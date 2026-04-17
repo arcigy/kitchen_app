@@ -37,6 +37,7 @@ type AppArgs = {
   axisLockEl: HTMLInputElement;
   measureReadoutEl: HTMLElement;
   resetBtn: HTMLButtonElement;
+  resetViewBtn: HTMLButtonElement;
   exportBtn: HTMLButtonElement;
   exportSceneBtn: HTMLButtonElement;
 };
@@ -1605,6 +1606,23 @@ export function startApp(args: AppArgs) {
     applyBuildLight();
   };
 
+  const frameToCabinet = () => {
+    if (!cabinetGroup) return;
+    const box = new THREE.Box3().setFromObject(cabinetGroup);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    const controls = ctl();
+    const camera = cam() as THREE.PerspectiveCamera;
+    controls.target.copy(center);
+    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
+    camera.near = Math.max(0.01, maxDim / 100);
+    camera.far = Math.max(50, maxDim * 20);
+    camera.updateProjectionMatrix();
+    controls.update();
+  };
+
   const setModel = (
     type: "drawer_low" | "nested_drawer_low" | "flap_shelves_low" | "swing_shelves_low" | "shelves" | "corner_shelf_lower"
   ) => {
@@ -2025,6 +2043,11 @@ export function startApp(args: AppArgs) {
                 ? "corner_shelf_lower"
                 : "drawer_low";
     setModel(next);
+  });
+
+  args.resetViewBtn.addEventListener("click", () => {
+    if (mode !== "build") return;
+    frameToCabinet();
   });
 
   modeSelect.value = "build";
