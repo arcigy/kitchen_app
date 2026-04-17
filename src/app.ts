@@ -338,6 +338,7 @@ export function startApp(args: AppArgs) {
     firstPoint: null as THREE.Vector3 | null,
     hoverPoint: null as THREE.Vector3 | null,
     hoverSnap: "none" as "none" | "free" | "face" | "edge" | "endpoint" | "midpoint",
+    pending: null as null | { pointerId: number; x: number; y: number; t0: number; moved: boolean },
     previewLine: null as THREE.Line | null,
     previewLabel: null as HTMLDivElement | null,
     cursorEl: null as HTMLDivElement | null,
@@ -413,6 +414,109 @@ export function startApp(args: AppArgs) {
       ? "Click 2 points to measure. Axis lock: X/Y/Z (hold Shift for vertical Y)."
       : "";
   });
+
+  const handleMeasureClick = (ev: PointerEvent) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+    pointerNdc.set(x, y);
+    raycaster.setFromCamera(pointerNdc, cam());
+
+    if (mode === "layout") {
+      if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "distance_3d";
+      const modeHint: MeasureMode = measureState.firstPoint ? (ev.shiftKey ? "vertical_y" : measureState.mode) : measureState.mode;
+
+      const picks = instances.map((i) => i.pick);
+      if (windowInst) picks.push(windowInst.pick);
+      const hits = raycaster.intersectObjects(picks, false);
+
+      const basePoint =
+        (hits[0]?.point ? hits[0].point.clone() : null) ??
+        (() => {
+          const p = new THREE.Vector3();
+          return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+        })();
+      if (!basePoint) return;
+
+      const box = hits[0]?.object ? new THREE.Box3().setFromObject(hits[0].object) : null;
+      const snapped0 = box ? snapPointXZ(basePoint, box, 22) : { point: basePoint.clone(), kind: "free" as const };
+      const snapped = {
+        point: snapped0.point,
+        kind: (snapped0.kind === "corner" ? "endpoint" : snapped0.kind) as "free" | "edge" | "endpoint"
+      };
+
+      const p = snapped.point.clone();
+      if (modeHint === "vertical_y" && box) p.y = snapYToBoxClosest(p.y, box);
+
+      if (!measureState.firstPoint) {
+        measureState.firstPoint = p;
+        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(p)} - pick second point...`;
+        return;
+      }
+
+      const a = measureState.firstPoint;
+      let b = p;
+      if (modeHint === "vertical_y") b = new THREE.Vector3(b.x, b.y, b.z);
+      else if (measureState.axisLock) b = axisLockXYZ(a, b);
+
+      addMeasurement(a, b, modeHint);
+      measureState.firstPoint = null;
+      measureState.mode = "distance_3d";
+      clearPreview();
+      return;
+    }
+
+    if (!cabinetGroup) return;
+    const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
+
+    if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "distance_3d";
+    const modeHint: MeasureMode = measureState.firstPoint ? (ev.shiftKey ? "vertical_y" : measureState.mode) : measureState.mode;
+
+    const hit = pickSurfacePoint(raycaster, meshes);
+    const basePoint =
+      hit?.point ??
+      (() => {
+        const p = new THREE.Vector3();
+        return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+      })();
+    if (!basePoint) return;
+
+    if (ev.altKey) {
+      if (!hit) return;
+      const areaMm2 = computeFaceAreaMm2(hit);
+      addAreaMeasurement(hit.point, areaMm2);
+      return;
+    }
+
+    const snapped =
+      modeHint === "vertical_y"
+        ? { point: basePoint.clone(), kind: (hit ? ("face" as const) : ("free" as const)) }
+        : hit
+          ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
+          : { point: basePoint.clone(), kind: "free" as const };
+
+    const p = snapped.point.clone();
+    if (modeHint === "vertical_y") {
+      const all = raycaster.intersectObjects(meshes, false).map((h) => ({ object: h.object, point: h.point }));
+      if (all.length > 0) p.y = snapYFromMeshHits(all, basePoint.y);
+    }
+
+    if (!measureState.firstPoint) {
+      measureState.firstPoint = p;
+      args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(p)} - pick second point...`;
+      return;
+    }
+
+    const a = measureState.firstPoint;
+    let b = p;
+    if (modeHint === "vertical_y") b = new THREE.Vector3(b.x, b.y, b.z);
+    else if (measureState.axisLock) b = axisLockXYZ(a, b);
+
+    addMeasurement(a, b, modeHint);
+    measureState.firstPoint = null;
+    measureState.mode = "distance_3d";
+    clearPreview();
+  };
 
   // Editor UI
   args.formEl.innerHTML = "";
@@ -1974,6 +2078,18 @@ export function startApp(args: AppArgs) {
   ro.observe(args.viewerEl);
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
+    // In measure mode we only accept "clicks" (short press + minimal movement).
+    // A press-and-hold should not create points.
+    if (measureState.enabled) {
+      measureState.pending = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY, t0: performance.now(), moved: false };
+      try {
+        renderer.domElement.setPointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     const rect = renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
@@ -1982,47 +2098,6 @@ export function startApp(args: AppArgs) {
     raycaster.setFromCamera(pointerNdc, cam());
 
     if (mode === "layout") {
-      if (measureState.enabled) {
-        const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "distance_3d";
-        const picks = instances.map((i) => i.pick);
-        if (windowInst) picks.push(windowInst.pick);
-        const hits = raycaster.intersectObjects(picks, false);
-
-        const basePoint =
-          (hits[0]?.point ? hits[0].point.clone() : null) ??
-          (() => {
-            const p = new THREE.Vector3();
-            return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
-          })();
-        if (!basePoint) return;
-
-        const box = hits[0]?.object ? new THREE.Box3().setFromObject(hits[0].object) : null;
-        const snapped0 = box ? snapPointXZ(basePoint, box, 22) : { point: basePoint.clone(), kind: "free" as const };
-        const snapped = {
-          point: snapped0.point,
-          kind: (snapped0.kind === "corner" ? "endpoint" : snapped0.kind) as "free" | "edge" | "endpoint"
-        };
-        const p = snapped.point.clone();
-        if (modeHint === "vertical_y" && box) p.y = snapYToBoxClosest(p.y, box);
-
-        if (!measureState.firstPoint) {
-          measureState.firstPoint = p;
-          args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} - pick second point...`;
-          return;
-        }
-
-        const a = measureState.firstPoint;
-        let b = p;
-        if (modeHint === "vertical_y") b = new THREE.Vector3(a.x, b.y, a.z);
-        else if (measureState.axisLock) b = axisLockXYZ(a, b);
-
-        addMeasurement(a, b, modeHint);
-        measureState.firstPoint = null;
-        measureState.mode = "distance_3d";
-        clearPreview();
-        return;
-      }
-
       const picks = instances.map((i) => i.pick);
       if (windowInst) picks.push(windowInst.pick);
       const hits = raycaster.intersectObjects(picks, false);
@@ -2073,61 +2148,7 @@ export function startApp(args: AppArgs) {
     }
 
     if (!cabinetGroup) return;
-
     const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
-
-    if (measureState.enabled) {
-      if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "distance_3d";
-      const modeHint: MeasureMode = measureState.firstPoint ? (ev.shiftKey ? "vertical_y" : measureState.mode) : measureState.mode;
-      const hit = pickSurfacePoint(raycaster, meshes);
-
-      // Allow measuring even when cursor is not over a mesh: fall back to ground plane (XZ).
-      const basePoint =
-        hit?.point ??
-        (() => {
-          const p = new THREE.Vector3();
-          return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
-        })();
-      if (!basePoint) return;
-
-      if (ev.altKey) {
-        if (!hit) return;
-        const areaMm2 = computeFaceAreaMm2(hit);
-        addAreaMeasurement(hit.point, areaMm2);
-        return;
-      }
-
-      const snapped =
-        modeHint === "vertical_y"
-          ? { point: basePoint.clone(), kind: (hit ? ("face" as const) : ("free" as const)) }
-          : hit
-            ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
-            : { point: basePoint.clone(), kind: "free" as const };
-
-      const p = snapped.point.clone();
-      if (modeHint === "vertical_y") {
-        const all = raycaster.intersectObjects(meshes, false).map((h) => ({ object: h.object, point: h.point }));
-        if (all.length > 0) p.y = snapYFromMeshHits(all, basePoint.y);
-      }
-      if (!measureState.firstPoint) {
-        measureState.firstPoint = p;
-        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} - pick second point...`;
-        return;
-      }
-
-      const a = measureState.firstPoint;
-      let b = p;
-      if (modeHint === "vertical_y") {
-        // Vertical height: keep point X/Z for cursor feedback, distance uses Y only.
-        b = new THREE.Vector3(b.x, b.y, b.z);
-      } else if (measureState.axisLock) b = axisLockXYZ(a, b);
-
-      addMeasurement(a, b, modeHint);
-      measureState.firstPoint = null;
-      measureState.mode = "distance_3d";
-      clearPreview();
-      return;
-    }
 
     const hits = raycaster.intersectObjects(meshes, false);
     const first = hits[0]?.object as THREE.Mesh | undefined;
@@ -2136,6 +2157,12 @@ export function startApp(args: AppArgs) {
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (measureState.pending && ev.pointerId === measureState.pending.pointerId) {
+      const dx = ev.clientX - measureState.pending.x;
+      const dy = ev.clientY - measureState.pending.y;
+      if (dx * dx + dy * dy > 16) measureState.pending.moved = true; // > 4px
+    }
+
     if (mode === "layout" && windowDragState.active && windowInst && windowDragState.wall) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2347,6 +2374,24 @@ export function startApp(args: AppArgs) {
   });
 
   renderer.domElement.addEventListener("pointerup", (ev) => {
+    if (measureState.enabled && measureState.pending && ev.pointerId === measureState.pending.pointerId) {
+      const CLICK_MAX_MS = 280;
+      const dt = performance.now() - measureState.pending.t0;
+      const moved = measureState.pending.moved;
+      measureState.pending = null;
+      try {
+        renderer.domElement.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+
+      // Only accept a short press without drag as a "click".
+      if (!moved && dt <= CLICK_MAX_MS) {
+        handleMeasureClick(ev);
+      }
+      return;
+    }
+
     if (mode !== "layout") return;
     if (windowDragState.active) {
       windowDragState.active = false;
