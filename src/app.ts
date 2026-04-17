@@ -2161,12 +2161,11 @@ export function startApp(args: AppArgs) {
     // In measure mode we only accept "clicks" (short press + minimal movement).
     // A press-and-hold should not create points.
     if (measureState.enabled) {
-      // Prevent OrbitControls + browser context menu from stealing the interaction.
-      ev.preventDefault();
-      ev.stopPropagation();
-
       // Right click cancels current measurement; do not start a click/drag sequence.
       if (ev.button === 2) {
+        // For right click we fully "own" the interaction: cancel measurement and suppress context menu/controls.
+        ev.preventDefault();
+        ev.stopPropagation();
         measureState.pending = null;
         if (measureState.firstPoint) {
           measureState.firstPoint = null;
@@ -2180,6 +2179,9 @@ export function startApp(args: AppArgs) {
       // Only left-click should create measurement points.
       if (ev.button !== 0) return;
 
+      // Important: do NOT preventDefault/stopPropagation for left button.
+      // We want OrbitControls to keep working (rotate/pan), while we treat a short click as "pick point"
+      // on pointerup (see below).
       measureState.pending = {
         pointerId: ev.pointerId,
         button: ev.button,
@@ -2188,11 +2190,6 @@ export function startApp(args: AppArgs) {
         t0: performance.now(),
         moved: false
       };
-      try {
-        renderer.domElement.setPointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
       return;
     }
 
