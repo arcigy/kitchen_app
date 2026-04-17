@@ -86,13 +86,22 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   setPartMeta(bottom, { width: internalW, height: boardT, depth: internalD });
   g.add(bottom);
 
-  // Top panel (full, simplified)
-  const topGeo = new THREE.BoxGeometry(internalW, boardT, internalD);
-  const top = new THREE.Mesh(topGeo, bodyMat);
-  top.position.set(0, height - boardT / 2, interiorCenterZ);
-  top.name = "top";
-  setPartMeta(top, { width: internalW, height: boardT, depth: internalD });
-  g.add(top);
+  // Top stretchers (kitchen-style): front + back rails instead of a full top panel.
+  // This saves material but still keeps the carcass rigid.
+  const railD = Math.min(depth * 0.25, Math.max(0.06, boardT * 3)); // ~60-140mm
+  const railGeo = new THREE.BoxGeometry(internalW, boardT, railD);
+
+  const topRailFront = new THREE.Mesh(railGeo, bodyMat);
+  topRailFront.position.set(0, height - boardT / 2, depth / 2 - railD / 2);
+  topRailFront.name = "topRailFront";
+  setPartMeta(topRailFront, { width: internalW, height: boardT, depth: railD });
+  g.add(topRailFront);
+
+  const topRailBack = new THREE.Mesh(railGeo, bodyMat);
+  topRailBack.position.set(0, height - boardT / 2, -depth / 2 + railD / 2);
+  topRailBack.name = "topRailBack";
+  setPartMeta(topRailBack, { width: internalW, height: boardT, depth: railD });
+  g.add(topRailBack);
 
   // Back panel (full width), mounted outside so it doesn't overlap the interior volume.
   const backGeo = new THREE.BoxGeometry(width, sideH, backT);

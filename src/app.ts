@@ -1,13 +1,24 @@
 import * as THREE from "three";
 import type { ModuleParams } from "./model/cabinetTypes";
-import { makeDefaultCornerShelfLowerParams, makeDefaultDrawerLowParams, makeDefaultShelvesParams, validateModule } from "./model/cabinetTypes";
+import {
+  makeDefaultCornerShelfLowerParams,
+  makeDefaultDrawerLowParams,
+  makeDefaultNestedDrawerLowParams,
+  makeDefaultFlapShelvesLowParams,
+  makeDefaultSwingShelvesLowParams,
+  makeDefaultShelvesParams,
+  validateModule
+} from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./scene/createScene";
 import { createPartPanel, type OverlapRow } from "./ui/createPartPanel";
 import { disposeObject3D } from "./scene/disposeObject3D";
 import { createDrawerLowControls } from "./ui/createDrawerLowControls";
+import { createNestedDrawerLowControls } from "./ui/createNestedDrawerLowControls";
 import { createShelvesControls } from "./ui/createShelvesControls";
 import { createCornerShelfLowerControls } from "./ui/createCornerShelfLowerControls";
+import { createFlapShelvesLowControls } from "./ui/createFlapShelvesLowControls";
+import { createSwingShelvesLowControls } from "./ui/createSwingShelvesLowControls";
 
 type AppArgs = {
   viewerEl: HTMLElement;
@@ -132,6 +143,9 @@ export function startApp(args: AppArgs) {
 
   modelSelect.innerHTML = `
     <option value="drawer_low">drawer_low</option>
+    <option value="nested_drawer_low">nested_drawer_low</option>
+    <option value="flap_shelves_low">flap_shelves_low</option>
+    <option value="swing_shelves_low">swing_shelves_low</option>
     <option value="shelves">shelves</option>
     <option value="corner_shelf_lower">corner_shelf_lower</option>
   `;
@@ -237,6 +251,12 @@ export function startApp(args: AppArgs) {
 
     if (params.type === "drawer_low") {
       createDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "nested_drawer_low") {
+      createNestedDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "flap_shelves_low") {
+      createFlapShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "swing_shelves_low") {
+      createSwingShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else if (params.type === "shelves") {
       createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else {
@@ -298,13 +318,21 @@ export function startApp(args: AppArgs) {
     controls.update();
   };
 
-  const setModel = (type: "drawer_low" | "shelves" | "corner_shelf_lower") => {
+  const setModel = (
+    type: "drawer_low" | "nested_drawer_low" | "flap_shelves_low" | "swing_shelves_low" | "shelves" | "corner_shelf_lower"
+  ) => {
     params =
       type === "drawer_low"
         ? makeDefaultDrawerLowParams()
-        : type === "shelves"
-          ? makeDefaultShelvesParams()
-          : makeDefaultCornerShelfLowerParams();
+        : type === "nested_drawer_low"
+          ? makeDefaultNestedDrawerLowParams()
+        : type === "flap_shelves_low"
+          ? makeDefaultFlapShelvesLowParams()
+          : type === "swing_shelves_low"
+            ? makeDefaultSwingShelvesLowParams()
+            : type === "shelves"
+              ? makeDefaultShelvesParams()
+              : makeDefaultCornerShelfLowerParams();
     modelSelect.value = type;
     hiddenParts.clear();
     selectMesh(null);
@@ -447,7 +475,17 @@ export function startApp(args: AppArgs) {
   modelSelect.addEventListener("change", () => {
     const v = modelSelect.value;
     const next =
-      v === "shelves" ? "shelves" : v === "corner_shelf_lower" ? "corner_shelf_lower" : "drawer_low";
+      v === "nested_drawer_low"
+        ? "nested_drawer_low"
+        : v === "flap_shelves_low"
+          ? "flap_shelves_low"
+          : v === "swing_shelves_low"
+            ? "swing_shelves_low"
+            : v === "shelves"
+              ? "shelves"
+              : v === "corner_shelf_lower"
+                ? "corner_shelf_lower"
+                : "drawer_low";
     setModel(next);
   });
 

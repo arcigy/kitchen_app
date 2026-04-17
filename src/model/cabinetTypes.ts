@@ -36,6 +36,92 @@ export type DrawerLowParams = {
   materials: MaterialParams;
 };
 
+export type NestedDrawerLowParams = {
+  type: "nested_drawer_low";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  frontGap: number; // mm (used as internal clearances)
+  sideGap: number; // mm (left/right reveal)
+  topGap: number; // mm (top reveal)
+  bottomGap: number; // mm (bottom reveal above plinth)
+  drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
+  drawerBoxSideHeight: number; // mm (outer drawer side/back panel height)
+
+  drawerCount: number;
+  drawerFrontHeights: number[]; // mm
+
+  // Inner "drawer in drawer" (a smaller tray inside the outer drawer)
+  innerDrawerDepth: number; // mm
+  innerDrawerSideHeight: number; // mm
+
+  materials: MaterialParams;
+};
+
+export type FlapShelvesLowParams = {
+  type: "flap_shelves_low";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  wallMounted: boolean; // true = no legs/kickboard
+  // Reveal around the front flap (same semantics as drawer_low reveals)
+  sideGap: number; // mm
+  topGap: number; // mm
+  bottomGap: number; // mm
+  // Kept for "drawer_low-like" parameter parity, even though flap is a single front.
+  frontGap: number; // mm
+
+  // Door/flap preview state
+  flapOpen: boolean;
+  flapHinge: "bottom" | "top";
+  hingeCount: 2 | 3;
+
+  // Shelf layout (same as shelves)
+  shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
+  shelfThickness: number; // mm
+  shelfAutoFit: boolean;
+  shelfGaps: number[]; // mm (count = shelfCount)
+
+  materials: MaterialParams;
+};
+
+export type SwingShelvesLowParams = {
+  type: "swing_shelves_low";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  wallMounted: boolean; // true = no legs/kickboard
+
+  // Reveal around the front doors (same semantics as drawer_low reveals)
+  sideGap: number; // mm
+  topGap: number; // mm
+  bottomGap: number; // mm
+  // Kept for "drawer_low-like" parameter parity; used as the center gap between doors when doorDouble=true.
+  frontGap: number; // mm
+
+  // Door preview state
+  doorDouble: boolean; // false = single door, true = double door
+  doorOpen: boolean;
+  hingeCountPerDoor: 2 | 3;
+
+  // Shelf layout
+  shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
+  shelfThickness: number; // mm
+  shelfAutoFit: boolean;
+  shelfGaps: number[]; // mm (count = shelfCount)
+
+  materials: MaterialParams;
+};
+
 export type ShelvesParams = {
   type: "shelves";
   width: number; // mm
@@ -73,7 +159,13 @@ export type CornerShelfLowerParams = {
   materials: MaterialParams;
 };
 
-export type ModuleParams = DrawerLowParams | ShelvesParams | CornerShelfLowerParams;
+export type ModuleParams =
+  | DrawerLowParams
+  | NestedDrawerLowParams
+  | FlapShelvesLowParams
+  | SwingShelvesLowParams
+  | ShelvesParams
+  | CornerShelfLowerParams;
 
 export function makeDefaultDrawerLowParams(): DrawerLowParams {
   const base: DrawerLowParams = {
@@ -102,6 +194,106 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     }
   };
   base.drawerFrontHeights = computeEqualDrawerFrontHeights(base);
+  return base;
+}
+
+export function makeDefaultNestedDrawerLowParams(): NestedDrawerLowParams {
+  const base: NestedDrawerLowParams = {
+    type: "nested_drawer_low",
+    width: 800,
+    height: 720,
+    depth: 560,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 100,
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    drawerBoxThickness: 13,
+    drawerBoxSideHeight: 110,
+    drawerCount: 3,
+    drawerFrontHeights: [],
+    innerDrawerDepth: 250,
+    innerDrawerSideHeight: 55,
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_default",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a"
+    }
+  };
+  base.drawerFrontHeights = computeEqualNestedDrawerFrontHeights(base);
+  return base;
+}
+
+export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
+  const base: FlapShelvesLowParams = {
+    type: "flap_shelves_low",
+    width: 800,
+    height: 720,
+    depth: 560,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 0,
+    wallMounted: true,
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    flapOpen: false,
+    flapHinge: "top",
+    hingeCount: 2,
+    shelfCount: 4,
+    shelfThickness: 18,
+    shelfAutoFit: true,
+    shelfGaps: [],
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_default",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a"
+    }
+  };
+  base.shelfGaps = computeEqualShelfGaps(base);
+  return base;
+}
+
+export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
+  const base: SwingShelvesLowParams = {
+    type: "swing_shelves_low",
+    width: 800,
+    height: 720,
+    depth: 560,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 0,
+    wallMounted: true,
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    doorDouble: true,
+    doorOpen: false,
+    hingeCountPerDoor: 3,
+    shelfCount: 4,
+    shelfThickness: 18,
+    shelfAutoFit: true,
+    shelfGaps: [],
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_default",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a"
+    }
+  };
+  base.shelfGaps = computeEqualShelfGaps(base);
   return base;
 }
 
@@ -166,6 +358,9 @@ export function makeDefaultCornerShelfLowerParams(): CornerShelfLowerParams {
 
 export function validateModule(p: ModuleParams): string[] {
   if (p.type === "drawer_low") return validateDrawerLow(p);
+  if (p.type === "nested_drawer_low") return validateNestedDrawerLow(p);
+  if (p.type === "flap_shelves_low") return validateFlapShelvesLow(p);
+  if (p.type === "swing_shelves_low") return validateSwingShelvesLow(p);
   if (p.type === "shelves") return validateShelves(p);
   if (p.type === "corner_shelf_lower") return validateCornerShelfLower(p);
   return ["Unknown module type."];
@@ -233,6 +428,89 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
   return errors;
 }
 
+export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
+  positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
+  positiveNumber(errors, "innerDrawerDepth", p.innerDrawerDepth, 80);
+  positiveNumber(errors, "innerDrawerSideHeight", p.innerDrawerSideHeight, 20);
+
+  if (!Number.isInteger(p.drawerCount) || p.drawerCount < 2 || p.drawerCount > 8) {
+    errors.push("drawerCount must be an integer between 2 and 8.");
+  }
+
+  if (!Array.isArray(p.drawerFrontHeights) || p.drawerFrontHeights.some((n) => typeof n !== "number")) {
+    errors.push("drawerFrontHeights must be an array of numbers.");
+  } else {
+    if (p.drawerFrontHeights.length !== p.drawerCount) {
+      errors.push("drawerFrontHeights count must match drawerCount.");
+    }
+    if (p.drawerFrontHeights.some((h) => !Number.isFinite(h) || h <= 20)) {
+      errors.push("drawerFrontHeights values must be > 20.");
+    }
+  }
+
+  const internalWidth = p.width - 2 * p.boardThickness;
+  if (internalWidth <= 50) errors.push("Width too small for boardThickness (internal width <= 50mm).");
+
+  const openingHeight = p.height - p.plinthHeight;
+  if (openingHeight <= 80) errors.push("height - plinthHeight must be > 80mm.");
+
+  const requiredFrontStack =
+    p.topGap +
+    p.bottomGap +
+    (Array.isArray(p.drawerFrontHeights) ? p.drawerFrontHeights.reduce((a, b) => a + b, 0) : 0) +
+    Math.max(0, p.drawerCount - 1) * p.frontGap;
+  if (requiredFrontStack > openingHeight) {
+    errors.push(
+      `Drawer fronts do not fit: need ${Math.round(requiredFrontStack)}mm, have ${Math.round(openingHeight)}mm.`
+    );
+  }
+
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.drawerBoxThickness >= p.boardThickness) errors.push("drawerBoxThickness should be smaller than boardThickness.");
+
+  // Conservative: keep some clearance to the back like buildDrawerLow.
+  const maxInnerDepth = p.depth - 50;
+  if (p.innerDrawerDepth > maxInnerDepth) errors.push(`innerDrawerDepth too deep: max ${Math.round(maxInnerDepth)}mm.`);
+  const minFront =
+    Array.isArray(p.drawerFrontHeights) && p.drawerFrontHeights.length > 0 ? Math.min(...p.drawerFrontHeights) : 0;
+  if (minFront > 0 && p.innerDrawerSideHeight >= minFront) {
+    errors.push("innerDrawerSideHeight must be smaller than the smallest drawer front height.");
+  }
+
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function computeEqualNestedDrawerFrontHeights(p: NestedDrawerLowParams): number[] {
+  const drawerCount = Math.max(2, Math.round(p.drawerCount));
+  const openingHeight = p.height - p.plinthHeight;
+  const available = openingHeight - p.topGap - p.bottomGap - Math.max(0, drawerCount - 1) * p.frontGap;
+
+  if (!Number.isFinite(available) || available <= 0) {
+    return Array.from({ length: drawerCount }, () => 200);
+  }
+
+  const base = Math.floor(available / drawerCount);
+  const remainder = Math.round(available - base * drawerCount);
+
+  const out: number[] = [];
+  for (let i = 0; i < drawerCount; i++) out.push(base + (i < remainder ? 1 : 0));
+  return out;
+}
+
 export function validateShelves(p: ShelvesParams): string[] {
   const errors: string[] = [];
 
@@ -280,6 +558,85 @@ export function validateShelves(p: ShelvesParams): string[] {
   }
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+
+  if (typeof p.wallMounted !== "boolean") errors.push("wallMounted must be a boolean.");
+  if (p.wallMounted === true && p.plinthHeight !== 0) errors.push("plinthHeight must be 0 when wallMounted=true.");
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
+
+  if (p.hingeCount !== 2 && p.hingeCount !== 3) errors.push("hingeCount must be 2 or 3.");
+  if (p.flapHinge !== "bottom" && p.flapHinge !== "top") errors.push("flapHinge must be 'bottom' or 'top'.");
+
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");
+
+  // Basic door fit sanity: leaves at least some opening after reveals.
+  const openingW = p.width - 2 * p.sideGap;
+  const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
+  if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
+  if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
+
+  if (!Number.isInteger(p.shelfCount) || p.shelfCount < 1 || p.shelfCount > 11) {
+    errors.push("shelfCount must be an integer between 1 and 11.");
+  }
+
+  validateShelfLayout(errors, p);
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+
+  if (typeof p.wallMounted !== "boolean") errors.push("wallMounted must be a boolean.");
+  if (p.wallMounted === true && p.plinthHeight !== 0) errors.push("plinthHeight must be 0 when wallMounted=true.");
+
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
+
+  if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
+    errors.push("hingeCountPerDoor must be 2 or 3.");
+  }
+
+  if (!Number.isInteger(p.shelfCount) || p.shelfCount < 1 || p.shelfCount > 11) {
+    errors.push("shelfCount must be an integer between 1 and 11.");
+  }
+
+  if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+
+  const openingW = p.width - 2 * p.sideGap;
+  const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
+  if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
+  if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
+
+  validateShelfLayout(errors, p);
   validateMaterials(errors, p.materials);
   return errors;
 }
