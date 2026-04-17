@@ -338,7 +338,7 @@ export function startApp(args: AppArgs) {
     firstPoint: null as THREE.Vector3 | null,
     hoverPoint: null as THREE.Vector3 | null,
     hoverSnap: "none" as "none" | "free" | "face" | "edge" | "endpoint" | "midpoint",
-    pending: null as null | { pointerId: number; x: number; y: number; t0: number; moved: boolean },
+    pending: null as null | { pointerId: number; button: number; x: number; y: number; t0: number; moved: boolean },
     previewLine: null as THREE.Line | null,
     previewLabel: null as HTMLDivElement | null,
     cursorEl: null as HTMLDivElement | null,
@@ -2081,7 +2081,30 @@ export function startApp(args: AppArgs) {
     // In measure mode we only accept "clicks" (short press + minimal movement).
     // A press-and-hold should not create points.
     if (measureState.enabled) {
-      measureState.pending = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY, t0: performance.now(), moved: false };
+      // Right click cancels current measurement; do not start a click/drag sequence.
+      if (ev.button === 2) {
+        ev.preventDefault();
+        measureState.pending = null;
+        if (measureState.firstPoint) {
+          measureState.firstPoint = null;
+          measureState.mode = "distance_3d";
+          clearPreview();
+          args.measureReadoutEl.textContent = "Cancelled. Click first point.";
+        }
+        return;
+      }
+
+      // Only left-click should create measurement points.
+      if (ev.button !== 0) return;
+
+      measureState.pending = {
+        pointerId: ev.pointerId,
+        button: ev.button,
+        x: ev.clientX,
+        y: ev.clientY,
+        t0: performance.now(),
+        moved: false
+      };
       try {
         renderer.domElement.setPointerCapture(ev.pointerId);
       } catch {
@@ -2378,6 +2401,7 @@ export function startApp(args: AppArgs) {
       const CLICK_MAX_MS = 280;
       const dt = performance.now() - measureState.pending.t0;
       const moved = measureState.pending.moved;
+      const button = measureState.pending.button;
       measureState.pending = null;
       try {
         renderer.domElement.releasePointerCapture(ev.pointerId);
@@ -2386,7 +2410,7 @@ export function startApp(args: AppArgs) {
       }
 
       // Only accept a short press without drag as a "click".
-      if (!moved && dt <= CLICK_MAX_MS) {
+      if (button === 0 && !moved && dt <= CLICK_MAX_MS) {
         handleMeasureClick(ev);
       }
       return;
