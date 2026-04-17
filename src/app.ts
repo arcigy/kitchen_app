@@ -42,6 +42,24 @@ type AppArgs = {
   exportSceneBtn: HTMLButtonElement;
 };
 
+function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): ModuleParams {
+  const t = Math.max(0, Math.round(worktopThicknessMm));
+  if (t <= 0) return p;
+
+  // Wall-mounted modules are not under the worktop.
+  const wallMounted = (p as any).wallMounted === true;
+  if (wallMounted) return p;
+
+  if (p.type === "corner_shelf_lower") {
+    return { ...p, height: Math.max(50, p.height - t) };
+  }
+
+  // All straight modules share width/height/depth.
+  const hp = (p as any).height;
+  if (typeof hp === "number") return { ...(p as any), height: Math.max(50, hp - t) } as ModuleParams;
+  return p;
+}
+
 export function startApp(args: AppArgs) {
   let params: ModuleParams = makeDefaultDrawerLowParams();
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
@@ -71,6 +89,15 @@ export function startApp(args: AppArgs) {
   const ctl = () => getControls();
 
   setDaylightIntensity(9);
+
+  // Worktop logic:
+  // Users enter FINAL heights including the worktop. We never render the worktop in build mode,
+  // but we subtract its thickness from any module that is "under the worktop" so carcass height matches reality.
+  let worktopThicknessMm = 40;
+
+  const effectiveParams = (p: ModuleParams): ModuleParams => {
+    return computeEffectiveParams(p, worktopThicknessMm);
+  };
 
   // Build-mode flat lighting: even fill, no shadows (easier to work with while editing).
   let flatLightEnabled = true;
@@ -397,6 +424,59 @@ export function startApp(args: AppArgs) {
 
   const editorHost = document.createElement("div");
   buildUi.appendChild(editorHost);
+
+  const mountWorktopControl = (parent: HTMLElement) => {
+    const host = document.createElement("div");
+    host.style.display = "grid";
+    host.style.gap = "8px";
+    host.style.padding = "10px";
+    host.style.border = "1px solid var(--border)";
+    host.style.borderRadius = "12px";
+    host.style.background = "rgba(10,12,16,0.35)";
+
+    const title = document.createElement("div");
+    title.textContent = "Worktop";
+    title.style.fontWeight = "600";
+    host.appendChild(title);
+
+    const row = document.createElement("div");
+    row.className = "field";
+    row.style.gridTemplateColumns = "1fr 120px";
+
+    const lab = document.createElement("label");
+    lab.textContent = "Thickness (mm)";
+    row.appendChild(lab);
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "1";
+    input.value = String(worktopThicknessMm);
+    row.appendChild(input);
+
+    host.appendChild(row);
+
+    const note = document.createElement("div");
+    note.className = "muted";
+    note.textContent =
+      "All module heights are entered as final height incl. worktop. Cabinet height is computed as height - thickness.";
+    host.appendChild(note);
+
+    input.addEventListener("input", () => {
+      const n = Math.round(Number(input.value));
+      if (Number.isFinite(n)) worktopThicknessMm = Math.max(0, n);
+      if (mode === "build") rebuild();
+      else {
+        for (const inst of instances) rebuildInstance(inst);
+      }
+    });
+
+    parent.insertBefore(host, parent.firstChild);
+  };
+
+  // Worktop control at the top of each mode panel.
+  mountWorktopControl(buildUi);
+  mountWorktopControl(layoutUi);
 
   // Build lighting controls
   {
@@ -784,7 +864,7 @@ export function startApp(args: AppArgs) {
     const root = new THREE.Group();
     root.name = `module_${id}`;
 
-    const module = buildModule(nextParams);
+    const module = buildModule(effectiveParams(nextParams));
     module.name = `moduleGeom_${id}`;
     root.add(module);
 
@@ -819,10 +899,12 @@ export function startApp(args: AppArgs) {
       return new THREE.Box3(new THREE.Vector3(-w / 2, 0, -d / 2), new THREE.Vector3(w / 2, h, d / 2));
     };
 
-    if (p.type === "corner_shelf_lower") return make(p.lengthX, p.height, p.lengthZ);
+    const ep = effectiveParams(p);
+
+    if (ep.type === "corner_shelf_lower") return make(ep.lengthX, ep.height, ep.lengthZ);
 
     // Straight modules all share width/height/depth.
-    return make((p as any).width ?? 800, (p as any).height ?? 720, (p as any).depth ?? 560);
+    return make((ep as any).width ?? 800, (ep as any).height ?? 720, (ep as any).depth ?? 560);
   }
 
   function gEmpty() {
@@ -1075,11 +1157,12 @@ export function startApp(args: AppArgs) {
   }
 
   function rebuildInstance(inst: LayoutInstance) {
-    const errors = validateModule(inst.params);
+    const eff = effectiveParams(inst.params);
+    const errors = validateModule(eff);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return;
 
-    const next = buildModule(inst.params);
+    const next = buildModule(eff);
 
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
@@ -1426,6 +1509,7 @@ export function startApp(args: AppArgs) {
       mode: "layout" as const,
       units: "mm" as const,
       generatedAt: new Date().toISOString(),
+      worktopThicknessMm,
       window: windowInst ? windowInst.params : null,
       modules: instances.map((i) => ({
         id: i.id,
@@ -1564,11 +1648,12 @@ export function startApp(args: AppArgs) {
   };
 
   const rebuild = () => {
-    const errors = validateModule(params);
+    const eff = effectiveParams(params);
+    const errors = validateModule(eff);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return;
 
-    const next = buildModule(params);
+    const next = buildModule(eff);
 
     if (cabinetGroup) {
       scene.remove(cabinetGroup);
@@ -1686,10 +1771,11 @@ export function startApp(args: AppArgs) {
 
     let json = "";
     if (mode === "build") {
-      const errors = validateModule(params);
+      const eff = effectiveParams(params);
+      const errors = validateModule(eff);
       renderErrors(args.errorsEl, errors);
       if (errors.length > 0) return;
-      json = JSON.stringify(buildExportPayload(params, cabinetGroup), null, 2);
+      json = JSON.stringify(buildExportPayload(params, cabinetGroup, worktopThicknessMm), null, 2);
     } else {
       const payload = buildLayoutExportPayload();
       json = JSON.stringify(payload, null, 2);
@@ -1809,7 +1895,10 @@ export function startApp(args: AppArgs) {
 
   args.copyBtn.addEventListener("click", async () => {
     args.copyStatusEl.textContent = "";
-    const fallback = mode === "build" ? JSON.stringify(buildExportPayload(params, cabinetGroup), null, 2) : JSON.stringify(buildLayoutExportPayload(), null, 2);
+    const fallback =
+      mode === "build"
+        ? JSON.stringify(buildExportPayload(params, cabinetGroup, worktopThicknessMm), null, 2)
+        : JSON.stringify(buildLayoutExportPayload(), null, 2);
     const text = args.exportOutEl.value.trim().length > 0 ? args.exportOutEl.value : fallback;
     args.exportOutEl.value = text;
     try {
@@ -2552,7 +2641,7 @@ function computeOverlaps(root: THREE.Object3D): OverlapRow[] {
   return out.slice(0, 40);
 }
 
-function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | null) {
+function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | null, worktopThicknessMm: number) {
   if (cabinetGroup) cabinetGroup.updateMatrixWorld(true);
   const overlaps = cabinetGroup ? computeOverlaps(cabinetGroup) : [];
   const parts = cabinetGroup
@@ -2563,6 +2652,9 @@ function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | nu
       }))
     : [];
 
+  const eff = computeEffectiveParams(params, worktopThicknessMm) as any;
+  const cabinetHeightMm = typeof eff.height === "number" ? eff.height : null;
+
   const roundBox = (box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }) => ({
     min: { x: round01(box.min.x), y: round01(box.min.y), z: round01(box.min.z) },
     max: { x: round01(box.max.x), y: round01(box.max.y), z: round01(box.max.z) }
@@ -2570,7 +2662,11 @@ function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | nu
 
   const out = {
     ...params,
+    worktopThicknessMm,
     isCorner: params.type === "corner_shelf_lower",
+    __computed: {
+      cabinetHeightMm
+    },
     __debug: {
       units: "mm",
       generatedAt: new Date().toISOString(),
