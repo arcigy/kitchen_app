@@ -1968,7 +1968,7 @@ export function startApp(args: AppArgs) {
 
     if (mode === "layout") {
       if (measureState.enabled) {
-        const modeHint: MeasureMode = measureState.axisLock && ev.shiftKey ? "vertical_y" : "planar_xz";
+        const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
         const picks = instances.map((i) => i.pick);
         if (windowInst) picks.push(windowInst.pick);
         const hits = raycaster.intersectObjects(picks, false);
@@ -1981,25 +1981,21 @@ export function startApp(args: AppArgs) {
           })();
         if (!basePoint) return;
 
-        const snapped = hits[0]?.object
-          ? snapPointXZ(basePoint, new THREE.Box3().setFromObject(hits[0].object), 22)
-          : { point: basePoint.clone(), kind: "free" as const };
+        const box = hits[0]?.object ? new THREE.Box3().setFromObject(hits[0].object) : null;
+        const snapped = box ? snapPointXZ(basePoint, box, 22) : { point: basePoint.clone(), kind: "free" as const };
+        const p = snapped.point.clone();
+        if (modeHint === "vertical_y" && box) p.y = snapYToBoxClosest(p.y, box);
 
         if (!measureState.firstPoint) {
-          measureState.firstPoint = snapped.point;
+          measureState.firstPoint = p;
           args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} - pick second point...`;
           return;
         }
 
         const a = measureState.firstPoint;
-        let b = snapped.point;
-        if (measureState.axisLock) {
-          b = modeHint === "vertical_y" ? new THREE.Vector3(a.x, b.y, a.z) : axisLockXZ(a, b);
-        }
-        if (modeHint === "vertical_y" && hits[0]?.object) {
-          const box = new THREE.Box3().setFromObject(hits[0].object);
-          b = new THREE.Vector3(b.x, snapYToBox(b.y, box, 15), b.z);
-        }
+        let b = p;
+        if (modeHint === "vertical_y") b = new THREE.Vector3(a.x, b.y, a.z);
+        else if (measureState.axisLock) b = axisLockXZ(a, b);
 
         addMeasurement(a, b, modeHint);
         measureState.firstPoint = null;
@@ -2061,7 +2057,7 @@ export function startApp(args: AppArgs) {
     const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
 
     if (measureState.enabled) {
-      const modeHint: MeasureMode = measureState.axisLock && ev.shiftKey ? "vertical_y" : "planar_xz";
+      const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
       const hit = pickSurfacePoint(raycaster, meshes);
 
       // Allow measuring even when cursor is not over a mesh: fall back to ground plane (XZ).
@@ -2080,25 +2076,25 @@ export function startApp(args: AppArgs) {
       const fineD = planarDistanceMm(basePoint, fine.point) / 1000;
       const coarseD = planarDistanceMm(basePoint, coarse.point) / 1000;
       const snapped = coarseD < fineD ? coarse : fine;
+      const p = snapped.point.clone();
+      if (modeHint === "vertical_y") {
+        const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
+        const boxCoarse = new THREE.Box3().setFromObject(cabinetGroup);
+        const yFine = boxFine ? snapYToBoxClosest(p.y, boxFine) : p.y;
+        const yCoarse = snapYToBoxClosest(p.y, boxCoarse);
+        const useY = Math.abs(yCoarse - p.y) < Math.abs(yFine - p.y) ? yCoarse : yFine;
+        p.y = useY;
+      }
       if (!measureState.firstPoint) {
-        measureState.firstPoint = snapped.point;
+        measureState.firstPoint = p;
         args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} - pick second point...`;
         return;
       }
 
       const a = measureState.firstPoint;
-      let b = snapped.point;
-      if (measureState.axisLock) {
-        b = modeHint === "vertical_y" ? new THREE.Vector3(a.x, b.y, a.z) : axisLockXZ(a, b);
-      }
-      if (modeHint === "vertical_y") {
-        const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
-        const boxCoarse = new THREE.Box3().setFromObject(cabinetGroup);
-        const yFine = boxFine ? snapYToBox(b.y, boxFine, 12) : b.y;
-        const yCoarse = snapYToBox(b.y, boxCoarse, 18);
-        const useY = Math.abs(yCoarse - b.y) < Math.abs(yFine - b.y) ? yCoarse : yFine;
-        b = new THREE.Vector3(a.x, useY, a.z);
-      }
+      let b = p;
+      if (modeHint === "vertical_y") b = new THREE.Vector3(a.x, b.y, a.z);
+      else if (measureState.axisLock) b = axisLockXZ(a, b);
 
       addMeasurement(a, b, modeHint);
       measureState.firstPoint = null;
@@ -2186,7 +2182,9 @@ export function startApp(args: AppArgs) {
         measureState.hoverPoint = null;
         measureState.hoverSnap = "none";
         if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
-        args.measureReadoutEl.textContent = measureState.firstPoint ? "Pick second point..." : "Click 2 points to measure (planar X/Z).";
+        args.measureReadoutEl.textContent = measureState.firstPoint
+          ? "Pick second point..."
+          : "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y).";
         clearPreview();
         return;
       }
@@ -2252,8 +2250,8 @@ export function startApp(args: AppArgs) {
       measureState.hoverSnap = "none";
       if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
       args.measureReadoutEl.textContent = measureState.firstPoint
-        ? "Pick second point… (no surface)"
-        : "Click 2 points to measure (planar X/Z).";
+        ? "Pick second point..."
+        : "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y).";
       clearPreview();
       return;
     }
@@ -2280,11 +2278,21 @@ export function startApp(args: AppArgs) {
 
     // Preview line after first click
     if (measureState.firstPoint) {
-      let a = measureState.firstPoint;
+      const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
+      const a = measureState.firstPoint;
       let b = snapped.point;
-      if (measureState.axisLock) b = axisLockXZ(a, b);
-      updatePreview(a, b, "planar_xz", rect);
-      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) — ${Math.round(planarDistanceMm(a, b))} mm`;
+      if (modeHint === "vertical_y") {
+        const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
+        const boxCoarse = new THREE.Box3().setFromObject(cabinetGroup);
+        const yFine = boxFine ? snapYToBoxClosest(b.y, boxFine) : b.y;
+        const yCoarse = snapYToBoxClosest(b.y, boxCoarse);
+        const useY = Math.abs(yCoarse - b.y) < Math.abs(yFine - b.y) ? yCoarse : yFine;
+        b = new THREE.Vector3(a.x, useY, a.z);
+      } else if (measureState.axisLock) {
+        b = axisLockXZ(a, b);
+      }
+      updatePreview(a, b, modeHint, rect);
+      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) — ${Math.round(measureDistanceMm(a, b, modeHint))} mm`;
     } else {
       args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} — click first point`;
       clearPreview();
@@ -2609,6 +2617,12 @@ function snapYToBox(y: number, box: THREE.Box3, thresholdMm: number) {
   const d = Math.min(d0, d1);
   if (d > t) return y;
   return d0 <= d1 ? y0 : y1;
+}
+
+function snapYToBoxClosest(y: number, box: THREE.Box3) {
+  const y0 = box.min.y;
+  const y1 = box.max.y;
+  return Math.abs(y - y0) <= Math.abs(y - y1) ? y0 : y1;
 }
 
 function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
