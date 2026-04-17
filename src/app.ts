@@ -788,7 +788,7 @@ export function startApp(args: AppArgs) {
     module.name = `moduleGeom_${id}`;
     root.add(module);
 
-    const localBox = new THREE.Box3().setFromObject(module);
+    const localBox = computeLayoutLocalBox(nextParams);
 
     const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.1), pickMat);
@@ -804,6 +804,25 @@ export function startApp(args: AppArgs) {
     const inst: LayoutInstance = { id, params: nextParams, root, module, localBox, pick, outline };
     ensurePickAndOutline(inst);
     return inst;
+  }
+
+  function computeLayoutLocalBox(p: ModuleParams) {
+    // Important: layout footprint must be derived from params, not from mesh bounding boxes.
+    // Mesh bounds include outboard details (back panels, handles, kickboard clips, etc.)
+    // which shifts the box center and breaks alignment for "same size" cabinets.
+    const mm = 0.001;
+
+    const make = (wMm: number, hMm: number, dMm: number) => {
+      const w = Math.max(0.05, wMm * mm);
+      const h = Math.max(0.05, hMm * mm);
+      const d = Math.max(0.05, dMm * mm);
+      return new THREE.Box3(new THREE.Vector3(-w / 2, 0, -d / 2), new THREE.Vector3(w / 2, h, d / 2));
+    };
+
+    if (p.type === "corner_shelf_lower") return make(p.lengthX, p.height, p.lengthZ);
+
+    // Straight modules all share width/height/depth.
+    return make((p as any).width ?? 800, (p as any).height ?? 720, (p as any).depth ?? 560);
   }
 
   function gEmpty() {
@@ -1069,7 +1088,7 @@ export function startApp(args: AppArgs) {
     inst.root.remove(prevModule);
     inst.module = next;
     inst.root.add(inst.module);
-    inst.localBox = new THREE.Box3().setFromObject(inst.module);
+    inst.localBox = computeLayoutLocalBox(inst.params);
     ensurePickAndOutline(inst);
 
     const clamped = applyWallConstraints(inst, inst.root.position.clone());
