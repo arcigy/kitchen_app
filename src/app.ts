@@ -340,12 +340,21 @@ export function startApp(args: AppArgs) {
     previewLine: null as THREE.Line | null,
     previewLabel: null as HTMLDivElement | null,
     cursorEl: null as HTMLDivElement | null,
-    measures: [] as Array<{
-      a: THREE.Vector3;
-      b: THREE.Vector3;
-      line: THREE.Line;
-      label: HTMLDivElement;
-    }>
+    measures: [] as Array<
+      | {
+          kind: "line";
+          a: THREE.Vector3;
+          b: THREE.Vector3;
+          line: THREE.Line;
+          label: HTMLDivElement;
+        }
+      | {
+          kind: "area";
+          center: THREE.Vector3;
+          label: HTMLDivElement;
+          areaMm2: number;
+        }
+    >
   };
 
   // Cursor HUD for measurement (shows snap state)
@@ -386,10 +395,14 @@ export function startApp(args: AppArgs) {
 
   args.clearMeasuresBtn.addEventListener("click", () => {
     for (const m of measureState.measures) {
-      scene.remove(m.line);
-      m.line.geometry.dispose();
-      (m.line.material as THREE.Material).dispose();
-      m.label.remove();
+      if (m.kind === "line") {
+        scene.remove(m.line);
+        m.line.geometry.dispose();
+        (m.line.material as THREE.Material).dispose();
+        m.label.remove();
+      } else {
+        m.label.remove();
+      }
     }
     measureState.measures = [];
     measureState.firstPoint = null;
@@ -2069,13 +2082,14 @@ export function startApp(args: AppArgs) {
         })();
       if (!basePoint) return;
 
-      // Snap to either the hit part (fine) or whole cabinet bounds (coarse), whichever is closer.
-      const coarseBox = new THREE.Box3().setFromObject(cabinetGroup);
-      const fine = hit ? snapPointXZ(basePoint, hit.object, 18) : { point: basePoint.clone(), kind: "free" as const };
-      const coarse = snapPointXZ(basePoint, coarseBox, 22);
-      const fineD = planarDistanceMm(basePoint, fine.point) / 1000;
-      const coarseD = planarDistanceMm(basePoint, coarse.point) / 1000;
-      const snapped = coarseD < fineD ? coarse : fine;
+      if (ev.altKey) {
+        if (!hit) return;
+        const areaMm2 = computeFaceAreaMm2(hit);
+        addAreaMeasurement(hit.point, areaMm2);
+        return;
+      }
+
+      const snapped = hit ? snapHitToGeometry(hit, 10) : { point: basePoint.clone(), kind: "free" as const };
       const p = snapped.point.clone();
       if (modeHint === "vertical_y") {
         const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
@@ -2256,12 +2270,7 @@ export function startApp(args: AppArgs) {
       return;
     }
 
-    const coarseBox = new THREE.Box3().setFromObject(cabinetGroup);
-    const fine = hit ? snapPointXZ(basePoint, hit.object, 18) : { point: basePoint.clone(), kind: "free" as const };
-    const coarse = snapPointXZ(basePoint, coarseBox, 22);
-    const fineD = planarDistanceMm(basePoint, fine.point) / 1000;
-    const coarseD = planarDistanceMm(basePoint, coarse.point) / 1000;
-    const snapped = coarseD < fineD ? coarse : fine;
+    const snapped = hit ? snapHitToGeometry(hit, 10) : { point: basePoint.clone(), kind: "free" as const };
     measureState.hoverPoint = snapped.point;
     measureState.hoverSnap = snapped.kind;
 
@@ -2513,8 +2522,28 @@ export function startApp(args: AppArgs) {
     label.textContent = `${Math.round(mm)} mm`;
     measureOverlay.appendChild(label);
 
-    measureState.measures.push({ a: a.clone(), b: b.clone(), line, label });
+    measureState.measures.push({ kind: "line", a: a.clone(), b: b.clone(), line, label });
     args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm`;
+  }
+
+  function addAreaMeasurement(center: THREE.Vector3, areaMm2: number) {
+    const label = document.createElement("div");
+    label.style.position = "absolute";
+    label.style.transform = "translate(-50%, -50%)";
+    label.style.padding = "4px 8px";
+    label.style.borderRadius = "10px";
+    label.style.border = "1px solid var(--border)";
+    label.style.background = "#0f1117";
+    label.style.color = "var(--text)";
+    label.style.fontSize = "12px";
+    label.style.whiteSpace = "nowrap";
+
+    const m2 = areaMm2 / 1_000_000;
+    label.textContent = `${Math.round(areaMm2)} mm² (${m2.toFixed(3)} m²)`;
+    measureOverlay.appendChild(label);
+
+    measureState.measures.push({ kind: "area", center: center.clone(), label, areaMm2 });
+    args.measureReadoutEl.textContent = `Area: ${Math.round(areaMm2)} mm² (${m2.toFixed(3)} m²)`;
   }
 
   function updateMeasureLabels() {
@@ -2522,7 +2551,11 @@ export function startApp(args: AppArgs) {
 
     const rect = renderer.domElement.getBoundingClientRect();
     for (const m of measureState.measures) {
-      const mid = new THREE.Vector3((m.a.x + m.b.x) / 2, (m.a.y + m.b.y) / 2 + 0.02, (m.a.z + m.b.z) / 2);
+      const mid =
+        m.kind === "line"
+          ? new THREE.Vector3((m.a.x + m.b.x) / 2, (m.a.y + m.b.y) / 2 + 0.02, (m.a.z + m.b.z) / 2)
+          : new THREE.Vector3(m.center.x, m.center.y + 0.02, m.center.z);
+
       const p = mid.project(cam());
       const sx = (p.x * 0.5 + 0.5) * rect.width;
       const sy = (-p.y * 0.5 + 0.5) * rect.height;
@@ -2632,11 +2665,24 @@ function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
   return new THREE.Vector3(a.x, b.y, b.z);
 }
 
-function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]) {
+type SurfaceHit = {
+  point: THREE.Vector3;
+  object: THREE.Mesh;
+  faceIndex: number | null;
+  faceNormalLocal: THREE.Vector3 | null;
+};
+
+function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]): SurfaceHit | null {
   const hits = raycaster.intersectObjects(meshes, false);
   if (hits.length === 0) return null;
   const h = hits[0];
-  return { point: h.point.clone(), object: h.object as THREE.Mesh };
+  const obj = h.object as THREE.Mesh;
+  return {
+    point: h.point.clone(),
+    object: obj,
+    faceIndex: typeof h.faceIndex === "number" ? h.faceIndex : null,
+    faceNormalLocal: h.face?.normal ? h.face.normal.clone() : null
+  };
 }
 
 function snapPointXZ(
@@ -2687,6 +2733,68 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
 }
 
+function snapHitToGeometry(hit: SurfaceHit, thresholdMm: number) {
+  const t = Math.max(0, thresholdMm) / 1000; // mm -> m
+  const mesh = hit.object;
+  const geo = mesh.geometry as THREE.BufferGeometry;
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute | null;
+  if (!pos) return { point: hit.point.clone(), kind: "face" as const };
+
+  const index = geo.getIndex();
+  const triIndex = hit.faceIndex ?? null;
+  if (triIndex === null) return { point: hit.point.clone(), kind: "face" as const };
+
+  const getV = (i: number) => {
+    const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+    return v.applyMatrix4(mesh.matrixWorld);
+  };
+
+  // three.js faceIndex is the triangle number, not vertex index.
+  const i0 = index ? index.getX(triIndex * 3 + 0) : triIndex * 3 + 0;
+  const i1 = index ? index.getX(triIndex * 3 + 1) : triIndex * 3 + 1;
+  const i2 = index ? index.getX(triIndex * 3 + 2) : triIndex * 3 + 2;
+
+  const v0 = getV(i0);
+  const v1 = getV(i1);
+  const v2 = getV(i2);
+
+  // Candidates: vertices + closest points on triangle edges (like basic OSNAP).
+  const edgeClosest = (a: THREE.Vector3, b: THREE.Vector3) => closestPointOnSegment(hit.point, a, b);
+  const cands: Array<{ p: THREE.Vector3; kind: "vertex" | "edge" | "face" }> = [
+    { p: v0, kind: "vertex" },
+    { p: v1, kind: "vertex" },
+    { p: v2, kind: "vertex" },
+    { p: edgeClosest(v0, v1), kind: "edge" },
+    { p: edgeClosest(v1, v2), kind: "edge" },
+    { p: edgeClosest(v2, v0), kind: "edge" },
+    { p: hit.point.clone(), kind: "face" }
+  ];
+
+  let best = hit.point.clone();
+  let bestKind: "vertex" | "edge" | "face" = "face";
+  let bestD = Infinity;
+  for (const c of cands) {
+    const d = c.p.distanceTo(hit.point);
+    if (d < bestD) {
+      bestD = d;
+      best = c.p;
+      bestKind = c.kind;
+    }
+  }
+
+  if (bestKind !== "face" && bestD <= t) return { point: best.clone(), kind: bestKind };
+  return { point: hit.point.clone(), kind: "face" as const };
+}
+
+function closestPointOnSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) {
+  const ab = new THREE.Vector3().subVectors(b, a);
+  const ap = new THREE.Vector3().subVectors(p, a);
+  const denom = ab.lengthSq();
+  if (denom <= 1e-12) return a.clone();
+  const t = clamp(ap.dot(ab) / denom, 0, 1);
+  return a.clone().addScaledVector(ab, t);
+}
+
 function formatMm(v: THREE.Vector3) {
   return `${Math.round(v.x * 1000)}, ${Math.round(v.z * 1000)}`;
 }
@@ -2697,6 +2805,64 @@ function worldToScreen(world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect
     x: (p.x * 0.5 + 0.5) * rect.width,
     y: (-p.y * 0.5 + 0.5) * rect.height
   };
+}
+
+function computeFaceAreaMm2(hit: SurfaceHit) {
+  const mesh = hit.object;
+  const geo = mesh.geometry as THREE.BufferGeometry;
+
+  // Prefer "whole face of a box-like part" using geometry bbox and face normal axis.
+  const normalLocal = hit.faceNormalLocal;
+  if (normalLocal) {
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    if (geo.boundingBox) {
+      const sizeLocal = new THREE.Vector3();
+      geo.boundingBox.getSize(sizeLocal);
+
+      const tmpPos = new THREE.Vector3();
+      const tmpQuat = new THREE.Quaternion();
+      const tmpScale = new THREE.Vector3();
+      mesh.matrixWorld.decompose(tmpPos, tmpQuat, tmpScale);
+
+      const sizeWorld = new THREE.Vector3(
+        Math.abs(sizeLocal.x * tmpScale.x),
+        Math.abs(sizeLocal.y * tmpScale.y),
+        Math.abs(sizeLocal.z * tmpScale.z)
+      );
+
+      const ax = Math.abs(normalLocal.x);
+      const ay = Math.abs(normalLocal.y);
+      const az = Math.abs(normalLocal.z);
+      const axis = ax >= ay && ax >= az ? "x" : ay >= az ? "y" : "z";
+
+      const areaM2 =
+        axis === "x"
+          ? sizeWorld.y * sizeWorld.z
+          : axis === "y"
+            ? sizeWorld.x * sizeWorld.z
+            : sizeWorld.x * sizeWorld.y;
+
+      if (Number.isFinite(areaM2) && areaM2 > 0) return areaM2 * 1_000_000;
+    }
+  }
+
+  // Fallback: triangle area (mm^2)
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute | null;
+  const triIndex = hit.faceIndex ?? null;
+  if (!pos || triIndex === null) return 0;
+  const index = geo.getIndex();
+  const i0 = index ? index.getX(triIndex * 3 + 0) : triIndex * 3 + 0;
+  const i1 = index ? index.getX(triIndex * 3 + 1) : triIndex * 3 + 1;
+  const i2 = index ? index.getX(triIndex * 3 + 2) : triIndex * 3 + 2;
+
+  const v0 = new THREE.Vector3(pos.getX(i0), pos.getY(i0), pos.getZ(i0)).applyMatrix4(mesh.matrixWorld);
+  const v1 = new THREE.Vector3(pos.getX(i1), pos.getY(i1), pos.getZ(i1)).applyMatrix4(mesh.matrixWorld);
+  const v2 = new THREE.Vector3(pos.getX(i2), pos.getY(i2), pos.getZ(i2)).applyMatrix4(mesh.matrixWorld);
+
+  const a = new THREE.Vector3().subVectors(v1, v0);
+  const b = new THREE.Vector3().subVectors(v2, v0);
+  const areaM2 = new THREE.Vector3().crossVectors(a, b).length() * 0.5;
+  return areaM2 * 1_000_000;
 }
 
 function getSelectableMeshes(root: THREE.Object3D): THREE.Mesh[] {
