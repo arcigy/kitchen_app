@@ -59,6 +59,7 @@ export function startApp(args: AppArgs) {
     getDaylightIntensity,
     setShadowAlgorithm,
     getShadowAlgorithm,
+    setShadowsEnabled,
     setWindowOpening,
     getWindowOpening,
     setWindowCutout,
@@ -70,24 +71,15 @@ export function startApp(args: AppArgs) {
 
   setDaylightIntensity(9);
 
-  // Build-mode "work light": a simple spotlight that helps with readability while editing a single module.
-  // (Hidden in layout mode.)
-  let buildLightEnabled = true;
-  let buildLightIntensity = 18;
-  const buildLight = new THREE.SpotLight(0xfff3cf, 0, 0, Math.PI / 5, 0.5, 1);
-  buildLight.name = "buildWorkLight";
-  buildLight.castShadow = false;
-  const buildLightTarget = new THREE.Object3D();
-  buildLightTarget.name = "buildWorkLightTarget";
-  scene.add(buildLightTarget);
-  buildLight.target = buildLightTarget;
-  scene.add(buildLight);
-  const buildLightViz = new THREE.Mesh(
-    new THREE.SphereGeometry(0.02, 12, 10),
-    new THREE.MeshBasicMaterial({ color: 0xfff3cf })
-  );
-  buildLightViz.name = "buildWorkLightViz";
-  buildLight.add(buildLightViz);
+  // Build-mode flat lighting: even fill, no shadows (easier to work with while editing).
+  let flatLightEnabled = true;
+  let flatLightIntensity = 18;
+  const flatAmbient = new THREE.AmbientLight(0xffffff, 0);
+  flatAmbient.name = "buildFlatAmbient";
+  const flatHemi = new THREE.HemisphereLight(0xffffff, 0x3b4050, 0);
+  flatHemi.name = "buildFlatHemi";
+  scene.add(flatAmbient);
+  scene.add(flatHemi);
 
   type AppMode = "build" | "layout";
   let mode: AppMode = "build";
@@ -415,7 +407,7 @@ export function startApp(args: AppArgs) {
     lightHost.style.marginTop = "10px";
 
     const title = document.createElement("div");
-    title.textContent = "Build light";
+    title.textContent = "Flat light (no shadows)";
     title.style.fontWeight = "600";
     lightHost.appendChild(title);
 
@@ -432,7 +424,7 @@ export function startApp(args: AppArgs) {
 
     const enabled = document.createElement("input");
     enabled.type = "checkbox";
-    enabled.checked = buildLightEnabled;
+    enabled.checked = flatLightEnabled;
     enabled.style.justifySelf = "start";
     mkRow("Enabled", enabled);
 
@@ -441,15 +433,15 @@ export function startApp(args: AppArgs) {
     intensity.min = "0";
     intensity.max = "40";
     intensity.step = "0.5";
-    intensity.value = String(buildLightIntensity);
+    intensity.value = String(flatLightIntensity);
     mkRow("Intensity", intensity);
 
     enabled.addEventListener("change", () => {
-      buildLightEnabled = enabled.checked;
+      flatLightEnabled = enabled.checked;
       applyBuildLight();
     });
     intensity.addEventListener("input", () => {
-      buildLightIntensity = Number(intensity.value);
+      flatLightIntensity = Number(intensity.value);
       applyBuildLight();
     });
 
@@ -1377,23 +1369,24 @@ export function startApp(args: AppArgs) {
   }
 
   const applyBuildLight = () => {
-    const on = mode === "build" && buildLightEnabled;
-    buildLight.visible = on;
-    buildLightTarget.visible = on;
-    buildLight.intensity = on ? buildLightIntensity : 0;
-    if (!on || !cabinetGroup) return;
+    const on = mode === "build" && flatLightEnabled;
 
-    const box = new THREE.Box3().setFromObject(cabinetGroup);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    // When flat light is on, also disable shadow maps for a clean "everywhere lit" look.
+    setShadowsEnabled(!on);
 
-    buildLight.position.set(center.x, box.max.y + maxDim * 0.55, center.z + maxDim * 1.15);
-    buildLightTarget.position.copy(center);
+    flatAmbient.visible = on;
+    flatHemi.visible = on;
 
-    buildLight.distance = Math.max(2.0, maxDim * 6);
-    buildLight.angle = Math.PI / 5;
-    buildLight.penumbra = 0.5;
+    if (!on) {
+      flatAmbient.intensity = 0;
+      flatHemi.intensity = 0;
+      return;
+    }
+
+    // Split intensity across ambient + hemisphere so materials still have some shape.
+    const i = Math.max(0, flatLightIntensity);
+    flatAmbient.intensity = i * 0.75;
+    flatHemi.intensity = i * 0.55;
   };
 
   function buildLayoutExportPayload() {

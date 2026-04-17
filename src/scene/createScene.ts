@@ -488,6 +488,12 @@ export function createScene(container: HTMLElement) {
     updateLighting();
   };
 
+  const setShadowsEnabled = (enabled: boolean) => {
+    renderer.shadowMap.enabled = enabled;
+    renderer.shadowMap.needsUpdate = true;
+    updateLighting();
+  };
+
   const setWindowOpening = (opening: { center: THREE.Vector3; inwardNormal: THREE.Vector3; width: number; height: number } | null) => {
     windowOpening = opening;
     if (!opening) {
@@ -548,6 +554,8 @@ export function createScene(container: HTMLElement) {
     getDaylightIntensity: () => daylightIntensity,
     setShadowAlgorithm: setShadowAlgorithmPublic,
     getShadowAlgorithm: () => shadowAlgorithm,
+    setShadowsEnabled,
+    getShadowsEnabled: () => renderer.shadowMap.enabled,
     setWindowOpening,
     getWindowOpening: () =>
       windowOpening
