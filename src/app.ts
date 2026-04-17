@@ -2431,6 +2431,19 @@ export function startApp(args: AppArgs) {
     setModel(next);
   });
 
+  // Right-click cancels the current measurement (first point) instead of opening the context menu.
+  renderer.domElement.addEventListener("contextmenu", (ev) => {
+    if (!measureState.enabled) return;
+    ev.preventDefault();
+    measureState.pending = null;
+    if (measureState.firstPoint) {
+      measureState.firstPoint = null;
+      measureState.mode = "distance_3d";
+      clearPreview();
+      args.measureReadoutEl.textContent = "Cancelled. Click first point.";
+    }
+  });
+
   args.resetViewBtn.addEventListener("click", () => {
     if (mode !== "build") return;
     frameToCabinet();
@@ -2893,22 +2906,44 @@ function snapHitToFeatureEdges(args: {
   let bestPoint = args.hit.point.clone();
   let bestD = Infinity;
 
-  // Iterate edge segments (pairs of vertices).
-  for (let i = 0; i + 5 < edgesLocal.length; i += 6) {
-    const a = new THREE.Vector3(edgesLocal[i + 0], edgesLocal[i + 1], edgesLocal[i + 2]).applyMatrix4(mesh.matrixWorld);
-    const b = new THREE.Vector3(edgesLocal[i + 3], edgesLocal[i + 4], edgesLocal[i + 5]).applyMatrix4(mesh.matrixWorld);
+  const planeEps = 0.0015; // 1.5mm: keep snaps on the same face when possible.
+  const facePlane = (() => {
+    if (!args.hit.faceNormalLocal) return null;
+    const n = args.hit.faceNormalLocal.clone();
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(args.hit.object.matrixWorld);
+    n.applyMatrix3(normalMatrix).normalize();
+    return new THREE.Plane().setFromNormalAndCoplanarPoint(n, args.hit.point);
+  })();
 
-    const res = closestPointRayToSegment(args.ray, a, b);
-    if (res.dist > threshold) continue;
+  const tryEdges = (requireOnFace: boolean) => {
+    // Iterate edge segments (pairs of vertices).
+    for (let i = 0; i + 5 < edgesLocal.length; i += 6) {
+      const a = new THREE.Vector3(edgesLocal[i + 0], edgesLocal[i + 1], edgesLocal[i + 2]).applyMatrix4(mesh.matrixWorld);
+      const b = new THREE.Vector3(edgesLocal[i + 3], edgesLocal[i + 4], edgesLocal[i + 5]).applyMatrix4(mesh.matrixWorld);
 
-    if (res.dist < bestD) {
-      bestD = res.dist;
-      bestPoint = res.q;
-      if (res.t < 0.08 || res.t > 0.92) bestKind = "endpoint";
-      else if (Math.abs(res.t - 0.5) < 0.08) bestKind = "midpoint";
-      else bestKind = "edge";
+      // Prefer edges that lie on the same face plane the user is pointing at.
+      if (requireOnFace && facePlane) {
+        const da = Math.abs(facePlane.distanceToPoint(a));
+        const db = Math.abs(facePlane.distanceToPoint(b));
+        if (da > planeEps || db > planeEps) continue;
+      }
+
+      const res = closestPointRayToSegment(args.ray, a, b);
+      if (res.dist > threshold) continue;
+
+      if (res.dist < bestD) {
+        bestD = res.dist;
+        bestPoint = res.q;
+        if (res.t < 0.08 || res.t > 0.92) bestKind = "endpoint";
+        else if (Math.abs(res.t - 0.5) < 0.08) bestKind = "midpoint";
+        else bestKind = "edge";
+      }
     }
-  }
+  };
+
+  // First pass: edges on the same face plane. Second pass: any edges (fallback).
+  tryEdges(true);
+  if (bestKind === "face") tryEdges(false);
 
   return { point: bestPoint, kind: bestKind };
 }
