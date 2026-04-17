@@ -2253,8 +2253,9 @@ export function startApp(args: AppArgs) {
           args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dy ${dy})`;
         } else {
           const dx = Math.round(Math.abs(b.x - a.x) * 1000);
+          const dy = Math.round(Math.abs(b.y - a.y) * 1000);
           const dz = Math.round(Math.abs(b.z - a.z) * 1000);
-          args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dx ${dx}, dz ${dz})`;
+          args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dx ${dx}, dy ${dy}, dz ${dz})`;
         }
       } else {
         args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} - click first point`;
@@ -2333,7 +2334,10 @@ export function startApp(args: AppArgs) {
         const dy = Math.round(Math.abs(b.y - a.y) * 1000);
         args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dy ${dy})`;
       } else {
-        args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm`;
+        const dx = Math.round(Math.abs(b.x - a.x) * 1000);
+        const dy = Math.round(Math.abs(b.y - a.y) * 1000);
+        const dz = Math.round(Math.abs(b.z - a.z) * 1000);
+        args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dx ${dx}, dy ${dy}, dz ${dz})`;
       }
     } else {
       args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} - click first point`;
@@ -2556,7 +2560,15 @@ export function startApp(args: AppArgs) {
     measureOverlay.appendChild(label);
 
     measureState.measures.push({ kind: "line", a: a.clone(), b: b.clone(), line, label });
-    args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm`;
+    if (mode === "vertical_y") {
+      const dy = Math.round(Math.abs(b.y - a.y) * 1000);
+      args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm (dy ${dy})`;
+    } else {
+      const dx = Math.round(Math.abs(b.x - a.x) * 1000);
+      const dy = Math.round(Math.abs(b.y - a.y) * 1000);
+      const dz = Math.round(Math.abs(b.z - a.z) * 1000);
+      args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm (dx ${dx}, dy ${dy}, dz ${dz})`;
+    }
   }
 
   function addAreaMeasurement(center: THREE.Vector3, areaMm2: number) {
