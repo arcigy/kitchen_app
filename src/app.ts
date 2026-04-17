@@ -334,6 +334,7 @@ export function startApp(args: AppArgs) {
   const measureState = {
     enabled: false,
     axisLock: true,
+    mode: "planar_xz" as MeasureMode,
     firstPoint: null as THREE.Vector3 | null,
     hoverPoint: null as THREE.Vector3 | null,
     hoverSnap: "none" as "none" | "free" | "face" | "edge" | "endpoint" | "midpoint",
@@ -379,6 +380,7 @@ export function startApp(args: AppArgs) {
 
   args.measureBtn.addEventListener("click", () => {
     measureState.enabled = !measureState.enabled;
+    measureState.mode = "planar_xz";
     measureState.firstPoint = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
@@ -2074,7 +2076,8 @@ export function startApp(args: AppArgs) {
     const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
 
     if (measureState.enabled) {
-      const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
+      if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "planar_xz";
+      const modeHint: MeasureMode = measureState.firstPoint ? (ev.shiftKey ? "vertical_y" : measureState.mode) : measureState.mode;
       const hit = pickSurfacePoint(raycaster, meshes);
 
       // Allow measuring even when cursor is not over a mesh: fall back to ground plane (XZ).
@@ -2093,17 +2096,17 @@ export function startApp(args: AppArgs) {
         return;
       }
 
-      const snapped = hit
-        ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
-        : { point: basePoint.clone(), kind: "free" as const };
+      const snapped =
+        modeHint === "vertical_y"
+          ? { point: basePoint.clone(), kind: (hit ? ("face" as const) : ("free" as const)) }
+          : hit
+            ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
+            : { point: basePoint.clone(), kind: "free" as const };
+
       const p = snapped.point.clone();
       if (modeHint === "vertical_y") {
-        const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
-        const boxCoarse = new THREE.Box3().setFromObject(cabinetGroup);
-        const yFine = boxFine ? snapYToBoxClosest(p.y, boxFine) : p.y;
-        const yCoarse = snapYToBoxClosest(p.y, boxCoarse);
-        const useY = Math.abs(yCoarse - p.y) < Math.abs(yFine - p.y) ? yCoarse : yFine;
-        p.y = useY;
+        const all = raycaster.intersectObjects(meshes, false).map((h) => ({ object: h.object, point: h.point }));
+        if (all.length > 0) p.y = snapYFromMeshHits(all, basePoint.y);
       }
       if (!measureState.firstPoint) {
         measureState.firstPoint = p;
@@ -2113,11 +2116,14 @@ export function startApp(args: AppArgs) {
 
       const a = measureState.firstPoint;
       let b = p;
-      if (modeHint === "vertical_y") b = new THREE.Vector3(a.x, b.y, a.z);
-      else if (measureState.axisLock) b = axisLockXZ(a, b);
+      if (modeHint === "vertical_y") {
+        // Vertical height: keep point X/Z for cursor feedback, distance uses Y only.
+        b = new THREE.Vector3(b.x, b.y, b.z);
+      } else if (measureState.axisLock) b = axisLockXZ(a, b);
 
       addMeasurement(a, b, modeHint);
       measureState.firstPoint = null;
+      measureState.mode = "planar_xz";
       clearPreview();
       return;
     }
@@ -2280,9 +2286,15 @@ export function startApp(args: AppArgs) {
       return;
     }
 
-    const snapped = hit
-      ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
-      : { point: basePoint.clone(), kind: "free" as const };
+    const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : measureState.mode;
+    if (!measureState.firstPoint) measureState.mode = modeHint;
+
+    const snapped =
+      modeHint === "vertical_y"
+        ? { point: basePoint.clone(), kind: (hit ? ("face" as const) : ("free" as const)) }
+        : hit
+          ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
+          : { point: basePoint.clone(), kind: "free" as const };
     measureState.hoverPoint = snapped.point;
     measureState.hoverSnap = snapped.kind;
 
@@ -2308,23 +2320,23 @@ export function startApp(args: AppArgs) {
 
     // Preview line after first click
     if (measureState.firstPoint) {
-      const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
       const a = measureState.firstPoint;
-      let b = snapped.point;
+      let b = snapped.point.clone();
       if (modeHint === "vertical_y") {
-        const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
-        const boxCoarse = new THREE.Box3().setFromObject(cabinetGroup);
-        const yFine = boxFine ? snapYToBoxClosest(b.y, boxFine) : b.y;
-        const yCoarse = snapYToBoxClosest(b.y, boxCoarse);
-        const useY = Math.abs(yCoarse - b.y) < Math.abs(yFine - b.y) ? yCoarse : yFine;
-        b = new THREE.Vector3(a.x, useY, a.z);
+        const all = raycaster.intersectObjects(meshes, false).map((h) => ({ object: h.object, point: h.point }));
+        if (all.length > 0) b.y = snapYFromMeshHits(all, basePoint.y);
       } else if (measureState.axisLock) {
         b = axisLockXZ(a, b);
       }
       updatePreview(a, b, modeHint, rect);
-      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) — ${Math.round(measureDistanceMm(a, b, modeHint))} mm`;
+      if (modeHint === "vertical_y") {
+        const dy = Math.round(Math.abs(b.y - a.y) * 1000);
+        args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm (dy ${dy})`;
+      } else {
+        args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(measureDistanceMm(a, b, modeHint))} mm`;
+      }
     } else {
-      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} — click first point`;
+      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} - click first point`;
       clearPreview();
     }
   });
@@ -2677,6 +2689,27 @@ function snapYToBoxClosest(y: number, box: THREE.Box3) {
   const y0 = box.min.y;
   const y1 = box.max.y;
   return Math.abs(y - y0) <= Math.abs(y - y1) ? y0 : y1;
+}
+
+function snapYFromMeshHits(hits: Array<{ object: THREE.Object3D; point: THREE.Vector3 }>, y: number) {
+  let bestY = y;
+  let bestD = Infinity;
+  for (const h of hits) {
+    const box = new THREE.Box3().setFromObject(h.object);
+    const y0 = box.min.y;
+    const y1 = box.max.y;
+    const d0 = Math.abs(y - y0);
+    const d1 = Math.abs(y - y1);
+    if (d0 < bestD) {
+      bestD = d0;
+      bestY = y0;
+    }
+    if (d1 < bestD) {
+      bestD = d1;
+      bestY = y1;
+    }
+  }
+  return bestY;
 }
 
 function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
