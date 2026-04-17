@@ -1961,7 +1961,38 @@ export function startApp(args: AppArgs) {
     raycaster.setFromCamera(pointerNdc, cam());
 
     if (mode === "layout") {
-      if (measureState.enabled) return;
+      if (measureState.enabled) {
+        const picks = instances.map((i) => i.pick);
+        if (windowInst) picks.push(windowInst.pick);
+        const hits = raycaster.intersectObjects(picks, false);
+
+        const basePoint =
+          (hits[0]?.point ? hits[0].point.clone() : null) ??
+          (() => {
+            const p = new THREE.Vector3();
+            return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+          })();
+        if (!basePoint) return;
+
+        const snapped = hits[0]?.object
+          ? snapPointXZ(basePoint, new THREE.Box3().setFromObject(hits[0].object), 22)
+          : { point: basePoint.clone(), kind: "free" as const };
+
+        if (!measureState.firstPoint) {
+          measureState.firstPoint = snapped.point;
+          args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} - pick second point...`;
+          return;
+        }
+
+        let a = measureState.firstPoint;
+        let b = snapped.point;
+        if (measureState.axisLock) b = axisLockXZ(a, b);
+
+        addMeasurement(a, b);
+        measureState.firstPoint = null;
+        clearPreview();
+        return;
+      }
 
       const picks = instances.map((i) => i.pick);
       if (windowInst) picks.push(windowInst.pick);
@@ -2018,9 +2049,23 @@ export function startApp(args: AppArgs) {
 
     if (measureState.enabled) {
       const hit = pickSurfacePoint(raycaster, meshes);
-      if (!hit) return;
 
-      const snapped = snapPointXZ(hit.point, hit.object);
+      // Allow measuring even when cursor is not over a mesh: fall back to ground plane (XZ).
+      const basePoint =
+        hit?.point ??
+        (() => {
+          const p = new THREE.Vector3();
+          return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+        })();
+      if (!basePoint) return;
+
+      // Snap to either the hit part (fine) or whole cabinet bounds (coarse), whichever is closer.
+      const coarseBox = new THREE.Box3().setFromObject(cabinetGroup);
+      const fine = hit ? snapPointXZ(basePoint, hit.object, 18) : { point: basePoint.clone(), kind: "free" as const };
+      const coarse = snapPointXZ(basePoint, coarseBox, 22);
+      const fineD = planarDistanceMm(basePoint, fine.point) / 1000;
+      const coarseD = planarDistanceMm(basePoint, coarse.point) / 1000;
+      const snapped = coarseD < fineD ? coarse : fine;
       if (!measureState.firstPoint) {
         measureState.firstPoint = snapped.point;
         args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} — pick second point…`;
@@ -2093,7 +2138,7 @@ export function startApp(args: AppArgs) {
       return;
     }
 
-    if (!measureState.enabled || !cabinetGroup) return;
+    if (!measureState.enabled) return;
 
     const rect = renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2101,9 +2146,71 @@ export function startApp(args: AppArgs) {
     pointerNdc.set(x, y);
     raycaster.setFromCamera(pointerNdc, cam());
 
+    if (mode === "layout") {
+      const picks = instances.map((i) => i.pick);
+      if (windowInst) picks.push(windowInst.pick);
+      const hits = raycaster.intersectObjects(picks, false);
+
+      const basePoint =
+        (hits[0]?.point ? hits[0].point.clone() : null) ??
+        (() => {
+          const p = new THREE.Vector3();
+          return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+        })();
+
+      if (!basePoint) {
+        measureState.hoverPoint = null;
+        measureState.hoverSnap = "none";
+        if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
+        args.measureReadoutEl.textContent = measureState.firstPoint ? "Pick second point..." : "Click 2 points to measure (planar X/Z).";
+        clearPreview();
+        return;
+      }
+
+      const snapped = hits[0]?.object
+        ? snapPointXZ(basePoint, new THREE.Box3().setFromObject(hits[0].object), 22)
+        : { point: basePoint.clone(), kind: "free" as const };
+
+      measureState.hoverPoint = snapped.point;
+      measureState.hoverSnap = snapped.kind;
+
+      if (measureState.cursorEl) {
+        const s = worldToScreen(snapped.point, cam(), rect);
+        measureState.cursorEl.style.left = `${s.x}px`;
+        measureState.cursorEl.style.top = `${s.y}px`;
+        measureState.cursorEl.style.display = "block";
+        const c = snapped.kind === "corner" ? "#ff4dff" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
+        measureState.cursorEl.style.borderColor = c;
+      }
+
+      if (measureState.firstPoint) {
+        let a = measureState.firstPoint;
+        let b = snapped.point;
+        if (measureState.axisLock) b = axisLockXZ(a, b);
+        updatePreview(a, b, rect);
+        const dx = Math.round(Math.abs(b.x - a.x) * 1000);
+        const dz = Math.round(Math.abs(b.z - a.z) * 1000);
+        args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) - ${Math.round(planarDistanceMm(a, b))} mm (dx ${dx}, dz ${dz})`;
+      } else {
+        args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} - click first point`;
+        clearPreview();
+      }
+
+      return;
+    }
+
+    if (!cabinetGroup) return;
+
     const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
     const hit = pickSurfacePoint(raycaster, meshes);
-    if (!hit) {
+
+    const basePoint =
+      hit?.point ??
+      (() => {
+        const p = new THREE.Vector3();
+        return raycaster.ray.intersectPlane(groundPlane, p) ? p : null;
+      })();
+    if (!basePoint) {
       measureState.hoverPoint = null;
       measureState.hoverSnap = "none";
       if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
@@ -2114,7 +2221,12 @@ export function startApp(args: AppArgs) {
       return;
     }
 
-    const snapped = snapPointXZ(hit.point, hit.object);
+    const coarseBox = new THREE.Box3().setFromObject(cabinetGroup);
+    const fine = hit ? snapPointXZ(basePoint, hit.object, 18) : { point: basePoint.clone(), kind: "free" as const };
+    const coarse = snapPointXZ(basePoint, coarseBox, 22);
+    const fineD = planarDistanceMm(basePoint, fine.point) / 1000;
+    const coarseD = planarDistanceMm(basePoint, coarse.point) / 1000;
+    const snapped = coarseD < fineD ? coarse : fine;
     measureState.hoverPoint = snapped.point;
     measureState.hoverSnap = snapped.kind;
 
@@ -2448,9 +2560,13 @@ function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]) {
   return { point: h.point.clone(), object: h.object as THREE.Mesh };
 }
 
-function snapPointXZ(point: THREE.Vector3, mesh: THREE.Mesh): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
-  const threshold = 0.015; // 15mm
-  const box = new THREE.Box3().setFromObject(mesh);
+function snapPointXZ(
+  point: THREE.Vector3,
+  target: THREE.Object3D | THREE.Box3,
+  thresholdMm = 15
+): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
+  const threshold = Math.max(0, thresholdMm) / 1000; // mm -> m
+  const box = target instanceof THREE.Box3 ? target : new THREE.Box3().setFromObject(target);
 
   const candidates: THREE.Vector3[] = [];
   const cornerCount = 4;
