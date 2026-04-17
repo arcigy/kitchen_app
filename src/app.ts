@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { ModuleParams } from "./model/cabinetTypes";
 import {
+  computeEqualDrawerFrontHeights,
+  computeEqualNestedDrawerFrontHeights,
   makeDefaultCornerShelfLowerParams,
   makeDefaultDrawerLowParams,
   makeDefaultFlapShelvesLowParams,
@@ -46,7 +48,17 @@ function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): Mo
   const t = Math.max(0, Math.round(worktopThicknessMm));
   if (t <= 0) return p;
 
-  // Wall-mounted modules are not under the worktop.
+  // Only base/under-worktop modules should be adjusted.
+  // Upper cabinets ("shelves") are not under the worktop.
+  const isUnderWorktop =
+    p.type === "drawer_low" ||
+    p.type === "nested_drawer_low" ||
+    p.type === "corner_shelf_lower" ||
+    p.type === "flap_shelves_low" ||
+    p.type === "swing_shelves_low";
+  if (!isUnderWorktop) return p;
+
+  // Wall-mounted base modules are not under the worktop.
   const wallMounted = (p as any).wallMounted === true;
   if (wallMounted) return p;
 
@@ -56,7 +68,29 @@ function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): Mo
 
   // All straight modules share width/height/depth.
   const hp = (p as any).height;
-  if (typeof hp === "number") return { ...(p as any), height: Math.max(50, hp - t) } as ModuleParams;
+  if (typeof hp === "number") {
+    const next = { ...(p as any), height: Math.max(50, hp - t) } as ModuleParams;
+
+    // Keep derived "auto" params consistent with the adjusted height so the model stays valid.
+    // If user is on manual front heights, we preserve them and validation can flag if they no longer fit.
+    if (next.type === "drawer_low") {
+      const dl = next as any;
+      if (dl.frontStackPreset !== "manual") {
+        dl.drawerFrontHeights = computeEqualDrawerFrontHeights(dl);
+      }
+      return dl as ModuleParams;
+    }
+
+    if (next.type === "nested_drawer_low") {
+      const nd = next as any;
+      if (nd.frontStackPreset !== "manual") {
+        nd.drawerFrontHeights = computeEqualNestedDrawerFrontHeights(nd);
+      }
+      return nd as ModuleParams;
+    }
+
+    return next;
+  }
   return p;
 }
 
