@@ -303,81 +303,26 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
       "frontStackPreset",
       "topFrontHeightMm",
       "handleType",
-      "handlePositionMm"
+      "handlePositionMm",
+      "handleLengthMm",
+      "handleSizeMm",
+      "handleProjectionMm"
     ]);
     g.add(front);
 
     // Handle preview (for collisions / realism)
-    if (p.handleType !== "none" && p.handleType !== "gola") {
-      const handleOffsetFromTop = Math.max(0, p.handlePositionMm) * MM_TO_M;
-      const handleY = front.position.y + h / 2 - handleOffsetFromTop;
+    if (p.handleType !== "none") {
       const screwMat2 = new THREE.MeshStandardMaterial({ color: 0x8a93a3, roughness: 0.35, metalness: 0.75 });
 
-      if (p.handleType === "bar") {
-        const hw = Math.min(frontW * 0.6, 0.35);
-        const hh = 0.012;
-        const hd = 0.012;
-        const geo = new THREE.BoxGeometry(hw, hh, hd);
-        const m = new THREE.Mesh(geo, railMat);
-        m.name = `handle_${i + 1}`;
-        m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + hd / 2);
-        setPartMeta(m, { width: hw, height: hh, depth: hd });
-        setParamKeys(m, ["handleType", "handlePositionMm", "frontThicknessMm", "width", "drawerCount", "drawerFrontHeights"]);
-        g.add(m);
+      const handleLen = Math.max(0, p.handleLengthMm) * MM_TO_M;
+      const handleSize = Math.max(0, p.handleSizeMm) * MM_TO_M;
+      const handleProj = Math.max(0, p.handleProjectionMm) * MM_TO_M;
 
-        // Handle hardware: two mounting screws shown on the INSIDE face of the front.
-        // (In reality you drive screws from inside through the front into the handle.)
+      const addScrews2 = (prefix: string, count: 1 | 2, spreadW: number, y: number, handleDepth: number) => {
         const headR = 0.004;
         const headLen = 0.0025;
         const shaftR = 0.0016;
-        const shaftLen = Math.max(0.01, frontThickness + hd + 0.004);
-        const headGeo = new THREE.CylinderGeometry(headR, headR, headLen, 16);
-        const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 12);
-
-        const insideFaceZ = frontPlaneZ - frontThickness / 2; // ~= depth/2
-        const headZ = insideFaceZ - headLen / 2 - 0.0005;
-        const shaftZ = insideFaceZ + shaftLen / 2 - 0.0005;
-
-        const screwSpread = Math.min(hw * 0.75, Math.max(0.06, hw - 0.08));
-        const sx = screwSpread / 2;
-
-        const addScrew = (name: string, x: number) => {
-          const head = new THREE.Mesh(headGeo, screwMat2);
-          head.name = `${name}_head`;
-          head.rotation.x = Math.PI / 2; // along Z
-          head.position.set(x, handleY, headZ);
-          setPartMeta(head, { width: headR * 2, height: headR * 2, depth: headLen });
-          setParamKeys(head, ["handleType", "handlePositionMm", "frontThicknessMm"]);
-          g.add(head);
-
-          const shaft = new THREE.Mesh(shaftGeo, screwMat2);
-          shaft.name = `${name}_shaft`;
-          shaft.rotation.x = Math.PI / 2; // along Z
-          shaft.position.set(x, handleY, shaftZ);
-          setPartMeta(shaft, { width: shaftR * 2, height: shaftR * 2, depth: shaftLen });
-          setParamKeys(shaft, ["handleType", "handlePositionMm", "frontThicknessMm"]);
-          g.add(shaft);
-        };
-
-        addScrew(`handle_${i + 1}_screw_1`, -sx);
-        addScrew(`handle_${i + 1}_screw_2`, sx);
-      } else if (p.handleType === "knob") {
-        const r = 0.012;
-        const d = 0.018;
-        const geo = new THREE.CylinderGeometry(r, r, d, 18);
-        const m = new THREE.Mesh(geo, railMat);
-        m.name = `handle_${i + 1}`;
-        m.rotation.x = Math.PI / 2;
-        m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + d / 2);
-        setPartMeta(m, { width: r * 2, height: r * 2, depth: d });
-        setParamKeys(m, ["handleType", "handlePositionMm", "frontThicknessMm", "width", "drawerCount", "drawerFrontHeights"]);
-        g.add(m);
-
-        // Knob hardware: single mounting screw on the inside face.
-        const headR = 0.004;
-        const headLen = 0.0025;
-        const shaftR = 0.0016;
-        const shaftLen = Math.max(0.01, frontThickness + d + 0.004);
+        const shaftLen = Math.max(0.01, frontThickness + handleDepth + 0.004);
         const headGeo = new THREE.CylinderGeometry(headR, headR, headLen, 16);
         const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 12);
 
@@ -385,21 +330,137 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
         const headZ = insideFaceZ - headLen / 2 - 0.0005;
         const shaftZ = insideFaceZ + shaftLen / 2 - 0.0005;
 
-        const head = new THREE.Mesh(headGeo, screwMat2);
-        head.name = `handle_${i + 1}_screw_1_head`;
-        head.rotation.x = Math.PI / 2;
-        head.position.set(0, handleY, headZ);
-        setPartMeta(head, { width: headR * 2, height: headR * 2, depth: headLen });
-        setParamKeys(head, ["handleType", "handlePositionMm", "frontThicknessMm"]);
-        g.add(head);
+        const xs = count === 2 ? [-spreadW / 2, spreadW / 2] : [0];
 
-        const shaft = new THREE.Mesh(shaftGeo, screwMat2);
-        shaft.name = `handle_${i + 1}_screw_1_shaft`;
-        shaft.rotation.x = Math.PI / 2;
-        shaft.position.set(0, handleY, shaftZ);
-        setPartMeta(shaft, { width: shaftR * 2, height: shaftR * 2, depth: shaftLen });
-        setParamKeys(shaft, ["handleType", "handlePositionMm", "frontThicknessMm"]);
-        g.add(shaft);
+        for (let si = 0; si < xs.length; si++) {
+          const x = xs[si] ?? 0;
+          const base = `${prefix}_screw_${si + 1}`;
+
+          const head = new THREE.Mesh(headGeo, screwMat2);
+          head.name = `${base}_head`;
+          head.rotation.x = Math.PI / 2;
+          head.position.set(x, y, headZ);
+          setPartMeta(head, { width: headR * 2, height: headR * 2, depth: headLen });
+          setParamKeys(head, [
+            "handleType",
+            "handlePositionMm",
+            "frontThicknessMm",
+            "handleLengthMm",
+            "handleSizeMm",
+            "handleProjectionMm"
+          ]);
+          g.add(head);
+
+          const shaft = new THREE.Mesh(shaftGeo, screwMat2);
+          shaft.name = `${base}_shaft`;
+          shaft.rotation.x = Math.PI / 2;
+          shaft.position.set(x, y, shaftZ);
+          setPartMeta(shaft, { width: shaftR * 2, height: shaftR * 2, depth: shaftLen });
+          setParamKeys(shaft, [
+            "handleType",
+            "handlePositionMm",
+            "frontThicknessMm",
+            "handleLengthMm",
+            "handleSizeMm",
+            "handleProjectionMm"
+          ]);
+          g.add(shaft);
+        }
+      };
+
+      if (p.handleType === "gola") {
+        // Gola profile: an integrated rail near the top edge of the front.
+        const golaH = clamp(handleSize, 0.006, 0.05);
+        const golaD = clamp(handleProj, 0.006, 0.04);
+        const golaW = clamp(handleLen > 0 ? handleLen : frontW, 0.06, frontW);
+        const geo = new THREE.BoxGeometry(golaW, golaH, golaD);
+        const m = new THREE.Mesh(geo, railMat);
+        m.name = `gola_${i + 1}`;
+
+        const y = front.position.y + h / 2 - golaH / 2 - 0.002;
+        const z = frontPlaneZ - frontThickness / 2 - golaD / 2 + 0.002;
+        m.position.set(0, y, z);
+
+        setPartMeta(m, { width: golaW, height: golaH, depth: golaD });
+        setParamKeys(m, ["handleType", "handleLengthMm", "handleSizeMm", "handleProjectionMm", "frontThicknessMm"]);
+        g.add(m);
+      } else {
+        const handleOffsetFromTop = Math.max(0, p.handlePositionMm) * MM_TO_M;
+        const handleY = front.position.y + h / 2 - handleOffsetFromTop;
+
+        if (p.handleType === "bar") {
+          const hw = clamp(handleLen > 0 ? handleLen : Math.min(frontW * 0.6, 0.35), 0.06, frontW * 0.95);
+          const hh = clamp(handleSize > 0 ? handleSize : 0.012, 0.006, 0.05);
+          const hd = clamp(handleProj > 0 ? handleProj : 0.012, 0.006, 0.06);
+          const geo = new THREE.BoxGeometry(hw, hh, hd);
+          const m = new THREE.Mesh(geo, railMat);
+          m.name = `handle_${i + 1}`;
+          m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + hd / 2);
+          setPartMeta(m, { width: hw, height: hh, depth: hd });
+          setParamKeys(m, [
+            "handleType",
+            "handlePositionMm",
+            "handleLengthMm",
+            "handleSizeMm",
+            "handleProjectionMm",
+            "frontThicknessMm",
+            "width",
+            "drawerCount",
+            "drawerFrontHeights"
+          ]);
+          g.add(m);
+
+          const screwSpread = Math.min(hw * 0.75, Math.max(0.06, hw - 0.08));
+          addScrews2(`handle_${i + 1}`, 2, screwSpread, handleY, hd);
+        } else if (p.handleType === "knob") {
+          const r = clamp((handleSize > 0 ? handleSize : 0.024) / 2, 0.006, 0.03);
+          const d = clamp(handleProj > 0 ? handleProj : 0.018, 0.008, 0.06);
+          const geo = new THREE.CylinderGeometry(r, r, d, 18);
+          const m = new THREE.Mesh(geo, railMat);
+          m.name = `handle_${i + 1}`;
+          m.rotation.x = Math.PI / 2;
+          m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + d / 2);
+          setPartMeta(m, { width: r * 2, height: r * 2, depth: d });
+          setParamKeys(m, [
+            "handleType",
+            "handlePositionMm",
+            "handleSizeMm",
+            "handleProjectionMm",
+            "frontThicknessMm",
+            "width",
+            "drawerCount",
+            "drawerFrontHeights"
+          ]);
+          g.add(m);
+
+          addScrews2(`handle_${i + 1}`, 1, 0, handleY, d);
+        } else if (p.handleType === "cup") {
+          // Cup pull: approximated by a half-cylinder shell.
+          const hw = clamp(handleLen > 0 ? handleLen : Math.min(frontW * 0.45, 0.22), 0.06, frontW * 0.9);
+          const hd = clamp(handleProj > 0 ? handleProj : 0.02, 0.01, 0.05);
+          const r = Math.max(0.006, hd / 2);
+          const geo = new THREE.CylinderGeometry(r, r, hw, 24, 1, true, 0, Math.PI);
+          const m = new THREE.Mesh(geo, railMat);
+          m.name = `handle_${i + 1}`;
+          m.rotation.z = Math.PI / 2; // axis along X
+          m.rotation.y = Math.PI; // face outward
+          const scaleY = handleSize > 0 ? clamp(handleSize / (2 * r), 0.35, 2.5) : 1.0;
+          m.scale.set(1, scaleY, 1);
+          m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + r);
+          setPartMeta(m, { width: hw, height: 2 * r * scaleY, depth: 2 * r });
+          setParamKeys(m, [
+            "handleType",
+            "handlePositionMm",
+            "handleLengthMm",
+            "handleSizeMm",
+            "handleProjectionMm",
+            "frontThicknessMm"
+          ]);
+          g.add(m);
+
+          const screwSpread = Math.min(hw * 0.7, Math.max(0.06, hw - 0.08));
+          addScrews2(`handle_${i + 1}`, 2, screwSpread, handleY, hd);
+        }
       }
     }
 

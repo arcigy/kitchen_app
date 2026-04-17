@@ -41,8 +41,11 @@ export type DrawerLowParams = {
   frontThicknessMm: number; // mm (front thickness can differ from carcass)
   frontStackPreset: "equal" | "top_small" | "manual";
   topFrontHeightMm: number; // mm (used when frontStackPreset=top_small)
-  handleType: "none" | "bar" | "knob" | "gola";
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
   handlePositionMm: number; // mm from top edge of each front
+  handleLengthMm: number; // mm (bar/cup/gola profile length)
+  handleSizeMm: number; // mm (bar thickness / knob diameter / gola profile height)
+  handleProjectionMm: number; // mm (bar/knob projection / cup depth / gola profile depth)
   drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
   drawerBoxSideHeight: number; // mm (drawer side/back panel height)
   drawerCount: number;
@@ -67,8 +70,11 @@ export type NestedDrawerLowParams = {
   frontThicknessMm: number; // mm
   frontStackPreset: "equal" | "top_small" | "manual";
   topFrontHeightMm: number; // mm
-  handleType: "none" | "bar" | "knob" | "gola";
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
   handlePositionMm: number; // mm from top edge of each front
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
   drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
   drawerBoxSideHeight: number; // mm (outer drawer side/back panel height)
 
@@ -208,6 +214,9 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     topFrontHeightMm: 160,
     handleType: "none",
     handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
     drawerBoxThickness: 13,
     drawerBoxSideHeight: 110,
     drawerCount: 3,
@@ -245,6 +254,9 @@ export function makeDefaultNestedDrawerLowParams(): NestedDrawerLowParams {
     topFrontHeightMm: 160,
     handleType: "none",
     handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
     drawerBoxThickness: 13,
     drawerBoxSideHeight: 110,
     drawerCount: 3,
@@ -410,10 +422,18 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
   positiveNumber(errors, "frontGap", p.frontGap, 0);
   positiveNumber(errors, "sideGap", p.sideGap, 0);
   positiveNumber(errors, "topGap", p.topGap, 0);
   positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "sideClearanceMm", p.sideClearanceMm, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+  positiveNumber(errors, "topFrontHeightMm", p.topFrontHeightMm, 20);
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
   positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
   positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
 
@@ -434,6 +454,7 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
 
   const internalWidth = p.width - 2 * p.boardThickness;
   if (internalWidth <= 50) errors.push("Width too small for boardThickness (internal width <= 50mm).");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
   const openingHeight = p.height - p.plinthHeight;
   if (openingHeight <= 80) errors.push("height - plinthHeight must be > 80mm.");
@@ -481,6 +502,9 @@ export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
   positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
   positiveNumber(errors, "topFrontHeightMm", p.topFrontHeightMm, 20);
   positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
   positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
   positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
   positiveNumber(errors, "innerDrawerDepth", p.innerDrawerDepth, 80);
@@ -503,7 +527,6 @@ export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
 
   const internalWidth = p.width - 2 * p.boardThickness;
   if (internalWidth <= 50) errors.push("Width too small for boardThickness (internal width <= 50mm).");
-  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
   if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
   const openingHeight = p.height - p.plinthHeight;

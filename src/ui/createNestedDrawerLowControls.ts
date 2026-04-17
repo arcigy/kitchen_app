@@ -120,6 +120,9 @@ export function createNestedDrawerLowControls(
   addNumber("sideClearanceMm", "Side clearance (mm)", { min: 0, step: 0.5 });
   addNumber("topFrontHeightMm", "Top front height (mm)", { min: 20, step: 1 });
   addNumber("handlePositionMm", "Handle pos from top (mm)", { min: 0, step: 1 });
+  addNumber("handleLengthMm", "Handle length (mm)", { min: 0, step: 1 });
+  addNumber("handleSizeMm", "Handle size (mm)", { min: 0, step: 1 });
+  addNumber("handleProjectionMm", "Handle projection (mm)", { min: 0, step: 1 });
 
   const stackWrap = document.createElement("div");
   stackWrap.className = "field";
@@ -156,6 +159,7 @@ export function createNestedDrawerLowControls(
     <option value="none">none</option>
     <option value="bar">bar</option>
     <option value="knob">knob</option>
+    <option value="cup">cup</option>
     <option value="gola">gola</option>
   `;
 
@@ -241,6 +245,17 @@ export function createNestedDrawerLowControls(
 
     const handlePosEl = numberFields.find((f) => f.key === "handlePositionMm")?.input ?? null;
     if (handlePosEl) handlePosEl.disabled = handleType.value === "none" || handleType.value === "gola";
+
+    const handleLenEl = numberFields.find((f) => f.key === "handleLengthMm")?.input ?? null;
+    if (handleLenEl)
+      handleLenEl.disabled =
+        handleType.value === "none" || handleType.value === "knob" ? true : false; // bar/cup/gola use length
+
+    const handleSizeEl = numberFields.find((f) => f.key === "handleSizeMm")?.input ?? null;
+    if (handleSizeEl) handleSizeEl.disabled = handleType.value === "none";
+
+    const handleProjEl = numberFields.find((f) => f.key === "handleProjectionMm")?.input ?? null;
+    if (handleProjEl) handleProjEl.disabled = handleType.value === "none";
   };
 
   const readNumber = (input: HTMLInputElement, fallback: number) => {
