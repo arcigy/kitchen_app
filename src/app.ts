@@ -70,6 +70,25 @@ export function startApp(args: AppArgs) {
 
   setDaylightIntensity(9);
 
+  // Build-mode "work light": a simple spotlight that helps with readability while editing a single module.
+  // (Hidden in layout mode.)
+  let buildLightEnabled = true;
+  let buildLightIntensity = 18;
+  const buildLight = new THREE.SpotLight(0xfff3cf, 0, 0, Math.PI / 5, 0.5, 1);
+  buildLight.name = "buildWorkLight";
+  buildLight.castShadow = false;
+  const buildLightTarget = new THREE.Object3D();
+  buildLightTarget.name = "buildWorkLightTarget";
+  scene.add(buildLightTarget);
+  buildLight.target = buildLightTarget;
+  scene.add(buildLight);
+  const buildLightViz = new THREE.Mesh(
+    new THREE.SphereGeometry(0.02, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0xfff3cf })
+  );
+  buildLightViz.name = "buildWorkLightViz";
+  buildLight.add(buildLightViz);
+
   type AppMode = "build" | "layout";
   let mode: AppMode = "build";
   let viewMode: "3d" | "2d" = "3d";
@@ -383,6 +402,59 @@ export function startApp(args: AppArgs) {
 
   const editorHost = document.createElement("div");
   buildUi.appendChild(editorHost);
+
+  // Build lighting controls
+  {
+    const lightHost = document.createElement("div");
+    lightHost.style.display = "grid";
+    lightHost.style.gap = "10px";
+    lightHost.style.padding = "10px";
+    lightHost.style.border = "1px solid var(--border)";
+    lightHost.style.borderRadius = "12px";
+    lightHost.style.background = "rgba(10,12,16,0.35)";
+    lightHost.style.marginTop = "10px";
+
+    const title = document.createElement("div");
+    title.textContent = "Build light";
+    title.style.fontWeight = "600";
+    lightHost.appendChild(title);
+
+    const mkRow = (label: string, el: HTMLElement) => {
+      const wrap = document.createElement("div");
+      wrap.className = "field";
+      wrap.style.gridTemplateColumns = "1fr 120px";
+      const l = document.createElement("label");
+      l.textContent = label;
+      wrap.appendChild(l);
+      wrap.appendChild(el);
+      lightHost.appendChild(wrap);
+    };
+
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = buildLightEnabled;
+    enabled.style.justifySelf = "start";
+    mkRow("Enabled", enabled);
+
+    const intensity = document.createElement("input");
+    intensity.type = "range";
+    intensity.min = "0";
+    intensity.max = "40";
+    intensity.step = "0.5";
+    intensity.value = String(buildLightIntensity);
+    mkRow("Intensity", intensity);
+
+    enabled.addEventListener("change", () => {
+      buildLightEnabled = enabled.checked;
+      applyBuildLight();
+    });
+    intensity.addEventListener("input", () => {
+      buildLightIntensity = Number(intensity.value);
+      applyBuildLight();
+    });
+
+    buildUi.appendChild(lightHost);
+  }
 
   // Layout UI: add/duplicate/delete + 2D toggle + selected params
   const addWrap = document.createElement("div");
@@ -1300,7 +1372,29 @@ export function startApp(args: AppArgs) {
       mountControls();
       rebuild();
     }
+
+    applyBuildLight();
   }
+
+  const applyBuildLight = () => {
+    const on = mode === "build" && buildLightEnabled;
+    buildLight.visible = on;
+    buildLightTarget.visible = on;
+    buildLight.intensity = on ? buildLightIntensity : 0;
+    if (!on || !cabinetGroup) return;
+
+    const box = new THREE.Box3().setFromObject(cabinetGroup);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    buildLight.position.set(center.x, box.max.y + maxDim * 0.55, center.z + maxDim * 1.15);
+    buildLightTarget.position.copy(center);
+
+    buildLight.distance = Math.max(2.0, maxDim * 6);
+    buildLight.angle = Math.PI / 5;
+    buildLight.penumbra = 0.5;
+  };
 
   function buildLayoutExportPayload() {
     return {
@@ -1502,6 +1596,8 @@ export function startApp(args: AppArgs) {
 
       frameOnNextRebuild = false;
     }
+
+    applyBuildLight();
   };
 
   const setModel = (
