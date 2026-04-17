@@ -1679,6 +1679,78 @@ export function startApp(args: AppArgs) {
     };
   }
 
+  const clearRelatedFields = (host: HTMLElement) => {
+    for (const el of Array.from(host.querySelectorAll(".field.is-related"))) el.classList.remove("is-related");
+  };
+
+  const getByPath = (obj: any, path: string) => {
+    if (!obj) return undefined;
+    if (!path.includes(".")) return obj[path];
+    const parts = path.split(".");
+    let cur: any = obj;
+    for (const p of parts) {
+      if (cur == null) return undefined;
+      cur = cur[p];
+    }
+    return cur;
+  };
+
+  const formatParamValue = (key: string, value: unknown) => {
+    if (value == null) return "-";
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (typeof value === "string") return value;
+    if (typeof value === "number") {
+      if (key.toLowerCase().includes("count")) return String(Math.round(value));
+      if (key.toLowerCase().includes("deg")) return `${Math.round(value)}°`;
+      const r = Math.round(value * 10) / 10;
+      return `${r} mm`;
+    }
+    return String(value);
+  };
+
+  const highlightParamKeys = (host: HTMLElement, keys: string[]) => {
+    clearRelatedFields(host);
+    const unique = Array.from(new Set(keys.filter(Boolean)));
+
+    const specialIds: Record<string, string> = {
+      handleType: "f_handleType"
+    };
+
+    let firstField: HTMLElement | null = null;
+
+    for (const k of unique) {
+      const id = specialIds[k] ?? `f_${k}`;
+      const candidates = [
+        id,
+        `f_${k.replaceAll(".", "_")}` // nested keys: materials.bodyColor -> f_materials_bodyColor
+      ];
+
+      let el: HTMLElement | null = null;
+      for (const cid of candidates) {
+        el = host.querySelector(`#${CSS.escape(cid)}`) as HTMLElement | null;
+        if (el) break;
+      }
+      if (!el) continue;
+
+      const field = el.closest(".field") as HTMLElement | null;
+      if (!field) continue;
+      field.classList.add("is-related");
+      if (!firstField) firstField = field;
+    }
+
+    firstField?.scrollIntoView({ block: "center" });
+  };
+
+  const buildSelectedParamInfo = (keys: string[], p: any) => {
+    const unique = Array.from(new Set(keys.filter(Boolean)));
+    const lines: string[] = [];
+    for (const k of unique) {
+      const v = getByPath(p, k);
+      lines.push(`${k}: ${formatParamValue(k, v)}`);
+    }
+    return lines.length ? `Related params:\n${lines.join("\n")}` : "";
+  };
+
   const selectMesh = (mesh: THREE.Mesh | null) => {
     selectedMesh = mesh;
 
@@ -1698,10 +1770,16 @@ export function startApp(args: AppArgs) {
 
     if (!mesh) {
       partPanel.setSelected(null);
+      partPanel.setSelectedParamInfo("");
+      clearRelatedFields(editorHost);
       return;
     }
 
     partPanel.setSelected(mesh.name);
+
+    const keys = Array.isArray((mesh as any).userData?.paramKeys) ? ((mesh as any).userData.paramKeys as string[]) : [];
+    partPanel.setSelectedParamInfo(buildSelectedParamInfo(keys, params as any));
+    highlightParamKeys(editorHost, keys);
 
     selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
     selectedBox.name = "selectionBox";
@@ -2077,13 +2155,18 @@ export function startApp(args: AppArgs) {
   });
   ro.observe(args.viewerEl);
 
-  renderer.domElement.addEventListener("pointerdown", (ev) => {
+  renderer.domElement.addEventListener(
+    "pointerdown",
+    (ev) => {
     // In measure mode we only accept "clicks" (short press + minimal movement).
     // A press-and-hold should not create points.
     if (measureState.enabled) {
+      // Prevent OrbitControls + browser context menu from stealing the interaction.
+      ev.preventDefault();
+      ev.stopPropagation();
+
       // Right click cancels current measurement; do not start a click/drag sequence.
       if (ev.button === 2) {
-        ev.preventDefault();
         measureState.pending = null;
         if (measureState.firstPoint) {
           measureState.firstPoint = null;
@@ -2176,6 +2259,14 @@ export function startApp(args: AppArgs) {
     const hits = raycaster.intersectObjects(meshes, false);
     const first = hits[0]?.object as THREE.Mesh | undefined;
     selectMesh(first ?? null);
+    },
+    { capture: true }
+  );
+
+  // Keep right-click usable in measure mode (no browser menu).
+  renderer.domElement.addEventListener("contextmenu", (ev) => {
+    if (!measureState.enabled) return;
+    ev.preventDefault();
   });
 
   // Live hover + preview (SketchUp-like)

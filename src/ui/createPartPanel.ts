@@ -39,13 +39,16 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   selected.innerHTML = `
     <div class="name muted">Click a part…</div>
     <div class="dims muted"></div>
+    <div class="params muted"></div>
     <button type="button" disabled>Hide selected</button>
   `;
   container.appendChild(selected);
 
   const selectedNameEl = selected.querySelector(".name") as HTMLDivElement;
   const selectedDimsEl = selected.querySelector(".dims") as HTMLDivElement;
+  const selectedParamsEl = selected.querySelector(".params") as HTMLDivElement;
   const selectedBtn = selected.querySelector("button") as HTMLButtonElement;
+  selectedParamsEl.style.whiteSpace = "pre-wrap";
 
   const list = document.createElement("div");
   list.className = "list";
@@ -68,12 +71,14 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   let rows: PartRow[] = [];
   let selectedName: string | null = null;
   let overlaps: OverlapRow[] = [];
+  let selectedParamInfo = "";
 
   const renderSelected = () => {
     if (!selectedName) {
       selectedNameEl.textContent = "Click a part…";
       selectedNameEl.classList.add("muted");
       selectedDimsEl.textContent = "";
+      selectedParamsEl.textContent = "";
       selectedBtn.disabled = true;
       selectedBtn.textContent = "Hide selected";
       return;
@@ -89,6 +94,7 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     selectedNameEl.textContent = row.name;
     selectedNameEl.classList.remove("muted");
     selectedDimsEl.textContent = formatDims(row.dimensionsMm, row.grainAlong);
+    selectedParamsEl.textContent = selectedParamInfo;
     selectedBtn.disabled = false;
     selectedBtn.textContent = row.visible ? "Hide selected" : "Show selected";
   };
@@ -189,6 +195,10 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     },
     setSelected(name: string | null) {
       selectedName = name;
+      renderSelected();
+    },
+    setSelectedParamInfo(text: string) {
+      selectedParamInfo = text;
       renderSelected();
     },
     updateVisibility(name: string, visible: boolean) {
