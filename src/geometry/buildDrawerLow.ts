@@ -14,10 +14,18 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   const boardT = p.boardThickness * MM_TO_M;
   const backT = p.backThickness * MM_TO_M;
   const plinthH = p.plinthHeight * MM_TO_M;
+  const plinthSetback = p.plinthSetbackMm * MM_TO_M;
   const frontGap = p.frontGap * MM_TO_M;
   const sideGap = p.sideGap * MM_TO_M;
   const bottomGap = p.bottomGap * MM_TO_M;
+  const sideClearance = p.sideClearanceMm * MM_TO_M;
   const drawerBoxT = p.drawerBoxThickness * MM_TO_M;
+
+  // Kickboard geometry inputs reused by legs + kickboard positioning.
+  const kickDepth = Math.min(boardT, depth * 0.2);
+  const kickSetback = Math.min(plinthSetback, depth / 2);
+  const kickCenterZ = depth / 2 - kickDepth / 2 - kickSetback;
+  const kickBackFaceZ = kickCenterZ - kickDepth / 2;
 
   const bodyMat = new THREE.MeshStandardMaterial({
     color: parseHexColor(p.materials.bodyColor),
@@ -34,6 +42,8 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     roughness: 0.8,
     metalness: 0.0
   });
+  // Modern kitchen drawers: metal sides + metal back, only the bottom panel is board (DTD/ply).
+  const drawerHardwareMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.55, metalness: 0.25 });
   const railMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.55, metalness: 0.1 });
 
   const setPartMeta = (mesh: THREE.Mesh, dimsM: { width: number; height: number; depth: number }) => {
@@ -50,6 +60,11 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     mesh.userData.dimensionsMm = { ...dimsMm };
   };
 
+  const setParamKeys = (mesh: THREE.Object3D, keys: Array<keyof DrawerLowParams | string>) => {
+    (mesh as any).userData ??= {};
+    (mesh as any).userData.paramKeys = [...keys];
+  };
+
   // Coordinate system:
   // - Y up, ground at y=0
   // - Cabinet centered on X, Z (front is +Z, back is -Z)
@@ -64,12 +79,14 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   leftSide.position.set(-(width / 2 - boardT / 2), plinthH + sideH / 2, 0);
   leftSide.name = "leftSide";
   setPartMeta(leftSide, { width: boardT, height: sideH, depth });
+  setParamKeys(leftSide, ["width", "height", "depth", "boardThickness", "plinthHeight"]);
   g.add(leftSide);
 
   const rightSide = new THREE.Mesh(sideGeo, bodyMat);
   rightSide.position.set(width / 2 - boardT / 2, plinthH + sideH / 2, 0);
   rightSide.name = "rightSide";
   setPartMeta(rightSide, { width: boardT, height: sideH, depth });
+  setParamKeys(rightSide, ["width", "height", "depth", "boardThickness", "plinthHeight"]);
   g.add(rightSide);
 
   // Interior dimensions (simplified):
@@ -84,6 +101,7 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   bottom.position.set(0, plinthH + boardT / 2, interiorCenterZ);
   bottom.name = "bottom";
   setPartMeta(bottom, { width: internalW, height: boardT, depth: internalD });
+  setParamKeys(bottom, ["width", "depth", "boardThickness", "plinthHeight"]);
   g.add(bottom);
 
   // Top stretchers (kitchen-style): front + back rails instead of a full top panel.
@@ -95,12 +113,14 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   topRailFront.position.set(0, height - boardT / 2, depth / 2 - railD / 2);
   topRailFront.name = "topRailFront";
   setPartMeta(topRailFront, { width: internalW, height: boardT, depth: railD });
+  setParamKeys(topRailFront, ["width", "depth", "height", "boardThickness"]);
   g.add(topRailFront);
 
   const topRailBack = new THREE.Mesh(railGeo, bodyMat);
   topRailBack.position.set(0, height - boardT / 2, -depth / 2 + railD / 2);
   topRailBack.name = "topRailBack";
   setPartMeta(topRailBack, { width: internalW, height: boardT, depth: railD });
+  setParamKeys(topRailBack, ["width", "depth", "height", "boardThickness"]);
   g.add(topRailBack);
 
   // Back panel (full width), mounted outside so it doesn't overlap the interior volume.
@@ -109,6 +129,7 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   back.position.set(0, plinthH + sideH / 2, -depth / 2 - backT / 2);
   back.name = "back";
   setPartMeta(back, { width, height: sideH, depth: backT });
+  setParamKeys(back, ["width", "height", "depth", "backThickness", "plinthHeight"]);
   g.add(back);
 
   // Legs (cylinders) - 4x, under the carcass, height = plinthHeight
@@ -121,7 +142,12 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     const insetZ = 0.06; // 60mm (avoid front kickboard area a bit)
     const xL = -width / 2 + insetX;
     const xR = width / 2 - insetX;
-    const zF = depth / 2 - insetZ;
+
+    // Ensure front legs are always behind the kickboard.
+    // Compare using the LEG FRONT SURFACE (center + radius), not just its center.
+    const legMaxFrontCenterZ = kickBackFaceZ - legRadius - 0.01; // keep 10mm behind the kickboard
+
+    const zF = Math.min(depth / 2 - insetZ, legMaxFrontCenterZ);
     const zB = -depth / 2 + insetZ;
 
     const addLeg = (name: string, x: number, z: number) => {
@@ -129,6 +155,7 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
       leg.name = name;
       leg.position.set(x, legH / 2, z);
       setPartMetaMm(leg, { width: legRadius * 2 * 1000, height: legH / MM_TO_M, depth: legRadius * 2 * 1000 });
+      setParamKeys(leg, ["plinthHeight", "plinthSetbackMm", "depth", "width"]);
       g.add(leg);
     };
 
@@ -136,19 +163,118 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     addLeg("leg_FR", xR, zF);
     addLeg("leg_BL", xL, zB);
     addLeg("leg_BR", xR, zB);
+
+    // Kickboard clips (realistic): a snap-on collar on the leg + an arm screwed into the kickboard.
+    const clipMat = new THREE.MeshStandardMaterial({ color: 0x606772, roughness: 0.7, metalness: 0.05 }); // plastic-ish
+    const screwMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.45, metalness: 0.35 });
+
+    const collarOuterR = legRadius + 0.004;
+    const collarH = 0.016;
+    const collarGap = Math.PI * 0.35; // opening
+    const collarGeo = new THREE.CylinderGeometry(
+      collarOuterR,
+      collarOuterR,
+      collarH,
+      24,
+      1,
+      true,
+      collarGap / 2,
+      Math.PI * 2 - collarGap
+    );
+
+    const padW = 0.03;
+    const padH = 0.012;
+    const padD = 0.012;
+    const padGeo = new THREE.BoxGeometry(padW, padH, padD);
+
+    const armH = 0.01;
+    const armW = 0.016;
+
+    const screwR = 0.0018;
+
+    // In real kitchens, plinth clips tend to sit relatively low (reachable from below),
+    // not near the very top of the leg. Keep it inside the plinth volume with a small safety margin.
+    const clipY = Math.max(
+      collarH / 2,
+      Math.min(
+        legH - collarH / 2 - 0.004,
+        // ~lower third, but never below ~40mm from the floor
+        Math.max(0.04, legH * 0.35)
+      )
+    );
+
+    const addKickClip = (namePrefix: string, x: number) => {
+      const group = new THREE.Group();
+      group.name = `${namePrefix}_group`;
+      group.position.set(x, clipY, zF);
+
+      // Collar (snaps onto leg). Opening faces backwards (-Z).
+      const collar = new THREE.Mesh(collarGeo, clipMat);
+      collar.name = `${namePrefix}_collar`;
+      collar.rotation.y = Math.PI; // orient the opening toward -Z
+      setPartMeta(collar, { width: collarOuterR * 2, height: collarH, depth: collarOuterR * 2 });
+      setParamKeys(collar, ["plinthHeight", "plinthSetbackMm", "depth", "width", "boardThickness"]);
+      group.add(collar);
+
+      // Pad sits just behind the inner face of the kickboard.
+      const padCenterZWorld = kickBackFaceZ - 0.001 - padD / 2;
+      const padRelZ = padCenterZWorld - zF;
+
+      const pad = new THREE.Mesh(padGeo, clipMat);
+      pad.name = `${namePrefix}_pad`;
+      pad.position.set(0, 0, padRelZ);
+      setPartMeta(pad, { width: padW, height: padH, depth: padD });
+      setParamKeys(pad, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
+      group.add(pad);
+
+      // Arm connects collar to pad (thin strap).
+      const armStartZ = legRadius + 0.003;
+      const armEndZ = padRelZ - padD / 2;
+      const armLen = Math.max(0.005, armEndZ - armStartZ);
+      const armGeo = new THREE.BoxGeometry(armW, armH, armLen);
+      const arm = new THREE.Mesh(armGeo, clipMat);
+      arm.name = `${namePrefix}_arm`;
+      arm.position.set(0, -padH / 2 + armH / 2, armStartZ + armLen / 2);
+      setPartMeta(arm, { width: armW, height: armH, depth: armLen });
+      setParamKeys(arm, ["plinthHeight", "plinthSetbackMm", "depth"]);
+      group.add(arm);
+
+      // Screws on the pad (into kickboard).
+      const screwLen = padD + Math.min(kickDepth * 0.85, 0.016);
+      const screwGeo = new THREE.CylinderGeometry(screwR, screwR, screwLen, 12);
+      const padBackFaceZ = padRelZ - padD / 2;
+      const screwZ = padBackFaceZ + screwLen / 2;
+      const screwOffsetY = 0.003;
+      const addScrew = (name: string, y: number) => {
+        const s = new THREE.Mesh(screwGeo, screwMat);
+        s.name = name;
+        s.rotation.x = Math.PI / 2; // align along Z
+        s.position.set(0, y, screwZ);
+        setPartMeta(s, { width: screwR * 2, height: screwR * 2, depth: screwLen });
+        setParamKeys(s, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
+        group.add(s);
+      };
+      addScrew(`${namePrefix}_screw_1`, -screwOffsetY);
+      addScrew(`${namePrefix}_screw_2`, screwOffsetY);
+
+      g.add(group);
+    };
+
+    addKickClip("kickClip_FL", xL);
+    addKickClip("kickClip_FR", xR);
   }
 
   // Plinth / kickboard (simple front plate)
-  const kickDepth = Math.min(boardT, depth * 0.2);
   const kickGeo = new THREE.BoxGeometry(width, plinthH, kickDepth);
   const kick = new THREE.Mesh(kickGeo, bodyMat);
-  kick.position.set(0, plinthH / 2, depth / 2 - kickDepth / 2);
+  kick.position.set(0, plinthH / 2, kickCenterZ);
   kick.name = "kick";
   setPartMeta(kick, { width, height: plinthH, depth: kickDepth });
+  setParamKeys(kick, ["width", "plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
   g.add(kick);
 
   // Drawer fronts (overlay across side panels)
-  const frontThickness = boardT;
+  const frontThickness = p.frontThicknessMm * MM_TO_M;
   const frontW = width - 2 * sideGap;
   const frontPlaneZ = depth / 2 + frontThickness / 2;
 
@@ -163,7 +289,119 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     front.position.set(0, cursorY + h / 2, frontPlaneZ);
     front.name = `front_${i + 1}`;
     setPartMeta(front, { width: frontW, height: h, depth: frontThickness });
+    setParamKeys(front, [
+      "width",
+      "height",
+      "depth",
+      "frontThicknessMm",
+      "sideGap",
+      "topGap",
+      "bottomGap",
+      "frontGap",
+      "drawerCount",
+      "drawerFrontHeights",
+      "frontStackPreset",
+      "topFrontHeightMm",
+      "handleType",
+      "handlePositionMm"
+    ]);
     g.add(front);
+
+    // Handle preview (for collisions / realism)
+    if (p.handleType !== "none" && p.handleType !== "gola") {
+      const handleOffsetFromTop = Math.max(0, p.handlePositionMm) * MM_TO_M;
+      const handleY = front.position.y + h / 2 - handleOffsetFromTop;
+      const screwMat2 = new THREE.MeshStandardMaterial({ color: 0x8a93a3, roughness: 0.35, metalness: 0.75 });
+
+      if (p.handleType === "bar") {
+        const hw = Math.min(frontW * 0.6, 0.35);
+        const hh = 0.012;
+        const hd = 0.012;
+        const geo = new THREE.BoxGeometry(hw, hh, hd);
+        const m = new THREE.Mesh(geo, railMat);
+        m.name = `handle_${i + 1}`;
+        m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + hd / 2);
+        setPartMeta(m, { width: hw, height: hh, depth: hd });
+        setParamKeys(m, ["handleType", "handlePositionMm", "frontThicknessMm", "width", "drawerCount", "drawerFrontHeights"]);
+        g.add(m);
+
+        // Handle hardware: two mounting screws shown on the INSIDE face of the front.
+        // (In reality you drive screws from inside through the front into the handle.)
+        const headR = 0.004;
+        const headLen = 0.0025;
+        const shaftR = 0.0016;
+        const shaftLen = Math.max(0.01, frontThickness + hd + 0.004);
+        const headGeo = new THREE.CylinderGeometry(headR, headR, headLen, 16);
+        const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 12);
+
+        const insideFaceZ = frontPlaneZ - frontThickness / 2; // ~= depth/2
+        const headZ = insideFaceZ - headLen / 2 - 0.0005;
+        const shaftZ = insideFaceZ + shaftLen / 2 - 0.0005;
+
+        const screwSpread = Math.min(hw * 0.75, Math.max(0.06, hw - 0.08));
+        const sx = screwSpread / 2;
+
+        const addScrew = (name: string, x: number) => {
+          const head = new THREE.Mesh(headGeo, screwMat2);
+          head.name = `${name}_head`;
+          head.rotation.x = Math.PI / 2; // along Z
+          head.position.set(x, handleY, headZ);
+          setPartMeta(head, { width: headR * 2, height: headR * 2, depth: headLen });
+          setParamKeys(head, ["handleType", "handlePositionMm", "frontThicknessMm"]);
+          g.add(head);
+
+          const shaft = new THREE.Mesh(shaftGeo, screwMat2);
+          shaft.name = `${name}_shaft`;
+          shaft.rotation.x = Math.PI / 2; // along Z
+          shaft.position.set(x, handleY, shaftZ);
+          setPartMeta(shaft, { width: shaftR * 2, height: shaftR * 2, depth: shaftLen });
+          setParamKeys(shaft, ["handleType", "handlePositionMm", "frontThicknessMm"]);
+          g.add(shaft);
+        };
+
+        addScrew(`handle_${i + 1}_screw_1`, -sx);
+        addScrew(`handle_${i + 1}_screw_2`, sx);
+      } else if (p.handleType === "knob") {
+        const r = 0.012;
+        const d = 0.018;
+        const geo = new THREE.CylinderGeometry(r, r, d, 18);
+        const m = new THREE.Mesh(geo, railMat);
+        m.name = `handle_${i + 1}`;
+        m.rotation.x = Math.PI / 2;
+        m.position.set(0, handleY, frontPlaneZ + frontThickness / 2 + d / 2);
+        setPartMeta(m, { width: r * 2, height: r * 2, depth: d });
+        setParamKeys(m, ["handleType", "handlePositionMm", "frontThicknessMm", "width", "drawerCount", "drawerFrontHeights"]);
+        g.add(m);
+
+        // Knob hardware: single mounting screw on the inside face.
+        const headR = 0.004;
+        const headLen = 0.0025;
+        const shaftR = 0.0016;
+        const shaftLen = Math.max(0.01, frontThickness + d + 0.004);
+        const headGeo = new THREE.CylinderGeometry(headR, headR, headLen, 16);
+        const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 12);
+
+        const insideFaceZ = frontPlaneZ - frontThickness / 2;
+        const headZ = insideFaceZ - headLen / 2 - 0.0005;
+        const shaftZ = insideFaceZ + shaftLen / 2 - 0.0005;
+
+        const head = new THREE.Mesh(headGeo, screwMat2);
+        head.name = `handle_${i + 1}_screw_1_head`;
+        head.rotation.x = Math.PI / 2;
+        head.position.set(0, handleY, headZ);
+        setPartMeta(head, { width: headR * 2, height: headR * 2, depth: headLen });
+        setParamKeys(head, ["handleType", "handlePositionMm", "frontThicknessMm"]);
+        g.add(head);
+
+        const shaft = new THREE.Mesh(shaftGeo, screwMat2);
+        shaft.name = `handle_${i + 1}_screw_1_shaft`;
+        shaft.rotation.x = Math.PI / 2;
+        shaft.position.set(0, handleY, shaftZ);
+        setPartMeta(shaft, { width: shaftR * 2, height: shaftR * 2, depth: shaftLen });
+        setParamKeys(shaft, ["handleType", "handlePositionMm", "frontThicknessMm"]);
+        g.add(shaft);
+      }
+    }
 
     // Drawer box (panels)
     // Rails (carcass-mounted) define the required side clearance.
@@ -171,7 +409,7 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     const railH = 0.045;
     const slideAllowanceX = railT + 0.003; // slide thickness + a bit of running clearance
 
-    const drawerClearSide = Math.max(0.005, sideGap * 2);
+    const drawerClearSide = Math.max(0.005, sideClearance);
     const drawerClearTopBottom = Math.max(0.006, frontGap * 2);
     // IMPORTANT: drawer box must not overlap the slides/rails.
     const drawerOuterW = Math.max(0.05, internalW - 2 * (drawerClearSide + slideAllowanceX));
@@ -194,36 +432,40 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     const drawerCenter = new THREE.Vector3(0, centerY, carcassFrontZ - drawerFrontClear - drawerOuterD / 2);
     const sideCenterY = drawerCenter.y - drawerOuterH / 2 + sideH / 2;
 
-    // Left side
+    // Left side (hardware)
     const leftSideGeo2 = new THREE.BoxGeometry(drawerBoxT, sideH, drawerOuterD);
-    const leftSide2 = new THREE.Mesh(leftSideGeo2, drawerMat);
+    const leftSide2 = new THREE.Mesh(leftSideGeo2, drawerHardwareMat);
     leftSide2.name = `drawer_${i + 1}_sideL`;
     leftSide2.position.set(drawerCenter.x - drawerOuterW / 2 + drawerBoxT / 2, sideCenterY, drawerCenter.z);
     setPartMeta(leftSide2, { width: drawerBoxT, height: sideH, depth: drawerOuterD });
+    setParamKeys(leftSide2, ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(leftSide2);
 
-    // Right side
+    // Right side (hardware)
     const rightSideGeo2 = new THREE.BoxGeometry(drawerBoxT, sideH, drawerOuterD);
-    const rightSide2 = new THREE.Mesh(rightSideGeo2, drawerMat);
+    const rightSide2 = new THREE.Mesh(rightSideGeo2, drawerHardwareMat);
     rightSide2.name = `drawer_${i + 1}_sideR`;
     rightSide2.position.set(drawerCenter.x + drawerOuterW / 2 - drawerBoxT / 2, sideCenterY, drawerCenter.z);
     setPartMeta(rightSide2, { width: drawerBoxT, height: sideH, depth: drawerOuterD });
+    setParamKeys(rightSide2, ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(rightSide2);
 
-    // Bottom
+    // Bottom (board)
     const bottomGeo2 = new THREE.BoxGeometry(innerW, drawerBoxT, innerD);
     const bottom2 = new THREE.Mesh(bottomGeo2, drawerMat);
     bottom2.name = `drawer_${i + 1}_bottom`;
     bottom2.position.set(drawerCenter.x, drawerCenter.y - drawerOuterH / 2 + drawerBoxT / 2, drawerCenter.z + drawerBoxT / 2);
     setPartMeta(bottom2, { width: innerW, height: drawerBoxT, depth: innerD });
+    setParamKeys(bottom2, ["drawerBoxThickness", "sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(bottom2);
 
-    // Back
+    // Back (hardware)
     const backGeo2 = new THREE.BoxGeometry(innerW, sideH, drawerBoxT);
-    const back2 = new THREE.Mesh(backGeo2, drawerMat);
+    const back2 = new THREE.Mesh(backGeo2, drawerHardwareMat);
     back2.name = `drawer_${i + 1}_back`;
     back2.position.set(drawerCenter.x, sideCenterY, drawerCenter.z - drawerOuterD / 2 + drawerBoxT / 2);
     setPartMeta(back2, { width: innerW, height: sideH, depth: drawerBoxT });
+    setParamKeys(back2, ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(back2);
 
     // Rails (carcass-mounted)
@@ -238,12 +480,14 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
     railL.name = `drawer_${i + 1}_railL`;
     railL.position.set(-internalW / 2 + railT / 2 + railInsetX, railCenterY, railCenterZ);
     setPartMeta(railL, { width: railT, height: railH, depth: railLen });
+    setParamKeys(railL, ["sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(railL);
 
     const railR = new THREE.Mesh(railGeo, railMat);
     railR.name = `drawer_${i + 1}_railR`;
     railR.position.set(internalW / 2 - railT / 2 - railInsetX, railCenterY, railCenterZ);
     setPartMeta(railR, { width: railT, height: railH, depth: railLen });
+    setParamKeys(railR, ["sideClearanceMm", "width", "depth", "drawerCount"]);
     g.add(railR);
 
     cursorY += h + frontGap;

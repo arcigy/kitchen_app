@@ -7,6 +7,13 @@ export type MaterialParams = {
   drawerColor: string; // "#RRGGBB"
 };
 
+// Parameter contract (keep this simple and "kitchen-real"):
+// - Every parameter must map to a real-world decision in manufacturing, ordering hardware, or installation.
+// - Avoid duplicates: one dimension/clearance should have one source of truth.
+// - Keep reveals (gaps around fronts) separate from hardware clearances (drawer slide requirements).
+// - Auto-fit vs manual: if UI is in auto-fit mode, heights are derived; if manual, user heights are respected.
+// - Defaults should look like a realistic kitchen cabinet without extra tweaking.
+
 type ShelfLayoutParams = {
   shelfCount: number; // compartments
   shelfThickness: number; // mm
@@ -25,10 +32,17 @@ export type DrawerLowParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
   frontGap: number; // mm (vertical gap between fronts)
   sideGap: number; // mm (left/right reveal)
   topGap: number; // mm (top reveal)
   bottomGap: number; // mm (bottom reveal above plinth)
+  sideClearanceMm: number; // mm (hardware clearance per side)
+  frontThicknessMm: number; // mm (front thickness can differ from carcass)
+  frontStackPreset: "equal" | "top_small" | "manual";
+  topFrontHeightMm: number; // mm (used when frontStackPreset=top_small)
+  handleType: "none" | "bar" | "knob" | "gola";
+  handlePositionMm: number; // mm from top edge of each front
   drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
   drawerBoxSideHeight: number; // mm (drawer side/back panel height)
   drawerCount: number;
@@ -44,10 +58,17 @@ export type NestedDrawerLowParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
-  frontGap: number; // mm (used as internal clearances)
+  plinthSetbackMm: number; // mm
+  frontGap: number; // mm (vertical gap between fronts)
   sideGap: number; // mm (left/right reveal)
   topGap: number; // mm (top reveal)
   bottomGap: number; // mm (bottom reveal above plinth)
+  sideClearanceMm: number; // mm
+  frontThicknessMm: number; // mm
+  frontStackPreset: "equal" | "top_small" | "manual";
+  topFrontHeightMm: number; // mm
+  handleType: "none" | "bar" | "knob" | "gola";
+  handlePositionMm: number; // mm from top edge of each front
   drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
   drawerBoxSideHeight: number; // mm (outer drawer side/back panel height)
 
@@ -176,10 +197,17 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 100,
+    plinthSetbackMm: 60,
     frontGap: 2,
     sideGap: 2,
     topGap: 2,
     bottomGap: 2,
+    sideClearanceMm: 13,
+    frontThicknessMm: 19,
+    frontStackPreset: "equal",
+    topFrontHeightMm: 160,
+    handleType: "none",
+    handlePositionMm: 60,
     drawerBoxThickness: 13,
     drawerBoxSideHeight: 110,
     drawerCount: 3,
@@ -206,10 +234,17 @@ export function makeDefaultNestedDrawerLowParams(): NestedDrawerLowParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 100,
+    plinthSetbackMm: 60,
     frontGap: 2,
     sideGap: 2,
     topGap: 2,
     bottomGap: 2,
+    sideClearanceMm: 13,
+    frontThicknessMm: 19,
+    frontStackPreset: "equal",
+    topFrontHeightMm: 160,
+    handleType: "none",
+    handlePositionMm: 60,
     drawerBoxThickness: 13,
     drawerBoxSideHeight: 110,
     drawerCount: 3,
@@ -437,10 +472,15 @@ export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
   positiveNumber(errors, "frontGap", p.frontGap, 0);
   positiveNumber(errors, "sideGap", p.sideGap, 0);
   positiveNumber(errors, "topGap", p.topGap, 0);
   positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "sideClearanceMm", p.sideClearanceMm, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+  positiveNumber(errors, "topFrontHeightMm", p.topFrontHeightMm, 20);
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
   positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
   positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
   positiveNumber(errors, "innerDrawerDepth", p.innerDrawerDepth, 80);
@@ -463,6 +503,8 @@ export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
 
   const internalWidth = p.width - 2 * p.boardThickness;
   if (internalWidth <= 50) errors.push("Width too small for boardThickness (internal width <= 50mm).");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
   const openingHeight = p.height - p.plinthHeight;
   if (openingHeight <= 80) errors.push("height - plinthHeight must be > 80mm.");
@@ -501,6 +543,19 @@ export function computeEqualNestedDrawerFrontHeights(p: NestedDrawerLowParams): 
 
   if (!Number.isFinite(available) || available <= 0) {
     return Array.from({ length: drawerCount }, () => 200);
+  }
+
+  if (p.frontStackPreset === "top_small" && drawerCount >= 2) {
+    const minEach = 20;
+    const top = Math.max(minEach, Math.min(p.topFrontHeightMm, Math.floor(available - (drawerCount - 1) * minEach)));
+    const restAvail = Math.max(0, available - top);
+    const restCount = drawerCount - 1;
+    const base = restCount > 0 ? Math.floor(restAvail / restCount) : 0;
+    const remainder = restCount > 0 ? Math.round(restAvail - base * restCount) : 0;
+
+    const out: number[] = [top];
+    for (let i = 0; i < restCount; i++) out.push(base + (i < remainder ? 1 : 0));
+    return out;
   }
 
   const base = Math.floor(available / drawerCount);
@@ -648,6 +703,19 @@ export function computeEqualDrawerFrontHeights(p: DrawerLowParams): number[] {
 
   if (!Number.isFinite(available) || available <= 0) {
     return Array.from({ length: drawerCount }, () => 200);
+  }
+
+  if (p.frontStackPreset === "top_small" && drawerCount >= 2) {
+    const minEach = 20;
+    const top = Math.max(minEach, Math.min(p.topFrontHeightMm, Math.floor(available - (drawerCount - 1) * minEach)));
+    const restAvail = Math.max(0, available - top);
+    const restCount = drawerCount - 1;
+    const base = restCount > 0 ? Math.floor(restAvail / restCount) : 0;
+    const remainder = restCount > 0 ? Math.round(restAvail - base * restCount) : 0;
+
+    const out: number[] = [top];
+    for (let i = 0; i < restCount; i++) out.push(base + (i < remainder ? 1 : 0));
+    return out;
   }
 
   const base = Math.floor(available / drawerCount);

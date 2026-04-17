@@ -3,6 +3,8 @@ import { computeEqualNestedDrawerFrontHeights } from "../model/cabinetTypes";
 
 type ControlApi = {
   syncFromParams: () => void;
+  highlightParamKeys: (keys: string[]) => void;
+  clearHighlights: () => void;
 };
 
 type CreateControlsArgs = {
@@ -29,6 +31,7 @@ export function createNestedDrawerLowControls(
     key: "materials.bodyColor" | "materials.frontColor" | "materials.drawerColor";
     input: HTMLInputElement;
   }> = [];
+  const fieldByKey = new Map<string, HTMLElement>();
 
   const addNumber = (key: keyof NestedDrawerLowParams, label: string, opts: { min?: number; step?: number } = {}) => {
     const wrap = document.createElement("div");
@@ -50,6 +53,7 @@ export function createNestedDrawerLowControls(
     grid.appendChild(wrap);
 
     numberFields.push({ key, input });
+    fieldByKey.set(String(key), wrap);
   };
 
   const addKey = (key: "materials.bodyKey" | "materials.frontKey" | "materials.drawerKey", label: string) => {
@@ -70,6 +74,7 @@ export function createNestedDrawerLowControls(
     grid.appendChild(wrap);
 
     keyFields.push({ key, input });
+    fieldByKey.set(String(key), wrap);
   };
 
   const addColor = (key: "materials.bodyColor" | "materials.frontColor" | "materials.drawerColor", label: string) => {
@@ -93,6 +98,7 @@ export function createNestedDrawerLowControls(
     grid.appendChild(wrap);
 
     colorFields.push({ key, input });
+    fieldByKey.set(String(key), wrap);
   };
 
   // Base
@@ -102,13 +108,61 @@ export function createNestedDrawerLowControls(
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
+  addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
 
   // Front / reveals
   addNumber("drawerCount", "Drawer count", { min: 2, step: 1 });
+  addNumber("frontThicknessMm", "Front thickness (mm)", { min: 5, step: 1 });
   addNumber("frontGap", "Front gap (mm)", { min: 0, step: 0.5 });
   addNumber("sideGap", "Side reveal (mm)", { min: 0, step: 0.5 });
   addNumber("topGap", "Top reveal (mm)", { min: 0, step: 0.5 });
   addNumber("bottomGap", "Bottom reveal (mm)", { min: 0, step: 0.5 });
+  addNumber("sideClearanceMm", "Side clearance (mm)", { min: 0, step: 0.5 });
+  addNumber("topFrontHeightMm", "Top front height (mm)", { min: 20, step: 1 });
+  addNumber("handlePositionMm", "Handle pos from top (mm)", { min: 0, step: 1 });
+
+  const stackWrap = document.createElement("div");
+  stackWrap.className = "field";
+  stackWrap.style.gridTemplateColumns = "1fr 120px";
+
+  const stackLabel = document.createElement("label");
+  stackLabel.textContent = "Front stack preset";
+  stackLabel.htmlFor = "f_frontStackPreset";
+
+  const stackPreset = document.createElement("select");
+  stackPreset.id = "f_frontStackPreset";
+  stackPreset.innerHTML = `
+    <option value="equal">equal</option>
+    <option value="top_small">top_small</option>
+    <option value="manual">manual</option>
+  `;
+
+  stackWrap.appendChild(stackLabel);
+  stackWrap.appendChild(stackPreset);
+  grid.appendChild(stackWrap);
+  fieldByKey.set("frontStackPreset", stackWrap);
+
+  const handleWrap = document.createElement("div");
+  handleWrap.className = "field";
+  handleWrap.style.gridTemplateColumns = "1fr 120px";
+
+  const handleLabel = document.createElement("label");
+  handleLabel.textContent = "Handle type";
+  handleLabel.htmlFor = "f_handleType";
+
+  const handleType = document.createElement("select");
+  handleType.id = "f_handleType";
+  handleType.innerHTML = `
+    <option value="none">none</option>
+    <option value="bar">bar</option>
+    <option value="knob">knob</option>
+    <option value="gola">gola</option>
+  `;
+
+  handleWrap.appendChild(handleLabel);
+  handleWrap.appendChild(handleType);
+  grid.appendChild(handleWrap);
+  fieldByKey.set("handleType", handleWrap);
 
   // Auto-fit checkbox
   const autoWrap = document.createElement("div");
@@ -116,7 +170,7 @@ export function createNestedDrawerLowControls(
   autoWrap.style.gridTemplateColumns = "1fr 120px";
 
   const autoLabel = document.createElement("label");
-  autoLabel.textContent = "Auto-fit equal fronts";
+  autoLabel.textContent = "Auto-fit fronts";
   autoLabel.htmlFor = "f_autoFit";
 
   const autoFit = document.createElement("input");
@@ -135,7 +189,7 @@ export function createNestedDrawerLowControls(
   heightsWrap.style.gridTemplateColumns = "1fr";
 
   const heightsLabel = document.createElement("label");
-  heightsLabel.textContent = "Drawer front heights (mm) – comma-separated";
+  heightsLabel.textContent = "Drawer front heights (mm) - comma-separated";
   heightsLabel.htmlFor = "f_drawerFrontHeights";
   heightsWrap.appendChild(heightsLabel);
 
@@ -145,6 +199,7 @@ export function createNestedDrawerLowControls(
   heights.placeholder = "e.g. 240, 240, 240";
   heightsWrap.appendChild(heights);
   grid.appendChild(heightsWrap);
+  fieldByKey.set("drawerFrontHeights", heightsWrap);
 
   // Drawer box
   addNumber("drawerBoxThickness", "Drawer box thickness (mm)", { min: 5, step: 1 });
@@ -171,7 +226,21 @@ export function createNestedDrawerLowControls(
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
 
     heights.value = params.drawerFrontHeights.join(", ");
+    stackPreset.value = params.frontStackPreset ?? "equal";
+    handleType.value = params.handleType ?? "none";
+    updateUiState();
+  };
+
+  const updateUiState = () => {
     heights.readOnly = autoFit.checked;
+
+    stackPreset.disabled = !autoFit.checked;
+
+    const topFrontEl = numberFields.find((f) => f.key === "topFrontHeightMm")?.input ?? null;
+    if (topFrontEl) topFrontEl.disabled = !autoFit.checked || stackPreset.value !== "top_small";
+
+    const handlePosEl = numberFields.find((f) => f.key === "handlePositionMm")?.input ?? null;
+    if (handlePosEl) handlePosEl.disabled = handleType.value === "none" || handleType.value === "gola";
   };
 
   const readNumber = (input: HTMLInputElement, fallback: number) => {
@@ -189,17 +258,22 @@ export function createNestedDrawerLowControls(
     for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);
     for (const f of colorFields) setMaterialColor(params, f.key, f.input.value);
 
+    params.handleType = (handleType.value as NestedDrawerLowParams["handleType"]) ?? "none";
+
     params.drawerCount = Math.max(2, Math.round(params.drawerCount));
 
     if (autoFit.checked) {
+      params.frontStackPreset = (stackPreset.value as NestedDrawerLowParams["frontStackPreset"]) ?? "equal";
       params.drawerFrontHeights = computeEqualNestedDrawerFrontHeights(params);
       heights.value = params.drawerFrontHeights.join(", ");
     } else {
+      params.frontStackPreset = "manual";
       const typed = parseNumbers(heights.value);
       params.drawerFrontHeights = normalizeHeights(typed, params.drawerCount);
       heights.value = params.drawerFrontHeights.join(", ");
     }
 
+    updateUiState();
     args.onChange();
   };
 
@@ -213,13 +287,31 @@ export function createNestedDrawerLowControls(
     }
     onInputsChanged();
   });
+  stackPreset.addEventListener("change", onInputsChanged);
+  handleType.addEventListener("change", onInputsChanged);
   autoFit.addEventListener("change", () => {
-    heights.readOnly = autoFit.checked;
     onInputsChanged();
   });
 
   syncFromParams();
-  return { syncFromParams };
+
+  const clearHighlights = () => {
+    for (const el of fieldByKey.values()) el.classList.remove("is-related");
+  };
+
+  const highlightParamKeys = (keys: string[]) => {
+    clearHighlights();
+    let first: HTMLElement | null = null;
+    for (const k of keys) {
+      const el = fieldByKey.get(k);
+      if (!el) continue;
+      el.classList.add("is-related");
+      if (!first) first = el;
+    }
+    first?.scrollIntoView({ block: "nearest" });
+  };
+
+  return { syncFromParams, highlightParamKeys, clearHighlights };
 }
 
 function parseNumbers(raw: string): number[] {

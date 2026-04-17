@@ -33,6 +33,7 @@ type AppArgs = {
   axisLockEl: HTMLInputElement;
   measureReadoutEl: HTMLElement;
   resetBtn: HTMLButtonElement;
+  resetViewBtn: HTMLButtonElement;
   exportBtn: HTMLButtonElement;
 };
 
@@ -40,6 +41,10 @@ export function startApp(args: AppArgs) {
   let params: ModuleParams = makeDefaultDrawerLowParams();
 
   const { scene, camera, renderer, controls, setSize } = createScene(args.viewerEl);
+
+  // When true, the next rebuild re-frames the camera to the cabinet.
+  // This is enabled on initial load, model switches, and when the user clicks "Reset view".
+  let frameOnNextRebuild = true;
 
   let cabinetGroup: THREE.Group | null = null;
   const hiddenParts = new Set<string>();
@@ -163,6 +168,13 @@ export function startApp(args: AppArgs) {
     onHighlightPair: (a, b) => highlightOverlap(a, b)
   });
 
+  let controlsApi:
+    | {
+        highlightParamKeys?: (keys: string[]) => void;
+        clearHighlights?: () => void;
+      }
+    | null = null;
+
   const selectMesh = (mesh: THREE.Mesh | null) => {
     selectedMesh = mesh;
 
@@ -175,10 +187,13 @@ export function startApp(args: AppArgs) {
 
     if (!mesh) {
       partPanel.setSelected(null);
+      controlsApi?.clearHighlights?.();
       return;
     }
 
     partPanel.setSelected(mesh.name);
+    const keys = (mesh.userData?.paramKeys as string[] | undefined) ?? [];
+    controlsApi?.highlightParamKeys?.(keys);
 
     selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
     selectedBox.name = "selectionBox";
@@ -250,23 +265,42 @@ export function startApp(args: AppArgs) {
     editorHost.innerHTML = "";
 
     if (params.type === "drawer_low") {
-      createDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else if (params.type === "nested_drawer_low") {
-      createNestedDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createNestedDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else if (params.type === "flap_shelves_low") {
-      createFlapShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createFlapShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() }) as any;
     } else if (params.type === "swing_shelves_low") {
-      createSwingShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createSwingShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() }) as any;
     } else if (params.type === "shelves") {
-      createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() }) as any;
     } else {
-      createCornerShelfLowerControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      controlsApi = createCornerShelfLowerControls(editorHost, params, { onChange: () => afterParamsChanged() }) as any;
     }
+
+    // Model switch: clear any stale highlights (selection is cleared separately).
+    controlsApi?.clearHighlights?.();
   };
 
   const afterParamsChanged = () => {
     rebuild();
     args.exportOutEl.value = "";
+  };
+
+  const frameToCabinet = () => {
+    if (!cabinetGroup) return;
+
+    const box = new THREE.Box3().setFromObject(cabinetGroup);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    controls.target.copy(center);
+    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
+    camera.near = Math.max(0.01, maxDim / 100);
+    camera.far = Math.max(50, maxDim * 20);
+    camera.updateProjectionMatrix();
+    controls.update();
   };
 
   const rebuild = () => {
@@ -304,18 +338,10 @@ export function startApp(args: AppArgs) {
       partPanel.setSelected(null);
     }
 
-    // Frame a bit better after rebuild.
-    const box = new THREE.Box3().setFromObject(cabinetGroup);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    controls.target.copy(center);
-    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
-    camera.near = Math.max(0.01, maxDim / 100);
-    camera.far = Math.max(50, maxDim * 20);
-    camera.updateProjectionMatrix();
-    controls.update();
+    if (frameOnNextRebuild) {
+      frameToCabinet();
+      frameOnNextRebuild = false;
+    }
   };
 
   const setModel = (
@@ -337,12 +363,18 @@ export function startApp(args: AppArgs) {
     hiddenParts.clear();
     selectMesh(null);
     mountControls();
+    frameOnNextRebuild = true;
     rebuild();
     args.exportOutEl.value = "";
   };
 
   args.resetBtn.addEventListener("click", () => {
     setModel(params.type);
+  });
+
+  args.resetViewBtn.addEventListener("click", () => {
+    frameOnNextRebuild = true;
+    rebuild();
   });
 
   args.exportBtn.addEventListener("click", async () => {

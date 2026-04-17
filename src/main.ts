@@ -12,6 +12,7 @@ const measureBtn = document.getElementById("measureBtn") as HTMLButtonElement | 
 const clearMeasuresBtn = document.getElementById("clearMeasuresBtn") as HTMLButtonElement | null;
 const axisLock = document.getElementById("axisLock") as HTMLInputElement | null;
 const measureReadout = document.getElementById("measureReadout");
+const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement | null;
 
 if (
   !viewer ||
@@ -24,7 +25,8 @@ if (
   !measureBtn ||
   !clearMeasuresBtn ||
   !axisLock ||
-  !measureReadout
+  !measureReadout ||
+  !resetViewBtn
 ) {
   throw new Error("Missing required DOM elements (viewer/form/errors/parts/exportOut/measure...).");
 }
@@ -42,5 +44,6 @@ startApp({
   axisLockEl: axisLock,
   measureReadoutEl: measureReadout,
   resetBtn: document.getElementById("resetBtn") as HTMLButtonElement,
+  resetViewBtn,
   exportBtn: document.getElementById("exportBtn") as HTMLButtonElement
 });
