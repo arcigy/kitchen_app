@@ -73,13 +73,15 @@ export function startApp(args: AppArgs) {
 
   // Build-mode flat lighting: even fill, no shadows (easier to work with while editing).
   let flatLightEnabled = true;
-  let flatLightIntensity = 18;
+  let flatLightIntensity = 4;
   const flatAmbient = new THREE.AmbientLight(0xffffff, 0);
   flatAmbient.name = "buildFlatAmbient";
   const flatHemi = new THREE.HemisphereLight(0xffffff, 0x3b4050, 0);
   flatHemi.name = "buildFlatHemi";
   scene.add(flatAmbient);
   scene.add(flatHemi);
+
+  let savedDaylightForFlat: number | null = null;
 
   type AppMode = "build" | "layout";
   let mode: AppMode = "build";
@@ -431,8 +433,8 @@ export function startApp(args: AppArgs) {
     const intensity = document.createElement("input");
     intensity.type = "range";
     intensity.min = "0";
-    intensity.max = "40";
-    intensity.step = "0.5";
+    intensity.max = "20";
+    intensity.step = "0.1";
     intensity.value = String(flatLightIntensity);
     mkRow("Intensity", intensity);
 
@@ -1378,15 +1380,25 @@ export function startApp(args: AppArgs) {
     flatHemi.visible = on;
 
     if (!on) {
+      if (savedDaylightForFlat !== null) {
+        setDaylightIntensity(savedDaylightForFlat);
+        savedDaylightForFlat = null;
+      }
       flatAmbient.intensity = 0;
       flatHemi.intensity = 0;
       return;
     }
 
+    if (savedDaylightForFlat === null) {
+      savedDaylightForFlat = getDaylightIntensity();
+      // Avoid double-lighting (daylight + flat) which causes overexposure.
+      setDaylightIntensity(0);
+    }
+
     // Split intensity across ambient + hemisphere so materials still have some shape.
     const i = Math.max(0, flatLightIntensity);
-    flatAmbient.intensity = i * 0.75;
-    flatHemi.intensity = i * 0.55;
+    flatAmbient.intensity = i * 0.35;
+    flatHemi.intensity = i * 0.25;
   };
 
   function buildLayoutExportPayload() {
