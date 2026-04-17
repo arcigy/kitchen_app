@@ -44,7 +44,7 @@ type AppArgs = {
   exportSceneBtn: HTMLButtonElement;
 };
 
-type MeasureMode = "planar_xz" | "vertical_y";
+type MeasureMode = "distance_3d" | "vertical_y";
 
 function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): ModuleParams {
   const t = Math.max(0, Math.round(worktopThicknessMm));
@@ -334,7 +334,7 @@ export function startApp(args: AppArgs) {
   const measureState = {
     enabled: false,
     axisLock: true,
-    mode: "planar_xz" as MeasureMode,
+    mode: "distance_3d" as MeasureMode,
     firstPoint: null as THREE.Vector3 | null,
     hoverPoint: null as THREE.Vector3 | null,
     hoverSnap: "none" as "none" | "free" | "face" | "edge" | "endpoint" | "midpoint",
@@ -380,13 +380,13 @@ export function startApp(args: AppArgs) {
 
   args.measureBtn.addEventListener("click", () => {
     measureState.enabled = !measureState.enabled;
-    measureState.mode = "planar_xz";
+    measureState.mode = "distance_3d";
     measureState.firstPoint = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     args.measureBtn.textContent = measureState.enabled ? "Measure: On" : "Measure: Off";
     args.measureReadoutEl.textContent = measureState.enabled
-      ? "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y)."
+      ? "Click 2 points to measure. Axis lock: X/Y/Z (hold Shift for vertical Y)."
       : "";
 
     if (!measureState.enabled) {
@@ -410,7 +410,7 @@ export function startApp(args: AppArgs) {
     measureState.firstPoint = null;
     clearPreview();
     args.measureReadoutEl.textContent = measureState.enabled
-      ? "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y)."
+      ? "Click 2 points to measure. Axis lock: X/Y/Z (hold Shift for vertical Y)."
       : "";
   });
 
@@ -1983,7 +1983,7 @@ export function startApp(args: AppArgs) {
 
     if (mode === "layout") {
       if (measureState.enabled) {
-        const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "planar_xz";
+        const modeHint: MeasureMode = ev.shiftKey ? "vertical_y" : "distance_3d";
         const picks = instances.map((i) => i.pick);
         if (windowInst) picks.push(windowInst.pick);
         const hits = raycaster.intersectObjects(picks, false);
@@ -2014,10 +2014,11 @@ export function startApp(args: AppArgs) {
         const a = measureState.firstPoint;
         let b = p;
         if (modeHint === "vertical_y") b = new THREE.Vector3(a.x, b.y, a.z);
-        else if (measureState.axisLock) b = axisLockXZ(a, b);
+        else if (measureState.axisLock) b = axisLockXYZ(a, b);
 
         addMeasurement(a, b, modeHint);
         measureState.firstPoint = null;
+        measureState.mode = "distance_3d";
         clearPreview();
         return;
       }
@@ -2076,7 +2077,7 @@ export function startApp(args: AppArgs) {
     const meshes = getSelectableMeshes(cabinetGroup).filter((m) => m.visible);
 
     if (measureState.enabled) {
-      if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "planar_xz";
+      if (!measureState.firstPoint) measureState.mode = ev.shiftKey ? "vertical_y" : "distance_3d";
       const modeHint: MeasureMode = measureState.firstPoint ? (ev.shiftKey ? "vertical_y" : measureState.mode) : measureState.mode;
       const hit = pickSurfacePoint(raycaster, meshes);
 
@@ -2119,11 +2120,11 @@ export function startApp(args: AppArgs) {
       if (modeHint === "vertical_y") {
         // Vertical height: keep point X/Z for cursor feedback, distance uses Y only.
         b = new THREE.Vector3(b.x, b.y, b.z);
-      } else if (measureState.axisLock) b = axisLockXZ(a, b);
+      } else if (measureState.axisLock) b = axisLockXYZ(a, b);
 
       addMeasurement(a, b, modeHint);
       measureState.firstPoint = null;
-      measureState.mode = "planar_xz";
+      measureState.mode = "distance_3d";
       clearPreview();
       return;
     }
@@ -2210,7 +2211,7 @@ export function startApp(args: AppArgs) {
         if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
         args.measureReadoutEl.textContent = measureState.firstPoint
           ? "Pick second point..."
-          : "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y).";
+          : "Click 2 points to measure. Axis lock: X/Y/Z (hold Shift for vertical Y).";
         clearPreview();
         return;
       }
@@ -2236,11 +2237,11 @@ export function startApp(args: AppArgs) {
       }
 
       if (measureState.firstPoint) {
-        const modeHint: MeasureMode = measureState.axisLock && ev.shiftKey ? "vertical_y" : "planar_xz";
+        const modeHint: MeasureMode = measureState.axisLock && ev.shiftKey ? "vertical_y" : "distance_3d";
         const a = measureState.firstPoint;
         let b = snapped.point;
         if (measureState.axisLock) {
-          b = modeHint === "vertical_y" ? new THREE.Vector3(a.x, b.y, a.z) : axisLockXZ(a, b);
+          b = modeHint === "vertical_y" ? new THREE.Vector3(a.x, b.y, a.z) : axisLockXYZ(a, b);
         }
         if (modeHint === "vertical_y" && hits[0]?.object) {
           const box = new THREE.Box3().setFromObject(hits[0].object);
@@ -2282,7 +2283,7 @@ export function startApp(args: AppArgs) {
       if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
       args.measureReadoutEl.textContent = measureState.firstPoint
         ? "Pick second point..."
-        : "Click 2 points to measure. Axis lock: X/Z (hold Shift for vertical Y).";
+        : "Click 2 points to measure. Axis lock: X/Y/Z (hold Shift for vertical Y).";
       clearPreview();
       return;
     }
@@ -2327,7 +2328,7 @@ export function startApp(args: AppArgs) {
         const all = raycaster.intersectObjects(meshes, false).map((h) => ({ object: h.object, point: h.point }));
         if (all.length > 0) b.y = snapYFromMeshHits(all, basePoint.y);
       } else if (measureState.axisLock) {
-        b = axisLockXZ(a, b);
+        b = axisLockXYZ(a, b);
       }
       updatePreview(a, b, modeHint, rect);
       if (modeHint === "vertical_y") {
@@ -2663,15 +2664,12 @@ export function startApp(args: AppArgs) {
   }
 }
 
-function planarDistanceMm(a: THREE.Vector3, b: THREE.Vector3) {
-  const dx = (b.x - a.x) * 1000;
-  const dz = (b.z - a.z) * 1000;
-  return Math.hypot(dx, dz);
-}
-
 function measureDistanceMm(a: THREE.Vector3, b: THREE.Vector3, mode: MeasureMode) {
   if (mode === "vertical_y") return Math.abs((b.y - a.y) * 1000);
-  return planarDistanceMm(a, b);
+  const dx = (b.x - a.x) * 1000;
+  const dy = (b.y - a.y) * 1000;
+  const dz = (b.z - a.z) * 1000;
+  return Math.hypot(dx, dy, dz);
 }
 
 function measureLinePoints(a: THREE.Vector3, b: THREE.Vector3, mode: MeasureMode): [THREE.Vector3, THREE.Vector3] {
@@ -2682,8 +2680,9 @@ function measureLinePoints(a: THREE.Vector3, b: THREE.Vector3, mode: MeasureMode
     return [new THREE.Vector3(x, a.y, z), new THREE.Vector3(x, b.y, z)];
   }
 
-  const y = Math.max(a.y, b.y) + 0.002;
-  return [new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z)];
+  // 3D distance line: keep the line near the real points, slightly lifted to avoid z-fighting.
+  const lift = new THREE.Vector3(0, 0.002, 0);
+  return [a.clone().add(lift), b.clone().add(lift)];
 }
 
 function snapYToBox(y: number, box: THREE.Box3, thresholdMm: number) {
@@ -2729,6 +2728,15 @@ function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
   const dz = Math.abs(b.z - a.z);
   if (dx >= dz) return new THREE.Vector3(b.x, b.y, a.z);
   return new THREE.Vector3(a.x, b.y, b.z);
+}
+
+function axisLockXYZ(a: THREE.Vector3, b: THREE.Vector3) {
+  const dx = Math.abs(b.x - a.x);
+  const dy = Math.abs(b.y - a.y);
+  const dz = Math.abs(b.z - a.z);
+  if (dx >= dy && dx >= dz) return new THREE.Vector3(b.x, a.y, a.z);
+  if (dy >= dz) return new THREE.Vector3(a.x, b.y, a.z);
+  return new THREE.Vector3(a.x, a.y, b.z);
 }
 
 type SurfaceHit = {
