@@ -336,13 +336,13 @@ export function startApp(args: AppArgs) {
     axisLock: true,
     firstPoint: null as THREE.Vector3 | null,
     hoverPoint: null as THREE.Vector3 | null,
-    hoverSnap: "none" as "none" | "free" | "edge" | "corner",
+    hoverSnap: "none" as "none" | "free" | "face" | "edge" | "endpoint" | "midpoint",
     previewLine: null as THREE.Line | null,
     previewLabel: null as HTMLDivElement | null,
     cursorEl: null as HTMLDivElement | null,
     measures: [] as Array<
       | {
-          kind: "line";
+        kind: "line";
           a: THREE.Vector3;
           b: THREE.Vector3;
           line: THREE.Line;
@@ -1995,7 +1995,11 @@ export function startApp(args: AppArgs) {
         if (!basePoint) return;
 
         const box = hits[0]?.object ? new THREE.Box3().setFromObject(hits[0].object) : null;
-        const snapped = box ? snapPointXZ(basePoint, box, 22) : { point: basePoint.clone(), kind: "free" as const };
+        const snapped0 = box ? snapPointXZ(basePoint, box, 22) : { point: basePoint.clone(), kind: "free" as const };
+        const snapped = {
+          point: snapped0.point,
+          kind: (snapped0.kind === "corner" ? "endpoint" : snapped0.kind) as "free" | "edge" | "endpoint"
+        };
         const p = snapped.point.clone();
         if (modeHint === "vertical_y" && box) p.y = snapYToBoxClosest(p.y, box);
 
@@ -2089,7 +2093,9 @@ export function startApp(args: AppArgs) {
         return;
       }
 
-      const snapped = hit ? snapHitToGeometry(hit, 10) : { point: basePoint.clone(), kind: "free" as const };
+      const snapped = hit
+        ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
+        : { point: basePoint.clone(), kind: "free" as const };
       const p = snapped.point.clone();
       if (modeHint === "vertical_y") {
         const boxFine = hit?.object ? new THREE.Box3().setFromObject(hit.object) : null;
@@ -2203,9 +2209,13 @@ export function startApp(args: AppArgs) {
         return;
       }
 
-      const snapped = hits[0]?.object
+      const snapped0 = hits[0]?.object
         ? snapPointXZ(basePoint, new THREE.Box3().setFromObject(hits[0].object), 22)
         : { point: basePoint.clone(), kind: "free" as const };
+      const snapped = {
+        point: snapped0.point,
+        kind: (snapped0.kind === "corner" ? "endpoint" : snapped0.kind) as "free" | "edge" | "endpoint"
+      };
 
       measureState.hoverPoint = snapped.point;
       measureState.hoverSnap = snapped.kind;
@@ -2215,7 +2225,7 @@ export function startApp(args: AppArgs) {
         measureState.cursorEl.style.left = `${s.x}px`;
         measureState.cursorEl.style.top = `${s.y}px`;
         measureState.cursorEl.style.display = "block";
-        const c = snapped.kind === "corner" ? "#ff4dff" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
+        const c = snapped.kind === "endpoint" ? "#59ff7b" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
         measureState.cursorEl.style.borderColor = c;
       }
 
@@ -2270,7 +2280,9 @@ export function startApp(args: AppArgs) {
       return;
     }
 
-    const snapped = hit ? snapHitToGeometry(hit, 10) : { point: basePoint.clone(), kind: "free" as const };
+    const snapped = hit
+      ? snapHitToFeatureEdges({ ray: raycaster.ray, hit, camera: cam(), rect, aperturePx: 14 })
+      : { point: basePoint.clone(), kind: "free" as const };
     measureState.hoverPoint = snapped.point;
     measureState.hoverSnap = snapped.kind;
 
@@ -2280,8 +2292,17 @@ export function startApp(args: AppArgs) {
       measureState.cursorEl.style.left = `${s.x}px`;
       measureState.cursorEl.style.top = `${s.y}px`;
       measureState.cursorEl.style.display = "block";
-      // Color by snap state: corner=magenta, edge=yellow, free=cyan
-      const c = snapped.kind === "corner" ? "#ff4dff" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
+      // Color by snap state
+      const c =
+        snapped.kind === "endpoint"
+          ? "#59ff7b"
+          : snapped.kind === "midpoint"
+            ? "#ffd166"
+            : snapped.kind === "edge"
+              ? "#ffd166"
+              : snapped.kind === "face"
+                ? "#00e5ff"
+                : "#9aa6b2";
       measureState.cursorEl.style.borderColor = c;
     }
 
@@ -2685,6 +2706,115 @@ function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]): Sur
   };
 }
 
+const featureEdgeCache = new WeakMap<THREE.BufferGeometry, Float32Array>();
+
+function getFeatureEdgesLocal(geo: THREE.BufferGeometry) {
+  const cached = featureEdgeCache.get(geo);
+  if (cached) return cached;
+
+  // EdgesGeometry returns only "feature" edges (diagonals are filtered out by angle threshold).
+  const edges = new THREE.EdgesGeometry(geo, 20);
+  const pos = edges.getAttribute("position") as THREE.BufferAttribute;
+  const arr = new Float32Array(pos.array as ArrayLike<number>);
+  featureEdgeCache.set(geo, arr);
+  edges.dispose();
+  return arr;
+}
+
+function closestPointRayToSegment(ray: THREE.Ray, a: THREE.Vector3, b: THREE.Vector3) {
+  const p = ray.origin;
+  const d = ray.direction;
+  const v = new THREE.Vector3().subVectors(b, a);
+  const r = new THREE.Vector3().subVectors(p, a);
+
+  const vv = v.dot(v);
+  if (vv <= 1e-12) {
+    const q = a.clone();
+    const s = Math.max(0, d.dot(new THREE.Vector3().subVectors(q, p)));
+    const pr = p.clone().addScaledVector(d, s);
+    return { t: 0, q, pr, dist: q.distanceTo(pr) };
+  }
+
+  const dv = d.dot(v);
+  const dr = d.dot(r);
+  const vr = v.dot(r);
+  const denom = vv - dv * dv; // since d·d = 1
+
+  let t = 0;
+  if (Math.abs(denom) > 1e-10) {
+    // Unconstrained optimum on infinite line/segment param.
+    t = (vr - dv * dr) / denom;
+  } else {
+    // Almost parallel: fall back to projection of p onto segment.
+    t = vr / vv;
+  }
+
+  t = clamp(t, 0, 1);
+  const q = a.clone().addScaledVector(v, t);
+  const s = Math.max(0, d.dot(new THREE.Vector3().subVectors(q, p)));
+  const pr = p.clone().addScaledVector(d, s);
+  return { t, q, pr, dist: q.distanceTo(pr) };
+}
+
+function worldApertureForHitPx(camera: THREE.Camera, rect: DOMRect, hitPoint: THREE.Vector3, aperturePx: number) {
+  const px = Math.max(1, aperturePx);
+
+  if ((camera as any).isPerspectiveCamera) {
+    const cam = camera as THREE.PerspectiveCamera;
+    const depth = cam.position.distanceTo(hitPoint);
+    const fov = (cam.fov * Math.PI) / 180;
+    const worldPerPx = (2 * depth * Math.tan(fov / 2)) / Math.max(1, rect.height);
+    return worldPerPx * px;
+  }
+
+  if ((camera as any).isOrthographicCamera) {
+    const cam = camera as THREE.OrthographicCamera;
+    const worldH = (cam.top - cam.bottom) / Math.max(1e-6, cam.zoom);
+    const worldPerPx = worldH / Math.max(1, rect.height);
+    return worldPerPx * px;
+  }
+
+  return 0.01;
+}
+
+function snapHitToFeatureEdges(args: {
+  ray: THREE.Ray;
+  hit: SurfaceHit;
+  camera: THREE.Camera;
+  rect: DOMRect;
+  aperturePx?: number;
+}): { point: THREE.Vector3; kind: "endpoint" | "midpoint" | "edge" | "face" } {
+  const aperturePx = args.aperturePx ?? 12;
+  const mesh = args.hit.object;
+  const geo = mesh.geometry as THREE.BufferGeometry;
+  const edgesLocal = getFeatureEdgesLocal(geo);
+
+  const threshold = worldApertureForHitPx(args.camera, args.rect, args.hit.point, aperturePx);
+
+  let bestKind: "endpoint" | "midpoint" | "edge" | "face" = "face";
+  let bestPoint = args.hit.point.clone();
+  let bestD = Infinity;
+
+  // Iterate edge segments (pairs of vertices).
+  for (let i = 0; i + 5 < edgesLocal.length; i += 6) {
+    const a = new THREE.Vector3(edgesLocal[i + 0], edgesLocal[i + 1], edgesLocal[i + 2]).applyMatrix4(mesh.matrixWorld);
+    const b = new THREE.Vector3(edgesLocal[i + 3], edgesLocal[i + 4], edgesLocal[i + 5]).applyMatrix4(mesh.matrixWorld);
+
+    const res = closestPointRayToSegment(args.ray, a, b);
+    if (res.dist > threshold) continue;
+
+    if (res.dist < bestD) {
+      bestD = res.dist;
+      bestPoint = res.q;
+      if (res.t < 0.08 || res.t > 0.92) bestKind = "endpoint";
+      else if (Math.abs(res.t - 0.5) < 0.08) bestKind = "midpoint";
+      else bestKind = "edge";
+    }
+  }
+
+  return { point: bestPoint, kind: bestKind };
+}
+
 function snapPointXZ(
   point: THREE.Vector3,
   target: THREE.Object3D | THREE.Box3,
@@ -2733,70 +2863,8 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
 }
 
-function snapHitToGeometry(hit: SurfaceHit, thresholdMm: number) {
-  const t = Math.max(0, thresholdMm) / 1000; // mm -> m
-  const mesh = hit.object;
-  const geo = mesh.geometry as THREE.BufferGeometry;
-  const pos = geo.getAttribute("position") as THREE.BufferAttribute | null;
-  if (!pos) return { point: hit.point.clone(), kind: "face" as const };
-
-  const index = geo.getIndex();
-  const triIndex = hit.faceIndex ?? null;
-  if (triIndex === null) return { point: hit.point.clone(), kind: "face" as const };
-
-  const getV = (i: number) => {
-    const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
-    return v.applyMatrix4(mesh.matrixWorld);
-  };
-
-  // three.js faceIndex is the triangle number, not vertex index.
-  const i0 = index ? index.getX(triIndex * 3 + 0) : triIndex * 3 + 0;
-  const i1 = index ? index.getX(triIndex * 3 + 1) : triIndex * 3 + 1;
-  const i2 = index ? index.getX(triIndex * 3 + 2) : triIndex * 3 + 2;
-
-  const v0 = getV(i0);
-  const v1 = getV(i1);
-  const v2 = getV(i2);
-
-  // Candidates: vertices + closest points on triangle edges (like basic OSNAP).
-  const edgeClosest = (a: THREE.Vector3, b: THREE.Vector3) => closestPointOnSegment(hit.point, a, b);
-  const cands: Array<{ p: THREE.Vector3; kind: "vertex" | "edge" | "face" }> = [
-    { p: v0, kind: "vertex" },
-    { p: v1, kind: "vertex" },
-    { p: v2, kind: "vertex" },
-    { p: edgeClosest(v0, v1), kind: "edge" },
-    { p: edgeClosest(v1, v2), kind: "edge" },
-    { p: edgeClosest(v2, v0), kind: "edge" },
-    { p: hit.point.clone(), kind: "face" }
-  ];
-
-  let best = hit.point.clone();
-  let bestKind: "vertex" | "edge" | "face" = "face";
-  let bestD = Infinity;
-  for (const c of cands) {
-    const d = c.p.distanceTo(hit.point);
-    if (d < bestD) {
-      bestD = d;
-      best = c.p;
-      bestKind = c.kind;
-    }
-  }
-
-  if (bestKind !== "face" && bestD <= t) return { point: best.clone(), kind: bestKind };
-  return { point: hit.point.clone(), kind: "face" as const };
-}
-
-function closestPointOnSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) {
-  const ab = new THREE.Vector3().subVectors(b, a);
-  const ap = new THREE.Vector3().subVectors(p, a);
-  const denom = ab.lengthSq();
-  if (denom <= 1e-12) return a.clone();
-  const t = clamp(ap.dot(ab) / denom, 0, 1);
-  return a.clone().addScaledVector(ab, t);
-}
-
 function formatMm(v: THREE.Vector3) {
-  return `${Math.round(v.x * 1000)}, ${Math.round(v.z * 1000)}`;
+  return `${Math.round(v.x * 1000)}, ${Math.round(v.y * 1000)}, ${Math.round(v.z * 1000)}`;
 }
 
 function worldToScreen(world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) {
