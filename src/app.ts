@@ -2598,9 +2598,13 @@ export function startApp(args: AppArgs) {
     const p2 = pts[1];
 
     const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-    const material = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+    const material = new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.95 });
+    // Draw on top without offsetting geometry (avoids "looks slightly above the edge").
+    material.depthTest = false;
+    material.depthWrite = false;
     const line = new THREE.Line(geometry, material);
     line.name = "measureLine";
+    line.renderOrder = 10_000;
     scene.add(line);
 
     const label = document.createElement("div");
@@ -2675,9 +2679,12 @@ export function startApp(args: AppArgs) {
 
     if (!measureState.previewLine) {
       const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const material = new THREE.LineBasicMaterial({ color: 0x88f7ff });
+      const material = new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 0.9 });
+      material.depthTest = false;
+      material.depthWrite = false;
       const line = new THREE.Line(geometry, material);
       line.name = "measurePreviewLine";
+      line.renderOrder = 10_000;
       scene.add(line);
       measureState.previewLine = line;
     } else {
@@ -2732,15 +2739,12 @@ function measureDistanceMm(a: THREE.Vector3, b: THREE.Vector3, mode: MeasureMode
 
 function measureLinePoints(a: THREE.Vector3, b: THREE.Vector3, mode: MeasureMode): [THREE.Vector3, THREE.Vector3] {
   if (mode === "vertical_y") {
-    // Tiny X offset keeps the line visible above surfaces.
-    const x = a.x + 0.002;
-    const z = a.z;
-    return [new THREE.Vector3(x, a.y, z), new THREE.Vector3(x, b.y, z)];
+    // Draw exactly on the snapped edge; visibility is handled via depthTest=false on the line material.
+    return [new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(a.x, b.y, a.z)];
   }
 
   // 3D distance line: keep the line near the real points, slightly lifted to avoid z-fighting.
-  const lift = new THREE.Vector3(0, 0.002, 0);
-  return [a.clone().add(lift), b.clone().add(lift)];
+  return [a.clone(), b.clone()];
 }
 
 function snapYToBox(y: number, box: THREE.Box3, thresholdMm: number) {
