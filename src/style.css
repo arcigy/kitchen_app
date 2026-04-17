@@ -35,6 +35,24 @@ body {
   min-width: 0;
 }
 
+#resetViewBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(27, 32, 48, 0.9);
+  color: var(--text);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+#resetViewBtn:hover {
+  background: rgba(35, 42, 62, 0.95);
+}
+
 #sidebar {
   border-left: 1px solid var(--border);
   background: var(--panel);
@@ -64,6 +82,16 @@ body {
   grid-template-columns: 1fr 120px;
   align-items: center;
   gap: 10px;
+}
+
+.field.is-related {
+  outline: 2px solid rgba(255, 209, 102, 0.9);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.field.is-related label {
+  color: #ffd166;
 }
 
 label {

@@ -1,12 +1,23 @@
 import * as THREE from "three";
 import type { ModuleParams } from "./model/cabinetTypes";
-import { makeDefaultCornerShelfLowerParams, makeDefaultDrawerLowParams, makeDefaultShelvesParams, validateModule } from "./model/cabinetTypes";
+import {
+  makeDefaultCornerShelfLowerParams,
+  makeDefaultDrawerLowParams,
+  makeDefaultFlapShelvesLowParams,
+  makeDefaultNestedDrawerLowParams,
+  makeDefaultShelvesParams,
+  makeDefaultSwingShelvesLowParams,
+  validateModule
+} from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./scene/createScene";
 import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./scene/disposeObject3D";
 import { createDrawerLowControls } from "./ui/createDrawerLowControls";
+import { createNestedDrawerLowControls } from "./ui/createNestedDrawerLowControls";
+import { createFlapShelvesLowControls } from "./ui/createFlapShelvesLowControls";
+import { createSwingShelvesLowControls } from "./ui/createSwingShelvesLowControls";
 import { createShelvesControls } from "./ui/createShelvesControls";
 import { createCornerShelfLowerControls } from "./ui/createCornerShelfLowerControls";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
@@ -359,6 +370,9 @@ export function startApp(args: AppArgs) {
 
   modelSelect.innerHTML = `
       <option value="drawer_low">drawer_low</option>
+      <option value="nested_drawer_low">nested_drawer_low</option>
+      <option value="flap_shelves_low">flap_shelves_low</option>
+      <option value="swing_shelves_low">swing_shelves_low</option>
       <option value="shelves">shelves</option>
       <option value="corner_shelf_lower">corner_shelf_lower</option>
     `;
@@ -1408,11 +1422,21 @@ export function startApp(args: AppArgs) {
     ];
   };
 
+  // Keep the user's view stable while they adjust parameters.
+  // We only reframe on initial load and when switching models.
+  let frameOnNextRebuild = true;
+
   const mountControls = () => {
     editorHost.innerHTML = "";
 
     if (params.type === "drawer_low") {
       createDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "nested_drawer_low") {
+      createNestedDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "flap_shelves_low") {
+      createFlapShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+    } else if (params.type === "swing_shelves_low") {
+      createSwingShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else if (params.type === "shelves") {
       createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else {
@@ -1461,33 +1485,45 @@ export function startApp(args: AppArgs) {
       partPanel.setSelected(null);
     }
 
-    // Frame a bit better after rebuild.
-    const box = new THREE.Box3().setFromObject(cabinetGroup);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    if (frameOnNextRebuild) {
+      const box = new THREE.Box3().setFromObject(cabinetGroup);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
 
-    const controls = ctl();
-    const camera = cam() as THREE.PerspectiveCamera;
-    controls.target.copy(center);
-    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
-    camera.near = Math.max(0.01, maxDim / 100);
-    camera.far = Math.max(50, maxDim * 20);
-    camera.updateProjectionMatrix();
-    controls.update();
+      const controls = ctl();
+      const camera = cam() as THREE.PerspectiveCamera;
+      controls.target.copy(center);
+      camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
+      camera.near = Math.max(0.01, maxDim / 100);
+      camera.far = Math.max(50, maxDim * 20);
+      camera.updateProjectionMatrix();
+      controls.update();
+
+      frameOnNextRebuild = false;
+    }
   };
 
-  const setModel = (type: "drawer_low" | "shelves" | "corner_shelf_lower") => {
+  const setModel = (
+    type: "drawer_low" | "nested_drawer_low" | "flap_shelves_low" | "swing_shelves_low" | "shelves" | "corner_shelf_lower"
+  ) => {
     params =
       type === "drawer_low"
         ? makeDefaultDrawerLowParams()
-        : type === "shelves"
-          ? makeDefaultShelvesParams()
-          : makeDefaultCornerShelfLowerParams();
+        : type === "nested_drawer_low"
+          ? makeDefaultNestedDrawerLowParams()
+          : type === "flap_shelves_low"
+            ? makeDefaultFlapShelvesLowParams()
+            : type === "swing_shelves_low"
+              ? makeDefaultSwingShelvesLowParams()
+              : type === "shelves"
+                ? makeDefaultShelvesParams()
+                : makeDefaultCornerShelfLowerParams();
     modelSelect.value = type;
     hiddenParts.clear();
     selectMesh(null);
     mountControls();
+    frameOnNextRebuild = true;
     rebuild();
     args.exportOutEl.value = "";
   };
@@ -1876,7 +1912,17 @@ export function startApp(args: AppArgs) {
     if (mode !== "build") return;
     const v = modelSelect.value;
     const next =
-      v === "shelves" ? "shelves" : v === "corner_shelf_lower" ? "corner_shelf_lower" : "drawer_low";
+      v === "nested_drawer_low"
+        ? "nested_drawer_low"
+        : v === "flap_shelves_low"
+          ? "flap_shelves_low"
+          : v === "swing_shelves_low"
+            ? "swing_shelves_low"
+            : v === "shelves"
+              ? "shelves"
+              : v === "corner_shelf_lower"
+                ? "corner_shelf_lower"
+                : "drawer_low";
     setModel(next);
   });
 

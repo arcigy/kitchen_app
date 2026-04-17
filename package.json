@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5180",
+    "dev": "vite",
+    "dev:bg": "node tools/dev-server.mjs start",
+    "dev:stop": "node tools/dev-server.mjs stop",
+    "dev:status": "node tools/dev-server.mjs status",
     "build": "vite build",
     "preview": "vite preview",
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
