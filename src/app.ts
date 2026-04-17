@@ -1464,12 +1464,7 @@ export function startApp(args: AppArgs) {
     selectedBox.name = "selectionBox";
     scene.add(selectedBox);
 
-    const grain = computeGrainArrow(mesh);
-    if (grain) {
-      grainArrow = new THREE.ArrowHelper(grain.dir, grain.origin, grain.length, 0x3ddc97, grain.length * 0.22, grain.length * 0.12);
-      grainArrow.name = "grainArrow";
-      scene.add(grainArrow);
-    }
+    // Grain direction arrows are intentionally disabled (too noisy for most users).
   };
 
   window.addEventListener("keydown", (ev) => {
@@ -2140,14 +2135,7 @@ export function startApp(args: AppArgs) {
       const inst = findInstance(selectedInstanceId);
       if (inst) selectedInstanceBox.setFromObject(inst.root);
     }
-    if (grainArrow && selectedMesh) {
-      const grain = computeGrainArrow(selectedMesh);
-      if (grain) {
-        grainArrow.position.copy(grain.origin);
-        grainArrow.setDirection(grain.dir);
-        grainArrow.setLength(grain.length, grain.length * 0.22, grain.length * 0.12);
-      }
-    }
+    // Grain arrow intentionally disabled.
     for (const o of overlapBoxes) o.helper.setFromObject(o.mesh);
     updateMeasureLabels();
 
