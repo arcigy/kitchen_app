@@ -187,14 +187,24 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   setParamKeys(bottom, ["width", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(bottom);
 
-  // Top panel
-  const topGeo = new THREE.BoxGeometry(internalW, boardT, internalD);
-  const top = new THREE.Mesh(topGeo, bodyMat);
-  top.name = "top";
-  top.position.set(0, height - boardT / 2, interiorCenterZ);
-  setPartMeta(top, { width: internalW, height: boardT, depth: internalD }, "width");
-  setParamKeys(top, ["width", "depth", "height", "boardThickness"]);
-  g.add(top);
+  // Top stretchers (kitchen-style): front + back rails instead of a full top panel.
+  // This saves material but still keeps the carcass rigid.
+  const railD = Math.min(depth * 0.25, Math.max(0.06, boardT * 3)); // ~60-140mm
+  const railGeo = new THREE.BoxGeometry(internalW, boardT, railD);
+
+  const topRailFront = new THREE.Mesh(railGeo, bodyMat);
+  topRailFront.name = "topRailFront";
+  topRailFront.position.set(0, height - boardT / 2, depth / 2 - railD / 2);
+  setPartMeta(topRailFront, { width: internalW, height: boardT, depth: railD }, "width");
+  setParamKeys(topRailFront, ["width", "depth", "height", "boardThickness"]);
+  g.add(topRailFront);
+
+  const topRailBack = new THREE.Mesh(railGeo, bodyMat);
+  topRailBack.name = "topRailBack";
+  topRailBack.position.set(0, height - boardT / 2, -depth / 2 + railD / 2);
+  setPartMeta(topRailBack, { width: internalW, height: boardT, depth: railD }, "width");
+  setParamKeys(topRailBack, ["width", "depth", "height", "boardThickness"]);
+  g.add(topRailBack);
 
   // Back panel
   const backGeo = new THREE.BoxGeometry(width, sideH, backT);
@@ -240,6 +250,97 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     addLeg("leg_FR", xR, zF);
     addLeg("leg_BL", xL, zB);
     addLeg("leg_BR", xR, zB);
+
+    // Kickboard clips (realistic): a snap-on collar on the leg + an arm screwed into the kickboard.
+    const clipMat = new THREE.MeshStandardMaterial({ color: 0x606772, roughness: 0.7, metalness: 0.05 }); // plastic-ish
+    const screwMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.45, metalness: 0.35 });
+
+    const collarOuterR = legRadius + 0.004;
+    const collarH = 0.016;
+    const collarGap = Math.PI * 0.35; // opening
+    const collarGeo = new THREE.CylinderGeometry(
+      collarOuterR,
+      collarOuterR,
+      collarH,
+      24,
+      1,
+      true,
+      collarGap / 2,
+      Math.PI * 2 - collarGap
+    );
+
+    const padW = 0.03;
+    const padH = 0.012;
+    const padD = 0.012;
+    const padGeo = new THREE.BoxGeometry(padW, padH, padD);
+
+    const armH = 0.01;
+    const armW = 0.016;
+
+    const screwR = 0.0018;
+
+    // In real kitchens, plinth clips tend to sit relatively low (reachable from below).
+    const clipY = Math.max(collarH / 2, Math.min(legH - collarH / 2 - 0.004, Math.max(0.04, legH * 0.35)));
+
+    const addKickClip = (namePrefix: string, x: number) => {
+      const group = new THREE.Group();
+      group.name = `${namePrefix}_group`;
+      group.position.set(x, clipY, zF);
+
+      // Collar (snaps onto leg). Opening faces backwards (-Z).
+      const collar = new THREE.Mesh(collarGeo, clipMat);
+      collar.name = `${namePrefix}_collar`;
+      collar.rotation.y = Math.PI;
+      setPartMeta(collar, { width: collarOuterR * 2, height: collarH, depth: collarOuterR * 2 }, "none");
+      setParamKeys(collar, ["plinthHeight", "plinthSetbackMm", "depth", "width", "boardThickness", "wallMounted"]);
+      group.add(collar);
+
+      // Pad sits just behind the inner face of the kickboard.
+      const padCenterZWorld = kickBackFaceZ - 0.001 - padD / 2;
+      const padRelZ = padCenterZWorld - zF;
+
+      const pad = new THREE.Mesh(padGeo, clipMat);
+      pad.name = `${namePrefix}_pad`;
+      pad.position.set(0, 0, padRelZ);
+      setPartMeta(pad, { width: padW, height: padH, depth: padD }, "none");
+      setParamKeys(pad, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness", "wallMounted"]);
+      group.add(pad);
+
+      // Arm connects collar to pad (thin strap).
+      const armStartZ = legRadius + 0.003;
+      const armEndZ = padRelZ - padD / 2;
+      const armLen = Math.max(0.005, armEndZ - armStartZ);
+      const armGeo = new THREE.BoxGeometry(armW, armH, armLen);
+      const arm = new THREE.Mesh(armGeo, clipMat);
+      arm.name = `${namePrefix}_arm`;
+      arm.position.set(0, 0, armStartZ + armLen / 2);
+      setPartMeta(arm, { width: armW, height: armH, depth: armLen }, "none");
+      setParamKeys(arm, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness", "wallMounted"]);
+      group.add(arm);
+
+      // Screws (approx)
+      const screwLen = Math.max(0.008, padD + 0.016);
+      const screwGeo = new THREE.CylinderGeometry(screwR, screwR, screwLen, 12);
+      const padBackFaceZ = padRelZ - padD / 2;
+      const screwZ = padBackFaceZ + screwLen / 2;
+      const screwOffsetY = 0.003;
+      const addScrew = (name: string, y: number) => {
+        const s = new THREE.Mesh(screwGeo, screwMat);
+        s.name = name;
+        s.rotation.x = Math.PI / 2;
+        s.position.set(0, y, screwZ);
+        setPartMeta(s, { width: screwR * 2, height: screwR * 2, depth: screwLen }, "none");
+        setParamKeys(s, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness", "wallMounted"]);
+        group.add(s);
+      };
+      addScrew(`${namePrefix}_screw_1`, -screwOffsetY);
+      addScrew(`${namePrefix}_screw_2`, screwOffsetY);
+
+      g.add(group);
+    };
+
+    addKickClip("kickClip_FL", xL);
+    addKickClip("kickClip_FR", xR);
   }
 
   // Kickboard (front)
