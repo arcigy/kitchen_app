@@ -142,6 +142,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   // Door split (freezer + fridge)
   addNumber("freezerDoorHeightMm", "Freezer door height (mm)", { min: 50, step: 1 });
   addNumber("fridgeDoorGapMm", "Door gap (mm)", { min: 0, step: 0.5 });
+  addNumber("doorHandleOffsetFromSplitMm", "Handle offset from split (mm)", { min: 0, step: 1 });
 
   // No top cabinet in this variant (the unit ends at the fridge height).
 

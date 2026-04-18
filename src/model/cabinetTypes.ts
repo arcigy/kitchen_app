@@ -362,6 +362,7 @@ export type FridgeTallParams = {
   // Fridge door fronts (2-piece, typical: freezer bottom + fridge top)
   freezerDoorHeightMm: number; // mm (height of the lower door front)
   fridgeDoorGapMm: number; // mm (gap between the two doors)
+  doorHandleOffsetFromSplitMm: number; // mm (distance from the split line to handle center on each door)
 
   materials: MaterialParams;
 };
@@ -865,6 +866,7 @@ export function makeDefaultFridgeTallParams(): FridgeTallParams {
 
     freezerDoorHeightMm: 700,
     fridgeDoorGapMm: 2,
+    doorHandleOffsetFromSplitMm: 45,
 
     materials: {
       bodyKey: "carcass_default",
@@ -1035,6 +1037,7 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   positiveNumber(errors, "gapAboveDrawersMm", p.gapAboveDrawersMm, 0);
   positiveNumber(errors, "freezerDoorHeightMm", p.freezerDoorHeightMm, 50);
   positiveNumber(errors, "fridgeDoorGapMm", p.fridgeDoorGapMm, 0);
+  positiveNumber(errors, "doorHandleOffsetFromSplitMm", p.doorHandleOffsetFromSplitMm, 0);
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
   if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");

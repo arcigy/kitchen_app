@@ -369,7 +369,10 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     const xEdge = w / 2 - Math.max(8, edgeInsetMm) * MM_TO_M;
 
     // Y near the split line (as close as reasonable given handle size).
-    const splitInsetMm = clamp(handleSizeMm > 0 ? handleSizeMm / 2 + 8 : 14, 8, 30);
+    const userOffsetMm = Number((p as any).doorHandleOffsetFromSplitMm);
+    const splitInsetMm = Number.isFinite(userOffsetMm)
+      ? clamp(userOffsetMm, 0, 120)
+      : clamp(handleSizeMm > 0 ? handleSizeMm / 2 + 8 : 14, 8, 30);
     const y = where === "nearTop" ? h / 2 - splitInsetMm * MM_TO_M : -h / 2 + splitInsetMm * MM_TO_M;
 
     if (p.handleType === "gola") {
