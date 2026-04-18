@@ -379,7 +379,10 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
       const geo = new THREE.BoxGeometry(golaW, golaH, golaD);
       const m = new THREE.Mesh(geo, railMat);
       m.name = name;
-      const cx = clamp(xEdge - golaW / 2, -w / 2 + golaW / 2, w / 2 - golaW / 2);
+      // Rotate so the "length" runs vertically.
+      m.rotation.z = Math.PI / 2;
+      // After rotation, X extent becomes golaH.
+      const cx = clamp(xEdge - golaH / 2, -w / 2 + golaH / 2, w / 2 - golaH / 2);
       m.position.set(cx, y, t / 2 - golaD / 2 + 0.002);
       front.add(m);
       return;
@@ -392,8 +395,10 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
       const geo = new THREE.BoxGeometry(hw, hh, hd);
       const m = new THREE.Mesh(geo, railMat);
       m.name = name;
-      // Hug the edge by placing the RIGHT side of the handle at xEdge.
-      const cx = clamp(xEdge - hw / 2, -w / 2 + hw / 2, w / 2 - hw / 2);
+      // Rotate so the "length" runs vertically.
+      m.rotation.z = Math.PI / 2;
+      // After rotation, X extent becomes hh.
+      const cx = clamp(xEdge - hh / 2, -w / 2 + hh / 2, w / 2 - hh / 2);
       m.position.set(cx, y, t / 2 + hd / 2);
       front.add(m);
       return;
@@ -418,8 +423,8 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     const geo = new THREE.CapsuleGeometry(r, Math.max(0.001, hw - 2 * r), 8, 20);
     const m = new THREE.Mesh(geo, railMat);
     m.name = name;
-    m.rotation.z = Math.PI / 2;
-    const cx = clamp(xEdge - hw / 2, -w / 2 + hw / 2, w / 2 - hw / 2);
+    // Capsule is vertical by default (axis along Y).
+    const cx = clamp(xEdge, -w / 2 + r, w / 2 - r);
     m.position.set(cx, y, t / 2 + d / 2);
     front.add(m);
   }
