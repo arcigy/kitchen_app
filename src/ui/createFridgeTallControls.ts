@@ -15,6 +15,8 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   container.appendChild(grid);
 
   const numberFields: Array<{ key: keyof FridgeTallParams; input: HTMLInputElement }> = [];
+  const keyFields: Array<{ key: "materials.bodyKey" | "materials.frontKey"; input: HTMLInputElement }> = [];
+  const colorFields: Array<{ key: "materials.bodyColor" | "materials.frontColor"; input: HTMLInputElement }> = [];
   let fridgePresetSelect: HTMLSelectElement | null = null;
 
   const addNumber = (key: keyof FridgeTallParams, label: string, opts: { min?: number; step?: number } = {}) => {
@@ -35,6 +37,41 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     numberFields.push({ key, input });
   };
 
+  const addKey = (key: "materials.bodyKey" | "materials.frontKey", label: string) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    lab.htmlFor = `f_${key.replaceAll(".", "_")}`;
+    const input = document.createElement("input");
+    input.id = `f_${key.replaceAll(".", "_")}`;
+    input.type = "text";
+    input.placeholder = "e.g. egger_u999_st2";
+    wrap.appendChild(lab);
+    wrap.appendChild(input);
+    grid.appendChild(wrap);
+    keyFields.push({ key, input });
+  };
+
+  const addColor = (key: "materials.bodyColor" | "materials.frontColor", label: string) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    lab.htmlFor = `f_${key.replaceAll(".", "_")}`;
+    const input = document.createElement("input");
+    input.id = `f_${key.replaceAll(".", "_")}`;
+    input.type = "color";
+    input.style.width = "120px";
+    input.style.height = "36px";
+    input.style.padding = "0";
+    input.style.borderRadius = "10px";
+    wrap.appendChild(lab);
+    wrap.appendChild(input);
+    grid.appendChild(wrap);
+    colorFields.push({ key, input });
+  };
+
   // Base
   addNumber("width", "Width (mm)", { min: 200, step: 1 });
   addNumber("height", "Height (mm)", { min: 400, step: 1 });
@@ -44,27 +81,11 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
   addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
 
-  // Drawer fronts (optional)
-  addNumber("drawerCount", "Drawer count", { min: 0, step: 1 });
-  addNumber("frontThicknessMm", "Front thickness (mm)", { min: 5, step: 1 });
-  addNumber("frontGap", "Drawer front gap (mm)", { min: 0, step: 0.5 });
+  // Doors (reveals + thickness)
+  addNumber("frontThicknessMm", "Door thickness (mm)", { min: 5, step: 1 });
   addNumber("sideGap", "Side reveal (mm)", { min: 0, step: 0.5 });
   addNumber("topGap", "Top reveal (mm)", { min: 0, step: 0.5 });
   addNumber("bottomGap", "Bottom reveal (mm)", { min: 0, step: 0.5 });
-
-  const heightsWrap = document.createElement("div");
-  heightsWrap.className = "field";
-  heightsWrap.style.gridTemplateColumns = "1fr";
-  const heightsLabel = document.createElement("label");
-  heightsLabel.textContent = "Drawer front heights (mm) – comma-separated (count = drawerCount)";
-  heightsLabel.htmlFor = "f_drawerFrontHeights";
-  heightsWrap.appendChild(heightsLabel);
-  const heights = document.createElement("textarea");
-  heights.id = "f_drawerFrontHeights";
-  heights.rows = 2;
-  heights.placeholder = "e.g. 200, 200";
-  heightsWrap.appendChild(heights);
-  grid.appendChild(heightsWrap);
 
   // Handles (same contract as other models)
   const handleWrap = document.createElement("div");
@@ -86,12 +107,9 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   handleWrap.appendChild(handleType);
   grid.appendChild(handleWrap);
 
-  addNumber("handlePositionMm", "Handle position from top (mm)", { min: 0, step: 1 });
   addNumber("handleLengthMm", "Handle length (mm)", { min: 0, step: 1 });
   addNumber("handleSizeMm", "Handle size (mm)", { min: 0, step: 1 });
   addNumber("handleProjectionMm", "Handle projection (mm)", { min: 0, step: 1 });
-
-  addNumber("gapAboveDrawersMm", "Gap above drawers (mm)", { min: 0, step: 1 });
 
   // Fridge niche
   addNumber("fridgeWidthMm", "Fridge niche width (mm)", { min: 100, step: 1 });
@@ -146,6 +164,11 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
 
   // No top cabinet in this variant (the unit ends at the fridge height).
 
+  addKey("materials.bodyKey", "Body material key");
+  addKey("materials.frontKey", "Fronts material key");
+  addColor("materials.bodyColor", "Body color");
+  addColor("materials.frontColor", "Fronts color");
+
   const readNumber = (input: HTMLInputElement, fallback: number) => {
     const n = Number(input.value);
     return Number.isFinite(n) ? n : fallback;
@@ -153,8 +176,6 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
 
   const updateUiState = () => {
     const type = (handleType.value as FridgeTallParams["handleType"]) ?? "none";
-    const pos = numberFields.find((f) => f.key === "handlePositionMm")?.input ?? null;
-    if (pos) pos.disabled = type === "none" || type === "gola";
     const len = numberFields.find((f) => f.key === "handleLengthMm")?.input ?? null;
     if (len) len.disabled = type === "none" || type === "knob";
     const size = numberFields.find((f) => f.key === "handleSizeMm")?.input ?? null;
@@ -168,8 +189,9 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
       const value = params[f.key];
       f.input.value = typeof value === "number" ? String(value) : "";
     }
-    heights.value = params.drawerFrontHeights.join(", ");
     handleType.value = (params.handleType as any) ?? "none";
+    for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
+    for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
     if (fridgePresetSelect) {
       const w = Math.round(Number(params.fridgeWidthMm));
       const h = Math.round(Number(params.fridgeHeightMm));
@@ -179,31 +201,15 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     updateUiState();
   };
 
-  const parseHeights = (txt: string) =>
-    txt
-      .split(",")
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isFinite(n));
-
-  const normalizeHeights = (arr: number[], count: number) => {
-    const out = arr.slice(0, count);
-    while (out.length < count) out.push(out[out.length - 1] ?? 200);
-    return out.map((n) => Math.max(1, Math.round(n)));
-  };
-
   const onInputsChanged = () => {
     for (const f of numberFields) {
       const current = params[f.key];
       if (typeof current !== "number") continue;
       (params[f.key] as number) = readNumber(f.input, current);
     }
-
-    params.drawerCount = Math.max(0, Math.min(6, Math.round(params.drawerCount)));
     params.handleType = (handleType.value as any) ?? "none";
-
-    const typed = parseHeights(heights.value);
-    params.drawerFrontHeights = normalizeHeights(typed, params.drawerCount);
-    heights.value = params.drawerFrontHeights.join(", ");
+    for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);
+    for (const f of colorFields) setMaterialColor(params, f.key, f.input.value);
 
     updateUiState();
     args.onChange();
@@ -212,9 +218,30 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   for (const f of numberFields) {
     f.input.addEventListener("input", onInputsChanged);
   }
-  heights.addEventListener("input", onInputsChanged);
+  for (const f of keyFields) f.input.addEventListener("input", onInputsChanged);
+  for (const f of colorFields) f.input.addEventListener("input", onInputsChanged);
   handleType.addEventListener("change", onInputsChanged);
 
   syncFromParams();
   return { syncFromParams };
+}
+
+function getMaterialKey(params: FridgeTallParams, key: "materials.bodyKey" | "materials.frontKey") {
+  if (key === "materials.bodyKey") return params.materials.bodyKey ?? "";
+  return params.materials.frontKey ?? "";
+}
+
+function setMaterialKey(params: FridgeTallParams, key: "materials.bodyKey" | "materials.frontKey", value: string) {
+  if (key === "materials.bodyKey") params.materials.bodyKey = value;
+  else params.materials.frontKey = value;
+}
+
+function getMaterialColor(params: FridgeTallParams, key: "materials.bodyColor" | "materials.frontColor") {
+  if (key === "materials.bodyColor") return params.materials.bodyColor ?? "#ffffff";
+  return params.materials.frontColor ?? "#ffffff";
+}
+
+function setMaterialColor(params: FridgeTallParams, key: "materials.bodyColor" | "materials.frontColor", value: string) {
+  if (key === "materials.bodyColor") params.materials.bodyColor = value;
+  else params.materials.frontColor = value;
 }

@@ -333,18 +333,15 @@ export type FridgeTallParams = {
   plinthHeight: number; // mm
   plinthSetbackMm: number; // mm
 
-  // Optional bottom drawers (some tall units have small drawers at the bottom)
-  frontGap: number; // mm
-  sideGap: number; // mm
-  topGap: number; // mm (reveal above the top door)
-  bottomGap: number; // mm
-  frontThicknessMm: number; // mm
-  drawerCount: number; // 0..6
-  drawerFrontHeights: number[]; // mm (count=drawerCount)
+  // Front reveals + thickness
+  sideGap: number; // mm (left/right reveal)
+  topGap: number; // mm (top reveal)
+  bottomGap: number; // mm (bottom reveal above plinth)
+  frontThicknessMm: number; // mm (door thickness)
 
   // Handles (same contract as drawer_low)
   handleType: "none" | "bar" | "knob" | "cup" | "gola";
-  handlePositionMm: number; // mm from top edge of each drawer front / top flap
+  handlePositionMm: number; // mm (kept for parity; not used for fridge side handles)
   handleLengthMm: number; // mm
   handleSizeMm: number; // mm
   handleProjectionMm: number; // mm
@@ -356,8 +353,6 @@ export type FridgeTallParams = {
   fridgeSideClearanceMm: number;
   fridgeTopClearanceMm: number;
   fridgeBottomClearanceMm: number;
-
-  gapAboveDrawersMm: number; // mm (vertical spacer above bottom drawers before fridge zone)
 
   // Fridge door fronts (2-piece, typical: freezer bottom + fridge top)
   freezerDoorHeightMm: number; // mm (height of the lower door front)
@@ -840,13 +835,10 @@ export function makeDefaultFridgeTallParams(): FridgeTallParams {
     plinthHeight: plinthH,
     plinthSetbackMm: 0,
 
-    frontGap: 2,
     sideGap: 2,
     topGap: 2,
     bottomGap: 2,
     frontThicknessMm: 19,
-    drawerCount: 0,
-    drawerFrontHeights: [],
 
     handleType: "bar",
     handlePositionMm: 60,
@@ -861,8 +853,6 @@ export function makeDefaultFridgeTallParams(): FridgeTallParams {
     fridgeSideClearanceMm: 2,
     fridgeTopClearanceMm: topClear,
     fridgeBottomClearanceMm: bottomClear,
-
-    gapAboveDrawersMm: 10,
 
     freezerDoorHeightMm: 700,
     fridgeDoorGapMm: 2,
@@ -1010,18 +1000,10 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
   positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
 
-  positiveNumber(errors, "frontGap", p.frontGap, 0);
   positiveNumber(errors, "sideGap", p.sideGap, 0);
   positiveNumber(errors, "topGap", p.topGap, 0);
   positiveNumber(errors, "bottomGap", p.bottomGap, 0);
   positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
-
-  if (!Number.isInteger(p.drawerCount) || p.drawerCount < 0 || p.drawerCount > 6) errors.push("drawerCount must be 0..6.");
-  if (!Array.isArray(p.drawerFrontHeights) || p.drawerFrontHeights.some((n) => typeof n !== "number")) {
-    errors.push("drawerFrontHeights must be an array of numbers.");
-  } else if (p.drawerFrontHeights.length !== p.drawerCount) {
-    errors.push("drawerFrontHeights count must match drawerCount.");
-  }
 
   positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
   positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
@@ -1034,10 +1016,15 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   positiveNumber(errors, "fridgeSideClearanceMm", p.fridgeSideClearanceMm, 0);
   positiveNumber(errors, "fridgeTopClearanceMm", p.fridgeTopClearanceMm, 0);
   positiveNumber(errors, "fridgeBottomClearanceMm", p.fridgeBottomClearanceMm, 0);
-  positiveNumber(errors, "gapAboveDrawersMm", p.gapAboveDrawersMm, 0);
   positiveNumber(errors, "freezerDoorHeightMm", p.freezerDoorHeightMm, 50);
   positiveNumber(errors, "fridgeDoorGapMm", p.fridgeDoorGapMm, 0);
   positiveNumber(errors, "doorHandleOffsetFromSplitMm", p.doorHandleOffsetFromSplitMm, 0);
+
+  // Door split sanity: freezer height + gap must fit into the available door zone.
+  const doorZoneHm = Math.max(0, p.fridgeHeightMm + p.fridgeTopClearanceMm + p.fridgeBottomClearanceMm - p.topGap - p.bottomGap);
+  if (p.freezerDoorHeightMm + p.fridgeDoorGapMm >= doorZoneHm - 10) {
+    errors.push("Door split does not fit: freezerDoorHeightMm + fridgeDoorGapMm is too large for available height.");
+  }
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
   if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
@@ -1048,15 +1035,8 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   }
 
   // Ensure the niche height actually fits inside the cabinet height (top panel counts as part of height).
-  const drawerCount = Math.max(0, Math.min(6, Math.round(p.drawerCount)));
-  const drawerHeights = Array.isArray(p.drawerFrontHeights) ? p.drawerFrontHeights.slice(0, drawerCount) : [];
-  const sumDrawerHeights = drawerHeights.reduce((acc, n) => acc + (Number.isFinite(n) ? Math.max(0, n) : 0), 0);
-  const sumFrontGaps = drawerCount > 0 ? Math.max(0, p.frontGap) * Math.max(0, drawerCount - 1) : 0;
-  const baseStartMm = p.plinthHeight + p.boardThickness + (drawerCount > 0 ? p.bottomGap : 0);
-  const afterDrawersMm =
-    baseStartMm + (drawerCount > 0 ? sumDrawerHeights + sumFrontGaps + Math.max(0, p.gapAboveDrawersMm) + p.boardThickness : 0);
   const fridgeZoneMm = Math.max(0, p.fridgeHeightMm) + Math.max(0, p.fridgeTopClearanceMm) + Math.max(0, p.fridgeBottomClearanceMm);
-  const requiredMinHeightMm = afterDrawersMm + fridgeZoneMm + p.boardThickness;
+  const requiredMinHeightMm = p.plinthHeight + 2 * p.boardThickness + fridgeZoneMm;
   if (p.height + 0.5 < requiredMinHeightMm) {
     errors.push("Cabinet height too small: fridge niche + clearances does not fit.");
   }

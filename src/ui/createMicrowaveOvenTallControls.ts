@@ -97,7 +97,7 @@ export function createMicrowaveOvenTallControls(
   heightsWrap.className = "field";
   heightsWrap.style.gridTemplateColumns = "1fr";
   const heightsLabel = document.createElement("label");
-  heightsLabel.textContent = "Drawer front heights (mm) – comma-separated (count = drawerCount)";
+  heightsLabel.textContent = "Drawer front heights (mm) - comma-separated (count = drawerCount)";
   heightsLabel.htmlFor = "f_drawerFrontHeights";
   heightsWrap.appendChild(heightsLabel);
   const heights = document.createElement("textarea");

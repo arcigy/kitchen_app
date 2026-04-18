@@ -18,7 +18,6 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
   const plinthH = Math.max(0, p.plinthHeight) * MM_TO_M;
   const plinthSetback = Math.max(0, p.plinthSetbackMm) * MM_TO_M;
 
-  const frontGap = Math.max(0, p.frontGap) * MM_TO_M;
   const sideGap = Math.max(0, p.sideGap) * MM_TO_M;
   const topGap = Math.max(0, p.topGap) * MM_TO_M;
   const bottomGap = Math.max(0, p.bottomGap) * MM_TO_M;
@@ -163,49 +162,8 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     g.add(kick);
   }
 
-  // Optional bottom drawers
-  const drawerCount = Math.max(0, Math.min(6, Math.round(p.drawerCount)));
-  const drawerHeights = (Array.isArray(p.drawerFrontHeights) ? p.drawerFrontHeights : []).slice(0, drawerCount);
-  while (drawerHeights.length < drawerCount) drawerHeights.push(drawerHeights[drawerHeights.length - 1] ?? 200);
-
-  const frontPlaneZ = depth / 2 + frontT / 2;
-  const frontW = Math.max(0.05, width - 2 * sideGap);
-  const hasDrawers = drawerCount > 0;
-  let cursorY = plinthH + boardT + (hasDrawers ? bottomGap : 0);
-  for (let i = 0; i < drawerCount; i++) {
-    const h = Math.max(0.02, (drawerHeights[i] ?? 200) * MM_TO_M);
-    const geo = new THREE.BoxGeometry(frontW, h, frontT);
-    const front = new THREE.Mesh(geo, frontMat);
-    front.name = `drawerFront_${i + 1}`;
-    front.position.set(0, cursorY + h / 2, frontPlaneZ);
-    setPartMeta(front, { width: frontW, height: h, depth: frontT }, "height");
-    setParamKeys(front, [
-      "drawerCount",
-      "drawerFrontHeights",
-      "frontGap",
-      "sideGap",
-      "bottomGap",
-      "frontThicknessMm",
-      "handleType",
-      "handlePositionMm",
-      "handleLengthMm",
-      "handleSizeMm",
-      "handleProjectionMm"
-    ]);
-    g.add(front);
-
-    addCenteredHandle(front, `drawerHandle_${i + 1}`, frontW, h, frontT);
-    cursorY += h + (i === drawerCount - 1 ? 0 : frontGap);
-  }
-
-  const drawersTopY = cursorY + (hasDrawers ? Math.max(0, p.gapAboveDrawersMm) * MM_TO_M : 0);
-  if (hasDrawers) {
-    const div1Y = drawersTopY + boardT / 2;
-    addDivider("divider_drawers", div1Y, ["gapAboveDrawersMm", "drawerFrontHeights", "boardThickness"]);
-  }
-
   // Fridge niche zone
-  const fridgeZoneStartY = hasDrawers ? drawersTopY + boardT : plinthH + boardT;
+  const fridgeZoneStartY = plinthH + boardT;
   const fridgeZoneH =
     (Math.max(0, p.fridgeHeightMm) + Math.max(0, p.fridgeTopClearanceMm) + Math.max(0, p.fridgeBottomClearanceMm)) * MM_TO_M;
   const fridgeZoneTopY = fridgeZoneStartY + fridgeZoneH;
@@ -214,7 +172,12 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
   {
     const doorW = Math.max(0.05, width - 2 * sideGap);
     const gap = Math.max(0, p.fridgeDoorGapMm) * MM_TO_M;
-    const zoneH = Math.max(0.12, fridgeZoneH);
+
+    // Doors sit within the fridge zone, but keep reveals at top/bottom.
+    const doorZoneMinY = fridgeZoneStartY + bottomGap;
+    const doorZoneMaxY = fridgeZoneTopY - topGap;
+    const zoneH = Math.max(0.12, doorZoneMaxY - doorZoneMinY);
+
     const freezerH = clamp(Math.max(0.05, p.freezerDoorHeightMm * MM_TO_M), 0.08, Math.max(0.08, zoneH - gap - 0.08));
     const fridgeH = Math.max(0.08, zoneH - freezerH - gap);
 
@@ -223,11 +186,13 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     const freezerGeo = new THREE.BoxGeometry(doorW, freezerH, frontT);
     const freezerDoor = new THREE.Mesh(freezerGeo, frontMat);
     freezerDoor.name = "freezerDoorFront";
-    freezerDoor.position.set(0, fridgeZoneStartY + freezerH / 2, doorPlaneZ);
+    freezerDoor.position.set(0, doorZoneMinY + freezerH / 2, doorPlaneZ);
     setPartMeta(freezerDoor, { width: doorW, height: freezerH, depth: frontT }, "height");
     setParamKeys(freezerDoor, [
       "freezerDoorHeightMm",
       "fridgeDoorGapMm",
+      "topGap",
+      "bottomGap",
       "fridgeHeightMm",
       "fridgeTopClearanceMm",
       "fridgeBottomClearanceMm",
@@ -245,11 +210,13 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     const fridgeGeo = new THREE.BoxGeometry(doorW, fridgeH, frontT);
     const fridgeDoor = new THREE.Mesh(fridgeGeo, frontMat);
     fridgeDoor.name = "fridgeDoorFront";
-    fridgeDoor.position.set(0, fridgeZoneStartY + freezerH + gap + fridgeH / 2, doorPlaneZ);
+    fridgeDoor.position.set(0, doorZoneMinY + freezerH + gap + fridgeH / 2, doorPlaneZ);
     setPartMeta(fridgeDoor, { width: doorW, height: fridgeH, depth: frontT }, "height");
     setParamKeys(fridgeDoor, [
       "freezerDoorHeightMm",
       "fridgeDoorGapMm",
+      "topGap",
+      "bottomGap",
       "fridgeHeightMm",
       "fridgeTopClearanceMm",
       "fridgeBottomClearanceMm",
@@ -369,7 +336,7 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     const xEdge = w / 2 - Math.max(8, edgeInsetMm) * MM_TO_M;
 
     // Y near the split line (as close as reasonable given handle size).
-    const userOffsetMm = Number((p as any).doorHandleOffsetFromSplitMm);
+    const userOffsetMm = Number(p.doorHandleOffsetFromSplitMm);
     const splitInsetMm = Number.isFinite(userOffsetMm)
       ? clamp(userOffsetMm, 0, 120)
       : clamp(handleSizeMm > 0 ? handleSizeMm / 2 + 8 : 14, 8, 30);
