@@ -240,7 +240,7 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
       "handleProjectionMm"
     ]);
     g.add(freezerDoor);
-    addCenteredHandle(freezerDoor, "freezerDoor_handle", doorW, freezerH, frontT);
+    addSplitSideHandle(freezerDoor, "freezerDoor_handle", doorW, freezerH, frontT, "nearTop");
 
     const fridgeGeo = new THREE.BoxGeometry(doorW, fridgeH, frontT);
     const fridgeDoor = new THREE.Mesh(fridgeGeo, frontMat);
@@ -262,7 +262,7 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
       "handleProjectionMm"
     ]);
     g.add(fridgeDoor);
-    addCenteredHandle(fridgeDoor, "fridgeDoor_handle", doorW, fridgeH, frontT);
+    addSplitSideHandle(fridgeDoor, "fridgeDoor_handle", doorW, fridgeH, frontT, "nearBottom");
   }
 
   // Fridge dummy (visual only)
@@ -344,6 +344,83 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     m.name = name;
     m.rotation.z = Math.PI / 2;
     m.position.set(0, y, t / 2 + d / 2);
+    front.add(m);
+  }
+
+  // For fridge doors we want "two handles above each other" near the split line and near the side edge.
+  // Bottom (freezer) handle: near top edge. Top (fridge) handle: near bottom edge.
+  function addSplitSideHandle(
+    front: THREE.Mesh,
+    name: string,
+    w: number,
+    h: number,
+    t: number,
+    where: "nearTop" | "nearBottom"
+  ) {
+    if (p.handleType === "none") return;
+
+    const handleLen = Math.max(0, p.handleLengthMm) * MM_TO_M;
+    const handleSizeMm = Math.max(0, p.handleSizeMm);
+    const handleSize = handleSizeMm * MM_TO_M;
+    const handleProj = Math.max(0, p.handleProjectionMm) * MM_TO_M;
+
+    // X near edge (right side by default, matches common fridge layout).
+    const edgeInsetMm = 50;
+    const xEdge = w / 2 - Math.max(8, edgeInsetMm) * MM_TO_M;
+
+    // Y near the split line (as close as reasonable given handle size).
+    const splitInsetMm = clamp(handleSizeMm > 0 ? handleSizeMm / 2 + 8 : 14, 8, 30);
+    const y = where === "nearTop" ? h / 2 - splitInsetMm * MM_TO_M : -h / 2 + splitInsetMm * MM_TO_M;
+
+    if (p.handleType === "gola") {
+      const golaH = clamp(handleSize, 0.006, 0.05);
+      const golaD = clamp(handleProj, 0.006, 0.04);
+      const golaW = clamp(handleLen > 0 ? handleLen : Math.min(w * 0.45, 0.28), 0.06, w);
+      const geo = new THREE.BoxGeometry(golaW, golaH, golaD);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = name;
+      const cx = clamp(xEdge - golaW / 2, -w / 2 + golaW / 2, w / 2 - golaW / 2);
+      m.position.set(cx, y, t / 2 - golaD / 2 + 0.002);
+      front.add(m);
+      return;
+    }
+
+    if (p.handleType === "bar") {
+      const hw = clamp(handleLen > 0 ? handleLen : Math.min(w * 0.5, 0.28), 0.06, w * 0.95);
+      const hh = clamp(handleSize > 0 ? handleSize : 0.012, 0.006, 0.05);
+      const hd = clamp(handleProj > 0 ? handleProj : 0.012, 0.006, 0.06);
+      const geo = new THREE.BoxGeometry(hw, hh, hd);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = name;
+      // Hug the edge by placing the RIGHT side of the handle at xEdge.
+      const cx = clamp(xEdge - hw / 2, -w / 2 + hw / 2, w / 2 - hw / 2);
+      m.position.set(cx, y, t / 2 + hd / 2);
+      front.add(m);
+      return;
+    }
+
+    if (p.handleType === "knob") {
+      const r = clamp(handleSize > 0 ? handleSize / 2 : 0.01, 0.006, 0.03);
+      const d = clamp(handleProj > 0 ? handleProj : 0.02, 0.006, 0.06);
+      const geo = new THREE.SphereGeometry(r, 18, 12);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = name;
+      const cx = clamp(xEdge, -w / 2 + r, w / 2 - r);
+      m.position.set(cx, y, t / 2 + d / 2);
+      front.add(m);
+      return;
+    }
+
+    // cup
+    const hw = clamp(handleLen > 0 ? handleLen : Math.min(w * 0.5, 0.28), 0.06, w * 0.95);
+    const r = clamp(handleSize > 0 ? handleSize / 2 : 0.01, 0.006, 0.03);
+    const d = clamp(handleProj > 0 ? handleProj : 0.02, 0.006, 0.06);
+    const geo = new THREE.CapsuleGeometry(r, Math.max(0.001, hw - 2 * r), 8, 20);
+    const m = new THREE.Mesh(geo, railMat);
+    m.name = name;
+    m.rotation.z = Math.PI / 2;
+    const cx = clamp(xEdge - hw / 2, -w / 2 + hw / 2, w / 2 - hw / 2);
+    m.position.set(cx, y, t / 2 + d / 2);
     front.add(m);
   }
 
