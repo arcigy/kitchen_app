@@ -210,6 +210,61 @@ export function buildFridgeTall(p: FridgeTallParams): THREE.Group {
     (Math.max(0, p.fridgeHeightMm) + Math.max(0, p.fridgeTopClearanceMm) + Math.max(0, p.fridgeBottomClearanceMm)) * MM_TO_M;
   const fridgeZoneTopY = fridgeZoneStartY + fridgeZoneH;
 
+  // Two-piece door fronts (freezer bottom + fridge top).
+  {
+    const doorW = Math.max(0.05, width - 2 * sideGap);
+    const gap = Math.max(0, p.fridgeDoorGapMm) * MM_TO_M;
+    const zoneH = Math.max(0.12, fridgeZoneH);
+    const freezerH = clamp(Math.max(0.05, p.freezerDoorHeightMm * MM_TO_M), 0.08, Math.max(0.08, zoneH - gap - 0.08));
+    const fridgeH = Math.max(0.08, zoneH - freezerH - gap);
+
+    const doorPlaneZ = depth / 2 + frontT / 2;
+
+    const freezerGeo = new THREE.BoxGeometry(doorW, freezerH, frontT);
+    const freezerDoor = new THREE.Mesh(freezerGeo, frontMat);
+    freezerDoor.name = "freezerDoorFront";
+    freezerDoor.position.set(0, fridgeZoneStartY + freezerH / 2, doorPlaneZ);
+    setPartMeta(freezerDoor, { width: doorW, height: freezerH, depth: frontT }, "height");
+    setParamKeys(freezerDoor, [
+      "freezerDoorHeightMm",
+      "fridgeDoorGapMm",
+      "fridgeHeightMm",
+      "fridgeTopClearanceMm",
+      "fridgeBottomClearanceMm",
+      "sideGap",
+      "frontThicknessMm",
+      "handleType",
+      "handlePositionMm",
+      "handleLengthMm",
+      "handleSizeMm",
+      "handleProjectionMm"
+    ]);
+    g.add(freezerDoor);
+    addCenteredHandle(freezerDoor, "freezerDoor_handle", doorW, freezerH, frontT);
+
+    const fridgeGeo = new THREE.BoxGeometry(doorW, fridgeH, frontT);
+    const fridgeDoor = new THREE.Mesh(fridgeGeo, frontMat);
+    fridgeDoor.name = "fridgeDoorFront";
+    fridgeDoor.position.set(0, fridgeZoneStartY + freezerH + gap + fridgeH / 2, doorPlaneZ);
+    setPartMeta(fridgeDoor, { width: doorW, height: fridgeH, depth: frontT }, "height");
+    setParamKeys(fridgeDoor, [
+      "freezerDoorHeightMm",
+      "fridgeDoorGapMm",
+      "fridgeHeightMm",
+      "fridgeTopClearanceMm",
+      "fridgeBottomClearanceMm",
+      "sideGap",
+      "frontThicknessMm",
+      "handleType",
+      "handlePositionMm",
+      "handleLengthMm",
+      "handleSizeMm",
+      "handleProjectionMm"
+    ]);
+    g.add(fridgeDoor);
+    addCenteredHandle(fridgeDoor, "fridgeDoor_handle", doorW, fridgeH, frontT);
+  }
+
   // Fridge dummy (visual only)
   addApplianceDummy({
     name: "fridge",
