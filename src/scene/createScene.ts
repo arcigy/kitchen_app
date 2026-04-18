@@ -5,11 +5,95 @@ import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLigh
 import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
 import { getPbrMaterial } from "../materials/pbrMaterials";
 
+type SceneCleanup = {
+  dispose: () => void;
+};
+
+function cleanupPreviousRenderer(container: HTMLElement) {
+  const w = window as any;
+  const prev = w.__kitchen_webgl_cleanup as SceneCleanup | undefined;
+  if (prev) {
+    try {
+      prev.dispose();
+    } catch {
+      // ignore
+    }
+    w.__kitchen_webgl_cleanup = undefined;
+  }
+
+  // Also remove any leftover canvases in the container (defensive).
+  for (const c of Array.from(container.querySelectorAll("canvas"))) {
+    try {
+      c.remove();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function createCompatibleRenderer() {
+  const make = (opts: { antialias: boolean; powerPreference: WebGLPowerPreference }) => {
+    const canvas = document.createElement("canvas");
+
+    // Some machines/drivers fail WebGL2 but can still do WebGL1.
+    // Also, some environments (RDP/VM/hardware accel off) have WebGL disabled entirely.
+    const attrs: WebGLContextAttributes & { powerPreference?: WebGLPowerPreference } = {
+      alpha: false,
+      antialias: opts.antialias,
+      depth: true,
+      stencil: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      failIfMajorPerformanceCaveat: false,
+      powerPreference: opts.powerPreference
+    };
+
+    const ctx =
+      (canvas.getContext("webgl2", attrs) as WebGL2RenderingContext | null) ||
+      (canvas.getContext("webgl", attrs) as WebGLRenderingContext | null) ||
+      (canvas.getContext("experimental-webgl", attrs) as WebGLRenderingContext | null);
+
+    if (!ctx) return null;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      context: ctx as any,
+      antialias: opts.antialias
+    });
+
+    return renderer;
+  };
+
+  return (
+    make({ antialias: true, powerPreference: "high-performance" }) ??
+    make({ antialias: false, powerPreference: "low-power" }) ??
+    null
+  );
+}
+
 export function createScene(container: HTMLElement) {
+  // In dev (Vite reload/HMR), it's easy to leak WebGL contexts if we don't dispose properly.
+  // Once the browser hits the context limit, THREE throws: "Error creating WebGL context."
+  cleanupPreviousRenderer(container);
+
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0c10);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = createCompatibleRenderer();
+  if (!renderer) {
+    throw new Error(
+      [
+        "Error creating WebGL context.",
+        "",
+        "Most common causes:",
+        "- Hardware acceleration is OFF in the browser",
+        "- Running via Remote Desktop / VM without GPU acceleration",
+        "- GPU driver/blacklist disabled WebGL",
+        "",
+        "Try: enable hardware acceleration, restart the browser, or test in another browser."
+      ].join("\n")
+    );
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.physicallyCorrectLights = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -18,6 +102,9 @@ export function createScene(container: HTMLElement) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = true;
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+  renderer.domElement.style.display = "block";
   container.appendChild(renderer.domElement);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -487,6 +574,40 @@ export function createScene(container: HTMLElement) {
     applyShadowAlgorithm(algo);
     updateLighting();
   };
+
+  const cleanup: SceneCleanup = {
+    dispose() {
+      try {
+        controls?.dispose();
+      } catch {
+        // ignore
+      }
+      try {
+        pmrem?.dispose();
+      } catch {
+        // ignore
+      }
+      try {
+        // Best effort: explicitly lose context so the browser frees it immediately.
+        (renderer as any).forceContextLoss?.();
+      } catch {
+        // ignore
+      }
+      try {
+        renderer?.dispose();
+      } catch {
+        // ignore
+      }
+      try {
+        renderer?.domElement?.remove();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  (window as any).__kitchen_webgl_cleanup = cleanup;
+  window.addEventListener("beforeunload", () => cleanup.dispose(), { once: true });
 
   const setShadowsEnabled = (enabled: boolean) => {
     renderer.shadowMap.enabled = enabled;

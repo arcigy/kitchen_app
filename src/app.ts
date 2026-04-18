@@ -3,11 +3,15 @@ import type { ModuleParams } from "./model/cabinetTypes";
 import {
   computeEqualDrawerFrontHeights,
   computeEqualNestedDrawerFrontHeights,
+  computeEqualShelfGaps,
   makeDefaultCornerShelfLowerParams,
   makeDefaultDrawerLowParams,
   makeDefaultFlapShelvesLowParams,
   makeDefaultNestedDrawerLowParams,
+  makeDefaultOvenBaseLowParams,
+  makeDefaultMicrowaveOvenTallParams,
   makeDefaultShelvesParams,
+  makeDefaultTopDrawersDoorsLowParams,
   makeDefaultSwingShelvesLowParams,
   validateModule
 } from "./model/cabinetTypes";
@@ -22,6 +26,9 @@ import { createFlapShelvesLowControls } from "./ui/createFlapShelvesLowControls"
 import { createSwingShelvesLowControls } from "./ui/createSwingShelvesLowControls";
 import { createShelvesControls } from "./ui/createShelvesControls";
 import { createCornerShelfLowerControls } from "./ui/createCornerShelfLowerControls";
+import { createTopDrawersDoorsLowControls } from "./ui/createTopDrawersDoorsLowControls";
+import { createOvenBaseLowControls } from "./ui/createOvenBaseLowControls";
+import { createMicrowaveOvenTallControls } from "./ui/createMicrowaveOvenTallControls";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./scene/exportSceneJson";
@@ -46,7 +53,19 @@ type AppArgs = {
 
 type MeasureMode = "distance_3d" | "vertical_y";
 
+function migrateLegacyParams(p: ModuleParams): ModuleParams {
+  // Corner cabinet: older versions used "bottom/top" for the X-face hinge side.
+  // Map it to the current "left/right" contract so old saved layouts keep working.
+  if (p.type === "corner_shelf_lower") {
+    const hx = (p as any).hingeSideFrontX;
+    if (hx === "bottom") return { ...(p as any), hingeSideFrontX: "left" } as ModuleParams;
+    if (hx === "top") return { ...(p as any), hingeSideFrontX: "right" } as ModuleParams;
+  }
+  return p;
+}
+
 function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): ModuleParams {
+  p = migrateLegacyParams(p);
   const t = Math.max(0, Math.round(worktopThicknessMm));
   if (t <= 0) return p;
 
@@ -55,9 +74,11 @@ function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): Mo
   const isUnderWorktop =
     p.type === "drawer_low" ||
     p.type === "nested_drawer_low" ||
+    p.type === "oven_base_low" ||
     p.type === "corner_shelf_lower" ||
     p.type === "flap_shelves_low" ||
-    p.type === "swing_shelves_low";
+    p.type === "swing_shelves_low" ||
+    p.type === "top_drawers_doors_low";
   if (!isUnderWorktop) return p;
 
   // Wall-mounted base modules are not under the worktop.
@@ -89,6 +110,23 @@ function computeEffectiveParams(p: ModuleParams, worktopThicknessMm: number): Mo
         nd.drawerFrontHeights = computeEqualNestedDrawerFrontHeights(nd);
       }
       return nd as ModuleParams;
+    }
+
+    if (next.type === "top_drawers_doors_low") {
+      const td = next as any;
+      if (td.shelfAutoFit === true) {
+        const shelfVirtualHeightMm = Math.max(50, td.height - td.topGap - td.rowGapMm - td.topDrawerFrontHeightMm);
+        td.shelfGaps = computeEqualShelfGaps({
+          height: shelfVirtualHeightMm,
+          plinthHeight: td.wallMounted ? 0 : td.plinthHeight,
+          boardThickness: td.boardThickness,
+          shelfCount: td.shelfCount,
+          shelfThickness: td.shelfThickness,
+          shelfAutoFit: true,
+          shelfGaps: []
+        } as any);
+      }
+      return td as ModuleParams;
     }
 
     return next;
@@ -124,6 +162,30 @@ export function startApp(args: AppArgs) {
   const cam = () => getCamera();
   const ctl = () => getControls();
 
+  const showFatalUi = (title: string, msg: string) => {
+    args.errorsEl.classList.add("visible");
+    args.errorsEl.innerHTML = `<div style="font-weight:600; margin-bottom:6px;">${escapeHtml(title)}</div><pre style="margin:0; white-space:pre-wrap;">${escapeHtml(
+      msg
+    )}</pre>`;
+  };
+
+  // WebGL context loss => black canvas. Surface it immediately.
+  renderer.domElement.addEventListener("webglcontextlost", (ev) => {
+    ev.preventDefault();
+    showFatalUi("WebGL context lost", "WebGL context was lost. Close other tabs, restart the browser, or reload the page.");
+  });
+
+  // Camera-follow "headlamp" so build mode is always perfectly readable (no shadows).
+  const headlampTarget = new THREE.Object3D();
+  headlampTarget.name = "headlampTarget";
+  scene.add(headlampTarget);
+  const headlamp = new THREE.DirectionalLight(0xffffff, 0);
+  headlamp.name = "headlamp";
+  headlamp.castShadow = false;
+  headlamp.position.set(2, 2, 2);
+  headlamp.target = headlampTarget;
+  scene.add(headlamp);
+
   setDaylightIntensity(9);
 
   // Worktop logic:
@@ -140,15 +202,27 @@ export function startApp(args: AppArgs) {
 
   // Build-mode flat lighting: even fill, no shadows (easier to work with while editing).
   let flatLightEnabled = true;
-  let flatLightIntensity = 4;
+  // Keep build mode comfortably readable by default (no window/daylight needed).
+  let flatLightIntensity = 5;
   const flatAmbient = new THREE.AmbientLight(0xffffff, 0);
   flatAmbient.name = "buildFlatAmbient";
   const flatHemi = new THREE.HemisphereLight(0xffffff, 0x3b4050, 0);
   flatHemi.name = "buildFlatHemi";
+  const flatKey = new THREE.DirectionalLight(0xffffff, 0);
+  flatKey.name = "buildFlatKey";
+  flatKey.castShadow = false;
+  flatKey.position.set(2.2, 3.0, 1.4);
+  const flatFill = new THREE.DirectionalLight(0xffffff, 0);
+  flatFill.name = "buildFlatFill";
+  flatFill.castShadow = false;
+  flatFill.position.set(-1.8, 2.4, -1.6);
   scene.add(flatAmbient);
   scene.add(flatHemi);
+  scene.add(flatKey);
+  scene.add(flatFill);
 
   let savedDaylightForFlat: number | null = null;
+  let savedExposureForFlat: number | null = null;
 
   type AppMode = "build" | "layout";
   let mode: AppMode = "build";
@@ -574,6 +648,9 @@ export function startApp(args: AppArgs) {
   modelSelect.innerHTML = `
       <option value="drawer_low">drawer_low</option>
       <option value="nested_drawer_low">nested_drawer_low</option>
+      <option value="oven_base_low">oven_base_low</option>
+      <option value="microwave_oven_tall">microwave_oven_tall</option>
+      <option value="top_drawers_doors_low">top_drawers_doors_low</option>
       <option value="flap_shelves_low">flap_shelves_low</option>
       <option value="swing_shelves_low">swing_shelves_low</option>
       <option value="shelves">shelves</option>
@@ -693,16 +770,23 @@ export function startApp(args: AppArgs) {
       applyBuildLight();
     });
 
-    buildUi.appendChild(lightHost);
+    // Put this near the top so it's always discoverable.
+    buildUi.insertBefore(lightHost, modelWrap);
   }
 
   // Layout UI: add/duplicate/delete + 2D toggle + selected params
   const addWrap = document.createElement("div");
   addWrap.className = "actions";
-  addWrap.style.gridTemplateColumns = "1fr 1fr";
+  addWrap.style.gridTemplateColumns = "1fr 1fr 1fr";
   const addDrawerBtn = document.createElement("button");
   addDrawerBtn.type = "button";
   addDrawerBtn.textContent = "Add drawer";
+  const addOvenBtn = document.createElement("button");
+  addOvenBtn.type = "button";
+  addOvenBtn.textContent = "Add oven";
+  const addTallBtn = document.createElement("button");
+  addTallBtn.type = "button";
+  addTallBtn.textContent = "Add tall";
   const addShelvesBtn = document.createElement("button");
   addShelvesBtn.type = "button";
   addShelvesBtn.textContent = "Add shelves";
@@ -710,6 +794,8 @@ export function startApp(args: AppArgs) {
   addCornerBtn.type = "button";
   addCornerBtn.textContent = "Add corner";
   addWrap.appendChild(addDrawerBtn);
+  addWrap.appendChild(addOvenBtn);
+  addWrap.appendChild(addTallBtn);
   addWrap.appendChild(addShelvesBtn);
   addWrap.appendChild(addCornerBtn);
 
@@ -953,6 +1039,8 @@ export function startApp(args: AppArgs) {
   });
 
   addDrawerBtn.addEventListener("click", () => addInstance("drawer_low"));
+  addOvenBtn.addEventListener("click", () => addInstance("oven_base_low"));
+  addTallBtn.addEventListener("click", () => addInstance("microwave_oven_tall"));
   addShelvesBtn.addEventListener("click", () => addInstance("shelves"));
   addCornerBtn.addEventListener("click", () => addInstance("corner_shelf_lower"));
   addWindowBtn.addEventListener("click", () => addOrSelectWindow());
@@ -1324,6 +1412,21 @@ export function startApp(args: AppArgs) {
         onChange: () => rebuildInstance(inst),
         getWorktopThicknessMm: () => worktopThicknessMm
       });
+    } else if (inst.params.type === "oven_base_low") {
+      layoutControlsApi = createOvenBaseLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (inst.params.type === "microwave_oven_tall") {
+      layoutControlsApi = createMicrowaveOvenTallControls(instanceEditorHost, inst.params as any, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (inst.params.type === "top_drawers_doors_low") {
+      layoutControlsApi = createTopDrawersDoorsLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (inst.params.type === "flap_shelves_low") {
       layoutControlsApi = createFlapShelvesLowControls(instanceEditorHost, inst.params, {
         onChange: () => rebuildInstance(inst),
@@ -1609,9 +1712,21 @@ export function startApp(args: AppArgs) {
     const nextParams =
       type === "drawer_low"
         ? makeDefaultDrawerLowParams()
-        : type === "shelves"
-          ? makeDefaultShelvesParams()
-          : makeDefaultCornerShelfLowerParams();
+        : type === "nested_drawer_low"
+          ? makeDefaultNestedDrawerLowParams()
+          : type === "oven_base_low"
+            ? makeDefaultOvenBaseLowParams()
+            : type === "microwave_oven_tall"
+              ? makeDefaultMicrowaveOvenTallParams()
+            : type === "top_drawers_doors_low"
+              ? makeDefaultTopDrawersDoorsLowParams()
+            : type === "flap_shelves_low"
+              ? makeDefaultFlapShelvesLowParams()
+                : type === "swing_shelves_low"
+                  ? makeDefaultSwingShelvesLowParams()
+                  : type === "shelves"
+                    ? makeDefaultShelvesParams()
+                    : makeDefaultCornerShelfLowerParams();
 
     // Keep layout view clean (no open doors for bounding boxes).
     if ("doorOpen" in nextParams) (nextParams as any).doorOpen = false;
@@ -1692,14 +1807,24 @@ export function startApp(args: AppArgs) {
 
     flatAmbient.visible = on;
     flatHemi.visible = on;
+    flatKey.visible = on;
+    flatFill.visible = on;
+    headlamp.visible = on;
 
     if (!on) {
       if (savedDaylightForFlat !== null) {
         setDaylightIntensity(savedDaylightForFlat);
         savedDaylightForFlat = null;
       }
+      if (savedExposureForFlat !== null) {
+        renderer.toneMappingExposure = savedExposureForFlat;
+        savedExposureForFlat = null;
+      }
       flatAmbient.intensity = 0;
       flatHemi.intensity = 0;
+      flatKey.intensity = 0;
+      flatFill.intensity = 0;
+      headlamp.intensity = 0;
       return;
     }
 
@@ -1708,11 +1833,19 @@ export function startApp(args: AppArgs) {
       // Avoid double-lighting (daylight + flat) which causes overexposure.
       setDaylightIntensity(0);
     }
+    if (savedExposureForFlat === null) {
+      savedExposureForFlat = renderer.toneMappingExposure;
+      // Keep build mode readable, but avoid overexposure.
+      renderer.toneMappingExposure = Math.max(0.35, savedExposureForFlat) * 0.8;
+    }
 
-    // Split intensity across ambient + hemisphere so materials still have some shape.
+    // Even fill for build mode: no shadows, low contrast (avoid overexposure).
     const i = Math.max(0, flatLightIntensity);
-    flatAmbient.intensity = i * 0.35;
-    flatHemi.intensity = i * 0.25;
+    flatAmbient.intensity = i * 0.28;
+    flatHemi.intensity = i * 0.18;
+    flatKey.intensity = i * 0.1;
+    flatFill.intensity = i * 0.08;
+    headlamp.intensity = i * 0.09;
   };
 
   function buildLayoutExportPayload() {
@@ -1926,6 +2059,21 @@ export function startApp(args: AppArgs) {
         onChange: () => afterParamsChanged(),
         getWorktopThicknessMm: () => worktopThicknessMm
       });
+    } else if (params.type === "oven_base_low") {
+      buildControlsApi = createOvenBaseLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (params.type === "microwave_oven_tall") {
+      buildControlsApi = createMicrowaveOvenTallControls(editorHost, params as any, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (params.type === "top_drawers_doors_low") {
+      buildControlsApi = createTopDrawersDoorsLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "flap_shelves_low") {
       buildControlsApi = createFlapShelvesLowControls(editorHost, params, {
         onChange: () => afterParamsChanged(),
@@ -2030,20 +2178,35 @@ export function startApp(args: AppArgs) {
   };
 
   const setModel = (
-    type: "drawer_low" | "nested_drawer_low" | "flap_shelves_low" | "swing_shelves_low" | "shelves" | "corner_shelf_lower"
+    type:
+      | "drawer_low"
+      | "nested_drawer_low"
+      | "oven_base_low"
+      | "microwave_oven_tall"
+      | "top_drawers_doors_low"
+      | "flap_shelves_low"
+      | "swing_shelves_low"
+      | "shelves"
+      | "corner_shelf_lower"
   ) => {
     params =
       type === "drawer_low"
         ? makeDefaultDrawerLowParams()
         : type === "nested_drawer_low"
           ? makeDefaultNestedDrawerLowParams()
-          : type === "flap_shelves_low"
-            ? makeDefaultFlapShelvesLowParams()
-            : type === "swing_shelves_low"
-              ? makeDefaultSwingShelvesLowParams()
-              : type === "shelves"
-                ? makeDefaultShelvesParams()
-                : makeDefaultCornerShelfLowerParams();
+          : type === "oven_base_low"
+            ? makeDefaultOvenBaseLowParams()
+            : type === "microwave_oven_tall"
+              ? makeDefaultMicrowaveOvenTallParams()
+            : type === "top_drawers_doors_low"
+              ? makeDefaultTopDrawersDoorsLowParams()
+            : type === "flap_shelves_low"
+              ? makeDefaultFlapShelvesLowParams()
+              : type === "swing_shelves_low"
+                ? makeDefaultSwingShelvesLowParams()
+                : type === "shelves"
+                  ? makeDefaultShelvesParams()
+                  : makeDefaultCornerShelfLowerParams();
     modelSelect.value = type;
     hiddenParts.clear();
     selectMesh(null);
@@ -2066,9 +2229,21 @@ export function startApp(args: AppArgs) {
     inst.params =
       inst.params.type === "drawer_low"
         ? makeDefaultDrawerLowParams()
-        : inst.params.type === "shelves"
-          ? makeDefaultShelvesParams()
-          : makeDefaultCornerShelfLowerParams();
+        : inst.params.type === "nested_drawer_low"
+          ? makeDefaultNestedDrawerLowParams()
+          : inst.params.type === "oven_base_low"
+            ? makeDefaultOvenBaseLowParams()
+            : inst.params.type === "microwave_oven_tall"
+              ? makeDefaultMicrowaveOvenTallParams()
+            : inst.params.type === "top_drawers_doors_low"
+              ? makeDefaultTopDrawersDoorsLowParams()
+              : inst.params.type === "flap_shelves_low"
+                ? makeDefaultFlapShelvesLowParams()
+                : inst.params.type === "swing_shelves_low"
+                  ? makeDefaultSwingShelvesLowParams()
+                  : inst.params.type === "shelves"
+                    ? makeDefaultShelvesParams()
+                    : makeDefaultCornerShelfLowerParams();
     mountInstanceControls(inst);
     rebuildInstance(inst);
   });
@@ -2601,6 +2776,12 @@ export function startApp(args: AppArgs) {
     const next =
       v === "nested_drawer_low"
         ? "nested_drawer_low"
+        : v === "oven_base_low"
+          ? "oven_base_low"
+          : v === "microwave_oven_tall"
+            ? "microwave_oven_tall"
+        : v === "top_drawers_doors_low"
+          ? "top_drawers_doors_low"
         : v === "flap_shelves_low"
           ? "flap_shelves_low"
           : v === "swing_shelves_low"
@@ -2705,6 +2886,13 @@ export function startApp(args: AppArgs) {
     // Grain arrow intentionally disabled.
     for (const o of overlapBoxes) o.helper.setFromObject(o.mesh);
     updateMeasureLabels();
+
+    // Keep headlamp pointed at the current orbit target.
+    // This is cheap and makes the build mode readable even when window/daylight is off.
+    const activeCamForLight = cam();
+    const target = ctl().target;
+    headlamp.position.copy(activeCamForLight.position);
+    headlampTarget.position.copy(target);
 
     const activeCam = cam();
     const isPhoto = renderMode === "photo_pathtrace" && ENABLE_PHOTO && activeCam instanceof THREE.PerspectiveCamera;

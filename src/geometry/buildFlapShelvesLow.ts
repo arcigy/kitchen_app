@@ -207,15 +207,23 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
 
     const hingeZ = -doorT / 2 - hingeD / 2 - 0.001;
     const hingeY = -hingeH / 2 - 0.001;
-    const marginX = Math.min(openingW / 2 - hingeW / 2, 0.12);
+    const hingeCount = clampInt(p.hingeCount, 1, 5);
+    const inset = Math.max(0, p.hingeInsetFromSideMm) * MM_TO_M;
+    const maxX = Math.max(0, openingW / 2 - hingeW / 2 - inset);
     const xs =
-      p.hingeCount === 2 ? [-marginX, marginX] : [-marginX, 0, marginX];
+      hingeCount === 1
+        ? [0]
+        : Array.from({ length: hingeCount }, (_, idx) => {
+            const t = hingeCount === 1 ? 0.5 : idx / (hingeCount - 1);
+            return -maxX + t * (2 * maxX);
+          });
 
     xs.forEach((x, idx) => {
       const h = new THREE.Mesh(hingeGeo, hingeMat);
       h.name = `hinge_${idx + 1}`;
       h.position.set(x, hingeY, hingeZ);
       setPartMeta(h, { width: hingeW, height: hingeH, depth: hingeD });
+      setParamKeys(h, ["hingeCount", "hingeInsetFromSideMm", "flapOpen", "flapHinge", "width", "sideGap"]);
       group.add(h);
     });
 
@@ -228,4 +236,10 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
 function parseHexColor(hex: string): number {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return 0xffffff;
   return Number.parseInt(hex.slice(1), 16);
+}
+
+function clampInt(value: unknown, min: number, max: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
 }

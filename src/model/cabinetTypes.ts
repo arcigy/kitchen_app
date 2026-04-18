@@ -126,7 +126,8 @@ export type FlapShelvesLowParams = {
   // Door/flap preview state
   flapOpen: boolean;
   flapHinge: "bottom" | "top";
-  hingeCount: 2 | 3;
+  hingeCount: number;
+  hingeInsetFromSideMm: number; // mm (how far hinges are from flap left/right edges)
 
   // Shelf layout (same as shelves)
   shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
@@ -158,13 +159,166 @@ export type SwingShelvesLowParams = {
   // Door preview state
   doorDouble: boolean; // false = single door, true = double door
   doorOpen: boolean;
-  hingeCountPerDoor: 2 | 3;
+  hingeSide: "left" | "right"; // used when doorDouble=false
+  hingeCountPerDoor: number;
+  hingeTopOffsetMm: number; // mm from top edge of door to top hinge center
+  hingeBottomOffsetMm: number; // mm from bottom edge of door to bottom hinge center
 
   // Shelf layout
   shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
   shelfThickness: number; // mm
   shelfAutoFit: boolean;
   shelfGaps: number[]; // mm (count = shelfCount)
+
+  materials: MaterialParams;
+};
+
+export type TopDrawersDoorsLowParams = {
+  type: "top_drawers_doors_low";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
+  wallMounted: boolean; // true = no legs/kickboard
+
+  // Front layout
+  topDrawerCount: number; // typically 3
+  bottomDoorCount: number; // typically 3
+  columnGapMm: number; // mm gap between columns (drawer/door fronts)
+  rowGapMm: number; // mm gap between top drawer row and bottom door row
+  topDrawerFrontHeightMm: number; // mm
+
+  // Reveals and front thickness
+  sideGap: number; // mm (left/right reveal)
+  topGap: number; // mm (top reveal above top drawers)
+  bottomGap: number; // mm (bottom reveal above plinth)
+  frontThicknessMm: number; // mm
+
+  // Door preview state
+  doorOpen: boolean;
+  hingeSide: "left" | "right"; // hinge side for each bottom door leaf
+  hingeCountPerDoor: number;
+  hingeTopOffsetMm: number; // mm
+  hingeBottomOffsetMm: number; // mm
+
+  // Handles (same contract as drawer_low)
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
+  handlePositionMm: number; // mm from top edge of each front (drawer/door)
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
+
+  // Drawer hardware (for the top drawers)
+  sideClearanceMm: number; // mm (hardware clearance per side)
+  drawerBoxThickness: number; // mm (metal side/back thickness)
+  drawerBoxSideHeight: number; // mm (metal side/back height)
+
+  // Shelves behind doors (per column)
+  shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
+  shelfThickness: number; // mm
+  shelfAutoFit: boolean;
+  shelfGaps: number[]; // mm (count = shelfCount)
+
+  materials: MaterialParams;
+};
+
+export type OvenBaseLowParams = {
+  type: "oven_base_low";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
+  wallMounted: boolean; // true = no legs/kickboard
+
+  // Bottom drawer (typical under-oven drawer)
+  drawerEnabled: boolean;
+  drawerFrontHeightMm: number; // mm
+  drawerGapAboveMm: number; // mm (gap between drawer front and oven opening)
+  sideGap: number; // mm (left/right reveal around drawer front)
+  bottomGap: number; // mm (reveal above plinth)
+  frontThicknessMm: number; // mm
+
+  // Handles (same contract as drawer_low)
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
+  handlePositionMm: number; // mm from top edge of drawer front
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
+
+  // Drawer hardware (modern: metal sides/back)
+  sideClearanceMm: number; // mm (hardware clearance per side)
+  drawerBoxThickness: number; // mm (metal side/back thickness)
+  drawerBoxSideHeight: number; // mm (metal side/back height)
+  drawerBoxDepthMm: number; // mm (usable box depth)
+
+  // Oven appliance sizing + clearances (fit check)
+  ovenWidthMm: number; // mm
+  ovenHeightMm: number; // mm
+  ovenDepthMm: number; // mm
+  ovenSideClearanceMm: number; // mm per side
+  ovenTopClearanceMm: number; // mm
+  ovenBottomClearanceMm: number; // mm
+
+  materials: MaterialParams;
+};
+
+export type MicrowaveOvenTallParams = {
+  type: "microwave_oven_tall";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm
+
+  // Bottom drawers (typical: 2)
+  frontGap: number; // mm (vertical gap between drawer fronts)
+  sideGap: number; // mm (left/right reveal)
+  topGap: number; // mm (reveal above top door)
+  bottomGap: number; // mm (bottom reveal above plinth)
+  frontThicknessMm: number; // mm
+  drawerCount: number;
+  drawerFrontHeights: number[]; // mm (count=drawerCount)
+
+  // Handles (same contract as drawer_low)
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
+  handlePositionMm: number; // mm from top edge of each drawer front
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
+
+  // Appliance niches (fit + dummy visuals)
+  ovenWidthMm: number; // niche width (mm)
+  ovenHeightMm: number; // niche height (mm)
+  ovenDepthMm: number; // niche depth (mm)
+  ovenSideClearanceMm: number;
+  ovenTopClearanceMm: number;
+  ovenBottomClearanceMm: number;
+
+  microwaveWidthMm: number; // niche width (mm)
+  microwaveHeightMm: number; // niche height (mm)
+  microwaveDepthMm: number; // niche depth (mm)
+  microwaveSideClearanceMm: number;
+  microwaveTopClearanceMm: number;
+  microwaveBottomClearanceMm: number;
+
+  // Vertical spacing
+  gapAboveDrawersMm: number; // mm
+  gapBetweenAppliancesMm: number; // mm (normally 0; separator is the divider board)
+
+  // Top cabinet (fills the rest so there is no empty void)
+  topShelfCount: number; // compartments
+  topShelfThickness: number; // mm
+  topFlapOpen: boolean;
+  topHingeCount: number; // count along the top edge
+  topHingeInsetFromSideMm: number; // mm
 
   materials: MaterialParams;
 };
@@ -200,7 +354,10 @@ export type ShelvesParams = {
   shelfGaps: number[]; // mm clear gaps between boards (count = shelfCount)
   doorDouble: boolean; // false = single door, true = double door
   doorOpen: boolean; // simple preview state
+  hingeSide: "left" | "right"; // used when doorDouble=false
   hingeCountPerDoor: number; // usually 2 or 3
+  hingeTopOffsetMm: number; // mm from top edge of door to top hinge center
+  hingeBottomOffsetMm: number; // mm from bottom edge of door to bottom hinge center
   materials: MaterialParams;
 };
 
@@ -220,7 +377,14 @@ export type CornerShelfLowerParams = {
   shelfGaps: number[]; // mm (count = shelfCount)
   doorDouble: boolean; // false = only one face has door, true = both faces have doors
   doorOpen: boolean;
-  hingeCountPerDoor: number; // 2 or 3
+  // Hinge side (which edge is hinged) on each face:
+  // - Z face spans along X => "left/right" makes sense
+  // - X face spans along Z => still use "left/right" (mapped to start/end Z in geometry)
+  hingeSideFrontZ: "left" | "right";
+  hingeSideFrontX: "left" | "right";
+  hingeCountPerDoor: number; // usually 2 or 3
+  hingeTopOffsetMm: number; // mm from top edge of door to top hinge center
+  hingeBottomOffsetMm: number; // mm from bottom edge of door to bottom hinge center
   materials: MaterialParams;
 };
 
@@ -229,6 +393,9 @@ export type ModuleParams =
   | NestedDrawerLowParams
   | FlapShelvesLowParams
   | SwingShelvesLowParams
+  | TopDrawersDoorsLowParams
+  | OvenBaseLowParams
+  | MicrowaveOvenTallParams
   | ShelvesParams
   | CornerShelfLowerParams;
 
@@ -333,6 +500,7 @@ export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
     flapOpen: false,
     flapHinge: "top",
     hingeCount: 2,
+    hingeInsetFromSideMm: 120,
     shelfCount: 4,
     shelfThickness: 18,
     shelfAutoFit: true,
@@ -368,6 +536,9 @@ export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
     doorDouble: true,
     doorOpen: false,
     hingeCountPerDoor: 3,
+    hingeSide: "left",
+    hingeTopOffsetMm: 110,
+    hingeBottomOffsetMm: 110,
     shelfCount: 4,
     shelfThickness: 18,
     shelfAutoFit: true,
@@ -382,6 +553,67 @@ export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
     }
   };
   base.shelfGaps = computeEqualShelfGaps(base);
+  return base;
+}
+
+export function makeDefaultTopDrawersDoorsLowParams(): TopDrawersDoorsLowParams {
+  const base: TopDrawersDoorsLowParams = {
+    type: "top_drawers_doors_low",
+    width: 1200,
+    height: 720,
+    depth: 560,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 100,
+    plinthSetbackMm: 60,
+    wallMounted: false,
+
+    topDrawerCount: 3,
+    bottomDoorCount: 3,
+    columnGapMm: 2,
+    rowGapMm: 2,
+    topDrawerFrontHeightMm: 160,
+
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    frontThicknessMm: 19,
+
+    doorOpen: false,
+    hingeSide: "left",
+    hingeCountPerDoor: 3,
+    hingeTopOffsetMm: 110,
+    hingeBottomOffsetMm: 110,
+
+    handleType: "bar",
+    handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
+
+    sideClearanceMm: 13,
+    drawerBoxThickness: 13,
+    drawerBoxSideHeight: 110,
+
+    shelfCount: 2,
+    shelfThickness: 18,
+    shelfAutoFit: true,
+    shelfGaps: [],
+
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_default",
+      bodyColor: "#b8bcc7",
+      frontColor: "#f3f4f6",
+      drawerColor: "#f3f4f6",
+      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
+    }
+  };
+  base.shelfGaps = computeEqualShelfGaps({
+    ...base,
+    height: Math.max(50, base.height - base.topGap - base.topDrawerFrontHeightMm - base.rowGapMm)
+  });
   return base;
 }
 
@@ -413,6 +645,9 @@ export function makeDefaultShelvesParams(): ShelvesParams {
     doorDouble: true,
     doorOpen: false,
     hingeCountPerDoor: 3,
+    hingeSide: "left",
+    hingeTopOffsetMm: 110,
+    hingeBottomOffsetMm: 110,
     materials: {
       bodyKey: "carcass_default",
       frontKey: "front_default",
@@ -424,6 +659,122 @@ export function makeDefaultShelvesParams(): ShelvesParams {
     }
   };
   base.shelfGaps = computeEqualShelfGaps(base);
+  return base;
+}
+
+export function makeDefaultOvenBaseLowParams(): OvenBaseLowParams {
+  const base: OvenBaseLowParams = {
+    type: "oven_base_low",
+    width: 600,
+    // Default to the most common oven base cabinet carcass: 600×600×800 (e.g. IKEA METOD).
+    // In this app, base modules store FINAL height incl. worktop, so we add the default worktop thickness (40mm).
+    height: 840,
+    depth: 600,
+    boardThickness: 18,
+    backThickness: 8,
+    // 800mm carcass systems typically add legs/plinth separately, so keep these at 0 by default.
+    plinthHeight: 0,
+    plinthSetbackMm: 0,
+    wallMounted: false,
+
+    drawerEnabled: true,
+    drawerFrontHeightMm: 140,
+    drawerGapAboveMm: 2,
+    sideGap: 2,
+    bottomGap: 2,
+    frontThicknessMm: 19,
+
+    handleType: "bar",
+    handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
+
+    sideClearanceMm: 13,
+    drawerBoxThickness: 13,
+    drawerBoxSideHeight: 110,
+    drawerBoxDepthMm: 500,
+
+    // Use "niche" dimensions (kitchen-real). A 600mm cabinet typically has ~560mm niche width.
+    ovenWidthMm: 560,
+    ovenHeightMm: 600,
+    ovenDepthMm: 600,
+    ovenSideClearanceMm: 2,
+    ovenTopClearanceMm: 5,
+    ovenBottomClearanceMm: 5,
+
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_unused",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a",
+      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
+    }
+  };
+  return base;
+}
+
+export function makeDefaultMicrowaveOvenTallParams(): MicrowaveOvenTallParams {
+  const base: MicrowaveOvenTallParams = {
+    type: "microwave_oven_tall",
+    width: 600,
+    height: 2000,
+    depth: 600,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 0,
+    plinthSetbackMm: 0,
+
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    frontThicknessMm: 19,
+    drawerCount: 2,
+    drawerFrontHeights: [200, 200],
+
+    handleType: "bar",
+    handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
+
+    // Niche defaults (kitchen-real)
+    ovenWidthMm: 560,
+    ovenHeightMm: 600,
+    ovenDepthMm: 600,
+    ovenSideClearanceMm: 2,
+    ovenTopClearanceMm: 5,
+    ovenBottomClearanceMm: 5,
+
+    microwaveWidthMm: 560,
+    microwaveHeightMm: 390,
+    microwaveDepthMm: 520,
+    microwaveSideClearanceMm: 2,
+    microwaveTopClearanceMm: 5,
+    microwaveBottomClearanceMm: 5,
+
+    gapAboveDrawersMm: 10,
+    gapBetweenAppliancesMm: 0,
+
+    topShelfCount: 3,
+    topShelfThickness: 18,
+    topFlapOpen: false,
+    topHingeCount: 2,
+    topHingeInsetFromSideMm: 80,
+
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_unused",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a",
+      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
+    }
+  };
   return base;
 }
 
@@ -445,6 +796,10 @@ export function makeDefaultCornerShelfLowerParams(): CornerShelfLowerParams {
     doorDouble: true,
     doorOpen: false,
     hingeCountPerDoor: 3,
+    hingeSideFrontZ: "right",
+    hingeSideFrontX: "right",
+    hingeTopOffsetMm: 110,
+    hingeBottomOffsetMm: 110,
     materials: {
       bodyKey: "carcass_default",
       frontKey: "front_default",
@@ -464,9 +819,207 @@ export function validateModule(p: ModuleParams): string[] {
   if (p.type === "nested_drawer_low") return validateNestedDrawerLow(p);
   if (p.type === "flap_shelves_low") return validateFlapShelvesLow(p);
   if (p.type === "swing_shelves_low") return validateSwingShelvesLow(p);
+  if (p.type === "top_drawers_doors_low") return validateTopDrawersDoorsLow(p);
+  if (p.type === "oven_base_low") return validateOvenBaseLow(p);
+  if (p.type === "microwave_oven_tall") return validateMicrowaveOvenTall(p);
   if (p.type === "shelves") return validateShelves(p);
   if (p.type === "corner_shelf_lower") return validateCornerShelfLower(p);
   return ["Unknown module type."];
+}
+
+export function validateMicrowaveOvenTall(p: MicrowaveOvenTallParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 400);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
+
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+
+  if (!Number.isInteger(p.drawerCount) || p.drawerCount < 0 || p.drawerCount > 6) errors.push("drawerCount must be 0..6.");
+  if (!Array.isArray(p.drawerFrontHeights) || p.drawerFrontHeights.some((n) => typeof n !== "number")) {
+    errors.push("drawerFrontHeights must be an array of numbers.");
+  } else if (p.drawerFrontHeights.length !== p.drawerCount) {
+    errors.push("drawerFrontHeights count must match drawerCount.");
+  }
+
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
+
+  positiveNumber(errors, "ovenWidthMm", p.ovenWidthMm, 100);
+  positiveNumber(errors, "ovenHeightMm", p.ovenHeightMm, 100);
+  positiveNumber(errors, "ovenDepthMm", p.ovenDepthMm, 100);
+  positiveNumber(errors, "ovenSideClearanceMm", p.ovenSideClearanceMm, 0);
+  positiveNumber(errors, "ovenTopClearanceMm", p.ovenTopClearanceMm, 0);
+  positiveNumber(errors, "ovenBottomClearanceMm", p.ovenBottomClearanceMm, 0);
+
+  positiveNumber(errors, "microwaveWidthMm", p.microwaveWidthMm, 100);
+  positiveNumber(errors, "microwaveHeightMm", p.microwaveHeightMm, 100);
+  positiveNumber(errors, "microwaveDepthMm", p.microwaveDepthMm, 100);
+  positiveNumber(errors, "microwaveSideClearanceMm", p.microwaveSideClearanceMm, 0);
+  positiveNumber(errors, "microwaveTopClearanceMm", p.microwaveTopClearanceMm, 0);
+  positiveNumber(errors, "microwaveBottomClearanceMm", p.microwaveBottomClearanceMm, 0);
+
+  positiveNumber(errors, "gapAboveDrawersMm", p.gapAboveDrawersMm, 0);
+  positiveNumber(errors, "gapBetweenAppliancesMm", p.gapBetweenAppliancesMm, 0);
+
+  positiveNumber(errors, "topShelfThickness", p.topShelfThickness, 5);
+  if (!Number.isInteger(p.topShelfCount) || p.topShelfCount < 1 || p.topShelfCount > 8) errors.push("topShelfCount must be 1..8.");
+  positiveNumber(errors, "topHingeInsetFromSideMm", p.topHingeInsetFromSideMm, 0);
+  if (!Number.isInteger(p.topHingeCount) || p.topHingeCount < 1 || p.topHingeCount > 6) {
+    errors.push("topHingeCount must be an integer between 1 and 6.");
+  }
+
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+
+  const internalW = p.width - 2 * p.boardThickness;
+  if (p.ovenWidthMm + 2 * p.ovenSideClearanceMm > internalW + 0.5) {
+    errors.push("Oven does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
+  }
+  if (p.microwaveWidthMm + 2 * p.microwaveSideClearanceMm > internalW + 0.5) {
+    errors.push("Microwave does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
+  }
+
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function validateOvenBaseLow(p: OvenBaseLowParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
+
+  positiveNumber(errors, "drawerFrontHeightMm", p.drawerFrontHeightMm, 0);
+  positiveNumber(errors, "drawerGapAboveMm", p.drawerGapAboveMm, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
+
+  positiveNumber(errors, "sideClearanceMm", p.sideClearanceMm, 0);
+  positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 3);
+  positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
+  positiveNumber(errors, "drawerBoxDepthMm", p.drawerBoxDepthMm, 50);
+
+  positiveNumber(errors, "ovenWidthMm", p.ovenWidthMm, 100);
+  positiveNumber(errors, "ovenHeightMm", p.ovenHeightMm, 100);
+  positiveNumber(errors, "ovenDepthMm", p.ovenDepthMm, 100);
+  positiveNumber(errors, "ovenSideClearanceMm", p.ovenSideClearanceMm, 0);
+  positiveNumber(errors, "ovenTopClearanceMm", p.ovenTopClearanceMm, 0);
+  positiveNumber(errors, "ovenBottomClearanceMm", p.ovenBottomClearanceMm, 0);
+
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+
+  // Basic fit sanity check (not a hard constraint, but helps catch nonsense input).
+  const internalW = p.width - 2 * p.boardThickness;
+  if (p.ovenWidthMm + 2 * p.ovenSideClearanceMm > internalW + 0.5) {
+    errors.push("Oven does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
+  }
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function validateTopDrawersDoorsLow(p: TopDrawersDoorsLowParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
+
+  positiveNumber(errors, "columnGapMm", p.columnGapMm, 0);
+  positiveNumber(errors, "rowGapMm", p.rowGapMm, 0);
+  positiveNumber(errors, "topDrawerFrontHeightMm", p.topDrawerFrontHeightMm, 40);
+
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
+
+  positiveNumber(errors, "hingeTopOffsetMm", p.hingeTopOffsetMm, 0);
+  positiveNumber(errors, "hingeBottomOffsetMm", p.hingeBottomOffsetMm, 0);
+  if (p.hingeSide !== "left" && p.hingeSide !== "right") errors.push("hingeSide must be 'left' or 'right'.");
+  if (!Number.isInteger(p.hingeCountPerDoor) || p.hingeCountPerDoor < 1 || p.hingeCountPerDoor > 6) {
+    errors.push("hingeCountPerDoor must be an integer between 1 and 6.");
+  }
+
+  positiveNumber(errors, "sideClearanceMm", p.sideClearanceMm, 0);
+  positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
+  positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
+
+  if (!Number.isInteger(p.topDrawerCount) || p.topDrawerCount < 1 || p.topDrawerCount > 8) {
+    errors.push("topDrawerCount must be an integer between 1 and 8.");
+  }
+  if (!Number.isInteger(p.bottomDoorCount) || p.bottomDoorCount < 1 || p.bottomDoorCount > 8) {
+    errors.push("bottomDoorCount must be an integer between 1 and 8.");
+  }
+
+  const plinthHeight = p.wallMounted ? 0 : p.plinthHeight;
+  const openingHeight = p.height - plinthHeight;
+  if (openingHeight <= 80) errors.push("height - plinthHeight must be > 80mm.");
+
+  const availableFrontStack = openingHeight - p.topGap - p.bottomGap;
+  const required = p.topDrawerFrontHeightMm + p.rowGapMm;
+  if (required >= availableFrontStack) {
+    errors.push(
+      `Front rows do not fit: topDrawerFrontHeightMm + rowGapMm must be < ${Math.round(availableFrontStack)}mm (opening - topGap - bottomGap).`
+    );
+  }
+  const doorH = availableFrontStack - required;
+  if (p.hingeCountPerDoor >= 2 && p.hingeTopOffsetMm + p.hingeBottomOffsetMm >= doorH - 20) {
+    errors.push("Hinge offsets too large for door height.");
+  }
+
+  const internalWidthTop = p.width - 2 * p.boardThickness - Math.max(0, p.topDrawerCount - 1) * p.boardThickness;
+  const internalWidthBottom = p.width - 2 * p.boardThickness - Math.max(0, p.bottomDoorCount - 1) * p.boardThickness;
+  const internalWidth = Math.min(internalWidthTop, internalWidthBottom);
+  if (internalWidth <= 50) errors.push("Width too small for boardThickness/counts (internal width <= 50mm).");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.drawerBoxThickness >= p.boardThickness) errors.push("drawerBoxThickness should be smaller than boardThickness.");
+
+  validateShelfLayout(errors, {
+    height: Math.max(50, p.height - p.topGap - p.topDrawerFrontHeightMm - p.rowGapMm),
+    plinthHeight,
+    boardThickness: p.boardThickness,
+    shelfCount: p.shelfCount,
+    shelfThickness: p.shelfThickness,
+    shelfAutoFit: p.shelfAutoFit,
+    shelfGaps: p.shelfGaps
+  });
+
+  validateMaterials(errors, p.materials);
+  return errors;
 }
 
 export function validateDrawerLow(p: DrawerLowParams): string[] {
@@ -673,8 +1226,12 @@ export function validateShelves(p: ShelvesParams): string[] {
   if (!validHandle) errors.push("handleType must be one of: none, bar, knob, cup, gola.");
 
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
-  if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
-    errors.push("hingeCountPerDoor must be 2 or 3.");
+  positiveNumber(errors, "hingeTopOffsetMm", p.hingeTopOffsetMm, 0);
+  positiveNumber(errors, "hingeBottomOffsetMm", p.hingeBottomOffsetMm, 0);
+
+  if (p.hingeSide !== "left" && p.hingeSide !== "right") errors.push("hingeSide must be 'left' or 'right'.");
+  if (!Number.isInteger(p.hingeCountPerDoor) || p.hingeCountPerDoor < 1 || p.hingeCountPerDoor > 6) {
+    errors.push("hingeCountPerDoor must be an integer between 1 and 6.");
   }
 
   if (!Number.isInteger(p.shelfCount) || p.shelfCount < 1 || p.shelfCount > 11) {
@@ -693,6 +1250,9 @@ export function validateShelves(p: ShelvesParams): string[] {
   if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
   if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
   if (p.doorDouble && openingW - p.frontGap <= 80) errors.push("frontGap too large for double doors (door width <= 40mm).");
+  if (p.hingeCountPerDoor >= 2 && p.hingeTopOffsetMm + p.hingeBottomOffsetMm >= openingH - 20) {
+    errors.push("Hinge offsets too large for door height.");
+  }
 
   const shelfCount = Math.max(1, Math.round(p.shelfCount));
   const internalShelfCount = Math.max(0, shelfCount - 1);
@@ -741,7 +1301,10 @@ export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
   positiveNumber(errors, "bottomGap", p.bottomGap, 0);
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
 
-  if (p.hingeCount !== 2 && p.hingeCount !== 3) errors.push("hingeCount must be 2 or 3.");
+  if (!Number.isInteger(p.hingeCount) || p.hingeCount < 1 || p.hingeCount > 5) {
+    errors.push("hingeCount must be an integer between 1 and 5.");
+  }
+  positiveNumber(errors, "hingeInsetFromSideMm", p.hingeInsetFromSideMm, 0);
   if (p.flapHinge !== "bottom" && p.flapHinge !== "top") errors.push("flapHinge must be 'bottom' or 'top'.");
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
@@ -753,6 +1316,7 @@ export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
   const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
   if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
   if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
+  if (p.hingeInsetFromSideMm > openingW / 2) errors.push("hingeInsetFromSideMm too large for current width.");
 
   if (!Number.isInteger(p.shelfCount) || p.shelfCount < 1 || p.shelfCount > 11) {
     errors.push("shelfCount must be an integer between 1 and 11.");
@@ -783,8 +1347,11 @@ export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
   positiveNumber(errors, "bottomGap", p.bottomGap, 0);
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
 
-  if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
-    errors.push("hingeCountPerDoor must be 2 or 3.");
+  positiveNumber(errors, "hingeTopOffsetMm", p.hingeTopOffsetMm, 0);
+  positiveNumber(errors, "hingeBottomOffsetMm", p.hingeBottomOffsetMm, 0);
+  if (p.hingeSide !== "left" && p.hingeSide !== "right") errors.push("hingeSide must be 'left' or 'right'.");
+  if (!Number.isInteger(p.hingeCountPerDoor) || p.hingeCountPerDoor < 1 || p.hingeCountPerDoor > 6) {
+    errors.push("hingeCountPerDoor must be an integer between 1 and 6.");
   }
 
   if (!Number.isInteger(p.shelfCount) || p.shelfCount < 1 || p.shelfCount > 11) {
@@ -799,6 +1366,9 @@ export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
   const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
   if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
   if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
+  if (p.hingeCountPerDoor >= 2 && p.hingeTopOffsetMm + p.hingeBottomOffsetMm >= openingH - 20) {
+    errors.push("Hinge offsets too large for door height.");
+  }
 
   validateShelfLayout(errors, p);
   validateMaterials(errors, p.materials);
@@ -848,8 +1418,12 @@ export function validateCornerShelfLower(p: CornerShelfLowerParams): string[] {
   positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
 
-  if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
-    errors.push("hingeCountPerDoor must be 2 or 3.");
+  positiveNumber(errors, "hingeTopOffsetMm", p.hingeTopOffsetMm, 0);
+  positiveNumber(errors, "hingeBottomOffsetMm", p.hingeBottomOffsetMm, 0);
+  if (p.hingeSideFrontZ !== "left" && p.hingeSideFrontZ !== "right") errors.push("hingeSideFrontZ must be 'left' or 'right'.");
+  if (p.hingeSideFrontX !== "left" && p.hingeSideFrontX !== "right") errors.push("hingeSideFrontX must be 'left' or 'right'.");
+  if (!Number.isInteger(p.hingeCountPerDoor) || p.hingeCountPerDoor < 1 || p.hingeCountPerDoor > 6) {
+    errors.push("hingeCountPerDoor must be an integer between 1 and 6.");
   }
 
   if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");

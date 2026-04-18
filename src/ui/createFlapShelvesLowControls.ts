@@ -194,13 +194,18 @@ export function createFlapShelvesLowControls(
   const hingeCount = document.createElement("select");
   hingeCount.id = "f_hingeCount";
   hingeCount.innerHTML = `
+    <option value="1">1</option>
     <option value="2">2</option>
     <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
   `;
 
   hingeCountWrap.appendChild(hingeCountLabel);
   hingeCountWrap.appendChild(hingeCount);
   grid.appendChild(hingeCountWrap);
+
+  addNumber("hingeInsetFromSideMm", "Hinge inset from sides (mm)", { min: 0, step: 1 });
 
   // Auto-fit shelves
   const autoWrap = document.createElement("div");
@@ -300,7 +305,7 @@ export function createFlapShelvesLowControls(
     if (params.wallMounted) params.plinthHeight = 0;
     params.flapOpen = flapOpen.checked;
     params.flapHinge = "top";
-    params.hingeCount = hingeCount.value === "3" ? 3 : 2;
+    params.hingeCount = Math.max(1, Math.min(5, Math.round(Number(hingeCount.value) || 2)));
     params.shelfAutoFit = autoFit.checked;
 
     for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);

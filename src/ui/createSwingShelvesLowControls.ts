@@ -197,24 +197,29 @@ export function createSwingShelvesLowControls(
   openWrap.appendChild(doorOpen);
   grid.appendChild(openWrap);
 
-  const hingeWrap = document.createElement("div");
-  hingeWrap.className = "field";
-  hingeWrap.style.gridTemplateColumns = "1fr 120px";
+  // Hinges
+  const hingeSideWrap = document.createElement("div");
+  hingeSideWrap.className = "field";
+  hingeSideWrap.style.gridTemplateColumns = "1fr 120px";
 
-  const hingeLabel = document.createElement("label");
-  hingeLabel.textContent = "Hinges per door";
-  hingeLabel.htmlFor = "f_hingeCountPerDoor";
+  const hingeSideLabel = document.createElement("label");
+  hingeSideLabel.textContent = "Hinge side (single door)";
+  hingeSideLabel.htmlFor = "f_hingeSide";
 
-  const hingeCount = document.createElement("select");
-  hingeCount.id = "f_hingeCountPerDoor";
-  hingeCount.innerHTML = `
-    <option value="2">2</option>
-    <option value="3">3</option>
+  const hingeSide = document.createElement("select");
+  hingeSide.id = "f_hingeSide";
+  hingeSide.innerHTML = `
+    <option value="left">left</option>
+    <option value="right">right</option>
   `;
 
-  hingeWrap.appendChild(hingeLabel);
-  hingeWrap.appendChild(hingeCount);
-  grid.appendChild(hingeWrap);
+  hingeSideWrap.appendChild(hingeSideLabel);
+  hingeSideWrap.appendChild(hingeSide);
+  grid.appendChild(hingeSideWrap);
+
+  addNumber("hingeCountPerDoor", "Hinges per door", { min: 1, step: 1 });
+  addNumber("hingeTopOffsetMm", "Hinge top offset (mm)", { min: 0, step: 1 });
+  addNumber("hingeBottomOffsetMm", "Hinge bottom offset (mm)", { min: 0, step: 1 });
 
   // Shelves
   addNumber("shelfCount", "Shelf count (compartments)", { min: 1, step: 1 });
@@ -275,7 +280,7 @@ export function createSwingShelvesLowControls(
     wallMounted.checked = params.wallMounted === true;
     doorDouble.checked = params.doorDouble === true;
     doorOpen.checked = params.doorOpen === true;
-    hingeCount.value = String(params.hingeCountPerDoor);
+    hingeSide.value = params.hingeSide ?? "left";
     autoFit.checked = params.shelfAutoFit === true;
     shelfGaps.value = params.shelfGaps.join(", ");
     shelfGaps.readOnly = autoFit.checked;
@@ -318,7 +323,8 @@ export function createSwingShelvesLowControls(
     params.shelfCount = Math.max(1, Math.round(params.shelfCount));
     params.doorDouble = doorDouble.checked;
     params.doorOpen = doorOpen.checked;
-    params.hingeCountPerDoor = hingeCount.value === "2" ? 2 : 3;
+    params.hingeSide = (hingeSide.value as SwingShelvesLowParams["hingeSide"]) ?? "left";
+    params.hingeCountPerDoor = Math.max(1, Math.min(6, Math.round(params.hingeCountPerDoor)));
     params.shelfAutoFit = autoFit.checked;
 
     for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);
@@ -368,7 +374,7 @@ export function createSwingShelvesLowControls(
 
   doorDouble.addEventListener("change", onInputsChanged);
   doorOpen.addEventListener("change", onInputsChanged);
-  hingeCount.addEventListener("change", onInputsChanged);
+  hingeSide.addEventListener("change", onInputsChanged);
 
   autoFit.addEventListener("change", () => {
     shelfGaps.readOnly = autoFit.checked;

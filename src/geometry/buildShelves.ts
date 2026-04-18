@@ -366,7 +366,10 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     const doorCenterY = plinthH + bottomGap + doorH / 2;
 
     const openAngle = p.doorOpen ? Math.PI / 2 : 0;
-    const hingeCount = p.hingeCountPerDoor === 2 ? 2 : 3;
+    const hingeCount = clampInt(p.hingeCountPerDoor, 1, 6);
+    const hingeTopOffset = Math.max(0, p.hingeTopOffsetMm) * MM_TO_M;
+    const hingeBottomOffset = Math.max(0, p.hingeBottomOffsetMm) * MM_TO_M;
+    const singleHingeSide = p.hingeSide === "right" ? "right" : "left";
 
     if (p.doorDouble) {
       const doorW = Math.max(0.05, (width - 2 * reveal - centerGap) / 2);
@@ -417,18 +420,21 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
         const hingeX = hingeSide === "left" ? hingeW / 2 + hingeInsetX : -hingeW / 2 - hingeInsetX;
         const hingeZ = -doorT / 2 - hingeD / 2 - 0.001; // fully behind door (inside)
 
-        const marginY = Math.min(0.12, Math.max(0.03, doorH / 2 - hingeH / 2 - 0.02));
-        const ys = Array.from({ length: hingeCount }, (_, idx) => {
-          const t = hingeCount === 1 ? 0.5 : idx / (hingeCount - 1);
-          return -doorH / 2 + marginY + t * (doorH - 2 * marginY);
-        });
+        const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
 
         ys.forEach((y, idx) => {
           const hinge = new THREE.Mesh(hingeGeo, hingeMat);
           hinge.name = `${hingePrefix}_${idx + 1}`;
           hinge.position.set(hingeX, y, hingeZ);
           setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD }, "none");
-          setParamKeys(hinge, ["doorDouble", "doorOpen", "hingeCountPerDoor", "frontThicknessMm"]);
+          setParamKeys(hinge, [
+            "doorDouble",
+            "doorOpen",
+            "hingeCountPerDoor",
+            "hingeTopOffsetMm",
+            "hingeBottomOffsetMm",
+            "frontThicknessMm"
+          ]);
           group.add(hinge);
         });
 
@@ -440,16 +446,16 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     } else {
       const doorW = Math.max(0.05, width - 2 * reveal);
 
-      const pivotX = -width / 2 + reveal; // left edge
+      const pivotX = singleHingeSide === "left" ? -width / 2 + reveal : width / 2 - reveal;
       const group = new THREE.Group();
       group.name = "door_pivot";
       group.position.set(pivotX, doorCenterY, doorPlaneZ);
-      group.rotation.y = -openAngle;
+      group.rotation.y = singleHingeSide === "left" ? -openAngle : openAngle;
 
       const doorGeo = new THREE.BoxGeometry(doorW, doorH, doorT);
       const door = new THREE.Mesh(doorGeo, frontMat);
       door.name = "door";
-      door.position.set(doorW / 2, 0, 0);
+      door.position.set(singleHingeSide === "left" ? doorW / 2 : -doorW / 2, 0, 0);
       setPartMeta(door, { width: doorW, height: doorH, depth: doorT }, "height");
       setParamKeys(door, [
         "width",
@@ -463,6 +469,10 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
         "bottomGap",
         "doorDouble",
         "doorOpen",
+        "hingeSide",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
         "handleType",
         "handlePositionMm",
         "handleLengthMm",
@@ -475,25 +485,29 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
       const hingeH = 0.05;
       const hingeD = 0.018;
       const hingeGeo = new THREE.BoxGeometry(hingeW, hingeH, hingeD);
-      const hingeX = hingeW / 2 + 0.006;
+      const hingeX = singleHingeSide === "left" ? hingeW / 2 + 0.006 : -hingeW / 2 - 0.006;
       const hingeZ = -doorT / 2 - hingeD / 2 - 0.001;
 
-      const marginY = Math.min(0.12, Math.max(0.03, doorH / 2 - hingeH / 2 - 0.02));
-      const ys = Array.from({ length: hingeCount }, (_, idx) => {
-        const t = hingeCount === 1 ? 0.5 : idx / (hingeCount - 1);
-        return -doorH / 2 + marginY + t * (doorH - 2 * marginY);
-      });
+      const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
 
       ys.forEach((y, idx) => {
         const hinge = new THREE.Mesh(hingeGeo, hingeMat);
         hinge.name = `hinge_${idx + 1}`;
         hinge.position.set(hingeX, y, hingeZ);
         setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD }, "none");
-        setParamKeys(hinge, ["doorDouble", "doorOpen", "hingeCountPerDoor", "frontThicknessMm"]);
+        setParamKeys(hinge, [
+          "doorDouble",
+          "doorOpen",
+          "hingeSide",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "frontThicknessMm"
+        ]);
         group.add(hinge);
       });
 
-      addDoorHandle(group, "left", doorW, doorH, doorT);
+      addDoorHandle(group, singleHingeSide, doorW, doorH, doorT);
       g.add(group);
     }
   }
@@ -528,4 +542,28 @@ function parseHexColor(hex: string): number {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampInt(value: unknown, min: number, max: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function computeHingeYs(doorH: number, count: number, topOffset: number, bottomOffset: number) {
+  const c = Math.max(1, Math.round(count));
+  if (c === 1) return [0];
+
+  const yTop = doorH / 2 - Math.max(0, topOffset);
+  const yBottom = -doorH / 2 + Math.max(0, bottomOffset);
+
+  // If offsets overlap (or door is tiny), fall back to a safe margin.
+  const safeMargin = Math.min(0.12, Math.max(0.03, doorH / 2 - 0.025 - 0.02));
+  const a = yTop > yBottom ? yTop : doorH / 2 - safeMargin;
+  const b = yTop > yBottom ? yBottom : -doorH / 2 + safeMargin;
+
+  return Array.from({ length: c }, (_, idx) => {
+    const t = c === 1 ? 0.5 : idx / (c - 1);
+    return b + t * (a - b);
+  });
 }

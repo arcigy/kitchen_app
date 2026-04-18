@@ -8,6 +8,12 @@ const pidFile = path.join(tmpDir, "vite.pid");
 const outLog = path.join(tmpDir, "vite.out.log");
 const errLog = path.join(tmpDir, "vite.err.log");
 
+function nowStamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 function readEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const raw = fs.readFileSync(filePath, "utf8");
@@ -35,6 +41,29 @@ function isRunning(pid) {
   }
 }
 
+function getListeningPid(port) {
+  const p = Number(port);
+  if (!Number.isFinite(p) || p <= 0) return null;
+
+  // Prefer checking whether the port is LISTENING; this is more reliable than process.kill(pid,0) on Windows.
+  if (process.platform === "win32") {
+    const cmd = `netstat -ano | findstr :${p} | findstr LISTENING`;
+    const res = spawnSync("cmd", ["/c", cmd], { encoding: "utf8" });
+    const out = String(res.stdout || "").trim();
+    if (!out) return null;
+    // Example line: TCP  127.0.0.1:5180  0.0.0.0:0  LISTENING  28708
+    const lines = out.split(/\r?\n/g).map((s) => s.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/\sLISTENING\s+(\d+)\s*$/i);
+      if (m) return Number(m[1]);
+    }
+    return null;
+  }
+
+  // Non-Windows: best-effort fallback to pid file check only.
+  return null;
+}
+
 function ensureTmp() {
   fs.mkdirSync(tmpDir, { recursive: true });
 }
@@ -51,7 +80,14 @@ function writePid(pid) {
 }
 
 function removePid() {
-  if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
+  // In some restricted environments (e.g. sandboxed Windows), deleting files may be blocked
+  // even though rewriting is allowed. Instead of unlink, invalidate the pid file.
+  if (!fs.existsSync(pidFile)) return;
+  try {
+    fs.writeFileSync(pidFile, "invalid\n", "utf8");
+  } catch {
+    // ignore
+  }
 }
 
 function resolveViteBin() {
@@ -82,6 +118,15 @@ function start() {
   const port = Number(portRaw);
   const safePort = Number.isFinite(port) ? String(port) : "5180";
 
+  const portPid = getListeningPid(safePort);
+  if (portPid) {
+    // Someone is already listening on this port, assume it's an existing Vite instance.
+    writePid(portPid);
+    console.log(`Vite already listening on http://${host}:${safePort}/ (pid ${portPid}).`);
+    console.log(`Logs: ${outLog} / ${errLog}`);
+    return;
+  }
+
   const viteEntry = resolveViteEntry();
   const viteBin = resolveViteBin();
   if (!fs.existsSync(viteEntry) && !fs.existsSync(viteBin)) {
@@ -90,6 +135,9 @@ function start() {
     return;
   }
 
+  // Always start with clean logs so old failures don't look like current failures.
+  fs.writeFileSync(outLog, `# ${nowStamp()} dev-server start\n`, "utf8");
+  fs.writeFileSync(errLog, `# ${nowStamp()} dev-server start\n`, "utf8");
   const outFd = fs.openSync(outLog, "a");
   const errFd = fs.openSync(errLog, "a");
 
@@ -119,13 +167,31 @@ function stop() {
   }
 
   if (!isRunning(pid)) {
-    console.log(`Pid ${pid} not running. Cleaning pid file.`);
-    removePid();
+    const portPid = getListeningPid("5180");
+    if (portPid) {
+      console.log(`Pid file not running, but port 5180 is LISTENING (pid ${portPid}).`);
+      console.log("Not stopping automatically to avoid killing an unrelated process.");
+      console.log("If you want to stop it, run: taskkill /PID <pid> /T /F");
+    } else {
+      console.log(`Pid ${pid} not running. Cleaning pid file.`);
+      removePid();
+    }
     return;
   }
 
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    // taskkill can fail silently under some restrictions; verify and fallback.
+    const tk = spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { encoding: "utf8" });
+    if (isRunning(pid)) {
+      spawnSync("powershell", ["-NoProfile", "-Command", `Stop-Process -Id ${pid} -Force`], { encoding: "utf8" });
+    }
+    if (isRunning(pid)) {
+      console.log(`Tried to stop Vite (pid ${pid}) but it is still running.`);
+      if (tk.status != null) console.log(`taskkill exit code: ${tk.status}`);
+      const portPidAfter = getListeningPid("5180");
+      if (portPidAfter) console.log(`Port 5180 still LISTENING (pid ${portPidAfter}).`);
+      return;
+    }
   } else {
     try {
       process.kill(-pid, "SIGTERM");
@@ -140,10 +206,25 @@ function stop() {
 
 function status() {
   const pid = readPid();
-  if (!pid) {
-    console.log("Vite status: stopped (no pid file).");
+  const portPid = getListeningPid("5180");
+
+  if (!pid && !portPid) {
+    console.log("Vite status: stopped.");
     return;
   }
+
+  if (portPid) {
+    // If something is listening, prefer that signal (more reliable on Windows).
+    if (!pid || pid !== portPid) writePid(portPid);
+    console.log(`Vite status: running (listening on 5180, pid ${portPid}).`);
+    return;
+  }
+
+  if (!pid) {
+    console.log("Vite status: unknown (no pid file).");
+    return;
+  }
+
   console.log(`Vite status: ${isRunning(pid) ? "running" : "stopped"} (pid ${pid}).`);
   if (!isRunning(pid)) removePid();
 }

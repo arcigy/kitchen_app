@@ -5,6 +5,9 @@ import { buildShelves } from "./buildShelves";
 import { buildFlapShelvesLow } from "./buildFlapShelvesLow";
 import { buildSwingShelvesLow } from "./buildSwingShelvesLow";
 import { buildNestedDrawerLow } from "./buildNestedDrawerLow";
+import { buildTopDrawersDoorsLow } from "./buildTopDrawersDoorsLow";
+import { buildOvenBaseLow } from "./buildOvenBaseLow";
+import { buildMicrowaveOvenTall } from "./buildMicrowaveOvenTall";
 
 export function buildModule(p: ModuleParams) {
   const root =
@@ -12,10 +15,16 @@ export function buildModule(p: ModuleParams) {
       ? buildDrawerLow(p)
       : p.type === "nested_drawer_low"
         ? buildNestedDrawerLow(p)
+        : p.type === "oven_base_low"
+          ? buildOvenBaseLow(p)
+          : p.type === "microwave_oven_tall"
+            ? buildMicrowaveOvenTall(p)
         : p.type === "flap_shelves_low"
           ? buildFlapShelvesLow(p)
           : p.type === "swing_shelves_low"
             ? buildSwingShelvesLow(p)
+            : p.type === "top_drawers_doors_low"
+              ? buildTopDrawersDoorsLow(p)
             : p.type === "corner_shelf_lower"
               ? buildCornerShelfLower(p)
               : buildShelves(p);
