@@ -134,6 +134,7 @@ export function createFlapShelvesLowControls(
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
+  addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
 
   const wallWrap = document.createElement("div");
   wallWrap.className = "field";
@@ -264,6 +265,8 @@ export function createFlapShelvesLowControls(
 
     const plinthField = numberFields.find((f) => f.key === "plinthHeight");
     if (plinthField) plinthField.input.disabled = wallMounted.checked;
+    const setbackField = numberFields.find((f) => f.key === "plinthSetbackMm");
+    if (setbackField) setbackField.input.disabled = wallMounted.checked;
   };
 
   const readNumber = (input: HTMLInputElement, fallback: number) => {
@@ -333,9 +336,13 @@ export function createFlapShelvesLowControls(
   wallMounted.addEventListener("change", () => {
     const plinthField = numberFields.find((f) => f.key === "plinthHeight");
     if (plinthField) plinthField.input.disabled = wallMounted.checked;
+    const setbackField = numberFields.find((f) => f.key === "plinthSetbackMm");
+    if (setbackField) setbackField.input.disabled = wallMounted.checked;
     if (wallMounted.checked) {
       const plinthField2 = numberFields.find((f) => f.key === "plinthHeight");
       if (plinthField2) plinthField2.input.value = "0";
+      const setbackField2 = numberFields.find((f) => f.key === "plinthSetbackMm");
+      if (setbackField2) setbackField2.input.value = String(params.plinthSetbackMm ?? 60);
     }
     onInputsChanged();
   });

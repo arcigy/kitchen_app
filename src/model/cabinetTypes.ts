@@ -114,6 +114,7 @@ export type FlapShelvesLowParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
   wallMounted: boolean; // true = no legs/kickboard
   // Reveal around the front flap (same semantics as drawer_low reveals)
   sideGap: number; // mm
@@ -144,6 +145,7 @@ export type SwingShelvesLowParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
   wallMounted: boolean; // true = no legs/kickboard
 
   // Reveal around the front doors (same semantics as drawer_low reveals)
@@ -211,6 +213,7 @@ export type CornerShelfLowerParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
   shelfCount: number; // compartments
   shelfThickness: number; // mm
   shelfAutoFit: boolean;
@@ -321,6 +324,7 @@ export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 0,
+    plinthSetbackMm: 60,
     wallMounted: true,
     frontGap: 2,
     sideGap: 2,
@@ -355,6 +359,7 @@ export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 0,
+    plinthSetbackMm: 60,
     wallMounted: true,
     frontGap: 2,
     sideGap: 2,
@@ -432,6 +437,7 @@ export function makeDefaultCornerShelfLowerParams(): CornerShelfLowerParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 100,
+    plinthSetbackMm: 60,
     shelfCount: 4,
     shelfThickness: 18,
     shelfAutoFit: true,
@@ -725,6 +731,7 @@ export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
 
   if (typeof p.wallMounted !== "boolean") errors.push("wallMounted must be a boolean.");
   if (p.wallMounted === true && p.plinthHeight !== 0) errors.push("plinthHeight must be 0 when wallMounted=true.");
@@ -738,6 +745,7 @@ export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
   if (p.flapHinge !== "bottom" && p.flapHinge !== "top") errors.push("flapHinge must be 'bottom' or 'top'.");
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
   if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");
 
   // Basic door fit sanity: leaves at least some opening after reveals.
@@ -764,6 +772,7 @@ export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
 
   if (typeof p.wallMounted !== "boolean") errors.push("wallMounted must be a boolean.");
   if (p.wallMounted === true && p.plinthHeight !== 0) errors.push("plinthHeight must be 0 when wallMounted=true.");
@@ -784,6 +793,7 @@ export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
 
   if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
   const openingW = p.width - 2 * p.sideGap;
   const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
@@ -835,6 +845,7 @@ export function validateCornerShelfLower(p: CornerShelfLowerParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
 
   if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
@@ -843,6 +854,7 @@ export function validateCornerShelfLower(p: CornerShelfLowerParams): string[] {
 
   if (p.shelfThickness > p.boardThickness) errors.push("shelfThickness should be <= boardThickness.");
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
   validateShelfLayout(errors, p);
   validateMaterials(errors, p.materials);

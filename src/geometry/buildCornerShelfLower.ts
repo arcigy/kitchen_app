@@ -17,6 +17,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
   const boardT = p.boardThickness * MM_TO_M;
   const backT = p.backThickness * MM_TO_M;
   const plinthH = p.plinthHeight * MM_TO_M;
+  const plinthSetback = Math.max(0, p.plinthSetbackMm) * MM_TO_M;
   const shelfT = p.shelfThickness * MM_TO_M;
   const fitEps = 0.0002; // 0.2mm: avoids tiny overlaps from float math
 
@@ -66,6 +67,11 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     mesh.userData.grainAlong = grainAlong;
   };
 
+  const setParamKeys = (obj: THREE.Object3D, keys: Array<keyof CornerShelfLowerParams | string>) => {
+    (obj as any).userData ??= {};
+    (obj as any).userData.paramKeys = [...keys];
+  };
+
   // Layout:
   // - Inner corner (where walls meet) is at (-lenX/2, -lenZ/2).
   // - X run extends to +lenX/2
@@ -82,6 +88,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     sideX.name = "side_end_x";
     sideX.position.set(lenX / 2 - boardT / 2, plinthH + openingH / 2, innerZ + depth / 2);
     setPartMeta(sideX, { width: boardT, height: openingH, depth }, "height");
+    setParamKeys(sideX, ["lengthX", "height", "depth", "boardThickness", "plinthHeight"]);
     g.add(sideX);
 
     const sideGeoZ = new THREE.BoxGeometry(depth, openingH, boardT);
@@ -89,6 +96,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     sideZ.name = "side_end_z";
     sideZ.position.set(innerX + depth / 2, plinthH + openingH / 2, lenZ / 2 - boardT / 2);
     setPartMeta(sideZ, { width: depth, height: openingH, depth: boardT }, "height");
+    setParamKeys(sideZ, ["lengthZ", "height", "depth", "boardThickness", "plinthHeight"]);
     g.add(sideZ);
   }
 
@@ -102,6 +110,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     backX.name = "back_x";
     backX.position.set(innerX0 + fitEps / 2 + backXLen / 2, plinthH + openingH / 2, innerZ + backT / 2);
     setPartMeta(backX, { width: backXLen, height: openingH, depth: backT }, "width");
+    setParamKeys(backX, ["lengthX", "height", "depth", "backThickness", "plinthHeight"]);
     g.add(backX);
 
     const innerZ0 = innerZ + backT;
@@ -112,6 +121,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     backZ.name = "back_z";
     backZ.position.set(innerX + backT / 2, plinthH + openingH / 2, innerZ0 + fitEps / 2 + backZLen / 2);
     setPartMeta(backZ, { width: backT, height: openingH, depth: backZLen }, "depth");
+    setParamKeys(backZ, ["lengthZ", "height", "depth", "backThickness", "plinthHeight"]);
     g.add(backZ);
   }
 
@@ -154,6 +164,12 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     const legGeo = new THREE.CylinderGeometry(legRadius, legRadius, plinthH, 18);
     const inset = 0.03;
 
+    // Keep legs behind the kickboards (same rule as straight cabinets).
+    const kickDepth = Math.min(boardT, depth * 0.2);
+    const kickSetback = Math.min(plinthSetback, depth / 2);
+    const kickBackFaceZ = depth - kickDepth - kickSetback;
+    const kickBackFaceX = depth - kickDepth - kickSetback;
+
     const pts: Array<[string, number, number]> = [
       ["leg_inner", innerX + inset, innerZ + inset],
       ["leg_end_x", lenX / 2 - inset, innerZ + inset],
@@ -162,10 +178,15 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
     ];
 
     for (const [name, x, z] of pts) {
+      const maxX = innerX + kickBackFaceX - legRadius - 0.01;
+      const maxZ = innerZ + kickBackFaceZ - legRadius - 0.01;
+      const clampedX = Math.min(x, maxX);
+      const clampedZ = Math.min(z, maxZ);
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.name = name;
-      leg.position.set(x, plinthH / 2, z);
+      leg.position.set(clampedX, plinthH / 2, clampedZ);
       setPartMetaMm(leg, { width: legRadius * 2 * 1000, height: p.plinthHeight, depth: legRadius * 2 * 1000 }, "none");
+      setParamKeys(leg, ["plinthHeight", "plinthSetbackMm", "depth", "lengthX", "lengthZ"]);
       g.add(leg);
     }
   }
@@ -173,6 +194,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
   // Kickboards on both faces
   {
     const kickDepth = Math.min(boardT, depth * 0.2);
+    const kickSetback = Math.min(plinthSetback, depth / 2);
     const cornerW = boardT + 0.002;
 
     // IMPORTANT: front parts must NOT run through the inner elbow area (depth x depth overlap).
@@ -185,15 +207,17 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
       const kickCornerXGeo = new THREE.BoxGeometry(cornerW, plinthH, kickDepth);
       const kickCornerX = new THREE.Mesh(kickCornerXGeo, bodyMat);
       kickCornerX.name = "kick_corner_x";
-      kickCornerX.position.set(innerX + depth + cornerW / 2, plinthH / 2, innerZ + depth - kickDepth / 2);
+      kickCornerX.position.set(innerX + depth + cornerW / 2, plinthH / 2, innerZ + depth - kickDepth / 2 - kickSetback);
       setPartMeta(kickCornerX, { width: cornerW, height: plinthH, depth: kickDepth }, "width");
+      setParamKeys(kickCornerX, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
       g.add(kickCornerX);
 
       const kickCornerZGeo = new THREE.BoxGeometry(kickDepth, plinthH, cornerW);
       const kickCornerZ = new THREE.Mesh(kickCornerZGeo, bodyMat);
       kickCornerZ.name = "kick_corner_z";
-      kickCornerZ.position.set(innerX + depth - kickDepth / 2, plinthH / 2, innerZ + depth + cornerW / 2);
+      kickCornerZ.position.set(innerX + depth - kickDepth / 2 - kickSetback, plinthH / 2, innerZ + depth + cornerW / 2);
       setPartMeta(kickCornerZ, { width: kickDepth, height: plinthH, depth: cornerW }, "depth");
+      setParamKeys(kickCornerZ, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
       g.add(kickCornerZ);
     }
 
@@ -204,8 +228,9 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
       const kickGeoX = new THREE.BoxGeometry(kickXLen, plinthH, kickDepth);
       const kickX = new THREE.Mesh(kickGeoX, bodyMat);
       kickX.name = "kick_x";
-      kickX.position.set(kickX0 + fitEps / 2 + kickXLen / 2, plinthH / 2, innerZ + depth - kickDepth / 2);
+      kickX.position.set(kickX0 + fitEps / 2 + kickXLen / 2, plinthH / 2, innerZ + depth - kickDepth / 2 - kickSetback);
       setPartMeta(kickX, { width: kickXLen, height: plinthH, depth: kickDepth }, "width");
+      setParamKeys(kickX, ["plinthHeight", "plinthSetbackMm", "depth", "lengthX", "boardThickness"]);
       g.add(kickX);
     }
 
@@ -216,8 +241,9 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
       const kickGeoZ = new THREE.BoxGeometry(kickDepth, plinthH, kickZLen);
       const kickZ = new THREE.Mesh(kickGeoZ, bodyMat);
       kickZ.name = "kick_z";
-      kickZ.position.set(innerX + depth - kickDepth / 2, plinthH / 2, kickZ0 + fitEps / 2 + kickZLen / 2);
+      kickZ.position.set(innerX + depth - kickDepth / 2 - kickSetback, plinthH / 2, kickZ0 + fitEps / 2 + kickZLen / 2);
       setPartMeta(kickZ, { width: kickDepth, height: plinthH, depth: kickZLen }, "depth");
+      setParamKeys(kickZ, ["plinthHeight", "plinthSetbackMm", "depth", "lengthZ", "boardThickness"]);
       g.add(kickZ);
     }
   }
@@ -257,6 +283,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
         shelfX.name = `shelf_${i + 1}_x`;
         shelfX.position.set(innerX + backT + shelfXLenFull / 2, y, innerZ + backT + shelfDepth / 2);
         setPartMeta(shelfX, { width: shelfXLenFull, height: shelfT, depth: shelfDepth }, "width");
+        setParamKeys(shelfX, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
         g.add(shelfX);
       }
 
@@ -269,6 +296,7 @@ export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
         shelfZ.name = `shelf_${i + 1}_z`;
         shelfZ.position.set(innerX + backT + shelfDepth / 2, y, elbowZ + shelfZLenButt / 2);
         setPartMeta(shelfZ, { width: shelfDepth, height: shelfT, depth: shelfZLenButt }, "depth");
+        setParamKeys(shelfZ, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
         g.add(shelfZ);
       }
     }

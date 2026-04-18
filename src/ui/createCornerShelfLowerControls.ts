@@ -142,6 +142,7 @@ export function createCornerShelfLowerControls(
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
+  addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
 
   // Shelves
   addNumber("shelfCount", "Shelf count (compartments)", { min: 1, step: 1 });

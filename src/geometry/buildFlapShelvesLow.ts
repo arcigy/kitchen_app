@@ -14,6 +14,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
   const boardT = p.boardThickness * MM_TO_M;
   const backT = p.backThickness * MM_TO_M;
   const plinthH = p.plinthHeight * MM_TO_M;
+  const plinthSetback = Math.max(0, p.plinthSetbackMm) * MM_TO_M;
   const shelfT = p.shelfThickness * MM_TO_M;
 
   const sideGap = p.sideGap * MM_TO_M;
@@ -46,6 +47,17 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
     mesh.userData.dimensionsMm = { ...dimsMm };
   };
 
+  const setParamKeys = (obj: THREE.Object3D, keys: Array<keyof FlapShelvesLowParams | string>) => {
+    (obj as any).userData ??= {};
+    (obj as any).userData.paramKeys = [...keys];
+  };
+
+  // Kickboard geometry inputs reused by legs + kickboard positioning.
+  const kickDepth = Math.min(boardT, depth * 0.2);
+  const kickSetback = Math.min(plinthSetback, depth / 2);
+  const kickCenterZ = depth / 2 - kickDepth / 2 - kickSetback;
+  const kickBackFaceZ = kickCenterZ - kickDepth / 2;
+
   const openingH = height - plinthH;
   const sideH = openingH;
 
@@ -55,12 +67,14 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
   leftSide.name = "leftSide";
   leftSide.position.set(-(width / 2 - boardT / 2), plinthH + sideH / 2, 0);
   setPartMeta(leftSide, { width: boardT, height: sideH, depth });
+  setParamKeys(leftSide, ["width", "height", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(leftSide);
 
   const rightSide = new THREE.Mesh(sideGeo, bodyMat);
   rightSide.name = "rightSide";
   rightSide.position.set(width / 2 - boardT / 2, plinthH + sideH / 2, 0);
   setPartMeta(rightSide, { width: boardT, height: sideH, depth });
+  setParamKeys(rightSide, ["width", "height", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(rightSide);
 
   // Interior dims (back panel mounted outside)
@@ -74,6 +88,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
   bottom.name = "bottom";
   bottom.position.set(0, plinthH + boardT / 2, interiorCenterZ);
   setPartMeta(bottom, { width: internalW, height: boardT, depth: internalD });
+  setParamKeys(bottom, ["width", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(bottom);
 
   // Top
@@ -82,6 +97,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
   top.name = "top";
   top.position.set(0, height - boardT / 2, interiorCenterZ);
   setPartMeta(top, { width: internalW, height: boardT, depth: internalD });
+  setParamKeys(top, ["width", "depth", "height", "boardThickness"]);
   g.add(top);
 
   // Back
@@ -90,6 +106,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
   back.name = "back";
   back.position.set(0, plinthH + sideH / 2, -depth / 2 - backT / 2);
   setPartMeta(back, { width, height: sideH, depth: backT });
+  setParamKeys(back, ["width", "height", "depth", "backThickness", "plinthHeight", "wallMounted"]);
   g.add(back);
 
   // Legs (only when floor-standing)
@@ -102,7 +119,9 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
     const insetZ = 0.06;
     const xL = -width / 2 + insetX;
     const xR = width / 2 - insetX;
-    const zF = depth / 2 - insetZ;
+    // Ensure front legs are always behind the kickboard.
+    const legMaxFrontCenterZ = kickBackFaceZ - legRadius - 0.01; // keep 10mm behind the kickboard
+    const zF = Math.min(depth / 2 - insetZ, legMaxFrontCenterZ);
     const zB = -depth / 2 + insetZ;
 
     const addLeg = (name: string, x: number, z: number) => {
@@ -110,6 +129,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
       leg.name = name;
       leg.position.set(x, legH / 2, z);
       setPartMetaMm(leg, { width: legRadius * 2 * 1000, height: legH / MM_TO_M, depth: legRadius * 2 * 1000 });
+      setParamKeys(leg, ["plinthHeight", "plinthSetbackMm", "depth", "width", "wallMounted"]);
       g.add(leg);
     };
 
@@ -121,12 +141,12 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
 
   // Kickboard (front) only when floor-standing
   if (!p.wallMounted && plinthH > 0) {
-    const kickDepth = Math.min(boardT, depth * 0.2);
     const kickGeo = new THREE.BoxGeometry(width, plinthH, kickDepth);
     const kick = new THREE.Mesh(kickGeo, bodyMat);
     kick.name = "kick";
-    kick.position.set(0, plinthH / 2, depth / 2 - kickDepth / 2);
+    kick.position.set(0, plinthH / 2, kickCenterZ);
     setPartMeta(kick, { width, height: plinthH, depth: kickDepth });
+    setParamKeys(kick, ["width", "plinthHeight", "plinthSetbackMm", "depth", "boardThickness", "wallMounted"]);
     g.add(kick);
   }
 
@@ -145,6 +165,7 @@ export function buildFlapShelvesLow(p: FlapShelvesLowParams): THREE.Group {
     shelf.name = `shelf_${i + 1}`;
     shelf.position.set(0, y, interiorCenterZ);
     setPartMeta(shelf, { width: internalW, height: shelfT, depth: internalD });
+    setParamKeys(shelf, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
     g.add(shelf);
   }
 
