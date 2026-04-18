@@ -323,6 +323,52 @@ export type MicrowaveOvenTallParams = {
   materials: MaterialParams;
 };
 
+export type FridgeTallParams = {
+  type: "fridge_tall";
+  width: number; // mm
+  height: number; // mm
+  depth: number; // mm
+  boardThickness: number; // mm
+  backThickness: number; // mm
+  plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm
+
+  // Optional bottom drawers (some tall units have small drawers at the bottom)
+  frontGap: number; // mm
+  sideGap: number; // mm
+  topGap: number; // mm (reveal above the top door)
+  bottomGap: number; // mm
+  frontThicknessMm: number; // mm
+  drawerCount: number; // 0..6
+  drawerFrontHeights: number[]; // mm (count=drawerCount)
+
+  // Handles (same contract as drawer_low)
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
+  handlePositionMm: number; // mm from top edge of each drawer front / top flap
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
+
+  // Fridge niche (built-in)
+  fridgeWidthMm: number; // niche width (mm)
+  fridgeHeightMm: number; // niche height (mm)
+  fridgeDepthMm: number; // niche depth (mm)
+  fridgeSideClearanceMm: number;
+  fridgeTopClearanceMm: number;
+  fridgeBottomClearanceMm: number;
+
+  gapAboveDrawersMm: number; // mm (vertical spacer above bottom drawers before fridge zone)
+
+  // Top cabinet (fills the rest so there is no empty void)
+  topShelfCount: number; // compartments
+  topShelfThickness: number; // mm
+  topFlapOpen: boolean;
+  topHingeCount: number; // count along the top edge
+  topHingeInsetFromSideMm: number; // mm
+
+  materials: MaterialParams;
+};
+
 export type ShelvesParams = {
   type: "shelves";
   width: number; // mm
@@ -396,6 +442,7 @@ export type ModuleParams =
   | TopDrawersDoorsLowParams
   | OvenBaseLowParams
   | MicrowaveOvenTallParams
+  | FridgeTallParams
   | ShelvesParams
   | CornerShelfLowerParams;
 
@@ -778,6 +825,60 @@ export function makeDefaultMicrowaveOvenTallParams(): MicrowaveOvenTallParams {
   return base;
 }
 
+export function makeDefaultFridgeTallParams(): FridgeTallParams {
+  const base: FridgeTallParams = {
+    type: "fridge_tall",
+    width: 600,
+    height: 2000,
+    depth: 600,
+    boardThickness: 18,
+    backThickness: 8,
+    plinthHeight: 0,
+    plinthSetbackMm: 0,
+
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    frontThicknessMm: 19,
+    drawerCount: 0,
+    drawerFrontHeights: [],
+
+    handleType: "bar",
+    handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
+
+    // Built-in fridge niche defaults (kitchen-real)
+    fridgeWidthMm: 560,
+    fridgeHeightMm: 1770,
+    fridgeDepthMm: 550,
+    fridgeSideClearanceMm: 2,
+    fridgeTopClearanceMm: 5,
+    fridgeBottomClearanceMm: 5,
+
+    gapAboveDrawersMm: 10,
+
+    topShelfCount: 2,
+    topShelfThickness: 18,
+    topFlapOpen: false,
+    topHingeCount: 2,
+    topHingeInsetFromSideMm: 80,
+
+    materials: {
+      bodyKey: "carcass_default",
+      frontKey: "front_default",
+      drawerKey: "drawer_unused",
+      bodyColor: "#b8bcc7",
+      frontColor: "#3a7bd5",
+      drawerColor: "#e1a45a",
+      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
+    }
+  };
+  return base;
+}
+
 export function makeDefaultCornerShelfLowerParams(): CornerShelfLowerParams {
   const base: CornerShelfLowerParams = {
     type: "corner_shelf_lower",
@@ -822,6 +923,7 @@ export function validateModule(p: ModuleParams): string[] {
   if (p.type === "top_drawers_doors_low") return validateTopDrawersDoorsLow(p);
   if (p.type === "oven_base_low") return validateOvenBaseLow(p);
   if (p.type === "microwave_oven_tall") return validateMicrowaveOvenTall(p);
+  if (p.type === "fridge_tall") return validateFridgeTall(p);
   if (p.type === "shelves") return validateShelves(p);
   if (p.type === "corner_shelf_lower") return validateCornerShelfLower(p);
   return ["Unknown module type."];
@@ -891,6 +993,61 @@ export function validateMicrowaveOvenTall(p: MicrowaveOvenTallParams): string[] 
     errors.push("Microwave does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
   }
 
+  validateMaterials(errors, p.materials);
+  return errors;
+}
+
+export function validateFridgeTall(p: FridgeTallParams): string[] {
+  const errors: string[] = [];
+
+  positiveNumber(errors, "width", p.width, 200);
+  positiveNumber(errors, "height", p.height, 400);
+  positiveNumber(errors, "depth", p.depth, 200);
+  positiveNumber(errors, "boardThickness", p.boardThickness, 5);
+  positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
+
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+
+  if (!Number.isInteger(p.drawerCount) || p.drawerCount < 0 || p.drawerCount > 6) errors.push("drawerCount must be 0..6.");
+  if (!Array.isArray(p.drawerFrontHeights) || p.drawerFrontHeights.some((n) => typeof n !== "number")) {
+    errors.push("drawerFrontHeights must be an array of numbers.");
+  } else if (p.drawerFrontHeights.length !== p.drawerCount) {
+    errors.push("drawerFrontHeights count must match drawerCount.");
+  }
+
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
+
+  positiveNumber(errors, "fridgeWidthMm", p.fridgeWidthMm, 100);
+  positiveNumber(errors, "fridgeHeightMm", p.fridgeHeightMm, 100);
+  positiveNumber(errors, "fridgeDepthMm", p.fridgeDepthMm, 100);
+  positiveNumber(errors, "fridgeSideClearanceMm", p.fridgeSideClearanceMm, 0);
+  positiveNumber(errors, "fridgeTopClearanceMm", p.fridgeTopClearanceMm, 0);
+  positiveNumber(errors, "fridgeBottomClearanceMm", p.fridgeBottomClearanceMm, 0);
+  positiveNumber(errors, "gapAboveDrawersMm", p.gapAboveDrawersMm, 0);
+
+  positiveNumber(errors, "topShelfThickness", p.topShelfThickness, 5);
+  if (!Number.isInteger(p.topShelfCount) || p.topShelfCount < 1 || p.topShelfCount > 8) errors.push("topShelfCount must be 1..8.");
+  positiveNumber(errors, "topHingeInsetFromSideMm", p.topHingeInsetFromSideMm, 0);
+  if (!Number.isInteger(p.topHingeCount) || p.topHingeCount < 1 || p.topHingeCount > 6) {
+    errors.push("topHingeCount must be an integer between 1 and 6.");
+  }
+
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+
+  const internalW = p.width - 2 * p.boardThickness;
+  if (p.fridgeWidthMm + 2 * p.fridgeSideClearanceMm > internalW + 0.5) {
+    errors.push("Fridge does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
+  }
   validateMaterials(errors, p.materials);
   return errors;
 }

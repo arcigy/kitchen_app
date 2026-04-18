@@ -10,6 +10,7 @@ import {
   makeDefaultNestedDrawerLowParams,
   makeDefaultOvenBaseLowParams,
   makeDefaultMicrowaveOvenTallParams,
+  makeDefaultFridgeTallParams,
   makeDefaultShelvesParams,
   makeDefaultTopDrawersDoorsLowParams,
   makeDefaultSwingShelvesLowParams,
@@ -29,6 +30,7 @@ import { createCornerShelfLowerControls } from "./ui/createCornerShelfLowerContr
 import { createTopDrawersDoorsLowControls } from "./ui/createTopDrawersDoorsLowControls";
 import { createOvenBaseLowControls } from "./ui/createOvenBaseLowControls";
 import { createMicrowaveOvenTallControls } from "./ui/createMicrowaveOvenTallControls";
+import { createFridgeTallControls } from "./ui/createFridgeTallControls";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./scene/exportSceneJson";
@@ -650,6 +652,7 @@ export function startApp(args: AppArgs) {
       <option value="nested_drawer_low">nested_drawer_low</option>
       <option value="oven_base_low">oven_base_low</option>
       <option value="microwave_oven_tall">microwave_oven_tall</option>
+      <option value="fridge_tall">fridge_tall</option>
       <option value="top_drawers_doors_low">top_drawers_doors_low</option>
       <option value="flap_shelves_low">flap_shelves_low</option>
       <option value="swing_shelves_low">swing_shelves_low</option>
@@ -787,6 +790,9 @@ export function startApp(args: AppArgs) {
   const addTallBtn = document.createElement("button");
   addTallBtn.type = "button";
   addTallBtn.textContent = "Add tall";
+  const addFridgeBtn = document.createElement("button");
+  addFridgeBtn.type = "button";
+  addFridgeBtn.textContent = "Add fridge";
   const addShelvesBtn = document.createElement("button");
   addShelvesBtn.type = "button";
   addShelvesBtn.textContent = "Add shelves";
@@ -796,6 +802,7 @@ export function startApp(args: AppArgs) {
   addWrap.appendChild(addDrawerBtn);
   addWrap.appendChild(addOvenBtn);
   addWrap.appendChild(addTallBtn);
+  addWrap.appendChild(addFridgeBtn);
   addWrap.appendChild(addShelvesBtn);
   addWrap.appendChild(addCornerBtn);
 
@@ -1041,6 +1048,7 @@ export function startApp(args: AppArgs) {
   addDrawerBtn.addEventListener("click", () => addInstance("drawer_low"));
   addOvenBtn.addEventListener("click", () => addInstance("oven_base_low"));
   addTallBtn.addEventListener("click", () => addInstance("microwave_oven_tall"));
+  addFridgeBtn.addEventListener("click", () => addInstance("fridge_tall"));
   addShelvesBtn.addEventListener("click", () => addInstance("shelves"));
   addCornerBtn.addEventListener("click", () => addInstance("corner_shelf_lower"));
   addWindowBtn.addEventListener("click", () => addOrSelectWindow());
@@ -1422,6 +1430,11 @@ export function startApp(args: AppArgs) {
         onChange: () => rebuildInstance(inst),
         getWorktopThicknessMm: () => worktopThicknessMm
       });
+    } else if (inst.params.type === "fridge_tall") {
+      layoutControlsApi = createFridgeTallControls(instanceEditorHost, inst.params as any, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (inst.params.type === "top_drawers_doors_low") {
       layoutControlsApi = createTopDrawersDoorsLowControls(instanceEditorHost, inst.params, {
         onChange: () => rebuildInstance(inst),
@@ -1718,6 +1731,8 @@ export function startApp(args: AppArgs) {
             ? makeDefaultOvenBaseLowParams()
             : type === "microwave_oven_tall"
               ? makeDefaultMicrowaveOvenTallParams()
+              : type === "fridge_tall"
+                ? makeDefaultFridgeTallParams()
             : type === "top_drawers_doors_low"
               ? makeDefaultTopDrawersDoorsLowParams()
             : type === "flap_shelves_low"
@@ -2069,6 +2084,11 @@ export function startApp(args: AppArgs) {
         onChange: () => afterParamsChanged(),
         getWorktopThicknessMm: () => worktopThicknessMm
       });
+    } else if (params.type === "fridge_tall") {
+      buildControlsApi = createFridgeTallControls(editorHost, params as any, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "top_drawers_doors_low") {
       buildControlsApi = createTopDrawersDoorsLowControls(editorHost, params, {
         onChange: () => afterParamsChanged(),
@@ -2183,6 +2203,7 @@ export function startApp(args: AppArgs) {
       | "nested_drawer_low"
       | "oven_base_low"
       | "microwave_oven_tall"
+      | "fridge_tall"
       | "top_drawers_doors_low"
       | "flap_shelves_low"
       | "swing_shelves_low"
@@ -2198,6 +2219,8 @@ export function startApp(args: AppArgs) {
             ? makeDefaultOvenBaseLowParams()
             : type === "microwave_oven_tall"
               ? makeDefaultMicrowaveOvenTallParams()
+              : type === "fridge_tall"
+                ? makeDefaultFridgeTallParams()
             : type === "top_drawers_doors_low"
               ? makeDefaultTopDrawersDoorsLowParams()
             : type === "flap_shelves_low"
@@ -2231,14 +2254,16 @@ export function startApp(args: AppArgs) {
         ? makeDefaultDrawerLowParams()
         : inst.params.type === "nested_drawer_low"
           ? makeDefaultNestedDrawerLowParams()
-          : inst.params.type === "oven_base_low"
-            ? makeDefaultOvenBaseLowParams()
-            : inst.params.type === "microwave_oven_tall"
-              ? makeDefaultMicrowaveOvenTallParams()
-            : inst.params.type === "top_drawers_doors_low"
-              ? makeDefaultTopDrawersDoorsLowParams()
-              : inst.params.type === "flap_shelves_low"
-                ? makeDefaultFlapShelvesLowParams()
+        : inst.params.type === "oven_base_low"
+          ? makeDefaultOvenBaseLowParams()
+          : inst.params.type === "microwave_oven_tall"
+            ? makeDefaultMicrowaveOvenTallParams()
+            : inst.params.type === "fridge_tall"
+              ? makeDefaultFridgeTallParams()
+          : inst.params.type === "top_drawers_doors_low"
+            ? makeDefaultTopDrawersDoorsLowParams()
+            : inst.params.type === "flap_shelves_low"
+              ? makeDefaultFlapShelvesLowParams()
                 : inst.params.type === "swing_shelves_low"
                   ? makeDefaultSwingShelvesLowParams()
                   : inst.params.type === "shelves"
@@ -2778,8 +2803,10 @@ export function startApp(args: AppArgs) {
         ? "nested_drawer_low"
         : v === "oven_base_low"
           ? "oven_base_low"
-          : v === "microwave_oven_tall"
-            ? "microwave_oven_tall"
+        : v === "microwave_oven_tall"
+          ? "microwave_oven_tall"
+          : v === "fridge_tall"
+            ? "fridge_tall"
         : v === "top_drawers_doors_low"
           ? "top_drawers_doors_low"
         : v === "flap_shelves_low"
