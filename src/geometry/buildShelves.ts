@@ -15,7 +15,13 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   const depth = p.depth * MM_TO_M;
   const boardT = p.boardThickness * MM_TO_M;
   const backT = p.backThickness * MM_TO_M;
-  const plinthH = p.plinthHeight * MM_TO_M;
+  const plinthH = (p.wallMounted ? 0 : p.plinthHeight) * MM_TO_M;
+  const plinthSetback = Math.max(0, p.plinthSetbackMm) * MM_TO_M;
+  const frontThickness = Math.max(0, p.frontThicknessMm) * MM_TO_M;
+  const frontGap = Math.max(0, p.frontGap) * MM_TO_M;
+  const sideGap = Math.max(0, p.sideGap) * MM_TO_M;
+  const topGap = Math.max(0, p.topGap) * MM_TO_M;
+  const bottomGap = Math.max(0, p.bottomGap) * MM_TO_M;
   const shelfT = p.shelfThickness * MM_TO_M;
 
   const bodyMat = p.materials.bodyPbr
@@ -31,6 +37,7 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     metalness: 0.0
   });
   const hingeMat = new THREE.MeshStandardMaterial({ color: 0x4a4f5a, roughness: 0.5, metalness: 0.15 });
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.55, metalness: 0.1 });
 
   const setPartMeta = (
     mesh: THREE.Mesh,
@@ -64,6 +71,88 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     mesh.userData.grainAlong = grainAlong;
   };
 
+  const setParamKeys = (obj: THREE.Object3D, keys: Array<keyof ShelvesParams | string>) => {
+    (obj as any).userData ??= {};
+    (obj as any).userData.paramKeys = [...keys];
+  };
+
+  // Handle preview (for collisions / realism). Attached to the door pivot group so it rotates with the door.
+  const addDoorHandle = (doorGroup: THREE.Group, hingeSide: "left" | "right", doorW: number, doorH: number, doorT: number) => {
+    if (p.handleType === "none") return;
+
+    const handleLen = Math.max(0, p.handleLengthMm) * MM_TO_M;
+    const handleSize = Math.max(0, p.handleSizeMm) * MM_TO_M;
+    const handleProj = Math.max(0, p.handleProjectionMm) * MM_TO_M;
+
+    const edgeInset = Math.min(0.10, Math.max(0.04, doorW * 0.18));
+    const handleX = hingeSide === "left" ? doorW - edgeInset : -doorW + edgeInset;
+
+    if (p.handleType === "gola") {
+      const golaH = clamp(handleSize, 0.006, 0.05);
+      const golaD = clamp(handleProj, 0.006, 0.04);
+      const golaW = clamp(handleLen > 0 ? handleLen : doorW, 0.06, doorW);
+      const geo = new THREE.BoxGeometry(golaW, golaH, golaD);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = `gola_${hingeSide}`;
+      const y = doorH / 2 - golaH / 2 - 0.002;
+      const z = doorT / 2 - golaD / 2 + 0.002;
+      // Place centered on the door leaf (not at the opening edge for simplicity).
+      m.position.set(hingeSide === "left" ? doorW / 2 : -doorW / 2, y, z);
+      setPartMeta(m, { width: golaW, height: golaH, depth: golaD }, "none");
+      setParamKeys(m, ["handleType", "handleLengthMm", "handleSizeMm", "handleProjectionMm", "frontThicknessMm"]);
+      doorGroup.add(m);
+      return;
+    }
+
+    const handleOffsetFromTop = Math.max(0, p.handlePositionMm) * MM_TO_M;
+    const handleY = doorH / 2 - handleOffsetFromTop;
+
+    if (p.handleType === "bar") {
+      const hw = clamp(handleLen > 0 ? handleLen : Math.min(doorW * 0.6, 0.35), 0.06, doorW * 0.95);
+      const hh = clamp(handleSize > 0 ? handleSize : 0.012, 0.006, 0.05);
+      const hd = clamp(handleProj > 0 ? handleProj : 0.012, 0.006, 0.06);
+      const geo = new THREE.BoxGeometry(hw, hh, hd);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = `handle_${hingeSide}`;
+      m.position.set(handleX, handleY, doorT / 2 + hd / 2);
+      setPartMeta(m, { width: hw, height: hh, depth: hd }, "none");
+      setParamKeys(m, ["handleType", "handlePositionMm", "handleLengthMm", "handleSizeMm", "handleProjectionMm", "frontThicknessMm"]);
+      doorGroup.add(m);
+      return;
+    }
+
+    if (p.handleType === "knob") {
+      const r = clamp((handleSize > 0 ? handleSize : 0.024) / 2, 0.006, 0.03);
+      const d = clamp(handleProj > 0 ? handleProj : 0.018, 0.008, 0.06);
+      const geo = new THREE.CylinderGeometry(r, r, d, 18);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = `handle_${hingeSide}`;
+      m.rotation.x = Math.PI / 2;
+      m.position.set(handleX, handleY, doorT / 2 + d / 2);
+      setPartMeta(m, { width: r * 2, height: r * 2, depth: d }, "none");
+      setParamKeys(m, ["handleType", "handlePositionMm", "handleSizeMm", "handleProjectionMm", "frontThicknessMm"]);
+      doorGroup.add(m);
+      return;
+    }
+
+    if (p.handleType === "cup") {
+      const hw = clamp(handleLen > 0 ? handleLen : Math.min(doorW * 0.45, 0.22), 0.06, doorW * 0.9);
+      const hd = clamp(handleProj > 0 ? handleProj : 0.02, 0.01, 0.05);
+      const r = Math.max(0.006, hd / 2);
+      const geo = new THREE.CylinderGeometry(r, r, hw, 24, 1, true, 0, Math.PI);
+      const m = new THREE.Mesh(geo, railMat);
+      m.name = `handle_${hingeSide}`;
+      m.rotation.z = Math.PI / 2; // axis along X
+      m.rotation.y = Math.PI; // face outward
+      const scaleY = handleSize > 0 ? clamp(handleSize / (2 * r), 0.35, 2.5) : 1.0;
+      m.scale.set(1, scaleY, 1);
+      m.position.set(handleX, handleY, doorT / 2 + r);
+      setPartMeta(m, { width: hw, height: 2 * r * scaleY, depth: 2 * r }, "none");
+      setParamKeys(m, ["handleType", "handlePositionMm", "handleLengthMm", "handleSizeMm", "handleProjectionMm", "frontThicknessMm"]);
+      doorGroup.add(m);
+    }
+  };
+
   const openingH = height - plinthH;
   const sideH = openingH;
 
@@ -73,12 +162,14 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   leftSide.name = "leftSide";
   leftSide.position.set(-(width / 2 - boardT / 2), plinthH + sideH / 2, 0);
   setPartMeta(leftSide, { width: boardT, height: sideH, depth }, "height");
+  setParamKeys(leftSide, ["width", "height", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(leftSide);
 
   const rightSide = new THREE.Mesh(sideGeo, bodyMat);
   rightSide.name = "rightSide";
   rightSide.position.set(width / 2 - boardT / 2, plinthH + sideH / 2, 0);
   setPartMeta(rightSide, { width: boardT, height: sideH, depth }, "height");
+  setParamKeys(rightSide, ["width", "height", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(rightSide);
 
   // Interior dims
@@ -93,6 +184,7 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   bottom.name = "bottom";
   bottom.position.set(0, plinthH + boardT / 2, interiorCenterZ);
   setPartMeta(bottom, { width: internalW, height: boardT, depth: internalD }, "width");
+  setParamKeys(bottom, ["width", "depth", "boardThickness", "plinthHeight", "wallMounted"]);
   g.add(bottom);
 
   // Top panel
@@ -101,6 +193,7 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   top.name = "top";
   top.position.set(0, height - boardT / 2, interiorCenterZ);
   setPartMeta(top, { width: internalW, height: boardT, depth: internalD }, "width");
+  setParamKeys(top, ["width", "depth", "height", "boardThickness"]);
   g.add(top);
 
   // Back panel
@@ -109,7 +202,14 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   back.name = "back";
   back.position.set(0, plinthH + sideH / 2, -depth / 2 - backT / 2);
   setPartMeta(back, { width, height: sideH, depth: backT }, "width");
+  setParamKeys(back, ["width", "height", "depth", "backThickness", "plinthHeight", "wallMounted"]);
   g.add(back);
+
+  // Kickboard geometry inputs reused by legs + kickboard positioning.
+  const kickDepth = Math.min(boardT, depth * 0.2);
+  const kickSetback = Math.min(plinthSetback, depth / 2);
+  const kickCenterZ = depth / 2 - kickDepth / 2 - kickSetback;
+  const kickBackFaceZ = kickCenterZ - kickDepth / 2;
 
   // Legs (cylinders)
   if (plinthH > 0) {
@@ -121,7 +221,10 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     const insetZ = 0.06;
     const xL = -width / 2 + insetX;
     const xR = width / 2 - insetX;
-    const zF = depth / 2 - insetZ;
+
+    // Ensure front legs are always behind the kickboard.
+    const legMaxFrontCenterZ = kickBackFaceZ - legRadius - 0.01; // keep 10mm behind the kickboard
+    const zF = Math.min(depth / 2 - insetZ, legMaxFrontCenterZ);
     const zB = -depth / 2 + insetZ;
 
     const addLeg = (name: string, x: number, z: number) => {
@@ -129,6 +232,7 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
       leg.name = name;
       leg.position.set(x, legH / 2, z);
       setPartMetaMm(leg, { width: legRadius * 2 * 1000, height: legH / MM_TO_M, depth: legRadius * 2 * 1000 }, "none");
+      setParamKeys(leg, ["plinthHeight", "plinthSetbackMm", "depth", "width", "wallMounted"]);
       g.add(leg);
     };
 
@@ -139,24 +243,26 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
   }
 
   // Kickboard (front)
-  const kickDepth = Math.min(boardT, depth * 0.2);
-  const kickGeo = new THREE.BoxGeometry(width, plinthH, kickDepth);
-  const kick = new THREE.Mesh(kickGeo, bodyMat);
-  kick.name = "kick";
-  kick.position.set(0, plinthH / 2, depth / 2 - kickDepth / 2);
-  setPartMeta(kick, { width, height: plinthH, depth: kickDepth }, "width");
-  g.add(kick);
+  if (plinthH > 0) {
+    const kickGeo = new THREE.BoxGeometry(width, plinthH, kickDepth);
+    const kick = new THREE.Mesh(kickGeo, bodyMat);
+    kick.name = "kick";
+    kick.position.set(0, plinthH / 2, kickCenterZ);
+    setPartMeta(kick, { width, height: plinthH, depth: kickDepth }, "width");
+    setParamKeys(kick, ["width", "plinthHeight", "plinthSetbackMm", "depth", "boardThickness", "wallMounted"]);
+    g.add(kick);
+  }
 
   // Front doors (simple overlay) + hidden hinges
   {
-    const reveal = 0.002; // 2mm
-    const centerGap = 0.002; // 2mm between doors
-    const doorT = boardT;
+    const reveal = Math.max(0, sideGap);
+    const centerGap = Math.max(0, frontGap);
+    const doorT = Math.max(0.005, frontThickness > 0 ? frontThickness : boardT);
     const doorPlaneZ = depth / 2 + doorT / 2;
 
-    const openingH = height - plinthH;
-    const doorH = Math.max(0.1, openingH - 2 * reveal);
-    const doorCenterY = plinthH + openingH / 2;
+    const openingH2 = height - plinthH;
+    const doorH = Math.max(0.1, openingH2 - topGap - bottomGap);
+    const doorCenterY = plinthH + bottomGap + doorH / 2;
 
     const openAngle = p.doorOpen ? Math.PI / 2 : 0;
     const hingeCount = p.hingeCountPerDoor === 2 ? 2 : 3;
@@ -180,6 +286,25 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
         // Door extends inward from hinge pivot toward the center.
         door.position.set(hingeSide === "left" ? doorW / 2 : -doorW / 2, 0, 0);
         setPartMeta(door, { width: doorW, height: doorH, depth: doorT }, "height");
+        setParamKeys(door, [
+          "width",
+          "height",
+          "depth",
+          "plinthHeight",
+          "wallMounted",
+          "frontThicknessMm",
+          "frontGap",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "doorDouble",
+          "doorOpen",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ]);
         group.add(door);
 
         // Hidden hinges (boxes) slightly inset + fully on the inside of the door so they're not visible from outside.
@@ -202,8 +327,12 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
           hinge.name = `${hingePrefix}_${idx + 1}`;
           hinge.position.set(hingeX, y, hingeZ);
           setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD }, "none");
+          setParamKeys(hinge, ["doorDouble", "doorOpen", "hingeCountPerDoor", "frontThicknessMm"]);
           group.add(hinge);
         });
+
+        // Handle preview (rotates with the door)
+        addDoorHandle(group, hingeSide, doorW, doorH, doorT);
 
         g.add(group);
       }
@@ -221,6 +350,24 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
       door.name = "door";
       door.position.set(doorW / 2, 0, 0);
       setPartMeta(door, { width: doorW, height: doorH, depth: doorT }, "height");
+      setParamKeys(door, [
+        "width",
+        "height",
+        "depth",
+        "plinthHeight",
+        "wallMounted",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "doorDouble",
+        "doorOpen",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ]);
       group.add(door);
 
       const hingeW = 0.008;
@@ -241,9 +388,11 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
         hinge.name = `hinge_${idx + 1}`;
         hinge.position.set(hingeX, y, hingeZ);
         setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD }, "none");
+        setParamKeys(hinge, ["doorDouble", "doorOpen", "hingeCountPerDoor", "frontThicknessMm"]);
         group.add(hinge);
       });
 
+      addDoorHandle(group, "left", doorW, doorH, doorT);
       g.add(group);
     }
   }
@@ -264,6 +413,7 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
     shelf.name = `shelf_${i + 1}`;
     shelf.position.set(0, y, interiorCenterZ);
     setPartMeta(shelf, { width: internalW, height: shelfT, depth: internalD }, "width");
+    setParamKeys(shelf, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
     g.add(shelf);
   }
 
@@ -273,4 +423,8 @@ export function buildShelves(p: ShelvesParams): THREE.Group {
 function parseHexColor(hex: string): number {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return 0xffffff;
   return Number.parseInt(hex.slice(1), 16);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

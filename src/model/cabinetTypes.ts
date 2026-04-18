@@ -175,6 +175,23 @@ export type ShelvesParams = {
   boardThickness: number; // mm
   backThickness: number; // mm
   plinthHeight: number; // mm
+  plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
+  wallMounted: boolean; // true = no legs/kickboard
+
+  // Door/front sizing (same semantics as drawer_low reveals)
+  frontGap: number; // mm (center gap between doors when doorDouble=true)
+  sideGap: number; // mm (left/right reveal)
+  topGap: number; // mm (top reveal)
+  bottomGap: number; // mm (bottom reveal above plinth)
+  frontThicknessMm: number; // mm
+
+  // Handles (same contract as drawer_low)
+  handleType: "none" | "bar" | "knob" | "cup" | "gola";
+  handlePositionMm: number; // mm from top edge of each door
+  handleLengthMm: number; // mm
+  handleSizeMm: number; // mm
+  handleProjectionMm: number; // mm
+
   shelfCount: number; // compartments (clear spaces); internal shelves = shelfCount - 1
   shelfThickness: number; // mm
   shelfAutoFit: boolean; // when true, shelfGaps is recomputed to equal spacing
@@ -372,6 +389,18 @@ export function makeDefaultShelvesParams(): ShelvesParams {
     boardThickness: 18,
     backThickness: 8,
     plinthHeight: 100,
+    plinthSetbackMm: 60,
+    wallMounted: false,
+    frontGap: 2,
+    sideGap: 2,
+    topGap: 2,
+    bottomGap: 2,
+    frontThicknessMm: 19,
+    handleType: "none",
+    handlePositionMm: 60,
+    handleLengthMm: 160,
+    handleSizeMm: 12,
+    handleProjectionMm: 14,
     shelfCount: 4,
     shelfThickness: 18,
     shelfAutoFit: true,
@@ -381,7 +410,7 @@ export function makeDefaultShelvesParams(): ShelvesParams {
     hingeCountPerDoor: 3,
     materials: {
       bodyKey: "carcass_default",
-      frontKey: "front_unused",
+      frontKey: "front_default",
       drawerKey: "drawer_unused",
       bodyColor: "#b8bcc7",
       frontColor: "#3a7bd5",
@@ -619,6 +648,24 @@ export function validateShelves(p: ShelvesParams): string[] {
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
+  positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
+
+  if (typeof p.wallMounted !== "boolean") errors.push("wallMounted must be a boolean.");
+  if (p.wallMounted === true && p.plinthHeight !== 0) errors.push("plinthHeight must be 0 when wallMounted=true.");
+
+  positiveNumber(errors, "frontGap", p.frontGap, 0);
+  positiveNumber(errors, "sideGap", p.sideGap, 0);
+  positiveNumber(errors, "topGap", p.topGap, 0);
+  positiveNumber(errors, "bottomGap", p.bottomGap, 0);
+  positiveNumber(errors, "frontThicknessMm", p.frontThicknessMm, 5);
+  positiveNumber(errors, "handlePositionMm", p.handlePositionMm, 0);
+  positiveNumber(errors, "handleLengthMm", p.handleLengthMm, 0);
+  positiveNumber(errors, "handleSizeMm", p.handleSizeMm, 0);
+  positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
+
+  const validHandle = p.handleType === "none" || p.handleType === "bar" || p.handleType === "knob" || p.handleType === "cup" || p.handleType === "gola";
+  if (!validHandle) errors.push("handleType must be one of: none, bar, knob, cup, gola.");
+
   positiveNumber(errors, "shelfThickness", p.shelfThickness, 5);
   if (!Number.isInteger(p.hingeCountPerDoor) || (p.hingeCountPerDoor !== 2 && p.hingeCountPerDoor !== 3)) {
     errors.push("hingeCountPerDoor must be 2 or 3.");
@@ -631,6 +678,15 @@ export function validateShelves(p: ShelvesParams): string[] {
   if (p.shelfThickness > p.boardThickness) {
     errors.push("shelfThickness should be <= boardThickness.");
   }
+  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
+
+  // Door fit sanity (same semantics as swing_shelves_low)
+  const openingW = p.width - 2 * p.sideGap;
+  const openingH = p.height - p.plinthHeight - p.topGap - p.bottomGap;
+  if (openingW <= 80) errors.push("width too small for sideGap (opening width <= 80mm).");
+  if (openingH <= 80) errors.push("height too small for reveals (opening height <= 80mm).");
+  if (p.doorDouble && openingW - p.frontGap <= 80) errors.push("frontGap too large for double doors (door width <= 40mm).");
 
   const shelfCount = Math.max(1, Math.round(p.shelfCount));
   const internalShelfCount = Math.max(0, shelfCount - 1);
@@ -656,7 +712,6 @@ export function validateShelves(p: ShelvesParams): string[] {
     }
   }
 
-  if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
   validateMaterials(errors, p.materials);
   return errors;
 }

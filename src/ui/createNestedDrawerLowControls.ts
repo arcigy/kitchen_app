@@ -9,6 +9,7 @@ type ControlApi = {
 
 type CreateControlsArgs = {
   onChange: () => void;
+  getWorktopThicknessMm: () => number;
 };
 
 export function createNestedDrawerLowControls(
@@ -103,7 +104,39 @@ export function createNestedDrawerLowControls(
 
   // Base
   addNumber("width", "Width (mm)", { min: 200, step: 1 });
-  addNumber("height", "Height (mm)", { min: 200, step: 1 });
+
+  // Height (final incl. worktop + carcass excl. worktop)
+  const heightFinalWrap = document.createElement("div");
+  heightFinalWrap.className = "field";
+  const heightFinalLabel = document.createElement("label");
+  heightFinalLabel.textContent = "Final height (incl. worktop) (mm)";
+  heightFinalLabel.htmlFor = "f_height";
+  const heightFinal = document.createElement("input");
+  heightFinal.id = "f_height";
+  heightFinal.type = "number";
+  heightFinal.inputMode = "decimal";
+  heightFinal.min = "50";
+  heightFinal.step = "1";
+  heightFinalWrap.appendChild(heightFinalLabel);
+  heightFinalWrap.appendChild(heightFinal);
+  grid.appendChild(heightFinalWrap);
+  fieldByKey.set("height", heightFinalWrap);
+
+  const heightCarcassWrap = document.createElement("div");
+  heightCarcassWrap.className = "field";
+  const heightCarcassLabel = document.createElement("label");
+  heightCarcassLabel.textContent = "Carcass height (excl. worktop) (mm)";
+  heightCarcassLabel.htmlFor = "f_heightCarcass";
+  const heightCarcass = document.createElement("input");
+  heightCarcass.id = "f_heightCarcass";
+  heightCarcass.type = "number";
+  heightCarcass.inputMode = "decimal";
+  heightCarcass.min = "50";
+  heightCarcass.step = "1";
+  heightCarcassWrap.appendChild(heightCarcassLabel);
+  heightCarcassWrap.appendChild(heightCarcass);
+  grid.appendChild(heightCarcassWrap);
+
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
@@ -226,6 +259,8 @@ export function createNestedDrawerLowControls(
       const value = params[f.key];
       f.input.value = typeof value === "number" ? String(value) : "";
     }
+    heightFinal.value = String(params.height);
+    heightCarcass.value = String(computeCarcassHeight());
     for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
 
@@ -263,6 +298,18 @@ export function createNestedDrawerLowControls(
     return Number.isFinite(n) ? n : fallback;
   };
 
+  const getWorktopT = () => Math.max(0, Math.round(args.getWorktopThicknessMm()));
+  const computeCarcassHeight = () => {
+    const t = getWorktopT();
+    if (t <= 0) return params.height;
+    return Math.max(50, Math.round(params.height - t));
+  };
+  const setFinalHeightFromCarcass = (carcassMm: number) => {
+    const c = Math.max(50, Math.round(carcassMm));
+    const t = getWorktopT();
+    params.height = t > 0 ? c + t : c;
+  };
+
   const onInputsChanged = () => {
     for (const f of numberFields) {
       const current = params[f.key];
@@ -295,6 +342,17 @@ export function createNestedDrawerLowControls(
   for (const f of numberFields) f.input.addEventListener("input", onInputsChanged);
   for (const f of keyFields) f.input.addEventListener("input", onInputsChanged);
   for (const f of colorFields) f.input.addEventListener("input", onInputsChanged);
+
+  heightFinal.addEventListener("input", () => {
+    params.height = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
+    heightCarcass.value = String(computeCarcassHeight());
+    onInputsChanged();
+  });
+  heightCarcass.addEventListener("input", () => {
+    setFinalHeightFromCarcass(readNumber(heightCarcass, computeCarcassHeight()));
+    heightFinal.value = String(params.height);
+    onInputsChanged();
+  });
   heights.addEventListener("input", () => {
     if (autoFit.checked) {
       autoFit.checked = false;

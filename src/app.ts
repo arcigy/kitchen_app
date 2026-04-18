@@ -130,6 +130,9 @@ export function startApp(args: AppArgs) {
   // Users enter FINAL heights including the worktop. We never render the worktop in build mode,
   // but we subtract its thickness from any module that is "under the worktop" so carcass height matches reality.
   let worktopThicknessMm = 40;
+  type SyncApi = { syncFromParams: () => void };
+  let buildControlsApi: SyncApi | null = null;
+  let layoutControlsApi: SyncApi | null = null;
 
   const effectiveParams = (p: ModuleParams): ModuleParams => {
     return computeEffectiveParams(p, worktopThicknessMm);
@@ -618,7 +621,7 @@ export function startApp(args: AppArgs) {
     const note = document.createElement("div");
     note.className = "muted";
     note.textContent =
-      "All module heights are entered as final height incl. worktop. Cabinet height is computed as height - thickness.";
+      "Final height is entered incl. worktop. Carcass height (excl. worktop) is computed as final - thickness for base modules.";
     host.appendChild(note);
 
     input.addEventListener("input", () => {
@@ -628,6 +631,9 @@ export function startApp(args: AppArgs) {
       else {
         for (const inst of instances) rebuildInstance(inst);
       }
+      // Update any derived UI fields (e.g. carcass height) immediately.
+      if (mode === "build") buildControlsApi?.syncFromParams();
+      else layoutControlsApi?.syncFromParams();
     });
 
     parent.insertBefore(host, parent.firstChild);
@@ -1306,12 +1312,38 @@ export function startApp(args: AppArgs) {
 
   function mountInstanceControls(inst: LayoutInstance) {
     instanceEditorHost.innerHTML = "";
+
+    // Every module type has its own editor; keep the selected instance editor in sync with worktop thickness.
     if (inst.params.type === "drawer_low") {
-      createDrawerLowControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
+      layoutControlsApi = createDrawerLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (inst.params.type === "nested_drawer_low") {
+      layoutControlsApi = createNestedDrawerLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (inst.params.type === "flap_shelves_low") {
+      layoutControlsApi = createFlapShelvesLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
+    } else if (inst.params.type === "swing_shelves_low") {
+      layoutControlsApi = createSwingShelvesLowControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (inst.params.type === "shelves") {
-      createShelvesControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
+      layoutControlsApi = createShelvesControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else {
-      createCornerShelfLowerControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
+      layoutControlsApi = createCornerShelfLowerControls(instanceEditorHost, inst.params, {
+        onChange: () => rebuildInstance(inst),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     }
   }
 
@@ -1512,6 +1544,26 @@ export function startApp(args: AppArgs) {
   function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) {
     const snapDist = 0.03; // 30mm
 
+    // Avoid z-fighting with the room walls: keep modules slightly "inside" the room bounds,
+    // and account for outboard back panels which are mounted outside the carcass footprint.
+    const getWallPad = (p: ModuleParams) => {
+      const base = 0.0005; // 0.5mm visual clearance to prevent coplanar flicker
+      const mm = 0.001;
+      const out = { minX: base, maxX: base, minZ: base, maxZ: base };
+
+      const btMm = (p as any).backThickness;
+      if (typeof btMm === "number" && btMm > 0) {
+        const bt = btMm * mm;
+        // Straight modules mount the back panel outside towards -Z.
+        out.minZ = Math.max(out.minZ, bt + base);
+        // Corner module can have an outside back on the X-run as well.
+        if (p.type === "corner_shelf_lower") out.minX = Math.max(out.minX, bt + base);
+      }
+      return out;
+    };
+
+    const pad = getWallPad(moving.params);
+
     const currentPos = moving.root.position.clone();
     moving.root.position.copy(desired);
     const a = instanceWorldBox(moving);
@@ -1520,10 +1572,10 @@ export function startApp(args: AppArgs) {
     const next = desired.clone();
 
     // Hard clamp inside room bounds.
-    if (a.min.x < -roomBounds.halfW) next.x += -roomBounds.halfW - a.min.x;
-    if (a.max.x > roomBounds.halfW) next.x -= a.max.x - roomBounds.halfW;
-    if (a.min.z < -roomBounds.halfD) next.z += -roomBounds.halfD - a.min.z;
-    if (a.max.z > roomBounds.halfD) next.z -= a.max.z - roomBounds.halfD;
+    if (a.min.x < -roomBounds.halfW + pad.minX) next.x += -roomBounds.halfW + pad.minX - a.min.x;
+    if (a.max.x > roomBounds.halfW - pad.maxX) next.x -= a.max.x - (roomBounds.halfW - pad.maxX);
+    if (a.min.z < -roomBounds.halfD + pad.minZ) next.z += -roomBounds.halfD + pad.minZ - a.min.z;
+    if (a.max.z > roomBounds.halfD - pad.maxZ) next.z -= a.max.z - (roomBounds.halfD - pad.maxZ);
 
     // Soft snap to walls when close.
     const trySnap = (delta: THREE.Vector3) => {
@@ -1539,10 +1591,10 @@ export function startApp(args: AppArgs) {
     const b = instanceWorldBox(moving);
     moving.root.position.copy(currentPos2);
 
-    const dxL = -roomBounds.halfW - b.min.x;
-    const dxR = roomBounds.halfW - b.max.x;
-    const dzB = -roomBounds.halfD - b.min.z; // back wall (-Z)
-    const dzF = roomBounds.halfD - b.max.z; // front wall (+Z)
+    const dxL = -roomBounds.halfW + pad.minX - b.min.x;
+    const dxR = roomBounds.halfW - pad.maxX - b.max.x;
+    const dzB = -roomBounds.halfD + pad.minZ - b.min.z; // back wall (-Z)
+    const dzF = roomBounds.halfD - pad.maxZ - b.max.z; // front wall (+Z)
 
     if (Math.abs(dxL) <= snapDist) trySnap(new THREE.Vector3(dxL, 0, 0));
     if (Math.abs(dxR) <= snapDist) trySnap(new THREE.Vector3(dxR, 0, 0));
@@ -1865,17 +1917,35 @@ export function startApp(args: AppArgs) {
     editorHost.innerHTML = "";
 
     if (params.type === "drawer_low") {
-      createDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createDrawerLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "nested_drawer_low") {
-      createNestedDrawerLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createNestedDrawerLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "flap_shelves_low") {
-      createFlapShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createFlapShelvesLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "swing_shelves_low") {
-      createSwingShelvesLowControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createSwingShelvesLowControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else if (params.type === "shelves") {
-      createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createShelvesControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     } else {
-      createCornerShelfLowerControls(editorHost, params, { onChange: () => afterParamsChanged() });
+      buildControlsApi = createCornerShelfLowerControls(editorHost, params, {
+        onChange: () => afterParamsChanged(),
+        getWorktopThicknessMm: () => worktopThicknessMm
+      });
     }
   };
 

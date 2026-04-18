@@ -7,6 +7,7 @@ type ControlApi = {
 
 type CreateControlsArgs = {
   onChange: () => void;
+  getWorktopThicknessMm: () => number;
 };
 
 export function createShelvesControls(container: HTMLElement, params: ShelvesParams, args: CreateControlsArgs): ControlApi {
@@ -101,11 +102,97 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
   };
 
   addNumber("width", "Width (mm)", { min: 200, step: 1 });
-  addNumber("height", "Height (mm)", { min: 200, step: 1 });
+
+  // Height: shelves are typically upper cabinets (not under worktop),
+  // but we still expose both fields for consistency.
+  const heightFinalWrap = document.createElement("div");
+  heightFinalWrap.className = "field";
+  const heightFinalLabel = document.createElement("label");
+  heightFinalLabel.textContent = "Final height (incl. worktop) (mm)";
+  heightFinalLabel.htmlFor = "f_height";
+  const heightFinal = document.createElement("input");
+  heightFinal.id = "f_height";
+  heightFinal.type = "number";
+  heightFinal.inputMode = "decimal";
+  heightFinal.min = "50";
+  heightFinal.step = "1";
+  heightFinalWrap.appendChild(heightFinalLabel);
+  heightFinalWrap.appendChild(heightFinal);
+  grid.appendChild(heightFinalWrap);
+
+  const heightCarcassWrap = document.createElement("div");
+  heightCarcassWrap.className = "field";
+  const heightCarcassLabel = document.createElement("label");
+  heightCarcassLabel.textContent = "Carcass height (excl. worktop) (mm)";
+  heightCarcassLabel.htmlFor = "f_heightCarcass";
+  const heightCarcass = document.createElement("input");
+  heightCarcass.id = "f_heightCarcass";
+  heightCarcass.type = "number";
+  heightCarcass.inputMode = "decimal";
+  heightCarcass.min = "50";
+  heightCarcass.step = "1";
+  heightCarcassWrap.appendChild(heightCarcassLabel);
+  heightCarcassWrap.appendChild(heightCarcass);
+  grid.appendChild(heightCarcassWrap);
+
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
+  addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
+
+  const wallWrap = document.createElement("div");
+  wallWrap.className = "field";
+  wallWrap.style.gridTemplateColumns = "1fr 120px";
+
+  const wallLabel = document.createElement("label");
+  wallLabel.textContent = "Wall mounted (no legs/sockel)";
+  wallLabel.htmlFor = "f_wallMounted";
+
+  const wallMounted = document.createElement("input");
+  wallMounted.id = "f_wallMounted";
+  wallMounted.type = "checkbox";
+  wallMounted.checked = params.wallMounted === true;
+  wallMounted.style.justifySelf = "start";
+
+  wallWrap.appendChild(wallLabel);
+  wallWrap.appendChild(wallMounted);
+  grid.appendChild(wallWrap);
+
+  // Door/front sizing (match drawer cabinet semantics)
+  addNumber("frontThicknessMm", "Front thickness (mm)", { min: 5, step: 1 });
+  addNumber("frontGap", "Door center gap (mm)", { min: 0, step: 0.5 });
+  addNumber("sideGap", "Side reveal (mm)", { min: 0, step: 0.5 });
+  addNumber("topGap", "Top reveal (mm)", { min: 0, step: 0.5 });
+  addNumber("bottomGap", "Bottom reveal (mm)", { min: 0, step: 0.5 });
+
+  // Handles (same as drawer cabinet)
+  const handleWrap = document.createElement("div");
+  handleWrap.className = "field";
+  handleWrap.style.gridTemplateColumns = "1fr 120px";
+
+  const handleLabel = document.createElement("label");
+  handleLabel.textContent = "Handle type";
+  handleLabel.htmlFor = "f_handleType";
+
+  const handleType = document.createElement("select");
+  handleType.id = "f_handleType";
+  handleType.innerHTML = `
+    <option value="none">none</option>
+    <option value="bar">bar</option>
+    <option value="knob">knob</option>
+    <option value="cup">cup</option>
+    <option value="gola">gola</option>
+  `;
+
+  handleWrap.appendChild(handleLabel);
+  handleWrap.appendChild(handleType);
+  grid.appendChild(handleWrap);
+
+  addNumber("handlePositionMm", "Handle pos from top (mm)", { min: 0, step: 1 });
+  addNumber("handleLengthMm", "Handle length (mm)", { min: 0, step: 1 });
+  addNumber("handleSizeMm", "Handle size (mm)", { min: 0, step: 1 });
+  addNumber("handleProjectionMm", "Handle projection (mm)", { min: 0, step: 1 });
   addNumber("shelfCount", "Shelf count (compartments)", { min: 1, step: 1 });
   addNumber("shelfThickness", "Shelf thickness (mm)", { min: 5, step: 1 });
 
@@ -292,6 +379,8 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
       const value = params[f.key];
       f.input.value = typeof value === "number" ? String(value) : "";
     }
+    heightFinal.value = String(params.height);
+    heightCarcass.value = String(computeCarcassHeight());
     for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
     if (bodyTextureRotation) bodyTextureRotation.value = String(params.materials.bodyPbr?.rotationDeg ?? 0);
@@ -303,11 +392,40 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
     autoFit.checked = params.shelfAutoFit === true;
     heights.value = params.shelfGaps.join(", ");
     heights.readOnly = autoFit.checked;
+    handleType.value = (params.handleType as any) ?? "none";
+    wallMounted.checked = params.wallMounted === true;
+    updateUiState();
+  };
+
+  const updateUiState = () => {
+    const type = (handleType.value as ShelvesParams["handleType"]) ?? "none";
+
+    const pos = numberFields.find((f) => f.key === "handlePositionMm")?.input ?? null;
+    if (pos) pos.disabled = type === "none" || type === "gola";
+
+    const len = numberFields.find((f) => f.key === "handleLengthMm")?.input ?? null;
+    if (len) len.disabled = type === "none" || type === "knob";
+
+    const size = numberFields.find((f) => f.key === "handleSizeMm")?.input ?? null;
+    if (size) size.disabled = type === "none";
+
+    const proj = numberFields.find((f) => f.key === "handleProjectionMm")?.input ?? null;
+    if (proj) proj.disabled = type === "none";
+
+    const plinth = numberFields.find((f) => f.key === "plinthHeight")?.input ?? null;
+    const setback = numberFields.find((f) => f.key === "plinthSetbackMm")?.input ?? null;
+    if (plinth) plinth.disabled = wallMounted.checked;
+    if (setback) setback.disabled = wallMounted.checked;
   };
 
   const readNumber = (input: HTMLInputElement, fallback: number) => {
     const n = Number(input.value);
     return Number.isFinite(n) ? n : fallback;
+  };
+
+  const computeCarcassHeight = () => params.height;
+  const setFinalHeightFromCarcass = (carcassMm: number) => {
+    params.height = Math.max(50, Math.round(carcassMm));
   };
 
   const onInputsChanged = () => {
@@ -335,6 +453,9 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
       if (bodyTintStrength) params.materials.bodyPbr.tintStrength = Number(bodyTintStrength.value) / 100;
     }
 
+    params.wallMounted = wallMounted.checked;
+    params.handleType = (handleType.value as ShelvesParams["handleType"]) ?? "none";
+
     if (autoFit.checked) {
       params.shelfGaps = computeEqualShelfGaps(params);
       heights.value = params.shelfGaps.join(", ");
@@ -357,6 +478,19 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
   bodyTextureRotation?.addEventListener("change", onInputsChanged);
   bodyTintColor?.addEventListener("input", onInputsChanged);
   bodyTintStrength?.addEventListener("input", onInputsChanged);
+  handleType.addEventListener("change", onInputsChanged);
+  wallMounted.addEventListener("change", onInputsChanged);
+
+  heightFinal.addEventListener("input", () => {
+    params.height = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
+    heightCarcass.value = String(computeCarcassHeight());
+    onInputsChanged();
+  });
+  heightCarcass.addEventListener("input", () => {
+    setFinalHeightFromCarcass(readNumber(heightCarcass, computeCarcassHeight()));
+    heightFinal.value = String(params.height);
+    onInputsChanged();
+  });
   heights.addEventListener("input", () => {
     // Any manual typing should switch out of auto-fit, otherwise values get overwritten.
     if (autoFit.checked) {
@@ -382,6 +516,8 @@ export function createShelvesControls(container: HTMLElement, params: ShelvesPar
   doorDouble.addEventListener("change", onInputsChanged);
   doorOpen.addEventListener("change", onInputsChanged);
   hingeCount.addEventListener("change", onInputsChanged);
+  // Keep handle field enable/disable state responsive when user toggles type.
+  handleType.addEventListener("change", updateUiState);
 
   syncFromParams();
   return { syncFromParams };

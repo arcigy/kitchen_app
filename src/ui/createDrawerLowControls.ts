@@ -8,6 +8,7 @@ type ControlApi = {
 
 type CreateControlsArgs = {
   onChange: () => void;
+  getWorktopThicknessMm: () => number;
 };
 
 export function createDrawerLowControls(
@@ -107,7 +108,40 @@ export function createDrawerLowControls(
 
   // Base
   addNumber("width", "Width (mm)", { min: 200, step: 1 });
-  addNumber("height", "Height (mm)", { min: 200, step: 1 });
+
+  // Height:
+  // Users enter FINAL height incl. worktop thickness. We also expose carcass height (excl. worktop)
+  // for convenience; editing either updates the other.
+  const heightFinalWrap = document.createElement("div");
+  heightFinalWrap.className = "field";
+  const heightFinalLabel = document.createElement("label");
+  heightFinalLabel.textContent = "Final height (incl. worktop) (mm)";
+  heightFinalLabel.htmlFor = "f_height";
+  const heightFinal = document.createElement("input");
+  heightFinal.id = "f_height"; // keep id stable so part->param highlighting still works
+  heightFinal.type = "number";
+  heightFinal.inputMode = "decimal";
+  heightFinal.min = "50";
+  heightFinal.step = "1";
+  heightFinalWrap.appendChild(heightFinalLabel);
+  heightFinalWrap.appendChild(heightFinal);
+  grid.appendChild(heightFinalWrap);
+
+  const heightCarcassWrap = document.createElement("div");
+  heightCarcassWrap.className = "field";
+  const heightCarcassLabel = document.createElement("label");
+  heightCarcassLabel.textContent = "Carcass height (excl. worktop) (mm)";
+  heightCarcassLabel.htmlFor = "f_heightCarcass";
+  const heightCarcass = document.createElement("input");
+  heightCarcass.id = "f_heightCarcass";
+  heightCarcass.type = "number";
+  heightCarcass.inputMode = "decimal";
+  heightCarcass.min = "50";
+  heightCarcass.step = "1";
+  heightCarcassWrap.appendChild(heightCarcassLabel);
+  heightCarcassWrap.appendChild(heightCarcass);
+  grid.appendChild(heightCarcassWrap);
+
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
@@ -273,6 +307,8 @@ export function createDrawerLowControls(
       const value = params[f.key];
       f.input.value = typeof value === "number" ? String(value) : "";
     }
+    heightFinal.value = String(params.height);
+    heightCarcass.value = String(computeCarcassHeight());
     for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
     if (bodyTextureRotation) bodyTextureRotation.value = String(params.materials.bodyPbr?.rotationDeg ?? 0);
@@ -306,6 +342,20 @@ export function createDrawerLowControls(
   const readNumber = (input: HTMLInputElement, fallback: number) => {
     const n = Number(input.value);
     return Number.isFinite(n) ? n : fallback;
+  };
+
+  const getWorktopT = () => Math.max(0, Math.round(args.getWorktopThicknessMm()));
+  const isUnderWorktop = () => {
+    if ((params as any).wallMounted === true) return false;
+    return getWorktopT() > 0;
+  };
+  const computeCarcassHeight = () => {
+    if (!isUnderWorktop()) return params.height;
+    return Math.max(50, Math.round(params.height - getWorktopT()));
+  };
+  const setFinalHeightFromCarcass = (carcassMm: number) => {
+    const c = Math.max(50, Math.round(carcassMm));
+    params.height = isUnderWorktop() ? c + getWorktopT() : c;
   };
 
   const onInputsChanged = () => {
@@ -356,6 +406,18 @@ export function createDrawerLowControls(
   bodyTintStrength?.addEventListener("input", onInputsChanged);
   handleType.addEventListener("change", onInputsChanged);
   heights.addEventListener("input", onInputsChanged);
+
+  heightFinal.addEventListener("input", () => {
+    params.height = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
+    heightCarcass.value = String(computeCarcassHeight());
+    onInputsChanged();
+  });
+  heightCarcass.addEventListener("input", () => {
+    setFinalHeightFromCarcass(readNumber(heightCarcass, computeCarcassHeight()));
+    heightFinal.value = String(params.height);
+    onInputsChanged();
+  });
+
   autoFit.addEventListener("change", () => {
     heights.readOnly = autoFit.checked;
     onInputsChanged();
