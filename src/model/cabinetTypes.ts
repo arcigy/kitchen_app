@@ -2,6 +2,11 @@ export type MaterialParams = {
   bodyKey: string; // later: pricing lookup key
   frontKey: string; // later: pricing lookup key
   drawerKey: string; // later: pricing lookup key
+  // Human-readable material info (what it really is).
+  // Example: "Egger U999 ST2 18mm" or "Fenix NTM 0032 19mm".
+  bodyName?: string;
+  frontName?: string;
+  drawerName?: string;
   bodyColor: string; // "#RRGGBB"
   frontColor: string; // "#RRGGBB"
   drawerColor: string; // "#RRGGBB"
@@ -1669,6 +1674,9 @@ function validateMaterials(errors: string[], m: unknown) {
   validateMaterialKey(errors, "materials.bodyKey", mat.bodyKey);
   validateMaterialKey(errors, "materials.frontKey", mat.frontKey);
   validateMaterialKey(errors, "materials.drawerKey", mat.drawerKey);
+  validateMaterialName(errors, "materials.bodyName", mat.bodyName);
+  validateMaterialName(errors, "materials.frontName", mat.frontName);
+  validateMaterialName(errors, "materials.drawerName", mat.drawerName);
   validateHexColor(errors, "materials.bodyColor", mat.bodyColor);
   validateHexColor(errors, "materials.frontColor", mat.frontColor);
   validateHexColor(errors, "materials.drawerColor", mat.drawerColor);
@@ -1686,4 +1694,13 @@ function validateMaterialKey(errors: string[], label: string, value: unknown) {
     return;
   }
   if (value.length > 80) errors.push(`${label} must be <= 80 characters.`);
+}
+
+function validateMaterialName(errors: string[], label: string, value: unknown) {
+  if (value === undefined || value === null || value === "") return;
+  if (typeof value !== "string") {
+    errors.push(`${label} must be a string.`);
+    return;
+  }
+  if (value.length > 120) errors.push(`${label} must be <= 120 characters.`);
 }

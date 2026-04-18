@@ -25,6 +25,10 @@ export function createOvenBaseLowControls(
     key: "materials.bodyKey" | "materials.frontKey" | "materials.drawerKey";
     input: HTMLInputElement;
   }> = [];
+  const nameFields: Array<{
+    key: "materials.bodyName" | "materials.frontName" | "materials.drawerName";
+    input: HTMLInputElement;
+  }> = [];
   const colorFields: Array<{
     key: "materials.bodyColor" | "materials.frontColor" | "materials.drawerColor";
     input: HTMLInputElement;
@@ -73,6 +77,22 @@ export function createOvenBaseLowControls(
     grid.appendChild(wrap);
 
     keyFields.push({ key, input });
+  };
+
+  const addName = (key: "materials.bodyName" | "materials.frontName" | "materials.drawerName", label: string) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    lab.htmlFor = `f_${key.replaceAll(".", "_")}`;
+    const input = document.createElement("input");
+    input.id = `f_${key.replaceAll(".", "_")}`;
+    input.type = "text";
+    input.placeholder = "e.g. Egger U999 ST2 18mm";
+    wrap.appendChild(lab);
+    wrap.appendChild(input);
+    grid.appendChild(wrap);
+    nameFields.push({ key, input });
   };
 
   const addColor = (key: "materials.bodyColor" | "materials.frontColor" | "materials.drawerColor", label: string) => {
@@ -218,6 +238,9 @@ export function createOvenBaseLowControls(
   addKey("materials.bodyKey", "Body material key");
   addKey("materials.frontKey", "Fronts material key");
   addKey("materials.drawerKey", "Drawer material key");
+  addName("materials.bodyName", "Body material name");
+  addName("materials.frontName", "Fronts material name");
+  addName("materials.drawerName", "Drawer material name");
   addColor("materials.bodyColor", "Body color");
   addColor("materials.frontColor", "Fronts color");
   addColor("materials.drawerColor", "Drawer color");
@@ -349,6 +372,7 @@ export function createOvenBaseLowControls(
     heightFinal.value = String(params.height);
     heightCarcass.value = String(computeCarcassHeight());
     for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
+    for (const f of nameFields) f.input.value = getMaterialName(params, f.key);
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
     if (bodyTextureRotation) bodyTextureRotation.value = String(params.materials.bodyPbr?.rotationDeg ?? 0);
     if (bodyTintColor) bodyTintColor.value = params.materials.bodyPbr?.tintColor ?? "#ffffff";
@@ -371,6 +395,7 @@ export function createOvenBaseLowControls(
     params.handleType = (handleType.value as OvenBaseLowParams["handleType"]) ?? "none";
 
     for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);
+    for (const f of nameFields) setMaterialName(params, f.key, f.input.value);
     for (const f of colorFields) setMaterialColor(params, f.key, f.input.value);
     if (bodyTextureRotation) {
       if (!params.materials.bodyPbr) params.materials.bodyPbr = { id: "wood_veneer_oak_7760_1k", rotationDeg: 0 };
@@ -388,6 +413,7 @@ export function createOvenBaseLowControls(
 
   for (const f of numberFields) f.input.addEventListener("input", onInputsChanged);
   for (const f of keyFields) f.input.addEventListener("input", onInputsChanged);
+  for (const f of nameFields) f.input.addEventListener("input", onInputsChanged);
   for (const f of colorFields) f.input.addEventListener("input", onInputsChanged);
   bodyTextureRotation?.addEventListener("change", onInputsChanged);
   bodyTintColor?.addEventListener("input", onInputsChanged);
@@ -428,6 +454,22 @@ function setMaterialKey(
   if (key === "materials.bodyKey") params.materials.bodyKey = value;
   else if (key === "materials.frontKey") params.materials.frontKey = value;
   else params.materials.drawerKey = value;
+}
+
+function getMaterialName(params: OvenBaseLowParams, key: "materials.bodyName" | "materials.frontName" | "materials.drawerName") {
+  if (key === "materials.bodyName") return params.materials.bodyName ?? "";
+  if (key === "materials.frontName") return params.materials.frontName ?? "";
+  return params.materials.drawerName ?? "";
+}
+
+function setMaterialName(
+  params: OvenBaseLowParams,
+  key: "materials.bodyName" | "materials.frontName" | "materials.drawerName",
+  value: string
+) {
+  if (key === "materials.bodyName") params.materials.bodyName = value;
+  else if (key === "materials.frontName") params.materials.frontName = value;
+  else params.materials.drawerName = value;
 }
 
 function getMaterialColor(

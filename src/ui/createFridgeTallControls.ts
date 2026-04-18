@@ -16,6 +16,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
 
   const numberFields: Array<{ key: keyof FridgeTallParams; input: HTMLInputElement }> = [];
   const keyFields: Array<{ key: "materials.bodyKey" | "materials.frontKey"; input: HTMLInputElement }> = [];
+  const nameFields: Array<{ key: "materials.bodyName" | "materials.frontName"; input: HTMLInputElement }> = [];
   const colorFields: Array<{ key: "materials.bodyColor" | "materials.frontColor"; input: HTMLInputElement }> = [];
   let fridgePresetSelect: HTMLSelectElement | null = null;
 
@@ -70,6 +71,22 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     wrap.appendChild(input);
     grid.appendChild(wrap);
     colorFields.push({ key, input });
+  };
+
+  const addName = (key: "materials.bodyName" | "materials.frontName", label: string) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    lab.htmlFor = `f_${key.replaceAll(".", "_")}`;
+    const input = document.createElement("input");
+    input.id = `f_${key.replaceAll(".", "_")}`;
+    input.type = "text";
+    input.placeholder = "e.g. Egger U999 ST2 18mm";
+    wrap.appendChild(lab);
+    wrap.appendChild(input);
+    grid.appendChild(wrap);
+    nameFields.push({ key, input });
   };
 
   // Base
@@ -166,6 +183,8 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
 
   addKey("materials.bodyKey", "Body material key");
   addKey("materials.frontKey", "Fronts material key");
+  addName("materials.bodyName", "Body material name");
+  addName("materials.frontName", "Fronts material name");
   addColor("materials.bodyColor", "Body color");
   addColor("materials.frontColor", "Fronts color");
 
@@ -191,6 +210,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     }
     handleType.value = (params.handleType as any) ?? "none";
     for (const f of keyFields) f.input.value = getMaterialKey(params, f.key);
+    for (const f of nameFields) f.input.value = getMaterialName(params, f.key);
     for (const f of colorFields) f.input.value = getMaterialColor(params, f.key);
     if (fridgePresetSelect) {
       const w = Math.round(Number(params.fridgeWidthMm));
@@ -209,6 +229,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     }
     params.handleType = (handleType.value as any) ?? "none";
     for (const f of keyFields) setMaterialKey(params, f.key, f.input.value);
+    for (const f of nameFields) setMaterialName(params, f.key, f.input.value);
     for (const f of colorFields) setMaterialColor(params, f.key, f.input.value);
 
     updateUiState();
@@ -219,6 +240,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     f.input.addEventListener("input", onInputsChanged);
   }
   for (const f of keyFields) f.input.addEventListener("input", onInputsChanged);
+  for (const f of nameFields) f.input.addEventListener("input", onInputsChanged);
   for (const f of colorFields) f.input.addEventListener("input", onInputsChanged);
   handleType.addEventListener("change", onInputsChanged);
 
@@ -234,6 +256,16 @@ function getMaterialKey(params: FridgeTallParams, key: "materials.bodyKey" | "ma
 function setMaterialKey(params: FridgeTallParams, key: "materials.bodyKey" | "materials.frontKey", value: string) {
   if (key === "materials.bodyKey") params.materials.bodyKey = value;
   else params.materials.frontKey = value;
+}
+
+function getMaterialName(params: FridgeTallParams, key: "materials.bodyName" | "materials.frontName") {
+  if (key === "materials.bodyName") return params.materials.bodyName ?? "";
+  return params.materials.frontName ?? "";
+}
+
+function setMaterialName(params: FridgeTallParams, key: "materials.bodyName" | "materials.frontName", value: string) {
+  if (key === "materials.bodyName") params.materials.bodyName = value;
+  else params.materials.frontName = value;
 }
 
 function getMaterialColor(params: FridgeTallParams, key: "materials.bodyColor" | "materials.frontColor") {
