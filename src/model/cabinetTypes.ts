@@ -359,13 +359,6 @@ export type FridgeTallParams = {
 
   gapAboveDrawersMm: number; // mm (vertical spacer above bottom drawers before fridge zone)
 
-  // Top cabinet (fills the rest so there is no empty void)
-  topShelfCount: number; // compartments
-  topShelfThickness: number; // mm
-  topFlapOpen: boolean;
-  topHingeCount: number; // count along the top edge
-  topHingeInsetFromSideMm: number; // mm
-
   materials: MaterialParams;
 };
 
@@ -826,14 +819,20 @@ export function makeDefaultMicrowaveOvenTallParams(): MicrowaveOvenTallParams {
 }
 
 export function makeDefaultFridgeTallParams(): FridgeTallParams {
+  const boardT = 18;
+  const plinthH = 0;
+  const fridgeH = 1770;
+  const topClear = 5;
+  const bottomClear = 5;
+  const height = plinthH + 2 * boardT + fridgeH + topClear + bottomClear;
   const base: FridgeTallParams = {
     type: "fridge_tall",
     width: 600,
-    height: 2000,
+    height,
     depth: 600,
-    boardThickness: 18,
+    boardThickness: boardT,
     backThickness: 8,
-    plinthHeight: 0,
+    plinthHeight: plinthH,
     plinthSetbackMm: 0,
 
     frontGap: 2,
@@ -852,19 +851,13 @@ export function makeDefaultFridgeTallParams(): FridgeTallParams {
 
     // Built-in fridge niche defaults (kitchen-real)
     fridgeWidthMm: 560,
-    fridgeHeightMm: 1770,
+    fridgeHeightMm: fridgeH,
     fridgeDepthMm: 550,
     fridgeSideClearanceMm: 2,
-    fridgeTopClearanceMm: 5,
-    fridgeBottomClearanceMm: 5,
+    fridgeTopClearanceMm: topClear,
+    fridgeBottomClearanceMm: bottomClear,
 
     gapAboveDrawersMm: 10,
-
-    topShelfCount: 2,
-    topShelfThickness: 18,
-    topFlapOpen: false,
-    topHingeCount: 2,
-    topHingeInsetFromSideMm: 80,
 
     materials: {
       bodyKey: "carcass_default",
@@ -1034,13 +1027,6 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   positiveNumber(errors, "fridgeBottomClearanceMm", p.fridgeBottomClearanceMm, 0);
   positiveNumber(errors, "gapAboveDrawersMm", p.gapAboveDrawersMm, 0);
 
-  positiveNumber(errors, "topShelfThickness", p.topShelfThickness, 5);
-  if (!Number.isInteger(p.topShelfCount) || p.topShelfCount < 1 || p.topShelfCount > 8) errors.push("topShelfCount must be 1..8.");
-  positiveNumber(errors, "topHingeInsetFromSideMm", p.topHingeInsetFromSideMm, 0);
-  if (!Number.isInteger(p.topHingeCount) || p.topHingeCount < 1 || p.topHingeCount > 6) {
-    errors.push("topHingeCount must be an integer between 1 and 6.");
-  }
-
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
   if (p.plinthSetbackMm > p.depth) errors.push("plinthSetbackMm must be <= depth.");
 
@@ -1048,6 +1034,21 @@ export function validateFridgeTall(p: FridgeTallParams): string[] {
   if (p.fridgeWidthMm + 2 * p.fridgeSideClearanceMm > internalW + 0.5) {
     errors.push("Fridge does not fit: niche width + 2*side clearance exceeds internal cabinet width.");
   }
+
+  // Ensure the niche height actually fits inside the cabinet height (top panel counts as part of height).
+  const drawerCount = Math.max(0, Math.min(6, Math.round(p.drawerCount)));
+  const drawerHeights = Array.isArray(p.drawerFrontHeights) ? p.drawerFrontHeights.slice(0, drawerCount) : [];
+  const sumDrawerHeights = drawerHeights.reduce((acc, n) => acc + (Number.isFinite(n) ? Math.max(0, n) : 0), 0);
+  const sumFrontGaps = drawerCount > 0 ? Math.max(0, p.frontGap) * Math.max(0, drawerCount - 1) : 0;
+  const baseStartMm = p.plinthHeight + p.boardThickness + (drawerCount > 0 ? p.bottomGap : 0);
+  const afterDrawersMm =
+    baseStartMm + (drawerCount > 0 ? sumDrawerHeights + sumFrontGaps + Math.max(0, p.gapAboveDrawersMm) + p.boardThickness : 0);
+  const fridgeZoneMm = Math.max(0, p.fridgeHeightMm) + Math.max(0, p.fridgeTopClearanceMm) + Math.max(0, p.fridgeBottomClearanceMm);
+  const requiredMinHeightMm = afterDrawersMm + fridgeZoneMm + p.boardThickness;
+  if (p.height + 0.5 < requiredMinHeightMm) {
+    errors.push("Cabinet height too small: fridge niche + clearances does not fit.");
+  }
+
   validateMaterials(errors, p.materials);
   return errors;
 }

@@ -139,25 +139,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     });
   }
 
-  // Top cabinet
-  addNumber("topShelfCount", "Top shelf compartments", { min: 1, step: 1 });
-  addNumber("topShelfThickness", "Top shelf thickness (mm)", { min: 5, step: 1 });
-
-  const topOpenWrap = document.createElement("div");
-  topOpenWrap.className = "field";
-  topOpenWrap.style.gridTemplateColumns = "1fr 120px";
-  const topOpenLabel = document.createElement("label");
-  topOpenLabel.textContent = "Top flap open";
-  topOpenLabel.htmlFor = "f_topFlapOpen";
-  const topFlapOpen = document.createElement("input");
-  topFlapOpen.type = "checkbox";
-  topFlapOpen.id = "f_topFlapOpen";
-  topOpenWrap.appendChild(topOpenLabel);
-  topOpenWrap.appendChild(topFlapOpen);
-  grid.appendChild(topOpenWrap);
-
-  addNumber("topHingeCount", "Top hinge count", { min: 1, step: 1 });
-  addNumber("topHingeInsetFromSideMm", "Top hinge inset from sides (mm)", { min: 0, step: 1 });
+  // No top cabinet in this variant (the unit ends at the fridge height).
 
   const readNumber = (input: HTMLInputElement, fallback: number) => {
     const n = Number(input.value);
@@ -183,7 +165,6 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     }
     heights.value = params.drawerFrontHeights.join(", ");
     handleType.value = (params.handleType as any) ?? "none";
-    topFlapOpen.checked = params.topFlapOpen === true;
     if (fridgePresetSelect) {
       const w = Math.round(Number(params.fridgeWidthMm));
       const h = Math.round(Number(params.fridgeHeightMm));
@@ -213,9 +194,6 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
     }
 
     params.drawerCount = Math.max(0, Math.min(6, Math.round(params.drawerCount)));
-    params.topShelfCount = Math.max(1, Math.min(8, Math.round(params.topShelfCount)));
-    params.topHingeCount = Math.max(1, Math.min(6, Math.round(params.topHingeCount)));
-    params.topFlapOpen = topFlapOpen.checked;
     params.handleType = (handleType.value as any) ?? "none";
 
     const typed = parseHeights(heights.value);
@@ -231,9 +209,7 @@ export function createFridgeTallControls(container: HTMLElement, params: FridgeT
   }
   heights.addEventListener("input", onInputsChanged);
   handleType.addEventListener("change", onInputsChanged);
-  topFlapOpen.addEventListener("change", onInputsChanged);
 
   syncFromParams();
   return { syncFromParams };
 }
-
