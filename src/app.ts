@@ -1727,7 +1727,7 @@ export function startApp(args: AppArgs) {
       }
     }
 
-    return best?.pick ?? null;
+    return (best as { pick: PickedLine2D; d2: number } | null)?.pick ?? null;
   }
 
   function cross2XZ(a: THREE.Vector3, b: THREE.Vector3) {
@@ -3528,8 +3528,10 @@ export function startApp(args: AppArgs) {
   `;
   renderModeSel.value = renderMode;
 
+  const isPhotoRenderMode = (m: RenderMode) => m === "photo_pathtrace";
+
   const photoWrap = document.createElement("div");
-  photoWrap.style.display = renderMode === "photo_pathtrace" ? "" : "none";
+  photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
   photoWrap.style.paddingLeft = "168px";
   photoWrap.style.marginTop = "-6px";
 
@@ -3549,7 +3551,7 @@ export function startApp(args: AppArgs) {
       photoLastLightingRevision = -1;
     }
 
-    photoWrap.style.display = renderMode === "photo_pathtrace" ? "" : "none";
+    photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
   });
   sunRow("Render mode", renderModeSel);
   sunHost.appendChild(photoWrap);

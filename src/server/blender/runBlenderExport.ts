@@ -207,7 +207,7 @@ export async function runBlenderExport(args: RunBlenderExportArgs): Promise<RunB
 
   const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? Math.max(1_000, args.timeoutMs) : 60_000;
 
-  const exitCode: number = await new Promise((resolve, reject) => {
+  const exitCode: number = await new Promise<number>((resolve, reject) => {
     const t = setTimeout(() => {
       try {
         child.kill("SIGKILL");
