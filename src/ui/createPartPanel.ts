@@ -33,7 +33,6 @@ type CreatePartPanelArgs = {
   onHighlightPair: (a: string, b: string) => void;
   isMaterialOverrideEnabled: (name: string) => boolean;
   getMaterialOverride: (name: string) => BoardMaterialPresetId | "";
-  getMaterialInfo: (name: string) => string;
   onSetMaterialOverride: (name: string, presetId: BoardMaterialPresetId | "") => void;
 };
 
@@ -47,22 +46,16 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   selected.innerHTML = `
     <div class="name muted">Click a part…</div>
     <div class="dims muted"></div>
-    <div class="params muted"></div>
     <button type="button" disabled>Hide selected</button>
   `;
   container.appendChild(selected);
 
   const selectedNameEl = selected.querySelector(".name") as HTMLDivElement;
   const selectedDimsEl = selected.querySelector(".dims") as HTMLDivElement;
-  const selectedParamsEl = selected.querySelector(".params") as HTMLDivElement;
   const selectedBtn = selected.querySelector("button") as HTMLButtonElement;
-  selectedParamsEl.style.whiteSpace = "pre-wrap";
   const selectedMaterialWrap = document.createElement("div");
   selectedMaterialWrap.className = "field";
   selectedMaterialWrap.style.display = "none";
-  const selectedMaterialInfo = document.createElement("div");
-  selectedMaterialInfo.className = "muted";
-  selectedMaterialInfo.style.fontSize = "12px";
   const selectedMaterialLabel = document.createElement("label");
   selectedMaterialLabel.textContent = "Material override";
   selectedMaterialLabel.htmlFor = "selectedPartMaterialOverride";
@@ -71,7 +64,6 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   selectedMaterialSelect.innerHTML = ['<option value="">(no override)</option>', ...boardMaterialPresetIds.map((id) => `<option value="${id}">${id}</option>`)].join("");
   selectedMaterialWrap.appendChild(selectedMaterialLabel);
   selectedMaterialWrap.appendChild(selectedMaterialSelect);
-  selectedMaterialWrap.appendChild(selectedMaterialInfo);
   selected.appendChild(selectedMaterialWrap);
 
   const list = document.createElement("div");
@@ -95,19 +87,16 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   let rows: PartRow[] = [];
   let selectedName: string | null = null;
   let overlaps: OverlapRow[] = [];
-  let selectedParamInfo = "";
 
   const renderSelected = () => {
     if (!selectedName) {
       selectedNameEl.textContent = "Click a part…";
       selectedNameEl.classList.add("muted");
       selectedDimsEl.textContent = "";
-      selectedParamsEl.textContent = "";
       selectedBtn.disabled = true;
       selectedBtn.textContent = "Hide selected";
       selectedMaterialWrap.style.display = "none";
       selectedMaterialSelect.value = "";
-      selectedMaterialInfo.textContent = "";
       return;
     }
 
@@ -121,13 +110,11 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     selectedNameEl.textContent = row.name;
     selectedNameEl.classList.remove("muted");
     selectedDimsEl.textContent = formatDims(row.dimensionsMm, row.grainAlong);
-    selectedParamsEl.textContent = selectedParamInfo;
     selectedBtn.disabled = false;
     selectedBtn.textContent = row.visible ? "Hide selected" : "Show selected";
     const showMaterialOverride = args.isMaterialOverrideEnabled(row.name);
     selectedMaterialWrap.style.display = showMaterialOverride ? "" : "none";
     selectedMaterialSelect.value = showMaterialOverride ? args.getMaterialOverride(row.name) : "";
-    selectedMaterialInfo.textContent = showMaterialOverride ? args.getMaterialInfo(row.name) : "";
   };
 
   const renderList = () => {
@@ -215,10 +202,6 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
 
   selectedMaterialSelect.addEventListener("change", () => {
     if (!selectedName) return;
-    console.debug("[partMaterialOverride]", {
-      selectedName,
-      value: selectedMaterialSelect.value || ""
-    });
     args.onSetMaterialOverride(selectedName, (selectedMaterialSelect.value || "") as BoardMaterialPresetId | "");
   });
 
@@ -235,10 +218,6 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     },
     setSelected(name: string | null) {
       selectedName = name;
-      renderSelected();
-    },
-    setSelectedParamInfo(text: string) {
-      selectedParamInfo = text;
       renderSelected();
     },
     updateVisibility(name: string, visible: boolean) {

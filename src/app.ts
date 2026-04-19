@@ -1,4 +1,4 @@
-import * as THREE from "three";
+﻿import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import type { ModuleParams } from "./model/cabinetTypes";
 import {
@@ -38,7 +38,7 @@ import { createTopbar } from "./ui/createTopbar";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
-import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./layout/kitchenContext";
+import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
 import { createKitchenEditMode } from "./layout/kitchenEditMode";
 import {
   updateUndoRedoUi,
@@ -48,7 +48,31 @@ import {
   captureLayoutSnapshot,
   type HistoryHelpers
 } from "./layout/historyManager";
-import { getBoardMaterialPreset, isBoardMaterialPresetId } from "./data/materials";
+import {
+  makeDimTextSprite,
+  updateSpriteText,
+  makeDimBarMesh,
+  updateDimBar,
+  setSpriteScreenFixedScale,
+  updateDimensionTextScale,
+  updateDimensionGeometry,
+  updateAllDimensions,
+  updateDimensionSelectionHighlights,
+  createDimension,
+  disposeDimensionInstance,
+  deleteDimension,
+  dimValueMm,
+  wallLineSegment,
+  type DimensionHelpers
+} from "./layout/dimensionManager";
+import {
+  addInstance,
+  cancelPlacement,
+  commitPlacement,
+  mountPlacementControls,
+  rebuildGhost,
+  type PlacementHelpers
+} from "./layout/placementManager";
 
 type AppArgs = {
   viewerEl: HTMLElement;
@@ -119,10 +143,6 @@ export function startApp(args: AppArgs) {
   let photoLastLightingRevision = -1;
   let lastCameraWorld = new Float32Array(16);
   let lastCameraProj = new Float32Array(16);
-const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThicknessMm;
-  let rebuildDepth = 0;
-  let lastAfterParamsChangedAt = 0;
-  let rapidAfterParamsChangedCount = 0;
 
   const copyM16 = (out: Float32Array, m: THREE.Matrix4) => {
     const e = m.elements;
@@ -576,258 +596,10 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   const dimensions: DimensionInstance[] = [];
   let dimensionCounter = 1;
 
-  const dimMat = new THREE.MeshBasicMaterial({ color: 0x0b0f18, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+  const dimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
   const dimMatSelected = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
   const dimPickMat = new THREE.MeshBasicMaterial({ visible: false });
-
-  const makeDimTextSprite = (text: string) => {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas 2D not available");
-    const pad = 2;
-    const fontPx = 28;
-    ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
-    const metrics = ctx.measureText(text);
-    const w = Math.ceil(metrics.width + pad * 2);
-    const h = Math.ceil(fontPx + pad * 2);
-    canvas.width = w;
-    canvas.height = h;
-
-    // redraw
-    const ctx2 = canvas.getContext("2d")!;
-    ctx2.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
-    ctx2.textBaseline = "middle";
-    ctx2.textAlign = "center";
-    ctx2.fillStyle = "rgba(0,0,0,0.92)";
-    ctx2.fillText(text, w / 2, h / 2 + 1);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
-    const spr = new THREE.Sprite(mat);
-    spr.renderOrder = 90;
-    spr.position.y = 0.055;
-    (spr.userData as any).wPx = w;
-    (spr.userData as any).hPx = h;
-    return spr;
-  };
-
-  const updateSpriteText = (spr: THREE.Sprite, text: string) => {
-    if ((spr.userData as any).text === text) return;
-    (spr.userData as any).text = text;
-    const mat = spr.material as THREE.SpriteMaterial;
-    const old = mat.map as THREE.Texture | null;
-    const next = makeDimTextSprite(text);
-    const nextMat = next.material as THREE.SpriteMaterial;
-    mat.map = nextMat.map;
-    mat.needsUpdate = true;
-    nextMat.dispose();
-    (spr.userData as any).wPx = (next.userData as any).wPx;
-    (spr.userData as any).hPx = (next.userData as any).hPx;
-    if (old) old.dispose();
-  };
-
-  const makeDimBarMesh = (mat: THREE.Material) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
-    m.renderOrder = 75;
-    m.position.y = 0.05;
-    return m;
-  };
-
-  const updateDimBar = (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, thicknessM: number) => {
-    const d = b.clone().sub(a);
-    const len = d.length();
-    if (len < 1e-6) {
-      mesh.visible = false;
-      return;
-    }
-    const ang = Math.atan2(d.z, d.x);
-    const mid = a.clone().addScaledVector(d, 0.5);
-    mesh.geometry.dispose();
-    mesh.geometry = new THREE.BoxGeometry(len, 0.01, thicknessM);
-    mesh.position.set(mid.x, 0.05, mid.z);
-    mesh.rotation.set(0, ang, 0);
-    mesh.visible = true;
-  };
-
-  const orthoWorldPerPx = (rect: DOMRect) => {
-    const c = cam();
-    if (!(c instanceof THREE.OrthographicCamera)) return null as number | null;
-    const visibleHeight = Math.abs(c.top - c.bottom) / Math.max(1e-6, c.zoom);
-    const worldPerPixel = visibleHeight / Math.max(1, rect.height);
-    return worldPerPixel;
-  };
-
-  const setSpriteScreenFixedScale = (spr: THREE.Sprite, rect: DOMRect) => {
-    const wpp = orthoWorldPerPx(rect);
-    if (!wpp) return;
-    const wPx = Number((spr.userData as any).wPx ?? 60);
-    const hPx = Number((spr.userData as any).hPx ?? 28);
-    spr.scale.set(wpp * wPx, wpp * hPx, 1);
-  };
-
-  const updateDimensionTextScale = (rect: DOMRect) => {
-    for (const d of dimensions) setSpriteScreenFixedScale(d.text, rect);
-    if (dimPreview.root.visible) setSpriteScreenFixedScale(dimPreview.text, rect);
-  };
-
-  const wallLineSegment = (wallId: string, wallLine: AlignWallLine) => {
-    const w = walls.find((x) => x.id === wallId) ?? null;
-    if (!w) return null as null | { a: THREE.Vector3; b: THREE.Vector3; dir: THREE.Vector3 };
-    const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
-    const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-    const just = w.params.justification ?? "center";
-    const s = (w.params.exteriorSign ?? 1) as 1 | -1;
-    const center = wallRefLineToCenterLine(refA, refB, w.params.thicknessMm, just, s);
-    const d = center.b.clone().sub(center.a);
-    if (d.lengthSq() < 1e-10) return null;
-    d.normalize();
-    const n = new THREE.Vector3(-d.z, 0, d.x);
-    const half = Math.max(10, w.params.thicknessMm) / 2000;
-    const exteriorA = center.a.clone().addScaledVector(n, s * half);
-    const exteriorB = center.b.clone().addScaledVector(n, s * half);
-    const interiorA = center.a.clone().addScaledVector(n, -s * half);
-    const interiorB = center.b.clone().addScaledVector(n, -s * half);
-
-    if (wallLine === "center") return { a: center.a, b: center.b, dir: d.clone() };
-    if (wallLine === "exterior") return { a: exteriorA, b: exteriorB, dir: d.clone() };
-    if (wallLine === "interior") return { a: interiorA, b: interiorB, dir: d.clone() };
-
-    const endLen = Math.max(0.5, w.params.thicknessMm / 1000 + 0.25);
-    if (wallLine === "endA") return { a: center.a.clone().addScaledVector(n, -endLen / 2), b: center.a.clone().addScaledVector(n, endLen / 2), dir: n.clone().normalize() };
-    if (wallLine === "endB") return { a: center.b.clone().addScaledVector(n, -endLen / 2), b: center.b.clone().addScaledVector(n, endLen / 2), dir: n.clone().normalize() };
-    return null;
-  };
-
-  const dimValueMm = (p: DimensionParams) => {
-    const la = wallLineSegment(p.a.wallId, p.a.wallLine);
-    const lb = wallLineSegment(p.b.wallId, p.b.wallLine);
-    if (!la || !lb) return null as null | { absMm: number; signedM: number; n: THREE.Vector3; aPt: THREE.Vector3; bPt: THREE.Vector3 };
-    const aPt = la.a.clone().lerp(la.b, Math.max(0, Math.min(1, p.a.t)));
-    const bPt = lb.a.clone().lerp(lb.b, Math.max(0, Math.min(1, p.b.t)));
-    const dir = la.dir.clone().normalize();
-    const n = new THREE.Vector3(-dir.z, 0, dir.x);
-    const signedM = n.dot(bPt.clone().sub(aPt));
-    return { absMm: Math.round(Math.abs(signedM) * 1000), signedM, n, aPt, bPt };
-  };
-
-  const updateDimensionGeometry = (d: DimensionInstance, rect: DOMRect | null = null) => {
-    const la = wallLineSegment(d.params.a.wallId, d.params.a.wallLine);
-    const lb = wallLineSegment(d.params.b.wallId, d.params.b.wallLine);
-    if (!la || !lb) {
-      d.root.visible = false;
-      return;
-    }
-
-    const aPt = la.a.clone().lerp(la.b, Math.max(0, Math.min(1, d.params.a.t)));
-    const bPt = lb.a.clone().lerp(lb.b, Math.max(0, Math.min(1, d.params.b.t)));
-    const dir = la.dir.clone().normalize();
-    const n = new THREE.Vector3(-dir.z, 0, dir.x);
-
-    const off = d.params.offsetM;
-    const aDim = aPt.clone().addScaledVector(n, off);
-    const bDim = bPt.clone().addScaledVector(n, off);
-
-    const thick = rect ? hudLineThicknessM(rect) * 1.2 : 0.01;
-    updateDimBar(d.ext1, aPt, aDim, thick);
-    updateDimBar(d.ext2, bPt, bDim, thick);
-    updateDimBar(d.dim, aDim, bDim, thick);
-
-    const dimDir = bDim.clone().sub(aDim);
-    const len = dimDir.length();
-    const u = len > 1e-6 ? dimDir.clone().multiplyScalar(1 / len) : new THREE.Vector3(1, 0, 0);
-    const tickDir = u.clone().add(n.clone().normalize()).normalize(); // diagonal slash like in the reference
-    const tickLen = rect ? Math.max(thick * 8, thick * 10) : 0.08;
-    const t1a = aDim.clone().addScaledVector(tickDir, tickLen / 2);
-    const t1b = aDim.clone().addScaledVector(tickDir, -tickLen / 2);
-    const t2a = bDim.clone().addScaledVector(tickDir, tickLen / 2);
-    const t2b = bDim.clone().addScaledVector(tickDir, -tickLen / 2);
-    updateDimBar(d.tick1, t1a, t1b, thick);
-    updateDimBar(d.tick2, t2a, t2b, thick);
-
-    const mid = aDim.clone().add(bDim).multiplyScalar(0.5);
-    d.text.position.set(mid.x, 0.06, mid.z);
-    const mm = Math.round(Math.abs(n.dot(bPt.clone().sub(aPt))) * 1000);
-    updateSpriteText(d.text, `${mm}`);
-    if (rect) setSpriteScreenFixedScale(d.text, rect);
-
-    const angle = Math.atan2(bDim.z - aDim.z, bDim.x - aDim.x);
-    const pickLen = Math.max(0.01, aDim.distanceTo(bDim));
-    const pickThick = Math.max(0.05, rect ? thick * 10 : 0.08);
-    d.pick.geometry.dispose();
-    d.pick.geometry = new THREE.BoxGeometry(pickLen, 0.04, pickThick);
-    d.pick.position.set(mid.x, 0.05, mid.z);
-    d.pick.rotation.set(0, angle, 0);
-
-    d.root.visible = viewMode === "2d";
-  };
-
-  const updateAllDimensions = (rect: DOMRect | null = null) => {
-    for (const d of dimensions) updateDimensionGeometry(d, rect);
-    if (rect) updateDimensionTextScale(rect);
-    updateDimensionSelectionHighlights();
-  };
-
-  const updateDimensionSelectionHighlights = () => {
-    for (const d of dimensions) {
-      const sel = selectedKind === "dimension" && selectedDimensionId === d.id;
-      const mat = sel ? dimMatSelected : dimMat;
-      d.ext1.material = mat;
-      d.ext2.material = mat;
-      d.dim.material = mat;
-      d.tick1.material = mat;
-      d.tick2.material = mat;
-    }
-  };
-
-  const createDimension = (a: DimensionRef, b: DimensionRef, offsetM: number, opts?: { id?: string; skipHistory?: boolean }) => {
-    const id = opts?.id ?? `d${dimensionCounter++}`;
-    const root = new THREE.Group();
-    root.name = `dimension_${id}`;
-
-    const ext1 = makeDimBarMesh(dimMat);
-    const ext2 = makeDimBarMesh(dimMat);
-    const dim = makeDimBarMesh(dimMat);
-    const tick1 = makeDimBarMesh(dimMat);
-    const tick2 = makeDimBarMesh(dimMat);
-    const text = makeDimTextSprite("0");
-
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.08), dimPickMat);
-    pick.userData.kind = "dimension";
-    pick.userData.dimensionId = id;
-    root.add(pick, ext1, ext2, dim, tick1, tick2, text);
-
-    const inst: DimensionInstance = { id, params: { id, a, b, offsetM }, root, pick, ext1, ext2, dim, tick1, tick2, text };
-    layoutRoot.add(root);
-    dimensions.push(inst);
-    updateDimensionGeometry(inst);
-    if (!opts?.skipHistory) commitHistory(S);
-    return inst;
-  };
-
-  const disposeDimensionInstance = (d: DimensionInstance) => {
-    const meshes = [d.pick, d.ext1, d.ext2, d.dim, d.tick1, d.tick2];
-    for (const m of meshes) {
-      if (m.geometry) m.geometry.dispose();
-      // Do NOT dispose materials (shared)
-    }
-    const sm = d.text.material as THREE.SpriteMaterial;
-    const tex = sm.map as THREE.Texture | null;
-    if (tex) tex.dispose();
-    sm.dispose();
-  };
-
-  const deleteDimension = (id: string, opts?: { skipHistory?: boolean }) => {
-    const idx = dimensions.findIndex((x) => x.id === id);
-    if (idx < 0) return;
-    const d = dimensions[idx];
-    dimensions.splice(idx, 1);
-    layoutRoot.remove(d.root);
-    disposeDimensionInstance(d);
-    if (selectedDimensionId === id) setSelectedDimension(null);
-    if (!opts?.skipHistory) commitHistory(S);
-  };
+  let dimPreview: any = null;
 
   type LayoutSnapshot = {
     wallCounter: number;
@@ -867,6 +639,17 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
+  let helpers!: HistoryHelpers;
+  let placementHelpers!: PlacementHelpers;
+  let dimensionHelpers!: DimensionHelpers;
+
+  const placement = {
+    active: false,
+    params: null as ModuleParams | null,
+    ghost: null as any,
+    ghostValid: false,
+    lastCursor: new THREE.Vector3(0, 0, 0)
+  };
 
   const S: AppState = {
     mode,
@@ -906,6 +689,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     overlapBoxes: [],
     cabinetGroup: null,
     grainArrow: null,
+    placement,
     dimensions,
     dimensionCounter,
     undoBtnEl,
@@ -917,6 +701,22 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     underlayRotEl: null,
     underlayOpacityEl: null,
     history
+  };
+
+  dimensionHelpers = {
+    THREE,
+    cam,
+    hudLineThicknessM,
+    wallRefLineToCenterLine,
+    dimMat,
+    dimMatSelected,
+    dimPickMat,
+    layoutRoot,
+    getViewMode: () => viewMode,
+    getSelectedKind: () => selectedKind,
+    getSelectedDimensionId: () => selectedDimensionId,
+    setSelectedDimension,
+    getDimPreview: () => dimPreview
   };
 
 
@@ -966,7 +766,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       }
       updateLayoutPanel();
       updateSelectionHighlights();
-      updateDimensionSelectionHighlights();
+      updateDimensionSelectionHighlights(S, dimensionHelpers);
       mountProps();
     }
 
@@ -1275,14 +1075,14 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   };
 
   const dimPreviewMat = new THREE.MeshBasicMaterial({ color: 0x0b0f18, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false });
-  const dimPreview = {
+  dimPreview = {
     root: new THREE.Group(),
-    ext1: makeDimBarMesh(dimPreviewMat),
-    ext2: makeDimBarMesh(dimPreviewMat),
-    dim: makeDimBarMesh(dimPreviewMat),
-    tick1: makeDimBarMesh(dimPreviewMat),
-    tick2: makeDimBarMesh(dimPreviewMat),
-    text: makeDimTextSprite("...")
+    ext1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
+    ext2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
+    dim: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
+    tick1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
+    tick2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
+    text: makeDimTextSprite(S, dimensionHelpers, "...")
   };
   dimPreview.root.name = "dimPreview";
   dimPreview.root.visible = false;
@@ -1583,7 +1383,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   function removeWall(w: WallInstance) {
     // Remove dependent dimensions
     const dimIds = dimensions.filter((d) => d.params.a.wallId === w.id || d.params.b.wallId === w.id).map((d) => d.id);
-    for (const id of dimIds) deleteDimension(id, { skipHistory: true });
+    for (const id of dimIds) deleteDimension(S, dimensionHelpers, id, { skipHistory: true });
     layoutRoot.remove(w.root);
     w.mesh.geometry.dispose();
     (w.mesh.material as THREE.Material).dispose();
@@ -1728,7 +1528,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       }
     }
 
-    return best?.pick ?? null;
+    return (best as { pick: PickedLine2D; d2: number } | null)?.pick ?? null;
   }
 
   function cross2XZ(a: THREE.Vector3, b: THREE.Vector3) {
@@ -2121,7 +1921,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       }
     }
 
-    updateAllDimensions();
+    updateAllDimensions(S, dimensionHelpers);
   }
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
@@ -2275,7 +2075,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     rebuildWall(inst);
     rebuildWallPlanMesh();
 
-    // Disallow walls intersecting any module (prevents module↔wall overlap states).
+    // Disallow walls intersecting any module (prevents moduleâ†”wall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
       layoutRoot.remove(root);
@@ -2378,6 +2178,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const setToolSelect = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "select";
     clearToolHud();
     wallDraw.active = false;
@@ -2397,6 +2198,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const setToolWall = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "wall";
     clearToolHud();
     wallDraw.active = false;
@@ -2429,6 +2231,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const setToolAlign = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "align";
     clearToolHud();
     wallDraw.active = false;
@@ -2462,6 +2265,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const setToolTrim = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "trim";
     clearToolHud();
     wallDraw.active = false;
@@ -2498,6 +2302,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const setToolDimension = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "dimension";
     clearToolHud();
     wallDraw.active = false;
@@ -2531,6 +2336,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   window.addEventListener("keydown", (ev) => {
     if (isTypingTarget(ev.target)) return;
+    if (S.kitchenEditMode) return;
 
     if (mode === "layout") {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
@@ -2548,6 +2354,12 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         }
       }
 
+      if (placement.active && ev.key === "Escape") {
+        cancelPlacement(S, placementHelpers);
+        ev.preventDefault();
+        return;
+      }
+
       if (transformState.kind) {
         if (ev.key === "Escape") {
           clearTransform({ restore: true, status: "Canceled." });
@@ -2559,13 +2371,13 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
             transformState.typed = `${transformState.typed}${ev.key}`.slice(0, 6);
-            setUnderlayStatus(`Rotate: ${transformState.typed}° (Enter)`);
+            setUnderlayStatus(`Rotate: ${transformState.typed}Â° (Enter)`);
             ev.preventDefault();
             return;
           }
           if (ev.key === "Backspace") {
             transformState.typed = transformState.typed.slice(0, -1);
-            setUnderlayStatus(transformState.typed.length ? `Rotate: ${transformState.typed}° (Enter)` : "Rotate: move mouse to set direction, or type degrees + Enter.");
+            setUnderlayStatus(transformState.typed.length ? `Rotate: ${transformState.typed}Â° (Enter)` : "Rotate: move mouse to set direction, or type degrees + Enter.");
             ev.preventDefault();
             return;
           }
@@ -2575,7 +2387,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
               const sign = transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               applyRotateAngle(ang);
-              setUnderlayStatus(`Rotate: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}° (click to finish)`);
+              setUnderlayStatus(`Rotate: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Â° (click to finish)`);
             }
             transformState.typed = "";
             ev.preventDefault();
@@ -2685,7 +2497,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           if (moved) updateLayoutPanel();
         }
 
-        // Never allow module↔wall overlap (also blocks walls moving into existing modules).
+        // Never allow moduleâ†”wall overlap (also blocks walls moving into existing modules).
         if (instances.some((i) => moduleOverlapsWalls(i))) {
           for (const w of walls) {
             const p = prevWalls.get(w.id);
@@ -2885,7 +2697,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
             setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             wallTypedHud.style.display = "none";
-            setUnderlayStatus("Wall: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Wall: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -2950,7 +2762,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-            setUnderlayStatus("Wall: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Wall: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
             selectedKind = "wall";
             selectedWallId = w.id;
             mountProps();
@@ -2962,7 +2774,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
       if (ev.key === "Delete" || ev.key === "Backspace") {
         if (selectedKind === "dimension" && selectedDimensionId) {
-          deleteDimension(selectedDimensionId);
+          deleteDimension(S, dimensionHelpers, selectedDimensionId);
           ev.preventDefault();
           return;
         }
@@ -3284,7 +3096,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     args.measureBtn.textContent = measureState.enabled ? "Measure: On" : "Measure: Off";
-    args.measureReadoutEl.textContent = measureState.enabled ? "Click point A and point B to measure DX / DY / DZ / total." : "";
+    args.measureReadoutEl.textContent = measureState.enabled ? "Click 2 points to measure (planar X/Z)." : "";
 
     if (!measureState.enabled) {
       clearPreview();
@@ -3302,23 +3114,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     measureState.measures = [];
     measureState.firstPoint = null;
     clearPreview();
-    args.measureReadoutEl.textContent = measureState.enabled ? "Click point A and point B to measure DX / DY / DZ / total." : "";
-  });
-
-  renderer.domElement.addEventListener("contextmenu", (ev) => {
-    if (!measureState.enabled || !measureState.firstPoint) return;
-    ev.preventDefault();
-    measureState.firstPoint = null;
-    clearPreview();
-    args.measureReadoutEl.textContent = "Measurement canceled. Click point A.";
-  });
-
-  window.addEventListener("keydown", (ev) => {
-    if (!measureState.enabled) return;
-    if (ev.key !== "Escape") return;
-    measureState.firstPoint = null;
-    clearPreview();
-    args.measureReadoutEl.textContent = "Measurement canceled. Click point A.";
+    args.measureReadoutEl.textContent = measureState.enabled ? "Click 2 points to measure (planar X/Z)." : "";
   });
 
   // Editor UI
@@ -3535,8 +3331,10 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   `;
   renderModeSel.value = renderMode;
 
+  const isPhotoRenderMode = (m: RenderMode) => m === "photo_pathtrace";
+
   const photoWrap = document.createElement("div");
-  photoWrap.style.display = renderMode === "photo_pathtrace" ? "" : "none";
+  photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
   photoWrap.style.paddingLeft = "168px";
   photoWrap.style.marginTop = "-6px";
 
@@ -3556,7 +3354,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       photoLastLightingRevision = -1;
     }
 
-    photoWrap.style.display = renderMode === "photo_pathtrace" ? "" : "none";
+    photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
   });
   sunRow("Render mode", renderModeSel);
   sunHost.appendChild(photoWrap);
@@ -3658,149 +3456,17 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   args.partsEl.appendChild(partsBuildHost);
   args.partsEl.appendChild(partsLayoutHost);
 
-  function computeEffectiveParamsCurrent(p: ModuleParams, ctx: KitchenContext): ModuleParams {
-    const t = Math.max(
-      0,
-      Math.round(
-        typeof (p as any).worktopThicknessMm === "number" && Number.isFinite((p as any).worktopThicknessMm)
-          ? (p as any).worktopThicknessMm
-          : ctx.worktopThicknessMm
-      )
-    );
-    if (!t || t <= 0) return p;
-
-    if (
-      p.type !== "drawer_low" &&
-      p.type !== "oven_base_low" &&
-      p.type !== "nested_drawer_low" &&
-      p.type !== "flap_shelves_low" &&
-      p.type !== "swing_shelves_low" &&
-      p.type !== "top_drawers_doors_low"
-    ) {
-      return p;
-    }
-
-    if ((p as any).wallMounted === true) return p;
-
-    return {
-      ...p,
-      height: Math.max(0, p.height - t)
-    };
-  }
-
-  function getBuildContext(): KitchenContext {
-    return makeDefaultKitchenContext();
-  }
-
-  const getBuildModeWorktopThicknessMm = () => Math.max(0, Math.round(getBuildContext().worktopThicknessMm));
-  const getEffectiveParamsCurrent = (p: ModuleParams) => computeEffectiveParamsCurrent(p, getBuildContext());
-
-  const isHardwareLikePart = (name: string) =>
-    /(handle|hinge|rail|leg|clip|screw|arm|collar|pad|knob|gola|hardware)/i.test(name);
-
-  const inferPartMaterialRole = (name: string): "body" | "front" | "drawer" | null => {
-    if (!name || isHardwareLikePart(name)) return null;
-    if (/^(front_|door|flap|freezerDoor|fridgeDoor|topFlap|drawerFront)/i.test(name)) return "front";
-    if (/drawer_.*_(bottom|back|sideL|sideR)|innerDrawer|drawerBox/i.test(name)) return "drawer";
-    return "body";
-  };
-
-  const makeSolidMaterial = (hex: string, roughness = 0.8) =>
-    new THREE.MeshStandardMaterial({
-      color: new THREE.Color(hex),
-      roughness,
-      metalness: 0
-    });
-
-  const makeDvdMaterialSet = (insideHex: string, outsideHex: string): THREE.Material[] => {
-    const outside = makeSolidMaterial(outsideHex, 0.92);
-    const inside = makeSolidMaterial(insideHex, 0.76);
-    return [outside, outside, outside, outside, inside, outside];
-  };
-
-  const getEffectivePartMaterialPresetId = (p: ModuleParams, partName: string) => {
-    const overrideId = p.materials.partOverrides?.[partName];
-    if (isBoardMaterialPresetId(overrideId)) return overrideId;
-    const role = inferPartMaterialRole(partName);
-    if (role === "front") return p.materials.frontPresetId;
-    if (role === "drawer") return p.materials.drawerPresetId;
-    if (role === "body") return p.materials.bodyPresetId;
-    return null;
-  };
-
-  const buildBoardMaterialForPart = (p: ModuleParams, partName: string): THREE.Material | THREE.Material[] | null => {
-    const presetId = getEffectivePartMaterialPresetId(p, partName);
-    if (!presetId) return null;
-    const preset = getBoardMaterialPreset(presetId);
-    const role = inferPartMaterialRole(partName);
-    const tintStrength = Math.max(0, Math.min(1, p.materials.defaultTintStrength ?? 0));
-    const tint = p.materials.defaultTintColor ?? "#ffffff";
-    const tintColor = new THREE.Color(tint);
-    const tintHex = (hex: string) => {
-      const base = new THREE.Color(hex);
-      return tintStrength > 0 ? `#${base.lerp(tintColor, tintStrength).getHexString()}` : hex;
-    };
-    if (preset.visual.kind === "dvd") {
-      return makeDvdMaterialSet(tintHex(preset.visual.insideColor), tintHex(preset.visual.outsideColor));
-    }
-    const fallbackHex =
-      role === "front" ? p.materials.frontColor :
-      role === "drawer" ? p.materials.drawerColor :
-      p.materials.bodyColor;
-    const colorHex = tintStrength > 0 ? tintHex(preset.visual.color) : (preset.visual.color || fallbackHex);
-    return makeSolidMaterial(colorHex, role === "front" ? 0.68 : 0.82);
-  };
-
-  const applyMaterialSystemToGroup = (group: THREE.Object3D, p: ModuleParams) => {
-    for (const mesh of getSelectableMeshes(group)) {
-      const nextMaterial = buildBoardMaterialForPart(p, mesh.name);
-      if (nextMaterial) mesh.material = nextMaterial;
-    }
-  };
-
-  const describePartMaterial = (p: ModuleParams, partName: string) => {
-    const effective = getEffectivePartMaterialPresetId(p, partName);
-    if (!effective) return "Material: original mesh material";
-    const override = p.materials.partOverrides?.[partName];
-    const source = isBoardMaterialPresetId(override) ? "override" : `${inferPartMaterialRole(partName) ?? "default"} preset`;
-    const tint =
-      (p.materials.defaultTintStrength ?? 0) > 0
-        ? `, tint ${p.materials.defaultTintColor ?? "#ffffff"} � ${Math.round((p.materials.defaultTintStrength ?? 0) * 100)}%`
-        : "";
-    return `Material: ${effective} (${source}${tint})`;
-  };
-  const getByPath = (obj: unknown, path: string) =>
-    path.split(".").reduce<unknown>((acc, key) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[key] : undefined), obj);
-  const formatParamValue = (key: string, value: unknown) => {
-    if (value === undefined) return "-";
-    if (typeof value === "boolean") return value ? "true" : "false";
-    if (typeof value === "string") return value;
-    if (typeof value === "number") {
-      if (key.toLowerCase().includes("count")) return String(Math.round(value));
-      if (key.toLowerCase().includes("deg")) return `${Math.round(value)}�`;
-      const r = Math.round(value * 10) / 10;
-      return `${r} mm`;
-    }
-    return String(value);
-  };
-  const buildSelectedParamInfo = (keys: string[], p: unknown) => {
-    const unique = Array.from(new Set(keys.filter(Boolean)));
-    const lines: string[] = [];
-    for (const k of unique) {
-      const v = getByPath(p, k);
-      lines.push(`${k}: ${formatParamValue(k, v)}`);
-    }
-    return lines.length ? `Related params:\n${lines.join("\n")}` : "";
-  };
-
   const partPanel = createPartPanel(partsBuildHost, {
     onSelect: (name) => selectByName(name),
     onSetVisible: (name, visible) => setVisibleByName(name, visible),
     onHighlightPair: (a, b) => highlightOverlap(a, b),
-    isMaterialOverrideEnabled: (name) => !!name,
-    getMaterialOverride: (name) => params.materials.partOverrides?.[name] ?? "",
-    getMaterialInfo: (name) => describePartMaterial(params, name),
+    isMaterialOverrideEnabled: (name) => params.type === "drawer_low" && !!name,
+    getMaterialOverride: (name) => {
+      if (params.type !== "drawer_low") return "";
+      return params.materials.partOverrides?.[name] ?? "";
+    },
     onSetMaterialOverride: (name, presetId) => {
+      if (params.type !== "drawer_low") return;
       params.materials.partOverrides ??= {};
       if (presetId === "") delete params.materials.partOverrides[name];
       else params.materials.partOverrides[name] = presetId;
@@ -4071,32 +3737,32 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Moduly");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "Pridať drawer", () => {
+        ribbonButton(a, "PridaĹĄ drawer", () => {
           ensureLayoutMode();
           addInstance("drawer_low");
         });
-        ribbonButton(a, "Pridať shelves", () => {
+        ribbonButton(a, "PridaĹĄ shelves", () => {
           ensureLayoutMode();
           addInstance("shelves");
         });
-        ribbonButton(a, "Pridať corner", () => {
+        ribbonButton(a, "PridaĹĄ corner", () => {
           ensureLayoutMode();
           addInstance("corner_shelf_lower");
         });
 
-        const g2 = ribbonGroup(panelEl, "Výber");
+        const g2 = ribbonGroup(panelEl, "VĂ˝ber");
         const a2 = ribbonActions(g2, 3);
-        ribbonButton(a2, "Duplikovať", () => {
+        ribbonButton(a2, "DuplikovaĹĄ", () => {
           ensureLayoutMode();
           if (!selectedInstanceId) return;
           duplicateInstance(selectedInstanceId);
         });
-        ribbonButton(a2, "Zmazať", () => {
+        ribbonButton(a2, "ZmazaĹĄ", () => {
           ensureLayoutMode();
           if (!selectedInstanceId) return;
           deleteInstance(selectedInstanceId);
         });
-        ribbonButton(a2, "2D pohľad", () => {
+        ribbonButton(a2, "2D pohÄľad", () => {
           ensureLayoutMode();
           view2d.checked = !view2d.checked;
           setView2d(view2d.checked);
@@ -4121,13 +3787,13 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         const file = document.createElement("input");
         file.type = "file";
         file.accept = ".png,.pdf,image/png,application/pdf";
-        ribbonRow(g, "Nahrať", file);
+        ribbonRow(g, "NahraĹĄ", file);
 
         const clearBtnWrap = ribbonActions(g, 1);
-        ribbonButton(clearBtnWrap, "Odstrániť podklad", () => {
+        ribbonButton(clearBtnWrap, "OdstrĂˇniĹĄ podklad", () => {
           ensureLayoutMode();
           clearUnderlay();
-          setUnderlayStatus("Podklad odstránený.");
+          setUnderlayStatus("Podklad odstrĂˇnenĂ˝.");
         });
 
         const opacity = document.createElement("input");
@@ -4142,7 +3808,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         rot.type = "number";
         rot.step = "1";
         rot.value = String(underlayState.rotationDeg);
-        ribbonRow(g, "Rotácia (°)", rot);
+        ribbonRow(g, "RotĂˇcia (Â°)", rot);
 
         const offX = document.createElement("input");
         offX.type = "number";
@@ -4160,10 +3826,10 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         known.type = "number";
         known.step = "1";
         known.value = String(underlayCal.knownMm);
-        ribbonRow(g, "Kalibrácia (mm)", known);
+        ribbonRow(g, "KalibrĂˇcia (mm)", known);
 
         const calWrap = ribbonActions(g, 2);
-        ribbonButton(calWrap, "Kalibrovať škálu", () => {
+        ribbonButton(calWrap, "KalibrovaĹĄ ĹˇkĂˇlu", () => {
           ensureLayoutMode();
           if (!underlayMesh.visible) {
             setUnderlayStatus("Najprv nahraj podklad.");
@@ -4172,26 +3838,26 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           underlayCal.knownMm = Math.max(1, Number(known.value) || 1);
           underlayCal.active = true;
           underlayCal.first = null;
-          setUnderlayStatus("Kalibrácia: klikni prvý bod...");
+          setUnderlayStatus("KalibrĂˇcia: klikni prvĂ˝ bod...");
         });
-        ribbonButton(calWrap, "Reset škály", () => {
+        ribbonButton(calWrap, "Reset ĹˇkĂˇly", () => {
           ensureLayoutMode();
           underlayState.scale = 1;
           updateUnderlayTransform();
-          setUnderlayStatus("Škála resetnutá.");
+          setUnderlayStatus("Ĺ kĂˇla resetnutĂˇ.");
         });
 
         underlayStatusEl = document.createElement("div");
         underlayStatusEl.className = "muted";
         underlayStatusEl.style.fontSize = "12px";
-        underlayStatusEl.textContent = "Nahraj PDF/PNG podklad a nastav 1:1 kalibráciou.";
+        underlayStatusEl.textContent = "Nahraj PDF/PNG podklad a nastav 1:1 kalibrĂˇciou.";
         g.appendChild(underlayStatusEl);
 
         file.addEventListener("change", async () => {
           ensureLayoutMode();
           const f = file.files?.[0] ?? null;
           if (!f) return;
-          setUnderlayStatus("Načítavam...");
+          setUnderlayStatus("NaÄŤĂ­tavam...");
           try {
             const res = await loadUnderlayToCanvas(f);
             setUnderlayFromCanvas(res.canvas, res.name, res.kind);
@@ -4201,7 +3867,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
             offZ.value = String(underlayState.offsetMm.z);
             setUnderlayStatus(`Podklad: ${res.name}`);
           } catch (e) {
-            setUnderlayStatus(`Chyba pri načítaní: ${(e as Error).message}`);
+            setUnderlayStatus(`Chyba pri naÄŤĂ­tanĂ­: ${(e as Error).message}`);
           } finally {
             file.value = "";
           }
@@ -4229,9 +3895,9 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
         const g2 = ribbonGroup(panelEl, "Steny");
         const a2 = ribbonActions(g2, 3);
-        ribbonButton(a2, "Pridať stenu");
-        ribbonButton(a2, "Odsadiť stenu");
-        ribbonButton(a2, "Zmazať stenu");
+        ribbonButton(a2, "PridaĹĄ stenu");
+        ribbonButton(a2, "OdsadiĹĄ stenu");
+        ribbonButton(a2, "ZmazaĹĄ stenu");
       }
     },
     {
@@ -4240,9 +3906,9 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Dvere");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "Pridať dvere");
-        ribbonButton(a, "Editovať dvere");
-        ribbonButton(a, "Odstrániť dvere");
+        ribbonButton(a, "PridaĹĄ dvere");
+        ribbonButton(a, "EditovaĹĄ dvere");
+        ribbonButton(a, "OdstrĂˇniĹĄ dvere");
       }
     },
     {
@@ -4251,7 +3917,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Okno");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "Pridať/označiť okno", () => {
+        ribbonButton(a, "PridaĹĄ/oznaÄŤiĹĄ okno", () => {
           ensureLayoutMode();
           addOrSelectWindow();
         });
@@ -4281,6 +3947,8 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
   const I_UNDO = icon("M12 5H7.8l1.6-1.6L8 2 4 6l4 4 1.4-1.4L7.8 7H12c3.3 0 6 2.7 6 6 0 1.1-.3 2.1-.8 3l1.7 1c.7-1.2 1.1-2.6 1.1-4 0-4.4-3.6-8-8-8z");
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
+  const I_DONE = icon("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z");
+  const I_CANCEL = icon("M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z");
 
   const tb = createTopbar(args.ribbonEl);
 
@@ -4315,7 +3983,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = mode === "layout" ? "Vyber objekt alebo nástroj." : "Properties sú dostupné iba v layout mode.";
+    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂˇstroj." : "Properties sĂş dostupnĂ© iba v layout mode.";
     s.appendChild(p);
   };
 
@@ -4372,7 +4040,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     flip.addEventListener("click", () => {
       wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
       updatePreview();
-      setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A→B.`);
+      setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of Aâ†’B.`);
     });
     mat.addEventListener("change", () => {
       wallDefault.materialId = mat.value || "default";
@@ -4384,7 +4052,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni referenÄŤnĂş lĂ­niu, potom druhĂş rovnobeĹľnĂş lĂ­niu (stena sa posunie alebo sa upravĂ­ koniec). Esc = zruĹˇiĹĄ.";
+    hint.textContent = "Klikni referenĂ„Ĺ¤nÄ‚Ĺź lÄ‚Â­niu, potom druhÄ‚Ĺź rovnobeÄąÄľnÄ‚Ĺź lÄ‚Â­niu (stena sa posunie alebo sa upravÄ‚Â­ koniec). Esc = zruÄąË‡iÄąÄ„.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
@@ -4398,7 +4066,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni cieľovú stenu (ktorú chceš skrátiť), potom klikni cutter líniu. Esc = späť.";
+    hint.textContent = "Klikni cieÄľovĂş stenu (ktorĂş chceĹˇ skrĂˇtiĹĄ), potom klikni cutter lĂ­niu. Esc = spĂ¤ĹĄ.";
     s.appendChild(hint);
 
     const step = document.createElement("div");
@@ -4419,7 +4087,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni 1. líniu, potom 2. rovnobežnú líniu. Kóta sa preview-uje podľa kurzora, zostane v scéne, dá sa posúvať a mazať.";
+    hint.textContent = "Klikni 1. lĂ­niu, potom 2. rovnobeĹľnĂş lĂ­niu. KĂłta sa preview-uje podÄľa kurzora, zostane v scĂ©ne, dĂˇ sa posĂşvaĹĄ a mazaĹĄ.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
@@ -4493,7 +4161,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     s.appendChild(type);
     const pos = document.createElement("div");
     pos.className = "muted";
-    pos.textContent = `Pos: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
+    pos.textContent = `Pos: ${Math.round(inst.root.position.x * 1000)}Ă—${Math.round(inst.root.position.z * 1000)} mm`;
     s.appendChild(pos);
 
     const rowHost = document.createElement("div");
@@ -4545,7 +4213,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     editorHost.style.marginTop = "10px";
     s.appendChild(editorHost);
 
-    const worktopArgs = { getWorktopThicknessMm: getBuildModeWorktopThicknessMm };
+    const worktopArgs = { getWorktopThicknessMm: () => 0 };
     const onChange = () => {
       rebuildInstance(inst);
       commitHistory(S);
@@ -4592,7 +4260,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   };
 
   const setDimensionValueMm = (d: DimensionInstance, desiredMm: number) => {
-    const v = dimValueMm(d.params);
+    const v = dimValueMm(S, dimensionHelpers, d.params);
     if (!v) {
       setUnderlayStatus("Dimension: invalid refs.");
       return;
@@ -4638,7 +4306,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     if (!d) return showNoProps();
     props.setTitle(`Dimension (${d.id})`);
     const s = props.section();
-    const v = dimValueMm(d.params);
+    const v = dimValueMm(S, dimensionHelpers, d.params);
     const curMm = v?.absMm ?? 0;
 
     const inp = document.createElement("input");
@@ -4650,7 +4318,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.style.marginTop = "8px";
-    hint.textContent = "Enter/blur = apply (posunie jednu stenu). Drag kótu = zmena odsadenia.";
+    hint.textContent = "Enter/blur = apply (posunie jednu stenu). Drag kĂłtu = zmena odsadenia.";
     s.appendChild(hint);
 
     const apply = () => {
@@ -4669,7 +4337,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = "Nastavenia okna zatiaľ zostávajú vpravo (TODO: presunúť do properties).";
+    p.textContent = "Nastavenia okna zatiaÄľ zostĂˇvajĂş vpravo (TODO: presunĂşĹĄ do properties).";
     s.appendChild(p);
   };
 
@@ -4677,6 +4345,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   const mountProps = () => {
     if (mode !== "layout") return showNoProps();
+    if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
@@ -4706,20 +4375,20 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     showNoProps();
   };
 
-  const helpers: HistoryHelpers = {
+  helpers = {
     setSelectedWall,
     setSelectedModule,
     setSelectedDimension,
     updateSelectionHighlights,
-    updateDimensionSelectionHighlights,
-    disposeDimensionInstance,
+    updateDimensionSelectionHighlights: () => updateDimensionSelectionHighlights(S, dimensionHelpers),
+    disposeDimensionInstance: (d) => disposeDimensionInstance(S, dimensionHelpers, d as any),
     disposeObject3D,
     createInstance,
     createWallMesh,
     rebuildWall,
-    createDimension,
+    createDimension: (a, b, offset, opts) => createDimension(S, dimensionHelpers, a as any, b as any, offset, opts as any),
     rebuildWallPlanMesh,
-    updateAllDimensions,
+    updateAllDimensions: () => updateAllDimensions(S, dimensionHelpers),
     clearToolHud,
     mountProps,
     updateLayoutPanel,
@@ -4775,7 +4444,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     tb.toolButton(g, { title: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
     tb.toolButton(g, { title: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
     tb.toolButton(g, { title: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
-    tb.toolButton(g, { title: "Kuchy�a", iconSvg: I_CABINET, onClick: () => kitchenMode?.enter() });
+    tb.toolButton(g, { title: "Kuchyňa", iconSvg: I_CABINET, onClick: () => kitchenMode?.enter() });
   };
 
   rebuildStandardTopbar();
@@ -4785,16 +4454,16 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     setMode(next);
   });
 
-  addDrawerBtn.addEventListener("click", () => addInstance("drawer_low"));
-  addNestedDrawerBtn.addEventListener("click", () => addInstance("nested_drawer_low"));
-  addFridgeBtn.addEventListener("click", () => addInstance("fridge_tall"));
-  addShelvesBtn.addEventListener("click", () => addInstance("shelves"));
-  addCornerBtn.addEventListener("click", () => addInstance("corner_shelf_lower"));
-  addFlapBtn.addEventListener("click", () => addInstance("flap_shelves_low"));
-  addSwingBtn.addEventListener("click", () => addInstance("swing_shelves_low"));
-  addOvenBaseBtn.addEventListener("click", () => addInstance("oven_base_low"));
-  addMicrowaveTallBtn.addEventListener("click", () => addInstance("microwave_oven_tall"));
-  addTopDrawersDoorsBtn.addEventListener("click", () => addInstance("top_drawers_doors_low"));
+  addDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")));
+  addNestedDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "nested_drawer_low")));
+  addFridgeBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")));
+  addShelvesBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")));
+  addCornerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")));
+  addFlapBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "flap_shelves_low")));
+  addSwingBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "swing_shelves_low")));
+  addOvenBaseBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "oven_base_low")));
+  addMicrowaveTallBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "microwave_oven_tall")));
+  addTopDrawersDoorsBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "top_drawers_doors_low")));
   addWindowBtn.addEventListener("click", () => addOrSelectWindow());
 
   dupBtn.addEventListener("click", () => {
@@ -4875,8 +4544,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const root = new THREE.Group();
     root.name = `module_${id}`;
 
-    const module = buildModule(computeEffectiveParamsCurrent(nextParams, getBuildContext()));
-    applyMaterialSystemToGroup(module, nextParams);
+    const module = buildModule(nextParams);
     module.name = `moduleGeom_${id}`;
     root.add(module);
 
@@ -4951,7 +4619,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         selectedUnderlayBox = null;
       }
       updateSelectionHighlights();
-      updateDimensionSelectionHighlights();
+      updateDimensionSelectionHighlights(S, dimensionHelpers);
       mountProps();
     }
 
@@ -4967,7 +4635,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       (selectedUnderlayBox.material as THREE.Material).dispose();
       selectedUnderlayBox = null;
     }
-    updateDimensionSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
   }
 
@@ -5022,7 +4690,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     }
     showWallSnapMarkersFor(null);
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
   }
 
@@ -5063,7 +4731,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     scene.add(selectedWallBox);
     showWallSnapMarkersFor(id);
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
   }
 
@@ -5268,7 +4936,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   function mountInstanceControls(inst: LayoutInstance) {
     instanceEditorHost.innerHTML = "";
 
-    const worktopArgs = { getWorktopThicknessMm: getBuildModeWorktopThicknessMm };
+    const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
     if (inst.params.type === "drawer_low") {
       createDrawerLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
@@ -5315,8 +4983,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return;
 
-    const next = buildModule(computeEffectiveParamsCurrent(inst.params, getBuildContext()));
-    applyMaterialSystemToGroup(next, inst.params);
+    const next = buildModule(inst.params);
 
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
@@ -5672,59 +5339,10 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     inst.root.updateMatrixWorld(true);
   }
 
-  function addInstance(type: ModuleParams["type"]) {
-    if (mode !== "layout") return;
-    let nextParams: ModuleParams;
-    switch (type) {
-      case "drawer_low":
-        nextParams = makeDefaultDrawerLowParams();
-        break;
-      case "nested_drawer_low":
-        nextParams = makeDefaultNestedDrawerLowParams();
-        break;
-      case "fridge_tall":
-        nextParams = makeDefaultFridgeTallParams();
-        break;
-      case "shelves":
-        nextParams = makeDefaultShelvesParams();
-        break;
-      case "corner_shelf_lower":
-        nextParams = makeDefaultCornerShelfLowerParams();
-        break;
-      case "flap_shelves_low":
-        nextParams = makeDefaultFlapShelvesLowParams();
-        break;
-      case "swing_shelves_low":
-        nextParams = makeDefaultSwingShelvesLowParams();
-        break;
-      case "oven_base_low":
-        nextParams = makeDefaultOvenBaseLowParams();
-        break;
-      case "microwave_oven_tall":
-        nextParams = makeDefaultMicrowaveOvenTallParams();
-        break;
-      case "top_drawers_doors_low":
-        nextParams = makeDefaultTopDrawersDoorsLowParams();
-        break;
-      default:
-        nextParams = makeDefaultDrawerLowParams();
-    }
-
-    // Keep layout view clean (no open doors for bounding boxes).
-    if ("doorOpen" in nextParams) (nextParams as any).doorOpen = false;
-
-    const inst = createInstance(nextParams);
-    inst.root.position.set(0, 0, 0);
-    layoutRoot.add(inst.root);
-    instances.push(inst);
-    placeWithoutOverlap(inst);
-    setSelectedModule(inst.id);
-    updateLayoutPanel();
-  }
-
   function setView2d(enabled: boolean) {
     viewMode = enabled ? "2d" : "3d";
-    setViewMode(enabled ? "2d" : "3d");
+    S.viewMode = viewMode;
+    setViewMode(viewMode);
 
     // Simplify visuals in 2D: hide geometry, keep outlines.
     for (const inst of instances) {
@@ -5750,13 +5368,15 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       } else {
         for (const w of walls) w.mesh.visible = true;
       }
-      updateAllDimensions(renderer.domElement.getBoundingClientRect());
+      updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
     }
 
   function setMode(next: AppMode) {
     mode = next;
+    S.mode = mode;
 
     const isLayout = mode === "layout";
+    if (!isLayout && placement.active) cancelPlacement(S, placementHelpers);
     buildUi.style.display = isLayout ? "none" : "";
     layoutUi.style.display = isLayout ? "" : "none";
     partsBuildHost.style.display = isLayout ? "none" : "";
@@ -5830,7 +5450,6 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   }
 
   const selectMesh = (mesh: THREE.Mesh | null) => {
-    console.debug("[selectMesh]", { previous: selectedMesh?.name ?? null, next: mesh?.name ?? null });
     selectedMesh = mesh;
 
     if (selectedBox) {
@@ -5848,17 +5467,13 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     }
 
     if (!mesh) {
-      console.debug("[selectMesh] clear");
       activeBuildControls?.clearHighlights?.();
       partPanel.setSelected(null);
-      partPanel.setSelectedParamInfo("");
       return;
     }
 
     partPanel.setSelected(mesh.name);
-    const keys = ((mesh as any).userData?.paramKeys as string[] | undefined) ?? [];
-    partPanel.setSelectedParamInfo(buildSelectedParamInfo(keys, params as unknown));
-    activeBuildControls?.highlightParamKeys?.(keys);
+    activeBuildControls?.highlightParamKeys?.(((mesh as any).userData?.paramKeys as string[] | undefined) ?? []);
 
     selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
     selectedBox.name = "selectionBox";
@@ -5873,6 +5488,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   };
 
   window.addEventListener("keydown", (ev) => {
+    if (S.kitchenEditMode) return;
     if (!selectedMesh) return;
     const k = ev.key.toLowerCase();
     if (k === "p") toggleSelectedPbr(selectedMesh, "all");
@@ -5945,7 +5561,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     editorHost.innerHTML = "";
     activeBuildControls = null;
 
-    const worktopArgs = { getWorktopThicknessMm: getBuildModeWorktopThicknessMm };
+    const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
     if (params.type === "drawer_low") {
       activeBuildControls = createDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
@@ -5971,100 +5587,60 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   };
 
   const afterParamsChanged = () => {
-    const now = performance.now();
-    if (now - lastAfterParamsChangedAt < 500) rapidAfterParamsChangedCount += 1;
-    else rapidAfterParamsChangedCount = 1;
-    lastAfterParamsChangedAt = now;
-    if (rapidAfterParamsChangedCount >= 8) {
-      console.warn("[afterParamsChanged] high frequency", {
-        count: rapidAfterParamsChangedCount,
-        type: params.type
-      });
-    }
-    console.debug("[afterParamsChanged]", { type: params.type, ts: now });
     rebuild();
     args.exportOutEl.value = "";
   };
 
   const rebuild = () => {
-    if (rebuildDepth > 0) {
-      console.warn("[rebuild] reentrant call", { depth: rebuildDepth, type: params.type });
-    }
-    rebuildDepth += 1;
-    console.groupCollapsed("[rebuild] start");
-    console.debug("[rebuild] params", {
-      type: params.type,
-      selectedMesh: selectedMesh?.name ?? null,
-      hiddenParts: hiddenParts.size
-    });
     const errors = validateModule(params);
     renderErrors(args.errorsEl, errors);
-    if (errors.length > 0) {
-      console.warn("[rebuild] validation errors", errors);
-      console.groupEnd();
-      rebuildDepth -= 1;
-      return;
+    if (errors.length > 0) return;
+
+    const next = buildModule(params);
+
+    if (cabinetGroup) {
+      scene.remove(cabinetGroup);
+      disposeObject3D(cabinetGroup);
+    }
+    cabinetGroup = next;
+    scene.add(cabinetGroup);
+
+    const parts = getSelectableMeshes(cabinetGroup).map((m) => {
+      m.visible = !hiddenParts.has(m.name);
+      return {
+        name: m.name,
+        visible: m.visible,
+        dimensionsMm: readDimensionsMm(m),
+        grainAlong: readGrainAlong(m)
+      };
+    });
+    partPanel.setRows(parts);
+
+    partPanel.setOverlaps(computeOverlaps(cabinetGroup));
+    clearOverlapHighlight();
+
+    if (selectedMesh) {
+      const keepName = selectedMesh.name;
+      const nextSelected = findSelectableMeshByName(cabinetGroup, keepName);
+      selectMesh(nextSelected && nextSelected.visible ? nextSelected : null);
+    } else {
+      partPanel.setSelected(null);
     }
 
-    try {
-      const next = buildModule(computeEffectiveParamsCurrent(params, getBuildContext()));
-      applyMaterialSystemToGroup(next, params);
+    // Frame a bit better after rebuild.
+    const box = new THREE.Box3().setFromObject(cabinetGroup);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
 
-      if (cabinetGroup) {
-        scene.remove(cabinetGroup);
-        disposeObject3D(cabinetGroup);
-      }
-      cabinetGroup = next;
-      scene.add(cabinetGroup);
-
-      const parts = getSelectableMeshes(cabinetGroup).map((m) => {
-        m.visible = !hiddenParts.has(m.name);
-        return {
-          name: m.name,
-          visible: m.visible,
-          dimensionsMm: readDimensionsMm(m),
-          grainAlong: readGrainAlong(m)
-        };
-      });
-      console.debug("[rebuild] built", { parts: parts.length });
-      partPanel.setRows(parts);
-
-      partPanel.setOverlaps(computeOverlaps(cabinetGroup));
-      clearOverlapHighlight();
-
-      if (selectedMesh) {
-        const keepName = selectedMesh.name;
-        const nextSelected = findSelectableMeshByName(cabinetGroup, keepName);
-        selectMesh(nextSelected && nextSelected.visible ? nextSelected : null);
-      } else {
-        partPanel.setSelected(null);
-      }
-
-      // Frame a bit better after rebuild.
-      const box = new THREE.Box3().setFromObject(cabinetGroup);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-
-      const controls = ctl();
-      const camera = cam() as THREE.PerspectiveCamera;
-      controls.target.copy(center);
-      camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
-      camera.near = Math.max(0.01, maxDim / 100);
-      camera.far = Math.max(50, maxDim * 20);
-      camera.updateProjectionMatrix();
-      controls.update();
-      console.debug("[rebuild] done");
-    } catch (err) {
-      console.error("[rebuild] buildModule failed", err, {
-        type: params.type,
-        params
-      });
-      throw err;
-    } finally {
-      console.groupEnd();
-      rebuildDepth -= 1;
-    }
+    const controls = ctl();
+    const camera = cam() as THREE.PerspectiveCamera;
+    controls.target.copy(center);
+    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
+    camera.near = Math.max(0.01, maxDim / 100);
+    camera.far = Math.max(50, maxDim * 20);
+    camera.updateProjectionMatrix();
+    controls.update();
   };
 
   const setModel = (type: ModuleParams["type"]) => {
@@ -6242,7 +5818,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     };
 
     args.exportSceneBtn.disabled = true;
-    setUi("running", "Running Blender (up to 60s)…");
+    setUi("running", "Running Blender (up to 60s)â€¦");
     if (previewImg) previewImg.removeAttribute("src");
 
     try {
@@ -6330,7 +5906,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const d = dimensions.find((x) => x.id === dimId) ?? null;
     if (!d) return;
     setSelectedDimension(dimId);
-    const cur = dimValueMm(d.params)?.absMm ?? 0;
+    const cur = dimValueMm(S, dimensionHelpers, d.params)?.absMm ?? 0;
     const s = window.prompt("Dimension (mm)", String(cur));
     if (!s) return;
     const n = Number(s.trim().replace(",", "."));
@@ -6340,7 +5916,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
     // Marquee selection in 2D layout select tool (left button) - start pending, activate on drag.
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !transformState.kind && ev.button === 0 && !measureState.enabled) {
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !transformState.kind && !placement.active && ev.button === 0 && !measureState.enabled) {
       const rect = renderer.domElement.getBoundingClientRect();
       marquee.pending = true;
       marquee.active = false;
@@ -6382,7 +5958,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         const hitPoint = hit.point.clone();
         if (!underlayCal.first) {
           underlayCal.first = hitPoint.clone();
-          setUnderlayStatus(underlayCal.mode === "reference" ? "Reference scale: click second point..." : "Kalibrácia: klikni druhý bod...");
+          setUnderlayStatus(underlayCal.mode === "reference" ? "Reference scale: click second point..." : "KalibrĂˇcia: klikni druhĂ˝ bod...");
           return;
         }
 
@@ -6399,7 +5975,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         let desiredMm = Math.max(1, underlayCal.knownMm);
         if (underlayCal.mode === "reference") {
           const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("Reálna vzdialenosť (mm)", String(measuredMm));
+          const s = window.prompt("ReĂˇlna vzdialenosĹĄ (mm)", String(measuredMm));
           const n = s === null ? null : Number(s.trim().replace(",", "."));
           if (!n || !Number.isFinite(n) || n <= 0) {
             setUnderlayStatus("Reference scale canceled.");
@@ -6416,13 +5992,24 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           underlayState.scale *= factor;
           updateUnderlayTransform();
           if (underlayScaleEl) underlayScaleEl.value = String(underlayState.scale);
-          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `Kalibrácia OK: ${Math.round(desiredMm)} mm`);
+          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂˇcia OK: ${Math.round(desiredMm)} mm`);
         } else {
-          setUnderlayStatus("Kalibrácia zlyhala (nulová vzdialenosť).");
+          setUnderlayStatus("KalibrĂˇcia zlyhala (nulovĂˇ vzdialenosĹĄ).");
         }
 
         underlayCal.active = false;
         underlayCal.first = null;
+        return;
+      }
+
+      if (placement.active && viewMode === "2d" && layoutTool === "select") {
+        if (ev.button !== 0) return;
+        const hitPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+        rebuildGhost(S, placementHelpers, hitPoint);
+        commitPlacement(S, placementHelpers);
+        ev.preventDefault();
+        ev.stopPropagation();
         return;
       }
 
@@ -6752,7 +6339,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         const aPt = a.segA.clone().lerp(a.segB, dimTool.tA);
         dimTool.offsetM = n.dot(hitPoint.clone().sub(aPt));
 
-        createDimension(
+        createDimension(S, dimensionHelpers,
           { wallId: a.wallId, wallLine: a.wallLine, t: dimTool.tA },
           { wallId: picked.wallId, wallLine: picked.wallLine, t: tB },
           dimTool.offsetM
@@ -6797,7 +6384,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Wall: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Wall: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         return;
       }
 
@@ -6851,7 +6438,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Wall: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Wall: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         selectedKind = "wall";
         selectedWallId = w.id;
@@ -7070,16 +6657,16 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       const hit = pickSurfacePoint(raycaster, meshes);
       if (!hit) return;
 
-      const snapped = { point: hit.point.clone(), kind: "surface" as const };
+      const snapped = snapPointXZ(hit.point, hit.object);
       if (!measureState.firstPoint) {
         measureState.firstPoint = snapped.point;
-        args.measureReadoutEl.textContent = `Point A: ${formatMm(snapped.point)} - pick point B...`;
+        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} â€” pick second pointâ€¦`;
         return;
       }
 
       let a = measureState.firstPoint;
       let b = snapped.point;
-      if (measureState.axisLock) b = axisLock3D(a, b);
+      if (measureState.axisLock) b = axisLockXZ(a, b);
 
       addMeasurement(a, b);
       measureState.firstPoint = null;
@@ -7094,6 +6681,18 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && placement.active) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+      rebuildGhost(S, placementHelpers, hitPoint);
+      return;
+    }
+
     // Wall edit drag (2D, select tool)
     if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && wallEditHud.drag) {
       const d = wallEditHud.drag;
@@ -7232,7 +6831,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
         const delta = p.clone().sub(transformState.base);
         applyMoveDelta(delta);
-        setUnderlayStatus(`Move: Δ ${Math.round(delta.x * 1000)}×${Math.round(delta.z * 1000)} mm (click to finish)`);
+        setUnderlayStatus(`Move: Î” ${Math.round(delta.x * 1000)}Ă—${Math.round(delta.z * 1000)} mm (click to finish)`);
         return;
       }
 
@@ -7246,7 +6845,7 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
         while (d < -Math.PI) d += Math.PI * 2;
         transformState.lastAngleSign = d < 0 ? -1 : 1;
         applyRotateAngle(d);
-        setUnderlayStatus(`Rotate: ${Math.round((d * 180) / Math.PI)}° (click to finish)`);
+        setUnderlayStatus(`Rotate: ${Math.round((d * 180) / Math.PI)}Â° (click to finish)`);
         return;
       }
     }
@@ -7322,13 +6921,13 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
 
-      const la = wallLineSegment(d.params.a.wallId, d.params.a.wallLine);
+      const la = wallLineSegment(S, dimensionHelpers, d.params.a.wallId, d.params.a.wallLine);
       if (!la) return;
       const dir = la.dir.clone().normalize();
       const n = new THREE.Vector3(-dir.z, 0, dir.x);
       const delta = hitPoint.clone().sub(dimensionDragState.startWorld);
       d.params.offsetM = dimensionDragState.startOffsetM + n.dot(delta);
-      updateDimensionGeometry(d, rect);
+      updateDimensionGeometry(S, dimensionHelpers, d, rect);
       return;
     }
 
@@ -7422,9 +7021,9 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
             const bDim = bPt.clone().addScaledVector(n, off);
 
             const thickDim = thick * 1.2;
-            updateDimBar(dimPreview.ext1, aPt, aDim, thickDim);
-            updateDimBar(dimPreview.ext2, bPt, bDim, thickDim);
-            updateDimBar(dimPreview.dim, aDim, bDim, thickDim);
+            updateDimBar(S, dimensionHelpers, dimPreview.ext1, aPt, aDim, thickDim);
+            updateDimBar(S, dimensionHelpers, dimPreview.ext2, bPt, bDim, thickDim);
+            updateDimBar(S, dimensionHelpers, dimPreview.dim, aDim, bDim, thickDim);
 
             const dimDir = bDim.clone().sub(aDim);
             const len = dimDir.length();
@@ -7435,14 +7034,14 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
             const t1b = aDim.clone().addScaledVector(tickDir, -tickLen / 2);
             const t2a = bDim.clone().addScaledVector(tickDir, tickLen / 2);
             const t2b = bDim.clone().addScaledVector(tickDir, -tickLen / 2);
-            updateDimBar(dimPreview.tick1, t1a, t1b, thickDim);
-            updateDimBar(dimPreview.tick2, t2a, t2b, thickDim);
+            updateDimBar(S, dimensionHelpers, dimPreview.tick1, t1a, t1b, thickDim);
+            updateDimBar(S, dimensionHelpers, dimPreview.tick2, t2a, t2b, thickDim);
 
             const mid = aDim.clone().add(bDim).multiplyScalar(0.5);
             dimPreview.text.position.set(mid.x, 0.06, mid.z);
             const mm = Math.round(Math.abs(n.dot(bPt.clone().sub(aPt))) * 1000);
-            updateSpriteText(dimPreview.text, `${mm}`);
-            setSpriteScreenFixedScale(dimPreview.text, rect);
+            updateSpriteText(S, dimensionHelpers, dimPreview.text, `${mm}`);
+            setSpriteScreenFixedScale(S, dimensionHelpers, dimPreview.text, rect);
             dimPreview.root.visible = true;
           } else {
             dimPreview.root.visible = false;
@@ -7611,15 +7210,15 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       measureState.hoverSnap = "none";
       if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
       args.measureReadoutEl.textContent = measureState.firstPoint
-        ? "Pick second point... (no surface)"
-        : "Click point A and point B to measure DX / DY / DZ / total.";
+        ? "Pick second pointâ€¦ (no surface)"
+        : "Click 2 points to measure (planar X/Z).";
       clearPreview();
       return;
     }
 
-    const snapped = { point: hit.point.clone(), kind: "surface" as const };
+    const snapped = snapPointXZ(hit.point, hit.object);
     measureState.hoverPoint = snapped.point;
-    measureState.hoverSnap = "free";
+    measureState.hoverSnap = snapped.kind;
 
     // Cursor indicator
     if (measureState.cursorEl) {
@@ -7628,18 +7227,19 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       measureState.cursorEl.style.top = `${s.y}px`;
       measureState.cursorEl.style.display = "block";
       // Color by snap state: corner=magenta, edge=yellow, free=cyan
-      measureState.cursorEl.style.borderColor = "#00e5ff";
+      const c = snapped.kind === "corner" ? "#ff4dff" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
+      measureState.cursorEl.style.borderColor = c;
     }
 
     // Preview line after first click
     if (measureState.firstPoint) {
       let a = measureState.firstPoint;
       let b = snapped.point;
-      if (measureState.axisLock) b = axisLock3D(a, b);
+      if (measureState.axisLock) b = axisLockXZ(a, b);
       updatePreview(a, b, rect);
-      args.measureReadoutEl.textContent = formatMeasureSummary(a, b);
+      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) â€” ${Math.round(planarDistanceMm(a, b))} mm`;
     } else {
-      args.measureReadoutEl.textContent = `Hover: ${formatMm(snapped.point)} - click point A`;
+      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} â€” click first point`;
       clearPreview();
     }
   });
@@ -8132,9 +7732,9 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     const activeCam = cam();
     if (mode === "layout" && viewMode === "2d" && activeCam instanceof THREE.OrthographicCamera) {
       // Frame-driven scale update (no threshold) to avoid any zoom "jitter" on dimension text.
-      if (dimensions.length > 0 || dimPreview.root.visible) {
+      if (S.dimensions.length > 0 || dimPreview.root.visible) {
         const rect = renderer.domElement.getBoundingClientRect();
-        updateDimensionTextScale(rect);
+        updateDimensionTextScale(S, dimensionHelpers, rect);
       }
     }
     const isPhoto = renderMode === "photo_pathtrace" && ENABLE_PHOTO && activeCam instanceof THREE.PerspectiveCamera;
@@ -8204,24 +7804,6 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
   };
   tick();
 
-  function axisLock3D(a: THREE.Vector3, b: THREE.Vector3) {
-    const d = b.clone().sub(a);
-    const ax = Math.abs(d.x);
-    const ay = Math.abs(d.y);
-    const az = Math.abs(d.z);
-    if (ax >= ay && ax >= az) return new THREE.Vector3(b.x, a.y, a.z);
-    if (ay >= ax && ay >= az) return new THREE.Vector3(a.x, b.y, a.z);
-    return new THREE.Vector3(a.x, a.y, b.z);
-  }
-
-  function formatMeasureSummary(a: THREE.Vector3, b: THREE.Vector3) {
-    const dx = Math.round((b.x - a.x) * 1000);
-    const dy = Math.round((b.y - a.y) * 1000);
-    const dz = Math.round((b.z - a.z) * 1000);
-    const total = Math.round(a.distanceTo(b) * 1000);
-    return `DX ${dx} mm � DY ${dy} mm � DZ ${dz} mm � TOTAL ${total} mm`;
-  }
-
   function addMeasurement(a: THREE.Vector3, b: THREE.Vector3) {
     const y = Math.max(a.y, b.y) + 0.002;
     const p1 = new THREE.Vector3(a.x, y, a.z);
@@ -8244,11 +7826,12 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
     label.style.fontSize = "12px";
     label.style.whiteSpace = "nowrap";
 
-    label.textContent = formatMeasureSummary(a, b);
+    const mm = planarDistanceMm(a, b);
+    label.textContent = `${Math.round(mm)} mm`;
     measureOverlay.appendChild(label);
 
     measureState.measures.push({ a: a.clone(), b: b.clone(), line, label });
-    args.measureReadoutEl.textContent = `Measured: ${formatMeasureSummary(a, b)}`;
+    args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm`;
   }
 
   function updateMeasureLabels() {
@@ -8296,7 +7879,8 @@ const buildModeWorktopThicknessMm = makeDefaultKitchenContext().worktopThickness
       measureState.previewLabel = label;
     }
 
-    measureState.previewLabel.textContent = formatMeasureSummary(a, b);
+    const mm = planarDistanceMm(a, b);
+    measureState.previewLabel.textContent = `${Math.round(mm)} mm`;
 
     const mid = new THREE.Vector3((a.x + b.x) / 2, (a.y + b.y) / 2 + 0.02, (a.z + b.z) / 2);
     const s = worldToScreen(mid, cam(), rect);
@@ -8627,5 +8211,3 @@ function escapeHtml(input: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-
-

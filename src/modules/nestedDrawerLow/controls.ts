@@ -137,7 +137,6 @@ export function createNestedDrawerLowControls(
   heightCarcassWrap.appendChild(heightCarcass);
   grid.appendChild(heightCarcassWrap);
 
-  addNumber("worktopThicknessMm", "Worktop thickness (mm)", { min: 0, step: 1 });
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
@@ -299,7 +298,7 @@ export function createNestedDrawerLowControls(
     return Number.isFinite(n) ? n : fallback;
   };
 
-  const getWorktopT = () => Math.max(0, Math.round(params.worktopThicknessMm ?? args.getWorktopThicknessMm()));
+  const getWorktopT = () => Math.max(0, Math.round(args.getWorktopThicknessMm()));
   const computeCarcassHeight = () => {
     const t = getWorktopT();
     if (t <= 0) return params.height;
