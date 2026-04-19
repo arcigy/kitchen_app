@@ -34,8 +34,32 @@ body {
 #main {
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px 1fr 360px;
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
   overflow: hidden;
+}
+
+#properties {
+  grid-column: 1;
+}
+
+#viewer {
+  grid-column: 2;
+}
+
+#sidebar {
+  grid-column: 3;
+}
+
+#main:has(#properties[hidden]) {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+#main:has(#properties[hidden]) #viewer {
+  grid-column: 1;
+}
+
+#main:has(#properties[hidden]) #sidebar {
+  grid-column: 2;
 }
 
 #ribbon {
@@ -257,6 +281,13 @@ body {
   grid-template-columns: 1fr 120px;
   align-items: center;
   gap: 10px;
+}
+
+.field.is-related {
+  background: rgba(255, 224, 102, 0.12);
+  outline: 1px solid rgba(255, 224, 102, 0.9);
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 
 label {
