@@ -22,12 +22,16 @@ export function createTopbar(container: HTMLElement) {
 
   let openPanelEl: HTMLDivElement | null = null;
   let openOwnerBtn: HTMLButtonElement | null = null;
+  let onPanelChange: ((title: string | null) => void) | null = null;
+  let openPanelTitle: string | null = null;
 
   const closePanels = () => {
     if (openPanelEl) openPanelEl.hidden = true;
     if (openOwnerBtn) openOwnerBtn.classList.remove("active");
     openPanelEl = null;
     openOwnerBtn = null;
+    openPanelTitle = null;
+    onPanelChange?.(null);
   };
 
   const onDocPointerDown = (ev: PointerEvent) => {
@@ -103,6 +107,8 @@ export function createTopbar(container: HTMLElement) {
         btn.classList.add("active");
         openPanelEl = panel;
         openOwnerBtn = btn;
+        openPanelTitle = args.title;
+        onPanelChange?.(openPanelTitle);
 
         const b = btn.getBoundingClientRect();
         const c = container.getBoundingClientRect();
@@ -114,6 +120,15 @@ export function createTopbar(container: HTMLElement) {
     return { btn, panel };
   };
 
-  return { addGroup, toolButton, panelButton, closePanels };
+  return {
+    addGroup,
+    toolButton,
+    panelButton,
+    closePanels,
+    setOnPanelChange(fn: ((title: string | null) => void) | null) {
+      onPanelChange = fn;
+      onPanelChange?.(openPanelTitle);
+    }
+  };
 }
 

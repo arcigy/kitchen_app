@@ -38,6 +38,7 @@ import { createTopbar } from "./ui/createTopbar";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
+import { makeDefaultKitchenContext, resolveContext, validateContext } from "./layout/kitchenContext";
 import {
   updateUndoRedoUi,
   commitHistory,
@@ -71,6 +72,7 @@ import {
   rebuildGhost,
   type PlacementHelpers
 } from "./layout/placementManager";
+import { getAllMaterials } from "./data/materials";
 
 type AppArgs = {
   viewerEl: HTMLElement;
@@ -625,6 +627,9 @@ export function startApp(args: AppArgs) {
     max: 80
   };
 
+  let kitchenCtx = resolveContext(makeDefaultKitchenContext());
+  const allMaterials = getAllMaterials();
+
 
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
@@ -658,6 +663,7 @@ export function startApp(args: AppArgs) {
     instances,
     instanceCounter,
     params,
+    kitchenCtx,
     layoutTool,
     selectedKind,
     selectedInstanceId,
@@ -3920,6 +3926,28 @@ export function startApp(args: AppArgs) {
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
 
   const tb = createTopbar(args.ribbonEl);
+  const kitchenCtxBanner = document.createElement("div");
+  kitchenCtxBanner.textContent = "Kuchynský kontext — globálne nastavenia";
+  kitchenCtxBanner.style.position = "fixed";
+  kitchenCtxBanner.style.top = "0";
+  kitchenCtxBanner.style.left = "0";
+  kitchenCtxBanner.style.right = "0";
+  kitchenCtxBanner.style.height = "28px";
+  kitchenCtxBanner.style.display = "none";
+  kitchenCtxBanner.style.alignItems = "center";
+  kitchenCtxBanner.style.justifyContent = "center";
+  kitchenCtxBanner.style.fontWeight = "600";
+  kitchenCtxBanner.style.letterSpacing = "0.2px";
+  kitchenCtxBanner.style.color = "#f59e0b";
+  kitchenCtxBanner.style.background = "rgba(245, 158, 11, 0.10)";
+  kitchenCtxBanner.style.borderBottom = "1px solid rgba(245, 158, 11, 0.45)";
+  kitchenCtxBanner.style.zIndex = "9999";
+  kitchenCtxBanner.style.pointerEvents = "none";
+  document.body.appendChild(kitchenCtxBanner);
+
+  tb.setOnPanelChange((title) => {
+    kitchenCtxBanner.style.display = title === "Kitchen" ? "flex" : "none";
+  });
 
   const props = {
     setTitle(title: string) {
@@ -4479,6 +4507,100 @@ export function startApp(args: AppArgs) {
 
   const g3 = tb.addGroup();
   tb.panelButton(g3, {
+    title: "Kitchen",
+    iconSvg: I_CABINET,
+    buildPanel(panelEl) {
+      const row = (label: string, el: HTMLElement) => {
+        const wrap = document.createElement("div");
+        wrap.className = "row";
+        const l = document.createElement("label");
+        l.textContent = label;
+        wrap.appendChild(l);
+        wrap.appendChild(el);
+        panelEl.appendChild(wrap);
+      };
+
+      const mkNum = (value: number) => {
+        const el = document.createElement("input");
+        el.type = "number";
+        el.step = "1";
+        el.value = String(value);
+        return el;
+      };
+
+      const heightMmEl = mkNum(kitchenCtx.heightMm);
+      row("Výška (mm)", heightMmEl);
+
+      const worktopDepthMmEl = mkNum(kitchenCtx.worktopDepthMm);
+      row("Doska hĺbka (mm)", worktopDepthMmEl);
+
+      const worktopFrontOffsetMmEl = mkNum(kitchenCtx.worktopFrontOffsetMm);
+      row("Doska presah vpredu (mm)", worktopFrontOffsetMmEl);
+
+      const worktopBackOffsetMmEl = mkNum(kitchenCtx.worktopBackOffsetMm);
+      row("Doska medzera vzadu (mm)", worktopBackOffsetMmEl);
+
+      const worktopThicknessMmEl = mkNum(kitchenCtx.worktopThicknessMm);
+      row("Doska hrúbka (mm)", worktopThicknessMmEl);
+
+      const matSelect = (selectedId: string) => {
+        const sel = document.createElement("select");
+        sel.innerHTML = allMaterials
+          .map((m) => `<option value="${m.id}">${m.name} (€${m.pricePerM2}/m²)</option>`)
+          .join("");
+        sel.value = selectedId;
+        return sel;
+      };
+
+      const faceMaterialEl = matSelect(kitchenCtx.faceMaterialId);
+      row("Materiál dvierka", faceMaterialEl);
+
+      const corpusMaterialEl = matSelect(kitchenCtx.corpusMaterialId);
+      row("Materiál korpus", corpusMaterialEl);
+
+      const warningsEl = document.createElement("div");
+      warningsEl.className = "muted";
+      warningsEl.style.marginTop = "8px";
+      panelEl.appendChild(warningsEl);
+
+      const readMm = (el: HTMLInputElement, prev: number) => {
+        const v = Math.round(Number(el.value));
+        return Number.isFinite(v) ? v : prev;
+      };
+
+      const update = () => {
+        const next = resolveContext({
+          ...kitchenCtx,
+          heightMm: readMm(heightMmEl, kitchenCtx.heightMm),
+          worktopDepthMm: readMm(worktopDepthMmEl, kitchenCtx.worktopDepthMm),
+          worktopFrontOffsetMm: readMm(worktopFrontOffsetMmEl, kitchenCtx.worktopFrontOffsetMm),
+          worktopBackOffsetMm: readMm(worktopBackOffsetMmEl, kitchenCtx.worktopBackOffsetMm),
+          worktopThicknessMm: readMm(worktopThicknessMmEl, kitchenCtx.worktopThicknessMm),
+          faceMaterialId: faceMaterialEl.value || kitchenCtx.faceMaterialId,
+          corpusMaterialId: corpusMaterialEl.value || kitchenCtx.corpusMaterialId
+        });
+
+        kitchenCtx = next;
+        S.kitchenCtx = kitchenCtx;
+
+        applyKitchenContextToAllInstances();
+
+        const warnings = validateContext(kitchenCtx);
+        warningsEl.textContent = warnings.length ? warnings.join(" • ") : `OK • module: ${kitchenCtx.moduleHeightMm}×${kitchenCtx.moduleDepthMm} mm`;
+      };
+
+      heightMmEl.addEventListener("change", update);
+      worktopDepthMmEl.addEventListener("change", update);
+      worktopFrontOffsetMmEl.addEventListener("change", update);
+      worktopBackOffsetMmEl.addEventListener("change", update);
+      worktopThicknessMmEl.addEventListener("change", update);
+      faceMaterialEl.addEventListener("change", update);
+      corpusMaterialEl.addEventListener("change", update);
+
+      update();
+    }
+  });
+  tb.panelButton(g3, {
     title: "Underlay",
     iconSvg: I_UNDERLAY,
     buildPanel(panelEl) {
@@ -4885,6 +5007,14 @@ export function startApp(args: AppArgs) {
       }))
     );
     layoutPanel.setSelected(selectedInstanceId);
+  }
+
+  function applyKitchenContextToAllInstances() {
+    for (const inst of instances) {
+      inst.params.depth = kitchenCtx.moduleDepthMm;
+      inst.params.height = kitchenCtx.moduleHeightMm;
+      rebuildInstance(inst);
+    }
   }
 
   function setInstanceSelected(id: string | null) {
