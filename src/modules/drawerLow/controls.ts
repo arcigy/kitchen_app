@@ -1,15 +1,20 @@
 ﻿import type { DrawerLowParams } from "../../model/cabinetTypes";
 import { computeEqualDrawerFrontHeights } from "../../model/cabinetTypes";
 
+type DrawerLowNumberKey = keyof DrawerLowParams;
+
 type ControlApi = {
   syncFromParams: () => void;
   isAutoFitEnabled: () => boolean;
+  highlightParamKeys: (keys: string[]) => void;
+  clearHighlights: () => void;
 };
 
 type CreateControlsArgs = {
   onChange: () => void;
   getWorktopThicknessMm: () => number;
 };
+
 
 export function createDrawerLowControls(
   container: HTMLElement,
@@ -22,7 +27,8 @@ export function createDrawerLowControls(
   grid.className = "grid";
   container.appendChild(grid);
 
-  const numberFields: Array<{ key: keyof DrawerLowParams; input: HTMLInputElement }> = [];
+  const numberFields: Array<{ key: DrawerLowNumberKey; input: HTMLInputElement }> = [];
+  const fieldByKey = new Map<string, HTMLElement>();
   const keyFields: Array<{
     key: "materials.bodyKey" | "materials.frontKey" | "materials.drawerKey";
     input: HTMLInputElement;
@@ -35,7 +41,7 @@ export function createDrawerLowControls(
   let bodyTintColor: HTMLInputElement | null = null;
   let bodyTintStrength: HTMLInputElement | null = null;
 
-  const addNumber = (key: keyof DrawerLowParams, label: string, opts: { min?: number; step?: number } = {}) => {
+  const addNumber = (key: DrawerLowNumberKey, label: string, opts: { min?: number; step?: number } = {}) => {
     const wrap = document.createElement("div");
     wrap.className = "field";
 
@@ -53,6 +59,7 @@ export function createDrawerLowControls(
     wrap.appendChild(lab);
     wrap.appendChild(input);
     grid.appendChild(wrap);
+    fieldByKey.set(String(key), wrap);
 
     numberFields.push({ key, input });
   };
@@ -76,6 +83,7 @@ export function createDrawerLowControls(
     wrap.appendChild(lab);
     wrap.appendChild(input);
     grid.appendChild(wrap);
+    fieldByKey.set(String(key), wrap);
 
     keyFields.push({ key, input });
   };
@@ -102,6 +110,7 @@ export function createDrawerLowControls(
     wrap.appendChild(lab);
     wrap.appendChild(input);
     grid.appendChild(wrap);
+    fieldByKey.set(String(key), wrap);
 
     colorFields.push({ key, input });
   };
@@ -126,6 +135,7 @@ export function createDrawerLowControls(
   heightFinalWrap.appendChild(heightFinalLabel);
   heightFinalWrap.appendChild(heightFinal);
   grid.appendChild(heightFinalWrap);
+  fieldByKey.set("height", heightFinalWrap);
 
   const heightCarcassWrap = document.createElement("div");
   heightCarcassWrap.className = "field";
@@ -145,6 +155,10 @@ export function createDrawerLowControls(
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
+  addNumber("backGrooveDepthMm", "Back groove depth (mm)", { min: 0, step: 0.5 });
+  addNumber("backGrooveWidthMm", "Back groove width (mm)", { min: 0, step: 0.5 });
+  addNumber("backGrooveOffsetMm", "Back groove offset (mm)", { min: 0, step: 0.5 });
+  addNumber("backGrooveClearanceMm", "Back groove clearance (mm)", { min: 0, step: 0.5 });
   addNumber("plinthHeight", "Plinth height (mm)", { min: 0, step: 1 });
   addNumber("plinthSetbackMm", "Plinth setback (mm)", { min: 0, step: 1 });
 
@@ -155,6 +169,7 @@ export function createDrawerLowControls(
   addNumber("topGap", "Top reveal (mm)", { min: 0, step: 0.5 });
   addNumber("bottomGap", "Bottom reveal (mm)", { min: 0, step: 0.5 });
   addNumber("sideClearanceMm", "Side clearance (mm)", { min: 0, step: 0.5 });
+  addNumber("drawerBackReserveMm", "Drawer back reserve (mm)", { min: 0, step: 1 });
   addNumber("drawerCount", "Drawer count", { min: 1, step: 1 });
   addNumber("drawerBoxThickness", "Drawer box thickness (mm)", { min: 5, step: 1 });
   addNumber("drawerBoxSideHeight", "Drawer box side/back height (mm)", { min: 30, step: 1 });
@@ -181,6 +196,7 @@ export function createDrawerLowControls(
   handleWrap.appendChild(handleLabel);
   handleWrap.appendChild(handleType);
   grid.appendChild(handleWrap);
+  fieldByKey.set("handleType", handleWrap);
 
   addNumber("handlePositionMm", "Handle pos from top (mm)", { min: 0, step: 1 });
   addNumber("handleLengthMm", "Handle length (mm)", { min: 0, step: 1 });
@@ -301,6 +317,7 @@ export function createDrawerLowControls(
   heights.placeholder = "e.g. 200, 200, 200";
   heightsWrap.appendChild(heights);
   grid.appendChild(heightsWrap);
+  fieldByKey.set("drawerFrontHeights", heightsWrap);
 
   const syncFromParams = () => {
     for (const f of numberFields) {
@@ -424,7 +441,24 @@ export function createDrawerLowControls(
   });
 
   syncFromParams();
-  return { syncFromParams, isAutoFitEnabled: () => autoFit.checked };
+
+  const clearHighlights = () => {
+    for (const el of fieldByKey.values()) el.classList.remove("is-related");
+  };
+
+  const highlightParamKeys = (keys: string[]) => {
+    clearHighlights();
+    let first: HTMLElement | null = null;
+    for (const k of keys) {
+      const el = fieldByKey.get(k);
+      if (!el) continue;
+      el.classList.add("is-related");
+      if (!first) first = el;
+    }
+    first?.scrollIntoView({ block: "nearest" });
+  };
+
+  return { syncFromParams, isAutoFitEnabled: () => autoFit.checked, highlightParamKeys, clearHighlights };
 }
 
 function parseHeights(raw: string): number[] {

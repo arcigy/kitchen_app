@@ -67,6 +67,11 @@ type AppArgs = {
 };
 
 export function startApp(args: AppArgs) {
+  type ParamHighlightControls = {
+    highlightParamKeys?: (keys: string[]) => void;
+    clearHighlights?: () => void;
+  };
+
   let params: ModuleParams = makeDefaultDrawerLowParams();
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
   const ENABLE_PHOTO = import.meta.env.VITE_ENABLE_PHOTO === "true";
@@ -2998,6 +3003,7 @@ export function startApp(args: AppArgs) {
   let selectedMesh: THREE.Mesh | null = null;
   let selectedBox: THREE.BoxHelper | null = null;
   let grainArrow: THREE.ArrowHelper | null = null;
+  let activeBuildControls: ParamHighlightControls | null = null;
 
   let overlapBoxes: Array<{ mesh: THREE.Mesh; helper: THREE.BoxHelper }> = [];
 
@@ -3624,7 +3630,19 @@ export function startApp(args: AppArgs) {
   const partPanel = createPartPanel(partsBuildHost, {
     onSelect: (name) => selectByName(name),
     onSetVisible: (name, visible) => setVisibleByName(name, visible),
-    onHighlightPair: (a, b) => highlightOverlap(a, b)
+    onHighlightPair: (a, b) => highlightOverlap(a, b),
+    isMaterialOverrideEnabled: (name) => params.type === "drawer_low" && !!name,
+    getMaterialOverride: (name) => {
+      if (params.type !== "drawer_low") return "";
+      return params.materials.partOverrides?.[name] ?? "";
+    },
+    onSetMaterialOverride: (name, presetId) => {
+      if (params.type !== "drawer_low") return;
+      params.materials.partOverrides ??= {};
+      if (presetId === "") delete params.materials.partOverrides[name];
+      else params.materials.partOverrides[name] = presetId;
+      afterParamsChanged();
+    }
   });
 
   const layoutPanel = createLayoutPanel(partsLayoutHost, {
@@ -5982,11 +6000,13 @@ export function startApp(args: AppArgs) {
     }
 
     if (!mesh) {
+      activeBuildControls?.clearHighlights?.();
       partPanel.setSelected(null);
       return;
     }
 
     partPanel.setSelected(mesh.name);
+    activeBuildControls?.highlightParamKeys?.(((mesh as any).userData?.paramKeys as string[] | undefined) ?? []);
 
     selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
     selectedBox.name = "selectionBox";
@@ -5996,7 +6016,7 @@ export function startApp(args: AppArgs) {
     if (grain) {
       grainArrow = new THREE.ArrowHelper(grain.dir, grain.origin, grain.length, 0x3ddc97, grain.length * 0.22, grain.length * 0.12);
       grainArrow.name = "grainArrow";
-      scene.add(grainArrow);
+      grainArrow.visible = false;
     }
   };
 
@@ -6071,13 +6091,14 @@ export function startApp(args: AppArgs) {
 
   const mountControls = () => {
     editorHost.innerHTML = "";
+    activeBuildControls = null;
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
     if (params.type === "drawer_low") {
-      createDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
+      activeBuildControls = createDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
     } else if (params.type === "nested_drawer_low") {
-      createNestedDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
+      activeBuildControls = createNestedDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
     } else if (params.type === "fridge_tall") {
       createFridgeTallControls(editorHost, params, { onChange: () => afterParamsChanged() });
     } else if (params.type === "flap_shelves_low") {
