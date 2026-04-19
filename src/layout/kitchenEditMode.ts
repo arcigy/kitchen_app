@@ -63,7 +63,7 @@ export function exitKitchenMode(S: AppState, helpers: KitchenModeHelpers, action
   if (S.placement.active) helpers.cancelPlacement();
 
   if (action === "discard") {
-    S.kitchenCtx = structuredClone(session.kitchenCtxBefore);
+    S.kitchenCtx = resolveContext(structuredClone(session.kitchenCtxBefore));
     helpers.applyKitchenContextToAllInstances();
   }
 
@@ -137,6 +137,7 @@ export function mountKitchenContextPanel(container: HTMLElement, S: AppState, on
   };
 
   const update = () => {
+    if (!S.kitchenEditMode) return;
     S.kitchenCtx = resolveContext({
       ...S.kitchenCtx,
       heightMm: readMm(heightMmEl, S.kitchenCtx.heightMm),
