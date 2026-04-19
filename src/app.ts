@@ -35,6 +35,7 @@ import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline"
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
 import { createTopbar } from "./ui/createTopbar";
+import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
@@ -3486,8 +3487,6 @@ export function startApp(args: AppArgs) {
   let underlayScaleEl: HTMLInputElement | null = null;
   let underlayOffXEl: HTMLInputElement | null = null;
   let underlayOffZEl: HTMLInputElement | null = null;
-  let underlayRotEl: HTMLInputElement | null = null;
-  let underlayOpacityEl: HTMLInputElement | null = null;
   const setUnderlayStatus = (text: string) => {
     if (underlayStatusEl) underlayStatusEl.textContent = text;
   };
@@ -3566,7 +3565,6 @@ export function startApp(args: AppArgs) {
 
     const signed = rmid.clone().sub(mid).dot(n);
     const sign = signed >= 0 ? 1 : -1;
-    const currentCenterDistM = Math.abs(signed);
     const desiredCenterDistM = desiredOffsetMm / 1000 + (w.params.thicknessMm + ref.params.thicknessMm) / 2000;
     const desiredSigned = sign * desiredCenterDistM;
     const shift = signed - desiredSigned;
@@ -3931,8 +3929,6 @@ export function startApp(args: AppArgs) {
   const icon = (d: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
   const I_SELECT = icon("M4 4h7v2H6v5H4V4zm14 0v7h-2V6h-5V4h7zM4 20v-7h2v5h5v2H4zm16-7v7h-7v-2h5v-5h2z");
   const I_WALL = icon("M4 6h16v2H4V6zm0 10h16v2H4v-2zM6 8h2v8H6V8zm10 0h2v8h-2V8z");
-  const I_WINDOW = icon("M5 4h14v16H5V4zm2 2v6h5V6H7zm7 0v6h5V6h-5zM7 14v4h5v-4H7zm7 0v4h5v-4h-5z");
-  const I_DOOR = icon("M6 3h12v18h-2V5H8v16H6V3zm5 10h2v8h-2v-8z");
   const I_UNDERLAY = icon("M6 2h9l3 3v17H6V2zm9 1.5V6h2.5L15 3.5zM8 9h8v2H8V9zm0 4h8v2H8v-2z");
   const I_CABINET = icon("M4 6h16v14H4V6zm2 2v3h12V8H6zm0 5v5h5v-5H6zm7 0v5h5v-5h-5z");
   const I_GRID2D = icon("M4 4h16v16H4V4zm2 2v4h4V6H6zm6 0v4h6V6h-6zM6 12v6h4v-6H6zm6 0v6h6v-6h-6z");
@@ -3942,7 +3938,7 @@ export function startApp(args: AppArgs) {
   const I_COPY = icon("M8 7h11v14H8V7zM5 3h11v2H7v12H5V3z");
   const I_RESET = icon("M12 6V3l-4 4 4 4V8c2.8 0 5 2.2 5 5a5 5 0 1 1-9.8-1H5.1A7 7 0 1 0 12 6z");
   const I_VIEW = icon("M12 5c5.5 0 9.5 5.5 9.5 7s-4 7-9.5 7S2.5 14.5 2.5 12 6.5 5 12 5zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z");
-  const I_DEBUG = icon("M4 12h16v2H4v-2zm7-8h2v16h-2V4z");
+  const I_BOM = icon("M5 3h14v18H5V3zm2 2v4h10V5H7zm0 6v2h10v-2H7zm0 4v2h6v-2H7z");
   const I_ALIGN = icon("M4 7h12v2H4V7zm0 8h12v2H4v-2zM18 6l4 3-4 3V6zm0 6l4 3-4 3v-6z");
   const I_TRIM = icon("M4 7h11v2H4V7zm0 8h8v2H4v-2zM18 5l4 4-2 2-4-4 2-2zm-4 4l4 4-2 2-4-4 2-2z");
   const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
@@ -4360,7 +4356,6 @@ export function startApp(args: AppArgs) {
     opacity.step = "0.01";
     opacity.value = String(underlayState.opacity);
     props.row(s, "Opacity", opacity);
-    underlayOpacityEl = opacity;
     S.underlayOpacityEl = opacity;
 
     const scale = document.createElement("input");
@@ -4376,7 +4371,6 @@ export function startApp(args: AppArgs) {
     rot.step = "1";
     rot.value = String(underlayState.rotationDeg);
     props.row(s, "Rotation °", rot);
-    underlayRotEl = rot;
     S.underlayRotEl = rot;
 
     const offX = document.createElement("input");
@@ -4641,6 +4635,65 @@ export function startApp(args: AppArgs) {
     setView2d(view2d.checked);
   };
 
+  const openBomPanel = () => {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "1000";
+    overlay.style.background = "rgba(0,0,0,0.45)";
+    overlay.style.display = "grid";
+    overlay.style.placeItems = "center";
+    overlay.style.padding = "24px";
+
+    const panel = document.createElement("div");
+    panel.style.width = "min(980px, calc(100vw - 48px))";
+    panel.style.maxHeight = "calc(100vh - 48px)";
+    panel.style.overflow = "auto";
+    panel.style.background = "#12141a";
+    panel.style.border = "1px solid #303746";
+    panel.style.borderRadius = "8px";
+    panel.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
+    panel.style.padding = "16px";
+    overlay.appendChild(panel);
+
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.gap = "12px";
+    header.style.marginBottom = "14px";
+    panel.appendChild(header);
+
+    const title = document.createElement("h2");
+    title.textContent = "BOM";
+    title.style.margin = "0";
+    title.style.color = "#eef2ff";
+    title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    header.appendChild(title);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.textContent = "Zavrieť";
+    closeBtn.style.background = "#0e1118";
+    closeBtn.style.color = "#eef2ff";
+    closeBtn.style.border = "1px solid #303746";
+    closeBtn.style.borderRadius = "6px";
+    closeBtn.style.padding = "7px 10px";
+    header.appendChild(closeBtn);
+
+    const content = document.createElement("div");
+    panel.appendChild(content);
+
+    const close = () => overlay.remove();
+    closeBtn.addEventListener("click", close);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close();
+    });
+
+    mountBomDevPanel(content, S.instances, S.kitchenCtx);
+    document.body.appendChild(overlay);
+  };
+
   const buildClassicTopbar = () => {
     const row = tb.addRow({ className: "topbar-classic-ribbon" });
 
@@ -4666,6 +4719,7 @@ export function startApp(args: AppArgs) {
     tb.toolButton(project, { title: "Reset defaults", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
     tb.toolButton(project, { title: "Export JSON", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
     tb.toolButton(project, { title: "Copy export", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
+    tb.toolButton(project, { title: "BOM", iconSvg: I_BOM, label: "BOM", onClick: openBomPanel });
     const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
     tb.toolButton(project, { title: "Reset view", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
 
@@ -4741,15 +4795,6 @@ export function startApp(args: AppArgs) {
   function instanceWorldBox(inst: LayoutInstance) {
     inst.root.updateMatrixWorld(true);
     return new THREE.Box3().setFromObject(inst.module);
-  }
-
-  function instanceWorldBoxAt(inst: LayoutInstance, pos: THREE.Vector3) {
-    const prev = inst.root.position.clone();
-    inst.root.position.copy(pos);
-    const box = instanceWorldBox(inst);
-    inst.root.position.copy(prev);
-    inst.root.updateMatrixWorld(true);
-    return box;
   }
 
   function roomContainsBoxXZ(box: THREE.Box3, eps = 0.0005) {
