@@ -134,7 +134,62 @@ function renderResult(instance: LayoutInstance, ctx: KitchenContext) {
   total.style.textAlign = "right";
   wrap.appendChild(total);
 
+  wrap.appendChild(renderJsonCopyAction(instance, ctx));
+
   return wrap;
+}
+
+function renderJsonCopyAction(instance: LayoutInstance, ctx: KitchenContext) {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.alignItems = "center";
+  row.style.gap = "10px";
+  row.style.justifyContent = "flex-end";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Kopírovať JSON";
+  button.style.background = "#0e1118";
+  button.style.color = "#eef2ff";
+  button.style.border = "1px solid #303746";
+  button.style.borderRadius = "6px";
+  button.style.padding = "7px 10px";
+
+  const status = document.createElement("span");
+  status.textContent = "Skopírované!";
+  status.style.color = "#7ddc9b";
+  status.style.opacity = "0";
+  status.style.transition = "opacity 120ms ease";
+
+  let hideTimer: number | undefined;
+  button.addEventListener("click", async () => {
+    const data = buildBomJson(instance, ctx);
+    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+
+    status.style.opacity = "1";
+    if (hideTimer !== undefined) window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      status.style.opacity = "0";
+    }, 2000);
+  });
+
+  row.appendChild(button);
+  row.appendChild(status);
+  return row;
+}
+
+function buildBomJson(instance: LayoutInstance, ctx: KitchenContext) {
+  const result = calculateModuleBOM(instance, ctx);
+
+  return {
+    moduleType: result.moduleType,
+    params: instance.params,
+    bom: {
+      parts: result.parts,
+      hardware: result.hardware,
+      totalPrice: result.totalPrice
+    }
+  };
 }
 
 function renderPartsTable(parts: ReturnType<typeof calculateModuleBOM>["parts"]) {

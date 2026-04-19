@@ -3189,72 +3189,7 @@ export function startApp(args: AppArgs) {
   const editorHost = document.createElement("div");
   buildUi.appendChild(editorHost);
 
-  // Layout UI: add/duplicate/delete + 2D toggle + selected params
-  const addWrap = document.createElement("div");
-  addWrap.className = "actions";
-  addWrap.style.gridTemplateColumns = "1fr 1fr";
-  const addDrawerBtn = document.createElement("button");
-  addDrawerBtn.type = "button";
-  addDrawerBtn.textContent = "Add drawer";
-  const addNestedDrawerBtn = document.createElement("button");
-  addNestedDrawerBtn.type = "button";
-  addNestedDrawerBtn.textContent = "Add nested drawer";
-  const addFridgeBtn = document.createElement("button");
-  addFridgeBtn.type = "button";
-  addFridgeBtn.textContent = "Add fridge";
-  const addShelvesBtn = document.createElement("button");
-  addShelvesBtn.type = "button";
-  addShelvesBtn.textContent = "Add shelves";
-  const addCornerBtn = document.createElement("button");
-  addCornerBtn.type = "button";
-  addCornerBtn.textContent = "Add corner";
-  const addFlapBtn = document.createElement("button");
-  addFlapBtn.type = "button";
-  addFlapBtn.textContent = "Add flap shelves";
-  const addSwingBtn = document.createElement("button");
-  addSwingBtn.type = "button";
-  addSwingBtn.textContent = "Add swing shelves";
-  const addOvenBaseBtn = document.createElement("button");
-  addOvenBaseBtn.type = "button";
-  addOvenBaseBtn.textContent = "Add oven base";
-  const addMicrowaveTallBtn = document.createElement("button");
-  addMicrowaveTallBtn.type = "button";
-  addMicrowaveTallBtn.textContent = "Add microwave+oven";
-  const addTopDrawersDoorsBtn = document.createElement("button");
-  addTopDrawersDoorsBtn.type = "button";
-  addTopDrawersDoorsBtn.textContent = "Add top drawers/doors";
-  addWrap.appendChild(addDrawerBtn);
-  addWrap.appendChild(addNestedDrawerBtn);
-  addWrap.appendChild(addFridgeBtn);
-  addWrap.appendChild(addShelvesBtn);
-  addWrap.appendChild(addCornerBtn);
-  addWrap.appendChild(addFlapBtn);
-  addWrap.appendChild(addSwingBtn);
-  addWrap.appendChild(addOvenBaseBtn);
-  addWrap.appendChild(addMicrowaveTallBtn);
-  addWrap.appendChild(addTopDrawersDoorsBtn);
-
-  const addWindowBtn = document.createElement("button");
-  addWindowBtn.type = "button";
-  addWindowBtn.textContent = "Add window";
-  addWrap.appendChild(addWindowBtn);
-  layoutUi.appendChild(addWrap);
-
-  const layoutActions = document.createElement("div");
-  layoutActions.className = "actions";
-  const dupBtn = document.createElement("button");
-  dupBtn.type = "button";
-  dupBtn.textContent = "Duplicate selected";
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.textContent = "Delete selected";
-  delBtn.style.borderColor = "#3a1f23";
-  delBtn.style.background = "#1a0f12";
-  delBtn.style.color = "#ff6b6b";
-  layoutActions.appendChild(dupBtn);
-  layoutActions.appendChild(delBtn);
-  layoutUi.appendChild(layoutActions);
-
+  // Layout UI: global view/render controls only. Module actions live in kitchen edit toolbar.
   const viewWrap = document.createElement("div");
   viewWrap.className = "field";
   const viewLabel = document.createElement("label");
@@ -4759,28 +4694,6 @@ export function startApp(args: AppArgs) {
   modeSelect.addEventListener("change", () => {
     const next = modeSelect.value === "layout" ? "layout" : "build";
     setMode(next);
-  });
-
-  addDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")));
-  addNestedDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "nested_drawer_low")));
-  addFridgeBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")));
-  addShelvesBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")));
-  addCornerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")));
-  addFlapBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "flap_shelves_low")));
-  addSwingBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "swing_shelves_low")));
-  addOvenBaseBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "oven_base_low")));
-  addMicrowaveTallBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "microwave_oven_tall")));
-  addTopDrawersDoorsBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "top_drawers_doors_low")));
-  addWindowBtn.addEventListener("click", () => addOrSelectWindow());
-
-  dupBtn.addEventListener("click", () => {
-    if (!selectedInstanceId) return;
-    duplicateInstance(selectedInstanceId);
-  });
-
-  delBtn.addEventListener("click", () => {
-    if (!selectedInstanceId) return;
-    deleteInstance(selectedInstanceId);
   });
 
   view2d.addEventListener("change", () => {
