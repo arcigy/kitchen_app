@@ -11,6 +11,8 @@ export interface KitchenModeHelpers {
   setToolSelect: () => void;
   mountProps: () => void;
   applyKitchenContextToAllInstances: () => void;
+  onFinish?: () => void;
+  onDiscard?: () => void;
 }
 
 type Session = {
@@ -65,6 +67,10 @@ export function exitKitchenMode(S: AppState, helpers: KitchenModeHelpers, action
   if (action === "discard") {
     S.kitchenCtx = resolveContext(structuredClone(session.kitchenCtxBefore));
     helpers.applyKitchenContextToAllInstances();
+    helpers.onDiscard?.();
+  }
+  if (action === "finish") {
+    helpers.onFinish?.();
   }
 
   S.kitchenEditMode = false;

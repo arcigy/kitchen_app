@@ -8,7 +8,7 @@ import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
-export type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | null;
+export type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | "kitchenGroup" | null;
 export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {
@@ -98,6 +98,7 @@ export type DimensionInstance = {
 export type LayoutInstance = {
   id: string;
   params: ModuleParams;
+  kitchenGroupId: string | null;
   root: THREE.Group;
   module: THREE.Group;
   localBox: THREE.Box3;
@@ -140,6 +141,8 @@ export interface AppState {
   params: ModuleParams;
   kitchenCtx: KitchenContext;
   kitchenEditMode: boolean;
+  kitchenGroups: KitchenGroup[];
+  activeKitchenGroupId: string | null;
 
   // Selection
   layoutTool: LayoutTool;
@@ -194,6 +197,13 @@ export interface AppState {
   // (Left empty or populated if we find navigation variables)
 }
 
+export interface KitchenGroup {
+  id: string;
+  name: string;
+  ctx: KitchenContext;
+  instanceIds: string[];
+}
+
 export function makeAppState(defaultParams: ModuleParams): AppState {
   return {
     mode: "build",
@@ -217,6 +227,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     params: defaultParams,
     kitchenCtx: resolveContext(makeDefaultKitchenContext()),
     kitchenEditMode: false,
+    kitchenGroups: [],
+    activeKitchenGroupId: null,
 
     layoutTool: "select",
     selectedKind: null,

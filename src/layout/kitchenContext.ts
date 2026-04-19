@@ -1,4 +1,6 @@
 export interface KitchenContext {
+  name: string
+
   // Spodné moduly — rozmery
   heightMm: number              // výška modulov (bez sokla)
   worktopDepthMm: number        // skutočná šírka pracovnej dosky
@@ -49,6 +51,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
   const heightMm = 820
 
   return {
+    name: 'Kuchyňa 1',
     heightMm,
     worktopDepthMm,
     worktopFrontOffsetMm,

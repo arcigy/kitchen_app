@@ -113,6 +113,7 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   const inst = helpers.createInstance(nextParams);
   inst.root.position.copy(ghost.root.position);
   inst.root.rotation.y = ghost.root.rotation.y;
+  inst.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
 
   if (S.viewMode === "2d") {
     inst.module.visible = false;

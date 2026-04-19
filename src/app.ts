@@ -494,6 +494,7 @@ export function startApp(args: AppArgs) {
   type LayoutInstance = {
     id: string;
     params: ModuleParams;
+    kitchenGroupId: string | null;
     root: THREE.Group;
     module: THREE.Group;
     localBox: THREE.Box3;
@@ -502,6 +503,8 @@ export function startApp(args: AppArgs) {
   };
   const instances: LayoutInstance[] = [];
   let instanceCounter = 1;
+  let kitchenGroupCounter = 1;
+  const kitchenGroupPickMeshes = new Map<string, THREE.Mesh>();
   let selectedInstanceId: string | null = null;
   let selectedWallId: string | null = null;
   const selectedInstanceIds = new Set<string>();
@@ -511,6 +514,7 @@ export function startApp(args: AppArgs) {
   let selectedInstanceBox: THREE.BoxHelper | null = null;
   let selectedWallBox: THREE.BoxHelper | null = null;
   let selectedUnderlayBox: THREE.BoxHelper | null = null;
+  let selectedKitchenGroupBox: THREE.BoxHelper | null = null;
 
   type WallId = "back" | "left" | "right";
   type WindowParams = {
@@ -529,9 +533,10 @@ export function startApp(args: AppArgs) {
   };
 
   let windowInst: WindowInstance | null = null;
-  type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | null;
+  type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | "kitchenGroup" | null;
   let selectedKind: SelectedKind = null;
   let selectedDimensionId: string | null = null;
+  let selectedKitchenGroupId: string | null = null;
 
   type WallParams = {
     thicknessMm: number;
@@ -662,6 +667,8 @@ export function startApp(args: AppArgs) {
     params,
     kitchenCtx: resolveContext(makeDefaultKitchenContext()),
     kitchenEditMode: false,
+    kitchenGroups: [],
+    activeKitchenGroupId: null,
     layoutTool,
     selectedKind,
     selectedInstanceId,
@@ -4315,6 +4322,45 @@ export function startApp(args: AppArgs) {
     s.appendChild(p);
   };
 
+  const mountKitchenGroupProps = (kitchenGroupId: string) => {
+    const g = S.kitchenGroups.find((x) => x.id === kitchenGroupId) ?? null;
+    if (!g) return showNoProps();
+    props.setTitle(`Kuchyňa (${g.id})`);
+    const s = props.section();
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = g.name;
+    name.style.height = "34px";
+    name.style.borderRadius = "10px";
+    name.style.border = "1px solid var(--border)";
+    name.style.background = "#0f1117";
+    name.style.color = "var(--text)";
+    props.row(s, "Názov", name);
+
+    const info = document.createElement("div");
+    info.className = "muted";
+    info.style.marginTop = "8px";
+    info.textContent = `height: ${g.ctx.heightMm}mm • depth: ${g.ctx.worktopDepthMm}mm • face: ${g.ctx.faceMaterialId} • corpus: ${g.ctx.corpusMaterialId}`;
+    s.appendChild(info);
+
+    const list = document.createElement("div");
+    list.className = "muted";
+    list.style.marginTop = "10px";
+    list.textContent = `Modules: ${g.instanceIds.map((id) => `${id}`).join(", ") || "(none)"}`;
+    s.appendChild(list);
+
+    name.addEventListener("change", () => {
+      const v = name.value.trim();
+      if (!v) {
+        name.value = g.name;
+        return;
+      }
+      g.name = v;
+      g.ctx.name = v;
+    });
+  };
+
   const mountProps = () => {
     if (mode !== "layout") return showNoProps();
     if (S.kitchenEditMode) {
@@ -4349,6 +4395,7 @@ export function startApp(args: AppArgs) {
       if (w) return mountWallProps(w);
       return showNoProps();
     }
+    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId) return mountKitchenGroupProps(selectedKitchenGroupId);
     if (selectedKind === "window") return mountWindowProps();
     if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
     if (selectedKind === "dimension" && selectedDimensionId) return mountDimensionProps(selectedDimensionId);
@@ -4392,6 +4439,77 @@ export function startApp(args: AppArgs) {
     autoOrientModuleToRoomWallIfSnapped
   };
 
+  const rebuildKitchenGroupPickMesh = (kitchenGroupId: string) => {
+    const insts = instances.filter((i) => i.kitchenGroupId === kitchenGroupId);
+    const prev = kitchenGroupPickMeshes.get(kitchenGroupId) ?? null;
+    if (prev) {
+      layoutRoot.remove(prev);
+      disposeObject3D(prev);
+      kitchenGroupPickMeshes.delete(kitchenGroupId);
+    }
+
+    if (insts.length === 0) return;
+
+    const box = new THREE.Box3();
+    for (let i = 0; i < insts.length; i++) {
+      const b = instanceWorldBox(insts[i]);
+      if (i === 0) box.copy(b);
+      else box.union(b);
+    }
+
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.max(0.01, size.x), Math.max(0.01, size.y), Math.max(0.01, size.z)),
+      mat
+    );
+    mesh.name = `kitchenGroupPick_${kitchenGroupId}`;
+    mesh.position.copy(center);
+    mesh.userData.kind = "kitchenGroup";
+    mesh.userData.kitchenGroupId = kitchenGroupId;
+    layoutRoot.add(mesh);
+    kitchenGroupPickMeshes.set(kitchenGroupId, mesh);
+  };
+
+  const commitActiveKitchenGroup = () => {
+    const kitchenGroupId = S.activeKitchenGroupId;
+    if (!kitchenGroupId) return;
+    const instanceIds = instances.filter((i) => i.kitchenGroupId === kitchenGroupId).map((i) => i.id);
+    const name = S.kitchenCtx.name || "Kuchyňa";
+    const next = { id: kitchenGroupId, name, ctx: structuredClone(S.kitchenCtx), instanceIds };
+    const idx = S.kitchenGroups.findIndex((g) => g.id === kitchenGroupId);
+    if (idx >= 0) S.kitchenGroups[idx] = next;
+    else S.kitchenGroups.push(next);
+    rebuildKitchenGroupPickMesh(kitchenGroupId);
+    setSelectedKitchenGroup(kitchenGroupId);
+    S.activeKitchenGroupId = null;
+  };
+
+  const discardActiveKitchenGroup = () => {
+    const kitchenGroupId = S.activeKitchenGroupId;
+    if (!kitchenGroupId) return;
+    const existed = S.kitchenGroups.some((g) => g.id === kitchenGroupId);
+    if (!existed) {
+      for (const inst of instances) {
+        if (inst.kitchenGroupId === kitchenGroupId) inst.kitchenGroupId = null;
+      }
+    }
+    S.activeKitchenGroupId = null;
+  };
+
+  const enterKitchenModeForGroup = (kitchenGroupId: string) => {
+    const g = S.kitchenGroups.find((x) => x.id === kitchenGroupId) ?? null;
+    if (!g) return;
+    ensureLayoutMode();
+    S.kitchenCtx = resolveContext(structuredClone(g.ctx));
+    S.activeKitchenGroupId = kitchenGroupId;
+    enterKitchenMode(S, kitchenHelpers);
+  };
+
   const kitchenHelpers: KitchenModeHelpers = {
     ribbonEl: args.ribbonEl,
     onModuleAdd: (type) => {
@@ -4402,7 +4520,9 @@ export function startApp(args: AppArgs) {
     cancelPlacement: () => cancelPlacement(S, placementHelpers),
     setToolSelect,
     mountProps,
-    applyKitchenContextToAllInstances
+    applyKitchenContextToAllInstances,
+    onFinish: () => commitActiveKitchenGroup(),
+    onDiscard: () => discardActiveKitchenGroup()
   };
 
   const g1 = tb.addGroup();
@@ -4506,6 +4626,10 @@ export function startApp(args: AppArgs) {
     iconSvg: I_CABINET,
     onClick: () => {
       ensureLayoutMode();
+      const name = window.prompt("Názov kuchyne:", `Kuchyňa ${kitchenGroupCounter}`);
+      if (!name) return;
+      S.kitchenCtx.name = name;
+      S.activeKitchenGroupId = `kg${kitchenGroupCounter++}`;
       enterKitchenMode(S, kitchenHelpers);
     }
   });
@@ -4897,7 +5021,7 @@ export function startApp(args: AppArgs) {
     outline.name = `outline_${id}`;
     root.add(outline);
 
-    const inst: LayoutInstance = { id, params: nextParams, root, module, localBox, pick, outline };
+    const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, root, module, localBox, pick, outline };
     ensurePickAndOutline(inst);
     return inst;
   }
@@ -4919,7 +5043,10 @@ export function startApp(args: AppArgs) {
   }
 
   function applyKitchenContextToAllInstances() {
+    const targetGroupId = S.activeKitchenGroupId;
+    if (!targetGroupId) return;
     for (const inst of instances) {
+      if (inst.kitchenGroupId !== targetGroupId) continue;
       inst.params.depth = S.kitchenCtx.moduleDepthMm;
       if (inst.params.type !== "fridge_tall" && inst.params.type !== "microwave_oven_tall") {
         inst.params.height = S.kitchenCtx.moduleHeightMm;
@@ -4949,7 +5076,18 @@ export function startApp(args: AppArgs) {
     function setSelectedModule(id: string | null) {
       if (layoutTool !== "wall") layoutTool = "select";
       if (id && pinnedInstanceIds.has(id)) id = null;
+      if (id) {
+        const inst = findInstance(id);
+        if (inst?.kitchenGroupId) {
+          const allow = S.kitchenEditMode && S.activeKitchenGroupId === inst.kitchenGroupId;
+          if (!allow) {
+            setSelectedKitchenGroup(inst.kitchenGroupId);
+            return;
+          }
+        }
+      }
       selectedKind = id ? "module" : null;
+      selectedKitchenGroupId = null;
       selectedInstanceId = id;
       selectedInstanceIds.clear();
       if (id) selectedInstanceIds.add(id);
@@ -4957,6 +5095,12 @@ export function startApp(args: AppArgs) {
       selectedWallIds.clear();
       selectedDimensionId = null;
       setInstanceSelected(id);
+      if (selectedKitchenGroupBox) {
+        scene.remove(selectedKitchenGroupBox);
+        selectedKitchenGroupBox.geometry.dispose();
+        (selectedKitchenGroupBox.material as THREE.Material).dispose();
+        selectedKitchenGroupBox = null;
+      }
       if (selectedUnderlayBox) {
         scene.remove(selectedUnderlayBox);
         selectedUnderlayBox.geometry.dispose();
@@ -4968,9 +5112,44 @@ export function startApp(args: AppArgs) {
       mountProps();
     }
 
+  function setSelectedKitchenGroup(id: string | null) {
+    if (layoutTool !== "wall") layoutTool = "select";
+    selectedKind = id ? "kitchenGroup" : null;
+    selectedKitchenGroupId = id;
+    selectedInstanceId = null;
+    selectedInstanceIds.clear();
+    selectedWallId = null;
+    selectedWallIds.clear();
+    selectedDimensionId = null;
+    setInstanceSelected(null);
+    if (selectedUnderlayBox) {
+      scene.remove(selectedUnderlayBox);
+      selectedUnderlayBox.geometry.dispose();
+      (selectedUnderlayBox.material as THREE.Material).dispose();
+      selectedUnderlayBox = null;
+    }
+    if (selectedKitchenGroupBox) {
+      scene.remove(selectedKitchenGroupBox);
+      selectedKitchenGroupBox.geometry.dispose();
+      (selectedKitchenGroupBox.material as THREE.Material).dispose();
+      selectedKitchenGroupBox = null;
+    }
+    if (id) {
+      const mesh = kitchenGroupPickMeshes.get(id) ?? null;
+      if (mesh) {
+        selectedKitchenGroupBox = new THREE.BoxHelper(mesh, 0xf59e0b);
+        selectedKitchenGroupBox.name = "kitchenGroupSelectionBox";
+        scene.add(selectedKitchenGroupBox);
+      }
+    }
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    mountProps();
+  }
+
   function setSelectedWindow() {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = "window";
+    selectedKitchenGroupId = null;
     selectedWallId = null;
     selectedDimensionId = null;
     setInstanceSelected(null);
@@ -4988,6 +5167,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     if (!underlayMesh.visible || underlayState.pinned) return;
     selectedKind = "underlay";
+    selectedKitchenGroupId = null;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
@@ -4999,6 +5179,12 @@ export function startApp(args: AppArgs) {
       selectedWallBox.geometry.dispose();
       (selectedWallBox.material as THREE.Material).dispose();
       selectedWallBox = null;
+    }
+    if (selectedKitchenGroupBox) {
+      scene.remove(selectedKitchenGroupBox);
+      selectedKitchenGroupBox.geometry.dispose();
+      (selectedKitchenGroupBox.material as THREE.Material).dispose();
+      selectedKitchenGroupBox = null;
     }
     if (selectedUnderlayBox) {
       scene.remove(selectedUnderlayBox);
@@ -5015,12 +5201,19 @@ export function startApp(args: AppArgs) {
   function setSelectedDimension(id: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = id ? "dimension" : null;
+    selectedKitchenGroupId = null;
     selectedDimensionId = id;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
     selectedInstanceIds.clear();
     setInstanceSelected(null);
+    if (selectedKitchenGroupBox) {
+      scene.remove(selectedKitchenGroupBox);
+      selectedKitchenGroupBox.geometry.dispose();
+      (selectedKitchenGroupBox.material as THREE.Material).dispose();
+      selectedKitchenGroupBox = null;
+    }
     if (selectedWallBox) {
       scene.remove(selectedWallBox);
       selectedWallBox.geometry.dispose();
@@ -5043,12 +5236,19 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     if (id && pinnedWallIds.has(id)) id = null;
     selectedKind = id ? "wall" : null;
+    selectedKitchenGroupId = null;
     selectedWallId = id;
     selectedWallIds.clear();
     if (id) selectedWallIds.add(id);
     setInstanceSelected(null);
     selectedInstanceIds.clear();
     selectedDimensionId = null;
+    if (selectedKitchenGroupBox) {
+      scene.remove(selectedKitchenGroupBox);
+      selectedKitchenGroupBox.geometry.dispose();
+      (selectedKitchenGroupBox.material as THREE.Material).dispose();
+      selectedKitchenGroupBox = null;
+    }
     if (selectedUnderlayBox) {
       scene.remove(selectedUnderlayBox);
       selectedUnderlayBox.geometry.dispose();
@@ -6235,12 +6435,25 @@ export function startApp(args: AppArgs) {
 
   // Quick edit dimension value (double click)
   renderer.domElement.addEventListener("dblclick", (ev) => {
-    if (mode !== "layout" || viewMode !== "2d") return;
+    if (mode !== "layout") return;
     const rect = renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
     pointerNdc.set(x, y);
     raycaster.setFromCamera(pointerNdc, cam());
+
+    if (!S.kitchenEditMode) {
+      const groupPicks = Array.from(kitchenGroupPickMeshes.values());
+      const groupHit = raycaster.intersectObjects(groupPicks, false)[0]?.object as THREE.Mesh | undefined;
+      const kgId = (groupHit?.userData?.kitchenGroupId as string | undefined) ?? null;
+      if (kgId) {
+        enterKitchenModeForGroup(kgId);
+        ev.preventDefault();
+        return;
+      }
+    }
+
+    if (viewMode !== "2d") return;
     const picks = dimensions.map((d) => d.pick);
     const hit = raycaster.intersectObjects(picks, false)[0]?.object as THREE.Mesh | undefined;
     const dimId = (hit?.userData?.dimensionId as string | undefined) ?? null;
@@ -6855,7 +7068,14 @@ export function startApp(args: AppArgs) {
         }
       }
 
-      const picks = instances.map((i) => i.pick);
+      const picks: THREE.Object3D[] = [];
+      if (!S.kitchenEditMode) {
+        for (const m of kitchenGroupPickMeshes.values()) picks.push(m);
+      }
+      const selectableInstances = S.kitchenEditMode && S.activeKitchenGroupId
+        ? instances.filter((i) => i.kitchenGroupId === S.activeKitchenGroupId)
+        : instances;
+      for (const i of selectableInstances) picks.push(i.pick);
       if (windowInst) picks.push(windowInst.pick);
       for (const w of walls) picks.push(w.mesh);
       for (const d of dimensions) picks.push(d.pick);
@@ -6912,6 +7132,19 @@ export function startApp(args: AppArgs) {
         return;
       }
 
+      if (kind === "kitchenGroup") {
+        const kgId = (first?.userData?.kitchenGroupId as string | undefined) ?? null;
+        if (!kgId) return;
+        if (marquee.pending && marquee.pointerId === ev.pointerId) {
+          marquee.hitSomething = true;
+          marquee.pending = false;
+          marquee.active = false;
+          marqueeEl.style.display = "none";
+        }
+        setSelectedKitchenGroup(kgId);
+        return;
+      }
+
       const id = (first?.userData?.instanceId as string | undefined) ?? null;
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       if (kind === "wall") {
@@ -6958,6 +7191,17 @@ export function startApp(args: AppArgs) {
         setSelectedModule(null);
         clearWindowLightIfMissing();
         return;
+      }
+
+      if (id) {
+        const inst = findInstance(id);
+        if (inst?.kitchenGroupId) {
+          const allow = S.kitchenEditMode && S.activeKitchenGroupId === inst.kitchenGroupId;
+          if (!allow) {
+            setSelectedKitchenGroup(inst.kitchenGroupId);
+            return;
+          }
+        }
       }
 
       const inst = findInstance(id);
