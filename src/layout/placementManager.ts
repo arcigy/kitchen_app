@@ -229,6 +229,13 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
       nextParams = makeDefaultDrawerLowParams();
   }
 
+  // Apply kitchen context defaults immediately for placement.
+  // (Keep tall cabinet heights; only unify depth there.)
+  nextParams.depth = S.kitchenCtx.moduleDepthMm;
+  if (nextParams.type !== "fridge_tall" && nextParams.type !== "microwave_oven_tall") {
+    nextParams.height = S.kitchenCtx.moduleHeightMm;
+  }
+
   if ("doorOpen" in nextParams) (nextParams as any).doorOpen = false;
 
   S.placement.active = true;

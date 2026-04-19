@@ -8,6 +8,8 @@ type PanelButtonArgs = ToolButtonArgs & {
   buildPanel: (panelEl: HTMLElement, close: () => void) => void;
 };
 
+export type TopbarMode = "standard" | "kitchen";
+
 export function createTopbar(container: HTMLElement) {
   container.innerHTML = "";
   container.style.position = "relative";
@@ -16,12 +18,18 @@ export function createTopbar(container: HTMLElement) {
   row.className = "topbar";
   container.appendChild(row);
 
+  const kitchenRow = document.createElement("div");
+  kitchenRow.className = "topbar";
+  kitchenRow.hidden = true;
+  container.appendChild(kitchenRow);
+
   const panelsHost = document.createElement("div");
   panelsHost.className = "topbar-panels-host";
   container.appendChild(panelsHost);
 
   let openPanelEl: HTMLDivElement | null = null;
   let openOwnerBtn: HTMLButtonElement | null = null;
+  let mode: TopbarMode = "standard";
 
   const closePanels = () => {
     if (openPanelEl) openPanelEl.hidden = true;
@@ -46,10 +54,11 @@ export function createTopbar(container: HTMLElement) {
   window.addEventListener("pointerdown", onDocPointerDown);
   window.addEventListener("keydown", onKeyDown);
 
-  const addGroup = (title?: string) => {
+  const addGroup = (title?: string, opts?: { mode?: TopbarMode }) => {
+    const hostRow = opts?.mode === "kitchen" ? kitchenRow : row;
     const g = document.createElement("div");
     g.className = "topbar-group";
-    row.appendChild(g);
+    hostRow.appendChild(g);
 
     if (title) {
       const t = document.createElement("div");
@@ -62,6 +71,13 @@ export function createTopbar(container: HTMLElement) {
     tools.className = "topbar-tools";
     g.appendChild(tools);
     return tools;
+  };
+
+  const addSpacer = (opts?: { mode?: TopbarMode }) => {
+    const hostRow = opts?.mode === "kitchen" ? kitchenRow : row;
+    const s = document.createElement("div");
+    s.style.flex = "1 1 auto";
+    hostRow.appendChild(s);
   };
 
   const toolButton = (toolsEl: HTMLElement, args: ToolButtonArgs) => {
@@ -114,6 +130,15 @@ export function createTopbar(container: HTMLElement) {
     return { btn, panel };
   };
 
-  return { addGroup, toolButton, panelButton, closePanels };
+  const setMode = (next: TopbarMode) => {
+    if (mode === next) return;
+    mode = next;
+    closePanels();
+    row.hidden = mode === "kitchen";
+    kitchenRow.hidden = mode !== "kitchen";
+    panelsHost.hidden = mode === "kitchen";
+  };
+
+  return { addGroup, addSpacer, toolButton, panelButton, closePanels, setMode };
 }
 
