@@ -54,6 +54,7 @@ export type LayoutSnapshot = {
 
 export type WallParams = {
   thicknessMm: number;
+  heightMm: number;
   materialId: string;
   justification?: "center" | "interior" | "exterior";
   exteriorSign?: 1 | -1;
@@ -64,6 +65,7 @@ export type WallParams = {
 export type WallInstance = {
   id: string;
   params: WallParams;
+  heightMm: number;
   root: THREE.Group;
   mesh: THREE.Mesh;
 };

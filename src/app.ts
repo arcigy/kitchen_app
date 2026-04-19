@@ -543,6 +543,7 @@ export function startApp(args: AppArgs) {
 
   type WallParams = {
     thicknessMm: number;
+    heightMm: number;
     materialId: string;
     justification?: "center" | "interior" | "exterior";
     // +1 => exterior is left of A->B, -1 => exterior is right of A->B (Revit-like).
@@ -554,6 +555,7 @@ export function startApp(args: AppArgs) {
   type WallInstance = {
     id: string;
     params: WallParams;
+    heightMm: number;
     root: THREE.Group;
     mesh: THREE.Mesh;
   };
@@ -563,7 +565,7 @@ export function startApp(args: AppArgs) {
   const wallJoinTolMm = 25;
   const wallDefault = {
     thicknessMm: 150,
-    heightM: 3,
+    heightMm: 2600,
     materialId: "default",
     justification: "center" as "center" | "interior" | "exterior",
     exteriorSign: 1 as 1 | -1
@@ -1756,7 +1758,13 @@ export function startApp(args: AppArgs) {
     );
   }
 
-  function updateWallMesh(mesh: THREE.Mesh, a: THREE.Vector3 | null, b: THREE.Vector3 | null, thicknessMm: number) {
+  function updateWallMesh(
+    mesh: THREE.Mesh,
+    a: THREE.Vector3 | null,
+    b: THREE.Vector3 | null,
+    thicknessMm: number,
+    heightMm = wallDefault.heightMm
+  ) {
     const aa = a ?? new THREE.Vector3(0, 0, 0);
     const bb = b ?? aa.clone();
     const dx = bb.x - aa.x;
@@ -1767,7 +1775,7 @@ export function startApp(args: AppArgs) {
     const rotY = -Math.atan2(dz, dx);
 
     const thickM = Math.max(0.01, thicknessMm / 1000);
-    const h = wallDefault.heightM;
+    const h = Math.max(1, heightMm) / 1000;
 
     mesh.geometry.dispose();
     mesh.geometry = new THREE.BoxGeometry(len, h, thickM);
@@ -1926,12 +1934,20 @@ export function startApp(args: AppArgs) {
     updateAllDimensions(S, dimensionHelpers);
   }
 
-  function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
+  function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, heightMm = wallDefault.heightMm) {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xc6cbd6
     });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, wallDefault.heightM, thicknessMm / 1000), mat);
-    updateWallMeshWithJustification(mesh, a, b, thicknessMm, wallDefault.justification, wallDefault.exteriorSign);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, Math.max(1, heightMm) / 1000, thicknessMm / 1000), mat);
+    updateWallMeshWithJustification(
+      mesh,
+      a,
+      b,
+      thicknessMm,
+      wallDefault.justification,
+      wallDefault.exteriorSign,
+      heightMm
+    );
     return mesh;
   }
 
@@ -1963,12 +1979,13 @@ export function startApp(args: AppArgs) {
     refB: THREE.Vector3 | null,
     thicknessMm: number,
     justification: "center" | "interior" | "exterior",
-    exteriorSign: 1 | -1
+    exteriorSign: 1 | -1,
+    heightMm = wallDefault.heightMm
   ) {
     const a = refA ?? new THREE.Vector3(0, 0, 0);
     const b = refB ?? a.clone();
     const center = wallRefLineToCenterLine(a, b, thicknessMm, justification, exteriorSign);
-    updateWallMesh(mesh, center.a, center.b, thicknessMm);
+    updateWallMesh(mesh, center.a, center.b, thicknessMm, heightMm);
   }
 
   function makeWallPreviewMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
@@ -1980,6 +1997,8 @@ export function startApp(args: AppArgs) {
   }
 
   function rebuildWall(w: WallInstance) {
+    w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
+    w.heightMm = w.params.heightMm;
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
     const just = w.params.justification ?? "center";
@@ -1989,7 +2008,7 @@ export function startApp(args: AppArgs) {
     // This does not change stored axis endpoints (aMm/bMm); only the rendered mesh.
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-8) {
-      updateWallMesh(w.mesh, a, b, w.params.thicknessMm);
+      updateWallMesh(w.mesh, a, b, w.params.thicknessMm, w.params.heightMm);
       return;
     }
     d.normalize();
@@ -2046,7 +2065,7 @@ export function startApp(args: AppArgs) {
 
     const aExt = a.clone().addScaledVector(d, -extA);
     const bExt = b.clone().addScaledVector(d, extB);
-    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm);
+    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm);
   }
 
   function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
@@ -2064,6 +2083,7 @@ export function startApp(args: AppArgs) {
     const bMm = toMmPoint(b);
     const params: WallParams = {
       thicknessMm: Math.max(10, Math.round(thicknessMm)),
+      heightMm: wallDefault.heightMm,
       materialId: wallDefault.materialId,
       justification: wallDefault.justification,
       exteriorSign: wallDefault.exteriorSign,
@@ -2071,7 +2091,7 @@ export function startApp(args: AppArgs) {
       bMm
     };
 
-    const inst: WallInstance = { id, params, root, mesh };
+    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh };
     layoutRoot.add(root);
     walls.push(inst);
     rebuildWall(inst);
@@ -4030,22 +4050,88 @@ export function startApp(args: AppArgs) {
     s.appendChild(cur);
   };
 
-  const mountWallProps = (w: WallInstance) => {
-    props.setTitle(`Wall (${w.id})`);
+  const mountWallProps = (w?: WallInstance) => {
+    const selectedWalls =
+      selectedWallIds.size > 1
+        ? [...selectedWallIds]
+            .map((id) => walls.find((wall) => wall.id === id))
+            .filter((wall): wall is WallInstance => Boolean(wall))
+        : w
+          ? [w]
+          : [];
+    if (selectedWalls.length === 0) return showNoProps();
+
+    const isMulti = selectedWalls.length > 1;
+    const firstWall = selectedWalls[0];
+    props.setTitle(isMulti ? `Steny (${selectedWalls.length})` : `Stena (${firstWall.id})`);
     const s = props.section();
+
+    const multiVal = <K extends keyof WallParams>(items: WallInstance[], key: K) => {
+      const first = items[0].params[key];
+      const mixed = items.some((item) => item.params[key] !== first);
+      return { value: mixed ? null : first, mixed };
+    };
+
+    const applyToSelectedWalls = (fn: (wall: WallInstance) => void) => {
+      for (const wall of selectedWalls) fn(wall);
+      for (const wall of walls) rebuildWall(wall);
+      rebuildWallPlanMesh();
+      commitHistory(S);
+      mountProps();
+    };
+
+    const thickness = multiVal(selectedWalls, "thicknessMm");
     const th = document.createElement("input");
     th.type = "number";
     th.step = "1";
-    th.value = String(w.params.thicknessMm);
-    props.row(s, "Thickness (mm)", th);
+    th.placeholder = thickness.mixed ? "(rôzne)" : "";
+    th.value = thickness.mixed ? "" : String(thickness.value);
+    props.row(s, "Hrúbka (mm)", th);
+
+    const height = multiVal(selectedWalls, "heightMm");
+    const heightInput = document.createElement("input");
+    heightInput.type = "number";
+    heightInput.step = "1";
+    heightInput.placeholder = height.mixed ? "(rôzne)" : "";
+    heightInput.value = height.mixed ? "" : String(height.value);
+    props.row(s, "Výška (mm)", heightInput);
+
+    const justification = multiVal(selectedWalls, "justification");
     const just = document.createElement("select");
     just.innerHTML = `
+      ${justification.mixed ? `<option value="">(rôzne)</option>` : ""}
       <option value="center">Center</option>
       <option value="interior">Finish face: interior</option>
       <option value="exterior">Finish face: exterior</option>
     `;
-    just.value = w.params.justification ?? "center";
+    just.value = justification.mixed ? "" : String(justification.value ?? "center");
     props.row(s, "Justification", just);
+
+    th.addEventListener("change", () => {
+      const next = Number(th.value);
+      if (!Number.isFinite(next)) return;
+      applyToSelectedWalls((wall) => {
+        wall.params.thicknessMm = Math.max(10, Math.round(next));
+      });
+    });
+    heightInput.addEventListener("change", () => {
+      const next = Number(heightInput.value);
+      if (!Number.isFinite(next)) return;
+      applyToSelectedWalls((wall) => {
+        wall.params.heightMm = Math.max(1, Math.round(next));
+        wall.heightMm = wall.params.heightMm;
+      });
+    });
+    just.addEventListener("change", () => {
+      if (!just.value) return;
+      applyToSelectedWalls((wall) => {
+        wall.params.justification =
+          just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
+      });
+    });
+
+    if (isMulti) return;
+
     const flip = document.createElement("button");
     flip.type = "button";
     flip.textContent = "Flip exterior";
@@ -4053,34 +4139,23 @@ export function startApp(args: AppArgs) {
     props.row(s, "Exterior", flip);
     const mat = document.createElement("select");
     mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = w.params.materialId;
+    mat.value = firstWall.params.materialId;
     props.row(s, "Material", mat);
     const len = document.createElement("div");
     len.className = "muted";
-    const dx = w.params.bMm.x - w.params.aMm.x;
-    const dz = w.params.bMm.z - w.params.aMm.z;
+    const dx = firstWall.params.bMm.x - firstWall.params.aMm.x;
+    const dz = firstWall.params.bMm.z - firstWall.params.aMm.z;
     len.textContent = `Length: ${Math.round(Math.hypot(dx, dz))} mm`;
     s.appendChild(len);
-    th.addEventListener("change", () => {
-      w.params.thicknessMm = Math.max(10, Number(th.value) || w.params.thicknessMm);
-      th.value = String(w.params.thicknessMm);
-      for (const ww of walls) rebuildWall(ww);
-      rebuildWallPlanMesh();
-    });
-    just.addEventListener("change", () => {
-      w.params.justification = just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
-      for (const ww of walls) rebuildWall(ww);
-      rebuildWallPlanMesh();
-    });
     flip.addEventListener("click", () => {
-      w.params.exteriorSign = (w.params.exteriorSign ?? 1) === 1 ? -1 : 1;
-      for (const ww of walls) rebuildWall(ww);
-      rebuildWallPlanMesh();
-      mountProps();
+      firstWall.params.exteriorSign = (firstWall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
+      applyToSelectedWalls((wall) => {
+        if (wall.id === firstWall.id) wall.params.exteriorSign = firstWall.params.exteriorSign;
+      });
     });
     mat.addEventListener("change", () => {
-      w.params.materialId = mat.value || "default";
-      // only one material for now; keep hook for later
+      firstWall.params.materialId = mat.value || "default";
+      commitHistory(S);
     });
   };
 
@@ -4456,6 +4531,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool === "dimension") return mountDimensionToolProps();
     if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) return;
     if (selectedKind === "underlay") return mountUnderlayProps();
+    if (selectedWallIds.size > 1 && selectedInstanceIds.size === 0) return mountWallProps();
     if (selectedWallIds.size + selectedInstanceIds.size > 1) {
       args.propertiesEl.innerHTML = "";
       const t = document.createElement("div");

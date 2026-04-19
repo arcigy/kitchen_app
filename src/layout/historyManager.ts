@@ -10,7 +10,7 @@ export interface HistoryHelpers {
   disposeDimensionInstance: (d: DimensionInstance) => void;
   disposeObject3D: (obj: THREE.Object3D) => void;
   createInstance: (params: ModuleParams, opts: { id?: string }) => any; // Return type to match your LayoutInstance
-  createWallMesh: (a: THREE.Vector3, b: THREE.Vector3, thickness: number) => THREE.Mesh;
+  createWallMesh: (a: THREE.Vector3, b: THREE.Vector3, thickness: number, heightMm?: number) => THREE.Mesh;
   rebuildWall: (inst: WallInstance) => void;
   createDimension: (a: any, b: any, offset: number, opts: { id?: string; skipHistory?: boolean }) => void;
   rebuildWallPlanMesh: () => void;
@@ -100,12 +100,14 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     root.name = `wall_${id}`;
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-    const mesh = helpers.createWallMesh(refA, refB, w.params.thicknessMm);
+    const params = JSON.parse(JSON.stringify(w.params)) as WallParams;
+    params.heightMm = Math.max(1, Math.round(params.heightMm ?? 2600));
+    const mesh = helpers.createWallMesh(refA, refB, params.thicknessMm, params.heightMm);
     mesh.name = `wallMesh_${id}`;
     mesh.userData.kind = "wall";
     mesh.userData.wallId = id;
     root.add(mesh);
-    const inst: WallInstance = { id, params: JSON.parse(JSON.stringify(w.params)) as WallParams, root, mesh };
+    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh };
     helpers.layoutRoot.add(root);
     S.walls.push(inst);
     helpers.rebuildWall(inst);
