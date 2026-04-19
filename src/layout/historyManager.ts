@@ -27,7 +27,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
     .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.thicknessMm}:${(x.params as any).justification ?? "center"}:${x.params.exteriorSign ?? 1}`)
     .join("|");
   const mods = (s.instances ?? [])
-    .map((m) => `${m.id}:${m.params?.type ?? "?"}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`)
+    .map((m) => `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`)
     .join("|");
   const dims = (s.dimensions ?? [])
     .map((d) => `${d.id}:${d.a.wallId}:${d.a.wallLine}:${Math.round(d.a.t * 1000)}-${d.b.wallId}:${d.b.wallLine}:${Math.round(d.b.t * 1000)}:${Math.round(d.offsetM * 1000)}`)
@@ -85,6 +85,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   if (snap.instances && snap.instances.length > 0) {
     for (const m of snap.instances) {
       const inst = helpers.createInstance(JSON.parse(JSON.stringify(m.params)) as ModuleParams, { id: m.id });
+      inst.kitchenGroupId = m.kitchenGroupId ?? null;
       inst.root.position.set(m.positionMm.x / 1000, 0, m.positionMm.z / 1000);
       inst.root.rotation.y = ((m.rotationYDeg ?? 0) * Math.PI) / 180;
       helpers.layoutRoot.add(inst.root);
@@ -147,6 +148,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
     instances: S.instances.map((i) => ({
       id: i.id,
       params: JSON.parse(JSON.stringify(i.params)) as ModuleParams,
+      kitchenGroupId: i.kitchenGroupId ?? null,
       positionMm: { x: Math.round(i.root.position.x * 1000), z: Math.round(i.root.position.z * 1000) },
       rotationYDeg: (i.root.rotation.y * 180) / Math.PI
     })),

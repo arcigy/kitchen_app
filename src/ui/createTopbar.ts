@@ -4,12 +4,6 @@ type ToolButtonArgs = {
   onClick?: () => void;
 };
 
-type PanelButtonArgs = ToolButtonArgs & {
-  buildPanel: (panelEl: HTMLElement, close: () => void) => void;
-};
-
-export type TopbarMode = "standard" | "kitchen";
-
 export function createTopbar(container: HTMLElement) {
   container.innerHTML = "";
   container.style.position = "relative";
@@ -18,47 +12,14 @@ export function createTopbar(container: HTMLElement) {
   row.className = "topbar";
   container.appendChild(row);
 
-  const kitchenRow = document.createElement("div");
-  kitchenRow.className = "topbar";
-  kitchenRow.hidden = true;
-  container.appendChild(kitchenRow);
-
-  const panelsHost = document.createElement("div");
-  panelsHost.className = "topbar-panels-host";
-  container.appendChild(panelsHost);
-
-  let openPanelEl: HTMLDivElement | null = null;
-  let openOwnerBtn: HTMLButtonElement | null = null;
-  let mode: TopbarMode = "standard";
-
-  const closePanels = () => {
-    if (openPanelEl) openPanelEl.hidden = true;
-    if (openOwnerBtn) openOwnerBtn.classList.remove("active");
-    openPanelEl = null;
-    openOwnerBtn = null;
+  const clear = () => {
+    row.innerHTML = "";
   };
 
-  const onDocPointerDown = (ev: PointerEvent) => {
-    if (!openPanelEl) return;
-    const t = ev.target as Node | null;
-    if (!t) return;
-    if (openPanelEl.contains(t)) return;
-    if (openOwnerBtn && openOwnerBtn.contains(t)) return;
-    closePanels();
-  };
-
-  const onKeyDown = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") closePanels();
-  };
-
-  window.addEventListener("pointerdown", onDocPointerDown);
-  window.addEventListener("keydown", onKeyDown);
-
-  const addGroup = (title?: string, opts?: { mode?: TopbarMode }) => {
-    const hostRow = opts?.mode === "kitchen" ? kitchenRow : row;
+  const addGroup = (title?: string) => {
     const g = document.createElement("div");
     g.className = "topbar-group";
-    hostRow.appendChild(g);
+    row.appendChild(g);
 
     if (title) {
       const t = document.createElement("div");
@@ -73,11 +34,10 @@ export function createTopbar(container: HTMLElement) {
     return tools;
   };
 
-  const addSpacer = (opts?: { mode?: TopbarMode }) => {
-    const hostRow = opts?.mode === "kitchen" ? kitchenRow : row;
+  const addSpacer = () => {
     const s = document.createElement("div");
     s.style.flex = "1 1 auto";
-    hostRow.appendChild(s);
+    row.appendChild(s);
   };
 
   const toolButton = (toolsEl: HTMLElement, args: ToolButtonArgs) => {
@@ -97,48 +57,6 @@ export function createTopbar(container: HTMLElement) {
     return btn;
   };
 
-  const panelButton = (toolsEl: HTMLElement, args: PanelButtonArgs) => {
-    const panel = document.createElement("div");
-    panel.className = "topbar-panel";
-    panel.hidden = true;
-    panelsHost.appendChild(panel);
-
-    const btn = toolButton(toolsEl, {
-      title: args.title,
-      iconSvg: args.iconSvg,
-      onClick: () => {
-        if (openPanelEl === panel) {
-          closePanels();
-          return;
-        }
-
-        closePanels();
-        panel.innerHTML = "";
-        args.buildPanel(panel, closePanels);
-        panel.hidden = false;
-        btn.classList.add("active");
-        openPanelEl = panel;
-        openOwnerBtn = btn;
-
-        const b = btn.getBoundingClientRect();
-        const c = container.getBoundingClientRect();
-        const left = Math.max(8, Math.min(c.width - 320, b.left - c.left));
-        panel.style.left = `${left}px`;
-      }
-    });
-
-    return { btn, panel };
-  };
-
-  const setMode = (next: TopbarMode) => {
-    if (mode === next) return;
-    mode = next;
-    closePanels();
-    row.hidden = mode === "kitchen";
-    kitchenRow.hidden = mode !== "kitchen";
-    panelsHost.hidden = mode === "kitchen";
-  };
-
-  return { addGroup, addSpacer, toolButton, panelButton, closePanels, setMode };
+  return { clear, addGroup, addSpacer, toolButton };
 }
 

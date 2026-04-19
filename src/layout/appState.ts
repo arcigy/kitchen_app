@@ -33,6 +33,7 @@ export type LayoutSnapshot = {
   instances: Array<{
     id: string;
     params: ModuleParams;
+    kitchenGroupId: string | null;
     positionMm: { x: number; z: number };
     rotationYDeg: number;
   }>;
@@ -98,11 +99,19 @@ export type DimensionInstance = {
 export type LayoutInstance = {
   id: string;
   params: ModuleParams;
+  kitchenGroupId: string | null;
   root: THREE.Group;
   module: THREE.Group;
   localBox: THREE.Box3;
   pick: THREE.Mesh;
   outline: THREE.Line;
+};
+
+export type KitchenGroup = {
+  id: string;
+  name: string;
+  ctx: KitchenContext;
+  instanceIds: string[];
 };
 
 export type AlignPickedLine = {
@@ -140,6 +149,8 @@ export interface AppState {
   params: ModuleParams;
   kitchenCtx: KitchenContext;
   kitchenEditMode: boolean;
+  activeKitchenGroupId: string | null;
+  kitchenGroups: KitchenGroup[];
 
   // Selection
   layoutTool: LayoutTool;
@@ -217,6 +228,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     params: defaultParams,
     kitchenCtx: resolveContext(makeDefaultKitchenContext()),
     kitchenEditMode: false,
+    activeKitchenGroupId: null,
+    kitchenGroups: [],
 
     layoutTool: "select",
     selectedKind: null,

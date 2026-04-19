@@ -111,6 +111,7 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   const nextParams = structuredClone(S.placement.params) as ModuleParams;
 
   const inst = helpers.createInstance(nextParams);
+  inst.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
   inst.root.position.copy(ghost.root.position);
   inst.root.rotation.y = ghost.root.rotation.y;
 
@@ -229,10 +230,8 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
       nextParams = makeDefaultDrawerLowParams();
   }
 
-  // Apply kitchen context defaults immediately for placement.
-  // (Keep tall cabinet heights; only unify depth there.)
-  nextParams.depth = S.kitchenCtx.moduleDepthMm;
-  if (nextParams.type !== "fridge_tall" && nextParams.type !== "microwave_oven_tall") {
+  if (S.kitchenEditMode && S.activeKitchenGroupId) {
+    nextParams.depth = S.kitchenCtx.moduleDepthMm;
     nextParams.height = S.kitchenCtx.moduleHeightMm;
   }
 
