@@ -77,9 +77,20 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   const g = S.placement.ghost;
   if (!g) return;
 
-  g.root.position.copy(helpers.applyWallConstraints(g, cursorWorld));
+  const placeWithBottomLeftAtCursor = () => {
+    g.root.position.copy(cursorWorld);
+    g.root.updateMatrixWorld(true);
+    const box = helpers.instanceWorldBox(g);
+    const desired = cursorWorld.clone();
+    desired.x += cursorWorld.x - box.min.x;
+    desired.z += cursorWorld.z - box.max.z;
+    g.root.position.copy(helpers.applyWallConstraints(g, desired));
+    g.root.updateMatrixWorld(true);
+  };
+
+  placeWithBottomLeftAtCursor();
   helpers.autoOrientModuleToRoomWallIfSnapped(g);
-  g.root.updateMatrixWorld(true);
+  placeWithBottomLeftAtCursor();
 
   const inRoom = helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g));
   const overlaps = helpers.anyOverlap(g, null) || helpers.moduleOverlapsWalls(g);
