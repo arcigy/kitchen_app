@@ -81,3 +81,43 @@ NEVER modify these without being explicitly asked:
 - src/model/cabinetTypes.ts (god-file � high risk)
 - src/geometry/buildModule.ts (dispatcher � affects all modules)
 - src/main.ts
+
+## Current refactor status (as of 2026-04-19)
+
+### Completed
+
+- src/data/materials.ts — MaterialDefinition, getMaterial, getAllMaterials
+- src/data/hardware.ts — HardwareDefinition, getHardware, getAllHardware
+- src/layout/kitchenContext.ts — KitchenContext, makeDefaultKitchenContext,
+  resolveContext, validateContext
+- src/layout/appState.ts — AppState interface with 143 fields, makeAppState()
+- src/layout/historyManager.ts — captureLayoutSnapshot, updateUndoRedoUi,
+  restoreLayoutSnapshot, commitHistory, undo, redo
+  All 31 call sites updated in app.ts. Ctrl+Z and Ctrl+Shift+Z working.
+
+### Next modules to extract from app.ts (in order)
+
+1. src/layout/placementManager.ts — cancelPlacement, rebuildGhost,
+   mountPlacementControls, commitPlacement, addInstance
+2. src/layout/dimensionManager.ts — all dimension functions
+3. src/layout/instanceManager.ts — createInstance, rebuildInstance,
+   deleteInstance, duplicateInstance
+4. src/layout/wallManager.ts — all wall functions
+5. src/layout/selectionManager.ts — all setSelected\* functions
+6. src/ui/panelManager.ts — all mountProps\* functions
+
+### Known issues
+
+- TS error count fluctuates between 62 and 91 — investigate before
+  next extraction
+- Placement mode ghost not visible in 2D view (known bug, deferred)
+- Reference point for module placement should be bottom-left (not center)
+
+### S and helpers pattern
+
+app.ts uses:
+
+- S: AppState — declared with let at line ~855, references local state
+- helpers: HistoryHelpers — declared with let helpers!: HistoryHelpers
+  early, assigned after all functions defined (~line 4526)
+- This pattern must be replicated for each new manager module

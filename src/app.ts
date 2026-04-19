@@ -851,6 +851,7 @@ export function startApp(args: AppArgs) {
 
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
+  let helpers!: HistoryHelpers;
 
   const S: AppState = {
     mode,
@@ -4522,7 +4523,7 @@ export function startApp(args: AppArgs) {
     showNoProps();
   };
 
-  const helpers: HistoryHelpers = {
+  helpers = {
     setSelectedWall,
     setSelectedModule,
     setSelectedDimension,
