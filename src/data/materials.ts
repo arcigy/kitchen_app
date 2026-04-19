@@ -7,6 +7,8 @@ export interface MaterialDefinition {
 
 export type BoardMaterialPresetId = "DTD1" | "DTD2" | "DTD3" | "MDF" | "DVD" | "DTD16"
 
+export const BOARD_MATERIAL_PRESET_IDS: BoardMaterialPresetId[] = ["DTD1", "DTD2", "DTD3", "MDF", "DVD", "DTD16"]
+
 export type BoardMaterialPreset = {
   id: BoardMaterialPresetId
   label: string
@@ -53,4 +55,8 @@ export function isBoardMaterialPresetId(value: unknown): value is BoardMaterialP
 
 export function getBoardMaterialPreset(id: BoardMaterialPresetId): BoardMaterialPreset {
   return boardMaterialPresets[id]
+}
+
+export function getBoardMaterialPresetLabel(id: BoardMaterialPresetId): string {
+  return boardMaterialPresets[id].label
 }

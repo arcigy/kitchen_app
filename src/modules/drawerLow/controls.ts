@@ -152,6 +152,7 @@ export function createDrawerLowControls(
   heightCarcassWrap.appendChild(heightCarcass);
   grid.appendChild(heightCarcassWrap);
 
+  addNumber("worktopThicknessMm", "Worktop thickness (mm)", { min: 0, step: 1 });
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });
@@ -361,7 +362,7 @@ export function createDrawerLowControls(
     return Number.isFinite(n) ? n : fallback;
   };
 
-  const getWorktopT = () => Math.max(0, Math.round(args.getWorktopThicknessMm()));
+  const getWorktopT = () => Math.max(0, Math.round(params.worktopThicknessMm ?? args.getWorktopThicknessMm()));
   const isUnderWorktop = () => {
     if ((params as any).wallMounted === true) return false;
     return getWorktopT() > 0;
@@ -376,6 +377,11 @@ export function createDrawerLowControls(
   };
 
   const onInputsChanged = () => {
+    console.debug("[drawerLow:onInputsChanged]", {
+      drawerCount: params.drawerCount,
+      height: params.height,
+      autoFit: autoFit.checked
+    });
     for (const f of numberFields) {
       const current = params[f.key];
       if (typeof current !== "number") continue;

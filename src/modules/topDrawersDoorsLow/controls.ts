@@ -123,7 +123,7 @@ export function createTopDrawersDoorsLowControls(
     colorFields.push({ key, input });
   };
 
-  const getWorktopT = () => Math.max(0, Math.round(args.getWorktopThicknessMm()));
+const getWorktopT = () => Math.max(0, Math.round(params.worktopThicknessMm ?? args.getWorktopThicknessMm()));
   const isUnderWorktop = () => params.wallMounted !== true;
   const computeCarcassHeight = () => {
     if (!isUnderWorktop()) return params.height;
@@ -168,6 +168,7 @@ export function createTopDrawersDoorsLowControls(
   heightCarcassWrap.appendChild(heightCarcass);
   grid.appendChild(heightCarcassWrap);
 
+  addNumber("worktopThicknessMm", "Worktop thickness (mm)", { min: 0, step: 1 });
   addNumber("depth", "Depth (mm)", { min: 200, step: 1 });
   addNumber("boardThickness", "Board thickness (mm)", { min: 5, step: 1 });
   addNumber("backThickness", "Back thickness (mm)", { min: 3, step: 1 });

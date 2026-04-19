@@ -4,12 +4,17 @@ export type MaterialParams = {
   bodyKey: string; // later: pricing lookup key
   frontKey: string; // later: pricing lookup key
   drawerKey: string; // later: pricing lookup key
+  bodyPresetId: BoardMaterialPresetId;
+  frontPresetId: BoardMaterialPresetId;
+  drawerPresetId: BoardMaterialPresetId;
   bodyName?: string; // optional human-readable name (e.g. "Egger U999 ST2 18mm")
   frontName?: string;
   drawerName?: string;
   bodyColor: string; // "#RRGGBB"
   frontColor: string; // "#RRGGBB"
   drawerColor: string; // "#RRGGBB"
+  defaultTintColor?: string; // "#RRGGBB"
+  defaultTintStrength?: number; // 0..1
   bodyPbr?: {
     id: "wood_veneer_oak_7760_1k";
     rotationDeg?: 0 | 90 | 180 | 270;
@@ -31,6 +36,25 @@ export type MaterialParams = {
   partOverrides?: Record<string, BoardMaterialPresetId>;
 };
 
+export function makeDefaultMaterialParams(overrides: Partial<MaterialParams> = {}): MaterialParams {
+  return {
+    bodyKey: "carcass_default",
+    frontKey: "front_default",
+    drawerKey: "drawer_default",
+    bodyPresetId: "DTD1",
+    frontPresetId: "DTD2",
+    drawerPresetId: "DTD3",
+    bodyColor: "#b8bcc7",
+    frontColor: "#3a7bd5",
+    drawerColor: "#e1a45a",
+    defaultTintColor: "#ffffff",
+    defaultTintStrength: 0,
+    bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 },
+    ...overrides,
+    partOverrides: { ...(overrides.partOverrides ?? {}) }
+  };
+}
+
 type ShelfLayoutParams = {
   shelfCount: number; // compartments
   shelfThickness: number; // mm
@@ -45,6 +69,7 @@ export type DrawerLowParams = {
   type: "drawer_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -79,6 +104,7 @@ export type NestedDrawerLowParams = {
   type: "nested_drawer_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -218,6 +244,7 @@ export type FlapShelvesLowParams = {
   type: "flap_shelves_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -250,6 +277,7 @@ export type SwingShelvesLowParams = {
   type: "swing_shelves_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -285,6 +313,7 @@ export type TopDrawersDoorsLowParams = {
   type: "top_drawers_doors_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -337,6 +366,7 @@ export type OvenBaseLowParams = {
   type: "oven_base_low";
   width: number; // mm
   height: number; // mm
+  worktopThicknessMm: number; // mm
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
@@ -448,6 +478,7 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     type: "drawer_low",
     width: 800,
     height: 720,
+    worktopThicknessMm: 38,
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
@@ -475,16 +506,7 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     drawerBackReserveMm: 8,
     drawerCount: 3,
     drawerFrontHeights: [],
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 },
-      partOverrides: {}
-    }
+    materials: makeDefaultMaterialParams()
   };
   base.drawerFrontHeights = computeEqualDrawerFrontHeights(base);
   return base;
@@ -495,6 +517,7 @@ export function makeDefaultNestedDrawerLowParams(): NestedDrawerLowParams {
     type: "nested_drawer_low",
     width: 800,
     height: 720,
+    worktopThicknessMm: 38,
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
@@ -519,15 +542,7 @@ export function makeDefaultNestedDrawerLowParams(): NestedDrawerLowParams {
     drawerFrontHeights: [],
     innerDrawerDepth: 250,
     innerDrawerSideHeight: 55,
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams()
   };
   base.drawerFrontHeights = computeEqualNestedDrawerFrontHeights(base);
   return base;
@@ -564,15 +579,7 @@ export function makeDefaultShelvesParams(): ShelvesParams {
     hingeSide: "left",
     hingeTopOffsetMm: 110,
     hingeBottomOffsetMm: 110,
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_unused",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams({ drawerKey: "drawer_unused" })
   };
   base.shelfGaps = computeEqualShelfGaps(base);
   return base;
@@ -600,15 +607,7 @@ export function makeDefaultCornerShelfLowerParams(): CornerShelfLowerParams {
     hingeSideFrontX: "right",
     hingeTopOffsetMm: 110,
     hingeBottomOffsetMm: 110,
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_unused",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams({ drawerKey: "drawer_unused" })
   };
   base.shelfGaps = computeEqualShelfGaps(base);
   return base;
@@ -659,15 +658,7 @@ export function makeDefaultFridgeTallParams(): FridgeTallParams {
     fridgeDoorGapMm: 2,
     doorHandleOffsetFromSplitMm: 45,
 
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_unused",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams({ drawerKey: "drawer_unused" })
   };
 
   return base;
@@ -678,6 +669,7 @@ export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
     type: "flap_shelves_low",
     width: 800,
     height: 720,
+    worktopThicknessMm: 38,
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
@@ -696,14 +688,7 @@ export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
     shelfThickness: 18,
     shelfAutoFit: true,
     shelfGaps: [],
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a"
-    }
+    materials: makeDefaultMaterialParams()
   };
   base.shelfGaps = computeEqualShelfGaps(base);
   return base;
@@ -714,6 +699,7 @@ export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
     type: "swing_shelves_low",
     width: 800,
     height: 720,
+    worktopThicknessMm: 38,
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
@@ -734,14 +720,7 @@ export function makeDefaultSwingShelvesLowParams(): SwingShelvesLowParams {
     shelfThickness: 18,
     shelfAutoFit: true,
     shelfGaps: [],
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a"
-    }
+    materials: makeDefaultMaterialParams()
   };
   base.shelfGaps = computeEqualShelfGaps(base);
   return base;
@@ -752,6 +731,7 @@ export function makeDefaultOvenBaseLowParams(): OvenBaseLowParams {
     type: "oven_base_low",
     width: 600,
     height: 840,
+    worktopThicknessMm: 38,
     depth: 600,
     boardThickness: 18,
     backThickness: 8,
@@ -784,15 +764,7 @@ export function makeDefaultOvenBaseLowParams(): OvenBaseLowParams {
     ovenTopClearanceMm: 5,
     ovenBottomClearanceMm: 5,
 
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams()
   };
   return base;
 }
@@ -845,15 +817,7 @@ export function makeDefaultMicrowaveOvenTallParams(): MicrowaveOvenTallParams {
     topHingeCount: 2,
     topHingeInsetFromSideMm: 80,
 
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_unused",
-      bodyColor: "#b8bcc7",
-      frontColor: "#3a7bd5",
-      drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+    materials: makeDefaultMaterialParams({ drawerKey: "drawer_unused" })
   };
   return base;
 }
@@ -863,6 +827,7 @@ export function makeDefaultTopDrawersDoorsLowParams(): TopDrawersDoorsLowParams 
     type: "top_drawers_doors_low",
     width: 1200,
     height: 720,
+    worktopThicknessMm: 38,
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
@@ -902,15 +867,12 @@ export function makeDefaultTopDrawersDoorsLowParams(): TopDrawersDoorsLowParams 
     shelfAutoFit: true,
     shelfGaps: [],
 
-    materials: {
-      bodyKey: "carcass_default",
-      frontKey: "front_default",
-      drawerKey: "drawer_default",
-      bodyColor: "#b8bcc7",
+    materials: makeDefaultMaterialParams({
       frontColor: "#f3f4f6",
       drawerColor: "#f3f4f6",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
-    }
+      frontPresetId: "DTD2",
+      drawerPresetId: "DTD2"
+    })
   };
   base.shelfGaps = computeEqualShelfGaps({
     ...base,
@@ -934,16 +896,21 @@ export function validateModule(p: ModuleParams): string[] {
 }
 
 export function normalizeModuleParams(p: ModuleParams): ModuleParams {
+  const mergeMaterials = (raw: unknown, base: MaterialParams): MaterialParams => ({
+    ...base,
+    ...((raw as Partial<MaterialParams> | undefined) ?? {}),
+    partOverrides: {
+      ...(base.partOverrides ?? {}),
+      ...((((raw as Partial<MaterialParams> | undefined) ?? {}).partOverrides as Record<string, BoardMaterialPresetId> | undefined) ?? {})
+    }
+  });
+
   if (p.type === "drawer_low") {
     const base = makeDefaultDrawerLowParams();
     const next: DrawerLowParams = {
       ...base,
       ...(p as any),
-      materials: {
-        ...base.materials,
-        ...((p as any).materials ?? {}),
-        partOverrides: { ...(base.materials.partOverrides ?? {}), ...(((p as any).materials?.partOverrides as Record<string, BoardMaterialPresetId> | undefined) ?? {}) }
-      }
+      materials: mergeMaterials((p as any).materials, base.materials)
     };
     if (next.backGrooveWidthMm > 0 && next.backGrooveWidthMm < next.backThickness) {
       next.backGrooveWidthMm = next.backThickness;
@@ -957,7 +924,7 @@ export function normalizeModuleParams(p: ModuleParams): ModuleParams {
     const next: ShelvesParams = {
       ...base,
       ...(p as any),
-      materials: { ...base.materials, ...((p as any).materials ?? {}) }
+      materials: mergeMaterials((p as any).materials, base.materials)
     };
     if (!Array.isArray(next.shelfGaps)) next.shelfGaps = [];
     // Ensure required keys exist (backward compatible with older saved JSON)
@@ -974,11 +941,64 @@ export function normalizeModuleParams(p: ModuleParams): ModuleParams {
     const next: CornerShelfLowerParams = {
       ...base,
       ...(p as any),
-      materials: { ...base.materials, ...((p as any).materials ?? {}) }
+      materials: mergeMaterials((p as any).materials, base.materials)
     };
     if (!Array.isArray(next.shelfGaps)) next.shelfGaps = [];
     if (next.hingeSideFrontZ !== "left" && next.hingeSideFrontZ !== "right") next.hingeSideFrontZ = base.hingeSideFrontZ;
     if (next.hingeSideFrontX !== "left" && next.hingeSideFrontX !== "right") next.hingeSideFrontX = base.hingeSideFrontX;
+    return next;
+  }
+
+  if (p.type === "nested_drawer_low") {
+    const base = makeDefaultNestedDrawerLowParams();
+    const next: NestedDrawerLowParams = {
+      ...base,
+      ...(p as any),
+      materials: mergeMaterials((p as any).materials, base.materials)
+    };
+    if (!Array.isArray(next.drawerFrontHeights)) next.drawerFrontHeights = [];
+    return next;
+  }
+
+  if (p.type === "flap_shelves_low") {
+    const base = makeDefaultFlapShelvesLowParams();
+    const next: FlapShelvesLowParams = {
+      ...base,
+      ...(p as any),
+      materials: mergeMaterials((p as any).materials, base.materials)
+    };
+    if (!Array.isArray(next.shelfGaps)) next.shelfGaps = [];
+    return next;
+  }
+
+  if (p.type === "swing_shelves_low") {
+    const base = makeDefaultSwingShelvesLowParams();
+    const next: SwingShelvesLowParams = {
+      ...base,
+      ...(p as any),
+      materials: mergeMaterials((p as any).materials, base.materials)
+    };
+    if (!Array.isArray(next.shelfGaps)) next.shelfGaps = [];
+    return next;
+  }
+
+  if (p.type === "oven_base_low") {
+    const base = makeDefaultOvenBaseLowParams();
+    return {
+      ...base,
+      ...(p as any),
+      materials: mergeMaterials((p as any).materials, base.materials)
+    };
+  }
+
+  if (p.type === "top_drawers_doors_low") {
+    const base = makeDefaultTopDrawersDoorsLowParams();
+    const next: TopDrawersDoorsLowParams = {
+      ...base,
+      ...(p as any),
+      materials: mergeMaterials((p as any).materials, base.materials)
+    };
+    if (!Array.isArray(next.shelfGaps)) next.shelfGaps = [];
     return next;
   }
 
@@ -991,6 +1011,7 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1079,6 +1100,7 @@ export function validateNestedDrawerLow(p: NestedDrawerLowParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1150,6 +1172,7 @@ export function validateShelves(p: ShelvesParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1379,6 +1402,7 @@ export function validateFlapShelvesLow(p: FlapShelvesLowParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1424,6 +1448,7 @@ export function validateSwingShelvesLow(p: SwingShelvesLowParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1469,6 +1494,7 @@ export function validateOvenBaseLow(p: OvenBaseLowParams): string[] {
 
   positiveNumber(errors, "width", p.width, 200);
   positiveNumber(errors, "height", p.height, 200);
+  positiveNumber(errors, "worktopThicknessMm", p.worktopThicknessMm, 0);
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
@@ -1697,12 +1723,44 @@ function validateMaterials(errors: string[], m: unknown) {
   validateMaterialKey(errors, "materials.bodyKey", mat.bodyKey);
   validateMaterialKey(errors, "materials.frontKey", mat.frontKey);
   validateMaterialKey(errors, "materials.drawerKey", mat.drawerKey);
+  validateBoardPresetId(errors, "materials.bodyPresetId", mat.bodyPresetId);
+  validateBoardPresetId(errors, "materials.frontPresetId", mat.frontPresetId);
+  validateBoardPresetId(errors, "materials.drawerPresetId", mat.drawerPresetId);
   validateMaterialName(errors, "materials.bodyName", mat.bodyName);
   validateMaterialName(errors, "materials.frontName", mat.frontName);
   validateMaterialName(errors, "materials.drawerName", mat.drawerName);
   validateHexColor(errors, "materials.bodyColor", mat.bodyColor);
   validateHexColor(errors, "materials.frontColor", mat.frontColor);
   validateHexColor(errors, "materials.drawerColor", mat.drawerColor);
+  if (mat.defaultTintColor !== undefined) validateHexColor(errors, "materials.defaultTintColor", mat.defaultTintColor);
+  if (mat.defaultTintStrength !== undefined) {
+    if (typeof mat.defaultTintStrength !== "number" || !Number.isFinite(mat.defaultTintStrength) || mat.defaultTintStrength < 0 || mat.defaultTintStrength > 1) {
+      errors.push("materials.defaultTintStrength must be a number between 0 and 1.");
+    }
+  }
+  if (mat.partOverrides !== undefined) {
+    if (!mat.partOverrides || typeof mat.partOverrides !== "object" || Array.isArray(mat.partOverrides)) {
+      errors.push("materials.partOverrides must be an object map (partName -> materialId).");
+    } else {
+      const allowed = new Set(["DTD1", "DTD2", "DTD3", "MDF", "DVD", "DTD16"]);
+      for (const [k, v] of Object.entries(mat.partOverrides as Record<string, unknown>)) {
+        if (typeof k !== "string" || k.trim().length === 0) {
+          errors.push("materials.partOverrides has an invalid key.");
+          continue;
+        }
+        if (typeof v !== "string" || !allowed.has(v)) {
+          errors.push(`materials.partOverrides.${k} must be one of: ${Array.from(allowed).join(", ")}.`);
+        }
+      }
+    }
+  }
+}
+
+function validateBoardPresetId(errors: string[], label: string, value: unknown) {
+  const allowed = new Set(["DTD1", "DTD2", "DTD3", "MDF", "DVD", "DTD16"]);
+  if (typeof value !== "string" || !allowed.has(value)) {
+    errors.push(`${label} must be one of: ${Array.from(allowed).join(", ")}.`);
+  }
 }
 
 function validateHexColor(errors: string[], label: string, value: unknown) {
