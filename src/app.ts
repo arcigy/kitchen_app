@@ -38,6 +38,8 @@ import { createTopbar } from "./ui/createTopbar";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
+import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
+import { enterKitchenMode, mountKitchenContextPanel, type KitchenModeHelpers } from "./layout/kitchenEditMode";
 import {
   updateUndoRedoUi,
   commitHistory,
@@ -658,6 +660,8 @@ export function startApp(args: AppArgs) {
     instances,
     instanceCounter,
     params,
+    kitchenCtx: resolveContext(makeDefaultKitchenContext()),
+    kitchenEditMode: false,
     layoutTool,
     selectedKind,
     selectedInstanceId,
@@ -2321,6 +2325,7 @@ export function startApp(args: AppArgs) {
 
   window.addEventListener("keydown", (ev) => {
     if (isTypingTarget(ev.target)) return;
+    if (S.kitchenEditMode) return;
 
     if (mode === "layout") {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
@@ -4312,6 +4317,15 @@ export function startApp(args: AppArgs) {
 
   const mountProps = () => {
     if (mode !== "layout") return showNoProps();
+    if (S.kitchenEditMode) {
+      if (placement.active) return mountPlacementControls(S, placementHelpers);
+      if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
+      mountKitchenContextPanel(args.propertiesEl, S, () => {
+        applyKitchenContextToAllInstances();
+        commitHistory(S);
+      });
+      return;
+    }
     if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
@@ -4376,6 +4390,19 @@ export function startApp(args: AppArgs) {
     anyOverlap,
     moduleOverlapsWalls,
     autoOrientModuleToRoomWallIfSnapped
+  };
+
+  const kitchenHelpers: KitchenModeHelpers = {
+    ribbonEl: args.ribbonEl,
+    onModuleAdd: (type) => {
+      ensureLayoutMode();
+      setToolSelect();
+      addInstance(S, placementHelpers, type as any);
+    },
+    cancelPlacement: () => cancelPlacement(S, placementHelpers),
+    setToolSelect,
+    mountProps,
+    applyKitchenContextToAllInstances
   };
 
   const g1 = tb.addGroup();
@@ -4445,10 +4472,6 @@ export function startApp(args: AppArgs) {
   });
 
   const g2 = tb.addGroup();
-  tb.toolButton(g2, { title: "Add drawer", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")) });
-  tb.toolButton(g2, { title: "Add fridge", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")) });
-  tb.toolButton(g2, { title: "Add shelves", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")) });
-  tb.toolButton(g2, { title: "Add corner", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")) });
   tb.toolButton(g2, {
     title: "2D",
     iconSvg: I_GRID2D,
@@ -4478,6 +4501,14 @@ export function startApp(args: AppArgs) {
   });
 
   const g3 = tb.addGroup();
+  tb.toolButton(g3, {
+    title: "Kuchyňa",
+    iconSvg: I_CABINET,
+    onClick: () => {
+      ensureLayoutMode();
+      enterKitchenMode(S, kitchenHelpers);
+    }
+  });
   tb.panelButton(g3, {
     title: "Underlay",
     iconSvg: I_UNDERLAY,
@@ -4885,6 +4916,16 @@ export function startApp(args: AppArgs) {
       }))
     );
     layoutPanel.setSelected(selectedInstanceId);
+  }
+
+  function applyKitchenContextToAllInstances() {
+    for (const inst of instances) {
+      inst.params.depth = S.kitchenCtx.moduleDepthMm;
+      if (inst.params.type !== "fridge_tall" && inst.params.type !== "microwave_oven_tall") {
+        inst.params.height = S.kitchenCtx.moduleHeightMm;
+      }
+      rebuildInstance(inst);
+    }
   }
 
   function setInstanceSelected(id: string | null) {
@@ -5790,6 +5831,7 @@ export function startApp(args: AppArgs) {
   };
 
   window.addEventListener("keydown", (ev) => {
+    if (S.kitchenEditMode) return;
     if (!selectedMesh) return;
     const k = ev.key.toLowerCase();
     if (k === "p") toggleSelectedPbr(selectedMesh, "all");
