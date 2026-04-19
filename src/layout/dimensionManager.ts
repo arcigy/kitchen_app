@@ -38,11 +38,12 @@ export const makeDimTextSprite = (S: AppState, helpers: DimensionHelpers, text: 
   canvas.width = w;
   canvas.height = h;
 
+  // redraw
   const ctx2 = canvas.getContext("2d")!;
   ctx2.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
   ctx2.textBaseline = "middle";
   ctx2.textAlign = "center";
-  ctx2.fillStyle = "rgba(0,0,0,0.92)";
+  ctx2.fillStyle = "rgba(255,255,255,0.92)";
   ctx2.fillText(text, w / 2, h / 2 + 1);
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -120,7 +121,7 @@ export const setSpriteScreenFixedScale = (S: AppState, helpers: DimensionHelpers
 export const updateDimensionTextScale = (S: AppState, helpers: DimensionHelpers, rect: DOMRect) => {
   for (const d of S.dimensions) setSpriteScreenFixedScale(S, helpers, d.text as any, rect);
   const preview = helpers.getDimPreview();
-  if (preview?.root?.visible) setSpriteScreenFixedScale(S, helpers, preview.text as any, rect);
+  if (preview && preview.root.visible) setSpriteScreenFixedScale(S, helpers, preview.text as any, rect);
 };
 
 export const wallLineSegment = (S: AppState, helpers: DimensionHelpers, wallId: string, wallLine: AlignWallLine) => {

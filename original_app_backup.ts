@@ -47,23 +47,6 @@ import {
   type HistoryHelpers
 } from "./layout/historyManager";
 import {
-  makeDimTextSprite,
-  updateSpriteText,
-  makeDimBarMesh,
-  updateDimBar,
-  setSpriteScreenFixedScale,
-  updateDimensionTextScale,
-  updateDimensionGeometry,
-  updateAllDimensions,
-  updateDimensionSelectionHighlights,
-  createDimension,
-  disposeDimensionInstance,
-  deleteDimension,
-  dimValueMm,
-  wallLineSegment,
-  type DimensionHelpers
-} from "./layout/dimensionManager";
-import {
   addInstance,
   cancelPlacement,
   commitPlacement,
@@ -588,10 +571,258 @@ export function startApp(args: AppArgs) {
   const dimensions: DimensionInstance[] = [];
   let dimensionCounter = 1;
 
-  const dimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+  const dimMat = new THREE.MeshBasicMaterial({ color: 0x0b0f18, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
   const dimMatSelected = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
   const dimPickMat = new THREE.MeshBasicMaterial({ visible: false });
-  let dimPreview: any = null;
+
+  const makeDimTextSprite = (text: string) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D not available");
+    const pad = 2;
+    const fontPx = 28;
+    ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+    const metrics = ctx.measureText(text);
+    const w = Math.ceil(metrics.width + pad * 2);
+    const h = Math.ceil(fontPx + pad * 2);
+    canvas.width = w;
+    canvas.height = h;
+
+    // redraw
+    const ctx2 = canvas.getContext("2d")!;
+    ctx2.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+    ctx2.textBaseline = "middle";
+    ctx2.textAlign = "center";
+    ctx2.fillStyle = "rgba(0,0,0,0.92)";
+    ctx2.fillText(text, w / 2, h / 2 + 1);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+    const spr = new THREE.Sprite(mat);
+    spr.renderOrder = 90;
+    spr.position.y = 0.055;
+    (spr.userData as any).wPx = w;
+    (spr.userData as any).hPx = h;
+    return spr;
+  };
+
+  const updateSpriteText = (spr: THREE.Sprite, text: string) => {
+    if ((spr.userData as any).text === text) return;
+    (spr.userData as any).text = text;
+    const mat = spr.material as THREE.SpriteMaterial;
+    const old = mat.map as THREE.Texture | null;
+    const next = makeDimTextSprite(text);
+    const nextMat = next.material as THREE.SpriteMaterial;
+    mat.map = nextMat.map;
+    mat.needsUpdate = true;
+    nextMat.dispose();
+    (spr.userData as any).wPx = (next.userData as any).wPx;
+    (spr.userData as any).hPx = (next.userData as any).hPx;
+    if (old) old.dispose();
+  };
+
+  const makeDimBarMesh = (mat: THREE.Material) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
+    m.renderOrder = 75;
+    m.position.y = 0.05;
+    return m;
+  };
+
+  const updateDimBar = (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, thicknessM: number) => {
+    const d = b.clone().sub(a);
+    const len = d.length();
+    if (len < 1e-6) {
+      mesh.visible = false;
+      return;
+    }
+    const ang = Math.atan2(d.z, d.x);
+    const mid = a.clone().addScaledVector(d, 0.5);
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.BoxGeometry(len, 0.01, thicknessM);
+    mesh.position.set(mid.x, 0.05, mid.z);
+    mesh.rotation.set(0, ang, 0);
+    mesh.visible = true;
+  };
+
+  const orthoWorldPerPx = (rect: DOMRect) => {
+    const c = cam();
+    if (!(c instanceof THREE.OrthographicCamera)) return null as number | null;
+    const visibleHeight = Math.abs(c.top - c.bottom) / Math.max(1e-6, c.zoom);
+    const worldPerPixel = visibleHeight / Math.max(1, rect.height);
+    return worldPerPixel;
+  };
+
+  const setSpriteScreenFixedScale = (spr: THREE.Sprite, rect: DOMRect) => {
+    const wpp = orthoWorldPerPx(rect);
+    if (!wpp) return;
+    const wPx = Number((spr.userData as any).wPx ?? 60);
+    const hPx = Number((spr.userData as any).hPx ?? 28);
+    spr.scale.set(wpp * wPx, wpp * hPx, 1);
+  };
+
+  const updateDimensionTextScale = (rect: DOMRect) => {
+    for (const d of dimensions) setSpriteScreenFixedScale(d.text, rect);
+    if (dimPreview.root.visible) setSpriteScreenFixedScale(dimPreview.text, rect);
+  };
+
+  const wallLineSegment = (wallId: string, wallLine: AlignWallLine) => {
+    const w = walls.find((x) => x.id === wallId) ?? null;
+    if (!w) return null as null | { a: THREE.Vector3; b: THREE.Vector3; dir: THREE.Vector3 };
+    const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
+    const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
+    const just = w.params.justification ?? "center";
+    const s = (w.params.exteriorSign ?? 1) as 1 | -1;
+    const center = wallRefLineToCenterLine(refA, refB, w.params.thicknessMm, just, s);
+    const d = center.b.clone().sub(center.a);
+    if (d.lengthSq() < 1e-10) return null;
+    d.normalize();
+    const n = new THREE.Vector3(-d.z, 0, d.x);
+    const half = Math.max(10, w.params.thicknessMm) / 2000;
+    const exteriorA = center.a.clone().addScaledVector(n, s * half);
+    const exteriorB = center.b.clone().addScaledVector(n, s * half);
+    const interiorA = center.a.clone().addScaledVector(n, -s * half);
+    const interiorB = center.b.clone().addScaledVector(n, -s * half);
+
+    if (wallLine === "center") return { a: center.a, b: center.b, dir: d.clone() };
+    if (wallLine === "exterior") return { a: exteriorA, b: exteriorB, dir: d.clone() };
+    if (wallLine === "interior") return { a: interiorA, b: interiorB, dir: d.clone() };
+
+    const endLen = Math.max(0.5, w.params.thicknessMm / 1000 + 0.25);
+    if (wallLine === "endA") return { a: center.a.clone().addScaledVector(n, -endLen / 2), b: center.a.clone().addScaledVector(n, endLen / 2), dir: n.clone().normalize() };
+    if (wallLine === "endB") return { a: center.b.clone().addScaledVector(n, -endLen / 2), b: center.b.clone().addScaledVector(n, endLen / 2), dir: n.clone().normalize() };
+    return null;
+  };
+
+  const dimValueMm = (p: DimensionParams) => {
+    const la = wallLineSegment(p.a.wallId, p.a.wallLine);
+    const lb = wallLineSegment(p.b.wallId, p.b.wallLine);
+    if (!la || !lb) return null as null | { absMm: number; signedM: number; n: THREE.Vector3; aPt: THREE.Vector3; bPt: THREE.Vector3 };
+    const aPt = la.a.clone().lerp(la.b, Math.max(0, Math.min(1, p.a.t)));
+    const bPt = lb.a.clone().lerp(lb.b, Math.max(0, Math.min(1, p.b.t)));
+    const dir = la.dir.clone().normalize();
+    const n = new THREE.Vector3(-dir.z, 0, dir.x);
+    const signedM = n.dot(bPt.clone().sub(aPt));
+    return { absMm: Math.round(Math.abs(signedM) * 1000), signedM, n, aPt, bPt };
+  };
+
+  const updateDimensionGeometry = (d: DimensionInstance, rect: DOMRect | null = null) => {
+    const la = wallLineSegment(d.params.a.wallId, d.params.a.wallLine);
+    const lb = wallLineSegment(d.params.b.wallId, d.params.b.wallLine);
+    if (!la || !lb) {
+      d.root.visible = false;
+      return;
+    }
+
+    const aPt = la.a.clone().lerp(la.b, Math.max(0, Math.min(1, d.params.a.t)));
+    const bPt = lb.a.clone().lerp(lb.b, Math.max(0, Math.min(1, d.params.b.t)));
+    const dir = la.dir.clone().normalize();
+    const n = new THREE.Vector3(-dir.z, 0, dir.x);
+
+    const off = d.params.offsetM;
+    const aDim = aPt.clone().addScaledVector(n, off);
+    const bDim = bPt.clone().addScaledVector(n, off);
+
+    const thick = rect ? hudLineThicknessM(rect) * 1.2 : 0.01;
+    updateDimBar(d.ext1, aPt, aDim, thick);
+    updateDimBar(d.ext2, bPt, bDim, thick);
+    updateDimBar(d.dim, aDim, bDim, thick);
+
+    const dimDir = bDim.clone().sub(aDim);
+    const len = dimDir.length();
+    const u = len > 1e-6 ? dimDir.clone().multiplyScalar(1 / len) : new THREE.Vector3(1, 0, 0);
+    const tickDir = u.clone().add(n.clone().normalize()).normalize(); // diagonal slash like in the reference
+    const tickLen = rect ? Math.max(thick * 8, thick * 10) : 0.08;
+    const t1a = aDim.clone().addScaledVector(tickDir, tickLen / 2);
+    const t1b = aDim.clone().addScaledVector(tickDir, -tickLen / 2);
+    const t2a = bDim.clone().addScaledVector(tickDir, tickLen / 2);
+    const t2b = bDim.clone().addScaledVector(tickDir, -tickLen / 2);
+    updateDimBar(d.tick1, t1a, t1b, thick);
+    updateDimBar(d.tick2, t2a, t2b, thick);
+
+    const mid = aDim.clone().add(bDim).multiplyScalar(0.5);
+    d.text.position.set(mid.x, 0.06, mid.z);
+    const mm = Math.round(Math.abs(n.dot(bPt.clone().sub(aPt))) * 1000);
+    updateSpriteText(d.text, `${mm}`);
+    if (rect) setSpriteScreenFixedScale(d.text, rect);
+
+    const angle = Math.atan2(bDim.z - aDim.z, bDim.x - aDim.x);
+    const pickLen = Math.max(0.01, aDim.distanceTo(bDim));
+    const pickThick = Math.max(0.05, rect ? thick * 10 : 0.08);
+    d.pick.geometry.dispose();
+    d.pick.geometry = new THREE.BoxGeometry(pickLen, 0.04, pickThick);
+    d.pick.position.set(mid.x, 0.05, mid.z);
+    d.pick.rotation.set(0, angle, 0);
+
+    d.root.visible = viewMode === "2d";
+  };
+
+  const updateAllDimensions = (rect: DOMRect | null = null) => {
+    for (const d of dimensions) updateDimensionGeometry(d, rect);
+    if (rect) updateDimensionTextScale(rect);
+    updateDimensionSelectionHighlights();
+  };
+
+  const updateDimensionSelectionHighlights = () => {
+    for (const d of dimensions) {
+      const sel = selectedKind === "dimension" && selectedDimensionId === d.id;
+      const mat = sel ? dimMatSelected : dimMat;
+      d.ext1.material = mat;
+      d.ext2.material = mat;
+      d.dim.material = mat;
+      d.tick1.material = mat;
+      d.tick2.material = mat;
+    }
+  };
+
+  const createDimension = (a: DimensionRef, b: DimensionRef, offsetM: number, opts?: { id?: string; skipHistory?: boolean }) => {
+    const id = opts?.id ?? `d${dimensionCounter++}`;
+    const root = new THREE.Group();
+    root.name = `dimension_${id}`;
+
+    const ext1 = makeDimBarMesh(dimMat);
+    const ext2 = makeDimBarMesh(dimMat);
+    const dim = makeDimBarMesh(dimMat);
+    const tick1 = makeDimBarMesh(dimMat);
+    const tick2 = makeDimBarMesh(dimMat);
+    const text = makeDimTextSprite("0");
+
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.08), dimPickMat);
+    pick.userData.kind = "dimension";
+    pick.userData.dimensionId = id;
+    root.add(pick, ext1, ext2, dim, tick1, tick2, text);
+
+    const inst: DimensionInstance = { id, params: { id, a, b, offsetM }, root, pick, ext1, ext2, dim, tick1, tick2, text };
+    layoutRoot.add(root);
+    dimensions.push(inst);
+    updateDimensionGeometry(inst);
+    if (!opts?.skipHistory) commitHistory(S);
+    return inst;
+  };
+
+  const disposeDimensionInstance = (d: DimensionInstance) => {
+    const meshes = [d.pick, d.ext1, d.ext2, d.dim, d.tick1, d.tick2];
+    for (const m of meshes) {
+      if (m.geometry) m.geometry.dispose();
+      // Do NOT dispose materials (shared)
+    }
+    const sm = d.text.material as THREE.SpriteMaterial;
+    const tex = sm.map as THREE.Texture | null;
+    if (tex) tex.dispose();
+    sm.dispose();
+  };
+
+  const deleteDimension = (id: string, opts?: { skipHistory?: boolean }) => {
+    const idx = dimensions.findIndex((x) => x.id === id);
+    if (idx < 0) return;
+    const d = dimensions[idx];
+    dimensions.splice(idx, 1);
+    layoutRoot.remove(d.root);
+    disposeDimensionInstance(d);
+    if (selectedDimensionId === id) setSelectedDimension(null);
+    if (!opts?.skipHistory) commitHistory(S);
+  };
 
   type LayoutSnapshot = {
     wallCounter: number;
@@ -630,7 +861,6 @@ export function startApp(args: AppArgs) {
   let redoBtnEl: HTMLButtonElement | null = null;
   let helpers!: HistoryHelpers;
   let placementHelpers!: PlacementHelpers;
-  let dimensionHelpers!: DimensionHelpers;
 
   const placement = {
     active: false,
@@ -688,22 +918,6 @@ export function startApp(args: AppArgs) {
     history
   };
 
-  dimensionHelpers = {
-    THREE,
-    cam,
-    hudLineThicknessM,
-    wallRefLineToCenterLine,
-    dimMat,
-    dimMatSelected,
-    dimPickMat,
-    layoutRoot,
-    getViewMode: () => viewMode,
-    getSelectedKind: () => selectedKind,
-    getSelectedDimensionId: () => selectedDimensionId,
-    setSelectedDimension,
-    getDimPreview: () => dimPreview
-  };
-
 
 
   const wallDraw = {
@@ -751,7 +965,7 @@ export function startApp(args: AppArgs) {
       }
       updateLayoutPanel();
       updateSelectionHighlights();
-      updateDimensionSelectionHighlights(S, dimensionHelpers);
+      updateDimensionSelectionHighlights();
       mountProps();
     }
 
@@ -1060,14 +1274,14 @@ export function startApp(args: AppArgs) {
   };
 
   const dimPreviewMat = new THREE.MeshBasicMaterial({ color: 0x0b0f18, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false });
-  dimPreview = {
+  const dimPreview = {
     root: new THREE.Group(),
-    ext1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    ext2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    dim: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    tick1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    tick2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    text: makeDimTextSprite(S, dimensionHelpers, "...")
+    ext1: makeDimBarMesh(dimPreviewMat),
+    ext2: makeDimBarMesh(dimPreviewMat),
+    dim: makeDimBarMesh(dimPreviewMat),
+    tick1: makeDimBarMesh(dimPreviewMat),
+    tick2: makeDimBarMesh(dimPreviewMat),
+    text: makeDimTextSprite("...")
   };
   dimPreview.root.name = "dimPreview";
   dimPreview.root.visible = false;
@@ -1368,7 +1582,7 @@ export function startApp(args: AppArgs) {
   function removeWall(w: WallInstance) {
     // Remove dependent dimensions
     const dimIds = dimensions.filter((d) => d.params.a.wallId === w.id || d.params.b.wallId === w.id).map((d) => d.id);
-    for (const id of dimIds) deleteDimension(S, dimensionHelpers, id, { skipHistory: true });
+    for (const id of dimIds) deleteDimension(id, { skipHistory: true });
     layoutRoot.remove(w.root);
     w.mesh.geometry.dispose();
     (w.mesh.material as THREE.Material).dispose();
@@ -1906,7 +2120,7 @@ export function startApp(args: AppArgs) {
       }
     }
 
-    updateAllDimensions(S, dimensionHelpers);
+    updateAllDimensions();
   }
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
@@ -2758,7 +2972,7 @@ export function startApp(args: AppArgs) {
 
       if (ev.key === "Delete" || ev.key === "Backspace") {
         if (selectedKind === "dimension" && selectedDimensionId) {
-          deleteDimension(S, dimensionHelpers, selectedDimensionId);
+          deleteDimension(selectedDimensionId);
           ev.preventDefault();
           return;
         }
@@ -4229,7 +4443,7 @@ export function startApp(args: AppArgs) {
   };
 
   const setDimensionValueMm = (d: DimensionInstance, desiredMm: number) => {
-    const v = dimValueMm(S, dimensionHelpers, d.params);
+    const v = dimValueMm(d.params);
     if (!v) {
       setUnderlayStatus("Dimension: invalid refs.");
       return;
@@ -4275,7 +4489,7 @@ export function startApp(args: AppArgs) {
     if (!d) return showNoProps();
     props.setTitle(`Dimension (${d.id})`);
     const s = props.section();
-    const v = dimValueMm(S, dimensionHelpers, d.params);
+    const v = dimValueMm(d.params);
     const curMm = v?.absMm ?? 0;
 
     const inp = document.createElement("input");
@@ -4346,15 +4560,15 @@ export function startApp(args: AppArgs) {
     setSelectedModule,
     setSelectedDimension,
     updateSelectionHighlights,
-    updateDimensionSelectionHighlights: () => updateDimensionSelectionHighlights(S, dimensionHelpers),
-    disposeDimensionInstance: (d) => disposeDimensionInstance(S, dimensionHelpers, d as any),
+    updateDimensionSelectionHighlights,
+    disposeDimensionInstance,
     disposeObject3D,
     createInstance,
     createWallMesh,
     rebuildWall,
-    createDimension: (a, b, offset, opts) => createDimension(S, dimensionHelpers, a as any, b as any, offset, opts as any),
+    createDimension,
     rebuildWallPlanMesh,
-    updateAllDimensions: () => updateAllDimensions(S, dimensionHelpers),
+    updateAllDimensions,
     clearToolHud,
     mountProps,
     updateLayoutPanel,
@@ -4923,7 +5137,7 @@ export function startApp(args: AppArgs) {
         selectedUnderlayBox = null;
       }
       updateSelectionHighlights();
-      updateDimensionSelectionHighlights(S, dimensionHelpers);
+      updateDimensionSelectionHighlights();
       mountProps();
     }
 
@@ -4939,7 +5153,7 @@ export function startApp(args: AppArgs) {
       (selectedUnderlayBox.material as THREE.Material).dispose();
       selectedUnderlayBox = null;
     }
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateDimensionSelectionHighlights();
     mountProps();
   }
 
@@ -4994,7 +5208,7 @@ export function startApp(args: AppArgs) {
     }
     showWallSnapMarkersFor(null);
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateDimensionSelectionHighlights();
     mountProps();
   }
 
@@ -5035,7 +5249,7 @@ export function startApp(args: AppArgs) {
     scene.add(selectedWallBox);
     showWallSnapMarkersFor(id);
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateDimensionSelectionHighlights();
     mountProps();
   }
 
@@ -5672,7 +5886,7 @@ export function startApp(args: AppArgs) {
       } else {
         for (const w of walls) w.mesh.visible = true;
       }
-      updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
+      updateAllDimensions(renderer.domElement.getBoundingClientRect());
     }
 
   function setMode(next: AppMode) {
@@ -6206,7 +6420,7 @@ export function startApp(args: AppArgs) {
     const d = dimensions.find((x) => x.id === dimId) ?? null;
     if (!d) return;
     setSelectedDimension(dimId);
-    const cur = dimValueMm(S, dimensionHelpers, d.params)?.absMm ?? 0;
+    const cur = dimValueMm(d.params)?.absMm ?? 0;
     const s = window.prompt("Dimension (mm)", String(cur));
     if (!s) return;
     const n = Number(s.trim().replace(",", "."));
@@ -6639,7 +6853,7 @@ export function startApp(args: AppArgs) {
         const aPt = a.segA.clone().lerp(a.segB, dimTool.tA);
         dimTool.offsetM = n.dot(hitPoint.clone().sub(aPt));
 
-        createDimension(S, dimensionHelpers,
+        createDimension(
           { wallId: a.wallId, wallLine: a.wallLine, t: dimTool.tA },
           { wallId: picked.wallId, wallLine: picked.wallLine, t: tB },
           dimTool.offsetM
@@ -7214,13 +7428,13 @@ export function startApp(args: AppArgs) {
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
 
-      const la = wallLineSegment(S, dimensionHelpers, d.params.a.wallId, d.params.a.wallLine);
+      const la = wallLineSegment(d.params.a.wallId, d.params.a.wallLine);
       if (!la) return;
       const dir = la.dir.clone().normalize();
       const n = new THREE.Vector3(-dir.z, 0, dir.x);
       const delta = hitPoint.clone().sub(dimensionDragState.startWorld);
       d.params.offsetM = dimensionDragState.startOffsetM + n.dot(delta);
-      updateDimensionGeometry(S, dimensionHelpers, d, rect);
+      updateDimensionGeometry(d, rect);
       return;
     }
 
@@ -7314,9 +7528,9 @@ export function startApp(args: AppArgs) {
             const bDim = bPt.clone().addScaledVector(n, off);
 
             const thickDim = thick * 1.2;
-            updateDimBar(S, dimensionHelpers, dimPreview.ext1, aPt, aDim, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.ext2, bPt, bDim, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.dim, aDim, bDim, thickDim);
+            updateDimBar(dimPreview.ext1, aPt, aDim, thickDim);
+            updateDimBar(dimPreview.ext2, bPt, bDim, thickDim);
+            updateDimBar(dimPreview.dim, aDim, bDim, thickDim);
 
             const dimDir = bDim.clone().sub(aDim);
             const len = dimDir.length();
@@ -7327,14 +7541,14 @@ export function startApp(args: AppArgs) {
             const t1b = aDim.clone().addScaledVector(tickDir, -tickLen / 2);
             const t2a = bDim.clone().addScaledVector(tickDir, tickLen / 2);
             const t2b = bDim.clone().addScaledVector(tickDir, -tickLen / 2);
-            updateDimBar(S, dimensionHelpers, dimPreview.tick1, t1a, t1b, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.tick2, t2a, t2b, thickDim);
+            updateDimBar(dimPreview.tick1, t1a, t1b, thickDim);
+            updateDimBar(dimPreview.tick2, t2a, t2b, thickDim);
 
             const mid = aDim.clone().add(bDim).multiplyScalar(0.5);
             dimPreview.text.position.set(mid.x, 0.06, mid.z);
             const mm = Math.round(Math.abs(n.dot(bPt.clone().sub(aPt))) * 1000);
-            updateSpriteText(S, dimensionHelpers, dimPreview.text, `${mm}`);
-            setSpriteScreenFixedScale(S, dimensionHelpers, dimPreview.text, rect);
+            updateSpriteText(dimPreview.text, `${mm}`);
+            setSpriteScreenFixedScale(dimPreview.text, rect);
             dimPreview.root.visible = true;
           } else {
             dimPreview.root.visible = false;
@@ -8024,9 +8238,9 @@ export function startApp(args: AppArgs) {
     const activeCam = cam();
     if (mode === "layout" && viewMode === "2d" && activeCam instanceof THREE.OrthographicCamera) {
       // Frame-driven scale update (no threshold) to avoid any zoom "jitter" on dimension text.
-      if (S.dimensions.length > 0 || dimPreview.root.visible) {
+      if (dimensions.length > 0 || dimPreview.root.visible) {
         const rect = renderer.domElement.getBoundingClientRect();
-        updateDimensionTextScale(S, dimensionHelpers, rect);
+        updateDimensionTextScale(rect);
       }
     }
     const isPhoto = renderMode === "photo_pathtrace" && ENABLE_PHOTO && activeCam instanceof THREE.PerspectiveCamera;
