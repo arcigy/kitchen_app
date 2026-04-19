@@ -71,8 +71,8 @@ body {
   z-index: 20;
 }
 
-.topbar {
-  height: 44px;
+.topbar-rows {
+  display: grid;
 }
 
 #properties {
@@ -113,12 +113,35 @@ body {
 }
 
 .topbar {
-  height: 44px;
+  min-height: 44px;
   display: flex;
   align-items: stretch;
   gap: 10px;
   padding: 6px 10px;
   overflow: auto hidden;
+}
+
+.topbar-row-wrap + .topbar-row-wrap {
+  border-top: 1px solid rgba(36, 40, 54, 0.65);
+}
+
+.topbar-row-title {
+  padding: 7px 10px 0;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  color: rgba(154, 163, 178, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topbar-kitchen-ribbon {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.topbar-kitchen-ribbon .topbar {
+  min-height: 72px;
+  padding-top: 7px;
 }
 
 .topbar-group {
@@ -161,6 +184,26 @@ body {
   place-items: center;
 }
 
+.tool-btn.has-label {
+  width: 82px;
+  height: 50px;
+  padding: 5px 4px;
+  align-content: center;
+  gap: 3px;
+}
+
+.tool-btn.success {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.tool-btn.danger {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .tool-btn:hover {
   background: rgba(35, 42, 62, 0.95);
 }
@@ -181,6 +224,16 @@ body {
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.tool-label {
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.1;
+  color: rgba(226, 232, 240, 0.92);
 }
 
 .topbar-panels-host {

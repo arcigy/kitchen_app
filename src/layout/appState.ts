@@ -8,7 +8,7 @@ import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
-export type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | null;
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "underlay" | "dimension" | null;
 export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {

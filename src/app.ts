@@ -535,8 +535,9 @@ export function startApp(args: AppArgs) {
   };
 
   let windowInst: WindowInstance | null = null;
-  type SelectedKind = "module" | "window" | "wall" | "underlay" | "dimension" | null;
+  type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "underlay" | "dimension" | null;
   let selectedKind: SelectedKind = null;
+  let selectedKitchenGroupId: string | null = null;
   let selectedDimensionId: string | null = null;
 
   type WallParams = {
@@ -3949,6 +3950,8 @@ export function startApp(args: AppArgs) {
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
   const I_DONE = icon("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z");
   const I_CANCEL = icon("M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z");
+  const I_MOVE = icon("M11 2h2v4h3l-4 4-4-4h3V2zm0 16H8l4-4 4 4h-3v4h-2v-4zM2 11h4V8l4 4-4 4v-3H2v-2zm16 0h4v2h-4v3l-4-4 4-4v3z");
+  const I_ROTATE = icon("M12 5V2L7.8 6.2 12 10V7c2.8 0 5 2.2 5 5 0 1.3-.5 2.5-1.3 3.4l1.4 1.4A7 7 0 0 0 12 5zm-5.1 2.2A7 7 0 0 0 12 19v3l4.2-4.2L12 14v3a5 5 0 0 1-3.7-8.4L6.9 7.2z");
 
   const tb = createTopbar(args.ribbonEl);
 
@@ -4341,6 +4344,178 @@ export function startApp(args: AppArgs) {
     s.appendChild(p);
   };
 
+  const mountUnderlayProps = () => {
+    props.setTitle("Underlay");
+    const s = props.section();
+
+    const file = document.createElement("input");
+    file.type = "file";
+    file.accept = ".png,.pdf,image/png,application/pdf";
+    props.row(s, "Upload", file);
+
+    const opacity = document.createElement("input");
+    opacity.type = "range";
+    opacity.min = "0";
+    opacity.max = "1";
+    opacity.step = "0.01";
+    opacity.value = String(underlayState.opacity);
+    props.row(s, "Opacity", opacity);
+    underlayOpacityEl = opacity;
+    S.underlayOpacityEl = opacity;
+
+    const scale = document.createElement("input");
+    scale.type = "number";
+    scale.step = "0.01";
+    scale.value = String(underlayState.scale);
+    props.row(s, "Scale", scale);
+    underlayScaleEl = scale;
+    S.underlayScaleEl = scale;
+
+    const rot = document.createElement("input");
+    rot.type = "number";
+    rot.step = "1";
+    rot.value = String(underlayState.rotationDeg);
+    props.row(s, "Rotation °", rot);
+    underlayRotEl = rot;
+    S.underlayRotEl = rot;
+
+    const offX = document.createElement("input");
+    offX.type = "number";
+    offX.step = "1";
+    offX.value = String(underlayState.offsetMm.x);
+    props.row(s, "Offset X", offX);
+    underlayOffXEl = offX;
+    S.underlayOffXEl = offX;
+
+    const offZ = document.createElement("input");
+    offZ.type = "number";
+    offZ.step = "1";
+    offZ.value = String(underlayState.offsetMm.z);
+    props.row(s, "Offset Z", offZ);
+    underlayOffZEl = offZ;
+    S.underlayOffZEl = offZ;
+
+    const known = document.createElement("input");
+    known.type = "number";
+    known.step = "1";
+    known.value = String(underlayCal.knownMm);
+    props.row(s, "Calibrate mm", known);
+
+    const pinned = document.createElement("input");
+    pinned.type = "checkbox";
+    pinned.checked = underlayState.pinned;
+    props.row(s, "Pinned", pinned);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const calibrateBtn = document.createElement("button");
+    calibrateBtn.type = "button";
+    calibrateBtn.textContent = "Calibrate";
+    const resetScaleBtn = document.createElement("button");
+    resetScaleBtn.type = "button";
+    resetScaleBtn.textContent = "Reset scale";
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.textContent = "Remove";
+    clearBtn.style.borderColor = "#3a1f23";
+    clearBtn.style.background = "#1a0f12";
+    clearBtn.style.color = "#ff6b6b";
+    actions.appendChild(calibrateBtn);
+    actions.appendChild(resetScaleBtn);
+    actions.appendChild(clearBtn);
+    s.appendChild(actions);
+
+    underlayStatusEl = document.createElement("div");
+    underlayStatusEl.className = "muted";
+    underlayStatusEl.style.fontSize = "12px";
+    underlayStatusEl.style.marginTop = "10px";
+    underlayStatusEl.textContent = underlayMesh.visible ? `Underlay: ${underlayState.sourceName ?? "loaded"}` : "Upload PDF/PNG underlay.";
+    S.underlayStatusEl = underlayStatusEl;
+    s.appendChild(underlayStatusEl);
+
+    file.addEventListener("change", async () => {
+      ensureLayoutMode();
+      const f = file.files?.[0] ?? null;
+      if (!f) return;
+      setUnderlayStatus("Loading...");
+      try {
+        const res = await loadUnderlayToCanvas(f);
+        setUnderlayFromCanvas(res.canvas, res.name, res.kind);
+        opacity.value = String(underlayState.opacity);
+        scale.value = String(underlayState.scale);
+        rot.value = String(underlayState.rotationDeg);
+        offX.value = String(underlayState.offsetMm.x);
+        offZ.value = String(underlayState.offsetMm.z);
+        pinned.checked = underlayState.pinned;
+        setUnderlayStatus(`Underlay: ${res.name}`);
+        setSelectedUnderlay();
+        commitHistory(S);
+      } catch (e) {
+        setUnderlayStatus(`Load failed: ${(e as Error).message}`);
+      } finally {
+        file.value = "";
+      }
+    });
+
+    opacity.addEventListener("input", () => {
+      underlayState.opacity = Math.min(1, Math.max(0, Number(opacity.value) || 0));
+      updateUnderlayTransform();
+    });
+    scale.addEventListener("change", () => {
+      underlayState.scale = Math.max(0.001, Number(scale.value) || 1);
+      updateUnderlayTransform();
+      commitHistory(S);
+    });
+    rot.addEventListener("change", () => {
+      underlayState.rotationDeg = Number(rot.value) || 0;
+      updateUnderlayTransform();
+      commitHistory(S);
+    });
+    offX.addEventListener("change", () => {
+      underlayState.offsetMm.x = Number(offX.value) || 0;
+      updateUnderlayTransform();
+      commitHistory(S);
+    });
+    offZ.addEventListener("change", () => {
+      underlayState.offsetMm.z = Number(offZ.value) || 0;
+      updateUnderlayTransform();
+      commitHistory(S);
+    });
+    pinned.addEventListener("change", () => {
+      underlayState.pinned = pinned.checked;
+      S.underlayState.pinned = underlayState.pinned;
+      if (underlayState.pinned) setSelectedModule(null);
+      commitHistory(S);
+      mountProps();
+    });
+    calibrateBtn.addEventListener("click", () => {
+      ensureLayoutMode();
+      if (!underlayMesh.visible) {
+        setUnderlayStatus("Upload underlay first.");
+        return;
+      }
+      underlayCal.knownMm = Math.max(1, Number(known.value) || 1);
+      underlayCal.active = true;
+      underlayCal.mode = "calibrate";
+      underlayCal.first = null;
+      setUnderlayStatus("Calibration: click first point...");
+    });
+    resetScaleBtn.addEventListener("click", () => {
+      underlayState.scale = 1;
+      scale.value = "1";
+      updateUnderlayTransform();
+      commitHistory(S);
+      setUnderlayStatus("Scale reset.");
+    });
+    clearBtn.addEventListener("click", () => {
+      clearUnderlay();
+      setSelectedModule(null);
+      selectedKind = "underlay";
+      commitHistory(S);
+      mountProps();
+    });
+  };
+
   let kitchenMode: ReturnType<typeof createKitchenEditMode> | null = null;
 
   const mountProps = () => {
@@ -4350,6 +4525,8 @@ export function startApp(args: AppArgs) {
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
     if (layoutTool === "dimension") return mountDimensionToolProps();
+    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) return;
+    if (selectedKind === "underlay") return mountUnderlayProps();
     if (selectedWallIds.size + selectedInstanceIds.size > 1) {
       args.propertiesEl.innerHTML = "";
       const t = document.createElement("div");
@@ -4371,7 +4548,7 @@ export function startApp(args: AppArgs) {
     if (selectedKind === "window") return mountWindowProps();
     if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
     if (selectedKind === "dimension" && selectedDimensionId) return mountDimensionProps(selectedDimensionId);
-    if (kitchenMode && kitchenMode.tryMountKitchenContextProps()) return;
+    if (kitchenMode && kitchenMode.tryMountActiveKitchenGroupProps()) return;
     showNoProps();
   };
 
@@ -4414,11 +4591,91 @@ export function startApp(args: AppArgs) {
 
 
   let rebuildStandardTopbar = () => {};
+  const openUnderlayPanel = () => {
+    ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    setToolSelect();
+    if (underlayMesh.visible && !underlayState.pinned) {
+      setSelectedUnderlay();
+      return;
+    }
+    setSelectedWall(null);
+    setSelectedModule(null);
+    selectedKind = "underlay";
+    mountProps();
+  };
+
+  const duplicateSelected = () => {
+    ensureLayoutMode();
+    if (selectedKind !== "module" || !selectedInstanceId) return;
+    duplicateInstance(selectedInstanceId);
+    commitHistory(S);
+  };
+
+  const deleteSelected = () => {
+    ensureLayoutMode();
+    if (selectedKind === "kitchenGroup") return;
+    if (selectedKind === "dimension" && selectedDimensionId) {
+      deleteDimension(S, dimensionHelpers, selectedDimensionId);
+      return;
+    }
+    if (selectedKind === "module" && selectedInstanceIds.size > 0) {
+      const ids = Array.from(selectedInstanceIds);
+      for (const id of ids) deleteInstance(id);
+      setSelectedModule(null);
+      selectedInstanceIds.clear();
+      commitHistory(S);
+      return;
+    }
+    if (selectedKind === "wall" && selectedWallIds.size > 0) {
+      const ids = Array.from(selectedWallIds);
+      for (const id of ids) deleteWall(id);
+      setSelectedWall(null);
+      selectedWallIds.clear();
+    }
+  };
+
+  const toggle2dView = () => {
+    ensureLayoutMode();
+    view2d.checked = !view2d.checked;
+    setView2d(view2d.checked);
+  };
+
+  const buildClassicTopbar = () => {
+    const row = tb.addRow({ className: "topbar-classic-ribbon" });
+
+    const tools = tb.addGroup("Classic", { row });
+    tb.toolButton(tools, { title: "Select", iconSvg: I_SELECT, onClick: () => setToolSelect() });
+    tb.toolButton(tools, { title: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
+    tb.toolButton(tools, { title: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
+    tb.toolButton(tools, { title: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
+    tb.toolButton(tools, { title: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
+    tb.toolButton(tools, { title: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
+    tb.toolButton(tools, { title: "Kuchyňa", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
+
+    const edit = tb.addGroup("Edit", { row });
+    S.undoBtnEl = tb.toolButton(edit, { title: "Undo", iconSvg: I_UNDO, onClick: () => undo(S, helpers) });
+    S.redoBtnEl = tb.toolButton(edit, { title: "Redo", iconSvg: I_REDO, onClick: () => redo(S, helpers) });
+    tb.toolButton(edit, { title: "Move", iconSvg: I_MOVE, onClick: () => startTransformFromSelection("move") });
+    tb.toolButton(edit, { title: "Rotate", iconSvg: I_ROTATE, onClick: () => startTransformFromSelection("rotate") });
+    tb.toolButton(edit, { title: "Duplicate", iconSvg: I_DUP, onClick: duplicateSelected });
+    tb.toolButton(edit, { title: "Delete", iconSvg: I_TRASH, onClick: deleteSelected });
+
+    const project = tb.addGroup("Project", { row });
+    tb.toolButton(project, { title: "2D view", iconSvg: I_GRID2D, onClick: toggle2dView });
+    tb.toolButton(project, { title: "Reset defaults", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
+    tb.toolButton(project, { title: "Export JSON", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
+    tb.toolButton(project, { title: "Copy export", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
+    const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
+    tb.toolButton(project, { title: "Reset view", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
+
+    updateUndoRedoUi(S);
+  };
+
   kitchenMode = createKitchenEditMode({
     S,
-    scene,
     layoutRoot,
-    propertiesEl: args.propertiesEl,
+    viewerEl: args.viewerEl,
     tb,
     props,
     icons: { cabinet: I_CABINET, done: I_DONE, cancel: I_CANCEL },
@@ -4430,21 +4687,17 @@ export function startApp(args: AppArgs) {
     addInstance: (type) => addInstance(S, placementHelpers, type),
     rebuildInstance,
     disposeObject3D,
+    createInstance,
     findInstance,
     setSelectedModule,
     updateLayoutPanel,
+    buildClassicTopbar,
     restoreStandardTopbar: () => rebuildStandardTopbar()
   });
 
   rebuildStandardTopbar = () => {
     tb.clear();
-    const g = tb.addGroup();
-    tb.toolButton(g, { title: "Select", iconSvg: I_SELECT, onClick: () => setToolSelect() });
-    tb.toolButton(g, { title: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
-    tb.toolButton(g, { title: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
-    tb.toolButton(g, { title: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
-    tb.toolButton(g, { title: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
-    tb.toolButton(g, { title: "Kuchyňa", iconSvg: I_CABINET, onClick: () => kitchenMode?.enter() });
+    buildClassicTopbar();
   };
 
   rebuildStandardTopbar();
@@ -4600,32 +4853,67 @@ export function startApp(args: AppArgs) {
     scene.add(selectedInstanceBox);
   }
 
-    function setSelectedModule(id: string | null) {
-      if (kitchenMode) id = kitchenMode.filterSelectableInstanceId(id);
-      if (layoutTool !== "wall") layoutTool = "select";
-      if (id && pinnedInstanceIds.has(id)) id = null;
-      selectedKind = id ? "module" : null;
-      selectedInstanceId = id;
-      selectedInstanceIds.clear();
-      if (id) selectedInstanceIds.add(id);
-      selectedWallId = null;
-      selectedWallIds.clear();
-      selectedDimensionId = null;
-      setInstanceSelected(id);
-      if (selectedUnderlayBox) {
-        scene.remove(selectedUnderlayBox);
-        selectedUnderlayBox.geometry.dispose();
-        (selectedUnderlayBox.material as THREE.Material).dispose();
-        selectedUnderlayBox = null;
+  function setSelectedKitchenGroup(groupId: string | null) {
+    if (layoutTool !== "wall") layoutTool = "select";
+    selectedKind = groupId ? "kitchenGroup" : null;
+    selectedKitchenGroupId = groupId;
+    selectedWallId = null;
+    selectedWallIds.clear();
+    selectedDimensionId = null;
+    selectedInstanceIds.clear();
+    if (groupId) {
+      for (const inst of instances) {
+        if (inst.kitchenGroupId !== groupId) continue;
+        selectedInstanceIds.add(inst.id);
       }
-      updateSelectionHighlights();
-      updateDimensionSelectionHighlights(S, dimensionHelpers);
-      mountProps();
     }
+    setInstanceSelected(null);
+    if (selectedWallBox) {
+      scene.remove(selectedWallBox);
+      selectedWallBox.geometry.dispose();
+      (selectedWallBox.material as THREE.Material).dispose();
+      selectedWallBox = null;
+    }
+    if (selectedUnderlayBox) {
+      scene.remove(selectedUnderlayBox);
+      selectedUnderlayBox.geometry.dispose();
+      (selectedUnderlayBox.material as THREE.Material).dispose();
+      selectedUnderlayBox = null;
+    }
+    showWallSnapMarkersFor(null);
+    updateSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    mountProps();
+  }
+
+  function setSelectedModule(id: string | null) {
+    if (kitchenMode) id = kitchenMode.filterSelectableInstanceId(id);
+    if (layoutTool !== "wall") layoutTool = "select";
+    if (id && pinnedInstanceIds.has(id)) id = null;
+    selectedKind = id ? "module" : null;
+    selectedKitchenGroupId = null;
+    selectedInstanceId = id;
+    selectedInstanceIds.clear();
+    if (id) selectedInstanceIds.add(id);
+    selectedWallId = null;
+    selectedWallIds.clear();
+    selectedDimensionId = null;
+    setInstanceSelected(id);
+    if (selectedUnderlayBox) {
+      scene.remove(selectedUnderlayBox);
+      selectedUnderlayBox.geometry.dispose();
+      (selectedUnderlayBox.material as THREE.Material).dispose();
+      selectedUnderlayBox = null;
+    }
+    updateSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    mountProps();
+  }
 
   function setSelectedWindow() {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = "window";
+    selectedKitchenGroupId = null;
     selectedWallId = null;
     selectedDimensionId = null;
     setInstanceSelected(null);
@@ -4643,6 +4931,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     if (!underlayMesh.visible || underlayState.pinned) return;
     selectedKind = "underlay";
+    selectedKitchenGroupId = null;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
@@ -4670,6 +4959,7 @@ export function startApp(args: AppArgs) {
   function setSelectedDimension(id: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = id ? "dimension" : null;
+    selectedKitchenGroupId = null;
     selectedDimensionId = id;
     selectedWallId = null;
     selectedWallIds.clear();
@@ -4698,6 +4988,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     if (id && pinnedWallIds.has(id)) id = null;
     selectedKind = id ? "wall" : null;
+    selectedKitchenGroupId = null;
     selectedWallId = id;
     selectedWallIds.clear();
     if (id) selectedWallIds.add(id);
@@ -5023,6 +5314,10 @@ export function startApp(args: AppArgs) {
     if (mode !== "layout") return;
     const inst = findInstance(id);
     if (!inst) return;
+    if (!S.kitchenEditMode && inst.kitchenGroupId) {
+      setSelectedKitchenGroup(inst.kitchenGroupId);
+      return;
+    }
     setSelectedModule(id);
   }
 
@@ -5032,6 +5327,7 @@ export function startApp(args: AppArgs) {
     if (!inst) return;
     const clonedParams = structuredClone(inst.params) as ModuleParams;
     const next = createInstance(clonedParams);
+    next.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
     next.root.position.copy(inst.root.position).add(new THREE.Vector3(0.2, 0, 0.2));
     layoutRoot.add(next.root);
     instances.push(next);
@@ -5893,12 +6189,22 @@ export function startApp(args: AppArgs) {
 
   // Quick edit dimension value (double click)
   renderer.domElement.addEventListener("dblclick", (ev) => {
-    if (mode !== "layout" || viewMode !== "2d") return;
+    if (mode !== "layout") return;
     const rect = renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
     pointerNdc.set(x, y);
     raycaster.setFromCamera(pointerNdc, cam());
+
+    const moduleHit = raycaster.intersectObjects(instances.map((inst) => inst.pick), false)[0]?.object as THREE.Mesh | undefined;
+    const instanceId = (moduleHit?.userData?.instanceId as string | undefined) ?? null;
+    const inst = instanceId ? findInstance(instanceId) : null;
+    if (inst?.kitchenGroupId && !S.kitchenEditMode) {
+      kitchenMode?.enterExisting(inst.kitchenGroupId);
+      return;
+    }
+
+    if (viewMode !== "2d") return;
     const picks = dimensions.map((d) => d.pick);
     const hit = raycaster.intersectObjects(picks, false)[0]?.object as THREE.Mesh | undefined;
     const dimId = (hit?.userData?.dimensionId as string | undefined) ?? null;
@@ -6632,6 +6938,13 @@ export function startApp(args: AppArgs) {
         marquee.pending = false;
         marquee.active = false;
         marqueeEl.style.display = "none";
+      }
+      if (!S.kitchenEditMode && inst.kitchenGroupId) {
+        const group = kitchenMode?.findKitchenGroup(inst.kitchenGroupId) ?? null;
+        if (group) {
+          setSelectedKitchenGroup(group.id);
+          return;
+        }
       }
       setSelectedModule(selectableId);
 

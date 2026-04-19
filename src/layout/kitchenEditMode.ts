@@ -1,13 +1,18 @@
-import * as THREE from "three";
+import type { Group, Object3D } from "three";
+import type { ModuleParams } from "../model/cabinetTypes";
 import { getAllMaterials } from "../data/materials";
-import type { AppState, LayoutInstance, KitchenGroup } from "./appState";
+import type { AppState, KitchenGroup, LayoutInstance } from "./appState";
 import { resolveContext, type KitchenContext } from "./kitchenContext";
 
 type TopbarApi = {
   clear: () => void;
-  addGroup: (title?: string) => HTMLElement;
-  addSpacer: () => void;
-  toolButton: (toolsEl: HTMLElement, args: { title: string; iconSvg: string; onClick?: () => void }) => HTMLButtonElement;
+  addRow: (args?: { title?: string; className?: string }) => HTMLElement;
+  addGroup: (title?: string, args?: { row?: HTMLElement }) => HTMLElement;
+  addSpacer: (args?: { row?: HTMLElement }) => void;
+  toolButton: (
+    toolsEl: HTMLElement,
+    args: { title: string; iconSvg: string; label?: string; variant?: "success" | "danger"; onClick?: () => void }
+  ) => HTMLButtonElement;
 };
 
 type PropsApi = {
@@ -16,11 +21,17 @@ type PropsApi = {
   row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
 };
 
+type GroupInstanceSnapshot = {
+  id: string;
+  params: ModuleParams;
+  position: { x: number; y: number; z: number };
+  rotationY: number;
+};
+
 type CreateKitchenEditModeArgs = {
   S: AppState;
-  scene: THREE.Scene;
-  layoutRoot: THREE.Group;
-  propertiesEl: HTMLElement;
+  layoutRoot: Group;
+  viewerEl: HTMLElement;
   tb: TopbarApi;
   props: PropsApi;
 
@@ -33,84 +44,69 @@ type CreateKitchenEditModeArgs = {
   ensureLayoutMode: () => void;
   setToolSelect: () => void;
   cancelPlacementIfActive: () => void;
-  addInstance: (type: any) => void;
+  addInstance: (type: ModuleParams["type"]) => void;
   rebuildInstance: (inst: LayoutInstance) => void;
-  disposeObject3D: (obj: THREE.Object3D) => void;
+  disposeObject3D: (obj: Object3D) => void;
+  createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
   findInstance: (id: string) => LayoutInstance | null;
   setSelectedModule: (id: string | null) => void;
   updateLayoutPanel: () => void;
+  buildClassicTopbar: () => void;
   restoreStandardTopbar: () => void;
 };
 
 export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   let overlayEl: HTMLDivElement | null = null;
-  let kitchenCtxSnapshot: KitchenContext | null = null;
-  let activeName: string | null = null;
   let escapeHandler: ((ev: KeyboardEvent) => void) | null = null;
 
-  const rebuildActiveGroupModules = () => {
-    const id = args.S.activeKitchenGroupId;
-    if (!id) return;
-    for (const inst of args.S.instances) {
-      if (inst.kitchenGroupId !== id) continue;
-      inst.params.depth = args.S.kitchenCtx.moduleDepthMm;
-      inst.params.height = args.S.kitchenCtx.moduleHeightMm;
-      args.rebuildInstance(inst);
-    }
+  let activeName = "";
+  let snapshotName = "";
+  let editingExistingGroupId: string | null = null;
+  let kitchenCtxSnapshot: KitchenContext | null = null;
+  let instanceSnapshots: GroupInstanceSnapshot[] = [];
+
+  const findKitchenGroup = (groupId: string | null) => {
+    if (!groupId) return null;
+    return args.S.kitchenGroups.find((group) => group.id === groupId) ?? null;
   };
 
-  const mountKitchenContextProps = () => {
-    args.props.setTitle("Kitchen");
-    const s = args.props.section();
+  const getGroupInstanceIds = (groupId: string) => {
+    return args.S.instances.filter((inst) => inst.kitchenGroupId === groupId).map((inst) => inst.id);
+  };
 
-    const numberRow = (label: string, value: number, onCommit: (next: number) => void) => {
-      const inp = document.createElement("input");
-      inp.type = "number";
-      inp.step = "1";
-      inp.value = String(Math.round(value));
-      args.props.row(s, label, inp);
-      const commit = () => {
-        const n = Number(String(inp.value).trim().replace(",", "."));
-        if (!Number.isFinite(n)) return;
-        onCommit(Math.round(n));
-        inp.value = String(Math.round(n));
-      };
-      inp.addEventListener("change", commit);
-      inp.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") commit();
-      });
-    };
+  const captureGroupInstances = (groupId: string) => {
+    return args.S.instances
+      .filter((inst) => inst.kitchenGroupId === groupId)
+      .map((inst) => ({
+        id: inst.id,
+        params: structuredClone(inst.params),
+        position: { x: inst.root.position.x, y: inst.root.position.y, z: inst.root.position.z },
+        rotationY: inst.root.rotation.y
+      }));
+  };
 
-    const applyCtx = (next: KitchenContext) => {
-      args.S.kitchenCtx = resolveContext(next);
-      rebuildActiveGroupModules();
-    };
+  const rebuildGroupModules = (groupId: string, ctx: KitchenContext) => {
+    for (const inst of args.S.instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      inst.params.depth = ctx.moduleDepthMm;
+      inst.params.height = ctx.moduleHeightMm;
+      args.rebuildInstance(inst);
+    }
+    args.updateLayoutPanel();
+  };
 
-    numberRow("Height (mm)", args.S.kitchenCtx.heightMm, (v) => applyCtx({ ...args.S.kitchenCtx, heightMm: v }));
-    numberRow("Worktop depth (mm)", args.S.kitchenCtx.worktopDepthMm, (v) => applyCtx({ ...args.S.kitchenCtx, worktopDepthMm: v }));
-    numberRow("Worktop front offset (mm)", args.S.kitchenCtx.worktopFrontOffsetMm, (v) => applyCtx({ ...args.S.kitchenCtx, worktopFrontOffsetMm: v }));
-    numberRow("Worktop back offset (mm)", args.S.kitchenCtx.worktopBackOffsetMm, (v) => applyCtx({ ...args.S.kitchenCtx, worktopBackOffsetMm: v }));
-    numberRow("Worktop thickness (mm)", args.S.kitchenCtx.worktopThicknessMm, (v) => applyCtx({ ...args.S.kitchenCtx, worktopThicknessMm: v }));
+  const applyNormalGroupCtx = (groupId: string, next: KitchenContext) => {
+    const group = findKitchenGroup(groupId);
+    if (!group) return;
+    group.ctx = resolveContext(next);
+    rebuildGroupModules(groupId, group.ctx);
+  };
 
-    const materials = getAllMaterials();
-    const makeMatSelect = (value: string, onChange: (id: string) => void) => {
-      const sel = document.createElement("select");
-      sel.innerHTML = materials.map((m) => `<option value="${m.id}">${m.name}</option>`).join("");
-      sel.value = value;
-      sel.addEventListener("change", () => onChange(sel.value));
-      return sel;
-    };
-
-    args.props.row(
-      s,
-      "Face material",
-      makeMatSelect(args.S.kitchenCtx.faceMaterialId, (id) => applyCtx({ ...args.S.kitchenCtx, faceMaterialId: id }))
-    );
-    args.props.row(
-      s,
-      "Corpus material",
-      makeMatSelect(args.S.kitchenCtx.corpusMaterialId, (id) => applyCtx({ ...args.S.kitchenCtx, corpusMaterialId: id }))
-    );
+  const applyActiveGroupCtx = (next: KitchenContext) => {
+    const groupId = args.S.activeKitchenGroupId;
+    if (!groupId) return;
+    args.S.kitchenCtx = resolveContext(next);
+    rebuildGroupModules(groupId, args.S.kitchenCtx);
   };
 
   const removeOverlay = () => {
@@ -118,14 +114,26 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     overlayEl = null;
   };
 
-  const removeKitchenEscapeHandler = () => {
+  const ensureOverlay = () => {
+    removeOverlay();
+    overlayEl = document.createElement("div");
+    overlayEl.style.position = "absolute";
+    overlayEl.style.inset = "0";
+    overlayEl.style.background = "rgba(255,255,255,0.14)";
+    overlayEl.style.mixBlendMode = "screen";
+    overlayEl.style.pointerEvents = "none";
+    overlayEl.style.zIndex = "9";
+    args.viewerEl.appendChild(overlayEl);
+  };
+
+  const removeEscapeHandler = () => {
     if (!escapeHandler) return;
-    window.removeEventListener("keydown", escapeHandler, { capture: true } as any);
+    window.removeEventListener("keydown", escapeHandler, { capture: true } as AddEventListenerOptions);
     escapeHandler = null;
   };
 
-  const addKitchenEscapeHandler = () => {
-    removeKitchenEscapeHandler();
+  const addEscapeHandler = () => {
+    removeEscapeHandler();
     escapeHandler = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape") return;
       if (!args.S.kitchenEditMode) return;
@@ -138,12 +146,15 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
   const buildKitchenTopbar = () => {
     args.tb.clear();
+    args.buildClassicTopbar();
 
-    const gModules = args.tb.addGroup();
-    const add = (title: string, type: any) => {
-      args.tb.toolButton(gModules, {
+    const row = args.tb.addRow({ title: "Kitchen settings", className: "topbar-kitchen-ribbon" });
+    const modulesGroup = args.tb.addGroup("Modules", { row });
+    const addModule = (title: string, label: string, type: ModuleParams["type"]) => {
+      args.tb.toolButton(modulesGroup, {
         title,
         iconSvg: args.icons.cabinet,
+        label,
         onClick: () => {
           args.ensureLayoutMode();
           args.setToolSelect();
@@ -152,92 +163,84 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       });
     };
 
-    add("drawer", "drawer_low");
-    add("nestedDrawer", "nested_drawer_low");
-    add("shelves", "shelves");
-    add("cornerShelf", "corner_shelf_lower");
-    add("fridgeTall", "fridge_tall");
-    add("flapShelves", "flap_shelves_low");
-    add("swingShelves", "swing_shelves_low");
-    add("ovenBase", "oven_base_low");
-    add("microwaveOvenTall", "microwave_oven_tall");
-    add("topDrawersDoors", "top_drawers_doors_low");
+    addModule("drawer", "Drawer", "drawer_low");
+    addModule("nestedDrawer", "Nested", "nested_drawer_low");
+    addModule("shelves", "Shelves", "shelves");
+    addModule("cornerShelf", "Corner", "corner_shelf_lower");
+    addModule("fridgeTall", "Fridge tall", "fridge_tall");
+    addModule("flapShelves", "Flap", "flap_shelves_low");
+    addModule("swingShelves", "Swing", "swing_shelves_low");
+    addModule("ovenBase", "Oven base", "oven_base_low");
+    addModule("microwaveOvenTall", "Micro tall", "microwave_oven_tall");
+    addModule("topDrawersDoors", "Top doors", "top_drawers_doors_low");
 
-    args.tb.addSpacer();
+    args.tb.addSpacer({ row });
 
-    const gExit = args.tb.addGroup();
-    const finishBtn = args.tb.toolButton(gExit, { title: "Dokončiť kuchyňu", iconSvg: args.icons.done, onClick: () => exitFinish() });
-    finishBtn.style.color = "#22c55e";
-    finishBtn.style.borderColor = "rgba(34,197,94,0.55)";
-    finishBtn.style.background = "rgba(34,197,94,0.10)";
-    const cancelBtn = args.tb.toolButton(gExit, { title: "Zrušiť", iconSvg: args.icons.cancel, onClick: () => exitDiscard() });
-    cancelBtn.style.color = "#ef4444";
-    cancelBtn.style.borderColor = "rgba(239,68,68,0.55)";
-    cancelBtn.style.background = "rgba(239,68,68,0.10)";
+    const exitGroup = args.tb.addGroup("Group", { row });
+    const finishBtn = args.tb.toolButton(exitGroup, {
+      title: "Dokončiť kuchyňu",
+      iconSvg: args.icons.done,
+      label: "Finish",
+      variant: "success",
+      onClick: () => exitFinish()
+    });
+    void finishBtn;
+
+    const cancelBtn = args.tb.toolButton(exitGroup, {
+      title: "Zrušiť",
+      iconSvg: args.icons.cancel,
+      label: "Discard",
+      variant: "danger",
+      onClick: () => exitDiscard()
+    });
+    void cancelBtn;
   };
 
-  const createOverlay = () => {
-    removeOverlay();
-    const el = document.createElement("div");
-    el.style.position = "fixed";
-    el.style.inset = "0";
-    el.style.background = "rgba(59,130,246,0.08)";
-    el.style.pointerEvents = "none";
-    el.style.zIndex = "10";
-    document.body.appendChild(el);
-    overlayEl = el;
-  };
-
-  const enter = () => {
-    const name = prompt("Názov kuchyne:", "Kuchyňa 1");
-    if (name === null) return;
-
-    const id = "kg_" + Date.now();
-
+  const beginEdit = (groupId: string, name: string, ctx: KitchenContext, existingGroupId: string | null) => {
     args.ensureLayoutMode();
     args.cancelPlacementIfActive();
     args.setToolSelect();
 
-    kitchenCtxSnapshot = structuredClone(args.S.kitchenCtx);
     activeName = name;
-    args.S.kitchenEditMode = true;
-    args.S.activeKitchenGroupId = id;
+    snapshotName = name;
+    editingExistingGroupId = existingGroupId;
+    kitchenCtxSnapshot = structuredClone(ctx);
+    instanceSnapshots = captureGroupInstances(groupId);
 
-    createOverlay();
+    args.S.kitchenCtx = resolveContext(structuredClone(ctx));
+    args.S.kitchenEditMode = true;
+    args.S.activeKitchenGroupId = groupId;
+
+    ensureOverlay();
     buildKitchenTopbar();
-    addKitchenEscapeHandler();
+    addEscapeHandler();
     args.setSelectedModule(null);
   };
 
-  const finishGroupBoundingBox = (kitchenGroupId: string) => {
-    const groupInstances = args.S.instances.filter((i) => i.kitchenGroupId === kitchenGroupId);
-    if (groupInstances.length === 0) return;
+  const enterNew = () => {
+    const name = prompt("Názov kuchyne:", "Kuchyňa 1");
+    if (name === null) return;
+    beginEdit("kg_" + Date.now(), name, args.S.kitchenCtx, null);
+  };
 
-    const box = new THREE.Box3();
-    for (const inst of groupInstances) box.expandByObject(inst.root);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-
-    const geo = new THREE.BoxGeometry(Math.max(0.001, size.x), Math.max(0.001, size.y), Math.max(0.001, size.z));
-    const mat = new THREE.MeshBasicMaterial({ visible: false });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.copy(center);
-    mesh.visible = false;
-    mesh.userData.kind = "kitchenGroup";
-    mesh.userData.kitchenGroupId = kitchenGroupId;
-    args.scene.add(mesh);
+  const enterExisting = (groupId: string) => {
+    const group = findKitchenGroup(groupId);
+    if (!group) return;
+    beginEdit(group.id, group.name, group.ctx, group.id);
   };
 
   const exitCommon = () => {
     args.S.kitchenEditMode = false;
     args.S.activeKitchenGroupId = null;
-    activeName = null;
+    activeName = "";
+    snapshotName = "";
+    editingExistingGroupId = null;
     kitchenCtxSnapshot = null;
+    instanceSnapshots = [];
     removeOverlay();
-    removeKitchenEscapeHandler();
+    removeEscapeHandler();
     args.restoreStandardTopbar();
     args.setSelectedModule(null);
-    args.propertiesEl.innerHTML = "";
   };
 
   const exitFinish = () => {
@@ -245,20 +248,62 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     args.cancelPlacementIfActive();
 
-    const id = args.S.activeKitchenGroupId;
-    if (id) {
-      const name = activeName ?? "Kuchyňa";
-      const group: KitchenGroup = {
-        id,
-        name,
-        ctx: structuredClone(args.S.kitchenCtx),
-        instanceIds: args.S.instances.filter((i) => i.kitchenGroupId === id).map((i) => i.id)
-      };
-      args.S.kitchenGroups.push(group);
-      finishGroupBoundingBox(id);
+    const groupId = args.S.activeKitchenGroupId;
+    if (!groupId) {
+      exitCommon();
+      return;
     }
 
+    const nextGroup: KitchenGroup = {
+      id: groupId,
+      name: activeName || "Kuchyňa",
+      ctx: structuredClone(args.S.kitchenCtx),
+      instanceIds: getGroupInstanceIds(groupId)
+    };
+
+    const existing = editingExistingGroupId ? findKitchenGroup(editingExistingGroupId) : null;
+    if (existing) {
+      existing.name = nextGroup.name;
+      existing.ctx = nextGroup.ctx;
+      existing.instanceIds = nextGroup.instanceIds;
+    } else {
+      args.S.kitchenGroups.push(nextGroup);
+    }
+
+    args.updateLayoutPanel();
     exitCommon();
+  };
+
+  const restoreExistingInstances = (groupId: string) => {
+    const snapshotIds = new Set(instanceSnapshots.map((snapshot) => snapshot.id));
+
+    for (let i = args.S.instances.length - 1; i >= 0; i--) {
+      const inst = args.S.instances[i];
+      if (inst.kitchenGroupId !== groupId) continue;
+      if (snapshotIds.has(inst.id)) continue;
+      args.layoutRoot.remove(inst.root);
+      args.disposeObject3D(inst.root);
+      args.S.instances.splice(i, 1);
+    }
+
+    for (const snapshot of instanceSnapshots) {
+      let inst = args.findInstance(snapshot.id);
+      if (!inst) {
+        inst = args.createInstance(structuredClone(snapshot.params), { id: snapshot.id });
+        inst.kitchenGroupId = groupId;
+        inst.root.position.set(snapshot.position.x, snapshot.position.y, snapshot.position.z);
+        inst.root.rotation.y = snapshot.rotationY;
+        args.layoutRoot.add(inst.root);
+        args.S.instances.push(inst);
+      }
+      inst.params = structuredClone(snapshot.params);
+      inst.kitchenGroupId = groupId;
+      inst.root.position.set(snapshot.position.x, snapshot.position.y, snapshot.position.z);
+      inst.root.rotation.y = snapshot.rotationY;
+      args.rebuildInstance(inst);
+      inst.root.position.set(snapshot.position.x, snapshot.position.y, snapshot.position.z);
+      inst.root.rotation.y = snapshot.rotationY;
+    }
   };
 
   const exitDiscard = () => {
@@ -266,45 +311,160 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     args.cancelPlacementIfActive();
 
-    if (kitchenCtxSnapshot) {
-      args.S.kitchenCtx = resolveContext(structuredClone(kitchenCtxSnapshot));
+    const groupId = args.S.activeKitchenGroupId;
+    if (!groupId) {
+      exitCommon();
+      return;
     }
 
-    const id = args.S.activeKitchenGroupId;
-    if (id) {
-      for (const inst of args.S.instances.filter((i) => i.kitchenGroupId === id)) {
-        args.layoutRoot.remove(inst.root);
-        args.disposeObject3D(inst.root);
+    if (editingExistingGroupId) {
+      const group = findKitchenGroup(editingExistingGroupId);
+      if (group && kitchenCtxSnapshot) {
+        group.name = snapshotName;
+        group.ctx = resolveContext(structuredClone(kitchenCtxSnapshot));
+        group.instanceIds = instanceSnapshots.map((snapshot) => snapshot.id);
+      }
+      if (kitchenCtxSnapshot) {
+        args.S.kitchenCtx = resolveContext(structuredClone(kitchenCtxSnapshot));
+      }
+      restoreExistingInstances(groupId);
+    } else {
+      if (kitchenCtxSnapshot) {
+        args.S.kitchenCtx = resolveContext(structuredClone(kitchenCtxSnapshot));
       }
       for (let i = args.S.instances.length - 1; i >= 0; i--) {
-        if (args.S.instances[i].kitchenGroupId === id) args.S.instances.splice(i, 1);
+        const inst = args.S.instances[i];
+        if (inst.kitchenGroupId !== groupId) continue;
+        args.layoutRoot.remove(inst.root);
+        args.disposeObject3D(inst.root);
+        args.S.instances.splice(i, 1);
       }
-      args.updateLayoutPanel();
     }
 
+    args.updateLayoutPanel();
     exitCommon();
   };
 
-  const filterSelectableInstanceId = (id: string | null) => {
-    if (!id) return null;
-    if (!args.S.kitchenEditMode) return id;
-    const activeId = args.S.activeKitchenGroupId;
-    if (!activeId) return null;
-    const inst = args.findInstance(id);
-    if (!inst) return null;
-    return inst.kitchenGroupId === activeId ? id : null;
+  const mountKitchenGroupProps = (groupId: string) => {
+    const isEditingActive = args.S.kitchenEditMode && args.S.activeKitchenGroupId === groupId;
+    const group = findKitchenGroup(groupId);
+    const ctx = isEditingActive ? args.S.kitchenCtx : group?.ctx ?? null;
+    const currentName = isEditingActive ? activeName : group?.name ?? "";
+    if (!ctx) return false;
+
+    args.props.setTitle("Kitchen");
+    const section = args.props.section();
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = currentName;
+    args.props.row(section, "Name", nameInput);
+    const commitName = () => {
+      const nextName = nameInput.value.trim() || "Kuchyňa";
+      nameInput.value = nextName;
+      if (isEditingActive) {
+        activeName = nextName;
+      } else if (group) {
+        group.name = nextName;
+      }
+    };
+    nameInput.addEventListener("change", commitName);
+    nameInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") commitName();
+    });
+
+    const commitCtx = (buildNext: (base: KitchenContext) => KitchenContext) => {
+      if (isEditingActive) {
+        applyActiveGroupCtx(buildNext(args.S.kitchenCtx));
+        return;
+      }
+      if (!group) return;
+      applyNormalGroupCtx(group.id, buildNext(group.ctx));
+    };
+
+    const addNumberRow = (label: string, value: number, onCommit: (value: number) => void) => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "1";
+      input.value = String(Math.round(value));
+      args.props.row(section, label, input);
+      const commit = () => {
+        const next = Number(String(input.value).trim().replace(",", "."));
+        if (!Number.isFinite(next)) return;
+        onCommit(Math.round(next));
+        input.value = String(Math.round(next));
+      };
+      input.addEventListener("change", commit);
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") commit();
+      });
+    };
+
+    addNumberRow("Height (mm)", ctx.heightMm, (value) => commitCtx((base) => ({ ...base, heightMm: value })));
+    addNumberRow("Worktop depth (mm)", ctx.worktopDepthMm, (value) => commitCtx((base) => ({ ...base, worktopDepthMm: value })));
+    addNumberRow("Worktop front offset (mm)", ctx.worktopFrontOffsetMm, (value) => commitCtx((base) => ({ ...base, worktopFrontOffsetMm: value })));
+    addNumberRow("Worktop back offset (mm)", ctx.worktopBackOffsetMm, (value) => commitCtx((base) => ({ ...base, worktopBackOffsetMm: value })));
+    addNumberRow("Worktop thickness (mm)", ctx.worktopThicknessMm, (value) => commitCtx((base) => ({ ...base, worktopThicknessMm: value })));
+
+    const materials = getAllMaterials();
+    const makeMaterialSelect = (value: string, onChange: (id: string) => void) => {
+      const select = document.createElement("select");
+      select.innerHTML = materials.map((material) => `<option value="${material.id}">${material.name}</option>`).join("");
+      select.value = value;
+      select.addEventListener("change", () => onChange(select.value));
+      return select;
+    };
+
+    args.props.row(
+      section,
+      "Face material",
+      makeMaterialSelect(ctx.faceMaterialId, (id) => commitCtx((base) => ({ ...base, faceMaterialId: id })))
+    );
+    args.props.row(
+      section,
+      "Corpus material",
+      makeMaterialSelect(ctx.corpusMaterialId, (id) => commitCtx((base) => ({ ...base, corpusMaterialId: id })))
+    );
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.textContent = "Upraviť kuchyňu";
+    editBtn.disabled = isEditingActive;
+    editBtn.style.marginTop = "10px";
+    editBtn.addEventListener("click", () => {
+      if (isEditingActive) return;
+      enterExisting(groupId);
+    });
+    section.appendChild(editBtn);
+
+    return true;
   };
 
   return {
-    enter,
+    enterNew,
+    enterExisting,
     exitFinish,
     exitDiscard,
-    filterSelectableInstanceId,
-    tryMountKitchenContextProps() {
-      if (!args.S.kitchenEditMode) return false;
-      if (!args.S.activeKitchenGroupId) return false;
-      mountKitchenContextProps();
-      return true;
+    findKitchenGroup,
+    getGroupForInstance(instanceId: string) {
+      const inst = args.findInstance(instanceId);
+      if (!inst?.kitchenGroupId) return null;
+      return findKitchenGroup(inst.kitchenGroupId);
+    },
+    filterSelectableInstanceId(id: string | null) {
+      if (!id) return null;
+      if (!args.S.kitchenEditMode) return id;
+      const activeGroupId = args.S.activeKitchenGroupId;
+      if (!activeGroupId) return null;
+      const inst = args.findInstance(id);
+      if (!inst) return null;
+      return inst.kitchenGroupId === activeGroupId ? id : null;
+    },
+    mountKitchenGroupProps,
+    tryMountActiveKitchenGroupProps() {
+      const groupId = args.S.activeKitchenGroupId;
+      if (!args.S.kitchenEditMode || !groupId) return false;
+      return mountKitchenGroupProps(groupId);
     }
   };
 }
