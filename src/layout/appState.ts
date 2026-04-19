@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { ModuleParams } from "../model/cabinetTypes";
+export type { ModuleParams };
 import type { SsgiPipeline } from "../rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 

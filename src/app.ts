@@ -39,9 +39,7 @@ import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
 import {
-  snapshotSignature,
   updateUndoRedoUi,
-  restoreLayoutSnapshot,
   commitHistory,
   undo,
   redo,
@@ -791,7 +789,7 @@ export function startApp(args: AppArgs) {
     layoutRoot.add(root);
     dimensions.push(inst);
     updateDimensionGeometry(inst);
-    if (!opts?.skipHistory) commitHistory();
+    if (!opts?.skipHistory) commitHistory(S);
     return inst;
   };
 
@@ -815,7 +813,7 @@ export function startApp(args: AppArgs) {
     layoutRoot.remove(d.root);
     disposeDimensionInstance(d);
     if (selectedDimensionId === id) setSelectedDimension(null);
-    if (!opts?.skipHistory) commitHistory();
+    if (!opts?.skipHistory) commitHistory(S);
   };
 
   type LayoutSnapshot = {
@@ -854,141 +852,54 @@ export function startApp(args: AppArgs) {
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
 
-
-  const restoreLayoutSnapshot = (snap: LayoutSnapshot) => {
-    // Clear selection visuals first
-    setSelectedWall(null);
-    setSelectedModule(null);
-    setSelectedDimension(null);
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    updateSelectionHighlights();
-
-    // Clear dimensions
-    for (const d of dimensions.splice(0, dimensions.length)) {
-      layoutRoot.remove(d.root);
-      disposeDimensionInstance(d);
-    }
-
-    // Clear wall roots
-    for (const w of walls.splice(0, walls.length)) {
-      layoutRoot.remove(w.root);
-      disposeObject3D(w.root);
-    }
-
-    wallCounter = snap.wallCounter;
-    instanceCounter = snap.instanceCounter ?? instanceCounter;
-    dimensionCounter = snap.dimensionCounter ?? dimensionCounter;
-
-    pinnedWallIds.clear();
-    for (const id of snap.pinnedWallIds) pinnedWallIds.add(id);
-    pinnedInstanceIds.clear();
-    for (const id of snap.pinnedInstanceIds) pinnedInstanceIds.add(id);
-    underlayState.pinned = !!snap.underlayPinned;
-
-    // Clear modules
-    for (const inst of instances.splice(0, instances.length)) {
-      layoutRoot.remove(inst.root);
-      disposeObject3D(inst.root);
-    }
-
-    // Restore modules
-    if (snap.instances && snap.instances.length > 0) {
-      for (const m of snap.instances) {
-        const inst = createInstance(JSON.parse(JSON.stringify(m.params)) as ModuleParams, { id: m.id });
-        inst.root.position.set(m.positionMm.x / 1000, 0, m.positionMm.z / 1000);
-        inst.root.rotation.y = ((m.rotationYDeg ?? 0) * Math.PI) / 180;
-        layoutRoot.add(inst.root);
-        instances.push(inst);
-      }
-      updateLayoutPanel();
-    }
-
-    for (const w of snap.walls) {
-      const id = w.id;
-      const root = new THREE.Group();
-      root.name = `wall_${id}`;
-      const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
-      const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-      const mesh = createWallMesh(refA, refB, w.params.thicknessMm);
-      mesh.name = `wallMesh_${id}`;
-      mesh.userData.kind = "wall";
-      mesh.userData.wallId = id;
-      root.add(mesh);
-      const inst: WallInstance = { id, params: JSON.parse(JSON.stringify(w.params)) as WallParams, root, mesh };
-      layoutRoot.add(root);
-      walls.push(inst);
-      rebuildWall(inst);
-    }
-
-    if (snap.dimensions && snap.dimensions.length > 0) {
-      for (const dp of snap.dimensions) {
-        createDimension(dp.a, dp.b, dp.offsetM, { id: dp.id, skipHistory: true });
-      }
-    }
-
-    rebuildWallPlanMesh();
-    updateAllDimensions();
-    clearToolHud();
-
-    // Restore selection (best-effort)
-    for (const id of snap.selected.wallIds) if (walls.some((w) => w.id === id)) selectedWallIds.add(id);
-    for (const id of snap.selected.instIds) if (instances.some((i) => i.id === id)) selectedInstanceIds.add(id);
-    if (snap.selected.kind === "wall" && snap.selected.wallId && walls.some((w) => w.id === snap.selected.wallId)) {
-      setSelectedWall(snap.selected.wallId);
-    } else if (snap.selected.kind === "module" && snap.selected.instId && instances.some((i) => i.id === snap.selected.instId)) {
-      setSelectedModule(snap.selected.instId);
-    } else if (snap.selected.kind === "dimension" && snap.selected.dimensionId) {
-      setSelectedDimension(snap.selected.dimensionId);
-    } else {
-      setSelectedWall(null);
-      setSelectedModule(null);
-    }
-    updateSelectionHighlights();
-    updateDimensionSelectionHighlights();
-    mountProps();
+  const S: AppState = {
+    mode,
+    viewMode,
+    renderMode,
+    ssgi,
+    ssgiCameraUuid,
+    photo,
+    photoCameraUuid,
+    photoLastLightingRevision: -1,
+    walls,
+    wallCounter,
+    wallPlanUnionMesh: null,
+    wallDebugEnabled: false,
+    wallSolvedJoinPolys: [],
+    wallUnionPolys: null,
+    instances,
+    instanceCounter,
+    params,
+    layoutTool,
+    selectedKind,
+    selectedInstanceId,
+    selectedWallId,
+    selectedDimensionId,
+    selectedWallIds,
+    selectedInstanceIds,
+    pinnedWallIds,
+    pinnedInstanceIds,
+    underlayState,
+    windowInst: null,
+    selectedMesh: null,
+    selectedBox: null,
+    overlapBoxes: [],
+    cabinetGroup: null,
+    grainArrow: null,
+    dimensions,
+    dimensionCounter,
+    undoBtnEl,
+    redoBtnEl,
+    underlayStatusEl: null,
+    underlayScaleEl: null,
+    underlayOffXEl: null,
+    underlayOffZEl: null,
+    underlayRotEl: null,
+    underlayOpacityEl: null,
+    history
   };
 
-  const commitHistory = () => {
-    if (mode !== "layout") return;
-    if (viewMode !== "2d" && viewMode !== "3d") return;
-    const next = captureLayoutSnapshot();
-    if (!history.current) {
-      history.current = next;
-      history.past = [];
-      history.future = [];
-      updateUndoRedoUi();
-      return;
-    }
-    const a = snapshotSignature(history.current);
-    const b = snapshotSignature(next);
-    if (a === b) return;
-    history.past.push(history.current);
-    if (history.past.length > history.max) history.past.splice(0, history.past.length - history.max);
-    history.current = next;
-    history.future = [];
-    updateUndoRedoUi();
-  };
 
-  const undo = () => {
-    if (!history.current) return;
-    const prev = history.past.pop() ?? null;
-    if (!prev) return;
-    history.future.push(history.current);
-    history.current = prev;
-    restoreLayoutSnapshot(prev);
-    updateUndoRedoUi();
-  };
-
-  const redo = () => {
-    if (!history.current) return;
-    const next = history.future.pop() ?? null;
-    if (!next) return;
-    history.past.push(history.current);
-    history.current = next;
-    restoreLayoutSnapshot(next);
-    updateUndoRedoUi();
-  };
 
   const wallDraw = {
     active: false,
@@ -2356,7 +2267,7 @@ export function startApp(args: AppArgs) {
       return null;
     }
 
-    commitHistory();
+    commitHistory(S);
     return inst;
   }
 
@@ -2605,13 +2516,13 @@ export function startApp(args: AppArgs) {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
         const k = ev.key;
         if (k === "z" || k === "Z") {
-          if (ev.shiftKey) redo();
-          else undo();
+          if (ev.shiftKey) redo(S, helpers);
+          else undo(S, helpers);
           ev.preventDefault();
           return;
         }
         if (k === "y" || k === "Y") {
-          redo();
+          redo(S, helpers);
           ev.preventDefault();
           return;
         }
@@ -2771,7 +2682,7 @@ export function startApp(args: AppArgs) {
 
         if (moved) {
           mountProps();
-          commitHistory();
+          commitHistory(S);
         }
         return moved;
       };
@@ -3040,7 +2951,7 @@ export function startApp(args: AppArgs) {
           for (const id of ids) deleteInstance(id);
           setSelectedModule(null);
           selectedInstanceIds.clear();
-          commitHistory();
+          commitHistory(S);
           ev.preventDefault();
           return;
         }
@@ -4433,7 +4344,7 @@ export function startApp(args: AppArgs) {
         rot.value = String(Math.round((prevRot * 180) / Math.PI));
         return;
       }
-      commitHistory();
+      commitHistory(S);
       mountProps();
     };
 
@@ -4445,7 +4356,7 @@ export function startApp(args: AppArgs) {
     pinned.addEventListener("change", () => {
       if (pinned.checked) pinnedInstanceIds.add(inst.id);
       else pinnedInstanceIds.delete(inst.id);
-      commitHistory();
+      commitHistory(S);
       mountProps();
     });
 
@@ -4456,7 +4367,7 @@ export function startApp(args: AppArgs) {
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
     const onChange = () => {
       rebuildInstance(inst);
-      commitHistory();
+      commitHistory(S);
       mountProps();
     };
 
@@ -4536,7 +4447,7 @@ export function startApp(args: AppArgs) {
       translateWallAndConnected(wa, Math.round(shift.x * 1000), Math.round(shift.z * 1000));
     }
 
-    commitHistory();
+    commitHistory(S);
     setUnderlayStatus("Dimension: updated.");
     mountProps();
   };
@@ -4611,6 +4522,26 @@ export function startApp(args: AppArgs) {
     showNoProps();
   };
 
+  const helpers: HistoryHelpers = {
+    setSelectedWall,
+    setSelectedModule,
+    setSelectedDimension,
+    updateSelectionHighlights,
+    updateDimensionSelectionHighlights,
+    disposeDimensionInstance,
+    disposeObject3D,
+    createInstance,
+    createWallMesh,
+    rebuildWall,
+    createDimension,
+    rebuildWallPlanMesh,
+    updateAllDimensions,
+    clearToolHud,
+    mountProps,
+    updateLayoutPanel,
+    layoutRoot
+  };
+
   const g1 = tb.addGroup();
   tb.toolButton(g1, {
     title: "Select",
@@ -4644,7 +4575,7 @@ export function startApp(args: AppArgs) {
     iconSvg: I_UNDO,
     onClick: () => {
       ensureLayoutMode();
-      undo();
+      undo(S, helpers);
     }
   });
   redoBtnEl = tb.toolButton(gEdit, {
@@ -4652,7 +4583,7 @@ export function startApp(args: AppArgs) {
     iconSvg: I_REDO,
     onClick: () => {
       ensureLayoutMode();
-      redo();
+      redo(S, helpers);
     }
   });
   tb.toolButton(gEdit, {
@@ -5284,7 +5215,7 @@ export function startApp(args: AppArgs) {
 
     // keep properties in sync
     mountProps();
-    commitHistory();
+    commitHistory(S);
   }
 
   function createWindow(defaultWall: WallId = "back") {
@@ -6600,7 +6531,7 @@ export function startApp(args: AppArgs) {
           if (transformState.step === "pickTarget" && transformState.base) {
             const delta = p.clone().sub(transformState.base);
             applyMoveDelta(delta);
-            commitHistory();
+            commitHistory(S);
             clearTransform({ status: "Move: done." });
             mountProps();
             return;
@@ -6618,7 +6549,7 @@ export function startApp(args: AppArgs) {
             return;
           }
           if (transformState.step === "rotating") {
-            commitHistory();
+            commitHistory(S);
             clearTransform({ status: "Rotate: done." });
             mountProps();
             return;
@@ -6688,7 +6619,7 @@ export function startApp(args: AppArgs) {
         } else {
           translateWallAndConnected(w, dxMm, dzMm);
         }
-        commitHistory();
+        commitHistory(S);
 
         alignState.lastA = ref;
         alignState.lastB = picked;
@@ -6779,7 +6710,7 @@ export function startApp(args: AppArgs) {
 
             if (dx1 !== 0 || dz1 !== 0) moveWallEndpointAndConnected(w, end1, dx1, dz1);
             if (dx2 !== 0 || dz2 !== 0) moveWallEndpointAndConnected(w2, end2, dx2, dz2);
-            commitHistory();
+            commitHistory(S);
 
             trimState.lastTarget = trimState.targetPick;
             trimState.lastCutter = picked;
@@ -6851,7 +6782,7 @@ export function startApp(args: AppArgs) {
         }
 
         moveWallEndpointAndConnected(w, moveWhich, dxMm, dzMm);
-        commitHistory();
+        commitHistory(S);
 
         trimState.lastTarget = trimState.targetPick ?? picked;
         trimState.lastCutter = picked;
@@ -7807,7 +7738,7 @@ export function startApp(args: AppArgs) {
       }
       rebuildWallPlanMesh();
       mountProps();
-      commitHistory();
+      commitHistory(S);
       try {
         renderer.domElement.releasePointerCapture(ev.pointerId);
       } catch {
@@ -7820,7 +7751,7 @@ export function startApp(args: AppArgs) {
       underlayDragState.active = false;
       underlayDragState.pointerId = null;
       setUnderlayStatus("Underlay moved.");
-      commitHistory();
+      commitHistory(S);
       try {
         renderer.domElement.releasePointerCapture(ev.pointerId);
       } catch {
@@ -7833,7 +7764,7 @@ export function startApp(args: AppArgs) {
       dimensionDragState.active = false;
       dimensionDragState.pointerId = null;
       dimensionDragState.id = null;
-      commitHistory();
+      commitHistory(S);
       try {
         renderer.domElement.releasePointerCapture(ev.pointerId);
       } catch {
@@ -8010,10 +7941,10 @@ export function startApp(args: AppArgs) {
 
   modeSelect.value = "layout";
   setMode("layout");
-  history.current = captureLayoutSnapshot();
+  history.current = captureLayoutSnapshot(S);
   history.past = [];
   history.future = [];
-  updateUndoRedoUi();
+  updateUndoRedoUi(S);
 
   const navForward = new THREE.Vector3();
   const navRight = new THREE.Vector3();
