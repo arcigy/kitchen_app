@@ -1,0 +1,83 @@
+
+> 3d-kuchyna-prototype@0.0.0 dev
+> vite --host 127.0.0.1 --port 5180
+
+Re-optimizing dependencies because vite config has changed
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m223[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5180[22m/[39m
+[2m15:15:46[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:15:51[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:15:56[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:16:19[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:20:06[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:20:37[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:20:55[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:03[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:19[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:32[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:21:37[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:28:27[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:28:48[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:29:53[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:30:29[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:30:41[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:30:45[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:30:49[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:30:54[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:31:01[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:31:46[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:32:09[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:32:16[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:32:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:32:47[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:32:59[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:33:08[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:33:24[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:33:55[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:33:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:34:08[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:34:30[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:34:43[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:34:57[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:35:06[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:35:23[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:35:48[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:35:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:36:19[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:36:23[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:36:46[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:37:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:37:47[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:37:52[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:45:38[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:45:55[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:46:11[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:46:46[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:47:18[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:47:21[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:47:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:51:20[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:51:27[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:51:30[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:51:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:58:22[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m15:58:30[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m16:02:20[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/app.ts[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/materials/pbrMaterials.ts[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/scene/createScene.ts[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[2m21:46:40[22m [36m[1m[vite][22m[39m changed tsconfig file detected: C:\Users\laube\Downloads\AUTOMATIZACIE\3D_kuchyna\tsconfig.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.ts[22m
+[2m21:46:40[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/style.css[22m
+Re-optimizing dependencies because lockfile has changed
+[2m21:46:40[22m [36m[1m[vite][22m[39m server restarted.
+[2m21:47:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mkitchen_app_repo/index.html[22m
+[2m21:47:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mkitchen_app_repo/index.html[22m
+[2m21:47:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mkitchen_app_repo/index.html[22m
+[2m21:47:36[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mkitchen_app_repo/index.html[22m

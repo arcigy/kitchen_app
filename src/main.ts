@@ -1,0 +1,55 @@
+import "./style.css";
+import { startApp } from "./app";
+
+const viewer = document.getElementById("viewer");
+const ribbon = document.getElementById("ribbon");
+const properties = document.getElementById("properties");
+const form = document.getElementById("form");
+const errors = document.getElementById("errors");
+const parts = document.getElementById("parts");
+const exportOut = document.getElementById("exportOut") as HTMLTextAreaElement | null;
+const copyBtn = document.getElementById("copyBtn") as HTMLButtonElement | null;
+const copyStatus = document.getElementById("copyStatus");
+const measureBtn = document.getElementById("measureBtn") as HTMLButtonElement | null;
+const clearMeasuresBtn = document.getElementById("clearMeasuresBtn") as HTMLButtonElement | null;
+const axisLock = document.getElementById("axisLock") as HTMLInputElement | null;
+const measureReadout = document.getElementById("measureReadout");
+const exportSceneBtn = document.getElementById("exportSceneBtn") as HTMLButtonElement | null;
+
+if (
+  !viewer ||
+  !ribbon ||
+  !properties ||
+  !form ||
+  !errors ||
+  !parts ||
+  !exportOut ||
+  !copyBtn ||
+  !copyStatus ||
+  !measureBtn ||
+  !clearMeasuresBtn ||
+  !axisLock ||
+  !measureReadout ||
+  !exportSceneBtn
+) {
+  throw new Error("Missing required DOM elements (viewer/form/errors/parts/exportOut/measure...).");
+}
+
+startApp({
+  viewerEl: viewer,
+  ribbonEl: ribbon,
+  propertiesEl: properties,
+  formEl: form,
+  errorsEl: errors,
+  partsEl: parts,
+  exportOutEl: exportOut,
+  copyBtn,
+  copyStatusEl: copyStatus,
+  measureBtn,
+  clearMeasuresBtn,
+  axisLockEl: axisLock,
+  measureReadoutEl: measureReadout,
+  resetBtn: document.getElementById("resetBtn") as HTMLButtonElement,
+  exportBtn: document.getElementById("exportBtn") as HTMLButtonElement,
+  exportSceneBtn
+});

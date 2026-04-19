@@ -1,0 +1,557 @@
+﻿import * as THREE from "three";
+import type { CornerShelfLowerParams } from "../../model/cabinetTypes";
+import { computeShelfHeightsFromGaps } from "../../model/cabinetTypes";
+import { getPbrMaterialWorldSizeM, getPbrWoodMaterial } from "../../materials/pbrMaterials";
+import { applyBoxGrainUv } from "../../materials/uvGrain";
+
+const MM_TO_M = 0.001;
+
+export function buildCornerShelfLower(p: CornerShelfLowerParams): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "cornerShelfLowerModule";
+
+  const lenX = p.lengthX * MM_TO_M;
+  const lenZ = p.lengthZ * MM_TO_M;
+  const depth = p.depth * MM_TO_M;
+  const height = p.height * MM_TO_M;
+  const boardT = p.boardThickness * MM_TO_M;
+  const backT = p.backThickness * MM_TO_M;
+  const plinthH = p.plinthHeight * MM_TO_M;
+  const plinthSetback = Math.max(0, p.plinthSetbackMm) * MM_TO_M;
+  const shelfT = p.shelfThickness * MM_TO_M;
+  const fitEps = 0.0002; // 0.2mm: avoids tiny overlaps from float math
+
+  const bodyMat = p.materials.bodyPbr
+    ? getPbrWoodMaterial({ fallbackColor: p.materials.bodyColor, ref: p.materials.bodyPbr })
+    : new THREE.MeshStandardMaterial({
+        color: parseHexColor(p.materials.bodyColor),
+        roughness: 0.85,
+        metalness: 0.0
+      });
+  const frontMat = new THREE.MeshStandardMaterial({
+    color: parseHexColor(p.materials.frontColor),
+    roughness: 0.65,
+    metalness: 0.0
+  });
+  const hingeMat = new THREE.MeshStandardMaterial({ color: 0x4a4f5a, roughness: 0.5, metalness: 0.15 });
+
+  const setPartMeta = (
+    mesh: THREE.Mesh,
+    dimsM: { width: number; height: number; depth: number },
+    grainAlong: "width" | "height" | "depth" | "none" = "none"
+  ) => {
+    mesh.userData.selectable = true;
+    mesh.userData.dimensionsMm = {
+      width: dimsM.width / MM_TO_M,
+      height: dimsM.height / MM_TO_M,
+      depth: dimsM.depth / MM_TO_M
+    };
+    mesh.userData.grainAlong = grainAlong;
+    if (p.materials.bodyPbr) {
+      applyBoxGrainUv(
+        mesh.geometry as THREE.BufferGeometry,
+        { x: dimsM.width, y: dimsM.height, z: dimsM.depth },
+        grainAlong,
+        { texScaleM: getPbrMaterialWorldSizeM(p.materials.bodyPbr.id) }
+      );
+    }
+  };
+
+  const setPartMetaMm = (
+    mesh: THREE.Mesh,
+    dimsMm: { width: number; height: number; depth: number },
+    grainAlong: "width" | "height" | "depth" | "none" = "none"
+  ) => {
+    mesh.userData.selectable = true;
+    mesh.userData.dimensionsMm = { ...dimsMm };
+    mesh.userData.grainAlong = grainAlong;
+  };
+
+  const setParamKeys = (obj: THREE.Object3D, keys: Array<keyof CornerShelfLowerParams | string>) => {
+    (obj as any).userData ??= {};
+    (obj as any).userData.paramKeys = [...keys];
+  };
+
+  // Layout:
+  // - Inner corner (where walls meet) is at (-lenX/2, -lenZ/2).
+  // - X run extends to +lenX/2
+  // - Z run extends to +lenZ/2
+  // - Both runs share a common depth measured from the inner corner edges.
+  const innerX = -lenX / 2;
+  const innerZ = -lenZ / 2;
+  const openingH = height - plinthH;
+
+  // Side panels at outer ends
+  {
+    const sideGeoX = new THREE.BoxGeometry(boardT, openingH, depth);
+    const sideX = new THREE.Mesh(sideGeoX, bodyMat);
+    sideX.name = "side_end_x";
+    sideX.position.set(lenX / 2 - boardT / 2, plinthH + openingH / 2, innerZ + depth / 2);
+    setPartMeta(sideX, { width: boardT, height: openingH, depth }, "height");
+    setParamKeys(sideX, ["lengthX", "height", "depth", "boardThickness", "plinthHeight"]);
+    g.add(sideX);
+
+    const sideGeoZ = new THREE.BoxGeometry(depth, openingH, boardT);
+    const sideZ = new THREE.Mesh(sideGeoZ, bodyMat);
+    sideZ.name = "side_end_z";
+    sideZ.position.set(innerX + depth / 2, plinthH + openingH / 2, lenZ / 2 - boardT / 2);
+    setPartMeta(sideZ, { width: depth, height: openingH, depth: boardT }, "height");
+    setParamKeys(sideZ, ["lengthZ", "height", "depth", "boardThickness", "plinthHeight"]);
+    g.add(sideZ);
+  }
+
+  // Back panels on inner edges
+  {
+    const innerX0 = innerX + backT;
+    const innerX1 = lenX / 2 - boardT;
+    const backXLen = safeDim(innerX1 - innerX0 - fitEps);
+    const backGeoX = new THREE.BoxGeometry(backXLen, openingH, backT);
+    const backX = new THREE.Mesh(backGeoX, bodyMat);
+    backX.name = "back_x";
+    backX.position.set(innerX0 + fitEps / 2 + backXLen / 2, plinthH + openingH / 2, innerZ + backT / 2);
+    setPartMeta(backX, { width: backXLen, height: openingH, depth: backT }, "width");
+    setParamKeys(backX, ["lengthX", "height", "depth", "backThickness", "plinthHeight"]);
+    g.add(backX);
+
+    const innerZ0 = innerZ + backT;
+    const innerZ1 = lenZ / 2 - boardT;
+    const backZLen = safeDim(innerZ1 - innerZ0 - fitEps);
+    const backGeoZ = new THREE.BoxGeometry(backT, openingH, backZLen);
+    const backZ = new THREE.Mesh(backGeoZ, bodyMat);
+    backZ.name = "back_z";
+    backZ.position.set(innerX + backT / 2, plinthH + openingH / 2, innerZ0 + fitEps / 2 + backZLen / 2);
+    setPartMeta(backZ, { width: backT, height: openingH, depth: backZLen }, "depth");
+    setParamKeys(backZ, ["lengthZ", "height", "depth", "backThickness", "plinthHeight"]);
+    g.add(backZ);
+  }
+
+  // Bottom/top panels (L-shape; fit between back + side panels)
+  addLPanel("bottom", plinthH + boardT / 2, boardT, bodyMat);
+  addLPanel("top", height - boardT / 2, boardT, bodyMat);
+
+  function addLPanel(name: string, y: number, t: number, mat: THREE.Material) {
+    // IMPORTANT: panels must stop at inner faces (no overlap with back/side panels).
+    const insideDepth = safeDim(depth - backT - fitEps);
+    const runX0 = innerX + backT;
+    const runX1 = lenX / 2 - boardT;
+    const runXLen = safeDim(runX1 - runX0 - fitEps);
+
+    const geoX = new THREE.BoxGeometry(runXLen, t, insideDepth);
+    const partX = new THREE.Mesh(geoX, mat);
+    partX.name = `${name}_x`;
+    partX.position.set(runX0 + fitEps / 2 + runXLen / 2, y, innerZ + backT + fitEps / 2 + insideDepth / 2);
+    setPartMeta(partX, { width: runXLen, height: t, depth: insideDepth }, "width");
+    g.add(partX);
+
+    const runZ0 = innerZ + depth;
+    const runZ1 = lenZ / 2 - boardT;
+    const runZLen = runZ1 - runZ0 - fitEps;
+    if (runZLen <= 0.0001) return;
+
+    const insideWidth = safeDim(depth - backT - fitEps);
+    const geoZ = new THREE.BoxGeometry(insideWidth, t, runZLen);
+    const partZ = new THREE.Mesh(geoZ, mat);
+    partZ.name = `${name}_z`;
+    partZ.position.set(innerX + backT + fitEps / 2 + insideWidth / 2, y, runZ0 + fitEps / 2 + runZLen / 2);
+    setPartMeta(partZ, { width: insideWidth, height: t, depth: runZLen }, "depth");
+    g.add(partZ);
+  }
+
+  // Legs (cylinders) - 4x (inner corner, elbow, endX, endZ)
+  if (plinthH > 0) {
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.6, metalness: 0.1 });
+    const legRadius = 0.02; // 20mm
+    const legGeo = new THREE.CylinderGeometry(legRadius, legRadius, plinthH, 18);
+    const inset = 0.03;
+
+    // Keep legs behind the kickboards (same rule as straight cabinets).
+    const kickDepth = Math.min(boardT, depth * 0.2);
+    const kickSetback = Math.min(plinthSetback, depth / 2);
+    const kickBackFaceZ = depth - kickDepth - kickSetback;
+    const kickBackFaceX = depth - kickDepth - kickSetback;
+
+    const pts: Array<[string, number, number]> = [
+      ["leg_inner", innerX + inset, innerZ + inset],
+      ["leg_end_x", lenX / 2 - inset, innerZ + inset],
+      ["leg_end_z", innerX + inset, lenZ / 2 - inset],
+      ["leg_elbow", innerX + depth - inset, innerZ + depth - inset]
+    ];
+
+    for (const [name, x, z] of pts) {
+      const maxX = innerX + kickBackFaceX - legRadius - 0.01;
+      const maxZ = innerZ + kickBackFaceZ - legRadius - 0.01;
+      const clampedX = Math.min(x, maxX);
+      const clampedZ = Math.min(z, maxZ);
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.name = name;
+      leg.position.set(clampedX, plinthH / 2, clampedZ);
+      setPartMetaMm(leg, { width: legRadius * 2 * 1000, height: p.plinthHeight, depth: legRadius * 2 * 1000 }, "none");
+      setParamKeys(leg, ["plinthHeight", "plinthSetbackMm", "depth", "lengthX", "lengthZ"]);
+      g.add(leg);
+    }
+  }
+
+  // Kickboards on both faces
+  {
+    const kickDepth = Math.min(boardT, depth * 0.2);
+    const kickSetback = Math.min(plinthSetback, depth / 2);
+    const cornerW = boardT + 0.002;
+
+    // IMPORTANT: front parts must NOT run through the inner elbow area (depth x depth overlap).
+    const outerXLen = Math.max(0, lenX - depth);
+    const outerZLen = Math.max(0, lenZ - depth);
+
+    // Corner filler at inner elbow (prevents gaps).
+    // Two thin pieces so the toe-kick stays "thin" in the forward direction.
+    {
+      const kickCornerXGeo = new THREE.BoxGeometry(cornerW, plinthH, kickDepth);
+      const kickCornerX = new THREE.Mesh(kickCornerXGeo, bodyMat);
+      kickCornerX.name = "kick_corner_x";
+      kickCornerX.position.set(innerX + depth + cornerW / 2, plinthH / 2, innerZ + depth - kickDepth / 2 - kickSetback);
+      setPartMeta(kickCornerX, { width: cornerW, height: plinthH, depth: kickDepth }, "width");
+      setParamKeys(kickCornerX, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
+      g.add(kickCornerX);
+
+      const kickCornerZGeo = new THREE.BoxGeometry(kickDepth, plinthH, cornerW);
+      const kickCornerZ = new THREE.Mesh(kickCornerZGeo, bodyMat);
+      kickCornerZ.name = "kick_corner_z";
+      kickCornerZ.position.set(innerX + depth - kickDepth / 2 - kickSetback, plinthH / 2, innerZ + depth + cornerW / 2);
+      setPartMeta(kickCornerZ, { width: kickDepth, height: plinthH, depth: cornerW }, "depth");
+      setParamKeys(kickCornerZ, ["plinthHeight", "plinthSetbackMm", "depth", "boardThickness"]);
+      g.add(kickCornerZ);
+    }
+
+    const kickX0 = innerX + depth + cornerW;
+    const kickX1 = lenX / 2 - boardT;
+    const kickXLen = kickX1 - kickX0 - fitEps;
+    if (kickXLen > 0.0001) {
+      const kickGeoX = new THREE.BoxGeometry(kickXLen, plinthH, kickDepth);
+      const kickX = new THREE.Mesh(kickGeoX, bodyMat);
+      kickX.name = "kick_x";
+      kickX.position.set(kickX0 + fitEps / 2 + kickXLen / 2, plinthH / 2, innerZ + depth - kickDepth / 2 - kickSetback);
+      setPartMeta(kickX, { width: kickXLen, height: plinthH, depth: kickDepth }, "width");
+      setParamKeys(kickX, ["plinthHeight", "plinthSetbackMm", "depth", "lengthX", "boardThickness"]);
+      g.add(kickX);
+    }
+
+    const kickZ0 = innerZ + depth + cornerW;
+    const kickZ1 = lenZ / 2 - boardT;
+    const kickZLen = kickZ1 - kickZ0 - fitEps;
+    if (kickZLen > 0.0001) {
+      const kickGeoZ = new THREE.BoxGeometry(kickDepth, plinthH, kickZLen);
+      const kickZ = new THREE.Mesh(kickGeoZ, bodyMat);
+      kickZ.name = "kick_z";
+      kickZ.position.set(innerX + depth - kickDepth / 2 - kickSetback, plinthH / 2, kickZ0 + fitEps / 2 + kickZLen / 2);
+      setPartMeta(kickZ, { width: kickDepth, height: plinthH, depth: kickZLen }, "depth");
+      setParamKeys(kickZ, ["plinthHeight", "plinthSetbackMm", "depth", "lengthZ", "boardThickness"]);
+      g.add(kickZ);
+    }
+  }
+
+  // Internal shelves (two L parts at each shelf height)
+  {
+    const shelfCount = Math.max(1, Math.round(p.shelfCount));
+    const internalShelfCount = Math.max(0, shelfCount - 1);
+    const innerMinY = plinthH + boardT;
+
+    const heightsMm =
+      p.shelfAutoFit === true
+        ? computeShelfHeightsFromGaps({ ...p, shelfGaps: [] })
+        : computeShelfHeightsFromGaps(p);
+
+    for (let i = 0; i < internalShelfCount; i++) {
+      const yFromBottomMm = heightsMm[i] ?? 0;
+      const y = innerMinY + yFromBottomMm * MM_TO_M;
+
+      // Two-piece L shelf (same idea as the top/bottom L panels), with X-side owning the overlap:
+      // - X piece covers the corner overlap + X-run
+      // - Z piece starts after the elbow and butts to the X piece
+
+      // Exact fit: shelves start exactly at the inner face of the back panels (no overlap).
+      // Note: to avoid z-fighting lines where faces touch, we use polygonOffset on shelf material (render-only).
+      const shelfDepth = safeDim(depth - backT); // clear depth inside (from back panel)
+      const shelfMat = (bodyMat as THREE.MeshStandardMaterial).clone();
+      shelfMat.polygonOffset = true;
+      shelfMat.polygonOffsetFactor = 1;
+      shelfMat.polygonOffsetUnits = 1;
+
+      // X-side "full" piece: spans along X (from inner back to end) and in Z only the depth area.
+      const shelfXLenFull = safeDim(lenX - boardT - backT);
+      if (shelfXLenFull > 0.0001) {
+        const geoX = new THREE.BoxGeometry(shelfXLenFull, shelfT, shelfDepth);
+        const shelfX = new THREE.Mesh(geoX, shelfMat);
+        shelfX.name = `shelf_${i + 1}_x`;
+        shelfX.position.set(innerX + backT + shelfXLenFull / 2, y, innerZ + backT + shelfDepth / 2);
+        setPartMeta(shelfX, { width: shelfXLenFull, height: shelfT, depth: shelfDepth }, "width");
+        setParamKeys(shelfX, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
+        g.add(shelfX);
+      }
+
+      // Z-side "butt" piece: only the Z-run outside the overlap (starts at elbowZ), limited in X to the depth area.
+      const elbowZ = innerZ + depth;
+      const shelfZLenButt = Math.max(0, lenZ - boardT - depth);
+      if (shelfZLenButt > 0.0001) {
+        const geoZ = new THREE.BoxGeometry(shelfDepth, shelfT, shelfZLenButt);
+        const shelfZ = new THREE.Mesh(geoZ, shelfMat);
+        shelfZ.name = `shelf_${i + 1}_z`;
+        shelfZ.position.set(innerX + backT + shelfDepth / 2, y, elbowZ + shelfZLenButt / 2);
+        setPartMeta(shelfZ, { width: shelfDepth, height: shelfT, depth: shelfZLenButt }, "depth");
+        setParamKeys(shelfZ, ["shelfCount", "shelfThickness", "shelfAutoFit", "shelfGaps", "height", "plinthHeight", "boardThickness"]);
+        g.add(shelfZ);
+      }
+    }
+  }
+
+  // Doors + hinges on both faces (simple overlay)
+  {
+    const doorT = boardT;
+    const doorH = Math.max(0.1, openingH);
+    const doorCenterY = plinthH + openingH / 2;
+    const openAngle = p.doorOpen ? Math.PI / 2 : 0;
+    const hingeCount = clampInt(p.hingeCountPerDoor, 1, 6);
+    const hingeTopOffset = Math.max(0, p.hingeTopOffsetMm) * MM_TO_M;
+    const hingeBottomOffset = Math.max(0, p.hingeBottomOffsetMm) * MM_TO_M;
+
+    // IMPORTANT: match the toe-kick logic:
+    // Front faces must NOT run through the inner elbow overlap area (depth x depth).
+    // Use only TWO door panels (no third filler):
+    // - Door on Z face covers the X-run from elbow -> outer end
+    // - Optional door on X face covers the Z-run from elbow -> outer end
+    const eps = 0.0002; // 0.2mm, avoids z-fighting without introducing a visible gap
+    const elbowX = innerX + depth;
+    const elbowZ = innerZ + depth;
+    const outerXLen = Math.max(0, lenX - depth);
+    const outerZLen = Math.max(0, lenZ - depth);
+
+    if (outerXLen > 0.0001) {
+      // Face Z (front of X-run): spans along X from elbow -> outer end, hinge at outer end.
+      const doorZ = addDoorOnZFace(
+        "door_front_z",
+        "hinge_front_z",
+        elbowX,
+        elbowX + outerXLen,
+        elbowZ + doorT / 2 + eps,
+        p.hingeSideFrontZ,
+        openAngle
+      );
+
+      if (p.doorDouble && outerZLen > 0.0001) {
+        // X-face is a "butt" panel (doesn't cover the elbow). No carcass hinges on this panel.
+        const buttOffset = Math.min(doorT, Math.max(0, outerZLen - 0.06));
+        addDoorOnXFace(
+          "door_front_x",
+          "hinge_front_x",
+          elbowZ + buttOffset,
+          elbowZ + outerZLen,
+          elbowX + doorT / 2 + eps,
+          p.hingeSideFrontX,
+          openAngle,
+          false
+        );
+
+        // Fold hinges live on the Z door edge (so hardware belongs to Z door).
+        addBifoldHingesOnZDoor(doorZ.pivot, doorZ.doorW);
+      }
+    }
+
+    function addDoorOnZFace(
+      doorName: string,
+      hingePrefix: string,
+      startX: number,
+      endX: number,
+      planeZ: number,
+      hingeSide: "left" | "right",
+      angle: number
+    ): { pivot: THREE.Group; doorW: number } {
+      const doorW = Math.max(0.05, endX - startX);
+      const pivotX = hingeSide === "left" ? startX : endX;
+      const pivot = new THREE.Group();
+      pivot.name = `${doorName}_pivot`;
+      pivot.position.set(pivotX, doorCenterY, planeZ);
+      pivot.rotation.y = hingeSide === "left" ? -angle : angle;
+
+      const doorGeo = new THREE.BoxGeometry(doorW, doorH, doorT);
+      const door = new THREE.Mesh(doorGeo, frontMat);
+      door.name = doorName;
+      door.position.set(hingeSide === "left" ? doorW / 2 : -doorW / 2, 0, 0);
+      setPartMeta(door, { width: doorW, height: doorH, depth: doorT }, "height");
+      pivot.add(door);
+
+      addHiddenHinges(pivot, hingePrefix, hingeSide === "left" ? +1 : -1);
+      g.add(pivot);
+
+      return { pivot, doorW };
+    }
+
+    function addBifoldPanelOnXFace(doorZPivot: THREE.Group, doorZW: number, outerZLenM: number) {
+      // Butt logic (same intent as before): the Z-face door "covers" the elbow, the folding panel starts after door thickness.
+      const buttOffset = Math.min(doorT, Math.max(0, outerZLenM - 0.06));
+      const panelW = Math.max(0.05, outerZLenM - buttOffset);
+
+      // Hinge line between the two panels, expressed in doorZPivot-local space.
+      // - X: at the inner edge of the Z door (startX) => local x = -doorZW (since hinge is on the right)
+      // - Z: move to the panel start (buttOffset) relative to the Z-door plane at +doorT/2
+      const bifoldPivot = new THREE.Group();
+      bifoldPivot.name = "door_bifold_pivot";
+      bifoldPivot.position.set(-doorZW, 0, buttOffset - doorT / 2);
+      bifoldPivot.rotation.y = p.doorOpen ? -Math.PI / 2 : 0;
+      doorZPivot.add(bifoldPivot);
+
+      const panelGroup = new THREE.Group();
+      panelGroup.name = "door_front_x_group";
+      // Closed: panel is perpendicular; Open: bifoldPivot rotates it flat with the Z-door.
+      panelGroup.rotation.y = Math.PI / 2;
+      bifoldPivot.add(panelGroup);
+
+      const panelGeo = new THREE.BoxGeometry(panelW, doorH, doorT);
+      const panel = new THREE.Mesh(panelGeo, frontMat);
+      panel.name = "door_front_x";
+      // Hinge at local x=0, extend toward +x.
+      panel.position.set(panelW / 2, 0, doorT / 2 + eps);
+      setPartMeta(panel, { width: panelW, height: doorH, depth: doorT });
+      panelGroup.add(panel);
+
+      // Bi-fold hinges (on the Z-door inner edge, not on the carcass) — keep them inside so they're not visible outside.
+      const hingeW = 0.006;
+      const hingeH = 0.045;
+      const hingeD = 0.014;
+      const hingeGeo = new THREE.BoxGeometry(hingeW, hingeH, hingeD);
+      const hingeX = 0.004; // slightly inside the Z-door thickness
+      const hingeZ = -doorT / 2 - hingeD / 2 - 0.001;
+
+      const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
+      ys.forEach((y, idx) => {
+        const hinge = new THREE.Mesh(hingeGeo, hingeMat);
+        hinge.name = `bifold_hinge_${idx + 1}`;
+        hinge.position.set(hingeX, y, hingeZ);
+        setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD });
+        bifoldPivot.add(hinge);
+      });
+    }
+
+    function addDoorOnXFace(
+      doorName: string,
+      hingePrefix: string,
+      startZ: number,
+      endZ: number,
+      planeX: number,
+      hingeSide: "left" | "right",
+      angle: number,
+      withHinges: boolean
+    ) {
+      const doorW = Math.max(0.05, endZ - startZ);
+      // Map "left/right" to the Z span endpoints (start/end), so UI stays consistent
+      // with other cabinets while geometry still hinges on either edge of the door leaf.
+      const pivotZ = hingeSide === "left" ? startZ : endZ;
+      const pivot = new THREE.Group();
+      pivot.name = `${doorName}_pivot`;
+      pivot.position.set(planeX, doorCenterY, pivotZ);
+      // Rotate around Y, because the door plane is perpendicular.
+      pivot.rotation.y = hingeSide === "left" ? angle : -angle;
+
+      const doorGeo = new THREE.BoxGeometry(doorT, doorH, doorW);
+      const door = new THREE.Mesh(doorGeo, frontMat);
+      door.name = doorName;
+      door.position.set(0, 0, hingeSide === "left" ? doorW / 2 : -doorW / 2);
+      setPartMeta(door, { width: doorT, height: doorH, depth: doorW }, "height");
+      pivot.add(door);
+
+      if (withHinges) {
+        const hingeW = 0.008;
+        const hingeH = 0.05;
+        const hingeD = 0.018;
+        const hingeGeo = new THREE.BoxGeometry(hingeD, hingeH, hingeW);
+        const hingeInset = 0.006;
+        const hingeZLocal = hingeSide === "left" ? hingeW / 2 + hingeInset : -hingeW / 2 - hingeInset;
+        const hingeXLocal = -doorT / 2 - hingeD / 2 - 0.001;
+        const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
+        ys.forEach((y, idx) => {
+          const hinge = new THREE.Mesh(hingeGeo, hingeMat);
+          hinge.name = `${hingePrefix}_${idx + 1}`;
+          hinge.position.set(hingeXLocal, y, hingeZLocal);
+          setPartMeta(hinge, { width: hingeD, height: hingeH, depth: hingeW });
+          pivot.add(hinge);
+        });
+      }
+
+      g.add(pivot);
+    }
+
+    function addBifoldHingesOnZDoor(doorZPivot: THREE.Group, doorZW: number) {
+      const hingeW = 0.006;
+      const hingeH = 0.045;
+      const hingeD = 0.014;
+      const hingeGeo = new THREE.BoxGeometry(hingeW, hingeH, hingeD);
+
+      // Inner edge of the Z door (the edge that meets the folding panel).
+      // Keep the hinge boxes fully on the inside so they're not visible from outside.
+      const hingeX = -doorZW + hingeW / 2 + 0.004;
+      const hingeZ = -doorT / 2 - hingeD / 2 - 0.001;
+
+      const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
+
+      ys.forEach((y, idx) => {
+        const hinge = new THREE.Mesh(hingeGeo, hingeMat);
+        hinge.name = `bifold_hinge_${idx + 1}`;
+        hinge.position.set(hingeX, y, hingeZ);
+        setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD });
+        doorZPivot.add(hinge);
+      });
+    }
+
+    function addHiddenHinges(parent: THREE.Object3D, hingePrefix: string, hingeDir: 1 | -1) {
+      const hingeW = 0.008;
+      const hingeH = 0.05;
+      const hingeD = 0.018;
+      const hingeGeo = new THREE.BoxGeometry(hingeW, hingeH, hingeD);
+
+      const hingeInsetX = 0.006;
+      const hingeX = hingeDir * (hingeW / 2 + hingeInsetX);
+      const hingeZ = -doorT / 2 - hingeD / 2 - 0.001; // behind door
+
+      const ys = computeHingeYs(doorH, hingeCount, hingeTopOffset, hingeBottomOffset);
+      ys.forEach((y, idx) => {
+        const hinge = new THREE.Mesh(hingeGeo, hingeMat);
+        hinge.name = `${hingePrefix}_${idx + 1}`;
+        hinge.position.set(hingeX, y, hingeZ);
+        setPartMeta(hinge, { width: hingeW, height: hingeH, depth: hingeD });
+        parent.add(hinge);
+      });
+    }
+  }
+
+  return g;
+}
+
+function parseHexColor(hex: string): number {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return 0xffffff;
+  return Number.parseInt(hex.slice(1), 16);
+}
+
+function safeDim(n: number) {
+  return Math.max(0.01, n);
+}
+
+function clampInt(value: unknown, min: number, max: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function computeHingeYs(doorH: number, count: number, topOffset: number, bottomOffset: number) {
+  const c = Math.max(1, Math.round(count));
+  if (c === 1) return [0];
+
+  const yTop = doorH / 2 - Math.max(0, topOffset);
+  const yBottom = -doorH / 2 + Math.max(0, bottomOffset);
+
+  const safeMargin = Math.min(0.12, Math.max(0.03, doorH / 2 - 0.025 - 0.02));
+  const a = yTop > yBottom ? yTop : doorH / 2 - safeMargin;
+  const b = yTop > yBottom ? yBottom : -doorH / 2 + safeMargin;
+
+  return Array.from({ length: c }, (_, idx) => {
+    const t = c === 1 ? 0.5 : idx / (c - 1);
+    return b + t * (a - b);
+  });
+}
+

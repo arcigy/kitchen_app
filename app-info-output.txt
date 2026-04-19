@@ -1,0 +1,485 @@
+Total line count: 8926
+
+Top-level imports:
+- from "three":
+  import * as THREE from "three";
+- from "polygon-clipping":
+  import polygonClipping from "polygon-clipping";
+- from "./model/cabinetTypes":
+  import type { ModuleParams } from "./model/cabinetTypes";
+  import {
+    makeDefaultCornerShelfLowerParams,
+    makeDefaultDrawerLowParams,
+    makeDefaultNestedDrawerLowParams,
+    makeDefaultFlapShelvesLowParams,
+    makeDefaultFridgeTallParams,
+    makeDefaultMicrowaveOvenTallParams,
+    makeDefaultOvenBaseLowParams,
+    makeDefaultShelvesParams,
+    makeDefaultSwingShelvesLowParams,
+    makeDefaultTopDrawersDoorsLowParams,
+    validateModule
+  } from "./model/cabinetTypes";
+- from "./geometry/buildModule":
+  import { buildModule } from "./geometry/buildModule";
+- from "./core/scene":
+  import { createScene } from "./core/scene";
+- from "./ui/createPartPanel":
+  import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
+- from "./ui/createLayoutPanel":
+  import { createLayoutPanel } from "./ui/createLayoutPanel";
+- from "./core/dispose":
+  import { disposeObject3D } from "./core/dispose";
+- from "./modules/_registry":
+  import {
+    createDrawerLowControls,
+    createFridgeTallControls,
+    createShelvesControls,
+    createCornerShelfLowerControls,
+    createNestedDrawerLowControls,
+    createFlapShelvesLowControls,
+    createSwingShelvesLowControls,
+    createOvenBaseLowControls,
+    createMicrowaveOvenTallControls,
+    createTopDrawersDoorsLowControls
+  } from "./modules/_registry";
+- from "./rendering/ssgiPipeline":
+  import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
+- from "./rendering/photoPathTracer":
+  import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
+- from "./core/exportScene":
+  import { exportSceneToJson } from "./core/exportScene";
+- from "./ui/createTopbar":
+  import { createTopbar } from "./ui/createTopbar";
+- from "./ui/loadUnderlay":
+  import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
+- from "./walls2d/solver":
+  import { solveWallNetwork } from "./walls2d/solver";
+
+State variables at top level of startApp():
+params : ModuleParams
+ENABLE_SSGI : (inferred)
+ENABLE_PHOTO : (inferred)
+cam : (inferred)
+ctl : (inferred)
+mode : AppMode
+viewMode : "3d" | "2d"
+layoutTool : LayoutTool
+renderMode : RenderMode
+ssgi : SsgiPipeline | null
+ssgiCameraUuid : string | null
+photo : PhotoPathTracer | null
+photoCameraUuid : string | null
+photoLastLightingRevision : (inferred)
+lastCameraWorld : (inferred)
+lastCameraProj : (inferred)
+cabinetGroup : THREE.Group | null
+hiddenParts : (inferred)
+layoutRoot : (inferred)
+wallPlanGroup : (inferred)
+wallPlanMat : (inferred)
+wallPlanMeshes : (inferred)
+wallJoinMeshes : THREE.Mesh[]
+wallPlanUnionMesh : THREE.Mesh | null
+wallDebugGroup : (inferred)
+wallDebugEnabled : (inferred)
+wallSolvedOutlines : (inferred)
+wallSolvedJoinPolys : Array<Array<{ x: number; z: number }>>
+wallUnionPolys : any | null
+wallSnapMarkers : (inferred)
+toolHud : (inferred)
+hudMatHover : (inferred)
+hudMatPick1 : (inferred)
+hudMatPick2 : (inferred)
+hudHoverLine : (inferred)
+hudPickLine1 : (inferred)
+hudPickLine2 : (inferred)
+snapMatCorner : (inferred)
+snapMatAxis : (inferred)
+snapMatEdge : (inferred)
+snapMatEnd : (inferred)
+snapGeom : (inferred)
+selectionHighlights : (inferred)
+underlayMesh : (inferred)
+instances : LayoutInstance[]
+instanceCounter : (inferred)
+selectedInstanceId : string | null
+selectedWallId : string | null
+selectedInstanceIds : (inferred)
+selectedWallIds : (inferred)
+pinnedInstanceIds : (inferred)
+pinnedWallIds : (inferred)
+selectedInstanceBox : THREE.BoxHelper | null
+selectedWallBox : THREE.BoxHelper | null
+selectedUnderlayBox : THREE.BoxHelper | null
+windowInst : WindowInstance | null
+selectedKind : SelectedKind
+selectedDimensionId : string | null
+walls : WallInstance[]
+wallCounter : (inferred)
+wallJoinTolMm : (inferred)
+dimensions : DimensionInstance[]
+dimensionCounter : (inferred)
+dimMat : (inferred)
+dimMatSelected : (inferred)
+dimPickMat : (inferred)
+undoBtnEl : HTMLButtonElement | null
+redoBtnEl : HTMLButtonElement | null
+dimPreviewMat : (inferred)
+wallEps : (inferred)
+raycaster : (inferred)
+pointerNdc : (inferred)
+groundPlane : (inferred)
+navClock : (inferred)
+navKeys : (inferred)
+selectedMesh : THREE.Mesh | null
+selectedBox : THREE.BoxHelper | null
+grainArrow : THREE.ArrowHelper | null
+overlapBoxes : Array<{ mesh: THREE.Mesh; helper: THREE.BoxHelper }>
+measureOverlay : (inferred)
+wallSnapHud : (inferred)
+wallTypedHud : (inferred)
+marqueeEl : (inferred)
+modeWrap : (inferred)
+modeLabel : (inferred)
+modeSelect : (inferred)
+buildUi : (inferred)
+layoutUi : (inferred)
+modelWrap : (inferred)
+modelLabel : (inferred)
+modelSelect : (inferred)
+editorHost : (inferred)
+addWrap : (inferred)
+addDrawerBtn : (inferred)
+addNestedDrawerBtn : (inferred)
+addFridgeBtn : (inferred)
+addShelvesBtn : (inferred)
+addCornerBtn : (inferred)
+addFlapBtn : (inferred)
+addSwingBtn : (inferred)
+addOvenBaseBtn : (inferred)
+addMicrowaveTallBtn : (inferred)
+addTopDrawersDoorsBtn : (inferred)
+addWindowBtn : (inferred)
+layoutActions : (inferred)
+dupBtn : (inferred)
+delBtn : (inferred)
+viewWrap : (inferred)
+viewLabel : (inferred)
+view2d : (inferred)
+sunHost : (inferred)
+sunTitle : (inferred)
+day : (inferred)
+shadowSel : (inferred)
+renderModeSel : (inferred)
+photoWrap : (inferred)
+photoControls : (inferred)
+photoSamples : (inferred)
+photoReset : (inferred)
+photoSave : (inferred)
+photoStatus : (inferred)
+hdriSel : (inferred)
+hdriBg : (inferred)
+hdriIntensity : (inferred)
+instanceEditorHost : (inferred)
+windowEditorHost : (inferred)
+partsBuildHost : (inferred)
+partsLayoutHost : (inferred)
+underlayStatusEl : HTMLDivElement | null
+underlayScaleEl : HTMLInputElement | null
+underlayOffXEl : HTMLInputElement | null
+underlayOffZEl : HTMLInputElement | null
+underlayRotEl : HTMLInputElement | null
+underlayOpacityEl : HTMLInputElement | null
+beginWallDrag : (inferred)
+icon : (inferred)
+I_SELECT : (inferred)
+I_WALL : (inferred)
+I_WINDOW : (inferred)
+I_DOOR : (inferred)
+I_UNDERLAY : (inferred)
+I_CABINET : (inferred)
+I_GRID2D : (inferred)
+I_DUP : (inferred)
+I_TRASH : (inferred)
+I_EXPORT : (inferred)
+I_COPY : (inferred)
+I_RESET : (inferred)
+I_VIEW : (inferred)
+I_DEBUG : (inferred)
+I_ALIGN : (inferred)
+I_TRIM : (inferred)
+I_DIM : (inferred)
+I_UNDO : (inferred)
+I_REDO : (inferred)
+tb : (inferred)
+g1 : (inferred)
+gEdit : (inferred)
+g2 : (inferred)
+g3 : (inferred)
+g4 : (inferred)
+navForward : (inferred)
+navRight : (inferred)
+navMove : (inferred)
+navUp : (inferred)
+
+Functions defined inside startApp():
+cam (~1 lines)
+ctl (~1 lines)
+copyM16 (~4 lines)
+matrixChanged (~7 lines)
+makeHudLineMesh (~8 lines)
+clearToolHud (~6 lines)
+hudLineThicknessM (~7 lines)
+updateHudLine (~17 lines)
+makeSnapDot (~10 lines)
+clearWallSnapMarkers (~3 lines)
+showWallSnapMarkersFor (~62 lines)
+updateSelectionHighlights (~48 lines)
+updateUnderlayTransform (~7 lines)
+setUnderlayBaseSize (~6 lines)
+setUnderlayFromCanvas (~1 lines)
+clearUnderlay (~16 lines)
+makeDimTextSprite (~32 lines)
+updateSpriteText (~14 lines)
+makeDimBarMesh (~6 lines)
+updateDimBar (~15 lines)
+orthoWorldPerPx (~7 lines)
+setSpriteScreenFixedScale (~7 lines)
+updateDimensionTextScale (~4 lines)
+wallLineSegment (~27 lines)
+dimValueMm (~11 lines)
+updateDimensionGeometry (~50 lines)
+updateAllDimensions (~5 lines)
+updateDimensionSelectionHighlights (~11 lines)
+createDimension (~24 lines)
+disposeDimensionInstance (~11 lines)
+deleteDimension (~10 lines)
+snapshotSignature (~14 lines)
+updateUndoRedoUi (~4 lines)
+restoreLayoutSnapshot (~93 lines)
+commitHistory (~20 lines)
+undo (~9 lines)
+redo (~9 lines)
+clearTransform (~36 lines)
+startTransformFromSelection (~29 lines)
+restoreTransformStartState (~15 lines)
+translateWallsByAnchors (~30 lines)
+applyMoveDelta (~64 lines)
+rotatePointAround (~7 lines)
+rotateWallsByAnchors (~41 lines)
+applyRotateAngle (~58 lines)
+segClosestT (~7 lines)
+distPxPointToSeg (~12 lines)
+pickAlignLineAt (~61 lines)
+alignParallel (~4 lines)
+alignShiftVec (~6 lines)
+lineLineIntersectionXZ (~12 lines)
+translateWallAndConnected (~46 lines)
+moveWallEndpointAndConnected (~39 lines)
+snapAxisXZ (~7 lines)
+toMmPoint (~3 lines)
+fromMmPoint (~3 lines)
+mmDist (~3 lines)
+wallEndpointWhich (~5 lines)
+setWallEndpointMm (~5 lines)
+pointOnWallAxisMm (~18 lines)
+wallDirOutFromNode (~10 lines)
+wallExteriorSign (~3 lines)
+joinExtensionM (~29 lines)
+removeWall (~12 lines)
+splitWallAtMm (~33 lines)
+autoJoinAtMmPoint (~11 lines)
+dist2 (~5 lines)
+distPointToSegment2 (~13 lines)
+pickWallLine2D (~61 lines)
+cross2XZ (~3 lines)
+intersectLinesXZ (~1 lines)
+bestNeighborAtNode (~22 lines)
+miterEndCorners (~1 lines)
+snapPoint2D (~1 lines)
+updateWallMesh (~18 lines)
+rebuildWallPlanMesh (~150 lines)
+createWallMesh (~8 lines)
+wallRefLineToCenterLine (~1 lines)
+updateWallMeshWithJustification (~1 lines)
+makeWallPreviewMesh (~7 lines)
+rebuildWall (~69 lines)
+addWall (~43 lines)
+isTypingTarget (~8 lines)
+setToolSelect (~18 lines)
+setToolWall (~31 lines)
+setToolAlign (~32 lines)
+setToolTrim (~35 lines)
+setToolDimension (~32 lines)
+sunRow (~12 lines)
+mkNum (~7 lines)
+downloadPng (~7 lines)
+applyHdri (~6 lines)
+setUnderlayStatus (~3 lines)
+hideWallEditHud (~16 lines)
+commitWallLengthMm (~31 lines)
+commitWallOffsetMm (~53 lines)
+ensureLayoutMode (~6 lines)
+icon (~1 lines)
+showNoProps (~8 lines)
+mountWallToolProps (~59 lines)
+mountAlignToolProps (~13 lines)
+mountTrimToolProps (~20 lines)
+mountDimensionToolProps (~13 lines)
+mountWallProps (~53 lines)
+mountModuleProps (~108 lines)
+setDimensionValueMm (~41 lines)
+mountDimensionProps (~30 lines)
+mountWindowProps (~8 lines)
+mountProps (~29 lines)
+findInstance (~3 lines)
+instanceWorldBox (~4 lines)
+instanceWorldBoxAt (~8 lines)
+roomContainsBoxXZ (~8 lines)
+ensurePickAndOutline (~24 lines)
+createInstance (~32 lines)
+gEmpty (~3 lines)
+updateLayoutPanel (~11 lines)
+setInstanceSelected (~17 lines)
+setSelectedModule (~21 lines)
+setSelectedWindow (~15 lines)
+setSelectedUnderlay (~27 lines)
+setSelectedDimension (~26 lines)
+setSelectedWall (~40 lines)
+deleteWall (~14 lines)
+createWindow (~28 lines)
+clampWindowParams (~12 lines)
+updateWindowTransform (~51 lines)
+addOrSelectWindow (~8 lines)
+mountWindowControls (~74 lines)
+clearWindowLightIfMissing (~4 lines)
+mountInstanceControls (~44 lines)
+rebuildInstance (~40 lines)
+selectInstanceById (~6 lines)
+duplicateInstance (~13 lines)
+deleteInstance (~11 lines)
+placeWithoutOverlap (~16 lines)
+aabbOverlapXZ (~11 lines)
+anyOverlap (~10 lines)
+anyOverlapIgnoring (~10 lines)
+polyArea (~9 lines)
+multiPolyArea (~18 lines)
+moduleWorldRing (~13 lines)
+moduleOverlapsWalls (~36 lines)
+snapPosition (~78 lines)
+applyWallConstraints (~42 lines)
+autoOrientModuleToRoomWallIfSnapped (~33 lines)
+cancelPlacement (~11 lines)
+rebuildGhost (~29 lines)
+mountPlacementControls (~26 lines)
+commitPlacement (~16 lines)
+addInstance (~58 lines)
+setView2d (~30 lines)
+setMode (~60 lines)
+buildLayoutExportPayload (~14 lines)
+selectMesh (~35 lines)
+selectByName (~8 lines)
+setVisibleByName (~11 lines)
+clearOverlapHighlight (~8 lines)
+showForHighlight (~8 lines)
+highlightOverlap (~21 lines)
+mountControls (~27 lines)
+afterParamsChanged (~4 lines)
+rebuild (~51 lines)
+setModel (~42 lines)
+applyKeyboardNav (~53 lines)
+updateWallEditHud (~182 lines)
+tick (~94 lines)
+addMeasurement (~29 lines)
+updateMeasureLabels (~13 lines)
+updatePreview (~39 lines)
+clearPreview (~12 lines)
+
+Event handlers:
+Event "keydown" (~478 lines)
+Event "keyup" (~3 lines)
+Event "blur" (~3 lines)
+Event "pointerleave" (~3 lines)
+Event "change" (~3 lines)
+Event "click" (~13 lines)
+Event "click" (~12 lines)
+Event "input" (~5010 lines)
+Event "change" (~4 lines)
+Event "change" (~18 lines)
+Event "click" (~3 lines)
+Event "click" (~3 lines)
+Event "change" (~4885 lines)
+Event "change" (~4884 lines)
+Event "input" (~4883 lines)
+Event "pointerdown" (~17 lines)
+Event "keydown" (~11 lines)
+Event "blur" (~3 lines)
+Event "pointerdown" (~15 lines)
+Event "keydown" (~11 lines)
+Event "blur" (~3 lines)
+Event "pointerdown" (~4 lines)
+Event "pointerdown" (~4 lines)
+Event "pointerdown" (~4 lines)
+Event "change" (~19 lines)
+Event "input" (~4 lines)
+Event "change" (~4 lines)
+Event "change" (~4 lines)
+Event "change" (~4 lines)
+Event "change" (~5 lines)
+Event "change" (~5 lines)
+Event "click" (~5 lines)
+Event "change" (~3 lines)
+Event "change" (~6 lines)
+Event "change" (~5 lines)
+Event "click" (~6 lines)
+Event "change" (~4 lines)
+Event "change" (~61 lines)
+Event "keydown" (~3 lines)
+Event "change" (~6 lines)
+Event "change" (~5 lines)
+Event "keydown" (~3 lines)
+Event "change" (~53 lines)
+Event "input" (~101 lines)
+Event "input" (~100 lines)
+Event "input" (~99 lines)
+Event "input" (~98 lines)
+Event "input" (~97 lines)
+Event "click" (~28 lines)
+Event "click" (~20 lines)
+Event "click" (~5 lines)
+Event "click" (~12 lines)
+Event "click" (~11 lines)
+Event "click" (~7 lines)
+Event "click" (~5 lines)
+Event "change" (~4 lines)
+Event "click" (~3582 lines)
+Event "click" (~3581 lines)
+Event "click" (~3580 lines)
+Event "click" (~3579 lines)
+Event "click" (~3578 lines)
+Event "click" (~3577 lines)
+Event "click" (~3576 lines)
+Event "click" (~3575 lines)
+Event "click" (~3574 lines)
+Event "click" (~3573 lines)
+Event "click" (~3572 lines)
+Event "click" (~4 lines)
+Event "click" (~4 lines)
+Event "change" (~4 lines)
+Event "change" (~6 lines)
+Event "input" (~5 lines)
+Event "input" (~5 lines)
+Event "input" (~5 lines)
+Event "input" (~5 lines)
+Event "keydown" (~7 lines)
+Event "click" (~47 lines)
+Event "click" (~24 lines)
+Event "click" (~102 lines)
+Event "click" (~12 lines)
+Event "contextmenu" (~5 lines)
+Event "dblclick" (~21 lines)
+Event "pointerdown" (~751 lines)
+Event "pointermove" (~567 lines)
+Event "pointerup" (~207 lines)
+Event "change" (~5 lines)
