@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5180",
     "build": "vite build",
-    "test": "vitest run",
     "preview": "vite preview",
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
     "worker:dev": "tsx scripts/worker.ts",
@@ -26,7 +25,6 @@
     "ts-morph": "^28.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
-    "vite": "^5.4.0",
-    "vitest": "^4.1.4"
+    "vite": "6.4.2"
   }
 }
