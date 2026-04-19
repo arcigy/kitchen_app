@@ -1,3 +1,5 @@
+import type { BoardMaterialPresetId } from "../data/materials";
+
 export type MaterialParams = {
   bodyKey: string; // later: pricing lookup key
   frontKey: string; // later: pricing lookup key
@@ -26,6 +28,7 @@ export type MaterialParams = {
     tintColor?: string;
     tintStrength?: number;
   };
+  partOverrides?: Record<string, BoardMaterialPresetId>;
 };
 
 type ShelfLayoutParams = {
@@ -45,6 +48,10 @@ export type DrawerLowParams = {
   depth: number; // mm
   boardThickness: number; // mm
   backThickness: number; // mm
+  backGrooveDepthMm: number; // mm
+  backGrooveWidthMm: number; // mm
+  backGrooveOffsetMm: number; // mm
+  backGrooveClearanceMm: number; // mm
   plinthHeight: number; // mm
   plinthSetbackMm: number; // mm (kickboard setback from cabinet front)
   frontGap: number; // mm (vertical gap between fronts)
@@ -62,6 +69,7 @@ export type DrawerLowParams = {
   handleProjectionMm: number; // mm
   drawerBoxThickness: number; // mm (drawer sides/back/bottom thickness)
   drawerBoxSideHeight: number; // mm (drawer side/back panel height)
+  drawerBackReserveMm: number; // mm
   drawerCount: number;
   drawerFrontHeights: number[]; // mm
   materials: MaterialParams;
@@ -443,6 +451,10 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     depth: 560,
     boardThickness: 18,
     backThickness: 8,
+    backGrooveDepthMm: 8,
+    backGrooveWidthMm: 8,
+    backGrooveOffsetMm: 12,
+    backGrooveClearanceMm: 1,
     plinthHeight: 100,
     plinthSetbackMm: 60,
     frontGap: 2,
@@ -460,6 +472,7 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
     handleProjectionMm: 14,
     drawerBoxThickness: 13,
     drawerBoxSideHeight: 110,
+    drawerBackReserveMm: 8,
     drawerCount: 3,
     drawerFrontHeights: [],
     materials: {
@@ -469,7 +482,8 @@ export function makeDefaultDrawerLowParams(): DrawerLowParams {
       bodyColor: "#b8bcc7",
       frontColor: "#3a7bd5",
       drawerColor: "#e1a45a",
-      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 }
+      bodyPbr: { id: "wood_veneer_oak_7760_1k", rotationDeg: 0, tintStrength: 0 },
+      partOverrides: {}
     }
   };
   base.drawerFrontHeights = computeEqualDrawerFrontHeights(base);
@@ -920,6 +934,24 @@ export function validateModule(p: ModuleParams): string[] {
 }
 
 export function normalizeModuleParams(p: ModuleParams): ModuleParams {
+  if (p.type === "drawer_low") {
+    const base = makeDefaultDrawerLowParams();
+    const next: DrawerLowParams = {
+      ...base,
+      ...(p as any),
+      materials: {
+        ...base.materials,
+        ...((p as any).materials ?? {}),
+        partOverrides: { ...(base.materials.partOverrides ?? {}), ...(((p as any).materials?.partOverrides as Record<string, BoardMaterialPresetId> | undefined) ?? {}) }
+      }
+    };
+    if (next.backGrooveWidthMm > 0 && next.backGrooveWidthMm < next.backThickness) {
+      next.backGrooveWidthMm = next.backThickness;
+    }
+    if (!Array.isArray(next.drawerFrontHeights)) next.drawerFrontHeights = [];
+    return next;
+  }
+
   if (p.type === "shelves") {
     const base = makeDefaultShelvesParams();
     const next: ShelvesParams = {
@@ -962,6 +994,10 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
   positiveNumber(errors, "depth", p.depth, 200);
   positiveNumber(errors, "boardThickness", p.boardThickness, 5);
   positiveNumber(errors, "backThickness", p.backThickness, 3);
+  positiveNumber(errors, "backGrooveDepthMm", p.backGrooveDepthMm, 0);
+  positiveNumber(errors, "backGrooveWidthMm", p.backGrooveWidthMm, 0);
+  positiveNumber(errors, "backGrooveOffsetMm", p.backGrooveOffsetMm, 0);
+  positiveNumber(errors, "backGrooveClearanceMm", p.backGrooveClearanceMm, 0);
   positiveNumber(errors, "plinthHeight", p.plinthHeight, 0);
   positiveNumber(errors, "plinthSetbackMm", p.plinthSetbackMm, 0);
   positiveNumber(errors, "frontGap", p.frontGap, 0);
@@ -977,6 +1013,7 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
   positiveNumber(errors, "handleProjectionMm", p.handleProjectionMm, 0);
   positiveNumber(errors, "drawerBoxThickness", p.drawerBoxThickness, 5);
   positiveNumber(errors, "drawerBoxSideHeight", p.drawerBoxSideHeight, 30);
+  positiveNumber(errors, "drawerBackReserveMm", p.drawerBackReserveMm, 0);
 
   const validHandle =
     p.handleType === "none" || p.handleType === "bar" || p.handleType === "knob" || p.handleType === "cup" || p.handleType === "gola";
@@ -1019,7 +1056,12 @@ export function validateDrawerLow(p: DrawerLowParams): string[] {
   }
 
   if (p.backThickness >= p.depth) errors.push("backThickness must be smaller than depth.");
+  if (p.backGrooveWidthMm > 0 && p.backGrooveWidthMm < p.backThickness) {
+    errors.push("backGrooveWidthMm must be >= backThickness when groove width is > 0.");
+  }
+  if (p.backGrooveOffsetMm > p.depth) errors.push("backGrooveOffsetMm must be <= depth.");
   if (p.drawerBoxThickness >= p.boardThickness) errors.push("drawerBoxThickness should be smaller than boardThickness.");
+  if (p.drawerBackReserveMm > p.depth) errors.push("drawerBackReserveMm must be <= depth.");
 
   const minFront = p.drawerFrontHeights.length > 0 ? Math.min(...p.drawerFrontHeights) : 0;
   const drawerClearTopBottomMm = Math.max(6, p.frontGap * 2);

@@ -1,4 +1,5 @@
 import type { GrainAlong } from "../materials/uvGrain";
+import type { BoardMaterialPresetId } from "../data/materials";
 export type { GrainAlong };
 
 export type PartDimensionsMm = {
@@ -30,7 +31,12 @@ type CreatePartPanelArgs = {
   onSelect: (name: string) => void;
   onSetVisible: (name: string, visible: boolean) => void;
   onHighlightPair: (a: string, b: string) => void;
+  isMaterialOverrideEnabled: (name: string) => boolean;
+  getMaterialOverride: (name: string) => BoardMaterialPresetId | "";
+  onSetMaterialOverride: (name: string, presetId: BoardMaterialPresetId | "") => void;
 };
+
+const boardMaterialPresetIds: BoardMaterialPresetId[] = ["DTD1", "DTD2", "DTD3", "MDF", "DVD", "DTD16"];
 
 export function createPartPanel(container: HTMLElement, args: CreatePartPanelArgs) {
   container.innerHTML = "";
@@ -47,6 +53,18 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   const selectedNameEl = selected.querySelector(".name") as HTMLDivElement;
   const selectedDimsEl = selected.querySelector(".dims") as HTMLDivElement;
   const selectedBtn = selected.querySelector("button") as HTMLButtonElement;
+  const selectedMaterialWrap = document.createElement("div");
+  selectedMaterialWrap.className = "field";
+  selectedMaterialWrap.style.display = "none";
+  const selectedMaterialLabel = document.createElement("label");
+  selectedMaterialLabel.textContent = "Material override";
+  selectedMaterialLabel.htmlFor = "selectedPartMaterialOverride";
+  const selectedMaterialSelect = document.createElement("select");
+  selectedMaterialSelect.id = "selectedPartMaterialOverride";
+  selectedMaterialSelect.innerHTML = ['<option value="">(no override)</option>', ...boardMaterialPresetIds.map((id) => `<option value="${id}">${id}</option>`)].join("");
+  selectedMaterialWrap.appendChild(selectedMaterialLabel);
+  selectedMaterialWrap.appendChild(selectedMaterialSelect);
+  selected.appendChild(selectedMaterialWrap);
 
   const list = document.createElement("div");
   list.className = "list";
@@ -77,6 +95,8 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
       selectedDimsEl.textContent = "";
       selectedBtn.disabled = true;
       selectedBtn.textContent = "Hide selected";
+      selectedMaterialWrap.style.display = "none";
+      selectedMaterialSelect.value = "";
       return;
     }
 
@@ -92,6 +112,9 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     selectedDimsEl.textContent = formatDims(row.dimensionsMm, row.grainAlong);
     selectedBtn.disabled = false;
     selectedBtn.textContent = row.visible ? "Hide selected" : "Show selected";
+    const showMaterialOverride = args.isMaterialOverrideEnabled(row.name);
+    selectedMaterialWrap.style.display = showMaterialOverride ? "" : "none";
+    selectedMaterialSelect.value = showMaterialOverride ? args.getMaterialOverride(row.name) : "";
   };
 
   const renderList = () => {
@@ -175,6 +198,11 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
     const row = rows.find((r) => r.name === selectedName);
     if (!row) return;
     args.onSetVisible(selectedName, !row.visible);
+  });
+
+  selectedMaterialSelect.addEventListener("change", () => {
+    if (!selectedName) return;
+    args.onSetMaterialOverride(selectedName, (selectedMaterialSelect.value || "") as BoardMaterialPresetId | "");
   });
 
   const api = {
