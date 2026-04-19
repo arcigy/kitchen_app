@@ -3,6 +3,7 @@ import type { ModuleParams } from "../model/cabinetTypes";
 export type { ModuleParams };
 import type { SsgiPipeline } from "../rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "../rendering/photoPathTracer";
+import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
 
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
@@ -137,6 +138,8 @@ export interface AppState {
   instances: LayoutInstance[];
   instanceCounter: number;
   params: ModuleParams;
+  kitchenCtx: KitchenContext;
+  kitchenEditMode: boolean;
 
   // Selection
   layoutTool: LayoutTool;
@@ -212,6 +215,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     instances: [],
     instanceCounter: 1,
     params: defaultParams,
+    kitchenCtx: resolveContext(makeDefaultKitchenContext()),
+    kitchenEditMode: false,
 
     layoutTool: "select",
     selectedKind: null,

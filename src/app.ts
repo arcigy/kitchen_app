@@ -38,6 +38,7 @@ import { createTopbar } from "./ui/createTopbar";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
+import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
 import {
   updateUndoRedoUi,
   commitHistory,
@@ -630,6 +631,10 @@ export function startApp(args: AppArgs) {
     max: 80
   };
 
+  let kitchenCtx = resolveContext(makeDefaultKitchenContext());
+  let kitchenEditMode = false;
+  let kitchenCtxBeforeKitchenMode = structuredClone(kitchenCtx);
+
 
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
@@ -663,6 +668,8 @@ export function startApp(args: AppArgs) {
     instances,
     instanceCounter,
     params,
+    kitchenCtx,
+    kitchenEditMode,
     layoutTool,
     selectedKind,
     selectedInstanceId,
@@ -2326,6 +2333,7 @@ export function startApp(args: AppArgs) {
 
   window.addEventListener("keydown", (ev) => {
     if (isTypingTarget(ev.target)) return;
+    if (S.kitchenEditMode) return;
 
     if (mode === "layout") {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
@@ -3936,8 +3944,18 @@ export function startApp(args: AppArgs) {
   const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
   const I_UNDO = icon("M12 5H7.8l1.6-1.6L8 2 4 6l4 4 1.4-1.4L7.8 7H12c3.3 0 6 2.7 6 6 0 1.1-.3 2.1-.8 3l1.7 1c.7-1.2 1.1-2.6 1.1-4 0-4.4-3.6-8-8-8z");
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
+  const I_DONE = icon("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z");
+  const I_CANCEL = icon("M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z");
 
   const tb = createTopbar(args.ribbonEl);
+  const kitchenOverlay = document.createElement("div");
+  kitchenOverlay.style.position = "fixed";
+  kitchenOverlay.style.inset = "0";
+  kitchenOverlay.style.background = "rgba(59,130,246,0.08)";
+  kitchenOverlay.style.pointerEvents = "none";
+  kitchenOverlay.style.zIndex = "10";
+  kitchenOverlay.style.display = "none";
+  document.body.appendChild(kitchenOverlay);
 
   const props = {
     setTitle(title: string) {
@@ -4396,6 +4414,48 @@ export function startApp(args: AppArgs) {
     autoOrientModuleToRoomWallIfSnapped
   };
 
+  const setKitchenEditMode = (next: boolean) => {
+    kitchenEditMode = next;
+    S.kitchenEditMode = next;
+    kitchenOverlay.style.display = next ? "block" : "none";
+    tb.setMode(next ? "kitchen" : "standard");
+    mountProps();
+  };
+
+  const exitKitchenModeFinish = () => {
+    if (!kitchenEditMode) return;
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    setKitchenEditMode(false);
+  };
+
+  const exitKitchenModeDiscard = () => {
+    if (!kitchenEditMode) return;
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    kitchenCtx = resolveContext(structuredClone(kitchenCtxBeforeKitchenMode));
+    S.kitchenCtx = kitchenCtx;
+    applyKitchenContextToAllInstances();
+    setKitchenEditMode(false);
+  };
+
+  const enterKitchenMode = () => {
+    ensureLayoutMode();
+    kitchenCtxBeforeKitchenMode = structuredClone(kitchenCtx);
+    setToolSelect();
+    setKitchenEditMode(true);
+  };
+
+  window.addEventListener(
+    "keydown",
+    (ev) => {
+      if (ev.key !== "Escape") return;
+      if (!kitchenEditMode) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      exitKitchenModeDiscard();
+    },
+    { capture: true }
+  );
+
   const g1 = tb.addGroup();
   tb.toolButton(g1, {
     title: "Select",
@@ -4496,6 +4556,37 @@ export function startApp(args: AppArgs) {
   });
 
   const g3 = tb.addGroup();
+  tb.toolButton(g3, {
+    title: "Kuchyňa",
+    iconSvg: I_CABINET,
+    onClick: () => {
+      enterKitchenMode();
+    }
+  });
+
+  const kModules = tb.addGroup(undefined, { mode: "kitchen" });
+  tb.toolButton(kModules, { title: "Add drawer", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")) });
+  tb.toolButton(kModules, { title: "Add nested drawer", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "nested_drawer_low")) });
+  tb.toolButton(kModules, { title: "Add shelves", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")) });
+  tb.toolButton(kModules, { title: "Add fridge", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")) });
+  tb.toolButton(kModules, { title: "Add corner", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")) });
+  tb.toolButton(kModules, { title: "Add flap", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "flap_shelves_low")) });
+  tb.toolButton(kModules, { title: "Add swing", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "swing_shelves_low")) });
+  tb.toolButton(kModules, { title: "Add oven base", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "oven_base_low")) });
+  tb.toolButton(kModules, { title: "Add microwave tall", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "microwave_oven_tall")) });
+  tb.toolButton(kModules, { title: "Add top drawers/doors", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "top_drawers_doors_low")) });
+
+  tb.addSpacer({ mode: "kitchen" });
+  const kExit = tb.addGroup(undefined, { mode: "kitchen" });
+  const finishBtn = tb.toolButton(kExit, { title: "Dokončiť", iconSvg: I_DONE, onClick: () => exitKitchenModeFinish() });
+  finishBtn.style.color = "#22c55e";
+  finishBtn.style.borderColor = "rgba(34,197,94,0.55)";
+  finishBtn.style.background = "rgba(34,197,94,0.10)";
+  const cancelBtn = tb.toolButton(kExit, { title: "Zrušiť zmeny", iconSvg: I_CANCEL, onClick: () => exitKitchenModeDiscard() });
+  cancelBtn.style.color = "#ef4444";
+  cancelBtn.style.borderColor = "rgba(239,68,68,0.55)";
+  cancelBtn.style.background = "rgba(239,68,68,0.10)";
+
   tb.panelButton(g3, {
     title: "Underlay",
     iconSvg: I_UNDERLAY,
@@ -4903,6 +4994,16 @@ export function startApp(args: AppArgs) {
       }))
     );
     layoutPanel.setSelected(selectedInstanceId);
+  }
+
+  function applyKitchenContextToAllInstances() {
+    for (const inst of instances) {
+      inst.params.depth = kitchenCtx.moduleDepthMm;
+      if (inst.params.type !== "fridge_tall" && inst.params.type !== "microwave_oven_tall") {
+        inst.params.height = kitchenCtx.moduleHeightMm;
+      }
+      rebuildInstance(inst);
+    }
   }
 
   function setInstanceSelected(id: string | null) {
@@ -5810,6 +5911,7 @@ export function startApp(args: AppArgs) {
   };
 
   window.addEventListener("keydown", (ev) => {
+    if (S.kitchenEditMode) return;
     if (!selectedMesh) return;
     const k = ev.key.toLowerCase();
     if (k === "p") toggleSelectedPbr(selectedMesh, "all");
