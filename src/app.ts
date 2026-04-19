@@ -46,6 +46,14 @@ import {
   captureLayoutSnapshot,
   type HistoryHelpers
 } from "./layout/historyManager";
+import {
+  addInstance,
+  cancelPlacement,
+  commitPlacement,
+  mountPlacementControls,
+  rebuildGhost,
+  type PlacementHelpers
+} from "./layout/placementManager";
 
 type AppArgs = {
   viewerEl: HTMLElement;
@@ -852,6 +860,15 @@ export function startApp(args: AppArgs) {
   let undoBtnEl: HTMLButtonElement | null = null;
   let redoBtnEl: HTMLButtonElement | null = null;
   let helpers!: HistoryHelpers;
+  let placementHelpers!: PlacementHelpers;
+
+  const placement = {
+    active: false,
+    params: null as ModuleParams | null,
+    ghost: null as any,
+    ghostValid: false,
+    lastCursor: new THREE.Vector3(0, 0, 0)
+  };
 
   const S: AppState = {
     mode,
@@ -887,6 +904,7 @@ export function startApp(args: AppArgs) {
     overlapBoxes: [],
     cabinetGroup: null,
     grainArrow: null,
+    placement,
     dimensions,
     dimensionCounter,
     undoBtnEl,
@@ -2359,6 +2377,7 @@ export function startApp(args: AppArgs) {
 
   const setToolSelect = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "select";
     clearToolHud();
     wallDraw.active = false;
@@ -2378,6 +2397,7 @@ export function startApp(args: AppArgs) {
 
   const setToolWall = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "wall";
     clearToolHud();
     wallDraw.active = false;
@@ -2410,6 +2430,7 @@ export function startApp(args: AppArgs) {
 
   const setToolAlign = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "align";
     clearToolHud();
     wallDraw.active = false;
@@ -2443,6 +2464,7 @@ export function startApp(args: AppArgs) {
 
   const setToolTrim = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "trim";
     clearToolHud();
     wallDraw.active = false;
@@ -2479,6 +2501,7 @@ export function startApp(args: AppArgs) {
 
   const setToolDimension = () => {
     ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "dimension";
     clearToolHud();
     wallDraw.active = false;
@@ -2527,6 +2550,12 @@ export function startApp(args: AppArgs) {
           ev.preventDefault();
           return;
         }
+      }
+
+      if (placement.active && ev.key === "Escape") {
+        cancelPlacement(S, placementHelpers);
+        ev.preventDefault();
+        return;
       }
 
       if (transformState.kind) {
@@ -4495,6 +4524,7 @@ export function startApp(args: AppArgs) {
 
   const mountProps = () => {
     if (mode !== "layout") return showNoProps();
+    if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
@@ -4541,6 +4571,23 @@ export function startApp(args: AppArgs) {
     mountProps,
     updateLayoutPanel,
     layoutRoot
+  };
+
+  placementHelpers = {
+    props,
+    layoutRoot,
+    setUnderlayStatus,
+    createInstance,
+    disposeObject3D,
+    updateLayoutPanel,
+    mountProps,
+    setSelectedModule,
+    applyWallConstraints,
+    roomContainsBoxXZ,
+    instanceWorldBox,
+    anyOverlap,
+    moduleOverlapsWalls,
+    autoOrientModuleToRoomWallIfSnapped
   };
 
   const g1 = tb.addGroup();
@@ -4610,10 +4657,10 @@ export function startApp(args: AppArgs) {
   });
 
   const g2 = tb.addGroup();
-  tb.toolButton(g2, { title: "Add drawer", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), addInstance("drawer_low")) });
-  tb.toolButton(g2, { title: "Add fridge", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), addInstance("fridge_tall")) });
-  tb.toolButton(g2, { title: "Add shelves", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), addInstance("shelves")) });
-  tb.toolButton(g2, { title: "Add corner", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), addInstance("corner_shelf_lower")) });
+  tb.toolButton(g2, { title: "Add drawer", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")) });
+  tb.toolButton(g2, { title: "Add fridge", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")) });
+  tb.toolButton(g2, { title: "Add shelves", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")) });
+  tb.toolButton(g2, { title: "Add corner", iconSvg: I_CABINET, onClick: () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")) });
   tb.toolButton(g2, {
     title: "2D",
     iconSvg: I_GRID2D,
@@ -4924,16 +4971,16 @@ export function startApp(args: AppArgs) {
     setMode(next);
   });
 
-  addDrawerBtn.addEventListener("click", () => addInstance("drawer_low"));
-  addNestedDrawerBtn.addEventListener("click", () => addInstance("nested_drawer_low"));
-  addFridgeBtn.addEventListener("click", () => addInstance("fridge_tall"));
-  addShelvesBtn.addEventListener("click", () => addInstance("shelves"));
-  addCornerBtn.addEventListener("click", () => addInstance("corner_shelf_lower"));
-  addFlapBtn.addEventListener("click", () => addInstance("flap_shelves_low"));
-  addSwingBtn.addEventListener("click", () => addInstance("swing_shelves_low"));
-  addOvenBaseBtn.addEventListener("click", () => addInstance("oven_base_low"));
-  addMicrowaveTallBtn.addEventListener("click", () => addInstance("microwave_oven_tall"));
-  addTopDrawersDoorsBtn.addEventListener("click", () => addInstance("top_drawers_doors_low"));
+  addDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "drawer_low")));
+  addNestedDrawerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "nested_drawer_low")));
+  addFridgeBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "fridge_tall")));
+  addShelvesBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "shelves")));
+  addCornerBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "corner_shelf_lower")));
+  addFlapBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "flap_shelves_low")));
+  addSwingBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "swing_shelves_low")));
+  addOvenBaseBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "oven_base_low")));
+  addMicrowaveTallBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "microwave_oven_tall")));
+  addTopDrawersDoorsBtn.addEventListener("click", () => (ensureLayoutMode(), setToolSelect(), addInstance(S, placementHelpers, "top_drawers_doors_low")));
   addWindowBtn.addEventListener("click", () => addOrSelectWindow());
 
   dupBtn.addEventListener("click", () => {
@@ -5808,59 +5855,10 @@ export function startApp(args: AppArgs) {
     inst.root.updateMatrixWorld(true);
   }
 
-  function addInstance(type: ModuleParams["type"]) {
-    if (mode !== "layout") return;
-    let nextParams: ModuleParams;
-    switch (type) {
-      case "drawer_low":
-        nextParams = makeDefaultDrawerLowParams();
-        break;
-      case "nested_drawer_low":
-        nextParams = makeDefaultNestedDrawerLowParams();
-        break;
-      case "fridge_tall":
-        nextParams = makeDefaultFridgeTallParams();
-        break;
-      case "shelves":
-        nextParams = makeDefaultShelvesParams();
-        break;
-      case "corner_shelf_lower":
-        nextParams = makeDefaultCornerShelfLowerParams();
-        break;
-      case "flap_shelves_low":
-        nextParams = makeDefaultFlapShelvesLowParams();
-        break;
-      case "swing_shelves_low":
-        nextParams = makeDefaultSwingShelvesLowParams();
-        break;
-      case "oven_base_low":
-        nextParams = makeDefaultOvenBaseLowParams();
-        break;
-      case "microwave_oven_tall":
-        nextParams = makeDefaultMicrowaveOvenTallParams();
-        break;
-      case "top_drawers_doors_low":
-        nextParams = makeDefaultTopDrawersDoorsLowParams();
-        break;
-      default:
-        nextParams = makeDefaultDrawerLowParams();
-    }
-
-    // Keep layout view clean (no open doors for bounding boxes).
-    if ("doorOpen" in nextParams) (nextParams as any).doorOpen = false;
-
-    const inst = createInstance(nextParams);
-    inst.root.position.set(0, 0, 0);
-    layoutRoot.add(inst.root);
-    instances.push(inst);
-    placeWithoutOverlap(inst);
-    setSelectedModule(inst.id);
-    updateLayoutPanel();
-  }
-
   function setView2d(enabled: boolean) {
     viewMode = enabled ? "2d" : "3d";
-    setViewMode(enabled ? "2d" : "3d");
+    S.viewMode = viewMode;
+    setViewMode(viewMode);
 
     // Simplify visuals in 2D: hide geometry, keep outlines.
     for (const inst of instances) {
@@ -5891,8 +5889,10 @@ export function startApp(args: AppArgs) {
 
   function setMode(next: AppMode) {
     mode = next;
+    S.mode = mode;
 
     const isLayout = mode === "layout";
+    if (!isLayout && placement.active) cancelPlacement(S, placementHelpers);
     buildUi.style.display = isLayout ? "none" : "";
     layoutUi.style.display = isLayout ? "" : "none";
     partsBuildHost.style.display = isLayout ? "none" : "";
@@ -6428,7 +6428,7 @@ export function startApp(args: AppArgs) {
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
     // Marquee selection in 2D layout select tool (left button) - start pending, activate on drag.
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !transformState.kind && ev.button === 0 && !measureState.enabled) {
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !transformState.kind && !placement.active && ev.button === 0 && !measureState.enabled) {
       const rect = renderer.domElement.getBoundingClientRect();
       marquee.pending = true;
       marquee.active = false;
@@ -6511,6 +6511,17 @@ export function startApp(args: AppArgs) {
 
         underlayCal.active = false;
         underlayCal.first = null;
+        return;
+      }
+
+      if (placement.active && viewMode === "2d" && layoutTool === "select") {
+        if (ev.button !== 0) return;
+        const hitPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+        rebuildGhost(S, placementHelpers, hitPoint);
+        commitPlacement(S, placementHelpers);
+        ev.preventDefault();
+        ev.stopPropagation();
         return;
       }
 
@@ -7175,6 +7186,18 @@ export function startApp(args: AppArgs) {
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && placement.active) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+      rebuildGhost(S, placementHelpers, hitPoint);
+      return;
+    }
+
     // Wall edit drag (2D, select tool)
     if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && wallEditHud.drag) {
       const d = wallEditHud.drag;

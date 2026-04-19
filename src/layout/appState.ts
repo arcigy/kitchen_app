@@ -157,7 +157,13 @@ export interface AppState {
   grainArrow: THREE.ArrowHelper | null;
 
   // Placement
-  // (Left empty or to be populated based on state vars that are related to placement)
+  placement: {
+    active: boolean;
+    params: ModuleParams | null;
+    ghost: LayoutInstance | null;
+    ghostValid: boolean;
+    lastCursor: THREE.Vector3;
+  };
 
   // Dimensions
   dimensions: DimensionInstance[];
@@ -223,6 +229,14 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     overlapBoxes: [],
     cabinetGroup: null,
     grainArrow: null,
+
+    placement: {
+      active: false,
+      params: null,
+      ghost: null,
+      ghostValid: false,
+      lastCursor: new THREE.Vector3(0, 0, 0)
+    },
 
     dimensions: [],
     dimensionCounter: 1,
