@@ -1,0 +1,14 @@
+node_modules/
+dist/
+exports/
+*.log
+devlocal.out
+devlocal.err
+tmp/
+.env
+.env.*
+*.log
+exports/
+*.log
+devlocal.out
+devlocal.err
