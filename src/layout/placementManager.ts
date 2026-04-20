@@ -104,14 +104,8 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   inst.root.position.copy(ghost.root.position);
   inst.root.rotation.y = ghost.root.rotation.y;
 
-  if (S.viewMode === "2d") {
-    inst.module.visible = false;
-    (inst.outline.material as any).opacity = 0.95;
-    inst.outline.visible = true;
-  } else {
-    (inst.outline.material as any).opacity = 0.6;
-    inst.outline.visible = true;
-  }
+  inst.module.visible = true;
+  inst.outline.visible = false;
 
   helpers.layoutRoot.add(inst.root);
   S.instances.push(inst);

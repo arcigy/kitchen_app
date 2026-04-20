@@ -8,7 +8,6 @@ import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPa
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
 import { getFirstModuleType, getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
-import importSummary from "./modules/import-summary.json";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
@@ -73,134 +72,11 @@ type AppArgs = {
   exportSceneBtn: HTMLButtonElement;
 };
 
-type ImportSummary = {
-  latest?: {
-    moduleType: string;
-    label?: string;
-    packageName: string;
-    packageVersion: string;
-    moduleFolder: string;
-    importedAt: string;
-    importedFrom: string;
-    preservedExistingTypes?: boolean;
-    preservedExistingCalculation?: boolean;
-    installedFiles?: string[];
-  } | null;
-};
-
-function showLatestImportModal() {
-  const latest = (importSummary as ImportSummary).latest;
-  if (!latest) return;
-
-  const key = `arcigy-import-summary:${latest.packageName}:${latest.packageVersion}:${latest.importedAt}`;
-  if (sessionStorage.getItem(key) === "seen") return;
-  sessionStorage.setItem(key, "seen");
-
-  const overlay = document.createElement("div");
-  overlay.style.position = "fixed";
-  overlay.style.inset = "0";
-  overlay.style.zIndex = "2000";
-  overlay.style.display = "grid";
-  overlay.style.placeItems = "center";
-  overlay.style.padding = "24px";
-  overlay.style.background = "rgba(0,0,0,0.55)";
-
-  const dialog = document.createElement("section");
-  dialog.style.width = "min(560px, 100%)";
-  dialog.style.maxHeight = "80vh";
-  dialog.style.overflow = "auto";
-  dialog.style.background = "#12141a";
-  dialog.style.color = "#e6e8ee";
-  dialog.style.border = "1px solid #303746";
-  dialog.style.borderRadius = "8px";
-  dialog.style.padding = "18px";
-  dialog.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
-  overlay.appendChild(dialog);
-
-  const title = document.createElement("h2");
-  title.textContent = "Modul bol importovany";
-  title.style.margin = "0 0 12px";
-  title.style.fontSize = "18px";
-  dialog.appendChild(title);
-
-  const rows = [
-    ["Modul", `${latest.label ?? latest.moduleType} (${latest.moduleType})`],
-    ["Balik", `${latest.packageName} ${latest.packageVersion}`],
-    ["Priecinok", `src/modules/${latest.moduleFolder}`],
-    ["Subor", latest.importedFrom],
-    ["Cas", new Date(latest.importedAt).toLocaleString("sk-SK")]
-  ];
-
-  const grid = document.createElement("div");
-  grid.style.display = "grid";
-  grid.style.gridTemplateColumns = "120px 1fr";
-  grid.style.gap = "7px 12px";
-  grid.style.fontSize = "13px";
-  dialog.appendChild(grid);
-
-  for (const [label, value] of rows) {
-    const labelEl = document.createElement("div");
-    labelEl.textContent = label;
-    labelEl.style.color = "#9aa3b2";
-    grid.appendChild(labelEl);
-
-    const valueEl = document.createElement("div");
-    valueEl.textContent = value;
-    valueEl.style.wordBreak = "break-word";
-    grid.appendChild(valueEl);
-  }
-
-  const notes = document.createElement("p");
-  notes.style.margin = "14px 0 0";
-  notes.style.color = "#9aa3b2";
-  notes.style.fontSize = "13px";
-  notes.textContent =
-    latest.preservedExistingTypes || latest.preservedExistingCalculation
-      ? "Importer zachoval lokalne adaptovane typy/BOM placeholder, aby modul fungoval v tejto appke."
-      : "Importer prepisal modul zo suboru a obnovil registry.";
-  dialog.appendChild(notes);
-
-  const files = latest.installedFiles ?? [];
-  if (files.length > 0) {
-    const details = document.createElement("details");
-    details.style.marginTop = "12px";
-    const summary = document.createElement("summary");
-    summary.textContent = `Subory v module (${files.length})`;
-    details.appendChild(summary);
-    const pre = document.createElement("pre");
-    pre.textContent = files.join("\n");
-    pre.style.whiteSpace = "pre-wrap";
-    pre.style.fontSize = "12px";
-    pre.style.color = "#cbd5e1";
-    details.appendChild(pre);
-    dialog.appendChild(details);
-  }
-
-  const close = document.createElement("button");
-  close.type = "button";
-  close.textContent = "OK";
-  close.style.marginTop = "16px";
-  close.style.borderRadius = "8px";
-  close.style.border = "1px solid #303746";
-  close.style.background = "#eef2ff";
-  close.style.color = "#12141a";
-  close.style.padding = "8px 14px";
-  close.addEventListener("click", () => overlay.remove());
-  dialog.appendChild(close);
-
-  overlay.addEventListener("click", (ev) => {
-    if (ev.target === overlay) overlay.remove();
-  });
-  document.body.appendChild(overlay);
-}
-
 export function startApp(args: AppArgs) {
   type ParamHighlightControls = {
     highlightParamKeys?: (keys: string[]) => void;
     clearHighlights?: () => void;
   };
-
-  showLatestImportModal();
 
   let params: ModuleParams = getModuleDescriptorOrThrow(getFirstModuleType()).defaultParams();
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
@@ -475,26 +351,6 @@ export function startApp(args: AppArgs) {
         line.renderOrder = 61;
         selectionHighlights.add(line);
       }
-    }
-
-    // Modules: box helper per selected instance
-    for (const id of selectedInstanceIds) {
-      const inst = instances.find((x) => x.id === id) ?? null;
-      if (!inst) continue;
-      const box = new THREE.Box3().setFromObject(inst.root);
-      const min = box.min, max = box.max;
-      const y = 0.012;
-      const pts = [
-        new THREE.Vector3(min.x, y, min.z),
-        new THREE.Vector3(max.x, y, min.z),
-        new THREE.Vector3(max.x, y, max.z),
-        new THREE.Vector3(min.x, y, max.z),
-        new THREE.Vector3(min.x, y, min.z)
-      ];
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.98, depthWrite: false }));
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
     }
 
     selectionHighlights.visible = selectionHighlights.children.length > 0;
@@ -5531,16 +5387,11 @@ export function startApp(args: AppArgs) {
 
   function ensurePickAndOutline(inst: LayoutInstance) {
     const box = inst.localBox;
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
 
-    // Pick mesh (invisible but raycastable)
-    const pickH = 0.02;
     inst.pick.geometry.dispose();
-    inst.pick.geometry = new THREE.BoxGeometry(Math.max(0.01, size.x), pickH, Math.max(0.01, size.z));
-    inst.pick.position.set(center.x, pickH / 2, center.z);
+    inst.pick.geometry = new THREE.BufferGeometry();
+    inst.pick.visible = false;
 
-    // Outline (XZ rectangle)
     const pts = [
       new THREE.Vector3(box.min.x, 0.01, box.min.z),
       new THREE.Vector3(box.max.x, 0.01, box.min.z),
@@ -5552,6 +5403,39 @@ export function startApp(args: AppArgs) {
     inst.outline.geometry.dispose();
     inst.outline.geometry = g;
     inst.outline.position.set(0, 0, 0);
+  }
+
+  function tagModuleGeometry(module: THREE.Object3D, instanceId: string) {
+    module.userData.kind = "module";
+    module.userData.instanceId = instanceId;
+    module.traverse((obj: any) => {
+      obj.userData.kind = "module";
+      obj.userData.instanceId = instanceId;
+    });
+  }
+
+  function getInstanceGeometryMeshes(inst: LayoutInstance) {
+    const meshes: THREE.Mesh[] = [];
+    inst.module.traverse((obj: any) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.visible) return;
+      meshes.push(mesh);
+    });
+    return meshes;
+  }
+
+  function getAllInstanceGeometryMeshes() {
+    return instances.flatMap((inst) => getInstanceGeometryMeshes(inst));
+  }
+
+  function getInstanceIdFromObject(obj: THREE.Object3D | null | undefined) {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.instanceId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
   }
 
   function createInstance(nextParams: ModuleParams, opts?: { id?: string }) {
@@ -5567,6 +5451,7 @@ export function startApp(args: AppArgs) {
 
     const module = buildModule(nextParams);
     module.name = `moduleGeom_${id}`;
+    tagModuleGeometry(module, id);
     root.add(module);
 
     const localBox = new THREE.Box3().setFromObject(module);
@@ -5575,11 +5460,13 @@ export function startApp(args: AppArgs) {
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.1), pickMat);
     pick.name = `pick_${id}`;
     pick.userData.instanceId = id;
+    pick.raycast = () => {};
     root.add(pick);
 
     const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.6 });
     const outline = new THREE.Line(gEmpty(), lineMat);
     outline.name = `outline_${id}`;
+    outline.visible = false;
     root.add(outline);
 
     const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, root, module, localBox, pick, outline };
@@ -5614,11 +5501,7 @@ export function startApp(args: AppArgs) {
       selectedInstanceBox = null;
     }
 
-    const inst = id ? findInstance(id) : null;
-    if (!inst) return;
-    selectedInstanceBox = new THREE.BoxHelper(inst.root, 0x3ddc97);
-    selectedInstanceBox.name = "instanceSelectionBox";
-    scene.add(selectedInstanceBox);
+    if (!id) return;
   }
 
   function setSelectedKitchenGroup(groupId: string | null) {
@@ -6052,6 +5935,8 @@ export function startApp(args: AppArgs) {
     if (errors.length > 0) return;
 
     const next = buildModule(inst.params);
+    next.name = `moduleGeom_${inst.id}`;
+    tagModuleGeometry(next, inst.id);
 
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
@@ -6073,6 +5958,7 @@ export function startApp(args: AppArgs) {
       inst.root.remove(inst.module);
       disposeObject3D(inst.module);
       inst.module = prevModule;
+      tagModuleGeometry(inst.module, inst.id);
       inst.localBox = prevBox;
       inst.root.position.copy(prevPos);
       inst.root.add(inst.module);
@@ -6085,6 +5971,37 @@ export function startApp(args: AppArgs) {
 
     disposeObject3D(prevModule);
     updateLayoutPanel();
+  }
+
+  function beginModuleSelection(selectableId: string, ev: PointerEvent) {
+    const inst = findInstance(selectableId);
+    if (!inst) return false;
+    if (marquee.pending && marquee.pointerId === ev.pointerId) {
+      marquee.hitSomething = true;
+      marquee.pending = false;
+      marquee.active = false;
+      marqueeEl.style.display = "none";
+    }
+    if (!S.kitchenEditMode && inst.kitchenGroupId) {
+      const group = kitchenMode?.findKitchenGroup(inst.kitchenGroupId) ?? null;
+      if (group) {
+        setSelectedKitchenGroup(group.id);
+        return true;
+      }
+    }
+    setSelectedModule(selectableId);
+
+    if (viewMode !== "2d") return true;
+    if (pinnedInstanceIds.has(selectableId)) return true;
+
+    const hitPoint = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return true;
+    dragState.active = true;
+    dragState.id = selectableId;
+    dragState.offset.set(hitPoint.x - inst.root.position.x, 0, hitPoint.z - inst.root.position.z);
+    dragState.lastValid.copy(inst.root.position);
+    renderer.domElement.setPointerCapture(ev.pointerId);
+    return true;
   }
 
   function selectInstanceById(id: string) {
@@ -6417,11 +6334,10 @@ export function startApp(args: AppArgs) {
     S.viewMode = viewMode;
     setViewMode(viewMode);
 
-    // Simplify visuals in 2D: hide geometry, keep outlines.
     for (const inst of instances) {
-      inst.module.visible = !enabled;
+      inst.module.visible = true;
       (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.6;
-      inst.outline.visible = true;
+      inst.outline.visible = false;
     }
 
     if (windowInst) {
@@ -6895,8 +6811,8 @@ export function startApp(args: AppArgs) {
     pointerNdc.set(x, y);
     raycaster.setFromCamera(pointerNdc, cam());
 
-    const moduleHit = raycaster.intersectObjects(instances.map((inst) => inst.pick), false)[0]?.object as THREE.Mesh | undefined;
-    const instanceId = (moduleHit?.userData?.instanceId as string | undefined) ?? null;
+    const moduleHit = raycaster.intersectObjects(getAllInstanceGeometryMeshes(), false)[0]?.object as THREE.Mesh | undefined;
+    const instanceId = getInstanceIdFromObject(moduleHit);
     const inst = instanceId ? findInstance(instanceId) : null;
     if (inst?.kitchenGroupId && !S.kitchenEditMode) {
       kitchenMode?.enterExisting(inst.kitchenGroupId);
@@ -7559,6 +7475,11 @@ export function startApp(args: AppArgs) {
         const rect2 = renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
 
+        const moduleHit = raycaster.intersectObjects(getAllInstanceGeometryMeshes(), false)[0]?.object;
+        const moduleId = getInstanceIdFromObject(moduleHit);
+        const selectableModuleId = moduleId && kitchenMode ? kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
+        if (selectableModuleId && beginModuleSelection(selectableModuleId, ev)) return;
+
         let bestFloor: { id: string; px: number } | null = null;
         for (const floor of floors) {
           const boundary = floor.params.boundary;
@@ -7641,7 +7562,7 @@ export function startApp(args: AppArgs) {
         }
       }
 
-      const picks = instances.map((i) => i.pick);
+      const picks: THREE.Object3D[] = getAllInstanceGeometryMeshes();
       if (windowInst) picks.push(windowInst.pick);
       for (const w of walls) picks.push(w.mesh);
       for (const floor of floors) picks.push(floor.mesh, floor.outline as any);
@@ -7699,7 +7620,7 @@ export function startApp(args: AppArgs) {
         return;
       }
 
-      const id = (first?.userData?.instanceId as string | undefined) ?? null;
+      const id = getInstanceIdFromObject(first);
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       const floorId = (first?.userData?.floorId as string | undefined) ?? null;
       if (kind === "floor") {
@@ -7770,34 +7691,7 @@ export function startApp(args: AppArgs) {
         return;
       }
 
-      const inst = findInstance(selectableId);
-      if (!inst) return;
-      if (marquee.pending && marquee.pointerId === ev.pointerId) {
-        marquee.hitSomething = true;
-        marquee.pending = false;
-        marquee.active = false;
-        marqueeEl.style.display = "none";
-      }
-      if (!S.kitchenEditMode && inst.kitchenGroupId) {
-        const group = kitchenMode?.findKitchenGroup(inst.kitchenGroupId) ?? null;
-        if (group) {
-          setSelectedKitchenGroup(group.id);
-          return;
-        }
-      }
-      setSelectedModule(selectableId);
-
-      // Disable object dragging in 3D view (layout edits happen in 2D).
-      if (viewMode !== "2d") return;
-      if (pinnedInstanceIds.has(selectableId)) return;
-
-      const hitPoint = new THREE.Vector3();
-      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-      dragState.active = true;
-      dragState.id = selectableId;
-      dragState.offset.set(hitPoint.x - inst.root.position.x, 0, hitPoint.z - inst.root.position.z);
-      dragState.lastValid.copy(inst.root.position);
-      renderer.domElement.setPointerCapture(ev.pointerId);
+      beginModuleSelection(selectableId, ev);
       return;
     }
 
@@ -8569,7 +8463,10 @@ export function startApp(args: AppArgs) {
         const instBounds = (id: string) => {
           const inst = findInstance(id);
           if (!inst) return null;
-          const box = instanceWorldBox(inst);
+          const meshes = getInstanceGeometryMeshes(inst);
+          if (meshes.length === 0) return null;
+          const box = new THREE.Box3();
+          for (const mesh of meshes) box.expandByObject(mesh);
           const pts = [
             new THREE.Vector3(box.min.x, 0, box.min.z),
             new THREE.Vector3(box.min.x, 0, box.max.z),
