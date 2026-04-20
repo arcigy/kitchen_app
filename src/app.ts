@@ -129,6 +129,11 @@ export function startApp(initialArgs: AppArgs) {
 
   setDaylightIntensity(9);
 
+  const viewerTabbar = document.createElement("div");
+  viewerTabbar.className = "viewer-tabbar";
+  viewerTabbar.innerHTML = `<div class="viewer-tab viewer-tab-active">L1 - Kitchen Layout</div>`;
+  args.viewerEl.appendChild(viewerTabbar);
+
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
@@ -172,7 +177,7 @@ export function startApp(initialArgs: AppArgs) {
   wallPlanGroup.visible = false;
   layoutRoot.add(wallPlanGroup);
 
-  const wallPlanMat = new THREE.MeshBasicMaterial({ color: 0xc6cbd6 });
+  const wallPlanMat = new THREE.MeshBasicMaterial({ color: 0xbcbcbc });
   const wallPlanMeshes = new Map<string, THREE.Mesh>();
   const wallJoinMeshes: THREE.Mesh[] = [];
   let wallPlanUnionMesh: THREE.Mesh | null = null;
@@ -200,9 +205,9 @@ export function startApp(initialArgs: AppArgs) {
   toolHud.name = "toolHud";
   layoutRoot.add(toolHud);
 
-  const hudMatHover = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.25, depthTest: false, depthWrite: false });
-  const hudMatPick1 = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false });
-  const hudMatPick2 = new THREE.MeshBasicMaterial({ color: 0xff4dff, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false });
+  const hudMatHover = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false });
+  const hudMatPick1 = new THREE.MeshBasicMaterial({ color: 0x2f78c4, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
+  const hudMatPick2 = new THREE.MeshBasicMaterial({ color: 0x5c8f44, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
 
   const makeHudLineMesh = (mat: THREE.Material) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
@@ -250,10 +255,10 @@ export function startApp(initialArgs: AppArgs) {
     mesh.visible = true;
   };
 
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0xff4dff, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x00e5ff, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0xffd166, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x3ddc97, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapGeom = new THREE.CircleGeometry(0.035, 16);
   const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
     const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
@@ -4054,6 +4059,17 @@ export function startApp(initialArgs: AppArgs) {
   const I_ROTATE = icon("M12 5V2L7.8 6.2 12 10V7c2.8 0 5 2.2 5 5 0 1.3-.5 2.5-1.3 3.4l1.4 1.4A7 7 0 0 0 12 5zm-5.1 2.2A7 7 0 0 0 12 19v3l4.2-4.2L12 14v3a5 5 0 0 1-3.7-8.4L6.9 7.2z");
 
   const tb = createTopbar(args.ribbonEl);
+  tb.setChrome({
+    title: "Kitchen Layout 2026 - Floor Plan",
+    projectLabel: "Project 1",
+    tabs: [
+      { label: "File", accent: true },
+      { label: "Architecture" },
+      { label: "Modify", active: true },
+      { label: "View" },
+      { label: "Manage" }
+    ]
+  });
 
   const props = {
     setTitle(title: string) {
@@ -4086,7 +4102,7 @@ export function startApp(initialArgs: AppArgs) {
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂˇstroj." : "Properties sĂş dostupnĂ© iba v layout mode.";
+    p.textContent = mode === "layout" ? "Vyber objekt alebo nástroj." : "Properties sú dostupné iba v layout mode.";
     s.appendChild(p);
   };
 
@@ -5313,32 +5329,32 @@ export function startApp(initialArgs: AppArgs) {
   const buildClassicTopbar = () => {
     const row = tb.addRow({ className: "topbar-classic-ribbon" });
 
-    const tools = tb.addGroup("Classic", { row });
-    tb.toolButton(tools, { title: "Select", iconSvg: I_SELECT, onClick: () => setToolSelect() });
-    tb.toolButton(tools, { title: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
-    tb.toolButton(tools, { title: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
-    tb.toolButton(tools, { title: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
-    tb.toolButton(tools, { title: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
-    tb.toolButton(tools, { title: "Podlaha", iconSvg: I_FLOOR, onClick: () => enterFloorBoundaryEdit() });
-    tb.toolButton(tools, { title: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
-    tb.toolButton(tools, { title: "Kuchyňa", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
+    const tools = tb.addGroup("Layout", { row });
+    tb.toolButton(tools, { title: "Select", label: "Select", iconSvg: I_SELECT, onClick: () => setToolSelect() });
+    tb.toolButton(tools, { title: "Wall", label: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
+    tb.toolButton(tools, { title: "Align", label: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
+    tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
+    tb.toolButton(tools, { title: "Dimension", label: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
+    tb.toolButton(tools, { title: "Floor", label: "Floor", iconSvg: I_FLOOR, onClick: () => enterFloorBoundaryEdit() });
+    tb.toolButton(tools, { title: "Underlay", label: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
+    tb.toolButton(tools, { title: "Kitchen", label: "Kitchen", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
 
     const edit = tb.addGroup("Edit", { row });
-    S.undoBtnEl = tb.toolButton(edit, { title: "Undo", iconSvg: I_UNDO, onClick: () => undo(S, helpers) });
-    S.redoBtnEl = tb.toolButton(edit, { title: "Redo", iconSvg: I_REDO, onClick: () => redo(S, helpers) });
-    tb.toolButton(edit, { title: "Move", iconSvg: I_MOVE, onClick: () => startTransformFromSelection("move") });
-    tb.toolButton(edit, { title: "Rotate", iconSvg: I_ROTATE, onClick: () => startTransformFromSelection("rotate") });
-    tb.toolButton(edit, { title: "Duplicate", iconSvg: I_DUP, onClick: duplicateSelected });
-    tb.toolButton(edit, { title: "Delete", iconSvg: I_TRASH, onClick: deleteSelected });
+    S.undoBtnEl = tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: I_UNDO, onClick: () => undo(S, helpers) });
+    S.redoBtnEl = tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: I_REDO, onClick: () => redo(S, helpers) });
+    tb.toolButton(edit, { title: "Move", label: "Move", iconSvg: I_MOVE, onClick: () => startTransformFromSelection("move") });
+    tb.toolButton(edit, { title: "Rotate", label: "Rotate", iconSvg: I_ROTATE, onClick: () => startTransformFromSelection("rotate") });
+    tb.toolButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: I_DUP, onClick: duplicateSelected });
+    tb.toolButton(edit, { title: "Delete", label: "Delete", iconSvg: I_TRASH, onClick: deleteSelected });
 
     const project = tb.addGroup("Project", { row });
-    tb.toolButton(project, { title: "2D view", iconSvg: I_GRID2D, onClick: toggle2dView });
-    tb.toolButton(project, { title: "Reset defaults", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
-    tb.toolButton(project, { title: "Export JSON", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
-    tb.toolButton(project, { title: "Copy export", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
+    tb.toolButton(project, { title: "2D View", label: "2D View", iconSvg: I_GRID2D, onClick: toggle2dView });
+    tb.toolButton(project, { title: "Reset Defaults", label: "Reset", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
+    tb.toolButton(project, { title: "Export JSON", label: "Export", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
+    tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
     tb.toolButton(project, { title: "BOM", iconSvg: I_BOM, label: "BOM", onClick: openBomPanel });
     const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
-    tb.toolButton(project, { title: "Reset view", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
+    tb.toolButton(project, { title: "Reset View", label: "View", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
 
     updateUndoRedoUi(S);
   };

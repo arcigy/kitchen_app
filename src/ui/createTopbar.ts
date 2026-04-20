@@ -6,6 +6,18 @@ type ToolButtonArgs = {
   onClick?: () => void;
 };
 
+type ChromeTabArgs = {
+  label: string;
+  active?: boolean;
+  accent?: boolean;
+};
+
+type ChromeArgs = {
+  title: string;
+  projectLabel?: string;
+  tabs: ChromeTabArgs[];
+};
+
 type AddRowArgs = {
   title?: string;
   className?: string;
@@ -19,9 +31,47 @@ export function createTopbar(container: HTMLElement) {
   container.innerHTML = "";
   container.style.position = "relative";
 
+  const chrome = document.createElement("div");
+  chrome.className = "revit-chrome";
+  container.appendChild(chrome);
+
+  const titlebar = document.createElement("div");
+  titlebar.className = "revit-titlebar";
+  chrome.appendChild(titlebar);
+
+  const brand = document.createElement("div");
+  brand.className = "revit-brand";
+  brand.textContent = "K";
+  titlebar.appendChild(brand);
+
+  const title = document.createElement("div");
+  title.className = "revit-windowtitle";
+  titlebar.appendChild(title);
+
+  const project = document.createElement("div");
+  project.className = "revit-projectlabel";
+  titlebar.appendChild(project);
+
+  const tabs = document.createElement("div");
+  tabs.className = "revit-tabs";
+  chrome.appendChild(tabs);
+
   const rows = document.createElement("div");
   rows.className = "topbar-rows";
-  container.appendChild(rows);
+  chrome.appendChild(rows);
+
+  const setChrome = (args: ChromeArgs) => {
+    title.textContent = args.title;
+    project.textContent = args.projectLabel ?? "";
+    tabs.innerHTML = "";
+
+    for (const tab of args.tabs) {
+      const el = document.createElement("div");
+      el.className = ["revit-tab", tab.active ? "active" : "", tab.accent ? "accent" : ""].filter(Boolean).join(" ");
+      el.textContent = tab.label;
+      tabs.appendChild(el);
+    }
+  };
 
   const addRow = (args: AddRowArgs = {}) => {
     const wrap = document.createElement("div");
@@ -95,6 +145,18 @@ export function createTopbar(container: HTMLElement) {
     return btn;
   };
 
-  return { clear, addRow, addGroup, addSpacer, toolButton };
+  setChrome({
+    title: "Kitchen Layout 2026 - Floor Plan",
+    projectLabel: "Project 1",
+    tabs: [
+      { label: "File", accent: true },
+      { label: "Architecture" },
+      { label: "Modify", active: true },
+      { label: "View" },
+      { label: "Manage" }
+    ]
+  });
+
+  return { clear, addRow, addGroup, addSpacer, toolButton, setChrome };
 }
 

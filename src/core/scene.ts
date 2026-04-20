@@ -7,7 +7,7 @@ import { getPbrMaterial } from "../materials/pbrMaterials";
 
 export function createScene(container: HTMLElement) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0c10);
+  scene.background = new THREE.Color(0xf3f3f3);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -174,7 +174,7 @@ export function createScene(container: HTMLElement) {
 
   const planBg = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshBasicMaterial({ color: 0x0f1218, transparent: true, opacity: 0, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xe7e7e7, transparent: true, opacity: 1, depthWrite: false })
   );
   planBg.name = "planBg";
   planBg.rotation.x = -Math.PI / 2;
@@ -182,14 +182,24 @@ export function createScene(container: HTMLElement) {
   planBg.renderOrder = 0;
   planOverlay.add(planBg);
 
+  const planSheet = new THREE.Mesh(
+    new THREE.PlaneGeometry(roomW, roomD),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false })
+  );
+  planSheet.name = "planSheet";
+  planSheet.rotation.x = -Math.PI / 2;
+  planSheet.position.y = 0.0015;
+  planSheet.renderOrder = 1;
+  planOverlay.add(planSheet);
+
   // Large plan grid so it is visible everywhere you pan/zoom in 2D.
-  const planGrid = new THREE.GridHelper(200, 2000, 0x2b3243, 0x1b202c);
+  const planGrid = new THREE.GridHelper(200, 2000, 0xe5e5e5, 0xf1f1f1);
   planGrid.name = "planGrid";
   planGrid.renderOrder = 2;
   const planGridMats = Array.isArray(planGrid.material) ? planGrid.material : [planGrid.material];
   for (const m of planGridMats) {
     m.transparent = true;
-    m.opacity = 0.75;
+    m.opacity = 0.72;
     m.depthWrite = false;
   }
   planGrid.position.y = 0.002;
@@ -197,7 +207,7 @@ export function createScene(container: HTMLElement) {
 
   const planBounds = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(roomW, roomD)),
-    new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.9 })
+    new THREE.LineBasicMaterial({ color: 0x4e4e4e, transparent: true, opacity: 0.95 })
   );
   planBounds.name = "planBounds";
   planBounds.rotation.x = -Math.PI / 2;
@@ -206,7 +216,7 @@ export function createScene(container: HTMLElement) {
 
   const planOrigin = new THREE.Mesh(
     new THREE.PlaneGeometry(0.15, 0.15),
-    new THREE.MeshBasicMaterial({ color: 0xffd166, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0x7a7a7a, transparent: true, opacity: 0.35, depthWrite: false })
   );
   planOrigin.name = "planOrigin";
   planOrigin.rotation.x = -Math.PI / 2;
@@ -440,7 +450,7 @@ export function createScene(container: HTMLElement) {
         hdriProbeRt = null;
       }
       scene.environment = null;
-      scene.background = new THREE.Color(0x0a0c10);
+      scene.background = new THREE.Color(0xf3f3f3);
       lightProbe.intensity = 0;
       lastEnvIntensityApplied = -1;
       updateLighting();
@@ -449,7 +459,7 @@ export function createScene(container: HTMLElement) {
 
     if (args.id === hdriId && hdriSrc) {
       scene.environment = hdriEnv;
-      scene.background = hdriUseBackground ? hdriBg : new THREE.Color(0x0a0c10);
+      scene.background = hdriUseBackground ? hdriBg : new THREE.Color(0xf3f3f3);
       updateLighting();
       return;
     }
@@ -672,8 +682,8 @@ export function createScene(container: HTMLElement) {
       room.visible = false;
       planOverlay.visible = true;
       planAmbient.visible = true;
-      scene.background = new THREE.Color(0x0f1218);
-      renderer.setClearColor(0x0f1218, 1);
+      scene.background = new THREE.Color(0xf5f5f5);
+      renderer.setClearColor(0xf5f5f5, 1);
     } else {
       room.visible = false;
       planOverlay.visible = false;
@@ -681,8 +691,8 @@ export function createScene(container: HTMLElement) {
       controls.target.copy(savedView.target3d);
       camera3d.position.copy(savedView.cam3dPos);
       camera3d.updateProjectionMatrix();
-      scene.background = new THREE.Color(0x0a0c10);
-      renderer.setClearColor(0x0a0c10, 1);
+      scene.background = new THREE.Color(0xf3f3f3);
+      renderer.setClearColor(0xf3f3f3, 1);
       updateLighting();
     }
   };
