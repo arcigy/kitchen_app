@@ -3,6 +3,7 @@ import type { AppState, LayoutSnapshot, DimensionParams, WallParams, ModuleParam
 
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
+  setSelectedFloor?: (id: string | null) => void;
   setSelectedModule: (id: string | null) => void;
   setSelectedDimension: (id: string | null) => void;
   updateSelectionHighlights: () => void;
@@ -14,6 +15,7 @@ export interface HistoryHelpers {
   rebuildWall: (inst: WallInstance) => void;
   createDimension: (a: any, b: any, offset: number, opts: { id?: string; skipHistory?: boolean }) => void;
   rebuildWallPlanMesh: () => void;
+  restoreFloors?: (floors: NonNullable<LayoutSnapshot["floors"]>, floorCounter?: number) => void;
   updateAllDimensions: () => void;
   clearToolHud: () => void;
   mountProps: () => void;
@@ -29,11 +31,14 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const mods = (s.instances ?? [])
     .map((m) => `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`)
     .join("|");
+  const floors = (s.floors ?? [])
+    .map((f) => `${f.id}:${f.params.name}:${f.params.heightMm}:${f.params.thicknessMm}:${f.params.boundary.map((p) => `${p.x},${p.z}`).join(";")}`)
+    .join("|");
   const dims = (s.dimensions ?? [])
     .map((d) => `${d.id}:${d.a.wallId}:${d.a.wallLine}:${Math.round(d.a.t * 1000)}-${d.b.wallId}:${d.b.wallLine}:${Math.round(d.b.t * 1000)}:${Math.round(d.offsetM * 1000)}`)
     .join("|");
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.instanceCounter}:${s.dimensionCounter}::${pins}::${w}::${mods}::${dims}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.instanceCounter}:${s.dimensionCounter}::${pins}::${w}::${floors}::${mods}::${dims}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -63,6 +68,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   }
 
   S.wallCounter = snap.wallCounter;
+  S.floorCounter = snap.floorCounter ?? S.floorCounter;
   S.instanceCounter = snap.instanceCounter ?? S.instanceCounter;
   S.dimensionCounter = snap.dimensionCounter ?? S.dimensionCounter;
 
@@ -113,6 +119,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     helpers.rebuildWall(inst);
   }
 
+  helpers.restoreFloors?.(snap.floors ?? [], snap.floorCounter);
+
   if (snap.dimensions && snap.dimensions.length > 0) {
     for (const dp of snap.dimensions) {
       helpers.createDimension(dp.a, dp.b, dp.offsetM, { id: dp.id, skipHistory: true });
@@ -128,6 +136,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   for (const id of snap.selected.instIds) if (S.instances.some((i) => i.id === id)) S.selectedInstanceIds.add(id);
   if (snap.selected.kind === "wall" && snap.selected.wallId && S.walls.some((w) => w.id === snap.selected.wallId)) {
     helpers.setSelectedWall(snap.selected.wallId);
+  } else if (snap.selected.kind === "floor" && snap.selected.floorId && S.floors.some((f) => f.id === snap.selected.floorId)) {
+    helpers.setSelectedFloor?.(snap.selected.floorId);
   } else if (snap.selected.kind === "module" && snap.selected.instId && S.instances.some((i) => i.id === snap.selected.instId)) {
     helpers.setSelectedModule(snap.selected.instId);
   } else if (snap.selected.kind === "dimension" && snap.selected.dimensionId) {
@@ -146,6 +156,8 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
   return {
     wallCounter: S.wallCounter,
     walls: S.walls.map((w) => ({ id: w.id, params: copyParams(w.params) })),
+    floorCounter: S.floorCounter,
+    floors: S.floors.map((floor) => ({ id: floor.id, params: JSON.parse(JSON.stringify(floor.params)) })),
     instanceCounter: S.instanceCounter,
     instances: S.instances.map((i) => ({
       id: i.id,
@@ -163,6 +175,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       kind: S.selectedKind,
       wallId: S.selectedWallId,
       wallIds: Array.from(S.selectedWallIds),
+      floorId: S.selectedFloorId,
       instId: S.selectedInstanceId,
       instIds: Array.from(S.selectedInstanceIds),
       dimensionId: S.selectedDimensionId

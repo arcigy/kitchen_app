@@ -189,6 +189,11 @@ export function startApp(args: AppArgs) {
   wallSnapMarkers.visible = false;
   layoutRoot.add(wallSnapMarkers);
 
+  const floorBoundaryGroup = new THREE.Group();
+  floorBoundaryGroup.name = "floorBoundaryEdit";
+  floorBoundaryGroup.visible = false;
+  layoutRoot.add(floorBoundaryGroup);
+
   // Tool HUD overlays (Align/Trim) in 2D
   const toolHud = new THREE.Group();
   toolHud.name = "toolHud";
@@ -356,6 +361,18 @@ export function startApp(args: AppArgs) {
       const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthWrite: false }));
       line.renderOrder = 60;
       selectionHighlights.add(line);
+    }
+
+    if (selectedKind === "floor" && selectedFloorId) {
+      const floor = floors.find((x) => x.id === selectedFloorId) ?? null;
+      if (floor && floor.params.boundary.length >= 3) {
+        const pts = floor.params.boundary.map((p) => new THREE.Vector3(p.x / 1000, 0.018, p.z / 1000));
+        pts.push(new THREE.Vector3(floor.params.boundary[0].x / 1000, 0.018, floor.params.boundary[0].z / 1000));
+        const geom = new THREE.BufferGeometry().setFromPoints(pts);
+        const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthWrite: false }));
+        line.renderOrder = 61;
+        selectionHighlights.add(line);
+      }
     }
 
     // Modules: box helper per selected instance
@@ -536,10 +553,11 @@ export function startApp(args: AppArgs) {
   };
 
   let windowInst: WindowInstance | null = null;
-  type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "underlay" | "dimension" | null;
+  type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
   let selectedKind: SelectedKind = null;
   let selectedKitchenGroupId: string | null = null;
   let selectedDimensionId: string | null = null;
+  let selectedFloorId: string | null = null;
 
   type WallParams = {
     thicknessMm: number;
@@ -569,6 +587,28 @@ export function startApp(args: AppArgs) {
     materialId: "default",
     justification: "center" as "center" | "interior" | "exterior",
     exteriorSign: 1 as 1 | -1
+  };
+
+  type FloorBoundaryPoint = { x: number; z: number };
+  type FloorParams = {
+    name: string;
+    heightMm: number;
+    thicknessMm: number;
+    boundary: FloorBoundaryPoint[];
+  };
+  type FloorInstance = {
+    id: string;
+    params: FloorParams;
+    root: THREE.Group;
+    mesh: THREE.Mesh;
+    outline: THREE.Line;
+  };
+
+  const floors: FloorInstance[] = [];
+  let floorCounter = 1;
+  const floorDefault = {
+    heightMm: 0,
+    thicknessMm: 150
   };
 
   type DimensionRef = {
@@ -608,6 +648,8 @@ export function startApp(args: AppArgs) {
   type LayoutSnapshot = {
     wallCounter: number;
     walls: Array<{ id: string; params: WallParams }>;
+    floorCounter?: number;
+    floors?: Array<{ id: string; params: FloorParams }>;
     instanceCounter: number;
     instances: Array<{
       id: string;
@@ -625,6 +667,7 @@ export function startApp(args: AppArgs) {
       kind: SelectedKind;
       wallId: string | null;
       wallIds: string[];
+      floorId?: string | null;
       instId: string | null;
       instIds: string[];
       dimensionId: string | null;
@@ -670,6 +713,8 @@ export function startApp(args: AppArgs) {
     wallDebugEnabled: false,
     wallSolvedJoinPolys: [],
     wallUnionPolys: null,
+    floors,
+    floorCounter,
     instances,
     instanceCounter,
     params,
@@ -681,6 +726,7 @@ export function startApp(args: AppArgs) {
     selectedKind,
     selectedInstanceId,
     selectedWallId,
+    selectedFloorId,
     selectedDimensionId,
     selectedWallIds,
     selectedInstanceIds,
@@ -706,6 +752,14 @@ export function startApp(args: AppArgs) {
     underlayOpacityEl: null,
     history
   };
+
+  function syncSelectionState() {
+    S.selectedKind = selectedKind;
+    S.selectedInstanceId = selectedInstanceId;
+    S.selectedWallId = selectedWallId;
+    S.selectedFloorId = selectedFloorId;
+    S.selectedDimensionId = selectedDimensionId;
+  }
 
   dimensionHelpers = {
     THREE,
@@ -2113,6 +2167,107 @@ export function startApp(args: AppArgs) {
     return inst;
   }
 
+  const cloneFloorParams = (params: FloorParams): FloorParams => ({
+    name: params.name,
+    heightMm: params.heightMm,
+    thicknessMm: params.thicknessMm,
+    boundary: params.boundary.map((p) => ({ x: p.x, z: p.z }))
+  });
+
+  const makeFloorGeometry = (params: FloorParams) => {
+    const points = params.boundary;
+    if (points.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
+    const shape = new THREE.Shape(points.map((p) => new THREE.Vector2(p.x / 1000, p.z / 1000)));
+    const geom = new THREE.ExtrudeGeometry(shape, {
+      depth: Math.max(1, params.thicknessMm) / 1000,
+      bevelEnabled: false
+    });
+    geom.rotateX(Math.PI / 2);
+    return geom;
+  };
+
+  const makeFloorOutlineGeometry = (params: FloorParams) => {
+    if (params.boundary.length === 0) return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const y = params.heightMm / 1000 + 0.012;
+    const pts = params.boundary.map((p) => new THREE.Vector3(p.x / 1000, y, p.z / 1000));
+    pts.push(new THREE.Vector3(params.boundary[0].x / 1000, y, params.boundary[0].z / 1000));
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  };
+
+  function rebuildFloor(floor: FloorInstance) {
+    floor.params.heightMm = Math.round(floor.params.heightMm);
+    floor.params.thicknessMm = Math.max(1, Math.round(floor.params.thicknessMm));
+    floor.mesh.geometry.dispose();
+    floor.mesh.geometry = makeFloorGeometry(floor.params);
+    floor.mesh.position.y = floor.params.heightMm / 1000;
+    floor.outline.geometry.dispose();
+    floor.outline.geometry = makeFloorOutlineGeometry(floor.params);
+    floor.outline.position.set(0, 0, 0);
+  }
+
+  function createFloor(params: FloorParams, opts?: { id?: string; skipHistory?: boolean }) {
+    const id = opts?.id ?? `f${floorCounter++}`;
+    if (opts?.id) {
+      const m = /^f(\d+)$/.exec(id);
+      const n = m ? Number(m[1]) : NaN;
+      if (Number.isFinite(n) && n >= floorCounter) floorCounter = n + 1;
+    }
+    S.floorCounter = floorCounter;
+
+    const root = new THREE.Group();
+    root.name = `floor_${id}`;
+    const mesh = new THREE.Mesh(
+      makeFloorGeometry(params),
+      new THREE.MeshBasicMaterial({ color: 0x8fa4bd, transparent: true, opacity: 0.42, depthWrite: false })
+    );
+    mesh.name = `floorMesh_${id}`;
+    mesh.userData.kind = "floor";
+    mesh.userData.floorId = id;
+    mesh.renderOrder = 4;
+    mesh.position.y = params.heightMm / 1000;
+    root.add(mesh);
+
+    const outline = new THREE.Line(
+      makeFloorOutlineGeometry(params),
+      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthWrite: false })
+    );
+    outline.name = `floorOutline_${id}`;
+    outline.userData.kind = "floor";
+    outline.userData.floorId = id;
+    outline.renderOrder = 55;
+    root.add(outline);
+
+    const floor: FloorInstance = { id, params: cloneFloorParams(params), root, mesh, outline };
+    layoutRoot.add(root);
+    floors.push(floor);
+    rebuildFloor(floor);
+    if (!opts?.skipHistory) commitHistory(S);
+    return floor;
+  }
+
+  function deleteFloor(id: string, opts?: { skipHistory?: boolean }) {
+    const idx = floors.findIndex((floor) => floor.id === id);
+    if (idx < 0) return;
+    const floor = floors[idx];
+    layoutRoot.remove(floor.root);
+    disposeObject3D(floor.root);
+    floors.splice(idx, 1);
+    if (selectedFloorId === id) selectedFloorId = null;
+    if (!opts?.skipHistory) commitHistory(S);
+  }
+
+  function restoreFloorsFromSnapshot(nextFloors: Array<{ id: string; params: FloorParams }>, nextCounter?: number) {
+    for (const floor of floors.splice(0, floors.length)) {
+      layoutRoot.remove(floor.root);
+      disposeObject3D(floor.root);
+    }
+    floorCounter = nextCounter ?? 1;
+    S.floorCounter = floorCounter;
+    for (const floor of nextFloors) {
+      createFloor(cloneFloorParams(floor.params), { id: floor.id, skipHistory: true });
+    }
+  }
+
   const wallEps = 0.002;
   const wallDefs: Record<
     WallId,
@@ -2157,6 +2312,7 @@ export function startApp(args: AppArgs) {
   };
 
   const raycaster = new THREE.Raycaster();
+  raycaster.params.Line = { threshold: 0.08 };
   const pointerNdc = new THREE.Vector2();
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const dragState = {
@@ -2359,6 +2515,19 @@ export function startApp(args: AppArgs) {
   window.addEventListener("keydown", (ev) => {
     if (isTypingTarget(ev.target)) return;
     if (S.kitchenEditMode) return;
+    if (floorEdit.active) {
+      if (ev.key === "Escape") {
+        if (floorEdit.first) {
+          floorEdit.first = null;
+          floorEdit.hover = null;
+          renderFloorBoundaryEdit();
+        } else {
+          discardFloorBoundaryEdit();
+        }
+        ev.preventDefault();
+      }
+      return;
+    }
 
     if (mode === "layout") {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
@@ -3897,6 +4066,7 @@ export function startApp(args: AppArgs) {
   const I_ALIGN = icon("M4 7h12v2H4V7zm0 8h12v2H4v-2zM18 6l4 3-4 3V6zm0 6l4 3-4 3v-6z");
   const I_TRIM = icon("M4 7h11v2H4V7zm0 8h8v2H4v-2zM18 5l4 4-2 2-4-4 2-2zm-4 4l4 4-2 2-4-4 2-2z");
   const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
+  const I_FLOOR = icon("M4 15l8 4 8-4-8-4-8 4zm0-4l8 4 8-4-8-4-8 4z");
   const I_UNDO = icon("M12 5H7.8l1.6-1.6L8 2 4 6l4 4 1.4-1.4L7.8 7H12c3.3 0 6 2.7 6 6 0 1.1-.3 2.1-.8 3l1.7 1c.7-1.2 1.1-2.6 1.1-4 0-4.4-3.6-8-8-8z");
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
   const I_DONE = icon("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z");
@@ -3939,6 +4109,284 @@ export function startApp(args: AppArgs) {
     p.className = "muted";
     p.textContent = mode === "layout" ? "Vyber objekt alebo nĂˇstroj." : "Properties sĂş dostupnĂ© iba v layout mode.";
     s.appendChild(p);
+  };
+
+  type FloorBoundaryTool = "line" | "rectangle" | "circle" | "pickLines";
+  type FloorBoundarySegment = { a: FloorBoundaryPoint; b: FloorBoundaryPoint };
+
+  const floorEdit = {
+    active: false,
+    floorId: null as string | null,
+    params: null as FloorParams | null,
+    snapshot: null as FloorParams | null,
+    segments: [] as FloorBoundarySegment[],
+    tool: "line" as FloorBoundaryTool,
+    first: null as FloorBoundaryPoint | null,
+    hover: null as FloorBoundaryPoint | null,
+    overlayEl: null as HTMLDivElement | null
+  };
+
+  const floorPointDistMm = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => Math.hypot(a.x - b.x, a.z - b.z);
+  const floorPointEq = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, tolMm = 3) => floorPointDistMm(a, b) <= tolMm;
+  const worldToFloorPoint = (point: THREE.Vector3): FloorBoundaryPoint => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) });
+  const floorPointToWorld = (point: FloorBoundaryPoint, y = 0.055) => new THREE.Vector3(point.x / 1000, y, point.z / 1000);
+
+  const floorBoundaryToSegments = (boundary: FloorBoundaryPoint[]) => {
+    const segments: FloorBoundarySegment[] = [];
+    for (let i = 0; i < boundary.length; i++) {
+      const a = boundary[i];
+      const b = boundary[(i + 1) % boundary.length];
+      segments.push({ a: { ...a }, b: { ...b } });
+    }
+    return segments;
+  };
+
+  const floorSegmentsToBoundary = (segments: FloorBoundarySegment[]) => {
+    if (segments.length < 3) return null as FloorBoundaryPoint[] | null;
+    const remaining = segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } }));
+    const first = remaining.shift()!;
+    const boundary: FloorBoundaryPoint[] = [{ ...first.a }, { ...first.b }];
+
+    while (remaining.length > 0) {
+      const current = boundary[boundary.length - 1];
+      const index = remaining.findIndex((segment) => floorPointEq(segment.a, current) || floorPointEq(segment.b, current));
+      if (index < 0) break;
+      const [next] = remaining.splice(index, 1);
+      boundary.push(floorPointEq(next.a, current) ? { ...next.b } : { ...next.a });
+      if (boundary.length >= 4 && floorPointEq(boundary[boundary.length - 1], boundary[0])) {
+        boundary.pop();
+        break;
+      }
+    }
+
+    if (boundary.length < 3) return null;
+    return boundary;
+  };
+
+  const clearFloorBoundaryGroup = () => {
+    for (const child of [...floorBoundaryGroup.children]) {
+      floorBoundaryGroup.remove(child);
+      const anyChild = child as any;
+      anyChild.geometry?.dispose?.();
+      if (Array.isArray(anyChild.material)) for (const mat of anyChild.material) mat?.dispose?.();
+      else anyChild.material?.dispose?.();
+    }
+  };
+
+  const addFloorBoundaryLineMesh = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, color = 0x00e5ff, opacity = 0.95) => {
+    const geom = new THREE.BufferGeometry().setFromPoints([floorPointToWorld(a), floorPointToWorld(b)]);
+    const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+    line.renderOrder = 90;
+    floorBoundaryGroup.add(line);
+  };
+
+  const renderFloorBoundaryEdit = () => {
+    clearFloorBoundaryGroup();
+    for (const segment of floorEdit.segments) addFloorBoundaryLineMesh(segment.a, segment.b);
+
+    if (floorEdit.first && floorEdit.hover) {
+      if (floorEdit.tool === "rectangle") {
+        const a = floorEdit.first;
+        const b = floorEdit.hover;
+        const p1 = { x: a.x, z: a.z };
+        const p2 = { x: b.x, z: a.z };
+        const p3 = { x: b.x, z: b.z };
+        const p4 = { x: a.x, z: b.z };
+        for (const [start, end] of [[p1, p2], [p2, p3], [p3, p4], [p4, p1]] as Array<[FloorBoundaryPoint, FloorBoundaryPoint]>) {
+          addFloorBoundaryLineMesh(start, end, 0xffd166, 0.75);
+        }
+      } else if (floorEdit.tool === "circle") {
+        const points = makeFloorCirclePoints(floorEdit.first, floorEdit.hover);
+        for (let i = 0; i < points.length; i++) addFloorBoundaryLineMesh(points[i], points[(i + 1) % points.length], 0xffd166, 0.75);
+      } else {
+        addFloorBoundaryLineMesh(floorEdit.first, floorEdit.hover, 0xffd166, 0.75);
+      }
+    }
+
+    floorBoundaryGroup.visible = floorEdit.active;
+  };
+
+  const makeFloorCirclePoints = (center: FloorBoundaryPoint, edge: FloorBoundaryPoint) => {
+    const radius = Math.max(1, floorPointDistMm(center, edge));
+    const points: FloorBoundaryPoint[] = [];
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      points.push({ x: Math.round(center.x + Math.cos(a) * radius), z: Math.round(center.z + Math.sin(a) * radius) });
+    }
+    return points;
+  };
+
+  const setFloorBoundaryTool = (tool: FloorBoundaryTool) => {
+    floorEdit.tool = tool;
+    floorEdit.first = null;
+    floorEdit.hover = null;
+    clearToolHud();
+    renderFloorBoundaryEdit();
+    setUnderlayStatus(
+      tool === "pickLines"
+        ? "Floor boundary: Pick Lines — klikni hranu steny."
+        : tool === "rectangle"
+          ? "Floor boundary: Rectangle — klikni prvý a druhý roh."
+          : tool === "circle"
+            ? "Floor boundary: Circle — klikni stred a polomer."
+            : "Floor boundary: Line — klikaj body boundary line."
+    );
+    mountProps();
+  };
+
+  const buildFloorBoundaryTopbar = () => {
+    tb.clear();
+    buildClassicTopbar();
+    const row = tb.addRow({ title: "Floor boundary", className: "topbar-floor-ribbon" });
+    const draw = tb.addGroup("Draw", { row });
+    tb.toolButton(draw, { title: "Line", iconSvg: I_DIM, label: "Line", onClick: () => setFloorBoundaryTool("line") });
+    tb.toolButton(draw, { title: "Rectangle", iconSvg: I_GRID2D, label: "Rectangle", onClick: () => setFloorBoundaryTool("rectangle") });
+    tb.toolButton(draw, { title: "Circle", iconSvg: I_VIEW, label: "Circle", onClick: () => setFloorBoundaryTool("circle") });
+    tb.toolButton(draw, { title: "Pick Lines", iconSvg: I_ALIGN, label: "Pick Lines", onClick: () => setFloorBoundaryTool("pickLines") });
+    tb.addSpacer({ row });
+    const finish = tb.addGroup("Boundary", { row });
+    tb.toolButton(finish, { title: "Dokončiť podlahu", iconSvg: I_DONE, label: "Finish", variant: "success", onClick: () => finishFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "Zrušiť", iconSvg: I_CANCEL, label: "Discard", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
+  };
+
+  const ensureFloorOverlay = () => {
+    floorEdit.overlayEl?.remove();
+    const overlay = document.createElement("div");
+    overlay.style.position = "absolute";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(255,255,255,0.14)";
+    overlay.style.mixBlendMode = "screen";
+    overlay.style.pointerEvents = "none";
+    overlay.style.zIndex = "9";
+    args.viewerEl.appendChild(overlay);
+    floorEdit.overlayEl = overlay;
+  };
+
+  const enterFloorBoundaryEdit = (floorId?: string) => {
+    ensureLayoutMode();
+    view2d.checked = true;
+    setView2d(true);
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    setToolSelect();
+
+    const existing = floorId ? floors.find((floor) => floor.id === floorId) ?? null : null;
+    const params = existing
+      ? cloneFloorParams(existing.params)
+      : { name: `Podlaha ${floorCounter}`, heightMm: floorDefault.heightMm, thicknessMm: floorDefault.thicknessMm, boundary: [] };
+
+    floorEdit.active = true;
+    floorEdit.floorId = existing?.id ?? null;
+    floorEdit.params = params;
+    floorEdit.snapshot = existing ? cloneFloorParams(existing.params) : null;
+    floorEdit.segments = floorBoundaryToSegments(params.boundary);
+    floorEdit.tool = "line";
+    floorEdit.first = null;
+    floorEdit.hover = null;
+    selectedKind = null;
+    selectedFloorId = null;
+    selectedWallId = null;
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    selectedDimensionId = null;
+    setInstanceSelected(null);
+    ensureFloorOverlay();
+    buildFloorBoundaryTopbar();
+    renderFloorBoundaryEdit();
+    setUnderlayStatus("Floor boundary: Line — kresli boundary line alebo použi Pick Lines.");
+    mountProps();
+  };
+
+  const exitFloorBoundaryEditCommon = () => {
+    floorEdit.active = false;
+    floorEdit.floorId = null;
+    floorEdit.params = null;
+    floorEdit.snapshot = null;
+    floorEdit.segments = [];
+    floorEdit.first = null;
+    floorEdit.hover = null;
+    floorEdit.overlayEl?.remove();
+    floorEdit.overlayEl = null;
+    clearFloorBoundaryGroup();
+    clearToolHud();
+    rebuildStandardTopbar();
+    mountProps();
+  };
+
+  const finishFloorBoundaryEdit = () => {
+    if (!floorEdit.active || !floorEdit.params) return;
+    const boundary = floorSegmentsToBoundary(floorEdit.segments);
+    if (!boundary || boundary.length < 3) {
+      setUnderlayStatus("Floor boundary: boundary musí mať aspoň 3 čiary.");
+      return;
+    }
+    floorEdit.params.boundary = boundary;
+    let floor = floorEdit.floorId ? floors.find((item) => item.id === floorEdit.floorId) ?? null : null;
+    if (floor) {
+      floor.params = cloneFloorParams(floorEdit.params);
+      rebuildFloor(floor);
+    } else {
+      floor = createFloor(cloneFloorParams(floorEdit.params), { skipHistory: true });
+    }
+    selectedFloorId = floor.id;
+    selectedKind = "floor";
+    exitFloorBoundaryEditCommon();
+    setSelectedFloor(floor.id);
+    commitHistory(S);
+    setUnderlayStatus("Floor boundary: uložené.");
+  };
+
+  const discardFloorBoundaryEdit = () => {
+    if (!floorEdit.active) return;
+    const existing = floorEdit.floorId ? floors.find((floor) => floor.id === floorEdit.floorId) ?? null : null;
+    if (existing && floorEdit.snapshot) {
+      existing.params = cloneFloorParams(floorEdit.snapshot);
+      rebuildFloor(existing);
+    }
+    exitFloorBoundaryEditCommon();
+    setUnderlayStatus("Floor boundary: zrušené.");
+  };
+
+  const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => {
+    if (floorPointDistMm(a, b) < 2) return;
+    floorEdit.segments.push({ a: { ...a }, b: { ...b } });
+    renderFloorBoundaryEdit();
+  };
+
+  const mountFloorBoundaryProps = () => {
+    props.setTitle("Floor Boundary");
+    const s = props.section();
+    const params = floorEdit.params;
+    if (!params) return;
+
+    const height = document.createElement("input");
+    height.type = "number";
+    height.step = "1";
+    height.value = String(params.heightMm);
+    props.row(s, "Výška úrovne (mm)", height);
+
+    const thickness = document.createElement("input");
+    thickness.type = "number";
+    thickness.step = "1";
+    thickness.value = String(params.thicknessMm);
+    props.row(s, "Hrúbka (mm)", thickness);
+
+    const info = document.createElement("div");
+    info.className = "muted";
+    info.textContent = `Boundary lines: ${floorEdit.segments.length}. Horná línia je na výške úrovne, hrúbka ide vždy smerom dole.`;
+    s.appendChild(info);
+
+    height.addEventListener("change", () => {
+      const next = Number(height.value);
+      if (!Number.isFinite(next)) return;
+      params.heightMm = Math.round(next);
+      height.value = String(params.heightMm);
+    });
+    thickness.addEventListener("change", () => {
+      const next = Number(thickness.value);
+      if (!Number.isFinite(next)) return;
+      params.thicknessMm = Math.max(1, Math.round(next));
+      thickness.value = String(params.thicknessMm);
+    });
   };
 
   const mountWallToolProps = () => {
@@ -4157,6 +4605,51 @@ export function startApp(args: AppArgs) {
       firstWall.params.materialId = mat.value || "default";
       commitHistory(S);
     });
+  };
+
+  const mountFloorProps = (floor: FloorInstance) => {
+    props.setTitle(`Podlaha (${floor.id})`);
+    const s = props.section();
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = floor.params.name;
+    props.row(s, "Názov", name);
+
+    const height = document.createElement("input");
+    height.type = "number";
+    height.step = "1";
+    height.value = String(floor.params.heightMm);
+    props.row(s, "Výška úrovne (mm)", height);
+
+    const thickness = document.createElement("input");
+    thickness.type = "number";
+    thickness.step = "1";
+    thickness.value = String(floor.params.thicknessMm);
+    props.row(s, "Hrúbka (mm)", thickness);
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit Boundary Line";
+    edit.style.marginTop = "10px";
+    s.appendChild(edit);
+
+    const commit = () => {
+      floor.params.name = name.value.trim() || floor.params.name;
+      floor.params.heightMm = Math.round(Number(height.value) || floor.params.heightMm);
+      floor.params.thicknessMm = Math.max(1, Math.round(Number(thickness.value) || floor.params.thicknessMm));
+      name.value = floor.params.name;
+      height.value = String(floor.params.heightMm);
+      thickness.value = String(floor.params.thicknessMm);
+      rebuildFloor(floor);
+      updateSelectionHighlights();
+      commitHistory(S);
+    };
+
+    name.addEventListener("change", commit);
+    height.addEventListener("change", commit);
+    thickness.addEventListener("change", commit);
+    edit.addEventListener("click", () => enterFloorBoundaryEdit(floor.id));
   };
 
   const mountModuleProps = (id: string) => {
@@ -4524,6 +5017,7 @@ export function startApp(args: AppArgs) {
 
   const mountProps = () => {
     if (mode !== "layout") return showNoProps();
+    if (floorEdit.active) return mountFloorBoundaryProps();
     if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
@@ -4550,6 +5044,11 @@ export function startApp(args: AppArgs) {
       if (w) return mountWallProps(w);
       return showNoProps();
     }
+    if (selectedKind === "floor" && selectedFloorId) {
+      const floor = floors.find((x) => x.id === selectedFloorId) ?? null;
+      if (floor) return mountFloorProps(floor);
+      return showNoProps();
+    }
     if (selectedKind === "window") return mountWindowProps();
     if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
     if (selectedKind === "dimension" && selectedDimensionId) return mountDimensionProps(selectedDimensionId);
@@ -4559,6 +5058,7 @@ export function startApp(args: AppArgs) {
 
   helpers = {
     setSelectedWall,
+    setSelectedFloor,
     setSelectedModule,
     setSelectedDimension,
     updateSelectionHighlights,
@@ -4570,6 +5070,7 @@ export function startApp(args: AppArgs) {
     rebuildWall,
     createDimension: (a, b, offset, opts) => createDimension(S, dimensionHelpers, a as any, b as any, offset, opts as any),
     rebuildWallPlanMesh,
+    restoreFloors: restoreFloorsFromSnapshot,
     updateAllDimensions: () => updateAllDimensions(S, dimensionHelpers),
     clearToolHud,
     mountProps,
@@ -4622,6 +5123,11 @@ export function startApp(args: AppArgs) {
     if (selectedKind === "kitchenGroup") return;
     if (selectedKind === "dimension" && selectedDimensionId) {
       deleteDimension(S, dimensionHelpers, selectedDimensionId);
+      return;
+    }
+    if (selectedKind === "floor" && selectedFloorId) {
+      deleteFloor(selectedFloorId);
+      setSelectedFloor(null);
       return;
     }
     if (selectedKind === "module" && selectedInstanceIds.size > 0) {
@@ -4714,6 +5220,7 @@ export function startApp(args: AppArgs) {
     tb.toolButton(tools, { title: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
     tb.toolButton(tools, { title: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
     tb.toolButton(tools, { title: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
+    tb.toolButton(tools, { title: "Podlaha", iconSvg: I_FLOOR, onClick: () => enterFloorBoundaryEdit() });
     tb.toolButton(tools, { title: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
     tb.toolButton(tools, { title: "Kuchyňa", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
 
@@ -4891,6 +5398,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = groupId ? "kitchenGroup" : null;
     selectedKitchenGroupId = groupId;
+    selectedFloorId = null;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedDimensionId = null;
@@ -4915,6 +5423,7 @@ export function startApp(args: AppArgs) {
       selectedUnderlayBox = null;
     }
     showWallSnapMarkersFor(null);
+    syncSelectionState();
     updateSelectionHighlights();
     updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
@@ -4926,6 +5435,7 @@ export function startApp(args: AppArgs) {
     if (id && pinnedInstanceIds.has(id)) id = null;
     selectedKind = id ? "module" : null;
     selectedKitchenGroupId = null;
+    selectedFloorId = null;
     selectedInstanceId = id;
     selectedInstanceIds.clear();
     if (id) selectedInstanceIds.add(id);
@@ -4939,6 +5449,7 @@ export function startApp(args: AppArgs) {
       (selectedUnderlayBox.material as THREE.Material).dispose();
       selectedUnderlayBox = null;
     }
+    syncSelectionState();
     updateSelectionHighlights();
     updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
@@ -4948,6 +5459,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = "window";
     selectedKitchenGroupId = null;
+    selectedFloorId = null;
     selectedWallId = null;
     selectedDimensionId = null;
     setInstanceSelected(null);
@@ -4957,6 +5469,7 @@ export function startApp(args: AppArgs) {
       (selectedUnderlayBox.material as THREE.Material).dispose();
       selectedUnderlayBox = null;
     }
+    syncSelectionState();
     updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
   }
@@ -4966,6 +5479,7 @@ export function startApp(args: AppArgs) {
     if (!underlayMesh.visible || underlayState.pinned) return;
     selectedKind = "underlay";
     selectedKitchenGroupId = null;
+    selectedFloorId = null;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
@@ -4987,6 +5501,7 @@ export function startApp(args: AppArgs) {
     selectedUnderlayBox = new THREE.BoxHelper(underlayMesh, 0x5c8cff);
     selectedUnderlayBox.name = "underlaySelectionBox";
     scene.add(selectedUnderlayBox);
+    syncSelectionState();
     mountProps();
   }
 
@@ -4994,6 +5509,7 @@ export function startApp(args: AppArgs) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = id ? "dimension" : null;
     selectedKitchenGroupId = null;
+    selectedFloorId = null;
     selectedDimensionId = id;
     selectedWallId = null;
     selectedWallIds.clear();
@@ -5013,6 +5529,7 @@ export function startApp(args: AppArgs) {
       selectedUnderlayBox = null;
     }
     showWallSnapMarkersFor(null);
+    syncSelectionState();
     updateSelectionHighlights();
     updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
@@ -5023,6 +5540,7 @@ export function startApp(args: AppArgs) {
     if (id && pinnedWallIds.has(id)) id = null;
     selectedKind = id ? "wall" : null;
     selectedKitchenGroupId = null;
+    selectedFloorId = null;
     selectedWallId = id;
     selectedWallIds.clear();
     if (id) selectedWallIds.add(id);
@@ -5046,6 +5564,7 @@ export function startApp(args: AppArgs) {
     const w = id ? walls.find((x) => x.id === id) ?? null : null;
     if (!w) {
       showWallSnapMarkersFor(null);
+      syncSelectionState();
       updateSelectionHighlights();
       mountProps();
       return;
@@ -5055,6 +5574,37 @@ export function startApp(args: AppArgs) {
     selectedWallBox.name = "wallSelectionBox";
     scene.add(selectedWallBox);
     showWallSnapMarkersFor(id);
+    syncSelectionState();
+    updateSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    mountProps();
+  }
+
+  function setSelectedFloor(id: string | null) {
+    if (layoutTool !== "wall") layoutTool = "select";
+    selectedKind = id ? "floor" : null;
+    selectedKitchenGroupId = null;
+    selectedFloorId = id;
+    selectedWallId = null;
+    selectedWallIds.clear();
+    selectedInstanceId = null;
+    selectedInstanceIds.clear();
+    selectedDimensionId = null;
+    setInstanceSelected(null);
+    if (selectedWallBox) {
+      scene.remove(selectedWallBox);
+      selectedWallBox.geometry.dispose();
+      (selectedWallBox.material as THREE.Material).dispose();
+      selectedWallBox = null;
+    }
+    if (selectedUnderlayBox) {
+      scene.remove(selectedUnderlayBox);
+      selectedUnderlayBox.geometry.dispose();
+      (selectedUnderlayBox.material as THREE.Material).dispose();
+      selectedUnderlayBox = null;
+    }
+    showWallSnapMarkersFor(null);
+    syncSelectionState();
     updateSelectionHighlights();
     updateDimensionSelectionHighlights(S, dimensionHelpers);
     mountProps();
@@ -5745,6 +6295,7 @@ export function startApp(args: AppArgs) {
       updateLayoutPanel();
       if (selectedKind === "window") setSelectedWindow();
       else if (selectedKind === "wall") setSelectedWall(selectedWallId);
+      else if (selectedKind === "floor") setSelectedFloor(selectedFloorId);
       else setSelectedModule(selectedInstanceId);
 
       // Hide selection editors in right panel (use properties panel on the left).
@@ -5770,6 +6321,10 @@ export function startApp(args: AppArgs) {
       units: "mm" as const,
       generatedAt: new Date().toISOString(),
       window: windowInst ? windowInst.params : null,
+      floors: floors.map((floor) => ({
+        id: floor.id,
+        params: floor.params
+      })),
       modules: instances.map((i) => ({
         id: i.id,
         type: i.params.type,
@@ -6238,6 +6793,13 @@ export function startApp(args: AppArgs) {
       return;
     }
 
+    const floorHit = raycaster.intersectObjects(floors.flatMap((floor) => [floor.mesh, floor.outline]), false)[0]?.object as THREE.Object3D | undefined;
+    const floorId = (floorHit?.userData?.floorId as string | undefined) ?? null;
+    if (floorId && !floorEdit.active) {
+      enterFloorBoundaryEdit(floorId);
+      return;
+    }
+
     if (viewMode !== "2d") return;
     const picks = dimensions.map((d) => d.pick);
     const hit = raycaster.intersectObjects(picks, false)[0]?.object as THREE.Mesh | undefined;
@@ -6282,6 +6844,66 @@ export function startApp(args: AppArgs) {
     raycaster.setFromCamera(pointerNdc, cam());
 
     if (mode === "layout") {
+      if (floorEdit.active) {
+        if (ev.button !== 0) return;
+        const hitPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+        const point = worldToFloorPoint(hitPoint);
+
+        if (floorEdit.tool === "pickLines") {
+          const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+          const picked = pickWallLine2D(hitPoint, rect, cam(), 14);
+          const alignPicked = pickAlignLineAt(hitPoint, mouse, rect);
+          const a = picked?.a ?? alignPicked?.segA ?? null;
+          const b = picked?.b ?? alignPicked?.segB ?? null;
+          if (!a || !b) {
+            setUnderlayStatus("Floor boundary: nebola nájdená hrana.");
+            return;
+          }
+          addFloorEditSegment(worldToFloorPoint(a), worldToFloorPoint(b));
+          setUnderlayStatus("Floor boundary: hrana pridaná.");
+          return;
+        }
+
+        if (!floorEdit.first) {
+          floorEdit.first = point;
+          floorEdit.hover = point;
+          renderFloorBoundaryEdit();
+          return;
+        }
+
+        if (floorEdit.tool === "rectangle") {
+          const a = floorEdit.first;
+          const b = point;
+          const p1 = { x: a.x, z: a.z };
+          const p2 = { x: b.x, z: a.z };
+          const p3 = { x: b.x, z: b.z };
+          const p4 = { x: a.x, z: b.z };
+          floorEdit.segments.push({ a: p1, b: p2 }, { a: p2, b: p3 }, { a: p3, b: p4 }, { a: p4, b: p1 });
+          floorEdit.first = null;
+          floorEdit.hover = null;
+          renderFloorBoundaryEdit();
+          return;
+        }
+
+        if (floorEdit.tool === "circle") {
+          const points = makeFloorCirclePoints(floorEdit.first, point);
+          for (let i = 0; i < points.length; i++) floorEdit.segments.push({ a: points[i], b: points[(i + 1) % points.length] });
+          floorEdit.first = null;
+          floorEdit.hover = null;
+          renderFloorBoundaryEdit();
+          return;
+        }
+
+        const start = floorEdit.first;
+        const end = floorEdit.segments.length >= 2 && floorEdit.segments[0] && floorPointEq(point, floorEdit.segments[0].a, 12) ? floorEdit.segments[0].a : point;
+        addFloorEditSegment(start, end);
+        floorEdit.first = floorPointEq(end, floorEdit.segments[0]?.a ?? end, 3) ? null : end;
+        floorEdit.hover = floorEdit.first;
+        renderFloorBoundaryEdit();
+        return;
+      }
+
       if (underlayCal.active) {
         if (!underlayMesh.visible || underlayState.pinned) {
           underlayCal.active = false;
@@ -6856,6 +7478,7 @@ export function startApp(args: AppArgs) {
       const picks = instances.map((i) => i.pick);
       if (windowInst) picks.push(windowInst.pick);
       for (const w of walls) picks.push(w.mesh);
+      for (const floor of floors) picks.push(floor.mesh, floor.outline as any);
       for (const d of dimensions) picks.push(d.pick);
       const hits = raycaster.intersectObjects(picks, false);
       const first = hits[0]?.object as THREE.Mesh | undefined;
@@ -6912,6 +7535,21 @@ export function startApp(args: AppArgs) {
 
       const id = (first?.userData?.instanceId as string | undefined) ?? null;
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
+      const floorId = (first?.userData?.floorId as string | undefined) ?? null;
+      if (kind === "floor") {
+        if (!floorId) {
+          setSelectedFloor(null);
+          return;
+        }
+        if (marquee.pending && marquee.pointerId === ev.pointerId) {
+          marquee.hitSomething = true;
+          marquee.pending = false;
+          marquee.active = false;
+          marqueeEl.style.display = "none";
+        }
+        setSelectedFloor(floorId);
+        return;
+      }
       if (kind === "wall") {
         if (!wallId) {
           setSelectedWall(null);
@@ -6952,6 +7590,7 @@ export function startApp(args: AppArgs) {
           // don't clear selection yet; if it becomes a drag we want marquee selection
           return;
         }
+        setSelectedFloor(null);
         setSelectedWall(null);
         setSelectedModule(null);
         clearWindowLightIfMissing();
@@ -7028,6 +7667,34 @@ export function startApp(args: AppArgs) {
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (mode === "layout" && viewMode === "2d" && floorEdit.active) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+
+      if (floorEdit.tool === "pickLines") {
+        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+        const picked = pickWallLine2D(hitPoint, rect, cam(), 14);
+        const alignPicked = pickAlignLineAt(hitPoint, mouse, rect);
+        const a = picked?.a ?? alignPicked?.segA ?? null;
+        const b = picked?.b ?? alignPicked?.segB ?? null;
+        if (a && b) updateHudLine(hudHoverLine, a, b, hudLineThicknessM(rect));
+        else hudHoverLine.visible = false;
+      } else {
+        hudHoverLine.visible = false;
+      }
+
+      if (floorEdit.first) {
+        floorEdit.hover = worldToFloorPoint(hitPoint);
+        renderFloorBoundaryEdit();
+      }
+      return;
+    }
+
     if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && placement.active) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;

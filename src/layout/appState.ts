@@ -8,7 +8,7 @@ import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
-export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "underlay" | "dimension" | null;
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
 export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {
@@ -29,6 +29,8 @@ export type WindowInstance = {
 export type LayoutSnapshot = {
   wallCounter: number;
   walls: Array<{ id: string; params: WallParams }>;
+  floorCounter?: number;
+  floors?: Array<{ id: string; params: FloorParams }>;
   instanceCounter: number;
   instances: Array<{
     id: string;
@@ -46,6 +48,7 @@ export type LayoutSnapshot = {
     kind: SelectedKind;
     wallId: string | null;
     wallIds: string[];
+    floorId?: string | null;
     instId: string | null;
     instIds: string[];
     dimensionId: string | null;
@@ -68,6 +71,26 @@ export type WallInstance = {
   heightMm: number;
   root: THREE.Group;
   mesh: THREE.Mesh;
+};
+
+export type FloorBoundaryPoint = {
+  x: number;
+  z: number;
+};
+
+export type FloorParams = {
+  name: string;
+  heightMm: number;
+  thicknessMm: number;
+  boundary: FloorBoundaryPoint[];
+};
+
+export type FloorInstance = {
+  id: string;
+  params: FloorParams;
+  root: THREE.Group;
+  mesh: THREE.Mesh;
+  outline: THREE.Line;
 };
 
 export type AlignWallLine = "center" | "exterior" | "interior" | "endA" | "endB";
@@ -144,6 +167,8 @@ export interface AppState {
   wallDebugEnabled: boolean;
   wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>>;
   wallUnionPolys: any | null;
+  floors: FloorInstance[];
+  floorCounter: number;
 
   // Layout instances
   instances: LayoutInstance[];
@@ -159,6 +184,7 @@ export interface AppState {
   selectedKind: SelectedKind;
   selectedInstanceId: string | null;
   selectedWallId: string | null;
+  selectedFloorId: string | null;
   selectedDimensionId: string | null;
   selectedWallIds: Set<string>;
   selectedInstanceIds: Set<string>;
@@ -224,6 +250,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     wallDebugEnabled: false,
     wallSolvedJoinPolys: [],
     wallUnionPolys: null,
+    floors: [],
+    floorCounter: 1,
 
     instances: [],
     instanceCounter: 1,
@@ -237,6 +265,7 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     selectedKind: null,
     selectedInstanceId: null,
     selectedWallId: null,
+    selectedFloorId: null,
     selectedDimensionId: null,
     selectedWallIds: new Set(),
     selectedInstanceIds: new Set(),
