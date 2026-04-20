@@ -1,0 +1,2320 @@
+{
+  "schemaVersion": "module-live-state.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "exportedAt": "2026-04-20T23:24:32.513Z",
+  "params": {
+    "type": "drawer_low",
+    "width": 800,
+    "height": 720,
+    "worktopThicknessMm": 38,
+    "depth": 560,
+    "boardThickness": 18,
+    "backThickness": 6,
+    "backGrooveDepthMm": 8,
+    "backGrooveWidthMm": 8,
+    "backGrooveOffsetMm": 12,
+    "backGrooveClearanceMm": 1,
+    "plinthHeight": 100,
+    "plinthSetbackMm": 60,
+    "frontGap": 2,
+    "sideGap": 2,
+    "topGap": 2,
+    "bottomGap": 2,
+    "sideClearanceMm": 4,
+    "frontThicknessMm": 19,
+    "frontStackPreset": "equal",
+    "topFrontHeightMm": 160,
+    "handleType": "bar",
+    "handlePositionMm": 60,
+    "handleLengthMm": 160,
+    "handleSizeMm": 12,
+    "handleProjectionMm": 14,
+    "drawerBoxThickness": 13,
+    "drawerBoxSideHeight": 110,
+    "drawerBackReserveMm": 8,
+    "drawerCount": 3,
+    "drawerFrontHeights": [
+      192,
+      191,
+      191
+    ],
+    "materials": {
+      "bodyMaterialId": 2,
+      "frontMaterialId": 3,
+      "drawerMaterialId": 5,
+      "bodyKey": "2",
+      "frontKey": "3",
+      "drawerKey": "5",
+      "bodyColor": "#b88b5a",
+      "frontColor": "#005fb8",
+      "drawerColor": "#d8dde6",
+      "bodyPresetId": "DTD1",
+      "frontPresetId": "DTD2",
+      "drawerPresetId": "DTD16",
+      "defaultTintColor": "#ffffff",
+      "defaultTintStrength": 0,
+      "partOverrides": {},
+      "bodyPbr": {
+        "id": "wood_veneer_oak_7760_1k",
+        "rotationDeg": 0,
+        "tintStrength": 0,
+        "tintColor": "#ffffff"
+      },
+      "bodyName": "DTD Grey",
+      "frontName": "MDF Front",
+      "drawerName": "Drawer Box Board"
+    }
+  },
+  "systemParameters": {
+    "typeId": "drawer_low__type",
+    "type": "drawer_low",
+    "displayName": "Drawer",
+    "family": "base",
+    "code": null,
+    "variant": "3_drawers",
+    "version": "1.0.0-import-ready",
+    "widthMm": 800,
+    "heightMm": 720,
+    "depthMm": 560,
+    "positionXmm": 0,
+    "positionYmm": 0,
+    "positionZmm": 0,
+    "rotationZDeg": 0,
+    "customPriceOverride": null,
+    "pricingEnabled": true,
+    "priceSource": "calculated",
+    "costOverride": null,
+    "quantity": 1,
+    "isActive": true,
+    "isVisible": true,
+    "isLocked": false,
+    "isValid": true,
+    "validationErrors": [],
+    "notes": null,
+    "tags": [
+      "base",
+      "drawer_low"
+    ],
+    "createdAt": "2026-04-20T16:34:20.775Z",
+    "updatedAt": "2026-04-20T16:34:20.775Z",
+    "exportToIfc": true,
+    "ifcClass": "IfcFurniture",
+    "ifcPredefinedType": null,
+    "ifcName": "Drawer",
+    "ifcDescription": "Drawer (drawer_low)",
+    "ifcObjectType": "base",
+    "ifcTag": "drawer_low__type",
+    "classificationCode": null,
+    "classificationSystem": null
+  },
+  "capabilities": {
+    "hasWorktop": true,
+    "supportsKitchenContextDimensions": true,
+    "supportsKitchenContextMaterials": true
+  },
+  "commercial": {
+    "pricingConfig": {
+      "path": "commercial/drawer_low.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/drawer_low.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/drawer_low.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  },
+  "assets": {
+    "docs": [
+      {
+        "path": "docs/drawer_low.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  },
+  "liveRuntime": {
+    "moduleType": "drawer_low",
+    "params": {
+      "type": "drawer_low",
+      "width": 800,
+      "height": 720,
+      "worktopThicknessMm": 38,
+      "depth": 560,
+      "boardThickness": 18,
+      "backThickness": 6,
+      "backGrooveDepthMm": 8,
+      "backGrooveWidthMm": 8,
+      "backGrooveOffsetMm": 12,
+      "backGrooveClearanceMm": 1,
+      "plinthHeight": 100,
+      "plinthSetbackMm": 60,
+      "frontGap": 2,
+      "sideGap": 2,
+      "topGap": 2,
+      "bottomGap": 2,
+      "sideClearanceMm": 4,
+      "frontThicknessMm": 19,
+      "frontStackPreset": "equal",
+      "topFrontHeightMm": 160,
+      "handleType": "bar",
+      "handlePositionMm": 60,
+      "handleLengthMm": 160,
+      "handleSizeMm": 12,
+      "handleProjectionMm": 14,
+      "drawerBoxThickness": 13,
+      "drawerBoxSideHeight": 110,
+      "drawerBackReserveMm": 8,
+      "drawerCount": 3,
+      "drawerFrontHeights": [
+        192,
+        191,
+        191
+      ],
+      "materials": {
+        "bodyMaterialId": 2,
+        "frontMaterialId": 3,
+        "drawerMaterialId": 5,
+        "bodyKey": "2",
+        "frontKey": "3",
+        "drawerKey": "5",
+        "bodyColor": "#b88b5a",
+        "frontColor": "#005fb8",
+        "drawerColor": "#d8dde6",
+        "bodyPresetId": "DTD1",
+        "frontPresetId": "DTD2",
+        "drawerPresetId": "DTD16",
+        "defaultTintColor": "#ffffff",
+        "defaultTintStrength": 0,
+        "partOverrides": {},
+        "bodyPbr": {
+          "id": "wood_veneer_oak_7760_1k",
+          "rotationDeg": 0,
+          "tintStrength": 0,
+          "tintColor": "#ffffff"
+        },
+        "bodyName": "DTD Grey",
+        "frontName": "MDF Front",
+        "drawerName": "Drawer Box Board"
+      }
+    },
+    "selectedPartName": null,
+    "importedModuleType": "drawer_low",
+    "importedPackageKey": "module-builder-drawer_low@1.0.0",
+    "parts": [
+      {
+        "name": "leftSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": -391,
+          "y": 391,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 582,
+          "z": 560
+        },
+        "centerMm": {
+          "x": -391,
+          "y": 391,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "rightSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 391,
+          "y": 391,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 582,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 391,
+          "y": 391,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "topRailFront",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "height",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 673,
+          "z": 250
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 60
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 673,
+          "z": 250
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "topRailBack",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "height",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 673,
+          "z": -250
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 60
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 673,
+          "z": -250
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "boardThickness",
+          "backThickness",
+          "backGrooveDepthMm",
+          "backGrooveWidthMm",
+          "backGrooveOffsetMm",
+          "backGrooveClearanceMm",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 391,
+          "z": -271
+        },
+        "sizeMm": {
+          "x": 779,
+          "y": 561,
+          "z": 6
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 391,
+          "z": -271
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#b88b5a",
+            "transparent": false,
+            "opacity": 1
+          },
+          {
+            "name": null,
+            "colorHex": "#b88b5a",
+            "transparent": false,
+            "opacity": 1
+          },
+          {
+            "name": null,
+            "colorHex": "#b88b5a",
+            "transparent": false,
+            "opacity": 1
+          },
+          {
+            "name": null,
+            "colorHex": "#b88b5a",
+            "transparent": false,
+            "opacity": 1
+          },
+          {
+            "name": null,
+            "colorHex": "#f4f4f4",
+            "transparent": false,
+            "opacity": 1
+          },
+          {
+            "name": null,
+            "colorHex": "#b88b5a",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width"
+        ],
+        "positionMm": {
+          "x": -370,
+          "y": 50,
+          "z": 172
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 50,
+          "z": 172
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#2a2f3a",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width"
+        ],
+        "positionMm": {
+          "x": 370,
+          "y": 50,
+          "z": 172
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 50,
+          "z": 172
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#2a2f3a",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width"
+        ],
+        "positionMm": {
+          "x": -370,
+          "y": 50,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 50,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#2a2f3a",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width"
+        ],
+        "positionMm": {
+          "x": 370,
+          "y": 50,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 50,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#2a2f3a",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 40,
+          "z": 173.768
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 23
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 40,
+          "z": 195
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -1,
+          "z": 25.5
+        },
+        "sizeMm": {
+          "x": 16,
+          "y": 10,
+          "z": 5
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 39,
+          "z": 197.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL_screw_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -3,
+          "z": 30.65
+        },
+        "sizeMm": {
+          "x": 3.6,
+          "y": 3.6,
+          "z": 27.3
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 37,
+          "z": 202.65
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL_screw_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 3,
+          "z": 30.65
+        },
+        "sizeMm": {
+          "x": 3.6,
+          "y": 3.6,
+          "z": 27.3
+        },
+        "centerMm": {
+          "x": -370,
+          "y": 43,
+          "z": 202.65
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 40,
+          "z": 173.768
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 23
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 40,
+          "z": 195
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -1,
+          "z": 25.5
+        },
+        "sizeMm": {
+          "x": 16,
+          "y": 10,
+          "z": 5
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 39,
+          "z": 197.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR_screw_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -3,
+          "z": 30.65
+        },
+        "sizeMm": {
+          "x": 3.6,
+          "y": 3.6,
+          "z": 27.3
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 37,
+          "z": 202.65
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR_screw_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 3,
+          "z": 30.65
+        },
+        "sizeMm": {
+          "x": 3.6,
+          "y": 3.6,
+          "z": 27.3
+        },
+        "centerMm": {
+          "x": 370,
+          "y": 43,
+          "z": 202.65
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kick",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 50,
+          "z": 211
+        },
+        "sizeMm": {
+          "x": 800,
+          "y": 100,
+          "z": 18
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 50,
+          "z": 211
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#ffffff",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "front_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "frontThicknessMm",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "frontGap",
+          "drawerCount",
+          "drawerFrontHeights",
+          "frontStackPreset",
+          "topFrontHeightMm",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 198,
+          "z": 289.5
+        },
+        "sizeMm": {
+          "x": 796,
+          "y": 192,
+          "z": 19
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 198,
+          "z": 289.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#005fb8",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "frontThicknessMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 234,
+          "z": 306
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 234,
+          "z": 306
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_1_screw_1_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 234,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 234,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_1_screw_1_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 234,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 234,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_1_screw_2_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 234,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 234,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_1_screw_2_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 234,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 234,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_sideL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -371.5,
+          "y": 175,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": -371.5,
+          "y": 175,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_sideR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 371.5,
+          "y": 175,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": 371.5,
+          "y": 175,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 126.5,
+          "z": 9.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 13,
+          "z": 515
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 126.5,
+          "z": 9.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#d8dde6",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 175,
+          "z": -254.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 110,
+          "z": 13
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 175,
+          "z": -254.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_railL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -374,
+          "y": 113,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": -374,
+          "y": 113,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_1_railR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 374,
+          "y": 113,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": 374,
+          "y": 113,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "front_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "frontThicknessMm",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "frontGap",
+          "drawerCount",
+          "drawerFrontHeights",
+          "frontStackPreset",
+          "topFrontHeightMm",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 391.5,
+          "z": 289.5
+        },
+        "sizeMm": {
+          "x": 796,
+          "y": 191,
+          "z": 19
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 391.5,
+          "z": 289.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#005fb8",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "frontThicknessMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 427,
+          "z": 306
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 427,
+          "z": 306
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_2_screw_1_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 427,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 427,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_2_screw_1_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 427,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 427,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_2_screw_2_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 427,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 427,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_2_screw_2_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 427,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 427,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_sideL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -371.5,
+          "y": 354,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": -371.5,
+          "y": 354,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_sideR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 371.5,
+          "y": 354,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": 371.5,
+          "y": 354,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 305.5,
+          "z": 9.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 13,
+          "z": 515
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 305.5,
+          "z": 9.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#d8dde6",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 354,
+          "z": -254.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 110,
+          "z": 13
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 354,
+          "z": -254.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_railL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -374,
+          "y": 292,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": -374,
+          "y": 292,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_2_railR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 374,
+          "y": 292,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": 374,
+          "y": 292,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "front_3",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "frontThicknessMm",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "frontGap",
+          "drawerCount",
+          "drawerFrontHeights",
+          "frontStackPreset",
+          "topFrontHeightMm",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 584.5,
+          "z": 289.5
+        },
+        "sizeMm": {
+          "x": 796,
+          "y": 191,
+          "z": 19
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 584.5,
+          "z": 289.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#005fb8",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_3",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "frontThicknessMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 620,
+          "z": 306
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 620,
+          "z": 306
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_3_screw_1_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 620,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 620,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_3_screw_1_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -40,
+          "y": 620,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": -40,
+          "y": 620,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_3_screw_2_head",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 620,
+          "z": 278.25
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 8,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 620,
+          "z": 278.25
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "handle_3_screw_2_shaft",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleType",
+          "handlePositionMm",
+          "frontThicknessMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 40,
+          "y": 620,
+          "z": 298
+        },
+        "sizeMm": {
+          "x": 3.2,
+          "y": 3.2,
+          "z": 37
+        },
+        "centerMm": {
+          "x": 40,
+          "y": 620,
+          "z": 298
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#8a93a3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_sideL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -371.5,
+          "y": 532,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": -371.5,
+          "y": 532,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_sideR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 371.5,
+          "y": 532,
+          "z": 3
+        },
+        "sizeMm": {
+          "x": 13,
+          "y": 110,
+          "z": 528
+        },
+        "centerMm": {
+          "x": 371.5,
+          "y": 532,
+          "z": 3
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 483.5,
+          "z": 9.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 13,
+          "z": 515
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 483.5,
+          "z": 9.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#d8dde6",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "drawerBoxThickness",
+          "drawerBoxSideHeight",
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 532,
+          "z": -254.5
+        },
+        "sizeMm": {
+          "x": 730,
+          "y": 110,
+          "z": 13
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 532,
+          "z": -254.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_railL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": -374,
+          "y": 470,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": -374,
+          "y": 470,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "drawer_3_railR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "sideClearanceMm",
+          "drawerBackReserveMm",
+          "width",
+          "depth",
+          "drawerCount"
+        ],
+        "positionMm": {
+          "x": 374,
+          "y": 470,
+          "z": 5.5
+        },
+        "sizeMm": {
+          "x": 8,
+          "y": 12,
+          "z": 523
+        },
+        "centerMm": {
+          "x": 374,
+          "y": 470,
+          "z": 5.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      }
+    ]
+  }
+}

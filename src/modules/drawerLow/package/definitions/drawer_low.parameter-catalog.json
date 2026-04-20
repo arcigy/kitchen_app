@@ -1,0 +1,329 @@
+{
+  "schemaVersion": "module-parameter-catalog.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "groups": [
+    {
+      "key": "general",
+      "label": "General",
+      "description": "Primary module identity and behavior parameters."
+    },
+    {
+      "key": "dimensions",
+      "label": "Dimensions",
+      "description": "Overall sizing, spacing, thicknesses and clearances."
+    },
+    {
+      "key": "materials",
+      "label": "Materials",
+      "description": "Material and finish parameters."
+    },
+    {
+      "key": "fronts",
+      "label": "Fronts & Doors",
+      "description": "Front, handle and opening-related parameters."
+    },
+    {
+      "key": "drawers",
+      "label": "Drawers",
+      "description": "Drawer stack, boxes and runner-related parameters."
+    },
+    {
+      "key": "placement",
+      "label": "Placement",
+      "description": "Scene placement and mounting parameters."
+    },
+    {
+      "key": "other",
+      "label": "Other",
+      "description": "Parameters that do not fit the main module groups."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "backGrooveClearanceMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 1,
+      "description": "Exported parameter back groove clearance mm."
+    },
+    {
+      "key": "backGrooveDepthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter back groove depth mm."
+    },
+    {
+      "key": "backGrooveOffsetMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 12,
+      "description": "Exported parameter back groove offset mm."
+    },
+    {
+      "key": "backGrooveWidthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter back groove width mm."
+    },
+    {
+      "key": "backThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 6,
+      "description": "Exported parameter back thickness."
+    },
+    {
+      "key": "boardThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter board thickness."
+    },
+    {
+      "key": "bottomGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter bottom gap."
+    },
+    {
+      "key": "depth",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 560,
+      "description": "Exported parameter depth."
+    },
+    {
+      "key": "drawerBackReserveMm",
+      "group": "drawers",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter drawer back reserve mm."
+    },
+    {
+      "key": "drawerBoxSideHeight",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 110,
+      "description": "Exported parameter drawer box side height."
+    },
+    {
+      "key": "drawerBoxThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 13,
+      "description": "Exported parameter drawer box thickness."
+    },
+    {
+      "key": "drawerCount",
+      "group": "drawers",
+      "type": "number",
+      "required": true,
+      "defaultValue": 3,
+      "description": "Exported parameter drawer count."
+    },
+    {
+      "key": "drawerFrontHeights",
+      "group": "dimensions",
+      "type": "number[]",
+      "required": true,
+      "defaultValue": [
+        192,
+        191,
+        191
+      ],
+      "description": "Exported parameter drawer front heights."
+    },
+    {
+      "key": "frontGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter front gap."
+    },
+    {
+      "key": "frontStackPreset",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "equal",
+      "description": "Exported parameter front stack preset."
+    },
+    {
+      "key": "frontThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 19,
+      "description": "Exported parameter front thickness mm."
+    },
+    {
+      "key": "handleLengthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 160,
+      "description": "Exported parameter handle length mm."
+    },
+    {
+      "key": "handlePositionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter handle position mm."
+    },
+    {
+      "key": "handleProjectionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 14,
+      "description": "Exported parameter handle projection mm."
+    },
+    {
+      "key": "handleSizeMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 12,
+      "description": "Exported parameter handle size mm."
+    },
+    {
+      "key": "handleType",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "bar",
+      "description": "Exported parameter handle type."
+    },
+    {
+      "key": "height",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 720,
+      "description": "Exported parameter height."
+    },
+    {
+      "key": "materials",
+      "group": "materials",
+      "type": "object",
+      "required": true,
+      "defaultValue": {
+        "bodyMaterialId": 2,
+        "frontMaterialId": 3,
+        "drawerMaterialId": 5,
+        "bodyKey": "2",
+        "frontKey": "3",
+        "drawerKey": "5",
+        "bodyColor": "#b88b5a",
+        "frontColor": "#005fb8",
+        "drawerColor": "#d8dde6",
+        "bodyPresetId": "DTD1",
+        "frontPresetId": "DTD2",
+        "drawerPresetId": "DTD16",
+        "defaultTintColor": "#ffffff",
+        "defaultTintStrength": 0,
+        "partOverrides": {},
+        "bodyPbr": {
+          "id": "wood_veneer_oak_7760_1k",
+          "rotationDeg": 0,
+          "tintStrength": 0,
+          "tintColor": "#ffffff"
+        },
+        "bodyName": "DTD Grey",
+        "frontName": "MDF Front",
+        "drawerName": "Drawer Box Board"
+      },
+      "description": "Exported parameter materials."
+    },
+    {
+      "key": "plinthHeight",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 100,
+      "description": "Exported parameter plinth height."
+    },
+    {
+      "key": "plinthSetbackMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter plinth setback mm."
+    },
+    {
+      "key": "sideClearanceMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 4,
+      "description": "Exported parameter side clearance mm."
+    },
+    {
+      "key": "sideGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter side gap."
+    },
+    {
+      "key": "topFrontHeightMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 160,
+      "description": "Exported parameter top front height mm."
+    },
+    {
+      "key": "topGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter top gap."
+    },
+    {
+      "key": "type",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "drawer_low",
+      "description": "Exported parameter type."
+    },
+    {
+      "key": "width",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 800,
+      "description": "Exported parameter width."
+    },
+    {
+      "key": "worktopThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 38,
+      "description": "Exported parameter worktop thickness mm."
+    }
+  ]
+}

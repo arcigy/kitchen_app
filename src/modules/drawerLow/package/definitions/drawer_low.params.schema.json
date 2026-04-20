@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": "module-params-schema.v1",
+  "moduleType": "drawer_low",
+  "title": "Drawer Params",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "width": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "worktopThicknessMm": {
+      "type": "number"
+    },
+    "depth": {
+      "type": "number"
+    },
+    "boardThickness": {
+      "type": "number"
+    },
+    "backThickness": {
+      "type": "number"
+    },
+    "backGrooveDepthMm": {
+      "type": "number"
+    },
+    "backGrooveWidthMm": {
+      "type": "number"
+    },
+    "backGrooveOffsetMm": {
+      "type": "number"
+    },
+    "backGrooveClearanceMm": {
+      "type": "number"
+    },
+    "plinthHeight": {
+      "type": "number"
+    },
+    "plinthSetbackMm": {
+      "type": "number"
+    },
+    "frontGap": {
+      "type": "number"
+    },
+    "sideGap": {
+      "type": "number"
+    },
+    "topGap": {
+      "type": "number"
+    },
+    "bottomGap": {
+      "type": "number"
+    },
+    "sideClearanceMm": {
+      "type": "number"
+    },
+    "frontThicknessMm": {
+      "type": "number"
+    },
+    "frontStackPreset": {
+      "type": "string"
+    },
+    "topFrontHeightMm": {
+      "type": "number"
+    },
+    "handleType": {
+      "type": "string"
+    },
+    "handlePositionMm": {
+      "type": "number"
+    },
+    "handleLengthMm": {
+      "type": "number"
+    },
+    "handleSizeMm": {
+      "type": "number"
+    },
+    "handleProjectionMm": {
+      "type": "number"
+    },
+    "drawerBoxThickness": {
+      "type": "number"
+    },
+    "drawerBoxSideHeight": {
+      "type": "number"
+    },
+    "drawerBackReserveMm": {
+      "type": "number"
+    },
+    "drawerCount": {
+      "type": "number"
+    },
+    "drawerFrontHeights": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "materials": {
+      "type": "object",
+      "properties": {
+        "bodyMaterialId": {
+          "type": "number"
+        },
+        "frontMaterialId": {
+          "type": "number"
+        },
+        "drawerMaterialId": {
+          "type": "number"
+        },
+        "bodyKey": {
+          "type": "string"
+        },
+        "frontKey": {
+          "type": "string"
+        },
+        "drawerKey": {
+          "type": "string"
+        },
+        "bodyColor": {
+          "type": "string"
+        },
+        "frontColor": {
+          "type": "string"
+        },
+        "drawerColor": {
+          "type": "string"
+        },
+        "bodyPresetId": {
+          "type": "string"
+        },
+        "frontPresetId": {
+          "type": "string"
+        },
+        "drawerPresetId": {
+          "type": "string"
+        },
+        "defaultTintColor": {
+          "type": "string"
+        },
+        "defaultTintStrength": {
+          "type": "number"
+        },
+        "partOverrides": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "bodyPbr": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "rotationDeg": {
+              "type": "number"
+            },
+            "tintStrength": {
+              "type": "number"
+            },
+            "tintColor": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "bodyName": {
+          "type": "string"
+        },
+        "frontName": {
+          "type": "string"
+        },
+        "drawerName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "backGrooveClearanceMm",
+    "backGrooveDepthMm",
+    "backGrooveOffsetMm",
+    "backGrooveWidthMm",
+    "backThickness",
+    "boardThickness",
+    "bottomGap",
+    "depth",
+    "drawerBackReserveMm",
+    "drawerBoxSideHeight",
+    "drawerBoxThickness",
+    "drawerCount",
+    "drawerFrontHeights",
+    "frontGap",
+    "frontStackPreset",
+    "frontThicknessMm",
+    "handleLengthMm",
+    "handlePositionMm",
+    "handleProjectionMm",
+    "handleSizeMm",
+    "handleType",
+    "height",
+    "materials",
+    "plinthHeight",
+    "plinthSetbackMm",
+    "sideClearanceMm",
+    "sideGap",
+    "topFrontHeightMm",
+    "topGap",
+    "type",
+    "width",
+    "worktopThicknessMm"
+  ],
+  "additionalProperties": true
+}

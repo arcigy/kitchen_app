@@ -1,0 +1,9 @@
+{
+  "moduleType": "drawer_low",
+  "label": "Drawer",
+  "functionNames": {
+    "defaultParams": "La",
+    "build": "rh",
+    "controls": "h_"
+  }
+}

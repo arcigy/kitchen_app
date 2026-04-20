@@ -1,0 +1,1 @@
+{type:"drawer_low",label:"Drawer",defaultParams:()=>La(),build:n=>rh(n),createControls:(n,e,t)=>h_(n,e,t),capabilities:{hasWorktop:!0,supportsKitchenContextDimensions:!0,supportsKitchenContextMaterials:!0}}

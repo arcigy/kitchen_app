@@ -1,0 +1,1167 @@
+export const moduleType = "drawer_low";
+export const displayName = "Drawer";
+export const bomSnapshot = {
+  "schemaVersion": "module-bom.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "items": [
+    {
+      "id": "leftSide",
+      "category": "board",
+      "description": "leftSide",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 18,
+        "height": 582,
+        "depth": 560,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leftSide"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "rightSide",
+      "category": "board",
+      "description": "rightSide",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 18,
+        "height": 582,
+        "depth": 560,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "rightSide"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "bottom",
+      "category": "board",
+      "description": "bottom",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 560,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "bottom"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "topRailFront",
+      "category": "hardware",
+      "description": "topRailFront",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 60,
+        "thickness": 18
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "topRailFront"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "topRailBack",
+      "category": "board",
+      "description": "topRailBack",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 60,
+        "thickness": 18
+      },
+      "materialRole": "hardware",
+      "sourcePartIds": [
+        "topRailBack"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "back",
+      "category": "board",
+      "description": "back",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 779,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back"
+      ],
+      "notes": [
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #f4f4f4",
+        "material unnamed color #b88b5a"
+      ]
+    },
+    {
+      "id": "leg_FL",
+      "category": "board",
+      "description": "leg_FL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FL"
+      ],
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_FR",
+      "category": "board",
+      "description": "leg_FR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FR"
+      ],
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_BL",
+      "category": "board",
+      "description": "leg_BL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_BL"
+      ],
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_BR",
+      "category": "board",
+      "description": "leg_BR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_BR"
+      ],
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "kickClip_FL_collar",
+      "category": "board",
+      "description": "kickClip_FL_collar",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 48,
+        "height": 16,
+        "depth": 44,
+        "thickness": 16
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FL_collar"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_pad",
+      "category": "board",
+      "description": "kickClip_FL_pad",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 12,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FL_pad"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_arm",
+      "category": "board",
+      "description": "kickClip_FL_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 16,
+        "height": 10,
+        "depth": 5,
+        "thickness": 5
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FL_arm"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_screw_1",
+      "category": "board",
+      "description": "kickClip_FL_screw_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FL_screw_1"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FL_screw_2",
+      "category": "board",
+      "description": "kickClip_FL_screw_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FL_screw_2"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FR_collar",
+      "category": "board",
+      "description": "kickClip_FR_collar",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 48,
+        "height": 16,
+        "depth": 44,
+        "thickness": 16
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FR_collar"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_pad",
+      "category": "board",
+      "description": "kickClip_FR_pad",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 12,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FR_pad"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_arm",
+      "category": "board",
+      "description": "kickClip_FR_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 16,
+        "height": 10,
+        "depth": 5,
+        "thickness": 5
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FR_arm"
+      ],
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_screw_1",
+      "category": "board",
+      "description": "kickClip_FR_screw_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FR_screw_1"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FR_screw_2",
+      "category": "board",
+      "description": "kickClip_FR_screw_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kickClip_FR_screw_2"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kick",
+      "category": "board",
+      "description": "kick",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 800,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "kick"
+      ],
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "front_1",
+      "category": "drawer",
+      "description": "front_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 796,
+        "height": 192,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "front_1"
+      ],
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_1",
+      "category": "hardware",
+      "description": "handle_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_1"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_1_screw_1_head",
+      "category": "hardware",
+      "description": "handle_1_screw_1_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_1_screw_1_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_1_shaft",
+      "category": "hardware",
+      "description": "handle_1_screw_1_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_1_screw_1_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_2_head",
+      "category": "hardware",
+      "description": "handle_1_screw_2_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_1_screw_2_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_2_shaft",
+      "category": "hardware",
+      "description": "handle_1_screw_2_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_1_screw_2_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_1_sideL",
+      "category": "board",
+      "description": "drawer_1_sideL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_sideL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_sideR",
+      "category": "board",
+      "description": "drawer_1_sideR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_sideR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_bottom",
+      "category": "board",
+      "description": "drawer_1_bottom",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_bottom"
+      ],
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_1_back",
+      "category": "board",
+      "description": "drawer_1_back",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_back"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_railL",
+      "category": "board",
+      "description": "drawer_1_railL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_railL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_railR",
+      "category": "board",
+      "description": "drawer_1_railR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_1_railR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "front_2",
+      "category": "drawer",
+      "description": "front_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 796,
+        "height": 191,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "front_2"
+      ],
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_2",
+      "category": "hardware",
+      "description": "handle_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_2"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_2_screw_1_head",
+      "category": "hardware",
+      "description": "handle_2_screw_1_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_2_screw_1_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_1_shaft",
+      "category": "hardware",
+      "description": "handle_2_screw_1_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_2_screw_1_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_2_head",
+      "category": "hardware",
+      "description": "handle_2_screw_2_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_2_screw_2_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_2_shaft",
+      "category": "hardware",
+      "description": "handle_2_screw_2_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_2_screw_2_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_2_sideL",
+      "category": "board",
+      "description": "drawer_2_sideL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_sideL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_sideR",
+      "category": "board",
+      "description": "drawer_2_sideR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_sideR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_bottom",
+      "category": "board",
+      "description": "drawer_2_bottom",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_bottom"
+      ],
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_2_back",
+      "category": "board",
+      "description": "drawer_2_back",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_back"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_railL",
+      "category": "board",
+      "description": "drawer_2_railL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_railL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_railR",
+      "category": "board",
+      "description": "drawer_2_railR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_2_railR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "front_3",
+      "category": "drawer",
+      "description": "front_3",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 796,
+        "height": 191,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "front_3"
+      ],
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_3",
+      "category": "hardware",
+      "description": "handle_3",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_3"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_3_screw_1_head",
+      "category": "hardware",
+      "description": "handle_3_screw_1_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_3_screw_1_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_1_shaft",
+      "category": "hardware",
+      "description": "handle_3_screw_1_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_3_screw_1_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_2_head",
+      "category": "hardware",
+      "description": "handle_3_screw_2_head",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_3_screw_2_head"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_2_shaft",
+      "category": "hardware",
+      "description": "handle_3_screw_2_shaft",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "handle_3_screw_2_shaft"
+      ],
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_3_sideL",
+      "category": "board",
+      "description": "drawer_3_sideL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_sideL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_sideR",
+      "category": "board",
+      "description": "drawer_3_sideR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_sideR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_bottom",
+      "category": "board",
+      "description": "drawer_3_bottom",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_bottom"
+      ],
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_3_back",
+      "category": "board",
+      "description": "drawer_3_back",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_back"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_railL",
+      "category": "board",
+      "description": "drawer_3_railL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_railL"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_railR",
+      "category": "board",
+      "description": "drawer_3_railR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "materialRole": "drawer",
+      "sourcePartIds": [
+        "drawer_3_railR"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 57,
+    "boardItems": 41,
+    "hardwareItems": 16
+  }
+} as const;
+
+export function generateBom() {
+  return bomSnapshot;
+}
+
+export function summarizeBom() {
+  return bomSnapshot.summary;
+}

@@ -46,34 +46,98 @@ type PortableArchiveEnvelope = {
   packageVersion?: string;
 };
 
-type PortablePackagePayload = {
-  manifest: {
-    packageName: string;
-    packageVersion: string;
-    modules: Array<{
-      moduleType: string;
-      displayName: string;
-    }>;
+type PackageValidationIssue = {
+  severity: "error" | "warning" | "advisory";
+  category: "required_shape" | "projection_only" | "readiness";
+  code: string;
+  message: string;
+  path?: string;
+};
+
+type ModulePackageManifest = {
+  schemaVersion: "module-package.v1";
+  packageName: string;
+  packageVersion: string;
+  displayName?: string;
+  description?: string;
+  engineCompatibility?: {
+    app?: string;
+    moduleContract?: string;
   };
-  moduleEntries: Array<{
+  modules: Array<{
     moduleType: string;
     displayName: string;
-    capabilities?: Record<string, boolean>;
   }>;
-  systemParameters?: {
-    schemaVersion?: string;
+};
+
+type ModulePackageModuleManifest = {
+  moduleType: string;
+  displayName: string;
+  definition: {
+    moduleType: string;
+    source: string;
+  };
+  capabilities?: Record<string, boolean>;
+  logic?: Record<string, unknown>;
+  assets?: Record<string, unknown>;
+  commercial?: Record<string, unknown>;
+  tags?: string[];
+  status?: string;
+  notes?: string[];
+};
+
+type ModulePackageExportMeta = {
+  exportedAt: string;
+  source: "registry_projection" | "builder_portable_export";
+  scope: "single_module" | "local_module_set";
+  generator?: {
+    name: string;
+    version: number;
   };
 };
 
-type PortablePackageModule = {
-  moduleType: string;
-  displayName: string;
-  capabilities: Record<string, boolean>;
+type ModulePackageSystemParameterCatalog = {
+  schemaVersion: "module-system-parameters.v1";
+  groups: Array<{
+    key: string;
+    label: string;
+    description: string;
+  }>;
+  definitions: Array<{
+    key: string;
+    group: string;
+    type: string;
+    description: string;
+    required: boolean;
+  }>;
+  modules: Array<{
+    moduleType: string;
+    values: Record<string, string | number | boolean | string[] | null>;
+  }>;
+};
+
+type PortablePackagePayload = {
+  exportMeta: ModulePackageExportMeta;
+  manifest: ModulePackageManifest;
+  moduleEntries: ModulePackageModuleManifest[];
+  systemParameters: ModulePackageSystemParameterCatalog;
+};
+
+type PortablePackageInspection = {
+  archiveName: string;
+  rootDir: string;
+  packageKey: string;
+  packageName: string;
+  packageVersion: string;
+  payload: PortablePackagePayload;
+  moduleParameterSnapshots: Record<string, Record<string, unknown>>;
+  issues: PackageValidationIssue[];
 };
 
 const repoRoot = process.cwd();
 const packagePath = process.argv[2];
 const dryRun = process.argv.includes("--dry-run");
+const MODULE_PACKAGE_ARCHIVE_MANIFEST = "modpkg.archive.json";
 
 if (!packagePath) {
   throw new Error('Usage: npm run import:modpkg -- "C:\\path\\to\\module.modpkg"');
@@ -176,6 +240,269 @@ function discoverNormalizer(typesPath: string, paramsTypeName: string) {
   if (/export\s+function\s+normalizeModuleParams\b/.test(source)) return "normalizeModuleParams";
   if (/export\s+const\s+normalizeModuleParams\b/.test(source)) return "normalizeModuleParams";
   return null;
+}
+
+function joinPosix(...parts: string[]) {
+  return parts
+    .filter(Boolean)
+    .map((part, index) => (index === 0 ? part.replace(/\/+$/g, "") : part.replace(/^\/+|\/+$/g, "")))
+    .join("/");
+}
+
+function createIssue(
+  severity: PackageValidationIssue["severity"],
+  category: PackageValidationIssue["category"],
+  code: string,
+  message: string,
+  path?: string
+): PackageValidationIssue {
+  return { severity, category, code, message, ...(path ? { path } : {}) };
+}
+
+function parseJsonText<T>(raw: string, label: string): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${label}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function readRequiredArchiveJson<T>(files: ZipFiles, entryPath: string, label: string): T {
+  const bytes = files.get(entryPath);
+  if (!bytes) {
+    throw new Error(`Missing required ${label}: ${entryPath}`);
+  }
+  return parseJsonText<T>(toText(bytes), label);
+}
+
+function readOptionalArchiveJson<T>(files: ZipFiles, entryPath: string): T | undefined {
+  const bytes = files.get(entryPath);
+  return bytes ? parseJsonText<T>(toText(bytes), entryPath) : undefined;
+}
+
+function reconstructModuleEntries(
+  files: ZipFiles,
+  rootDir: string,
+  manifest: ModulePackageManifest
+): ModulePackageModuleManifest[] {
+  return manifest.modules.map((manifestModule) => {
+    const moduleType = manifestModule.moduleType;
+    const definition = readRequiredArchiveJson<{
+      moduleType: string;
+      displayName: string;
+      definition: ModulePackageModuleManifest["definition"];
+      capabilities?: ModulePackageModuleManifest["capabilities"];
+      status?: ModulePackageModuleManifest["status"];
+      tags?: string[];
+      notes?: string[];
+    }>(
+      files,
+      joinPosix(rootDir, "definitions", `${moduleType}.module.json`),
+      `module definition for ${moduleType}`
+    );
+
+    const logic = readOptionalArchiveJson<ModulePackageModuleManifest["logic"]>(
+      files,
+      joinPosix(rootDir, "logic", `${moduleType}.logic.json`)
+    );
+    const assets = readOptionalArchiveJson<ModulePackageModuleManifest["assets"]>(
+      files,
+      joinPosix(rootDir, "assets", `${moduleType}.assets.json`)
+    );
+    const commercial = readOptionalArchiveJson<ModulePackageModuleManifest["commercial"]>(
+      files,
+      joinPosix(rootDir, "commercial", `${moduleType}.commercial.json`)
+    );
+
+    return {
+      moduleType: definition.moduleType,
+      displayName: definition.displayName,
+      definition: definition.definition,
+      capabilities: definition.capabilities,
+      status: definition.status,
+      tags: definition.tags,
+      notes: definition.notes,
+      ...(logic ? { logic } : {}),
+      ...(assets ? { assets } : {}),
+      ...(commercial ? { commercial } : {})
+    };
+  });
+}
+
+function reconstructSystemParameters(
+  files: ZipFiles,
+  rootDir: string,
+  manifest: ModulePackageManifest
+): ModulePackageSystemParameterCatalog {
+  const schema = readOptionalArchiveJson<
+    Pick<ModulePackageSystemParameterCatalog, "schemaVersion" | "groups" | "definitions">
+  >(files, joinPosix(rootDir, "definitions", "system-parameters.schema.json"));
+
+  if (!schema) {
+    return {
+      schemaVersion: "module-system-parameters.v1",
+      groups: [],
+      definitions: [],
+      modules: []
+    };
+  }
+
+  return {
+    schemaVersion: schema.schemaVersion,
+    groups: schema.groups,
+    definitions: schema.definitions,
+    modules: manifest.modules.flatMap((manifestModule) => {
+      const values = readOptionalArchiveJson<{
+        moduleType: string;
+        values: Record<string, string | number | boolean | string[] | null>;
+      }>(files, joinPosix(rootDir, "definitions", `${manifestModule.moduleType}.system-parameters.json`));
+      return values ? [values] : [];
+    })
+  };
+}
+
+function reconstructModuleParameterSnapshots(
+  files: ZipFiles,
+  rootDir: string,
+  manifest: ModulePackageManifest
+): Record<string, Record<string, unknown>> {
+  const snapshots: Record<string, Record<string, unknown>> = {};
+  for (const manifestModule of manifest.modules) {
+    const snapshot = readOptionalArchiveJson<Record<string, unknown>>(
+      files,
+      joinPosix(rootDir, "definitions", `${manifestModule.moduleType}.params.json`)
+    );
+    if (snapshot) {
+      snapshots[manifestModule.moduleType] = snapshot;
+    }
+  }
+  return snapshots;
+}
+
+function validatePortablePayload(payload: PortablePackagePayload): PackageValidationIssue[] {
+  const issues: PackageValidationIssue[] = [];
+
+  if (payload.manifest.schemaVersion !== "module-package.v1") {
+    issues.push(
+      createIssue(
+        "error",
+        "required_shape",
+        "manifest.schemaVersion",
+        "Manifest schemaVersion must be module-package.v1.",
+        "manifest.schemaVersion"
+      )
+    );
+  }
+
+  if (!Array.isArray(payload.moduleEntries) || payload.moduleEntries.length === 0) {
+    issues.push(
+      createIssue(
+        "error",
+        "required_shape",
+        "moduleEntries",
+        "Payload must include at least one module entry.",
+        "moduleEntries"
+      )
+    );
+  }
+
+  if (payload.systemParameters.schemaVersion !== "module-system-parameters.v1") {
+    issues.push(
+      createIssue(
+        "error",
+        "required_shape",
+        "systemParameters.schemaVersion",
+        "Payload must include systemParameters with schemaVersion module-system-parameters.v1.",
+        "systemParameters.schemaVersion"
+      )
+    );
+  }
+
+  const requiredSystemKeys = new Set(
+    payload.systemParameters.definitions.filter((definition) => definition.required).map((definition) => definition.key)
+  );
+
+  for (const moduleEntry of payload.moduleEntries) {
+    const systemValues = payload.systemParameters.modules.find((entry) => entry.moduleType === moduleEntry.moduleType)?.values;
+    if (!systemValues) {
+      issues.push(
+        createIssue(
+          "error",
+          "required_shape",
+          "systemParameters.module_values",
+          `Module ${moduleEntry.moduleType} is missing fixed system-parameter values.`,
+          `systemParameters.modules.${moduleEntry.moduleType}`
+        )
+      );
+      continue;
+    }
+
+    for (const key of requiredSystemKeys) {
+      if (!(key in systemValues)) {
+        issues.push(
+          createIssue(
+            "error",
+            "required_shape",
+            "systemParameters.module_value_missing",
+            `Module ${moduleEntry.moduleType} is missing required system parameter ${key}.`,
+            `systemParameters.modules.${moduleEntry.moduleType}.${key}`
+          )
+        );
+      }
+    }
+  }
+
+  return issues;
+}
+
+function inspectPortablePackage(files: ZipFiles, archiveName: string): PortablePackageInspection {
+  const envelope = readRequiredArchiveJson<PortableArchiveEnvelope>(
+    files,
+    MODULE_PACKAGE_ARCHIVE_MANIFEST,
+    "archive manifest"
+  );
+  const rootDir = envelope.packageRootDir?.replace(/\\/g, "/").replace(/\/+$/g, "") ?? "";
+  if (!rootDir) {
+    throw new Error("Portable package archive is missing packageRootDir.");
+  }
+
+  const payloadSnapshot = readOptionalArchiveJson<PortablePackagePayload>(
+    files,
+    joinPosix(rootDir, "package-export.payload.json")
+  );
+
+  let payload: PortablePackagePayload;
+  if (payloadSnapshot) {
+    payload = payloadSnapshot;
+  } else {
+    const manifest = readRequiredArchiveJson<ModulePackageManifest>(
+      files,
+      joinPosix(rootDir, "module.package.json"),
+      "package manifest"
+    );
+    const exportMeta = readRequiredArchiveJson<ModulePackageExportMeta>(
+      files,
+      joinPosix(rootDir, "package-export.meta.json"),
+      "package export metadata"
+    );
+    payload = {
+      manifest,
+      exportMeta,
+      moduleEntries: reconstructModuleEntries(files, rootDir, manifest),
+      systemParameters: reconstructSystemParameters(files, rootDir, manifest)
+    };
+  }
+
+  return {
+    archiveName,
+    rootDir,
+    packageKey: `${payload.manifest.packageName}@${payload.manifest.packageVersion}`,
+    packageName: payload.manifest.packageName,
+    packageVersion: payload.manifest.packageVersion,
+    payload,
+    moduleParameterSnapshots: reconstructModuleParameterSnapshots(files, rootDir, payload.manifest),
+    issues: validatePortablePayload(payload)
+  };
 }
 
 function generateCabinetTypes(installed: InstalledModule[]) {
@@ -523,9 +850,20 @@ function generatePortableControlsSource(args: {
   moduleType: string;
   paramsTypeName: string;
   controlsExportName: string;
+  hasSystemParameters: boolean;
 }) {
-  const { moduleType, paramsTypeName, controlsExportName } = args;
-  return `import parameterCatalog from "./package/definitions/${moduleType}.parameter-catalog.json";
+  const { moduleType, paramsTypeName, controlsExportName, hasSystemParameters } = args;
+  const systemImports = hasSystemParameters
+    ? `
+import systemParameterCatalog from "./package/definitions/system-parameters.schema.json";
+import systemParameterValues from "./package/definitions/${moduleType}.system-parameters.json";`
+    : "";
+  const systemArgs = hasSystemParameters
+    ? `,
+    systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
+    systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]`
+    : "";
+  return `import parameterCatalog from "./package/definitions/${moduleType}.parameter-catalog.json";${systemImports}
 import type { ${paramsTypeName} } from "./types";
 import {
   createPortableModuleControls,
@@ -542,7 +880,7 @@ export function ${controlsExportName}(
     container,
     params: params as Record<string, unknown>,
     catalog: parameterCatalog as Parameters<typeof createPortableModuleControls>[0]["catalog"],
-    controlArgs: args
+    controlArgs: args${systemArgs}
   });
 }
 `;
@@ -665,155 +1003,181 @@ function installLegacyPackage(files: ZipFiles, integrationPath: string) {
 }
 
 function installPortablePackage(files: ZipFiles) {
-  const envelopeBytes = files.get("modpkg.archive.json");
-  if (!envelopeBytes) throw new Error("Missing modpkg.archive.json in module package.");
-
-  const envelope = JSON.parse(toText(envelopeBytes)) as PortableArchiveEnvelope;
-  const packageRootDir = envelope.packageRootDir?.replace(/\\/g, "/").replace(/\/+$/g, "") ?? "";
-  if (!packageRootDir) throw new Error("Portable package archive is missing packageRootDir.");
-
-  const { readJsonEntry } = createAccessor(files, `${packageRootDir}/`);
-  const payload = readJsonEntry<PortablePackagePayload>("package-export.payload.json");
-  const moduleEntry = payload.moduleEntries[0];
-  if (!moduleEntry) throw new Error("Portable package does not contain any module entry.");
-
-  const portableModule: PortablePackageModule = {
-    moduleType: moduleEntry.moduleType,
-    displayName: moduleEntry.displayName,
-    capabilities: moduleEntry.capabilities ?? {}
-  };
-
-  const moduleFolder = toCamelCase(portableModule.moduleType);
-  const moduleName = toPascalCase(portableModule.moduleType);
-  const paramsTypeName = `${moduleName}Params`;
-  const builderExportName = `build${moduleName}`;
-  const controlsExportName = `create${moduleName}Controls`;
-  const defaultFactoryName = `makeDefault${moduleName}Params`;
-  const validatorName = `validate${moduleName}`;
-  const normalizerName = `normalize${moduleName}Params`;
-
-  assertSafeSegment(moduleFolder, "moduleFolder");
-  assertSafeSegment(builderExportName, "builderExportName");
-  assertSafeSegment(controlsExportName, "controlsExportName");
-  assertSafeSegment(defaultFactoryName, "defaultFactoryName");
-  assertSafeSegment(validatorName, "validatorName");
-  assertSafeSegment(paramsTypeName, "paramsTypeName");
-
-  const moduleDest = path.join(repoRoot, "src", "modules", moduleFolder);
-  const moduleImportPath = path.join(moduleDest, "module.import.json");
-  const existingImportRecord =
-    existsSync(moduleImportPath) && existsSync(moduleDest)
-      ? (JSON.parse(readFileSync(moduleImportPath, "utf8")) as Record<string, unknown>)
-      : null;
-  const replaceExistingPortableModule = existingImportRecord?.importFormat === "portable_modpkg";
-
-  if (replaceExistingPortableModule && !dryRun) {
-    rmSync(moduleDest, { recursive: true, force: true });
+  const inspection = inspectPortablePackage(files, path.basename(packagePath));
+  const blockingIssues = inspection.issues.filter((issue) => issue.severity === "error");
+  if (blockingIssues.length > 0) {
+    throw new Error(
+      `Portable package validation failed:\n${blockingIssues
+        .map((issue) => `- [${issue.code}] ${issue.message}${issue.path ? ` (${issue.path})` : ""}`)
+        .join("\n")}`
+    );
   }
 
-  const packageDest = path.join(moduleDest, "package");
-  unpackPortablePackage(files, packageRootDir, packageDest);
-
-  const generatedCoreFiles = [
-    {
-      fileName: "types.ts",
-      contents: generatePortableTypesSource({
-        moduleType: portableModule.moduleType,
-        paramsTypeName,
-        defaultFactoryName,
-        validatorName,
-        normalizerName
-      })
-    },
-    {
-      fileName: "geometry.ts",
-      contents: generatePortableGeometrySource({
-        moduleType: portableModule.moduleType,
-        paramsTypeName,
-        builderExportName
-      })
-    },
-    {
-      fileName: "controls.ts",
-      contents: generatePortableControlsSource({
-        moduleType: portableModule.moduleType,
-        paramsTypeName,
-        controlsExportName
-      })
-    },
-    {
-      fileName: "calculation.ts",
-      contents: generatePortableCalculationSource({
-        moduleType: portableModule.moduleType,
-        paramsTypeName
-      })
-    }
-  ];
-
-  const preservedCoreFiles: string[] = [];
-  const createdCoreFiles: string[] = [];
-  const overwrittenCoreFiles: string[] = [];
-
-  for (const file of generatedCoreFiles) {
-    const targetPath = path.join(moduleDest, file.fileName);
-    if (existsSync(targetPath) && !replaceExistingPortableModule) {
-      preservedCoreFiles.push(file.fileName);
-      continue;
-    }
-    if (existsSync(targetPath)) {
-      overwrittenCoreFiles.push(file.fileName);
-    } else {
-      createdCoreFiles.push(file.fileName);
-    }
-    writeFileIfNotDryRun(targetPath, file.contents);
-  }
-
-  const portablePackageFiles = [...files.keys()]
-    .filter((entryName) => entryName === "modpkg.archive.json" || entryName.startsWith(`${packageRootDir}/`))
-    .map((entryName) => (entryName === "modpkg.archive.json" ? entryName : entryName.slice(`${packageRootDir}/`.length)))
+  const packageRootDir = inspection.rootDir;
+  const packageFiles = [...files.keys()]
+    .filter((entryName) => entryName === MODULE_PACKAGE_ARCHIVE_MANIFEST || entryName.startsWith(`${packageRootDir}/`))
+    .map((entryName) => (entryName === MODULE_PACKAGE_ARCHIVE_MANIFEST ? entryName : entryName.slice(`${packageRootDir}/`.length)))
     .filter(Boolean)
     .sort();
 
-  const importRecord: IntegrationMeta & Record<string, unknown> = {
-    schemaVersion: "local-module-integration.v1",
-    packageName: payload.manifest.packageName,
-    packageVersion: payload.manifest.packageVersion,
-    moduleType: portableModule.moduleType,
-    moduleFolder,
-    paramsTypeName,
-    builderExportName,
-    controlsExportName,
-    defaultFactoryName,
-    validatorName,
-    bomExportName: "calculateBOM",
-    label: portableModule.displayName,
-    capabilities: portableModule.capabilities,
-    importedAt: new Date().toISOString(),
-    importedFrom: path.basename(packagePath),
-    importFormat: "portable_modpkg",
-    packageRootDir,
-    preservedCoreFiles,
-    overwrittenCoreFiles,
-    generatedCoreFiles: createdCoreFiles,
-    portablePackageFiles,
-    installedFiles: [...createdCoreFiles, ...overwrittenCoreFiles, ...portablePackageFiles].sort(),
-    systemParameterSchemaVersion: payload.systemParameters?.schemaVersion ?? null
-  };
+  const importRecords: Array<Record<string, unknown>> = [];
+
+  for (const moduleEntry of inspection.payload.moduleEntries) {
+    const moduleType = moduleEntry.moduleType;
+    const moduleFolder = toCamelCase(moduleType);
+    const moduleName = toPascalCase(moduleType);
+    const paramsTypeName = `${moduleName}Params`;
+    const builderExportName = `build${moduleName}`;
+    const controlsExportName = `create${moduleName}Controls`;
+    const defaultFactoryName = `makeDefault${moduleName}Params`;
+    const validatorName = `validate${moduleName}`;
+    const normalizerName = `normalize${moduleName}Params`;
+
+    assertSafeSegment(moduleFolder, "moduleFolder");
+    assertSafeSegment(builderExportName, "builderExportName");
+    assertSafeSegment(controlsExportName, "controlsExportName");
+    assertSafeSegment(defaultFactoryName, "defaultFactoryName");
+    assertSafeSegment(validatorName, "validatorName");
+    assertSafeSegment(paramsTypeName, "paramsTypeName");
+
+    const moduleDest = path.join(repoRoot, "src", "modules", moduleFolder);
+    const moduleImportPath = path.join(moduleDest, "module.import.json");
+    const existingImportRecord =
+      existsSync(moduleImportPath) && existsSync(moduleDest)
+        ? (JSON.parse(readFileSync(moduleImportPath, "utf8")) as Record<string, unknown>)
+        : null;
+    const replaceExistingPortableModule = existingImportRecord?.importFormat === "portable_modpkg";
+
+    if (replaceExistingPortableModule && !dryRun) {
+      rmSync(moduleDest, { recursive: true, force: true });
+    }
+
+    const packageDest = path.join(moduleDest, "package");
+    unpackPortablePackage(files, packageRootDir, packageDest);
+
+    const hasSystemParameters =
+      files.has(joinPosix(packageRootDir, "definitions", "system-parameters.schema.json")) &&
+      files.has(joinPosix(packageRootDir, "definitions", `${moduleType}.system-parameters.json`));
+
+    const generatedCoreFiles = [
+      {
+        fileName: "types.ts",
+        contents: generatePortableTypesSource({
+          moduleType,
+          paramsTypeName,
+          defaultFactoryName,
+          validatorName,
+          normalizerName
+        })
+      },
+      {
+        fileName: "geometry.ts",
+        contents: generatePortableGeometrySource({
+          moduleType,
+          paramsTypeName,
+          builderExportName
+        })
+      },
+      {
+        fileName: "controls.ts",
+        contents: generatePortableControlsSource({
+          moduleType,
+          paramsTypeName,
+          controlsExportName,
+          hasSystemParameters
+        })
+      },
+      {
+        fileName: "calculation.ts",
+        contents: generatePortableCalculationSource({
+          moduleType,
+          paramsTypeName
+        })
+      }
+    ];
+
+    const preservedCoreFiles: string[] = [];
+    const createdCoreFiles: string[] = [];
+    const overwrittenCoreFiles: string[] = [];
+
+    for (const file of generatedCoreFiles) {
+      const targetPath = path.join(moduleDest, file.fileName);
+      if (existsSync(targetPath) && !replaceExistingPortableModule) {
+        preservedCoreFiles.push(file.fileName);
+        continue;
+      }
+      if (existsSync(targetPath)) {
+        overwrittenCoreFiles.push(file.fileName);
+      } else {
+        createdCoreFiles.push(file.fileName);
+      }
+      writeFileIfNotDryRun(targetPath, file.contents);
+    }
+
+    const systemParameterValues =
+      inspection.payload.systemParameters.modules.find((entry) => entry.moduleType === moduleType)?.values ?? null;
+
+    const importRecord: IntegrationMeta & Record<string, unknown> = {
+      schemaVersion: "local-module-integration.v1",
+      packageName: inspection.packageName,
+      packageVersion: inspection.packageVersion,
+      moduleType,
+      moduleFolder,
+      paramsTypeName,
+      builderExportName,
+      controlsExportName,
+      defaultFactoryName,
+      validatorName,
+      bomExportName: "calculateBOM",
+      label: moduleEntry.displayName,
+      capabilities: moduleEntry.capabilities ?? {},
+      importedAt: new Date().toISOString(),
+      importedFrom: path.basename(packagePath),
+      importFormat: "portable_modpkg",
+      packageRootDir,
+      packageKey: inspection.packageKey,
+      packageIssues: inspection.issues,
+      moduleParameterSnapshot: inspection.moduleParameterSnapshots[moduleType] ?? null,
+      systemParameterSchemaVersion: inspection.payload.systemParameters.schemaVersion,
+      systemParameterValues,
+      preservedCoreFiles,
+      overwrittenCoreFiles,
+      generatedCoreFiles: createdCoreFiles,
+      portablePackageFiles: packageFiles,
+      installedFiles: [...createdCoreFiles, ...overwrittenCoreFiles, ...packageFiles].sort()
+    };
+
+    writeFileIfNotDryRun(
+      path.join(moduleDest, "module.import.json"),
+      `${JSON.stringify(importRecord, null, 2)}\n`
+    );
+    importRecords.push(importRecord);
+
+    const action = dryRun ? "Validated" : "Imported";
+    const preservedText =
+      preservedCoreFiles.length > 0 ? ` (preserved core files: ${preservedCoreFiles.join(", ")})` : "";
+    console.log(`${action} ${moduleType} -> src/modules/${moduleFolder}${preservedText}`);
+  }
 
   writeFileIfNotDryRun(
-    path.join(moduleDest, "module.import.json"),
-    `${JSON.stringify(importRecord, null, 2)}\n`
-  );
-  writeFileIfNotDryRun(
     path.join(repoRoot, "src", "modules", "import-summary.json"),
-    `${JSON.stringify({ latest: importRecord }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        latest: importRecords.at(-1) ?? null,
+        importedModules: importRecords
+      },
+      null,
+      2
+    )}\n`
   );
   regenerateModuleIndexFiles();
 
-  const action = dryRun ? "Validated" : "Imported";
-  const preservedText =
-    preservedCoreFiles.length > 0 ? ` (preserved core files: ${preservedCoreFiles.join(", ")})` : "";
-  console.log(`${action} ${portableModule.moduleType} -> src/modules/${moduleFolder}${preservedText}`);
+  if (inspection.issues.length > 0) {
+    const warningCount = inspection.issues.filter((issue) => issue.severity !== "error").length;
+    if (warningCount > 0) {
+      console.log(`Imported with ${warningCount} non-blocking package issue(s). See module.import.json for details.`);
+    }
+  }
 }
 
 const files = readZip(path.resolve(packagePath));
