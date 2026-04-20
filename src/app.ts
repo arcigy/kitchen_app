@@ -177,10 +177,8 @@ export function startApp(initialArgs: AppArgs) {
   wallPlanGroup.visible = false;
   layoutRoot.add(wallPlanGroup);
 
-  const wallPlanMat = new THREE.MeshBasicMaterial({ color: 0xbcbcbc });
-  const wallPlanMeshes = new Map<string, THREE.Mesh>();
+  const wallPlanMeshes = new Map<string, THREE.Line>();
   const wallJoinMeshes: THREE.Mesh[] = [];
-  let wallPlanUnionMesh: THREE.Mesh | null = null;
   const wallDebugGroup = new THREE.Group();
   wallDebugGroup.name = "wallDebugGroup";
   wallDebugGroup.visible = false;
@@ -500,16 +498,16 @@ export function startApp(initialArgs: AppArgs) {
     updateUnderlayTransform();
   }
 
-  type LayoutInstance = {
-    id: string;
-    params: ModuleParams;
-    kitchenGroupId: string | null;
-    root: THREE.Group;
-    module: THREE.Group;
-    localBox: THREE.Box3;
-    pick: THREE.Mesh;
-    outline: THREE.Line;
-  };
+type LayoutInstance = {
+  id: string;
+  params: ModuleParams;
+  kitchenGroupId: string | null;
+  root: THREE.Group;
+  module: THREE.Group;
+  localBox: THREE.Box3;
+  pick: THREE.Mesh;
+  outline: THREE.LineSegments;
+};
   const instances: LayoutInstance[] = [];
   let instanceCounter = 1;
   let selectedInstanceId: string | null = null;
@@ -531,12 +529,12 @@ export function startApp(initialArgs: AppArgs) {
     centerMm: number; // along wall axis (x for back, z for sides)
   };
 
-  type WindowInstance = {
-    params: WindowParams;
-    root: THREE.Group;
-    pick: THREE.Mesh;
-    outline: THREE.Line;
-  };
+type WindowInstance = {
+  params: WindowParams;
+  root: THREE.Group;
+  pick: THREE.Mesh;
+  outline: THREE.Line;
+};
 
   let windowInst: WindowInstance | null = null;
   type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
@@ -1847,21 +1845,15 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function rebuildWallPlanMesh() {
-    const ids = new Set(walls.map((w) => w.id));
-    for (const [id, mesh] of wallPlanMeshes) {
-      if (ids.has(id)) continue;
-      wallPlanGroup.remove(mesh);
-      mesh.geometry.dispose();
-      wallPlanMeshes.delete(id);
+    for (const [, line] of wallPlanMeshes) {
+      wallPlanGroup.remove(line);
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
     }
+    wallPlanMeshes.clear();
     for (const m of wallJoinMeshes.splice(0, wallJoinMeshes.length)) {
       wallPlanGroup.remove(m);
       m.geometry.dispose();
-    }
-    if (wallPlanUnionMesh) {
-      wallPlanGroup.remove(wallPlanUnionMesh);
-      wallPlanUnionMesh.geometry.dispose();
-      wallPlanUnionMesh = null;
     }
 
     if (walls.length === 0) return;
@@ -1879,17 +1871,6 @@ export function startApp(initialArgs: AppArgs) {
     wallSolvedOutlines.clear();
     wallSolvedJoinPolys = solved.joinPolys.map((p) => p.map((q) => ({ x: q.x, z: q.z })));
     wallUnionPolys = null;
-
-    const makePolyMesh = (poly: Array<{ x: number; z: number }>, y: number, name: string) => {
-      if (poly.length < 3) return null;
-      const shape = new THREE.Shape(poly.map((p) => new THREE.Vector2(p.x, p.z)));
-      const geom = new THREE.ShapeGeometry(shape);
-      geom.rotateX(Math.PI / 2);
-      const mesh = new THREE.Mesh(geom, wallPlanMat);
-      mesh.name = name;
-      mesh.position.y = y;
-      return mesh;
-    };
 
     // Always keep per-wall solved outlines for hit-testing/export/debug.
     for (const w of solved.walls) wallSolvedOutlines.set(w.id, w.outline);
@@ -1927,33 +1908,28 @@ export function startApp(initialArgs: AppArgs) {
       merged = null;
     }
 
-    if (merged && merged.length > 0) {
-      wallUnionPolys = merged;
-      const shapes: THREE.Shape[] = [];
-      for (const poly of merged as any[]) {
-        const rings = poly as any[];
-        if (!rings || rings.length === 0) continue;
-        const outer = rings[0] as Array<[number, number]>;
-        if (!outer || outer.length < 3) continue;
-        const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
-        for (let i = 1; i < rings.length; i++) {
-          const hole = rings[i] as Array<[number, number]>;
-          if (!hole || hole.length < 3) continue;
-          const path = new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y)));
-          shape.holes.push(path);
-        }
-        shapes.push(shape);
-      }
+    if (merged && merged.length > 0) wallUnionPolys = merged;
 
-      if (shapes.length > 0) {
-        const geom = new THREE.ShapeGeometry(shapes);
-        geom.rotateX(Math.PI / 2);
-        const mesh = new THREE.Mesh(geom, wallPlanMat);
-        mesh.name = "wallPlanUnion";
-        mesh.position.y = 0.02;
-        wallPlanUnionMesh = mesh;
-        wallPlanGroup.add(mesh);
-      }
+    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02) => {
+      if (pts.length < 2) return null;
+      const linePts = pts.map((p) => new THREE.Vector3(p.x, y, p.z));
+      if (pts.length >= 3) linePts.push(new THREE.Vector3(pts[0].x, y, pts[0].z));
+      const geom = new THREE.BufferGeometry().setFromPoints(linePts);
+      return new THREE.Line(
+        geom,
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthWrite: false })
+      );
+    };
+
+    for (const solvedWall of solved.walls) {
+      const line = makePlanPolyline(solvedWall.outline, 0x4f4f4f);
+      if (!line) continue;
+      line.name = `wallPlan_${solvedWall.id}`;
+      line.userData.kind = "wallPlan";
+      line.userData.wallId = solvedWall.id;
+      line.renderOrder = 20;
+      wallPlanMeshes.set(solvedWall.id, line);
+      wallPlanGroup.add(line);
     }
 
     // Debug overlays
@@ -5416,20 +5392,71 @@ export function startApp(initialArgs: AppArgs) {
     const box = inst.localBox;
 
     inst.pick.geometry.dispose();
-    inst.pick.geometry = new THREE.BufferGeometry();
-    inst.pick.visible = false;
+    const width = Math.max(0.001, box.max.x - box.min.x);
+    const depth = Math.max(0.001, box.max.z - box.min.z);
+    inst.pick.geometry = new THREE.BoxGeometry(width, 0.03, depth);
+    inst.pick.position.set((box.min.x + box.max.x) * 0.5, 0.015, (box.min.z + box.max.z) * 0.5);
+    inst.pick.visible = true;
 
-    const pts = [
-      new THREE.Vector3(box.min.x, 0.01, box.min.z),
-      new THREE.Vector3(box.max.x, 0.01, box.min.z),
-      new THREE.Vector3(box.max.x, 0.01, box.max.z),
-      new THREE.Vector3(box.min.x, 0.01, box.max.z),
-      new THREE.Vector3(box.min.x, 0.01, box.min.z)
-    ];
-    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const g = buildPlanEdgeGeometry(inst);
     inst.outline.geometry.dispose();
     inst.outline.geometry = g;
     inst.outline.position.set(0, 0, 0);
+  }
+
+  function buildPlanEdgeGeometry(inst: LayoutInstance) {
+    inst.root.updateMatrixWorld(true);
+    inst.module.updateMatrixWorld(true);
+
+    const rootInv = inst.root.matrixWorld.clone().invert();
+    const points: THREE.Vector3[] = [];
+    const seen = new Set<string>();
+
+    const pushSegment = (a: THREE.Vector3, b: THREE.Vector3) => {
+      const ax = Math.round(a.x * 10000);
+      const az = Math.round(a.z * 10000);
+      const bx = Math.round(b.x * 10000);
+      const bz = Math.round(b.z * 10000);
+      const same = ax === bx && az === bz;
+      if (same) return;
+      const key =
+        ax < bx || (ax === bx && az <= bz) ? `${ax},${az}|${bx},${bz}` : `${bx},${bz}|${ax},${az}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      points.push(new THREE.Vector3(a.x, 0.01, a.z), new THREE.Vector3(b.x, 0.01, b.z));
+    };
+
+    inst.module.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.visible) return;
+      const edgeGeom = new THREE.EdgesGeometry(mesh.geometry as THREE.BufferGeometry, 1);
+      const pos = edgeGeom.getAttribute("position");
+      const toRoot = rootInv.clone().multiply(mesh.matrixWorld);
+
+      for (let i = 0; i < pos.count; i += 2) {
+        const a = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(toRoot);
+        const b = new THREE.Vector3(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)).applyMatrix4(toRoot);
+        if (Math.hypot(b.x - a.x, b.z - a.z) < 1e-5) continue;
+        pushSegment(a, b);
+      }
+
+      edgeGeom.dispose();
+    });
+
+    if (points.length === 0) {
+      points.push(
+        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.min.z),
+        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.min.z),
+        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.min.z),
+        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.max.z),
+        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.max.z),
+        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.max.z),
+        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.max.z),
+        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.min.z)
+      );
+    }
+
+    return new THREE.BufferGeometry().setFromPoints(points);
   }
 
   function tagModuleGeometry(module: THREE.Object3D, instanceId: string) {
@@ -5442,6 +5469,7 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function getInstanceGeometryMeshes(inst: LayoutInstance) {
+    if (viewMode === "2d") return [inst.pick];
     const meshes: THREE.Mesh[] = [];
     inst.module.traverse((obj: any) => {
       const mesh = obj as THREE.Mesh;
@@ -5486,14 +5514,16 @@ export function startApp(initialArgs: AppArgs) {
     const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.1), pickMat);
     pick.name = `pick_${id}`;
+    pick.userData.kind = "module";
     pick.userData.instanceId = id;
-    pick.raycast = () => {};
     root.add(pick);
 
     const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.6 });
-    const outline = new THREE.Line(gEmpty(), lineMat);
+    const outline = new THREE.LineSegments(gEmpty(), lineMat);
     outline.name = `outline_${id}`;
     outline.visible = false;
+    outline.userData.kind = "modulePlan";
+    outline.userData.instanceId = id;
     root.add(outline);
 
     const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, root, module, localBox, pick, outline };
@@ -6363,9 +6393,9 @@ export function startApp(initialArgs: AppArgs) {
     setViewMode(viewMode);
 
     for (const inst of instances) {
-      inst.module.visible = true;
+      inst.module.visible = !enabled;
       (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.6;
-      inst.outline.visible = false;
+      inst.outline.visible = enabled;
     }
 
     if (windowInst) {
@@ -6373,20 +6403,19 @@ export function startApp(initialArgs: AppArgs) {
       windowInst.outline.visible = true;
     }
 
+    for (const floor of floors) {
+      floor.mesh.visible = !enabled;
+      floor.outline.visible = enabled;
+    }
+
     wallSnapMarkers.visible = enabled && selectedKind === "wall" && !!selectedWallId;
     updateSelectionHighlights();
 
-      // Walls: render merged 2D mesh in plan view for clean joins.
-      wallPlanGroup.visible = enabled;
-      if (enabled) {
-        rebuildWallPlanMesh();
-        const hasMerged = !!wallPlanUnionMesh;
-        for (const w of walls) w.mesh.visible = !hasMerged;
-      } else {
-        for (const w of walls) w.mesh.visible = true;
-      }
-      updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
-    }
+    wallPlanGroup.visible = enabled;
+    if (enabled) rebuildWallPlanMesh();
+    for (const w of walls) w.mesh.visible = !enabled;
+    updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
+  }
 
   function setMode(next: AppMode) {
     if (next !== "layout") return;
