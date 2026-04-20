@@ -32,7 +32,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
     .map((m) => `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`)
     .join("|");
   const floors = (s.floors ?? [])
-    .map((f) => `${f.id}:${f.params.name}:${f.params.heightMm}:${f.params.thicknessMm}:${f.params.boundary.map((p) => `${p.x},${p.z}`).join(";")}`)
+    .map((f) => `${f.id}:${f.params.name}:${f.params.heightMm}:${f.params.thicknessMm}:${f.params.materialId ?? ""}:${f.params.boundary.map((p) => `${p.x},${p.z}`).join(";")}`)
     .join("|");
   const dims = (s.dimensions ?? [])
     .map((d) => `${d.id}:${d.a.wallId}:${d.a.wallLine}:${Math.round(d.a.t * 1000)}-${d.b.wallId}:${d.b.wallLine}:${Math.round(d.b.t * 1000)}:${Math.round(d.offsetM * 1000)}`)

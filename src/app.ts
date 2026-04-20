@@ -37,6 +37,7 @@ import { exportSceneToJson } from "./core/exportScene";
 import { createTopbar } from "./ui/createTopbar";
 import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
+import { getAllMaterials } from "./data/materials";
 import { solveWallNetwork } from "./walls2d/solver";
 import type { AppState } from "./layout/appState";
 import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
@@ -594,6 +595,7 @@ export function startApp(args: AppArgs) {
     name: string;
     heightMm: number;
     thicknessMm: number;
+    materialId: string;
     boundary: FloorBoundaryPoint[];
   };
   type FloorInstance = {
@@ -608,7 +610,8 @@ export function startApp(args: AppArgs) {
   let floorCounter = 1;
   const floorDefault = {
     heightMm: 0,
-    thicknessMm: 150
+    thicknessMm: 150,
+    materialId: "mat_grey_corpus"
   };
 
   type DimensionRef = {
@@ -1780,6 +1783,27 @@ export function startApp(args: AppArgs) {
       candidates.push({ p: new THREE.Vector3(box.max.x, y, box.max.z), kind: "corner" });
     }
 
+    // Floor boundary corners + edges
+    for (const floor of floors) {
+      const boundary = floor.params.boundary;
+      if (boundary.length < 2) continue;
+      for (const p of boundary) candidates.push({ p: new THREE.Vector3(p.x / 1000, 0, p.z / 1000), kind: "corner" });
+      for (let i = 0; i < boundary.length; i++) {
+        const a = boundary[i];
+        const b = boundary[(i + 1) % boundary.length];
+        const ax = a.x / 1000, az = a.z / 1000;
+        const bx = b.x / 1000, bz = b.z / 1000;
+        const vx = bx - ax;
+        const vz = bz - az;
+        const l2 = vx * vx + vz * vz;
+        if (l2 < 1e-12) continue;
+        const rx = raw.x - ax;
+        const rz = raw.z - az;
+        const t = Math.max(0, Math.min(1, (rx * vx + rz * vz) / l2));
+        candidates.push({ p: new THREE.Vector3(ax + vx * t, 0, az + vz * t), kind: "edge" });
+      }
+    }
+
     // Chain start (to close loop)
     if (layoutTool === "wall" && wallDraw.chainStart) {
       candidates.push({ p: wallDraw.chainStart.clone(), kind: "endpoint" });
@@ -2171,8 +2195,15 @@ export function startApp(args: AppArgs) {
     name: params.name,
     heightMm: params.heightMm,
     thicknessMm: params.thicknessMm,
+    materialId: params.materialId ?? floorDefault.materialId,
     boundary: params.boundary.map((p) => ({ x: p.x, z: p.z }))
   });
+
+  const floorMaterialColor = (materialId: string) => {
+    if (materialId === "mat_oak_natural" || materialId === "mat_worktop_oak") return 0xb98755;
+    if (materialId === "mat_white_melamine") return 0xf1f3f5;
+    return 0x9aa3af;
+  };
 
   const makeFloorGeometry = (params: FloorParams) => {
     const points = params.boundary;
@@ -2197,8 +2228,14 @@ export function startApp(args: AppArgs) {
   function rebuildFloor(floor: FloorInstance) {
     floor.params.heightMm = Math.round(floor.params.heightMm);
     floor.params.thicknessMm = Math.max(1, Math.round(floor.params.thicknessMm));
+    floor.params.materialId = floor.params.materialId ?? floorDefault.materialId;
     floor.mesh.geometry.dispose();
     floor.mesh.geometry = makeFloorGeometry(floor.params);
+    const mat = floor.mesh.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(floorMaterialColor(floor.params.materialId));
+    mat.transparent = false;
+    mat.opacity = 1;
+    mat.depthWrite = true;
     floor.mesh.position.y = floor.params.heightMm / 1000;
     floor.outline.geometry.dispose();
     floor.outline.geometry = makeFloorOutlineGeometry(floor.params);
@@ -2218,7 +2255,7 @@ export function startApp(args: AppArgs) {
     root.name = `floor_${id}`;
     const mesh = new THREE.Mesh(
       makeFloorGeometry(params),
-      new THREE.MeshBasicMaterial({ color: 0x8fa4bd, transparent: true, opacity: 0.42, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: floorMaterialColor(params.materialId ?? floorDefault.materialId) })
     );
     mesh.name = `floorMesh_${id}`;
     mesh.userData.kind = "floor";
@@ -4113,6 +4150,10 @@ export function startApp(args: AppArgs) {
 
   type FloorBoundaryTool = "line" | "rectangle" | "circle" | "pickLines";
   type FloorBoundarySegment = { a: FloorBoundaryPoint; b: FloorBoundaryPoint };
+  type FloorEditVertexRef = { segmentIndex: number; endpoint: "a" | "b" };
+  type FloorEditDrag =
+    | { pointerId: number; kind: "vertex"; startPoint: FloorBoundaryPoint; startSegments: FloorBoundarySegment[] }
+    | { pointerId: number; kind: "segment"; segmentIndex: number; startWorld: FloorBoundaryPoint; startSegments: FloorBoundarySegment[] };
 
   const floorEdit = {
     active: false,
@@ -4121,8 +4162,13 @@ export function startApp(args: AppArgs) {
     snapshot: null as FloorParams | null,
     segments: [] as FloorBoundarySegment[],
     tool: "line" as FloorBoundaryTool,
+    ortho: true,
     first: null as FloorBoundaryPoint | null,
     hover: null as FloorBoundaryPoint | null,
+    selectedSegmentIndex: null as number | null,
+    selectedVertex: null as FloorEditVertexRef | null,
+    drag: null as FloorEditDrag | null,
+    error: "",
     overlayEl: null as HTMLDivElement | null
   };
 
@@ -4130,6 +4176,63 @@ export function startApp(args: AppArgs) {
   const floorPointEq = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, tolMm = 3) => floorPointDistMm(a, b) <= tolMm;
   const worldToFloorPoint = (point: THREE.Vector3): FloorBoundaryPoint => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) });
   const floorPointToWorld = (point: FloorBoundaryPoint, y = 0.055) => new THREE.Vector3(point.x / 1000, y, point.z / 1000);
+  const cloneFloorSegments = (segments: FloorBoundarySegment[]) => segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } }));
+
+  const floorOrthoPoint = (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => {
+    if (!floorEdit.ortho) return raw;
+    const dx = raw.x - start.x;
+    const dz = raw.z - start.z;
+    return Math.abs(dx) >= Math.abs(dz) ? { x: raw.x, z: start.z } : { x: start.x, z: raw.z };
+  };
+
+  const moveFloorEditVertex = (startSegments: FloorBoundarySegment[], startPoint: FloorBoundaryPoint, nextPoint: FloorBoundaryPoint) => {
+    floorEdit.segments = startSegments.map((segment) => ({
+      a: floorPointEq(segment.a, startPoint) ? { ...nextPoint } : { ...segment.a },
+      b: floorPointEq(segment.b, startPoint) ? { ...nextPoint } : { ...segment.b }
+    }));
+  };
+
+  const moveFloorEditSegment = (
+    startSegments: FloorBoundarySegment[],
+    segmentIndex: number,
+    startWorld: FloorBoundaryPoint,
+    nextWorld: FloorBoundaryPoint
+  ) => {
+    const segment = startSegments[segmentIndex];
+    if (!segment) return;
+    const dx = nextWorld.x - startWorld.x;
+    const dz = nextWorld.z - startWorld.z;
+    const nextA = { x: segment.a.x + dx, z: segment.a.z + dz };
+    const nextB = { x: segment.b.x + dx, z: segment.b.z + dz };
+    floorEdit.segments = startSegments.map((item) => ({
+      a: floorPointEq(item.a, segment.a) ? { ...nextA } : floorPointEq(item.a, segment.b) ? { ...nextB } : { ...item.a },
+      b: floorPointEq(item.b, segment.a) ? { ...nextA } : floorPointEq(item.b, segment.b) ? { ...nextB } : { ...item.b }
+    }));
+  };
+
+  const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) => {
+    let bestVertex: { ref: FloorEditVertexRef; px: number } | null = null;
+    for (let i = 0; i < floorEdit.segments.length; i++) {
+      for (const endpoint of ["a", "b"] as const) {
+        const p = floorEdit.segments[i][endpoint];
+        const s = worldToScreen(floorPointToWorld(p), cam(), rect);
+        const px = Math.hypot(mousePx.x - s.x, mousePx.y - s.y);
+        if (px <= 12 && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: i, endpoint }, px };
+      }
+    }
+    if (bestVertex) return { kind: "vertex" as const, ref: bestVertex.ref };
+
+    let bestSegment: { segmentIndex: number; px: number } | null = null;
+    for (let i = 0; i < floorEdit.segments.length; i++) {
+      const segment = floorEdit.segments[i];
+      const a = worldToScreen(floorPointToWorld(segment.a), cam(), rect);
+      const b = worldToScreen(floorPointToWorld(segment.b), cam(), rect);
+      const px = distPxPointToSeg(mousePx.x, mousePx.y, a.x, a.y, b.x, b.y);
+      if (px <= 10 && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: i, px };
+    }
+    if (bestSegment) return { kind: "segment" as const, segmentIndex: bestSegment.segmentIndex };
+    return null;
+  };
 
   const floorBoundaryToSegments = (boundary: FloorBoundaryPoint[]) => {
     const segments: FloorBoundarySegment[] = [];
@@ -4147,6 +4250,7 @@ export function startApp(args: AppArgs) {
     const first = remaining.shift()!;
     const boundary: FloorBoundaryPoint[] = [{ ...first.a }, { ...first.b }];
 
+    let closed = false;
     while (remaining.length > 0) {
       const current = boundary[boundary.length - 1];
       const index = remaining.findIndex((segment) => floorPointEq(segment.a, current) || floorPointEq(segment.b, current));
@@ -4155,11 +4259,18 @@ export function startApp(args: AppArgs) {
       boundary.push(floorPointEq(next.a, current) ? { ...next.b } : { ...next.a });
       if (boundary.length >= 4 && floorPointEq(boundary[boundary.length - 1], boundary[0])) {
         boundary.pop();
+        closed = true;
         break;
       }
     }
 
+    if (!closed && floorPointEq(boundary[boundary.length - 1], boundary[0])) {
+      boundary.pop();
+      closed = true;
+    }
     if (boundary.length < 3) return null;
+    if (!closed) return null;
+    if (remaining.length > 0) return null;
     return boundary;
   };
 
@@ -4180,9 +4291,26 @@ export function startApp(args: AppArgs) {
     floorBoundaryGroup.add(line);
   };
 
+  const addFloorBoundaryPointMesh = (p: FloorBoundaryPoint, selected: boolean) => {
+    const geom = new THREE.CircleGeometry(selected ? 0.055 : 0.04, 16);
+    geom.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(
+      geom,
+      new THREE.MeshBasicMaterial({ color: selected ? 0xffd166 : 0xffffff, transparent: true, opacity: 0.95, depthWrite: false })
+    );
+    mesh.position.copy(floorPointToWorld(p, 0.058));
+    mesh.renderOrder = 95;
+    floorBoundaryGroup.add(mesh);
+  };
+
   const renderFloorBoundaryEdit = () => {
     clearFloorBoundaryGroup();
-    for (const segment of floorEdit.segments) addFloorBoundaryLineMesh(segment.a, segment.b);
+    for (let i = 0; i < floorEdit.segments.length; i++) {
+      const segment = floorEdit.segments[i];
+      addFloorBoundaryLineMesh(segment.a, segment.b, floorEdit.selectedSegmentIndex === i ? 0xffd166 : 0x00e5ff);
+      addFloorBoundaryPointMesh(segment.a, floorEdit.selectedVertex?.segmentIndex === i && floorEdit.selectedVertex.endpoint === "a");
+      addFloorBoundaryPointMesh(segment.b, floorEdit.selectedVertex?.segmentIndex === i && floorEdit.selectedVertex.endpoint === "b");
+    }
 
     if (floorEdit.first && floorEdit.hover) {
       if (floorEdit.tool === "rectangle") {
@@ -4243,6 +4371,16 @@ export function startApp(args: AppArgs) {
     tb.toolButton(draw, { title: "Rectangle", iconSvg: I_GRID2D, label: "Rectangle", onClick: () => setFloorBoundaryTool("rectangle") });
     tb.toolButton(draw, { title: "Circle", iconSvg: I_VIEW, label: "Circle", onClick: () => setFloorBoundaryTool("circle") });
     tb.toolButton(draw, { title: "Pick Lines", iconSvg: I_ALIGN, label: "Pick Lines", onClick: () => setFloorBoundaryTool("pickLines") });
+    tb.toolButton(draw, {
+      title: "Ortho kreslenie",
+      iconSvg: I_ALIGN,
+      label: floorEdit.ortho ? "Ortho ON" : "Ortho OFF",
+      onClick: () => {
+        floorEdit.ortho = !floorEdit.ortho;
+        buildFloorBoundaryTopbar();
+        mountProps();
+      }
+    });
     tb.addSpacer({ row });
     const finish = tb.addGroup("Boundary", { row });
     tb.toolButton(finish, { title: "Dokončiť podlahu", iconSvg: I_DONE, label: "Finish", variant: "success", onClick: () => finishFloorBoundaryEdit() });
@@ -4272,7 +4410,13 @@ export function startApp(args: AppArgs) {
     const existing = floorId ? floors.find((floor) => floor.id === floorId) ?? null : null;
     const params = existing
       ? cloneFloorParams(existing.params)
-      : { name: `Podlaha ${floorCounter}`, heightMm: floorDefault.heightMm, thicknessMm: floorDefault.thicknessMm, boundary: [] };
+      : {
+          name: `Podlaha ${floorCounter}`,
+          heightMm: floorDefault.heightMm,
+          thicknessMm: floorDefault.thicknessMm,
+          materialId: floorDefault.materialId,
+          boundary: []
+        };
 
     floorEdit.active = true;
     floorEdit.floorId = existing?.id ?? null;
@@ -4282,6 +4426,10 @@ export function startApp(args: AppArgs) {
     floorEdit.tool = "line";
     floorEdit.first = null;
     floorEdit.hover = null;
+    floorEdit.selectedSegmentIndex = null;
+    floorEdit.selectedVertex = null;
+    floorEdit.drag = null;
+    floorEdit.error = "";
     selectedKind = null;
     selectedFloorId = null;
     selectedWallId = null;
@@ -4304,6 +4452,10 @@ export function startApp(args: AppArgs) {
     floorEdit.segments = [];
     floorEdit.first = null;
     floorEdit.hover = null;
+    floorEdit.selectedSegmentIndex = null;
+    floorEdit.selectedVertex = null;
+    floorEdit.drag = null;
+    floorEdit.error = "";
     floorEdit.overlayEl?.remove();
     floorEdit.overlayEl = null;
     clearFloorBoundaryGroup();
@@ -4316,9 +4468,12 @@ export function startApp(args: AppArgs) {
     if (!floorEdit.active || !floorEdit.params) return;
     const boundary = floorSegmentsToBoundary(floorEdit.segments);
     if (!boundary || boundary.length < 3) {
+      floorEdit.error = "Boundary line nie je uzavretá. Uzavri loop alebo doplň chýbajúce čiary.";
       setUnderlayStatus("Floor boundary: boundary musí mať aspoň 3 čiary.");
+      mountProps();
       return;
     }
+    floorEdit.error = "";
     floorEdit.params.boundary = boundary;
     let floor = floorEdit.floorId ? floors.find((item) => item.id === floorEdit.floorId) ?? null : null;
     if (floor) {
@@ -4348,6 +4503,7 @@ export function startApp(args: AppArgs) {
 
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => {
     if (floorPointDistMm(a, b) < 2) return;
+    floorEdit.error = "";
     floorEdit.segments.push({ a: { ...a }, b: { ...b } });
     renderFloorBoundaryEdit();
   };
@@ -4370,10 +4526,23 @@ export function startApp(args: AppArgs) {
     thickness.value = String(params.thicknessMm);
     props.row(s, "Hrúbka (mm)", thickness);
 
+    const mat = document.createElement("select");
+    mat.innerHTML = getAllMaterials().map((material) => `<option value="${material.id}">${material.name}</option>`).join("");
+    mat.value = params.materialId ?? floorDefault.materialId;
+    props.row(s, "Materiál", mat);
+
     const info = document.createElement("div");
     info.className = "muted";
-    info.textContent = `Boundary lines: ${floorEdit.segments.length}. Horná línia je na výške úrovne, hrúbka ide vždy smerom dole.`;
+    info.textContent = `Boundary lines: ${floorEdit.segments.length}. Ortho: ${floorEdit.ortho ? "ON" : "OFF"}. Horná línia je na výške úrovne, hrúbka ide vždy smerom dole.`;
     s.appendChild(info);
+
+    if (floorEdit.error) {
+      const error = document.createElement("div");
+      error.style.color = "#ff6b6b";
+      error.style.marginTop = "8px";
+      error.textContent = floorEdit.error;
+      s.appendChild(error);
+    }
 
     height.addEventListener("change", () => {
       const next = Number(height.value);
@@ -4386,6 +4555,9 @@ export function startApp(args: AppArgs) {
       if (!Number.isFinite(next)) return;
       params.thicknessMm = Math.max(1, Math.round(next));
       thickness.value = String(params.thicknessMm);
+    });
+    mat.addEventListener("change", () => {
+      params.materialId = mat.value || floorDefault.materialId;
     });
   };
 
@@ -4628,6 +4800,11 @@ export function startApp(args: AppArgs) {
     thickness.value = String(floor.params.thicknessMm);
     props.row(s, "Hrúbka (mm)", thickness);
 
+    const mat = document.createElement("select");
+    mat.innerHTML = getAllMaterials().map((material) => `<option value="${material.id}">${material.name}</option>`).join("");
+    mat.value = floor.params.materialId ?? floorDefault.materialId;
+    props.row(s, "Materiál", mat);
+
     const edit = document.createElement("button");
     edit.type = "button";
     edit.textContent = "Edit Boundary Line";
@@ -4638,9 +4815,11 @@ export function startApp(args: AppArgs) {
       floor.params.name = name.value.trim() || floor.params.name;
       floor.params.heightMm = Math.round(Number(height.value) || floor.params.heightMm);
       floor.params.thicknessMm = Math.max(1, Math.round(Number(thickness.value) || floor.params.thicknessMm));
+      floor.params.materialId = mat.value || floorDefault.materialId;
       name.value = floor.params.name;
       height.value = String(floor.params.heightMm);
       thickness.value = String(floor.params.thicknessMm);
+      mat.value = floor.params.materialId;
       rebuildFloor(floor);
       updateSelectionHighlights();
       commitHistory(S);
@@ -4649,6 +4828,7 @@ export function startApp(args: AppArgs) {
     name.addEventListener("change", commit);
     height.addEventListener("change", commit);
     thickness.addEventListener("change", commit);
+    mat.addEventListener("change", commit);
     edit.addEventListener("click", () => enterFloorBoundaryEdit(floor.id));
   };
 
@@ -6818,7 +6998,7 @@ export function startApp(args: AppArgs) {
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
     // Marquee selection in 2D layout select tool (left button) - start pending, activate on drag.
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !transformState.kind && !placement.active && ev.button === 0 && !measureState.enabled) {
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !floorEdit.active && !transformState.kind && !placement.active && ev.button === 0 && !measureState.enabled) {
       const rect = renderer.domElement.getBoundingClientRect();
       marquee.pending = true;
       marquee.active = false;
@@ -6849,9 +7029,39 @@ export function startApp(args: AppArgs) {
         const hitPoint = new THREE.Vector3();
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
         const point = worldToFloorPoint(hitPoint);
+        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+        const pickedEdit = pickFloorEditElement(mouse, rect);
+
+        if (pickedEdit) {
+          floorEdit.first = null;
+          floorEdit.hover = null;
+          floorEdit.error = "";
+          if (pickedEdit.kind === "vertex") {
+            const startPoint = { ...floorEdit.segments[pickedEdit.ref.segmentIndex][pickedEdit.ref.endpoint] };
+            floorEdit.selectedVertex = pickedEdit.ref;
+            floorEdit.selectedSegmentIndex = null;
+            floorEdit.drag = { pointerId: ev.pointerId, kind: "vertex", startPoint, startSegments: cloneFloorSegments(floorEdit.segments) };
+          } else {
+            floorEdit.selectedSegmentIndex = pickedEdit.segmentIndex;
+            floorEdit.selectedVertex = null;
+            floorEdit.drag = {
+              pointerId: ev.pointerId,
+              kind: "segment",
+              segmentIndex: pickedEdit.segmentIndex,
+              startWorld: point,
+              startSegments: cloneFloorSegments(floorEdit.segments)
+            };
+          }
+          renderFloorBoundaryEdit();
+          renderer.domElement.setPointerCapture(ev.pointerId);
+          mountProps();
+          return;
+        }
+
+        floorEdit.selectedSegmentIndex = null;
+        floorEdit.selectedVertex = null;
 
         if (floorEdit.tool === "pickLines") {
-          const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
           const picked = pickWallLine2D(hitPoint, rect, cam(), 14);
           const alignPicked = pickAlignLineAt(hitPoint, mouse, rect);
           const a = picked?.a ?? alignPicked?.segA ?? null;
@@ -6874,7 +7084,7 @@ export function startApp(args: AppArgs) {
 
         if (floorEdit.tool === "rectangle") {
           const a = floorEdit.first;
-          const b = point;
+          const b = floorEdit.ortho ? floorOrthoPoint(a, point) : point;
           const p1 = { x: a.x, z: a.z };
           const p2 = { x: b.x, z: a.z };
           const p3 = { x: b.x, z: b.z };
@@ -6896,7 +7106,8 @@ export function startApp(args: AppArgs) {
         }
 
         const start = floorEdit.first;
-        const end = floorEdit.segments.length >= 2 && floorEdit.segments[0] && floorPointEq(point, floorEdit.segments[0].a, 12) ? floorEdit.segments[0].a : point;
+        const rawEnd = floorEdit.ortho ? floorOrthoPoint(start, point) : point;
+        const end = floorEdit.segments.length >= 2 && floorEdit.segments[0] && floorPointEq(rawEnd, floorEdit.segments[0].a, 12) ? floorEdit.segments[0].a : rawEnd;
         addFloorEditSegment(start, end);
         floorEdit.first = floorPointEq(end, floorEdit.segments[0]?.a ?? end, 3) ? null : end;
         floorEdit.hover = floorEdit.first;
@@ -7418,6 +7629,31 @@ export function startApp(args: AppArgs) {
         const rect2 = renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
 
+        let bestFloor: { id: string; px: number } | null = null;
+        for (const floor of floors) {
+          const boundary = floor.params.boundary;
+          for (let i = 0; i < boundary.length; i++) {
+            const a = boundary[i];
+            const b = boundary[(i + 1) % boundary.length];
+            const sa = worldToScreen(floorPointToWorld(a), cam(), rect2);
+            const sb = worldToScreen(floorPointToWorld(b), cam(), rect2);
+            const edgePx = distPxPointToSeg(mouse.x, mouse.y, sa.x, sa.y, sb.x, sb.y);
+            const cornerPx = Math.min(Math.hypot(mouse.x - sa.x, mouse.y - sa.y), Math.hypot(mouse.x - sb.x, mouse.y - sb.y));
+            const px = Math.min(edgePx, cornerPx);
+            if (px <= 12 && (!bestFloor || px < bestFloor.px)) bestFloor = { id: floor.id, px };
+          }
+        }
+        if (bestFloor) {
+          if (marquee.pending && marquee.pointerId === ev.pointerId) {
+            marquee.hitSomething = true;
+            marquee.pending = false;
+            marquee.active = false;
+            marqueeEl.style.display = "none";
+          }
+          setSelectedFloor(bestFloor.id);
+          return;
+        }
+
         const pointInPoly = (p: { x: number; z: number }, poly: Array<{ x: number; z: number }>) => {
           let inside = false;
           for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -7675,6 +7911,19 @@ export function startApp(args: AppArgs) {
       raycaster.setFromCamera(pointerNdc, cam());
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+      const floorPoint = worldToFloorPoint(hitPoint);
+
+      const activeFloorDrag = floorEdit.drag;
+      if (activeFloorDrag && activeFloorDrag.pointerId === ev.pointerId) {
+        if (activeFloorDrag.kind === "vertex") {
+          moveFloorEditVertex(activeFloorDrag.startSegments, activeFloorDrag.startPoint, floorPoint);
+        } else {
+          moveFloorEditSegment(activeFloorDrag.startSegments, activeFloorDrag.segmentIndex, activeFloorDrag.startWorld, floorPoint);
+        }
+        floorEdit.error = "";
+        renderFloorBoundaryEdit();
+        return;
+      }
 
       if (floorEdit.tool === "pickLines") {
         const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
@@ -7689,7 +7938,7 @@ export function startApp(args: AppArgs) {
       }
 
       if (floorEdit.first) {
-        floorEdit.hover = worldToFloorPoint(hitPoint);
+        floorEdit.hover = floorEdit.ortho ? floorOrthoPoint(floorEdit.first, floorPoint) : floorPoint;
         renderFloorBoundaryEdit();
       }
       return;
@@ -8260,6 +8509,18 @@ export function startApp(args: AppArgs) {
 
   renderer.domElement.addEventListener("pointerup", (ev) => {
     if (mode !== "layout") return;
+
+    if (floorEdit.drag && floorEdit.drag.pointerId === ev.pointerId) {
+      floorEdit.drag = null;
+      renderFloorBoundaryEdit();
+      mountProps();
+      try {
+        renderer.domElement.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
 
     if (wallEditHud.drag && wallEditHud.drag.pointerId === ev.pointerId) {
       const d = wallEditHud.drag;

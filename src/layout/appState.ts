@@ -82,6 +82,7 @@ export type FloorParams = {
   name: string;
   heightMm: number;
   thicknessMm: number;
+  materialId: string;
   boundary: FloorBoundaryPoint[];
 };
 
