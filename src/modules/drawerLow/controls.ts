@@ -11,8 +11,10 @@ type ControlApi = {
 };
 
 type CreateControlsArgs = {
-  onChange: () => void;
+  onChange: () => void | boolean;
   getWorktopThicknessMm: () => number;
+  textInputCommitMode?: "immediate" | "explicit";
+  commitBoundary?: HTMLElement | null;
 };
 
 
@@ -40,6 +42,10 @@ export function createDrawerLowControls(
   let bodyTextureRotation: HTMLSelectElement | null = null;
   let bodyTintColor: HTMLInputElement | null = null;
   let bodyTintStrength: HTMLInputElement | null = null;
+  const explicitCommitMode = args.textInputCommitMode === "explicit";
+  const commitBoundary = args.commitBoundary ?? container;
+  let hasDraftChanges = false;
+  let commitListenerController: AbortController | null = null;
 
   const addNumber = (key: DrawerLowNumberKey, label: string, opts: { min?: number; step?: number } = {}) => {
     const wrap = document.createElement("div");
@@ -362,6 +368,12 @@ export function createDrawerLowControls(
     return Number.isFinite(n) ? n : fallback;
   };
 
+  const restoreParams = (snapshot: DrawerLowParams) => {
+    const restored = structuredClone(snapshot) as DrawerLowParams;
+    for (const key of Object.keys(params)) delete (params as Record<string, unknown>)[key];
+    Object.assign(params, restored);
+  };
+
   const getWorktopT = () => Math.max(0, Math.round(typeof params.worktopThicknessMm === "number" ? params.worktopThicknessMm : args.getWorktopThicknessMm()));
   const isUnderWorktop = () => {
     if ((params as any).wallMounted === true) return false;
@@ -371,17 +383,29 @@ export function createDrawerLowControls(
     if (!isUnderWorktop()) return params.height;
     return Math.max(50, Math.round(params.height - getWorktopT()));
   };
-  const setFinalHeightFromCarcass = (carcassMm: number) => {
-    const c = Math.max(50, Math.round(carcassMm));
-    params.height = isUnderWorktop() ? c + getWorktopT() : c;
+
+  const syncDraftCarcassFromFinal = () => {
+    const finalMm = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
+    const carcassMm = isUnderWorktop() ? Math.max(50, Math.round(finalMm - getWorktopT())) : finalMm;
+    heightCarcass.value = String(carcassMm);
   };
 
-  const onInputsChanged = () => {
+  const syncDraftFinalFromCarcass = () => {
+    const carcassMm = Math.max(50, Math.round(readNumber(heightCarcass, computeCarcassHeight())));
+    const finalMm = isUnderWorktop() ? carcassMm + getWorktopT() : carcassMm;
+    heightFinal.value = String(finalMm);
+  };
+
+  const applyInputs = () => {
     for (const f of numberFields) {
       const current = params[f.key];
       if (typeof current !== "number") continue;
       (params[f.key] as number) = readNumber(f.input, current);
     }
+
+    params.height = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
+    heightFinal.value = String(params.height);
+    heightCarcass.value = String(computeCarcassHeight());
 
     params.drawerCount = Math.max(1, Math.round(params.drawerCount));
 
@@ -413,32 +437,154 @@ export function createDrawerLowControls(
     }
 
     updateUiState();
-    args.onChange();
   };
 
-  for (const f of numberFields) f.input.addEventListener("input", onInputsChanged);
-  for (const f of keyFields) f.input.addEventListener("input", onInputsChanged);
-  for (const f of colorFields) f.input.addEventListener("input", onInputsChanged);
-  bodyTextureRotation?.addEventListener("change", onInputsChanged);
-  bodyTintColor?.addEventListener("input", onInputsChanged);
-  bodyTintStrength?.addEventListener("input", onInputsChanged);
-  handleType.addEventListener("change", onInputsChanged);
-  heights.addEventListener("input", onInputsChanged);
+  const stopDeferredCommitTracking = () => {
+    commitListenerController?.abort();
+    commitListenerController = null;
+  };
 
-  heightFinal.addEventListener("input", () => {
-    params.height = Math.max(50, Math.round(readNumber(heightFinal, params.height)));
-    heightCarcass.value = String(computeCarcassHeight());
-    onInputsChanged();
+  const commitDraftChanges = () => {
+    if (!explicitCommitMode) {
+      applyInputs();
+      args.onChange();
+      return true;
+    }
+    if (!hasDraftChanges) return true;
+
+    const snapshot = structuredClone(params) as DrawerLowParams;
+    applyInputs();
+    const accepted = args.onChange() !== false;
+    if (!accepted) {
+      restoreParams(snapshot);
+    }
+    syncFromParams();
+    hasDraftChanges = false;
+    stopDeferredCommitTracking();
+    return accepted;
+  };
+
+  const discardDraftChanges = () => {
+    if (!explicitCommitMode) {
+      syncFromParams();
+      return;
+    }
+    hasDraftChanges = false;
+    syncFromParams();
+    stopDeferredCommitTracking();
+  };
+
+  const ensureDeferredCommitTracking = () => {
+    if (!explicitCommitMode || commitListenerController) return;
+    const controller = new AbortController();
+    commitListenerController = controller;
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!container.isConnected) {
+          stopDeferredCommitTracking();
+          return;
+        }
+        if (!hasDraftChanges) return;
+        const target = event.target;
+        if (target instanceof Node && commitBoundary.contains(target)) return;
+        commitDraftChanges();
+      },
+      { capture: true, signal: controller.signal }
+    );
+  };
+
+  const markDraftChanged = () => {
+    hasDraftChanges = true;
+    ensureDeferredCommitTracking();
+  };
+
+  const bindDeferredField = (field: HTMLInputElement | HTMLTextAreaElement) => {
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitDraftChanges();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        discardDraftChanges();
+        if (typeof field.select === "function") field.select();
+      }
+    });
+  };
+
+  if (explicitCommitMode) {
+    for (const f of numberFields) {
+      f.input.addEventListener("input", markDraftChanged);
+      bindDeferredField(f.input);
+    }
+    for (const f of keyFields) {
+      f.input.addEventListener("input", markDraftChanged);
+      bindDeferredField(f.input);
+    }
+    bindDeferredField(heightFinal);
+    bindDeferredField(heightCarcass);
+    bindDeferredField(heights);
+    heights.addEventListener("input", markDraftChanged);
+    heightFinal.addEventListener("input", () => {
+      syncDraftCarcassFromFinal();
+      markDraftChanged();
+    });
+    heightCarcass.addEventListener("input", () => {
+      syncDraftFinalFromCarcass();
+      markDraftChanged();
+    });
+  } else {
+    for (const f of numberFields) f.input.addEventListener("input", () => {
+      applyInputs();
+      args.onChange();
+    });
+    for (const f of keyFields) f.input.addEventListener("input", () => {
+      applyInputs();
+      args.onChange();
+    });
+    heights.addEventListener("input", () => {
+      applyInputs();
+      args.onChange();
+    });
+    heightFinal.addEventListener("input", () => {
+      syncDraftCarcassFromFinal();
+      applyInputs();
+      args.onChange();
+    });
+    heightCarcass.addEventListener("input", () => {
+      syncDraftFinalFromCarcass();
+      applyInputs();
+      args.onChange();
+    });
+  }
+
+  for (const f of colorFields) f.input.addEventListener("input", () => {
+    applyInputs();
+    args.onChange();
   });
-  heightCarcass.addEventListener("input", () => {
-    setFinalHeightFromCarcass(readNumber(heightCarcass, computeCarcassHeight()));
-    heightFinal.value = String(params.height);
-    onInputsChanged();
+  bodyTextureRotation?.addEventListener("change", () => {
+    applyInputs();
+    args.onChange();
+  });
+  bodyTintColor?.addEventListener("input", () => {
+    applyInputs();
+    args.onChange();
+  });
+  bodyTintStrength?.addEventListener("input", () => {
+    applyInputs();
+    args.onChange();
+  });
+  handleType.addEventListener("change", () => {
+    applyInputs();
+    args.onChange();
   });
 
   autoFit.addEventListener("change", () => {
     heights.readOnly = autoFit.checked;
-    onInputsChanged();
+    applyInputs();
+    args.onChange();
   });
 
   syncFromParams();

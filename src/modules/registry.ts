@@ -13,8 +13,10 @@ export type ModuleControlsApi = {
 };
 
 export type ModuleControlsArgs = {
-  onChange: () => void;
+  onChange: () => void | boolean;
   getWorktopThicknessMm: () => number;
+  textInputCommitMode?: "immediate" | "explicit";
+  commitBoundary?: HTMLElement | null;
 };
 
 export type ModuleCapabilityFlags = {

@@ -4821,6 +4821,11 @@ export function startApp(args: AppArgs) {
     rot.addEventListener("change", applyRot);
     rot.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") applyRot();
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
+        rot.select();
+      }
     });
 
     pinned.addEventListener("change", () => {
@@ -4836,12 +4841,19 @@ export function startApp(args: AppArgs) {
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
     const onChange = () => {
-      rebuildInstance(inst);
+      const accepted = rebuildInstance(inst);
+      if (!accepted) return false;
       commitHistory(S);
-      mountProps();
+      pos.textContent = `Pos: ${Math.round(inst.root.position.x * 1000)}Ă—${Math.round(inst.root.position.z * 1000)} mm`;
+      return true;
     };
 
-    getModuleDescriptorOrThrow(inst.params.type).createControls(editorHost, inst.params, { ...worktopArgs, onChange });
+    getModuleDescriptorOrThrow(inst.params.type).createControls(editorHost, inst.params, {
+      ...worktopArgs,
+      onChange,
+      textInputCommitMode: "explicit",
+      commitBoundary: args.propertiesEl
+    });
   };
 
   const setDimensionValueMm = (d: DimensionInstance, desiredMm: number) => {
@@ -5933,7 +5945,7 @@ export function startApp(args: AppArgs) {
   function rebuildInstance(inst: LayoutInstance) {
     const errors = validateModule(inst.params);
     renderErrors(args.errorsEl, errors);
-    if (errors.length > 0) return;
+    if (errors.length > 0) return false;
 
     const next = buildModule(inst.params);
     next.name = `moduleGeom_${inst.id}`;
@@ -5967,11 +5979,12 @@ export function startApp(args: AppArgs) {
       renderErrors(args.errorsEl, [
         !inRoom ? "Module doesn't fit inside the room bounds in layout mode." : overlaps ? "Module overlaps wall/another module in layout mode." : "Module invalid in layout mode."
       ]);
-      return;
+      return false;
     }
 
     disposeObject3D(prevModule);
     updateLayoutPanel();
+    return true;
   }
 
   function beginModuleSelection(selectableId: string, ev: PointerEvent) {
