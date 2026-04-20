@@ -87,10 +87,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const rebuildGroupModules = (groupId: string, ctx: KitchenContext) => {
+    void ctx;
     for (const inst of args.S.instances) {
       if (inst.kitchenGroupId !== groupId) continue;
-      inst.params.depth = ctx.moduleDepthMm;
-      inst.params.height = ctx.moduleHeightMm;
       args.rebuildInstance(inst);
     }
     args.updateLayoutPanel();

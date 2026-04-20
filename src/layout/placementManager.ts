@@ -13,6 +13,7 @@ export interface PlacementHelpers {
   props: PropsApi;
   layoutRoot: any;
   setUnderlayStatus: (text: string) => void;
+  getBuildParams: (type: ModuleParams["type"]) => ModuleParams | null;
   createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
   disposeObject3D: (obj: any) => void;
   updateLayoutPanel: () => void;
@@ -177,14 +178,9 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
 export const addInstance = (S: AppState, helpers: PlacementHelpers, type: ModuleParams["type"]) => {
   if (S.placement.active) cancelPlacement(S, helpers);
 
-  const nextParams = getModuleDescriptorOrThrow(type).defaultParams();
-
-  if (S.kitchenEditMode && S.activeKitchenGroupId) {
-    nextParams.depth = S.kitchenCtx.moduleDepthMm;
-    nextParams.height = S.kitchenCtx.moduleHeightMm;
-  }
-
-  if ("doorOpen" in nextParams) (nextParams as any).doorOpen = false;
+  const nextParams = structuredClone(
+    helpers.getBuildParams(type) ?? getModuleDescriptorOrThrow(type).defaultParams()
+  ) as ModuleParams;
 
   S.placement.active = true;
   S.placement.params = nextParams;

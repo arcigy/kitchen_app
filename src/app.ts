@@ -5165,6 +5165,7 @@ export function startApp(args: AppArgs) {
     props,
     layoutRoot,
     setUnderlayStatus,
+    getBuildParams: (type) => (params.type === type ? (structuredClone(params) as ModuleParams) : null),
     createInstance,
     disposeObject3D,
     updateLayoutPanel,
