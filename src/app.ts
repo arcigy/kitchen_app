@@ -57,22 +57,39 @@ type AppArgs = {
   viewerEl: HTMLElement;
   ribbonEl: HTMLElement;
   propertiesEl: HTMLElement;
-  formEl: HTMLElement;
-  errorsEl: HTMLElement;
-  partsEl: HTMLElement;
-  exportOutEl: HTMLTextAreaElement;
-  copyBtn: HTMLButtonElement;
-  copyStatusEl: HTMLElement;
-  measureBtn: HTMLButtonElement;
-  clearMeasuresBtn: HTMLButtonElement;
-  axisLockEl: HTMLInputElement;
-  measureReadoutEl: HTMLElement;
-  resetBtn: HTMLButtonElement;
-  exportBtn: HTMLButtonElement;
-  exportSceneBtn: HTMLButtonElement;
+  formEl?: HTMLElement;
+  errorsEl?: HTMLElement;
+  partsEl?: HTMLElement;
+  exportOutEl?: HTMLTextAreaElement;
+  copyBtn?: HTMLButtonElement;
+  copyStatusEl?: HTMLElement;
+  measureBtn?: HTMLButtonElement;
+  clearMeasuresBtn?: HTMLButtonElement;
+  axisLockEl?: HTMLInputElement;
+  measureReadoutEl?: HTMLElement;
+  resetBtn?: HTMLButtonElement;
+  exportBtn?: HTMLButtonElement;
+  exportSceneBtn?: HTMLButtonElement;
 };
 
-export function startApp(args: AppArgs) {
+export function startApp(initialArgs: AppArgs) {
+  const args = {
+    formEl: document.createElement("div"),
+    errorsEl: document.createElement("div"),
+    partsEl: document.createElement("div"),
+    exportOutEl: document.createElement("textarea"),
+    copyBtn: document.createElement("button"),
+    copyStatusEl: document.createElement("div"),
+    measureBtn: document.createElement("button"),
+    clearMeasuresBtn: document.createElement("button"),
+    axisLockEl: Object.assign(document.createElement("input"), { type: "checkbox", checked: true }),
+    measureReadoutEl: document.createElement("div"),
+    resetBtn: document.createElement("button"),
+    exportBtn: document.createElement("button"),
+    exportSceneBtn: document.createElement("button"),
+    ...initialArgs
+  };
+
   type ParamHighlightControls = {
     highlightParamKeys?: (keys: string[]) => void;
     clearHighlights?: () => void;
@@ -113,7 +130,7 @@ export function startApp(args: AppArgs) {
   setDaylightIntensity(9);
 
   type AppMode = "build" | "layout";
-  let mode: AppMode = "build";
+  let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
@@ -3311,33 +3328,9 @@ export function startApp(args: AppArgs) {
   // Editor UI
   args.formEl.innerHTML = "";
 
-  const modeWrap = document.createElement("div");
-  modeWrap.className = "field";
-
-  const modeLabel = document.createElement("label");
-  modeLabel.textContent = "Mode";
-  modeLabel.htmlFor = "appMode";
-
-  const modeSelect = document.createElement("select");
-  modeSelect.id = "appMode";
-  modeSelect.style.width = "120px";
-  modeSelect.style.height = "36px";
-  modeSelect.style.borderRadius = "10px";
-  modeSelect.style.border = "1px solid var(--border)";
-  modeSelect.style.background = "#0f1117";
-  modeSelect.style.color = "var(--text)";
-  modeSelect.innerHTML = `
-    <option value="build">build</option>
-    <option value="layout">layout</option>
-  `;
-
-  modeWrap.appendChild(modeLabel);
-  modeWrap.appendChild(modeSelect);
-  args.formEl.appendChild(modeWrap);
-
   const buildUi = document.createElement("div");
   const layoutUi = document.createElement("div");
-  layoutUi.style.display = "none";
+  buildUi.style.display = "none";
   args.formEl.appendChild(buildUi);
   args.formEl.appendChild(layoutUi);
 
@@ -3834,7 +3827,6 @@ export function startApp(args: AppArgs) {
 
   const ensureLayoutMode = () => {
     if (mode !== "layout") {
-      modeSelect.value = "layout";
       setMode("layout");
     }
   };
@@ -5381,11 +5373,6 @@ export function startApp(args: AppArgs) {
 
   rebuildStandardTopbar();
 
-  modeSelect.addEventListener("change", () => {
-    const next = modeSelect.value === "layout" ? "layout" : "build";
-    setMode(next);
-  });
-
   view2d.addEventListener("change", () => {
     if (mode !== "layout") return;
     setView2d(view2d.checked);
@@ -6386,6 +6373,7 @@ export function startApp(args: AppArgs) {
     }
 
   function setMode(next: AppMode) {
+    if (next !== "layout") return;
     mode = next;
     S.mode = mode;
 
@@ -6665,24 +6653,7 @@ export function startApp(args: AppArgs) {
     controls.update();
   };
 
-  const setModel = (type: ModuleParams["type"]) => {
-    if (!hasImportedModules) return;
-    params = getModuleDescriptorOrThrow(type).defaultParams();
-    modelSelect.value = type;
-    hiddenParts.clear();
-    selectMesh(null);
-    mountControls();
-    rebuild();
-    args.exportOutEl.value = "";
-  };
-
   args.resetBtn.addEventListener("click", () => {
-    if (mode === "build") {
-      if (!hasImportedModules) return;
-      setModel(params.type);
-      return;
-    }
-
     if (!selectedInstanceId) return;
     const inst = findInstance(selectedInstanceId);
     if (!inst) return;
@@ -6695,20 +6666,8 @@ export function startApp(args: AppArgs) {
   args.exportBtn.addEventListener("click", async () => {
     args.copyStatusEl.textContent = "";
 
-    let json = "";
-    if (mode === "build") {
-      if (!hasImportedModules) {
-        renderErrors(args.errorsEl, [noModulesMessage]);
-        return;
-      }
-      const errors = validateModule(params);
-      renderErrors(args.errorsEl, errors);
-      if (errors.length > 0) return;
-      json = JSON.stringify(buildExportPayload(params, cabinetGroup), null, 2);
-    } else {
-      const payload = buildLayoutExportPayload();
-      json = JSON.stringify(payload, null, 2);
-    }
+    const payload = buildLayoutExportPayload();
+    const json = JSON.stringify(payload, null, 2);
 
     args.exportOutEl.value = json;
 
@@ -6826,7 +6785,7 @@ export function startApp(args: AppArgs) {
 
   args.copyBtn.addEventListener("click", async () => {
     args.copyStatusEl.textContent = "";
-    const fallback = mode === "build" ? JSON.stringify(buildExportPayload(params, cabinetGroup), null, 2) : JSON.stringify(buildLayoutExportPayload(), null, 2);
+    const fallback = JSON.stringify(buildLayoutExportPayload(), null, 2);
     const text = args.exportOutEl.value.trim().length > 0 ? args.exportOutEl.value : fallback;
     args.exportOutEl.value = text;
     try {
@@ -8606,13 +8565,6 @@ export function startApp(args: AppArgs) {
     }
   });
 
-  modelSelect.addEventListener("change", () => {
-    if (mode !== "build") return;
-    const v = modelSelect.value as ModuleParams["type"];
-    setModel(v);
-  });
-
-  modeSelect.value = "layout";
   setMode("layout");
   history.current = captureLayoutSnapshot(S);
   history.past = [];
@@ -9300,49 +9252,6 @@ function computeOverlaps(root: THREE.Object3D): OverlapRow[] {
 
   out.sort((x, y) => (x.status === y.status ? y.volumeMm3 - x.volumeMm3 : x.status === "error" ? -1 : 1));
   return out.slice(0, 40);
-}
-
-function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | null) {
-  if (cabinetGroup) cabinetGroup.updateMatrixWorld(true);
-  const overlaps = cabinetGroup ? computeOverlaps(cabinetGroup) : [];
-  const parts = cabinetGroup
-    ? getSelectableMeshes(cabinetGroup).map((m) => ({
-        name: m.name,
-        dimensionsMm: readDimensionsMm(m),
-        grainAlong: readGrainAlong(m)
-      }))
-    : [];
-
-  const roundBox = (box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }) => ({
-    min: { x: round01(box.min.x), y: round01(box.min.y), z: round01(box.min.z) },
-    max: { x: round01(box.max.x), y: round01(box.max.y), z: round01(box.max.z) }
-  });
-
-  const out = {
-    ...params,
-    isCorner: false,
-    __debug: {
-      units: "mm",
-      generatedAt: new Date().toISOString(),
-      parts,
-      overlaps: overlaps.map((o) => ({
-        a: o.a,
-        b: o.b,
-        status: o.status,
-        reason: o.reason,
-        overlapMm: { x: round01(o.overlapMm.x), y: round01(o.overlapMm.y), z: round01(o.overlapMm.z) },
-        intersectionMm: roundBox(o.intersectionMm),
-        aBoxMm: roundBox(o.aBoxMm),
-        bBoxMm: roundBox(o.bBoxMm)
-      }))
-    }
-  };
-
-  return out;
-}
-
-function round01(n: number) {
-  return Math.round(n * 10) / 10;
 }
 
 function renderErrors(el: HTMLElement, errors: string[]) {

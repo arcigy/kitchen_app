@@ -34,7 +34,7 @@ body {
 #main {
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-columns: 320px minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -43,22 +43,6 @@ body {
 }
 
 #viewer {
-  grid-column: 2;
-}
-
-#sidebar {
-  grid-column: 3;
-}
-
-#main:has(#properties[hidden]) {
-  grid-template-columns: minmax(0, 1fr) 360px;
-}
-
-#main:has(#properties[hidden]) #viewer {
-  grid-column: 1;
-}
-
-#main:has(#properties[hidden]) #sidebar {
   grid-column: 2;
 }
 
@@ -303,13 +287,6 @@ body {
   background: rgba(18, 20, 26, 0.92);
   color: var(--text);
   cursor: pointer;
-}
-
-#sidebar {
-  border-left: 1px solid var(--border);
-  background: var(--panel);
-  padding: 14px;
-  overflow: auto;
 }
 
 .sidebar-header h1 {
