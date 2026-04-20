@@ -211,14 +211,15 @@ export function computeEqualDrawerFrontHeights(p: DrawerLowParams): number[] {
 }
 
 function normalizeMaterialParams(materials: MaterialParams): MaterialParams {
-  const body = ensureMaterialRoleSelection(resolveMaterialIdFromUnknown(materials.bodyMaterialId ?? materials.bodyKey), "corpus");
-  const front = ensureMaterialRoleSelection(resolveMaterialIdFromUnknown(materials.frontMaterialId ?? materials.frontKey), "front");
-  const drawer = ensureMaterialRoleSelection(resolveMaterialIdFromUnknown(materials.drawerMaterialId ?? materials.drawerKey), "drawer");
+  const next = { ...materials };
+  next.bodyMaterialId = resolveMaterialIdFromUnknown(next.bodyMaterialId ?? next.bodyKey);
+  next.frontMaterialId = resolveMaterialIdFromUnknown(next.frontMaterialId ?? next.frontKey);
+  next.drawerMaterialId = resolveMaterialIdFromUnknown(next.drawerMaterialId ?? next.drawerKey);
+  ensureMaterialRoleSelection(next, "body");
+  ensureMaterialRoleSelection(next, "front");
+  ensureMaterialRoleSelection(next, "drawer");
   return {
-    ...materials,
-    bodyMaterialId: body.materialId,
-    frontMaterialId: front.materialId,
-    drawerMaterialId: drawer.materialId
+    ...next
   };
 }
 

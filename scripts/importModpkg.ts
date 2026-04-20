@@ -104,6 +104,18 @@ if (moduleEntries.length === 0) {
 }
 
 const moduleDest = path.join(repoRoot, "src", "modules", integration.moduleFolder);
+const existingTypesPath = path.join(moduleDest, "types.ts");
+const existingCalculationPath = path.join(moduleDest, "calculation.ts");
+const preserveExistingTypes =
+  existsSync(existingTypesPath) &&
+  hasEntry(`${moduleSourcePrefix}types.ts`) &&
+  readTextEntry(`${moduleSourcePrefix}types.ts`).includes('../../model/cabinetTypes');
+const preserveExistingCalculation =
+  existsSync(existingCalculationPath) &&
+  hasEntry(`${moduleSourcePrefix}calculation.ts`) &&
+  readTextEntry(`${moduleSourcePrefix}calculation.ts`).includes("../../domain/");
+const preservedTypesSource = preserveExistingTypes ? readFileSync(existingTypesPath, "utf8") : null;
+const preservedCalculationSource = preserveExistingCalculation ? readFileSync(existingCalculationPath, "utf8") : null;
 
 function writeFileIfNotDryRun(targetPath: string, data: Uint8Array | string) {
   if (dryRun) return;
@@ -119,6 +131,12 @@ function copySourceTree(sourcePrefix: string, targetDir: string) {
     const rel = entryName.slice(fullPrefix.length);
     if (!rel) continue;
     writeFileIfNotDryRun(path.join(targetDir, rel), readEntry(`${sourcePrefix}${rel}`));
+  }
+  if (preservedTypesSource !== null) {
+    writeFileIfNotDryRun(path.join(targetDir, "types.ts"), preservedTypesSource);
+  }
+  if (preservedCalculationSource !== null) {
+    writeFileIfNotDryRun(path.join(targetDir, "calculation.ts"), preservedCalculationSource);
   }
 }
 
@@ -343,11 +361,21 @@ const importRecord = {
   label,
   capabilities,
   importedAt: new Date().toISOString(),
-  importedFrom: path.basename(packagePath)
+  importedFrom: path.basename(packagePath),
+  preservedExistingTypes: preserveExistingTypes,
+  preservedExistingCalculation: preserveExistingCalculation,
+  installedFiles: moduleEntries
+    .map((entryName) => entryName.slice(zipPath(moduleSourcePrefix).length))
+    .filter(Boolean)
+    .sort()
 };
 writeFileIfNotDryRun(
   path.join(moduleDest, "module.import.json"),
   `${JSON.stringify(importRecord, null, 2)}\n`
+);
+writeFileIfNotDryRun(
+  path.join(repoRoot, "src", "modules", "import-summary.json"),
+  `${JSON.stringify({ latest: importRecord }, null, 2)}\n`
 );
 
 if (!dryRun) {

@@ -1,6 +1,7 @@
 import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
+import type { DrawerLowParams } from "./drawerLow/types";
 import { buildDrawerLow } from "./drawerLow/geometry";
 import { createDrawerLowControls } from "./drawerLow/controls";
 
@@ -47,12 +48,12 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "kitchen-app-module-drawer_low",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("drawer_low"),
-    build: (params) => buildDrawerLow(params),
-    createControls: (container, params, args) => createDrawerLowControls(container, params, args),
+    build: (params) => buildDrawerLow(params as DrawerLowParams),
+    createControls: (container, params, args) => createDrawerLowControls(container, params as DrawerLowParams, args),
     capabilities: {
-      hasWorktop: true,
-      supportsKitchenContextDimensions: true,
-      supportsKitchenContextMaterials: true
+          "hasWorktop": true,
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
     }
   }
 ] as const;

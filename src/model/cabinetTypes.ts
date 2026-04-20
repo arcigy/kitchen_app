@@ -1,19 +1,10 @@
-export type {
-  DrawerLowParams,
-  MaterialParams
-} from "../modules/drawerLow/types";
-export {
-  computeEqualDrawerFrontHeights,
-  makeDefaultDrawerLowParams,
-  normalizeDrawerLowParams,
-  validateDrawerLow
-} from "../modules/drawerLow/types";
+export * from "../modules/drawerLow/types";
 
 import type { DrawerLowParams } from "../modules/drawerLow/types";
 import {
   makeDefaultDrawerLowParams,
-  normalizeDrawerLowParams,
-  validateDrawerLow
+  validateDrawerLow,
+  normalizeDrawerLowParams as normalizeDrawerLowImportedParams
 } from "../modules/drawerLow/types";
 
 export const MODULE_TYPES = ["drawer_low"] as const;
@@ -26,21 +17,20 @@ export function makeDefaultModuleParams(type: ModuleType): ModuleParams {
     case "drawer_low":
       return makeDefaultDrawerLowParams();
   }
-  return makeDefaultDrawerLowParams();
 }
 
 export function normalizeModuleParams(params: ModuleParams): ModuleParams {
   switch (params.type) {
     case "drawer_low":
-      return normalizeDrawerLowParams(params);
+      return normalizeDrawerLowImportedParams(params as DrawerLowParams) as ModuleParams;
   }
-  return normalizeDrawerLowParams(params);
+  return params;
 }
 
 export function validateModule(params: ModuleParams): string[] {
   switch (params.type) {
     case "drawer_low":
-      return validateDrawerLow(params);
+      return validateDrawerLow(params as DrawerLowParams);
   }
   return [`Unsupported imported module type: ${(params as { type?: string }).type ?? "unknown"}`];
 }

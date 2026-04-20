@@ -9,5 +9,21 @@
   "controlsExportName": "createDrawerLowControls",
   "defaultFactoryName": "makeDefaultDrawerLowParams",
   "validatorName": "validateDrawerLow",
-  "bomExportName": "calculateBOM"
+  "bomExportName": "calculateBOM",
+  "label": "Drawer",
+  "capabilities": {
+    "hasWorktop": true,
+    "supportsKitchenContextDimensions": true,
+    "supportsKitchenContextMaterials": true
+  },
+  "importedAt": "2026-04-20T13:48:17.763Z",
+  "importedFrom": "kitchen-app-module-drawer_low-1.0.0.modpkg.zip",
+  "preservedExistingTypes": true,
+  "preservedExistingCalculation": true,
+  "installedFiles": [
+    "calculation.ts",
+    "controls.ts",
+    "geometry.ts",
+    "types.ts"
+  ]
 }

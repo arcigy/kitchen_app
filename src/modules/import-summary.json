@@ -1,0 +1,31 @@
+{
+  "latest": {
+    "schemaVersion": "local-module-integration.v1",
+    "packageName": "kitchen-app-module-drawer_low",
+    "packageVersion": "1.0.0",
+    "moduleType": "drawer_low",
+    "moduleFolder": "drawerLow",
+    "paramsTypeName": "DrawerLowParams",
+    "builderExportName": "buildDrawerLow",
+    "controlsExportName": "createDrawerLowControls",
+    "defaultFactoryName": "makeDefaultDrawerLowParams",
+    "validatorName": "validateDrawerLow",
+    "bomExportName": "calculateBOM",
+    "label": "Drawer",
+    "capabilities": {
+      "hasWorktop": true,
+      "supportsKitchenContextDimensions": true,
+      "supportsKitchenContextMaterials": true
+    },
+    "importedAt": "2026-04-20T13:48:17.763Z",
+    "importedFrom": "kitchen-app-module-drawer_low-1.0.0.modpkg.zip",
+    "preservedExistingTypes": true,
+    "preservedExistingCalculation": true,
+    "installedFiles": [
+      "calculation.ts",
+      "controls.ts",
+      "geometry.ts",
+      "types.ts"
+    ]
+  }
+}

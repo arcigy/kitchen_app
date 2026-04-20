@@ -8,6 +8,7 @@ import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPa
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
 import { getFirstModuleType, getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
+import importSummary from "./modules/import-summary.json";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
@@ -72,11 +73,134 @@ type AppArgs = {
   exportSceneBtn: HTMLButtonElement;
 };
 
+type ImportSummary = {
+  latest?: {
+    moduleType: string;
+    label?: string;
+    packageName: string;
+    packageVersion: string;
+    moduleFolder: string;
+    importedAt: string;
+    importedFrom: string;
+    preservedExistingTypes?: boolean;
+    preservedExistingCalculation?: boolean;
+    installedFiles?: string[];
+  } | null;
+};
+
+function showLatestImportModal() {
+  const latest = (importSummary as ImportSummary).latest;
+  if (!latest) return;
+
+  const key = `arcigy-import-summary:${latest.packageName}:${latest.packageVersion}:${latest.importedAt}`;
+  if (sessionStorage.getItem(key) === "seen") return;
+  sessionStorage.setItem(key, "seen");
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.zIndex = "2000";
+  overlay.style.display = "grid";
+  overlay.style.placeItems = "center";
+  overlay.style.padding = "24px";
+  overlay.style.background = "rgba(0,0,0,0.55)";
+
+  const dialog = document.createElement("section");
+  dialog.style.width = "min(560px, 100%)";
+  dialog.style.maxHeight = "80vh";
+  dialog.style.overflow = "auto";
+  dialog.style.background = "#12141a";
+  dialog.style.color = "#e6e8ee";
+  dialog.style.border = "1px solid #303746";
+  dialog.style.borderRadius = "8px";
+  dialog.style.padding = "18px";
+  dialog.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
+  overlay.appendChild(dialog);
+
+  const title = document.createElement("h2");
+  title.textContent = "Modul bol importovany";
+  title.style.margin = "0 0 12px";
+  title.style.fontSize = "18px";
+  dialog.appendChild(title);
+
+  const rows = [
+    ["Modul", `${latest.label ?? latest.moduleType} (${latest.moduleType})`],
+    ["Balik", `${latest.packageName} ${latest.packageVersion}`],
+    ["Priecinok", `src/modules/${latest.moduleFolder}`],
+    ["Subor", latest.importedFrom],
+    ["Cas", new Date(latest.importedAt).toLocaleString("sk-SK")]
+  ];
+
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "120px 1fr";
+  grid.style.gap = "7px 12px";
+  grid.style.fontSize = "13px";
+  dialog.appendChild(grid);
+
+  for (const [label, value] of rows) {
+    const labelEl = document.createElement("div");
+    labelEl.textContent = label;
+    labelEl.style.color = "#9aa3b2";
+    grid.appendChild(labelEl);
+
+    const valueEl = document.createElement("div");
+    valueEl.textContent = value;
+    valueEl.style.wordBreak = "break-word";
+    grid.appendChild(valueEl);
+  }
+
+  const notes = document.createElement("p");
+  notes.style.margin = "14px 0 0";
+  notes.style.color = "#9aa3b2";
+  notes.style.fontSize = "13px";
+  notes.textContent =
+    latest.preservedExistingTypes || latest.preservedExistingCalculation
+      ? "Importer zachoval lokalne adaptovane typy/BOM placeholder, aby modul fungoval v tejto appke."
+      : "Importer prepisal modul zo suboru a obnovil registry.";
+  dialog.appendChild(notes);
+
+  const files = latest.installedFiles ?? [];
+  if (files.length > 0) {
+    const details = document.createElement("details");
+    details.style.marginTop = "12px";
+    const summary = document.createElement("summary");
+    summary.textContent = `Subory v module (${files.length})`;
+    details.appendChild(summary);
+    const pre = document.createElement("pre");
+    pre.textContent = files.join("\n");
+    pre.style.whiteSpace = "pre-wrap";
+    pre.style.fontSize = "12px";
+    pre.style.color = "#cbd5e1";
+    details.appendChild(pre);
+    dialog.appendChild(details);
+  }
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "OK";
+  close.style.marginTop = "16px";
+  close.style.borderRadius = "8px";
+  close.style.border = "1px solid #303746";
+  close.style.background = "#eef2ff";
+  close.style.color = "#12141a";
+  close.style.padding = "8px 14px";
+  close.addEventListener("click", () => overlay.remove());
+  dialog.appendChild(close);
+
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
 export function startApp(args: AppArgs) {
   type ParamHighlightControls = {
     highlightParamKeys?: (keys: string[]) => void;
     clearHighlights?: () => void;
   };
+
+  showLatestImportModal();
 
   let params: ModuleParams = getModuleDescriptorOrThrow(getFirstModuleType()).defaultParams();
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
