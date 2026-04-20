@@ -46,8 +46,8 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
   {
     type: "drawer_low",
     folder: "drawerLow",
-    label: "Drawer",
-    packageName: "kitchen-app-module-drawer_low",
+    label: "Drawer Low",
+    packageName: "module-builder-drawer_low",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("drawer_low"),
     build: (params) => buildDrawerLow(params as DrawerLowParams),
@@ -55,7 +55,8 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     capabilities: {
           "hasWorktop": true,
           "supportsKitchenContextDimensions": true,
-          "supportsKitchenContextMaterials": true
+          "supportsKitchenContextMaterials": true,
+          "supportsWallMountedVariant": true
     }
   }
 ] as const;
