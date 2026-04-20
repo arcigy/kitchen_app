@@ -1,36 +1,13 @@
 ﻿import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import type { ModuleParams } from "./model/cabinetTypes";
-import {
-  makeDefaultCornerShelfLowerParams,
-  makeDefaultDrawerLowParams,
-  makeDefaultNestedDrawerLowParams,
-  makeDefaultFlapShelvesLowParams,
-  makeDefaultFridgeTallParams,
-  makeDefaultMicrowaveOvenTallParams,
-  makeDefaultOvenBaseLowParams,
-  makeDefaultShelvesParams,
-  makeDefaultSwingShelvesLowParams,
-  makeDefaultTopDrawersDoorsLowParams,
-  validateModule
-} from "./model/cabinetTypes";
+import { validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./core/scene";
 import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
-import {
-  createDrawerLowControls,
-  createFridgeTallControls,
-  createShelvesControls,
-  createCornerShelfLowerControls,
-  createNestedDrawerLowControls,
-  createFlapShelvesLowControls,
-  createSwingShelvesLowControls,
-  createOvenBaseLowControls,
-  createMicrowaveOvenTallControls,
-  createTopDrawersDoorsLowControls
-} from "./modules/_registry";
+import { getFirstModuleType, getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
@@ -101,7 +78,7 @@ export function startApp(args: AppArgs) {
     clearHighlights?: () => void;
   };
 
-  let params: ModuleParams = makeDefaultDrawerLowParams();
+  let params: ModuleParams = getModuleDescriptorOrThrow(getFirstModuleType()).defaultParams();
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
   const ENABLE_PHOTO = import.meta.env.VITE_ENABLE_PHOTO === "true";
 
@@ -3395,18 +3372,9 @@ export function startApp(args: AppArgs) {
   modelSelect.style.background = "#0f1117";
   modelSelect.style.color = "var(--text)";
 
-  modelSelect.innerHTML = `
-      <option value="drawer_low">drawer_low</option>
-      <option value="nested_drawer_low">nested_drawer_low</option>
-      <option value="fridge_tall">fridge_tall</option>
-      <option value="shelves">shelves</option>
-      <option value="corner_shelf_lower">corner_shelf_lower</option>
-      <option value="flap_shelves_low">flap_shelves_low</option>
-      <option value="swing_shelves_low">swing_shelves_low</option>
-      <option value="oven_base_low">oven_base_low</option>
-      <option value="microwave_oven_tall">microwave_oven_tall</option>
-      <option value="top_drawers_doors_low">top_drawers_doors_low</option>
-    `;
+  modelSelect.innerHTML = getModuleDescriptors()
+    .map((descriptor) => `<option value="${descriptor.type}">${descriptor.type}</option>`)
+    .join("");
 
   modelWrap.appendChild(modelLabel);
   modelWrap.appendChild(modelSelect);
@@ -3623,18 +3591,9 @@ export function startApp(args: AppArgs) {
     onSelect: (name) => selectByName(name),
     onSetVisible: (name, visible) => setVisibleByName(name, visible),
     onHighlightPair: (a, b) => highlightOverlap(a, b),
-    isMaterialOverrideEnabled: (name) => params.type === "drawer_low" && !!name,
-    getMaterialOverride: (name) => {
-      if (params.type !== "drawer_low") return "";
-      return params.materials.partOverrides?.[name] ?? "";
-    },
-    onSetMaterialOverride: (name, presetId) => {
-      if (params.type !== "drawer_low") return;
-      params.materials.partOverrides ??= {};
-      if (presetId === "") delete params.materials.partOverrides[name];
-      else params.materials.partOverrides[name] = presetId;
-      afterParamsChanged();
-    }
+    isMaterialOverrideEnabled: () => false,
+    getMaterialOverride: () => "",
+    onSetMaterialOverride: () => {}
   });
 
   const layoutPanel = createLayoutPanel(partsLayoutHost, {
@@ -4902,43 +4861,7 @@ export function startApp(args: AppArgs) {
       mountProps();
     };
 
-    if (inst.params.type === "drawer_low") {
-      createDrawerLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "nested_drawer_low") {
-      createNestedDrawerLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "fridge_tall") {
-      createFridgeTallControls(editorHost, inst.params, { onChange });
-      return;
-    }
-    if (inst.params.type === "flap_shelves_low") {
-      createFlapShelvesLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "swing_shelves_low") {
-      createSwingShelvesLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "oven_base_low") {
-      createOvenBaseLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "microwave_oven_tall") {
-      createMicrowaveOvenTallControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "top_drawers_doors_low") {
-      createTopDrawersDoorsLowControls(editorHost, inst.params, { ...worktopArgs, onChange });
-      return;
-    }
-    if (inst.params.type === "shelves") {
-      createShelvesControls(editorHost, inst.params, { onChange });
-      return;
-    }
-    createCornerShelfLowerControls(editorHost, inst.params, { onChange });
+    getModuleDescriptorOrThrow(inst.params.type).createControls(editorHost, inst.params, { ...worktopArgs, onChange });
   };
 
   const setDimensionValueMm = (d: DimensionInstance, desiredMm: number) => {
@@ -5993,44 +5916,10 @@ export function startApp(args: AppArgs) {
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
-    if (inst.params.type === "drawer_low") {
-      createDrawerLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "nested_drawer_low") {
-      createNestedDrawerLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "fridge_tall") {
-      createFridgeTallControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "flap_shelves_low") {
-      createFlapShelvesLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "swing_shelves_low") {
-      createSwingShelvesLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "oven_base_low") {
-      createOvenBaseLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "microwave_oven_tall") {
-      createMicrowaveOvenTallControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "top_drawers_doors_low") {
-      createTopDrawersDoorsLowControls(instanceEditorHost, inst.params, { ...worktopArgs, onChange: () => rebuildInstance(inst) });
-      return;
-    }
-    if (inst.params.type === "shelves") {
-      createShelvesControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
-      return;
-    }
-
-    createCornerShelfLowerControls(instanceEditorHost, inst.params, { onChange: () => rebuildInstance(inst) });
+    getModuleDescriptorOrThrow(inst.params.type).createControls(instanceEditorHost, inst.params, {
+      ...worktopArgs,
+      onChange: () => rebuildInstance(inst)
+    });
   }
 
   function rebuildInstance(inst: LayoutInstance) {
@@ -6628,27 +6517,10 @@ export function startApp(args: AppArgs) {
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
-    if (params.type === "drawer_low") {
-      activeBuildControls = createDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "nested_drawer_low") {
-      activeBuildControls = createNestedDrawerLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "fridge_tall") {
-      createFridgeTallControls(editorHost, params, { onChange: () => afterParamsChanged() });
-    } else if (params.type === "flap_shelves_low") {
-      createFlapShelvesLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "swing_shelves_low") {
-      createSwingShelvesLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "oven_base_low") {
-      createOvenBaseLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "microwave_oven_tall") {
-      createMicrowaveOvenTallControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "top_drawers_doors_low") {
-      createTopDrawersDoorsLowControls(editorHost, params, { ...worktopArgs, onChange: () => afterParamsChanged() });
-    } else if (params.type === "shelves") {
-      createShelvesControls(editorHost, params, { onChange: () => afterParamsChanged() });
-    } else {
-      createCornerShelfLowerControls(editorHost, params, { onChange: () => afterParamsChanged() });
-    }
+    activeBuildControls = getModuleDescriptorOrThrow(params.type).createControls(editorHost, params, {
+      ...worktopArgs,
+      onChange: () => afterParamsChanged()
+    });
   };
 
   const afterParamsChanged = () => {
@@ -6709,40 +6581,7 @@ export function startApp(args: AppArgs) {
   };
 
   const setModel = (type: ModuleParams["type"]) => {
-    switch (type) {
-      case "drawer_low":
-        params = makeDefaultDrawerLowParams();
-        break;
-      case "nested_drawer_low":
-        params = makeDefaultNestedDrawerLowParams();
-        break;
-      case "fridge_tall":
-        params = makeDefaultFridgeTallParams();
-        break;
-      case "shelves":
-        params = makeDefaultShelvesParams();
-        break;
-      case "corner_shelf_lower":
-        params = makeDefaultCornerShelfLowerParams();
-        break;
-      case "flap_shelves_low":
-        params = makeDefaultFlapShelvesLowParams();
-        break;
-      case "swing_shelves_low":
-        params = makeDefaultSwingShelvesLowParams();
-        break;
-      case "oven_base_low":
-        params = makeDefaultOvenBaseLowParams();
-        break;
-      case "microwave_oven_tall":
-        params = makeDefaultMicrowaveOvenTallParams();
-        break;
-      case "top_drawers_doors_low":
-        params = makeDefaultTopDrawersDoorsLowParams();
-        break;
-      default:
-        params = makeDefaultDrawerLowParams();
-    }
+    params = getModuleDescriptorOrThrow(type).defaultParams();
     modelSelect.value = type;
     hiddenParts.clear();
     selectMesh(null);
@@ -6761,40 +6600,7 @@ export function startApp(args: AppArgs) {
     const inst = findInstance(selectedInstanceId);
     if (!inst) return;
 
-    switch (inst.params.type) {
-      case "drawer_low":
-        inst.params = makeDefaultDrawerLowParams();
-        break;
-      case "nested_drawer_low":
-        inst.params = makeDefaultNestedDrawerLowParams();
-        break;
-      case "fridge_tall":
-        inst.params = makeDefaultFridgeTallParams();
-        break;
-      case "shelves":
-        inst.params = makeDefaultShelvesParams();
-        break;
-      case "corner_shelf_lower":
-        inst.params = makeDefaultCornerShelfLowerParams();
-        break;
-      case "flap_shelves_low":
-        inst.params = makeDefaultFlapShelvesLowParams();
-        break;
-      case "swing_shelves_low":
-        inst.params = makeDefaultSwingShelvesLowParams();
-        break;
-      case "oven_base_low":
-        inst.params = makeDefaultOvenBaseLowParams();
-        break;
-      case "microwave_oven_tall":
-        inst.params = makeDefaultMicrowaveOvenTallParams();
-        break;
-      case "top_drawers_doors_low":
-        inst.params = makeDefaultTopDrawersDoorsLowParams();
-        break;
-      default:
-        inst.params = makeDefaultDrawerLowParams();
-    }
+    inst.params = getModuleDescriptorOrThrow(inst.params.type).defaultParams();
     mountInstanceControls(inst);
     rebuildInstance(inst);
   });
@@ -9442,7 +9248,7 @@ function buildExportPayload(params: ModuleParams, cabinetGroup: THREE.Group | nu
 
   const out = {
     ...params,
-    isCorner: params.type === "corner_shelf_lower",
+    isCorner: false,
     __debug: {
       units: "mm",
       generatedAt: new Date().toISOString(),

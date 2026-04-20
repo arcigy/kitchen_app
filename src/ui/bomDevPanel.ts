@@ -1,19 +1,11 @@
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutInstance } from "../layout/appState";
 import { calculateModuleBOM } from "../layout/bom/calculateBOM";
+import { getModuleDescriptor } from "../modules/registry";
 
-const typeLabels: Record<LayoutInstance["params"]["type"], string> = {
-  drawer_low: "drawerLow",
-  nested_drawer_low: "nestedDrawerLow",
-  shelves: "shelves",
-  corner_shelf_lower: "cornerShelfLower",
-  fridge_tall: "fridgeTall",
-  flap_shelves_low: "flapShelvesLow",
-  swing_shelves_low: "swingShelvesLow",
-  oven_base_low: "ovenBaseLow",
-  microwave_oven_tall: "microwaveOvenTall",
-  top_drawers_doors_low: "topDrawersDoorsLow"
-};
+function moduleTypeToLabel(type: LayoutInstance["params"]["type"]) {
+  return getModuleDescriptor(type)?.label ?? type;
+}
 
 export function mountBomDevPanel(
   container: HTMLElement,
@@ -51,7 +43,7 @@ export function mountBomDevPanel(
 
   const typeCounts = new Map<string, number>();
   instances.forEach((instance, index) => {
-    const moduleType = typeLabels[instance.params.type];
+    const moduleType = moduleTypeToLabel(instance.params.type);
     const next = (typeCounts.get(moduleType) ?? 0) + 1;
     typeCounts.set(moduleType, next);
 

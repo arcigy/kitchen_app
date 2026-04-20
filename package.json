@@ -8,10 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
+    "import:modpkg": "tsx scripts/importModpkg.ts",
     "worker:dev": "tsx scripts/worker.ts",
     "dev:local": "tsx scripts/devLocal.ts"
   },
   "dependencies": {
+    "fflate": "^0.8.2",
     "pdfjs-dist": "^4.10.38",
     "polygon-clipping": "^0.15.7",
     "postprocessing": "^6.39.0",

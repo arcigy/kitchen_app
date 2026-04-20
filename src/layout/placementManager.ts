@@ -1,17 +1,6 @@
 import type { AppState, LayoutInstance } from "./appState";
 import type { ModuleParams } from "../model/cabinetTypes";
-import {
-  makeDefaultCornerShelfLowerParams,
-  makeDefaultDrawerLowParams,
-  makeDefaultNestedDrawerLowParams,
-  makeDefaultFlapShelvesLowParams,
-  makeDefaultFridgeTallParams,
-  makeDefaultMicrowaveOvenTallParams,
-  makeDefaultOvenBaseLowParams,
-  makeDefaultShelvesParams,
-  makeDefaultSwingShelvesLowParams,
-  makeDefaultTopDrawersDoorsLowParams
-} from "../model/cabinetTypes";
+import { getModuleDescriptorOrThrow } from "../modules/registry";
 import { commitHistory } from "./historyManager";
 
 type PropsApi = {
@@ -194,41 +183,7 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
 export const addInstance = (S: AppState, helpers: PlacementHelpers, type: ModuleParams["type"]) => {
   if (S.placement.active) cancelPlacement(S, helpers);
 
-  let nextParams: ModuleParams;
-  switch (type) {
-    case "drawer_low":
-      nextParams = makeDefaultDrawerLowParams();
-      break;
-    case "nested_drawer_low":
-      nextParams = makeDefaultNestedDrawerLowParams();
-      break;
-    case "fridge_tall":
-      nextParams = makeDefaultFridgeTallParams();
-      break;
-    case "shelves":
-      nextParams = makeDefaultShelvesParams();
-      break;
-    case "corner_shelf_lower":
-      nextParams = makeDefaultCornerShelfLowerParams();
-      break;
-    case "flap_shelves_low":
-      nextParams = makeDefaultFlapShelvesLowParams();
-      break;
-    case "swing_shelves_low":
-      nextParams = makeDefaultSwingShelvesLowParams();
-      break;
-    case "oven_base_low":
-      nextParams = makeDefaultOvenBaseLowParams();
-      break;
-    case "microwave_oven_tall":
-      nextParams = makeDefaultMicrowaveOvenTallParams();
-      break;
-    case "top_drawers_doors_low":
-      nextParams = makeDefaultTopDrawersDoorsLowParams();
-      break;
-    default:
-      nextParams = makeDefaultDrawerLowParams();
-  }
+  const nextParams = getModuleDescriptorOrThrow(type).defaultParams();
 
   if (S.kitchenEditMode && S.activeKitchenGroupId) {
     nextParams.depth = S.kitchenCtx.moduleDepthMm;

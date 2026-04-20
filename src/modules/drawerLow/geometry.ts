@@ -1,8 +1,8 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import type { DrawerLowParams } from "../../model/cabinetTypes";
-import { getBoardMaterialPreset, isBoardMaterialPresetId } from "../../data/materials";
 import { getPbrMaterialWorldSizeM, getPbrWoodMaterial } from "../../materials/pbrMaterials";
 import { applyBoxGrainUv } from "../../materials/uvGrain";
+import { buildCatalogMaterialVisual } from "../../lib/materials/rendering";
 
 const MM_TO_M = 0.001;
 
@@ -61,32 +61,15 @@ export function buildDrawerLow(p: DrawerLowParams): THREE.Group {
   const railMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4b, roughness: 0.55, metalness: 0.1 });
   const partMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
 
-  const makeSolidMaterial = (hex: string, roughness = 0.85) =>
-    new THREE.MeshStandardMaterial({
-      color: parseHexColor(hex),
-      roughness: clamp(roughness, 0, 1),
-      metalness: 0.0
-    });
-
-  const makeDvdMaterialSet = (insideHex: string, outsideHex: string): THREE.Material[] => {
-    const outside = makeSolidMaterial(outsideHex, 0.95);
-    const inside = makeSolidMaterial(insideHex, 0.75);
-    return [outside, outside, outside, outside, inside, outside];
-  };
-
   const resolvePartMaterial = (partName: string, fallback: THREE.Material): THREE.Material | THREE.Material[] => {
     const overrideId = p.materials.partOverrides?.[partName];
-    if (!isBoardMaterialPresetId(overrideId)) return fallback;
+    if (typeof overrideId !== "number" || !Number.isFinite(overrideId)) return fallback;
 
     const cacheKey = `${partName}:${overrideId}`;
     const cached = partMaterialCache.get(cacheKey);
     if (cached) return cached;
 
-    const preset = getBoardMaterialPreset(overrideId);
-    const next =
-      preset.visual.kind === "dvd"
-        ? makeDvdMaterialSet(preset.visual.insideColor, preset.visual.outsideColor)
-        : makeSolidMaterial(preset.visual.color);
+    const next = buildCatalogMaterialVisual(overrideId);
     partMaterialCache.set(cacheKey, next);
     return next;
   };

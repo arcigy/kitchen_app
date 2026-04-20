@@ -3,6 +3,7 @@ import type { ModuleParams } from "../model/cabinetTypes";
 import { getAllMaterials } from "../data/materials";
 import type { AppState, KitchenGroup, LayoutInstance } from "./appState";
 import { resolveContext, type KitchenContext } from "./kitchenContext";
+import { getModuleDescriptors } from "../modules/registry";
 
 type TopbarApi = {
   clear: () => void;
@@ -163,16 +164,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       });
     };
 
-    addModule("drawer", "Drawer", "drawer_low");
-    addModule("nestedDrawer", "Nested", "nested_drawer_low");
-    addModule("shelves", "Shelves", "shelves");
-    addModule("cornerShelf", "Corner", "corner_shelf_lower");
-    addModule("fridgeTall", "Fridge tall", "fridge_tall");
-    addModule("flapShelves", "Flap", "flap_shelves_low");
-    addModule("swingShelves", "Swing", "swing_shelves_low");
-    addModule("ovenBase", "Oven base", "oven_base_low");
-    addModule("microwaveOvenTall", "Micro tall", "microwave_oven_tall");
-    addModule("topDrawersDoors", "Top doors", "top_drawers_doors_low");
+    for (const descriptor of getModuleDescriptors()) {
+      addModule(descriptor.type, descriptor.label, descriptor.type);
+    }
 
     args.tb.addSpacer({ row });
 
