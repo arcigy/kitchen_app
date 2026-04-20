@@ -1,0 +1,20 @@
+{
+  "pricingConfig": {
+    "path": "commercial/drawer_low.pricing.json",
+    "mediaType": "application/json",
+    "description": "Pricing snapshot and configuration.",
+    "provenance": "generated"
+  },
+  "bomConfig": {
+    "path": "commercial/drawer_low.bom.json",
+    "mediaType": "application/json",
+    "description": "BOM snapshot.",
+    "provenance": "generated"
+  },
+  "commercialMetadata": {
+    "path": "commercial/drawer_low.metadata.json",
+    "mediaType": "application/json",
+    "description": "Commercial summary snapshot.",
+    "provenance": "generated"
+  }
+}
