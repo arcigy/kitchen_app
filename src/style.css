@@ -390,6 +390,133 @@ body {
   gap: 8px;
 }
 
+.portable-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.portable-section {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  background: #fbfbfb;
+}
+
+.portable-section--system {
+  background: #f7f9fc;
+}
+
+.portable-section__header {
+  display: grid;
+  gap: 2px;
+}
+
+.portable-section__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2f2f2f;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.portable-section__description {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.portable-section__body {
+  gap: 10px;
+}
+
+.portable-section__body--compact {
+  gap: 6px;
+}
+
+.portable-field {
+  grid-template-columns: minmax(0, 1fr) 132px;
+  align-items: start;
+  padding: 6px;
+  border: 1px solid #dfdfdf;
+  background: #ffffff;
+}
+
+.portable-field--readonly {
+  background: #f5f7fa;
+}
+
+.portable-field__meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.portable-field__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.portable-field__description {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.portable-field__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.portable-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  padding: 0 5px;
+  border: 1px solid #d6d6d6;
+  background: #f3f3f3;
+  color: #555;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.portable-badge--group {
+  background: #edf3fb;
+  border-color: #bfd2e7;
+  color: #375a7b;
+}
+
+.portable-badge--system {
+  background: #e9f4ea;
+  border-color: #bad8bd;
+  color: #2f6b36;
+}
+
+.portable-badge--locked {
+  background: #f8ece7;
+  border-color: #e1b8aa;
+  color: #8a4732;
+}
+
+.portable-readonly-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.portable-readonly-toggle input {
+  width: auto;
+}
+
+.portable-system-summary {
+  margin: 0;
+}
+
 .field.is-related {
   background: #eef5fc;
   outline: 1px solid #c8ddf1;

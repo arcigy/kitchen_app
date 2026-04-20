@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "module-commercial-summary.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "quantity": 1,
+  "pricingEnabled": true,
+  "finalPriceEur": 1098.5,
+  "priceSource": "calculated",
+  "bomItems": 57
+}

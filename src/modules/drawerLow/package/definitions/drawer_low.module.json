@@ -1,0 +1,188 @@
+{
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "definition": {
+    "moduleType": "drawer_low",
+    "source": "package",
+    "description": "Portable module package exported from module-builder-dev.",
+    "provenance": "declared",
+    "paramsSchemaRef": {
+      "path": "definitions/drawer_low.params.schema.json",
+      "mediaType": "application/schema+json",
+      "description": "Full JSON schema for module parameters.",
+      "provenance": "generated"
+    },
+    "defaultsRef": {
+      "path": "definitions/drawer_low.defaults.json",
+      "mediaType": "application/json",
+      "description": "Current/default parameter snapshot.",
+      "provenance": "generated"
+    },
+    "parameterCatalogRef": {
+      "path": "definitions/drawer_low.parameter-catalog.json",
+      "mediaType": "application/json",
+      "description": "Human-readable parameter catalog.",
+      "provenance": "generated"
+    },
+    "geometrySnapshotRef": {
+      "path": "definitions/drawer_low.geometry.json",
+      "mediaType": "application/json",
+      "description": "Derived geometry snapshot.",
+      "provenance": "generated"
+    },
+    "bomSnapshotRef": {
+      "path": "definitions/drawer_low.bom.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Derived BOM snapshot.",
+      "provenance": "generated"
+    },
+    "materialsSnapshotRef": {
+      "path": "definitions/drawer_low.materials.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Current material state captured from params and live runtime.",
+      "provenance": "generated"
+    },
+    "liveStateSnapshotRef": {
+      "path": "definitions/drawer_low.live-state.json",
+      "mediaType": "application/json",
+      "description": "Complete live export state captured at the time of package export.",
+      "provenance": "generated"
+    }
+  },
+  "logic": {
+    "build": {
+      "path": "logic/drawer_low.build.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local build logic.",
+      "provenance": "generated"
+    },
+    "controls": {
+      "path": "logic/drawer_low.controls.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local controls definition.",
+      "provenance": "generated"
+    },
+    "validation": {
+      "path": "logic/drawer_low.validation.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local validation logic.",
+      "provenance": "generated"
+    },
+    "geometry": {
+      "path": "logic/drawer_low.geometry.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local geometry derivation logic.",
+      "provenance": "generated"
+    },
+    "bom": {
+      "path": "logic/drawer_low.bom.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local BOM derivation logic.",
+      "provenance": "generated"
+    },
+    "pricing": {
+      "path": "logic/drawer_low.pricing.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local pricing derivation logic.",
+      "provenance": "generated"
+    },
+    "commercialSummary": {
+      "path": "logic/drawer_low.commercial-summary.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local commercial summary logic.",
+      "provenance": "generated"
+    },
+    "legacyRuntime": {
+      "path": "legacy/legacy-builder.runtime.js",
+      "mediaType": "text/javascript",
+      "description": "Full legacy runtime source snapshot.",
+      "provenance": "generated"
+    },
+    "legacyDescriptor": {
+      "path": "legacy/drawer_low.descriptor.txt",
+      "mediaType": "text/plain",
+      "description": "Exact module descriptor snippet from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyDefaultParams": {
+      "path": "legacy/drawer_low.default-params.js",
+      "mediaType": "text/javascript",
+      "description": "Exact default-params function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyBuild": {
+      "path": "legacy/drawer_low.build.js",
+      "mediaType": "text/javascript",
+      "description": "Exact build function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyControls": {
+      "path": "legacy/drawer_low.controls.js",
+      "mediaType": "text/javascript",
+      "description": "Exact controls function from the legacy runtime.",
+      "provenance": "generated"
+    }
+  },
+  "commercial": {
+    "pricingConfig": {
+      "path": "commercial/drawer_low.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/drawer_low.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/drawer_low.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  },
+  "assets": {
+    "docs": [
+      {
+        "path": "docs/drawer_low.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/drawer_low.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  },
+  "capabilities": {
+    "hasWorktop": true,
+    "supportsKitchenContextDimensions": true,
+    "supportsKitchenContextMaterials": true
+  },
+  "tags": [
+    "base",
+    "drawer_low"
+  ],
+  "notes": [
+    "Exported from module-builder-dev browser runtime.",
+    "Includes live runtime mesh snapshot plus complete parameter schema, system parameters, geometry, BOM and portable TypeScript companion files."
+  ],
+  "status": "active"
+}

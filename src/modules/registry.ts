@@ -1,5 +1,9 @@
 import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
+import { makeDefaultModuleParams } from "../model/cabinetTypes";
+import type { DrawerLowParams } from "./drawerLow/types";
+import { buildDrawerLow } from "./drawerLow/geometry";
+import { createDrawerLowControls } from "./drawerLow/controls";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -38,16 +42,36 @@ export type ModuleDescriptor = {
   capabilities: ModuleCapabilityFlags;
 };
 
-export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [] as const;
+export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
+  {
+    type: "drawer_low",
+    folder: "drawerLow",
+    label: "Drawer",
+    packageName: "module-builder-drawer_low",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("drawer_low"),
+    build: (params) => buildDrawerLow(params as DrawerLowParams),
+    createControls: (container, params, args) => createDrawerLowControls(container, params as DrawerLowParams, args),
+    capabilities: {
+          "hasWorktop": true,
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  }
+] as const;
 
-const moduleDescriptorMap = new Map<ModuleType, ModuleDescriptor>();
+const moduleDescriptorMap = new Map<ModuleType, ModuleDescriptor>(
+  MODULE_DESCRIPTORS.map((descriptor) => [descriptor.type, descriptor])
+);
 
 export function getModuleDescriptors(): readonly ModuleDescriptor[] {
   return MODULE_DESCRIPTORS;
 }
 
 export function getFirstModuleType(): ModuleType {
-  throw new Error("No imported modules are registered.");
+  const first = MODULE_DESCRIPTORS[0];
+  if (!first) throw new Error("No imported modules are registered.");
+  return first.type;
 }
 
 export function getModuleDescriptor(type: ModuleType): ModuleDescriptor | undefined {

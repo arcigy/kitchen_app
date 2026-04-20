@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "builder-module-export.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "packageName": "module-builder-drawer_low",
+  "packageVersion": "1.0.0",
+  "geometryFile": "definitions/drawer_low.geometry.json",
+  "bomFile": "definitions/drawer_low.bom.snapshot.json"
+}

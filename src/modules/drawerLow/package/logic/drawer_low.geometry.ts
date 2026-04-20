@@ -1,0 +1,1666 @@
+export const moduleType = "drawer_low";
+export const displayName = "Drawer";
+export const geometrySnapshot = {
+  "schemaVersion": "module-geometry.v1",
+  "moduleType": "drawer_low",
+  "displayName": "Drawer",
+  "dimensions": {
+    "widthMm": 800,
+    "heightMm": 720,
+    "depthMm": 560,
+    "worktopThicknessMm": 38,
+    "plinthHeightMm": 100
+  },
+  "parameterEffects": [
+    {
+      "parameter": "width",
+      "effect": "drawer_low width changes carcass span, top/bottom panel width and drawer/front clear width."
+    },
+    {
+      "parameter": "height",
+      "effect": "drawer_low height changes side panels, front stack allocation and internal vertical clearances."
+    },
+    {
+      "parameter": "depth",
+      "effect": "drawer_low depth changes side panel depth, drawer box depth and back panel footprint."
+    },
+    {
+      "parameter": "boardThickness",
+      "effect": "Board thickness changes panel stock thickness and all dependent internal clear dimensions."
+    },
+    {
+      "parameter": "drawerCount",
+      "effect": "Drawer count changes number of drawer fronts, runner sets and drawer box assemblies."
+    },
+    {
+      "parameter": "drawerFrontHeights",
+      "effect": "Drawer front heights redistribute the visible front stack and drawer aperture geometry."
+    },
+    {
+      "parameter": "frontGap",
+      "effect": "Front gap changes revealed spacing between stacked fronts and side/top/bottom front edges."
+    },
+    {
+      "parameter": "worktopThicknessMm",
+      "effect": "Worktop thickness reduces effective carcass height when the module uses a worktop."
+    },
+    {
+      "parameter": "plinthHeight",
+      "effect": "Plinth height changes support geometry and usable carcass height for floor-mounted modules."
+    }
+  ],
+  "parts": [
+    {
+      "id": "leftSide",
+      "label": "leftSide",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 18,
+        "height": 582,
+        "depth": 560,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-391, 391, 0"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "rightSide",
+      "label": "rightSide",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 18,
+        "height": 582,
+        "depth": 560,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "391, 391, 0"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "bottom",
+      "label": "bottom",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 560,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 109, 0"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "topRailFront",
+      "label": "topRailFront",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 60,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "height",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 673, 250"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "topRailBack",
+      "label": "topRailBack",
+      "kind": "back-panel",
+      "materialRole": "hardware",
+      "sizeMm": {
+        "width": 764,
+        "height": 18,
+        "depth": 60,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "height",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 673, -250"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "back",
+      "label": "back",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 779,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "boardThickness",
+        "backThickness",
+        "backGrooveDepthMm",
+        "backGrooveWidthMm",
+        "backGrooveOffsetMm",
+        "backGrooveClearanceMm",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 391, -271"
+      },
+      "notes": [
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #b88b5a",
+        "material unnamed color #f4f4f4",
+        "material unnamed color #b88b5a"
+      ]
+    },
+    {
+      "id": "leg_FL",
+      "label": "leg_FL",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-370, 50, 172"
+      },
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_FR",
+      "label": "leg_FR",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "370, 50, 172"
+      },
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_BL",
+      "label": "leg_BL",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-370, 50, -220"
+      },
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "leg_BR",
+      "label": "leg_BR",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 39,
+        "height": 100,
+        "depth": 40,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "370, 50, -220"
+      },
+      "notes": [
+        "material unnamed color #2a2f3a"
+      ]
+    },
+    {
+      "id": "kickClip_FL_collar",
+      "label": "kickClip_FL_collar",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 48,
+        "height": 16,
+        "depth": 44,
+        "thickness": 16
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 0, 0"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_pad",
+      "label": "kickClip_FL_pad",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 30,
+        "height": 12,
+        "depth": 12,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 0, 23"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_arm",
+      "label": "kickClip_FL_arm",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 16,
+        "height": 10,
+        "depth": 5,
+        "thickness": 5
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, -1, 25.5"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FL_screw_1",
+      "label": "kickClip_FL_screw_1",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, -3, 30.65"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FL_screw_2",
+      "label": "kickClip_FL_screw_2",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 3, 30.65"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FR_collar",
+      "label": "kickClip_FR_collar",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 48,
+        "height": 16,
+        "depth": 44,
+        "thickness": 16
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 0, 0"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_pad",
+      "label": "kickClip_FR_pad",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 30,
+        "height": 12,
+        "depth": 12,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 0, 23"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_arm",
+      "label": "kickClip_FR_arm",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 16,
+        "height": 10,
+        "depth": 5,
+        "thickness": 5
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, -1, 25.5"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR_screw_1",
+      "label": "kickClip_FR_screw_1",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, -3, 30.65"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kickClip_FR_screw_2",
+      "label": "kickClip_FR_screw_2",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 4,
+        "height": 4,
+        "depth": 27,
+        "thickness": 4
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 3, 30.65"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "kick",
+      "label": "kick",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 800,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 50, 211"
+      },
+      "notes": [
+        "material unnamed color #ffffff"
+      ]
+    },
+    {
+      "id": "front_1",
+      "label": "front_1",
+      "kind": "drawer-box",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 796,
+        "height": 192,
+        "depth": 19,
+        "thickness": 19
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "drawerCount",
+        "drawerFrontHeights",
+        "frontStackPreset",
+        "topFrontHeightMm",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 198, 289.5"
+      },
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_1",
+      "label": "handle_1",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm",
+        "frontThicknessMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 234, 306"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_1_screw_1_head",
+      "label": "handle_1_screw_1_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 234, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_1_shaft",
+      "label": "handle_1_screw_1_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 234, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_2_head",
+      "label": "handle_1_screw_2_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 234, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_1_screw_2_shaft",
+      "label": "handle_1_screw_2_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 234, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_1_sideL",
+      "label": "drawer_1_sideL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-371.5, 175, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_sideR",
+      "label": "drawer_1_sideR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "371.5, 175, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_bottom",
+      "label": "drawer_1_bottom",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 126.5, 9.5"
+      },
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_1_back",
+      "label": "drawer_1_back",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 175, -254.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_railL",
+      "label": "drawer_1_railL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-374, 113, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_1_railR",
+      "label": "drawer_1_railR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "374, 113, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "front_2",
+      "label": "front_2",
+      "kind": "drawer-box",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 796,
+        "height": 191,
+        "depth": 19,
+        "thickness": 19
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "drawerCount",
+        "drawerFrontHeights",
+        "frontStackPreset",
+        "topFrontHeightMm",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 391.5, 289.5"
+      },
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_2",
+      "label": "handle_2",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm",
+        "frontThicknessMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 427, 306"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_2_screw_1_head",
+      "label": "handle_2_screw_1_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 427, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_1_shaft",
+      "label": "handle_2_screw_1_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 427, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_2_head",
+      "label": "handle_2_screw_2_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 427, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_2_screw_2_shaft",
+      "label": "handle_2_screw_2_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 427, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_2_sideL",
+      "label": "drawer_2_sideL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-371.5, 354, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_sideR",
+      "label": "drawer_2_sideR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "371.5, 354, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_bottom",
+      "label": "drawer_2_bottom",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 305.5, 9.5"
+      },
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_2_back",
+      "label": "drawer_2_back",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 354, -254.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_railL",
+      "label": "drawer_2_railL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-374, 292, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_2_railR",
+      "label": "drawer_2_railR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "374, 292, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "front_3",
+      "label": "front_3",
+      "kind": "drawer-box",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 796,
+        "height": 191,
+        "depth": 19,
+        "thickness": 19
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "drawerCount",
+        "drawerFrontHeights",
+        "frontStackPreset",
+        "topFrontHeightMm",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 584.5, 289.5"
+      },
+      "notes": [
+        "material unnamed color #005fb8"
+      ]
+    },
+    {
+      "id": "handle_3",
+      "label": "handle_3",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 160,
+        "height": 12,
+        "depth": 14,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm",
+        "frontThicknessMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 620, 306"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "handle_3_screw_1_head",
+      "label": "handle_3_screw_1_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 620, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_1_shaft",
+      "label": "handle_3_screw_1_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-40, 620, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_2_head",
+      "label": "handle_3_screw_2_head",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 8,
+        "height": 8,
+        "depth": 3,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 620, 278.25"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "handle_3_screw_2_shaft",
+      "label": "handle_3_screw_2_shaft",
+      "kind": "hardware",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 3,
+        "height": 3,
+        "depth": 37,
+        "thickness": 3
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleType",
+        "handlePositionMm",
+        "frontThicknessMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "40, 620, 298"
+      },
+      "notes": [
+        "material unnamed color #8a93a3"
+      ]
+    },
+    {
+      "id": "drawer_3_sideL",
+      "label": "drawer_3_sideL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-371.5, 532, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_sideR",
+      "label": "drawer_3_sideR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 13,
+        "height": 110,
+        "depth": 528,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "371.5, 532, 3"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_bottom",
+      "label": "drawer_3_bottom",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 13,
+        "depth": 515,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 483.5, 9.5"
+      },
+      "notes": [
+        "material unnamed color #d8dde6"
+      ]
+    },
+    {
+      "id": "drawer_3_back",
+      "label": "drawer_3_back",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 730,
+        "height": 110,
+        "depth": 13,
+        "thickness": 13
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "drawerBoxThickness",
+        "drawerBoxSideHeight",
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 532, -254.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_railL",
+      "label": "drawer_3_railL",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-374, 470, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "drawer_3_railR",
+      "label": "drawer_3_railR",
+      "kind": "back-panel",
+      "materialRole": "drawer",
+      "sizeMm": {
+        "width": 8,
+        "height": 12,
+        "depth": 523,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "sideClearanceMm",
+        "drawerBackReserveMm",
+        "width",
+        "depth",
+        "drawerCount"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "374, 470, 5.5"
+      },
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    }
+  ]
+} as const;
+
+export function computeGeometry() {
+  return geometrySnapshot;
+}
+
+export function explainParameterEffects() {
+  return geometrySnapshot.parameterEffects;
+}
