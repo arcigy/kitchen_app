@@ -7,7 +7,7 @@ import { createScene } from "./core/scene";
 import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
-import { getFirstModuleType, getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
+import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
@@ -78,7 +78,13 @@ export function startApp(args: AppArgs) {
     clearHighlights?: () => void;
   };
 
-  let params: ModuleParams = getModuleDescriptorOrThrow(getFirstModuleType()).defaultParams();
+  const availableModuleDescriptors = getModuleDescriptors();
+  const hasImportedModules = availableModuleDescriptors.length > 0;
+  const noModulesMessage =
+    'No imported modules installed. Run `npm run import:modpkg -- "<path-to.modpkg>"` and reload the app.';
+  let params: ModuleParams = hasImportedModules
+    ? getModuleDescriptorOrThrow(availableModuleDescriptors[0].type).defaultParams()
+    : ({ type: "__empty__" } as ModuleParams);
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
   const ENABLE_PHOTO = import.meta.env.VITE_ENABLE_PHOTO === "true";
 
@@ -3352,9 +3358,14 @@ export function startApp(args: AppArgs) {
   modelSelect.style.background = "#0f1117";
   modelSelect.style.color = "var(--text)";
 
-  modelSelect.innerHTML = getModuleDescriptors()
-    .map((descriptor) => `<option value="${descriptor.type}">${descriptor.type}</option>`)
-    .join("");
+  if (hasImportedModules) {
+    modelSelect.innerHTML = availableModuleDescriptors
+      .map((descriptor) => `<option value="${descriptor.type}">${descriptor.type}</option>`)
+      .join("");
+  } else {
+    modelSelect.innerHTML = `<option value="">No modules imported</option>`;
+    modelSelect.disabled = true;
+  }
 
   modelWrap.appendChild(modelLabel);
   modelWrap.appendChild(modelSelect);
@@ -6569,6 +6580,15 @@ export function startApp(args: AppArgs) {
     editorHost.innerHTML = "";
     activeBuildControls = null;
 
+    if (!hasImportedModules) {
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.textContent = noModulesMessage;
+      editorHost.appendChild(empty);
+      renderErrors(args.errorsEl, [noModulesMessage]);
+      return;
+    }
+
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
 
     activeBuildControls = getModuleDescriptorOrThrow(params.type).createControls(editorHost, params, {
@@ -6583,6 +6603,17 @@ export function startApp(args: AppArgs) {
   };
 
   const rebuild = () => {
+    if (!hasImportedModules) {
+      renderErrors(args.errorsEl, [noModulesMessage]);
+      if (cabinetGroup) {
+        scene.remove(cabinetGroup);
+        disposeObject3D(cabinetGroup);
+        cabinetGroup = null;
+      }
+      args.exportOutEl.value = "";
+      return;
+    }
+
     const errors = validateModule(params);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return;
@@ -6635,6 +6666,7 @@ export function startApp(args: AppArgs) {
   };
 
   const setModel = (type: ModuleParams["type"]) => {
+    if (!hasImportedModules) return;
     params = getModuleDescriptorOrThrow(type).defaultParams();
     modelSelect.value = type;
     hiddenParts.clear();
@@ -6646,6 +6678,7 @@ export function startApp(args: AppArgs) {
 
   args.resetBtn.addEventListener("click", () => {
     if (mode === "build") {
+      if (!hasImportedModules) return;
       setModel(params.type);
       return;
     }
@@ -6664,6 +6697,10 @@ export function startApp(args: AppArgs) {
 
     let json = "";
     if (mode === "build") {
+      if (!hasImportedModules) {
+        renderErrors(args.errorsEl, [noModulesMessage]);
+        return;
+      }
       const errors = validateModule(params);
       renderErrors(args.errorsEl, errors);
       if (errors.length > 0) return;
