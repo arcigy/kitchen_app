@@ -582,6 +582,7 @@ type WindowInstance = {
     heightMm: number;
     root: THREE.Group;
     mesh: THREE.Mesh;
+    outline: THREE.LineSegments;
   };
 
   const walls: WallInstance[] = [];
@@ -1451,6 +1452,8 @@ type WindowInstance = {
     const dimIds = dimensions.filter((d) => d.params.a.wallId === w.id || d.params.b.wallId === w.id).map((d) => d.id);
     for (const id of dimIds) deleteDimension(S, dimensionHelpers, id, { skipHistory: true });
     layoutRoot.remove(w.root);
+    w.outline.geometry.dispose();
+    (w.outline.material as THREE.Material).dispose();
     w.mesh.geometry.dispose();
     (w.mesh.material as THREE.Material).dispose();
     const idx = walls.indexOf(w);
@@ -1997,9 +2000,15 @@ type WindowInstance = {
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, heightMm = wallDefault.heightMm) {
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xc6cbd6
+      color: 0xb8c0cb,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      side: THREE.DoubleSide
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, Math.max(1, heightMm) / 1000, thicknessMm / 1000), mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     updateWallMeshWithJustification(
       mesh,
       a,
@@ -2010,6 +2019,31 @@ type WindowInstance = {
       heightMm
     );
     return mesh;
+  }
+
+  function createWallOutline(geometry: THREE.BufferGeometry) {
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry, 1),
+      new THREE.LineBasicMaterial({
+        color: 0x4f5663,
+        transparent: true,
+        opacity: 0.78,
+        depthTest: true,
+        depthWrite: false
+      })
+    );
+    outline.renderOrder = 12;
+    return outline;
+  }
+
+  function syncWallOutline(w: WallInstance) {
+    const nextGeometry = new THREE.EdgesGeometry(w.mesh.geometry as THREE.BufferGeometry, 1);
+    w.outline.geometry.dispose();
+    w.outline.geometry = nextGeometry;
+    w.outline.visible = viewMode === "3d";
+
+    const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
+    outlineMaterial.opacity = viewMode === "3d" ? 0.78 : 0;
   }
 
   function wallRefLineToCenterLine(
@@ -2060,6 +2094,13 @@ type WindowInstance = {
   function rebuildWall(w: WallInstance) {
     w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
     w.heightMm = w.params.heightMm;
+    const meshMaterial = w.mesh.material as THREE.MeshBasicMaterial;
+    meshMaterial.color.setHex(0xb8c0cb);
+    meshMaterial.transparent = false;
+    meshMaterial.opacity = 1;
+    meshMaterial.depthWrite = true;
+    meshMaterial.side = THREE.DoubleSide;
+
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
     const just = w.params.justification ?? "center";
@@ -2127,6 +2168,7 @@ type WindowInstance = {
     const aExt = a.clone().addScaledVector(d, -extA);
     const bExt = b.clone().addScaledVector(d, extB);
     updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm);
+    syncWallOutline(w);
   }
 
   function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
@@ -2140,6 +2182,12 @@ type WindowInstance = {
     mesh.userData.wallId = id;
     root.add(mesh);
 
+    const outline = createWallOutline(mesh.geometry as THREE.BufferGeometry);
+    outline.name = `wallOutline_${id}`;
+    outline.userData.kind = "wallOutline";
+    outline.userData.wallId = id;
+    mesh.add(outline);
+
     const aMm = toMmPoint(a);
     const bMm = toMmPoint(b);
     const params: WallParams = {
@@ -2152,7 +2200,7 @@ type WindowInstance = {
       bMm
     };
 
-    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh };
+    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
     layoutRoot.add(root);
     walls.push(inst);
     rebuildWall(inst);
@@ -6486,9 +6534,14 @@ type WindowInstance = {
     wallSnapMarkers.visible = !!selectedWallId;
     updateSelectionHighlights();
 
-    wallPlanGroup.visible = true;
+    wallPlanGroup.visible = enabled;
     rebuildWallPlanMesh();
-    for (const w of walls) w.mesh.visible = true;
+    for (const w of walls) {
+      w.mesh.visible = true;
+      w.outline.visible = !enabled;
+      const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
+      outlineMaterial.opacity = enabled ? 0 : 0.78;
+    }
     updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
   }
 
