@@ -5433,13 +5433,13 @@ type WindowInstance = {
     inst.pick.position.set((box.min.x + box.max.x) * 0.5, 0.015, (box.min.z + box.max.z) * 0.5);
     inst.pick.visible = true;
 
-    const g = buildPlanEdgeGeometry(inst);
+    const g = buildModuleEdgeGeometry(inst, viewMode === "2d");
     inst.outline.geometry.dispose();
     inst.outline.geometry = g;
     inst.outline.position.set(0, 0, 0);
   }
 
-  function buildPlanEdgeGeometry(inst: LayoutInstance) {
+  function buildModuleEdgeGeometry(inst: LayoutInstance, flattenToPlan: boolean) {
     inst.root.updateMatrixWorld(true);
     inst.module.updateMatrixWorld(true);
 
@@ -5448,17 +5448,27 @@ type WindowInstance = {
     const seen = new Set<string>();
 
     const pushSegment = (a: THREE.Vector3, b: THREE.Vector3) => {
-      const ax = Math.round(a.x * 10000);
-      const az = Math.round(a.z * 10000);
-      const bx = Math.round(b.x * 10000);
-      const bz = Math.round(b.z * 10000);
-      const same = ax === bx && az === bz;
+      const ay = flattenToPlan ? 0.01 : a.y;
+      const by = flattenToPlan ? 0.01 : b.y;
+      const aa = new THREE.Vector3(a.x, ay, a.z);
+      const bb = new THREE.Vector3(b.x, by, b.z);
+
+      const ax = Math.round(aa.x * 10000);
+      const ayi = Math.round(aa.y * 10000);
+      const az = Math.round(aa.z * 10000);
+      const bx = Math.round(bb.x * 10000);
+      const byi = Math.round(bb.y * 10000);
+      const bz = Math.round(bb.z * 10000);
+      const same = ax === bx && ayi === byi && az === bz;
       if (same) return;
+
       const key =
-        ax < bx || (ax === bx && az <= bz) ? `${ax},${az}|${bx},${bz}` : `${bx},${bz}|${ax},${az}`;
+        ax < bx || (ax === bx && (ayi < byi || (ayi === byi && az <= bz)))
+          ? `${ax},${ayi},${az}|${bx},${byi},${bz}`
+          : `${bx},${byi},${bz}|${ax},${ayi},${az}`;
       if (seen.has(key)) return;
       seen.add(key);
-      points.push(new THREE.Vector3(a.x, 0.01, a.z), new THREE.Vector3(b.x, 0.01, b.z));
+      points.push(aa, bb);
     };
 
     inst.module.traverse((obj) => {
@@ -5471,7 +5481,11 @@ type WindowInstance = {
       for (let i = 0; i < pos.count; i += 2) {
         const a = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(toRoot);
         const b = new THREE.Vector3(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)).applyMatrix4(toRoot);
-        if (Math.hypot(b.x - a.x, b.z - a.z) < 1e-5) continue;
+        if (flattenToPlan) {
+          if (Math.hypot(b.x - a.x, b.z - a.z) < 1e-5) continue;
+        } else {
+          if (a.distanceToSquared(b) < 1e-10) continue;
+        }
         pushSegment(a, b);
       }
 
@@ -5479,16 +5493,38 @@ type WindowInstance = {
     });
 
     if (points.length === 0) {
-      points.push(
-        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.min.z),
-        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.min.z),
-        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.min.z),
-        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.max.z),
-        new THREE.Vector3(inst.localBox.max.x, 0.01, inst.localBox.max.z),
-        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.max.z),
-        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.max.z),
-        new THREE.Vector3(inst.localBox.min.x, 0.01, inst.localBox.min.z)
-      );
+      const min = inst.localBox.min;
+      const max = inst.localBox.max;
+      const y = flattenToPlan ? 0.01 : min.y;
+      if (flattenToPlan) {
+        points.push(
+          new THREE.Vector3(min.x, y, min.z),
+          new THREE.Vector3(max.x, y, min.z),
+          new THREE.Vector3(max.x, y, min.z),
+          new THREE.Vector3(max.x, y, max.z),
+          new THREE.Vector3(max.x, y, max.z),
+          new THREE.Vector3(min.x, y, max.z),
+          new THREE.Vector3(min.x, y, max.z),
+          new THREE.Vector3(min.x, y, min.z)
+        );
+      } else {
+        const corners = [
+          new THREE.Vector3(min.x, min.y, min.z),
+          new THREE.Vector3(max.x, min.y, min.z),
+          new THREE.Vector3(max.x, min.y, max.z),
+          new THREE.Vector3(min.x, min.y, max.z),
+          new THREE.Vector3(min.x, max.y, min.z),
+          new THREE.Vector3(max.x, max.y, min.z),
+          new THREE.Vector3(max.x, max.y, max.z),
+          new THREE.Vector3(min.x, max.y, max.z)
+        ];
+        const edges: Array<[number, number]> = [
+          [0, 1], [1, 2], [2, 3], [3, 0],
+          [4, 5], [5, 6], [6, 7], [7, 4],
+          [0, 4], [1, 5], [2, 6], [3, 7]
+        ];
+        for (const [i0, i1] of edges) points.push(corners[i0], corners[i1]);
+      }
     }
 
     return new THREE.BufferGeometry().setFromPoints(points);
@@ -6431,6 +6467,7 @@ type WindowInstance = {
     syncViewerTabs();
 
     for (const inst of instances) {
+      ensurePickAndOutline(inst);
       inst.module.visible = true;
       (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.88;
       inst.outline.visible = true;
