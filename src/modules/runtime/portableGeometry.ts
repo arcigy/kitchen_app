@@ -372,31 +372,85 @@ function getPrimaryAxis(size: PortableLiveVector): "x" | "y" | "z" {
   return "z";
 }
 
-function wantsRoundPrimitive(part: PortableLivePart) {
-  return /(^|_)(handle|screw|leg|collar)(_|$)/i.test(part.name);
-}
+type LivePartGeometry = {
+  axis: "x" | "y" | "z" | null;
+  geometry: THREE.BufferGeometry;
+  rotationX?: number;
+  rotationY?: number;
+  rotationZ?: number;
+};
 
-function createRoundGeometry(part: PortableLivePart, sizeMm: PortableLiveVector) {
-  const axis = getPrimaryAxis(sizeMm);
-  const radius =
-    axis === "x"
-      ? Math.max(0.5, Math.min(sizeMm.y, sizeMm.z) / 2)
-      : axis === "y"
-        ? Math.max(0.5, Math.min(sizeMm.x, sizeMm.z) / 2)
-        : Math.max(0.5, Math.min(sizeMm.x, sizeMm.y) / 2);
-  const height = Math.max(
-    1,
-    axis === "x" ? sizeMm.x : axis === "y" ? sizeMm.y : sizeMm.z
-  );
+function createCylinderGeometry(
+  axis: "x" | "y" | "z",
+  radiusMm: number,
+  heightMm: number,
+  options?: {
+    radialSegments?: number;
+    openEnded?: boolean;
+    thetaStart?: number;
+    thetaLength?: number;
+    rotationX?: number;
+    rotationY?: number;
+    rotationZ?: number;
+  }
+): LivePartGeometry {
   return {
     axis,
-    geometry: new THREE.CylinderGeometry(radius * MM_TO_M, radius * MM_TO_M, height * MM_TO_M, 24)
+    geometry: new THREE.CylinderGeometry(
+      radiusMm * MM_TO_M,
+      radiusMm * MM_TO_M,
+      heightMm * MM_TO_M,
+      options?.radialSegments ?? 24,
+      1,
+      options?.openEnded ?? false,
+      options?.thetaStart ?? 0,
+      options?.thetaLength ?? Math.PI * 2
+    ),
+    rotationX: options?.rotationX,
+    rotationY: options?.rotationY,
+    rotationZ: options?.rotationZ
   };
 }
 
-function createLivePartGeometry(part: PortableLivePart, sizeMm: PortableLiveVector) {
-  if (wantsRoundPrimitive(part)) {
-    return createRoundGeometry(part, sizeMm);
+function createLegGeometry(sizeMm: PortableLiveVector) {
+  return createCylinderGeometry("y", Math.max(sizeMm.x, sizeMm.z) / 2, sizeMm.y);
+}
+
+function createCollarGeometry(sizeMm: PortableLiveVector) {
+  const gapAngle = Math.PI * 0.35;
+  const radiusMm = Math.max(sizeMm.x, sizeMm.z) / 2;
+  return createCylinderGeometry("y", radiusMm, sizeMm.y, {
+    radialSegments: 24,
+    openEnded: true,
+    thetaStart: gapAngle / 2,
+    thetaLength: Math.PI * 2 - gapAngle,
+    rotationY: Math.PI
+  });
+}
+
+function createScrewGeometry(part: PortableLivePart, sizeMm: PortableLiveVector) {
+  const axis = /head/i.test(part.name) ? "z" : getPrimaryAxis(sizeMm);
+  const radiusMm =
+    axis === "x"
+      ? Math.max(sizeMm.y, sizeMm.z) / 2
+      : axis === "y"
+        ? Math.max(sizeMm.x, sizeMm.z) / 2
+        : Math.max(sizeMm.x, sizeMm.y) / 2;
+  const heightMm = axis === "x" ? sizeMm.x : axis === "y" ? sizeMm.y : sizeMm.z;
+  return createCylinderGeometry(axis, radiusMm, heightMm, {
+    radialSegments: /head/i.test(part.name) ? 16 : 12
+  });
+}
+
+function createLivePartGeometry(part: PortableLivePart, sizeMm: PortableLiveVector): LivePartGeometry {
+  if (/^leg_/i.test(part.name)) {
+    return createLegGeometry(sizeMm);
+  }
+  if (/_collar$/i.test(part.name)) {
+    return createCollarGeometry(sizeMm);
+  }
+  if (/screw/i.test(part.name)) {
+    return createScrewGeometry(part, sizeMm);
   }
   return {
     axis: null,
@@ -463,11 +517,14 @@ function buildMeshFromLivePart(
     y: Math.max(1, y.sizeMm),
     z: Math.max(1, z.sizeMm)
   };
-  const { geometry, axis } = createLivePartGeometry(part, sizeMm);
+  const { geometry, axis, rotationX, rotationY, rotationZ } = createLivePartGeometry(part, sizeMm);
   const mesh = new THREE.Mesh(geometry, makeRuntimeMaterial(part));
   mesh.name = part.name;
   mesh.position.set(x.positionMm * MM_TO_M, y.positionMm * MM_TO_M, z.positionMm * MM_TO_M);
   orientLivePartMesh(mesh, axis);
+  if (typeof rotationX === "number") mesh.rotation.x += rotationX;
+  if (typeof rotationY === "number") mesh.rotation.y += rotationY;
+  if (typeof rotationZ === "number") mesh.rotation.z += rotationZ;
   mesh.visible = part.visible !== false;
   mesh.userData.selectable = part.selectable !== false;
   mesh.userData.paramKeys = [...(part.paramKeys ?? [])];
