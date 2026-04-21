@@ -688,6 +688,7 @@ export function buildRuntimeQuoteBom(args: {
       const resolved = resolveBoardMaterialForSlot(item, materialsSnapshot, params);
       if (resolved.material) {
         item.material = resolved.material;
+        item.name = `${resolved.material.name} - ${item.description}`;
         item.catalogRef = {
           entityType: "material",
           catalogId: resolved.material.catalogId,
@@ -722,6 +723,7 @@ export function buildRuntimeQuoteBom(args: {
             family: "edgeFamily" in edgeMaterial ? edgeMaterial.edgeFamily : (item.material?.family ?? undefined),
             assignmentSource: "catalog"
           } as PortableMaterialRef;
+          item.name = item.description;
           item.catalogRef = {
             entityType: "material",
             catalogId: item.material.catalogId,
@@ -745,6 +747,7 @@ export function buildRuntimeQuoteBom(args: {
       const component = resolveComponentForItem(item, materialsSnapshot, params);
       if (component) {
         item.component = component;
+        item.name = component.displayName;
         item.catalogRef = {
           entityType: "component",
           catalogId: component.catalogId,

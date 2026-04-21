@@ -1,6 +1,6 @@
 {
   "exportMeta": {
-    "exportedAt": "2026-04-21T21:24:13.699Z",
+    "exportedAt": "2026-04-21T22:55:57.009Z",
     "source": "builder_portable_export",
     "scope": "single_module",
     "generator": {
@@ -233,6 +233,11 @@
         "description": "Nominal module dimensions in millimeters."
       },
       {
+        "key": "assembly",
+        "label": "Assembly",
+        "description": "Assembly context and kitchen-specific placement role for the module."
+      },
+      {
         "key": "placement",
         "label": "Placement",
         "description": "Scene placement metadata for the exported module instance."
@@ -327,6 +332,27 @@
         "group": "dimensions",
         "type": "number",
         "description": "Nominal depth in mm.",
+        "required": true
+      },
+      {
+        "key": "assemblyContext",
+        "group": "assembly",
+        "type": "\"kitchen\" | \"generic\" | \"wardrobe\" | \"bathroom\" | \"laundry\" | null",
+        "description": "Top-level assembly/domain this module belongs to.",
+        "required": true
+      },
+      {
+        "key": "kitchenModuleRole",
+        "group": "assembly",
+        "type": "\"base\" | \"wall\" | \"tall\" | null",
+        "description": "Kitchen role used when assemblyContext is kitchen.",
+        "required": true
+      },
+      {
+        "key": "requiresWorktop",
+        "group": "assembly",
+        "type": "boolean",
+        "description": "Whether the module should receive a worktop board in kitchen composition flows.",
         "required": true
       },
       {
@@ -533,6 +559,9 @@
           "widthMm": 800,
           "heightMm": 700,
           "depthMm": 560,
+          "assemblyContext": "kitchen",
+          "kitchenModuleRole": "base",
+          "requiresWorktop": true,
           "positionXmm": 0,
           "positionYmm": 0,
           "positionZmm": 0,
@@ -552,8 +581,8 @@
             "base",
             "drawer_low"
           ],
-          "createdAt": "2026-04-21T21:24:13.699Z",
-          "updatedAt": "2026-04-21T21:24:13.699Z",
+          "createdAt": "2026-04-21T22:55:57.009Z",
+          "updatedAt": "2026-04-21T22:55:57.009Z",
           "exportToIfc": true,
           "ifcClass": "IfcFurniture",
           "ifcPredefinedType": null,

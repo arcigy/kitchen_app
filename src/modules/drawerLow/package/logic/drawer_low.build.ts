@@ -44,10 +44,13 @@ export const defaultParams = {
     "frontKey": "3",
     "drawerKey": "5"
   },
+  "assemblyContext": "kitchen",
   "autoFit": true,
   "handleComponentId": "cmp.handle.bar.160.black",
   "heightCarcass": 662,
-  "legComponentId": "cmp.leg.adjustable.100.black"
+  "kitchenModuleRole": "base",
+  "legComponentId": "cmp.leg.adjustable.100.black",
+  "requiresWorktop": true
 } as const;
 
 export function buildModule(input: Record<string, unknown> = defaultParams) {

@@ -20,6 +20,14 @@ Nominal module dimensions in millimeters.
 - `heightMm`: 700
 - `depthMm`: 560
 
+## Assembly
+
+Assembly context and kitchen-specific placement role for the module.
+
+- `assemblyContext`: "kitchen"
+- `kitchenModuleRole`: "base"
+- `requiresWorktop`: true
+
 ## Placement
 
 Scene placement metadata for the exported module instance.
@@ -55,8 +63,8 @@ Human-facing metadata kept alongside the technical module export.
 
 - `notes`: null
 - `tags`: ["base","drawer_low"]
-- `createdAt`: "2026-04-21T21:24:13.699Z"
-- `updatedAt`: "2026-04-21T21:24:13.699Z"
+- `createdAt`: "2026-04-21T22:55:57.009Z"
+- `updatedAt`: "2026-04-21T22:55:57.009Z"
 
 ## IFC Export
 

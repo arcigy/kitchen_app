@@ -12,6 +12,11 @@
       "description": "Nominal module dimensions in millimeters."
     },
     {
+      "key": "assembly",
+      "label": "Assembly",
+      "description": "Assembly context and kitchen-specific placement role for the module."
+    },
+    {
       "key": "placement",
       "label": "Placement",
       "description": "Scene placement metadata for the exported module instance."
@@ -106,6 +111,27 @@
       "group": "dimensions",
       "type": "number",
       "description": "Nominal depth in mm.",
+      "required": true
+    },
+    {
+      "key": "assemblyContext",
+      "group": "assembly",
+      "type": "\"kitchen\" | \"generic\" | \"wardrobe\" | \"bathroom\" | \"laundry\" | null",
+      "description": "Top-level assembly/domain this module belongs to.",
+      "required": true
+    },
+    {
+      "key": "kitchenModuleRole",
+      "group": "assembly",
+      "type": "\"base\" | \"wall\" | \"tall\" | null",
+      "description": "Kitchen role used when assemblyContext is kitchen.",
+      "required": true
+    },
+    {
+      "key": "requiresWorktop",
+      "group": "assembly",
+      "type": "boolean",
+      "description": "Whether the module should receive a worktop board in kitchen composition flows.",
       "required": true
     },
     {

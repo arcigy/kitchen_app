@@ -43,6 +43,14 @@ export const parameterCatalog = {
   ],
   "parameters": [
     {
+      "key": "assemblyContext",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "kitchen",
+      "description": "Exported parameter assembly context."
+    },
+    {
       "key": "autoFit",
       "group": "general",
       "type": "boolean",
@@ -247,6 +255,14 @@ export const parameterCatalog = {
       "description": "Exported parameter height carcass."
     },
     {
+      "key": "kitchenModuleRole",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "base",
+      "description": "Exported parameter kitchen module role."
+    },
+    {
       "key": "legComponentId",
       "group": "general",
       "type": "string",
@@ -281,6 +297,14 @@ export const parameterCatalog = {
       "required": true,
       "defaultValue": 60,
       "description": "Exported parameter plinth setback mm."
+    },
+    {
+      "key": "requiresWorktop",
+      "group": "placement",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter requires worktop."
     },
     {
       "key": "sideClearanceMm",

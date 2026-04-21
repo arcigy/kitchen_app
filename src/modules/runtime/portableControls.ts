@@ -114,6 +114,15 @@ function cloneValue<T>(value: T): T {
   return structuredClone(value);
 }
 
+function replaceRecordValues(target: Record<string, unknown>, next: Record<string, unknown>) {
+  for (const key of Object.keys(target)) {
+    if (!(key in next)) delete target[key];
+  }
+  for (const [key, value] of Object.entries(next)) {
+    target[key] = cloneValue(value);
+  }
+}
+
 function parseJsonValue(raw: string): PortableJsonValue | undefined {
   try {
     return JSON.parse(raw) as PortableJsonValue;
@@ -229,17 +238,24 @@ function getOrderedGroupKeys<T extends { group: string }>(
   return [...known, ...extra];
 }
 
-function createReadonlySystemControl(
+function createSystemFieldControl(
   definition: PortableSystemParameterCatalog["definitions"][number],
-  value: string | number | boolean | string[] | null
+  value: string | number | boolean | string[] | null,
+  locked: boolean
 ) {
   const controlId = `portable_${definition.key}`;
 
-  if (definition.key === "priceSource") {
+  if (definition.key === "priceSource" || definition.key === "assemblyContext" || definition.key === "kitchenModuleRole") {
     const select = document.createElement("select");
     select.id = controlId;
-    select.disabled = true;
-    for (const optionValue of ["calculated", "override", "manual", "catalog"]) {
+    select.disabled = locked;
+    const options =
+      definition.key === "priceSource"
+        ? ["calculated", "override", "manual", "catalog"]
+        : definition.key === "assemblyContext"
+          ? ["kitchen", "generic", "wardrobe", "bathroom", "laundry"]
+          : ["base", "wall", "tall"];
+    for (const optionValue of options) {
       const option = document.createElement("option");
       option.value = optionValue;
       option.textContent = optionValue;
@@ -257,7 +273,7 @@ function createReadonlySystemControl(
     input.id = controlId;
     input.type = "checkbox";
     input.checked = value === true;
-    input.disabled = true;
+    input.disabled = locked;
 
     const text = document.createElement("span");
     text.textContent = input.checked ? "Enabled" : "Disabled";
@@ -270,7 +286,7 @@ function createReadonlySystemControl(
     const textarea = document.createElement("textarea");
     textarea.id = controlId;
     textarea.rows = 2;
-    textarea.readOnly = true;
+    textarea.readOnly = locked;
     textarea.value = Array.isArray(value) ? value.join(", ") : value === null ? "null" : "";
     return textarea;
   }
@@ -279,7 +295,7 @@ function createReadonlySystemControl(
     const textarea = document.createElement("textarea");
     textarea.id = controlId;
     textarea.rows = 3;
-    textarea.readOnly = true;
+    textarea.readOnly = locked;
     textarea.value = typeof value === "string" ? value : value === null ? "null" : "";
     return textarea;
   }
@@ -287,7 +303,7 @@ function createReadonlySystemControl(
   const input = document.createElement("input");
   input.id = controlId;
   input.type = definition.type === "number" ? "number" : "text";
-  input.readOnly = true;
+  input.readOnly = locked;
   input.value =
     value === null
       ? "null"
@@ -297,6 +313,40 @@ function createReadonlySystemControl(
           ? JSON.stringify(value)
           : "";
   return input;
+}
+
+function parseSystemFieldValue(
+  definition: PortableSystemParameterCatalog["definitions"][number],
+  control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+): string | number | boolean | string[] | null {
+  if (definition.type === "boolean" && control instanceof HTMLInputElement) {
+    return control.checked;
+  }
+
+  if (definition.type === "number") {
+    const raw = control.value.trim();
+    return raw.length === 0 ? 0 : Number(raw);
+  }
+
+  if (definition.type === "string[]") {
+    return control.value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+
+  const raw = control.value.trim();
+  return raw.length === 0 ? null : raw;
+}
+
+function shouldRenderSystemField(
+  definition: PortableSystemParameterCatalog["definitions"][number],
+  values: Record<string, string | number | boolean | string[] | null>
+) {
+  if (definition.key === "kitchenModuleRole" || definition.key === "requiresWorktop") {
+    return values.assemblyContext === "kitchen";
+  }
+  return true;
 }
 
 function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | null {
@@ -319,6 +369,44 @@ function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | n
     }));
   }
   return null;
+}
+
+function deriveScalarOptions(parameterKey: string): PortableFieldOption[] | null {
+  if (parameterKey === "assemblyContext") {
+    return ["kitchen", "generic", "wardrobe", "bathroom", "laundry"].map((value) => ({
+      value,
+      label: value
+    }));
+  }
+  if (parameterKey === "kitchenModuleRole") {
+    return ["base", "wall", "tall"].map((value) => ({
+      value,
+      label: value
+    }));
+  }
+  return null;
+}
+
+function shouldRenderPortableParameter(
+  parameter: PortableParameterCatalog["parameters"][number],
+  params: Record<string, unknown>
+) {
+  if (parameter.key === "kitchenModuleRole" || parameter.key === "requiresWorktop") {
+    return params.assemblyContext === "kitchen";
+  }
+  return true;
+}
+
+function syncPortableSystemValues(
+  systemValues: PortableSystemParameterValues | undefined,
+  params: Record<string, unknown>
+) {
+  if (!systemValues) return;
+  for (const key of ["assemblyContext", "kitchenModuleRole", "requiresWorktop"] as const) {
+    if (key in params) {
+      systemValues.values[key] = (params[key] as string | number | boolean | string[] | null) ?? null;
+    }
+  }
 }
 
 function formatThicknessLabel(thickness: number) {
@@ -370,6 +458,21 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
   const fieldByKey = new Map<string, HTMLElement>();
   const controls: PortableFieldControl[] = [];
+  const syncFromParams = () => {
+    for (const control of controls) control.readFromParams();
+  };
+  const applyParamMutation = (mutate: () => void) => {
+    const previous = cloneValue(params);
+    mutate();
+    const accepted = controlArgs.onChange();
+    if (accepted === false) {
+      replaceRecordValues(params, previous);
+      syncFromParams();
+      return false;
+    }
+    syncFromParams();
+    return true;
+  };
 
   const editableRoot = document.createElement("div");
   editableRoot.className = "portable-controls";
@@ -394,6 +497,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   for (const parameter of catalog.parameters) {
     if (parameter.key === "type") continue;
     if (hiddenParameterKeys.has(parameter.key)) continue;
+    if (!shouldRenderPortableParameter(parameter, params)) continue;
     const bucket = groupedParameters.get(parameter.group) ?? [];
     bucket.push(parameter);
     groupedParameters.set(parameter.group, bucket);
@@ -425,8 +529,12 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         wrapper.appendChild(input);
 
         const apply = () => {
-          setTopLevelValue(params, parameter.key, input.checked);
-          controlArgs.onChange();
+          applyParamMutation(() => {
+            setTopLevelValue(params, parameter.key, input.checked);
+            if (parameter.key === "requiresWorktop") {
+              syncPortableSystemValues(systemValues, params);
+            }
+          });
         };
 
         input.addEventListener("change", apply);
@@ -451,8 +559,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const apply = () => {
           const next = Number(input.value);
           if (!Number.isFinite(next)) return;
-          setTopLevelValue(params, parameter.key, next);
-          controlArgs.onChange();
+          applyParamMutation(() => {
+            setTopLevelValue(params, parameter.key, next);
+          });
         };
 
         input.addEventListener(explicitCommitMode ? "change" : "input", apply);
@@ -468,7 +577,11 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       }
 
       if (parameter.type === "string" || parameter.type === "null" || parameter.type === "unknown") {
-        const options = fieldOptions?.[parameter.key] ?? deriveComponentOptions(parameter.key) ?? undefined;
+        const options =
+          fieldOptions?.[parameter.key] ??
+          deriveComponentOptions(parameter.key) ??
+          deriveScalarOptions(parameter.key) ??
+          undefined;
         if (options && options.length > 0) {
           const select = document.createElement("select");
           select.id = `portable_${parameter.key}`;
@@ -481,16 +594,35 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           wrapper.appendChild(select);
 
           const apply = () => {
-            if (parameter.key === "handleComponentId") {
-              Object.assign(params, applyDrawerLowHandleComponentToParams(params, select.value));
-            } else if (parameter.key === "legComponentId") {
-              Object.assign(params, applyDrawerLowLegComponentToParams(params, select.value));
-            } else if (parameter.key === "runnerComponentId") {
-              Object.assign(params, applyDrawerLowRunnerComponentToParams(params, select.value));
-            } else {
-              setTopLevelValue(params, parameter.key, select.value);
-            }
-            controlArgs.onChange();
+            applyParamMutation(() => {
+              if (parameter.key === "handleComponentId") {
+                Object.assign(params, applyDrawerLowHandleComponentToParams(params, select.value));
+              } else if (parameter.key === "legComponentId") {
+                Object.assign(params, applyDrawerLowLegComponentToParams(params, select.value));
+              } else if (parameter.key === "runnerComponentId") {
+                Object.assign(params, applyDrawerLowRunnerComponentToParams(params, select.value));
+              } else if (parameter.key === "assemblyContext") {
+                setTopLevelValue(params, parameter.key, select.value);
+                if (select.value !== "kitchen") {
+                  setTopLevelValue(params, "kitchenModuleRole", null);
+                  setTopLevelValue(params, "requiresWorktop", false);
+                } else {
+                  const resolvedRole =
+                    typeof params.kitchenModuleRole === "string" && params.kitchenModuleRole.trim().length > 0
+                      ? params.kitchenModuleRole
+                      : "base";
+                  setTopLevelValue(params, "kitchenModuleRole", resolvedRole);
+                  setTopLevelValue(params, "requiresWorktop", resolvedRole === "base");
+                }
+                syncPortableSystemValues(systemValues, params);
+              } else if (parameter.key === "kitchenModuleRole") {
+                setTopLevelValue(params, parameter.key, select.value);
+                setTopLevelValue(params, "requiresWorktop", select.value === "base");
+                syncPortableSystemValues(systemValues, params);
+              } else {
+                setTopLevelValue(params, parameter.key, select.value);
+              }
+            });
           };
 
           select.addEventListener("change", apply);
@@ -514,8 +646,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         wrapper.appendChild(input);
 
         const apply = () => {
-          setTopLevelValue(params, parameter.key, input.value);
-          controlArgs.onChange();
+          applyParamMutation(() => {
+            setTopLevelValue(params, parameter.key, input.value);
+          });
         };
 
         input.addEventListener(explicitCommitMode ? "change" : "input", apply);
@@ -549,8 +682,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           return;
         }
         wrapper.classList.remove("error");
-        setTopLevelValue(params, parameter.key, cloneValue(parsed));
-        controlArgs.onChange();
+        applyParamMutation(() => {
+          setTopLevelValue(params, parameter.key, cloneValue(parsed));
+        });
       };
 
       input.addEventListener(explicitCommitMode ? "change" : "input", apply);
@@ -635,22 +769,22 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       const applyMaterialChange = () => {
         const targetFamily = familyByBaseId.get(materialSelect.value);
         if (!targetFamily) return;
-        const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
-        for (const slotId of slotIds) {
-          const currentThickness = slotThicknesses[slotId] ?? targetFamily.variants[0]?.defaultThicknessMm ?? 18;
-          const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, currentThickness) ?? targetFamily.variants[0];
-          if (!nextVariant) continue;
-          updateCommercialSelections(params, (current) => {
-            current.boardMaterials[slotId] = nextVariant.id;
-            current.boardThicknesses[slotId] = nextVariant.defaultThicknessMm;
-            return current;
-          });
-          if (thicknessParameterKey) {
-            setTopLevelValue(params, thicknessParameterKey, nextVariant.defaultThicknessMm);
+        applyParamMutation(() => {
+          const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+          for (const slotId of slotIds) {
+            const currentThickness = slotThicknesses[slotId] ?? targetFamily.variants[0]?.defaultThicknessMm ?? 18;
+            const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, currentThickness) ?? targetFamily.variants[0];
+            if (!nextVariant) continue;
+            updateCommercialSelections(params, (current) => {
+              current.boardMaterials[slotId] = nextVariant.id;
+              current.boardThicknesses[slotId] = nextVariant.defaultThicknessMm;
+              return current;
+            });
+            if (thicknessParameterKey) {
+              setTopLevelValue(params, thicknessParameterKey, nextVariant.defaultThicknessMm);
+            }
           }
-        }
-        syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
-        controlArgs.onChange();
+        });
       };
 
       const applyThicknessChange = () => {
@@ -659,18 +793,18 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         if (!targetFamily || !Number.isFinite(nextThickness)) return;
         const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, nextThickness) ?? targetFamily.variants[0];
         if (!nextVariant) return;
-        for (const slotId of slotIds) {
-          updateCommercialSelections(params, (current) => {
-            current.boardMaterials[slotId] = nextVariant.id;
-            current.boardThicknesses[slotId] = nextThickness;
-            return current;
-          });
-        }
-        if (thicknessParameterKey) {
-          setTopLevelValue(params, thicknessParameterKey, nextThickness);
-        }
-        syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
-        controlArgs.onChange();
+        applyParamMutation(() => {
+          for (const slotId of slotIds) {
+            updateCommercialSelections(params, (current) => {
+              current.boardMaterials[slotId] = nextVariant.id;
+              current.boardThicknesses[slotId] = nextThickness;
+              return current;
+            });
+          }
+          if (thicknessParameterKey) {
+            setTopLevelValue(params, thicknessParameterKey, nextThickness);
+          }
+        });
       };
 
       materialSelect.addEventListener("change", applyMaterialChange);
@@ -755,9 +889,10 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       const sectionBody = createSection(systemRoot, groupLabel, groupDescription, "system");
 
       for (const definition of definitions) {
+        if (!shouldRenderSystemField(definition, systemValues.values)) continue;
         const locked = LOCKED_SYSTEM_PARAMETER_KEYS.has(definition.key);
         const value = systemValues.values[definition.key] ?? null;
-        const control = createReadonlySystemControl(definition, value);
+        const control = createSystemFieldControl(definition, value, locked);
         const badges = [
           { label: "System", tone: "system" as const }
         ];
@@ -774,13 +909,64 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           readOnly: true
         });
         wrapper.appendChild(control);
+
+        if (!locked) {
+          const apply = () => {
+            applyParamMutation(() => {
+              const nextValue = parseSystemFieldValue(definition, control);
+              params[definition.key] = cloneValue(nextValue);
+              systemValues.values[definition.key] = nextValue;
+
+              if (definition.key === "assemblyContext" && nextValue !== "kitchen") {
+                params.kitchenModuleRole = null;
+                params.requiresWorktop = false;
+                systemValues.values.kitchenModuleRole = null;
+                systemValues.values.requiresWorktop = false;
+              } else if (definition.key === "assemblyContext" && nextValue === "kitchen") {
+                const resolvedRole =
+                  typeof params.kitchenModuleRole === "string" && params.kitchenModuleRole.trim().length > 0
+                    ? params.kitchenModuleRole
+                    : "base";
+                params.kitchenModuleRole = resolvedRole;
+                params.requiresWorktop = resolvedRole === "base";
+                systemValues.values.kitchenModuleRole = resolvedRole;
+                systemValues.values.requiresWorktop = resolvedRole === "base";
+              }
+
+              if (definition.key === "kitchenModuleRole") {
+                const requiresWorktop = nextValue === "base";
+                params.requiresWorktop = requiresWorktop;
+                systemValues.values.requiresWorktop = requiresWorktop;
+              }
+            });
+          };
+
+          control.addEventListener("change", apply);
+          controls.push({
+            key: `system:${definition.key}`,
+            wrapper,
+            readFromParams: () => {
+              const nextValue =
+                params[definition.key] !== undefined
+                  ? (params[definition.key] as string | number | boolean | string[] | null)
+                  : (systemValues.values[definition.key] ?? null);
+              systemValues.values[definition.key] = nextValue;
+              const refreshed = createSystemFieldControl(definition, nextValue, locked);
+              if (control instanceof HTMLInputElement && refreshed instanceof HTMLInputElement) {
+                if (control.type === "checkbox") control.checked = refreshed.checked;
+                else control.value = refreshed.value;
+              } else if (
+                (control instanceof HTMLSelectElement && refreshed instanceof HTMLSelectElement) ||
+                (control instanceof HTMLTextAreaElement && refreshed instanceof HTMLTextAreaElement)
+              ) {
+                control.value = refreshed.value;
+              }
+            }
+          });
+        }
       }
     }
   }
-
-  const syncFromParams = () => {
-    for (const control of controls) control.readFromParams();
-  };
 
   const clearHighlights = () => {
     for (const element of fieldByKey.values()) element.classList.remove("is-related");

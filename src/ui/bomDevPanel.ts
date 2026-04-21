@@ -240,6 +240,28 @@ function round(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function itemDisplayName(item: BOMResult["pricing"]["items"][number]) {
+  if (item.description?.trim()) return item.description.trim();
+  const dashed = item.name.split(" - ");
+  return dashed[dashed.length - 1]?.trim() || item.name;
+}
+
+function itemResourceLabel(item: BOMResult["pricing"]["items"][number]) {
+  if (item.material?.displayName) return item.material.displayName;
+  if (item.component?.displayName) return item.component.displayName;
+  return "-";
+}
+
+function itemThicknessLabel(item: BOMResult["pricing"]["items"][number]) {
+  if (item.dimensionsMm?.thickness && Number.isFinite(item.dimensionsMm.thickness)) {
+    return `${formatNumber(item.dimensionsMm.thickness, 2)} mm`;
+  }
+  if (item.material?.defaultThicknessMm && Number.isFinite(item.material.defaultThicknessMm)) {
+    return `${formatNumber(item.material.defaultThicknessMm, 2)} mm`;
+  }
+  return "";
+}
+
 export function mountBomDevPanel(
   container: HTMLElement,
   instances: LayoutInstance[],
@@ -421,11 +443,13 @@ export function mountBomDevPanel(
   const breakdown = section("Item Breakdown", "Presné položky BOMu po výpočte, vrátane priced quantity, unit price a cost formula.");
   breakdown.appendChild(
     table(
-      ["Module", "Item", "ID", "Group", "Qty", "Priced Qty", "Unit price", "Item cost", "Formula"],
+      ["Module", "Item", "Material / Component", "Thickness", "ID", "Group", "Qty", "Priced Qty", "Unit price", "Item cost", "Formula"],
       modules.flatMap((module) =>
         module.result.pricing.items.map((item) => [
           module.label,
-          item.name,
+          itemDisplayName(item),
+          itemResourceLabel(item),
+          itemThicknessLabel(item),
           item.id,
           item.pricingGroup ?? "",
           formatNumber(item.quantity),

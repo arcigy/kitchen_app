@@ -20,15 +20,20 @@ async function main() {
 
       const params = makeDefaultDrawerLowParams();
       let changes = 0;
-      createDrawerLowControls(host, params, {
-        onChange: () => {
-          changes += 1;
-          return true;
-        },
-        getWorktopThicknessMm: () => 0,
-        textInputCommitMode: "explicit",
-        commitBoundary: host
-      });
+      const render = () => {
+        host.innerHTML = "";
+        createDrawerLowControls(host, params, {
+          onChange: () => {
+            changes += 1;
+            render();
+            return true;
+          },
+          getWorktopThicknessMm: () => 0,
+          textInputCommitMode: "explicit",
+          commitBoundary: host
+        });
+      };
+      render();
 
       const text = host.innerText;
       const blockedLabels = [
@@ -47,6 +52,46 @@ async function main() {
       const partRows = partSection ? [...partSection.querySelectorAll("div")].filter((row) => row.querySelectorAll("select").length === 2) : [];
       const firstRow = partRows[0];
       const [firstMaterialSelect, firstThicknessSelect] = firstRow ? [...firstRow.querySelectorAll("select")] : [null, null];
+
+      const getSystemSelect = (id) => host.querySelector(`#${id}`);
+      const getSystemCheckbox = (id) => {
+        const field = host.querySelector(`label[for="${id}"]`)?.closest(".portable-field");
+        return field ? field.querySelector('input[type="checkbox"]') : null;
+      };
+
+      const assemblySelect = getSystemSelect("portable_assemblyContext");
+      const kitchenRoleSelectBefore = getSystemSelect("portable_kitchenModuleRole");
+      const requiresWorktopCheckboxBefore = getSystemCheckbox("portable_requiresWorktop");
+
+      if (!assemblySelect || !kitchenRoleSelectBefore || !requiresWorktopCheckboxBefore) {
+        return {
+          ok: false,
+          reason: "Missing kitchen system controls",
+          text: text.slice(0, 3000)
+        };
+      }
+
+      assemblySelect.value = "generic";
+      assemblySelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const kitchenRoleSelectHidden = getSystemSelect("portable_kitchenModuleRole");
+      const requiresWorktopCheckboxHidden = getSystemCheckbox("portable_requiresWorktop");
+
+      const assemblySelectAfter = getSystemSelect("portable_assemblyContext");
+      if (!assemblySelectAfter) {
+        return {
+          ok: false,
+          reason: "Assembly context control disappeared after remount",
+          text: host.innerText.slice(0, 3000)
+        };
+      }
+
+      assemblySelectAfter.value = "kitchen";
+      assemblySelectAfter.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const kitchenRoleSelectAfter = getSystemSelect("portable_kitchenModuleRole");
+      const requiresWorktopCheckboxAfter = getSystemCheckbox("portable_requiresWorktop");
+
       if (!firstMaterialSelect || !firstThicknessSelect) {
         return {
           ok: false,
@@ -79,9 +124,15 @@ async function main() {
         ok: true,
         hasPartParameters: text.toLowerCase().includes("part parameters"),
         hasBackPanelsGroup: text.includes("Back Panels"),
+        hasSystemParameters: text.toLowerCase().includes("assembly context"),
         visibleBlockedLabels,
         changeEvents: changes,
         hasEightMm,
+        assemblyContext: params.assemblyContext ?? null,
+        kitchenModuleRole: params.kitchenModuleRole ?? null,
+        requiresWorktop: params.requiresWorktop ?? null,
+        kitchenControlsHiddenOutsideKitchen: !kitchenRoleSelectHidden && !requiresWorktopCheckboxHidden,
+        kitchenControlsRestoredInsideKitchen: Boolean(kitchenRoleSelectAfter && requiresWorktopCheckboxAfter),
         boardMaterials: params.commercialSelections?.boardMaterials ?? {},
         boardThicknesses: params.commercialSelections?.boardThicknesses ?? {}
       };
@@ -91,7 +142,13 @@ async function main() {
       throw new Error(JSON.stringify(result, null, 2));
     }
     if (!result.hasPartParameters) throw new Error("Part Parameters section did not render.");
+    if (!result.hasSystemParameters) throw new Error("System Parameters section did not render.");
     if (!result.hasBackPanelsGroup) throw new Error("Back Panels group did not render.");
+    if (result.assemblyContext !== "kitchen") throw new Error(`Expected assemblyContext kitchen, got ${result.assemblyContext}.`);
+    if (result.kitchenModuleRole !== "base") throw new Error(`Expected kitchenModuleRole base, got ${result.kitchenModuleRole}.`);
+    if (result.requiresWorktop !== true) throw new Error(`Expected requiresWorktop true, got ${result.requiresWorktop}.`);
+    if (!result.kitchenControlsHiddenOutsideKitchen) throw new Error("Kitchen-specific controls did not hide outside kitchen context.");
+    if (!result.kitchenControlsRestoredInsideKitchen) throw new Error("Kitchen-specific controls did not restore after switching back to kitchen.");
     if ((result.visibleBlockedLabels?.length ?? 0) > 0) {
       throw new Error(`Legacy thickness fields still visible: ${result.visibleBlockedLabels.join(", ")}`);
     }

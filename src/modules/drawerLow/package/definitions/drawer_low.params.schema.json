@@ -116,6 +116,9 @@
       },
       "additionalProperties": true
     },
+    "assemblyContext": {
+      "type": "string"
+    },
     "autoFit": {
       "type": "boolean"
     },
@@ -125,11 +128,18 @@
     "heightCarcass": {
       "type": "number"
     },
+    "kitchenModuleRole": {
+      "type": "string"
+    },
     "legComponentId": {
       "type": "string"
+    },
+    "requiresWorktop": {
+      "type": "boolean"
     }
   },
   "required": [
+    "assemblyContext",
     "autoFit",
     "backGrooveClearanceMm",
     "backGrooveDepthMm",
@@ -155,10 +165,12 @@
     "handleType",
     "height",
     "heightCarcass",
+    "kitchenModuleRole",
     "legComponentId",
     "materials",
     "plinthHeight",
     "plinthSetbackMm",
+    "requiresWorktop",
     "sideClearanceMm",
     "sideGap",
     "topFrontHeightMm",

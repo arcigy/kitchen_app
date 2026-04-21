@@ -2,7 +2,7 @@
   "schemaVersion": "module-live-state.v1",
   "moduleType": "drawer_low",
   "displayName": "Drawer",
-  "exportedAt": "2026-04-21T21:24:13.699Z",
+  "exportedAt": "2026-04-21T22:55:57.009Z",
   "params": {
     "type": "drawer_low",
     "width": 800,
@@ -44,10 +44,13 @@
       "frontKey": "3",
       "drawerKey": "5"
     },
+    "assemblyContext": "kitchen",
     "autoFit": true,
     "handleComponentId": "cmp.handle.bar.160.black",
     "heightCarcass": 662,
-    "legComponentId": "cmp.leg.adjustable.100.black"
+    "kitchenModuleRole": "base",
+    "legComponentId": "cmp.leg.adjustable.100.black",
+    "requiresWorktop": true
   },
   "systemParameters": {
     "typeId": "drawer_low__type",
@@ -60,6 +63,9 @@
     "widthMm": 800,
     "heightMm": 700,
     "depthMm": 560,
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "base",
+    "requiresWorktop": true,
     "positionXmm": 0,
     "positionYmm": 0,
     "positionZmm": 0,
@@ -79,8 +85,8 @@
       "base",
       "drawer_low"
     ],
-    "createdAt": "2026-04-21T21:24:13.699Z",
-    "updatedAt": "2026-04-21T21:24:13.699Z",
+    "createdAt": "2026-04-21T22:55:57.009Z",
+    "updatedAt": "2026-04-21T22:55:57.009Z",
     "exportToIfc": true,
     "ifcClass": "IfcFurniture",
     "ifcPredefinedType": null,
@@ -203,10 +209,13 @@
         "frontName": "MDF Front",
         "drawerName": "Drawer Box Board"
       },
+      "assemblyContext": "kitchen",
       "autoFit": true,
       "handleComponentId": "cmp.handle.bar.160.black",
       "heightCarcass": 662,
-      "legComponentId": "cmp.leg.adjustable.100.black"
+      "kitchenModuleRole": "base",
+      "legComponentId": "cmp.leg.adjustable.100.black",
+      "requiresWorktop": true
     },
     "selectedPartName": null,
     "importedModuleType": "drawer_low",

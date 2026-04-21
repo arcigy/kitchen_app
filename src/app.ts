@@ -1,7 +1,7 @@
 ﻿import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import type { ModuleParams } from "./model/cabinetTypes";
-import { validateModule } from "./model/cabinetTypes";
+import { normalizeModuleParams, validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./core/scene";
 import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
@@ -4912,6 +4912,7 @@ type WindowInstance = {
       if (!accepted) return false;
       commitHistory(S);
       pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
+      mountProps();
       return true;
     };
 
@@ -6169,9 +6170,13 @@ type WindowInstance = {
   }
 
   function rebuildInstance(inst: LayoutInstance) {
-    const errors = validateModule(inst.params);
+    const normalizedParams = normalizeModuleParams(structuredClone(inst.params));
+    const errors = validateModule(normalizedParams);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return false;
+
+    const previousParams = structuredClone(inst.params);
+    inst.params = normalizedParams;
 
     const next = buildModule(inst.params);
     next.name = `moduleGeom_${inst.id}`;
@@ -6194,6 +6199,7 @@ type WindowInstance = {
     const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst);
     if (!inRoom || overlaps) {
       // Revert (layout must never allow overlaps)
+      inst.params = previousParams;
       inst.root.remove(inst.module);
       disposeObject3D(inst.module);
       inst.module = prevModule;
