@@ -2631,13 +2631,13 @@ type WindowInstance = {
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
             transformState.typed = `${transformState.typed}${ev.key}`.slice(0, 6);
-            setUnderlayStatus(`Rotate: ${transformState.typed}Â° (Enter)`);
+            setUnderlayStatus(`Rotácia: ${transformState.typed}° (Enter)`);
             ev.preventDefault();
             return;
           }
           if (ev.key === "Backspace") {
             transformState.typed = transformState.typed.slice(0, -1);
-            setUnderlayStatus(transformState.typed.length ? `Rotate: ${transformState.typed}Â° (Enter)` : "Rotate: move mouse to set direction, or type degrees + Enter.");
+            setUnderlayStatus(transformState.typed.length ? `Rotácia: ${transformState.typed}° (Enter)` : "Rotácia: pohni myšou pre smer, alebo zadaj stupne + Enter.");
             ev.preventDefault();
             return;
           }
@@ -2647,7 +2647,7 @@ type WindowInstance = {
               const sign = transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               applyRotateAngle(ang);
-              setUnderlayStatus(`Rotate: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Â° (click to finish)`);
+              setUnderlayStatus(`Rotácia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}° (klikni pre dokončenie)`);
             }
             transformState.typed = "";
             ev.preventDefault();
@@ -2957,7 +2957,7 @@ type WindowInstance = {
             setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             wallTypedHud.style.display = "none";
-            setUnderlayStatus("Wall: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -3022,7 +3022,7 @@ type WindowInstance = {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-            setUnderlayStatus("Wall: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
             selectedKind = "wall";
             selectedWallId = w.id;
             mountProps();
@@ -3891,32 +3891,32 @@ type WindowInstance = {
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Moduly");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "PridaĹĄ drawer", () => {
+        ribbonButton(a, "Pridať drawer", () => {
           ensureLayoutMode();
           addInstance("drawer_low");
         });
-        ribbonButton(a, "PridaĹĄ shelves", () => {
+        ribbonButton(a, "Pridať shelves", () => {
           ensureLayoutMode();
           addInstance("shelves");
         });
-        ribbonButton(a, "PridaĹĄ corner", () => {
+        ribbonButton(a, "Pridať corner", () => {
           ensureLayoutMode();
           addInstance("corner_shelf_lower");
         });
 
-        const g2 = ribbonGroup(panelEl, "VĂ˝ber");
+        const g2 = ribbonGroup(panelEl, "Výber");
         const a2 = ribbonActions(g2, 3);
-        ribbonButton(a2, "DuplikovaĹĄ", () => {
+        ribbonButton(a2, "Duplikovať", () => {
           ensureLayoutMode();
           if (!selectedInstanceId) return;
           duplicateInstance(selectedInstanceId);
         });
-        ribbonButton(a2, "ZmazaĹĄ", () => {
+        ribbonButton(a2, "Zmazať", () => {
           ensureLayoutMode();
           if (!selectedInstanceId) return;
           deleteInstance(selectedInstanceId);
         });
-        ribbonButton(a2, "2D pohÄľad", () => {
+        ribbonButton(a2, "2D pohľad", () => {
           ensureLayoutMode();
           view2d.checked = !view2d.checked;
           setView2d(view2d.checked);
@@ -3941,13 +3941,13 @@ type WindowInstance = {
         const file = document.createElement("input");
         file.type = "file";
         file.accept = ".png,.pdf,image/png,application/pdf";
-        ribbonRow(g, "NahraĹĄ", file);
+        ribbonRow(g, "Nahrať", file);
 
         const clearBtnWrap = ribbonActions(g, 1);
-        ribbonButton(clearBtnWrap, "OdstrĂˇniĹĄ podklad", () => {
+        ribbonButton(clearBtnWrap, "Odstrániť podklad", () => {
           ensureLayoutMode();
           clearUnderlay();
-          setUnderlayStatus("Podklad odstrĂˇnenĂ˝.");
+          setUnderlayStatus("Podklad odstránený.");
         });
 
         const opacity = document.createElement("input");
@@ -3962,7 +3962,7 @@ type WindowInstance = {
         rot.type = "number";
         rot.step = "1";
         rot.value = String(underlayState.rotationDeg);
-        ribbonRow(g, "RotĂˇcia (Â°)", rot);
+        ribbonRow(g, "Rotácia (°)", rot);
 
         const offX = document.createElement("input");
         offX.type = "number";
@@ -3980,10 +3980,10 @@ type WindowInstance = {
         known.type = "number";
         known.step = "1";
         known.value = String(underlayCal.knownMm);
-        ribbonRow(g, "KalibrĂˇcia (mm)", known);
+        ribbonRow(g, "Kalibrácia (mm)", known);
 
         const calWrap = ribbonActions(g, 2);
-        ribbonButton(calWrap, "KalibrovaĹĄ ĹˇkĂˇlu", () => {
+        ribbonButton(calWrap, "Kalibrovať škálu", () => {
           ensureLayoutMode();
           if (!underlayMesh.visible) {
             setUnderlayStatus("Najprv nahraj podklad.");
@@ -3992,26 +3992,26 @@ type WindowInstance = {
           underlayCal.knownMm = Math.max(1, Number(known.value) || 1);
           underlayCal.active = true;
           underlayCal.first = null;
-          setUnderlayStatus("KalibrĂˇcia: klikni prvĂ˝ bod...");
+          setUnderlayStatus("Kalibrácia: klikni prvý bod...");
         });
-        ribbonButton(calWrap, "Reset ĹˇkĂˇly", () => {
+        ribbonButton(calWrap, "Reset škály", () => {
           ensureLayoutMode();
           underlayState.scale = 1;
           updateUnderlayTransform();
-          setUnderlayStatus("Ĺ kĂˇla resetnutĂˇ.");
+          setUnderlayStatus("Škála resetnutá.");
         });
 
         underlayStatusEl = document.createElement("div");
         underlayStatusEl.className = "muted";
         underlayStatusEl.style.fontSize = "12px";
-        underlayStatusEl.textContent = "Nahraj PDF/PNG podklad a nastav 1:1 kalibrĂˇciou.";
+        underlayStatusEl.textContent = "Nahraj PDF/PNG podklad a nastav 1:1 kalibráciou.";
         g.appendChild(underlayStatusEl);
 
         file.addEventListener("change", async () => {
           ensureLayoutMode();
           const f = file.files?.[0] ?? null;
           if (!f) return;
-          setUnderlayStatus("NaÄŤĂ­tavam...");
+          setUnderlayStatus("Načítavam...");
           try {
             const res = await loadUnderlayToCanvas(f);
             setUnderlayFromCanvas(res.canvas, res.name, res.kind);
@@ -4021,7 +4021,7 @@ type WindowInstance = {
             offZ.value = String(underlayState.offsetMm.z);
             setUnderlayStatus(`Podklad: ${res.name}`);
           } catch (e) {
-            setUnderlayStatus(`Chyba pri naÄŤĂ­tanĂ­: ${(e as Error).message}`);
+            setUnderlayStatus(`Chyba pri načítaní: ${(e as Error).message}`);
           } finally {
             file.value = "";
           }
@@ -4049,9 +4049,9 @@ type WindowInstance = {
 
         const g2 = ribbonGroup(panelEl, "Steny");
         const a2 = ribbonActions(g2, 3);
-        ribbonButton(a2, "PridaĹĄ stenu");
-        ribbonButton(a2, "OdsadiĹĄ stenu");
-        ribbonButton(a2, "ZmazaĹĄ stenu");
+        ribbonButton(a2, "Pridať stenu");
+        ribbonButton(a2, "Odsadiť stenu");
+        ribbonButton(a2, "Zmazať stenu");
       }
     },
     {
@@ -4060,9 +4060,9 @@ type WindowInstance = {
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Dvere");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "PridaĹĄ dvere");
-        ribbonButton(a, "EditovaĹĄ dvere");
-        ribbonButton(a, "OdstrĂˇniĹĄ dvere");
+        ribbonButton(a, "Pridať dvere");
+        ribbonButton(a, "Editovať dvere");
+        ribbonButton(a, "Odstrániť dvere");
       }
     },
     {
@@ -4071,7 +4071,7 @@ type WindowInstance = {
       build(panelEl) {
         const g = ribbonGroup(panelEl, "Okno");
         const a = ribbonActions(g, 3);
-        ribbonButton(a, "PridaĹĄ/oznaÄŤiĹĄ okno", () => {
+        ribbonButton(a, "Pridať/označiť okno", () => {
           ensureLayoutMode();
           addOrSelectWindow();
         });
@@ -4631,12 +4631,12 @@ type WindowInstance = {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni referenĂ„Ĺ¤nÄ‚Ĺź lÄ‚Â­niu, potom druhÄ‚Ĺź rovnobeÄąÄľnÄ‚Ĺź lÄ‚Â­niu (stena sa posunie alebo sa upravÄ‚Â­ koniec). Esc = zruÄąË‡iÄąÄ„.";
+    hint.textContent = "Klikni referenčnú líniu, potom druhú rovnobežnú líniu (stena sa posunie alebo sa upraví koniec). Esc = zrušiť.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
     cur.style.marginTop = "8px";
-    cur.textContent = alignState.ref ? `Reference: ${alignState.ref.label}` : "Reference: (none)";
+    cur.textContent = alignState.ref ? `Referencia: ${alignState.ref.label}` : "Referencia: (žiadna)";
     s.appendChild(cur);
   };
 
@@ -4645,19 +4645,19 @@ type WindowInstance = {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni cieÄľovĂş stenu (ktorĂş chceĹˇ skrĂˇtiĹĄ), potom klikni cutter lĂ­niu. Esc = spĂ¤ĹĄ.";
+    hint.textContent = "Klikni cieľovú stenu (ktorú chceš skrátiť), potom klikni reznú líniu. Esc = späť.";
     s.appendChild(hint);
 
     const step = document.createElement("div");
     step.className = "muted";
     step.style.marginTop = "8px";
-    step.textContent = trimState.step === "pickTarget" ? "Step: pick target" : "Step: pick cutter";
+    step.textContent = trimState.step === "pickTarget" ? "Krok: vyber cieľ" : "Krok: vyber rez";
     s.appendChild(step);
 
     const cur = document.createElement("div");
     cur.className = "muted";
     cur.style.marginTop = "6px";
-    cur.textContent = trimState.targetPick ? `Target: ${trimState.targetPick.label}` : "Target: (none)";
+    cur.textContent = trimState.targetPick ? `Cieľ: ${trimState.targetPick.label}` : "Cieľ: (žiadny)";
     s.appendChild(cur);
   };
 
@@ -4666,12 +4666,12 @@ type WindowInstance = {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni 1. lĂ­niu, potom 2. rovnobeĹľnĂş lĂ­niu. KĂłta sa preview-uje podÄľa kurzora, zostane v scĂ©ne, dĂˇ sa posĂşvaĹĄ a mazaĹĄ.";
+    hint.textContent = "Klikni 1. líniu, potom 2. rovnobežnú líniu. Kóta sa zobrazuje pod kurzorom, zostane v scéne a dá sa posúvať aj mazať.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
     cur.style.marginTop = "8px";
-    cur.textContent = dimTool.a ? `First: ${dimTool.a.label}` : "First: (none)";
+    cur.textContent = dimTool.a ? `Prvá: ${dimTool.a.label}` : "Prvá: (žiadna)";
     s.appendChild(cur);
   };
 
@@ -4848,7 +4848,7 @@ type WindowInstance = {
     s.appendChild(type);
     const pos = document.createElement("div");
     pos.className = "muted";
-    pos.textContent = `Pos: ${Math.round(inst.root.position.x * 1000)}Ă—${Math.round(inst.root.position.z * 1000)} mm`;
+    pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
     s.appendChild(pos);
 
     const rowHost = document.createElement("div");
@@ -4910,7 +4910,7 @@ type WindowInstance = {
       const accepted = rebuildInstance(inst);
       if (!accepted) return false;
       commitHistory(S);
-      pos.textContent = `Pos: ${Math.round(inst.root.position.x * 1000)}Ă—${Math.round(inst.root.position.z * 1000)} mm`;
+      pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
       return true;
     };
 
@@ -4981,7 +4981,7 @@ type WindowInstance = {
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.style.marginTop = "8px";
-    hint.textContent = "Enter/blur = apply (posunie jednu stenu). Drag kĂłtu = zmena odsadenia.";
+    hint.textContent = "Enter/blur = použiť (posunie jednu stenu). Potiahni kótu = zmena odsadenia.";
     s.appendChild(hint);
 
     const apply = () => {
@@ -5000,7 +5000,7 @@ type WindowInstance = {
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = "Nastavenia okna zatiaÄľ zostĂˇvajĂş vpravo (TODO: presunĂşĹĄ do properties).";
+    p.textContent = "Nastavenia okna zatiaľ zostávajú vpravo (TODO: presunúť do properties).";
     s.appendChild(p);
   };
 
@@ -7160,7 +7160,7 @@ type WindowInstance = {
         const hitPoint = hit.point.clone();
         if (!underlayCal.first) {
           underlayCal.first = hitPoint.clone();
-          setUnderlayStatus(underlayCal.mode === "reference" ? "Reference scale: click second point..." : "KalibrĂˇcia: klikni druhĂ˝ bod...");
+          setUnderlayStatus(underlayCal.mode === "reference" ? "Referenčná škála: klikni druhý bod..." : "Kalibrácia: klikni druhý bod...");
           return;
         }
 
@@ -7177,7 +7177,7 @@ type WindowInstance = {
         let desiredMm = Math.max(1, underlayCal.knownMm);
         if (underlayCal.mode === "reference") {
           const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("ReĂˇlna vzdialenosĹĄ (mm)", String(measuredMm));
+          const s = window.prompt("Reálna vzdialenosť (mm)", String(measuredMm));
           const n = s === null ? null : Number(s.trim().replace(",", "."));
           if (!n || !Number.isFinite(n) || n <= 0) {
             setUnderlayStatus("Reference scale canceled.");
@@ -7194,9 +7194,9 @@ type WindowInstance = {
           underlayState.scale *= factor;
           updateUnderlayTransform();
           if (underlayScaleEl) underlayScaleEl.value = String(underlayState.scale);
-          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂˇcia OK: ${Math.round(desiredMm)} mm`);
+          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `Kalibrácia OK: ${Math.round(desiredMm)} mm`);
         } else {
-          setUnderlayStatus("KalibrĂˇcia zlyhala (nulovĂˇ vzdialenosĹĄ).");
+          setUnderlayStatus("Kalibrácia zlyhala (nulová vzdialenosť).");
         }
 
         underlayCal.active = false;
@@ -7586,7 +7586,7 @@ type WindowInstance = {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Wall: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
         return;
       }
 
@@ -7640,7 +7640,7 @@ type WindowInstance = {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Wall: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         selectedKind = "wall";
         selectedWallId = w.id;
@@ -8101,7 +8101,7 @@ type WindowInstance = {
       if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
         const delta = p.clone().sub(transformState.base);
         applyMoveDelta(delta);
-        setUnderlayStatus(`Move: Î” ${Math.round(delta.x * 1000)}Ă—${Math.round(delta.z * 1000)} mm (click to finish)`);
+        setUnderlayStatus(`Posun: Δ ${Math.round(delta.x * 1000)}×${Math.round(delta.z * 1000)} mm (klikni pre dokončenie)`);
         return;
       }
 
@@ -8115,7 +8115,7 @@ type WindowInstance = {
         while (d < -Math.PI) d += Math.PI * 2;
         transformState.lastAngleSign = d < 0 ? -1 : 1;
         applyRotateAngle(d);
-        setUnderlayStatus(`Rotate: ${Math.round((d * 180) / Math.PI)}Â° (click to finish)`);
+        setUnderlayStatus(`Rotácia: ${Math.round((d * 180) / Math.PI)}° (klikni pre dokončenie)`);
         return;
       }
     }
