@@ -34,6 +34,41 @@ export type PortableGeometrySnapshot = {
   parts: PortableGeometryPart[];
 };
 
+type PortableLiveMaterial = {
+  name?: string | null;
+  colorHex?: string | null;
+  transparent?: boolean;
+  opacity?: number | null;
+};
+
+type PortableLiveVector = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+type PortableLivePart = {
+  name: string;
+  selectable?: boolean;
+  visible?: boolean;
+  paramKeys?: string[];
+  positionMm?: PortableLiveVector;
+  sizeMm?: PortableLiveVector;
+  centerMm?: PortableLiveVector;
+  materials?: PortableLiveMaterial[];
+};
+
+export type PortableLiveStateSnapshot = {
+  moduleType: string;
+  displayName?: string;
+  params?: Record<string, unknown>;
+  liveRuntime?: {
+    moduleType?: string;
+    params?: Record<string, unknown>;
+    parts?: PortableLivePart[];
+  };
+};
+
 const MM_TO_M = 0.001;
 
 function getNumber(value: unknown, fallback: number) {
@@ -68,6 +103,17 @@ function resolveSnapshotDimensions(params: Record<string, unknown>, snapshot: Po
     depthMm: getNumber(params.depth, getNumber(params.lengthZ, snapshot.dimensions.depthMm)),
     worktopThicknessMm: getNumber(params.worktopThicknessMm, snapshot.dimensions.worktopThicknessMm),
     plinthHeightMm: getNumber(params.plinthHeight, snapshot.dimensions.plinthHeightMm)
+  };
+}
+
+function resolveLiveDimensions(params: Record<string, unknown>, baseParams: Record<string, unknown>) {
+  return {
+    widthMm: getNumber(params.width, getNumber(params.lengthX, getNumber(baseParams.width, getNumber(baseParams.lengthX, 800)))),
+    heightMm: getNumber(params.height, getNumber(baseParams.height, 720)),
+    depthMm: getNumber(params.depth, getNumber(params.lengthZ, getNumber(baseParams.depth, getNumber(baseParams.lengthZ, 560)))),
+    worktopThicknessMm: getNumber(params.worktopThicknessMm, getNumber(baseParams.worktopThicknessMm, 38)),
+    plinthHeightMm: getNumber(params.plinthHeight, getNumber(baseParams.plinthHeight, 100)),
+    plinthSetbackMm: getNumber(params.plinthSetbackMm, getNumber(baseParams.plinthSetbackMm, 0))
   };
 }
 
@@ -128,7 +174,7 @@ function resolvePartSize(
   };
 }
 
-function getMaterial(part: PortableGeometryPart) {
+function getFallbackMaterial(part: PortableGeometryPart) {
   if (part.materialRole === "front") {
     return new THREE.MeshStandardMaterial({ color: 0x5b7dd3, roughness: 0.6, metalness: 0.05 });
   }
@@ -195,11 +241,19 @@ function placePart(args: {
   }
 
   if (/back/i.test(part.id)) {
-    return new THREE.Vector3(0, (plinthHeightMm + size.height / 2 + boardThickness) * MM_TO_M, (-depthMm / 2 + size.depth / 2) * MM_TO_M);
+    return new THREE.Vector3(
+      0,
+      (plinthHeightMm + size.height / 2 + boardThickness) * MM_TO_M,
+      (-depthMm / 2 + size.depth / 2) * MM_TO_M
+    );
   }
 
   if (/plinth|kick/i.test(part.id)) {
-    return new THREE.Vector3(0, size.height * 0.5 * MM_TO_M, (depthMm / 2 - size.depth / 2 - plinthSetbackMm) * MM_TO_M);
+    return new THREE.Vector3(
+      0,
+      size.height * 0.5 * MM_TO_M,
+      (depthMm / 2 - size.depth / 2 - plinthSetbackMm) * MM_TO_M
+    );
   }
 
   if (/top/i.test(part.id)) {
@@ -219,11 +273,15 @@ function placePart(args: {
   if (part.kind === "drawer-box") {
     const resolvedIndex = frontIndex >= 0 ? frontIndex : 0;
     const centerY = drawerCenters[resolvedIndex] ?? plinthHeightMm + size.height / 2;
-    return new THREE.Vector3(0, centerY * MM_TO_M, (depthMm / 2 - frontThicknessMm - size.depth / 2 - 12) * MM_TO_M);
+    return new THREE.Vector3(
+      0,
+      centerY * MM_TO_M,
+      (depthMm / 2 - frontThicknessMm - size.depth / 2 - 12) * MM_TO_M
+    );
   }
 
   if (part.kind === "hardware" && /handle/i.test(part.id)) {
-    const centerY = drawerCenters[0] ?? (heightMm / 2);
+    const centerY = drawerCenters[0] ?? heightMm / 2;
     return new THREE.Vector3(0, centerY * MM_TO_M, (depthMm / 2 + size.depth / 2 + frontThicknessMm) * MM_TO_M);
   }
 
@@ -232,6 +290,155 @@ function placePart(args: {
     (heightMm + 40 + Math.floor(index / 3) * 50) * MM_TO_M,
     0
   );
+}
+
+function toMeshPositionCentered(positionMm: number, axisSizeMm: number, spanMm: number, stretch: boolean) {
+  const leftGapMm = positionMm - axisSizeMm / 2 + spanMm / 2;
+  const rightGapMm = spanMm / 2 - (positionMm + axisSizeMm / 2);
+  const anchoredLeft = leftGapMm <= rightGapMm;
+  if (stretch) {
+    const nextSizeMm = Math.max(1, spanMm - leftGapMm - rightGapMm);
+    const nextPositionMm = -spanMm / 2 + leftGapMm + nextSizeMm / 2;
+    return { positionMm: nextPositionMm, sizeMm: nextSizeMm };
+  }
+  const nextPositionMm = anchoredLeft
+    ? -spanMm / 2 + leftGapMm + axisSizeMm / 2
+    : spanMm / 2 - rightGapMm - axisSizeMm / 2;
+  return { positionMm: nextPositionMm, sizeMm: axisSizeMm };
+}
+
+function toMeshPositionVertical(
+  positionMm: number,
+  axisSizeMm: number,
+  baseHeightMm: number,
+  nextHeightMm: number,
+  gapAdjustments: { bottomMm?: number; topMm?: number },
+  stretch: boolean
+) {
+  const bottomGapMm = positionMm - axisSizeMm / 2 + (gapAdjustments.bottomMm ?? 0);
+  const topGapMm = baseHeightMm - (positionMm + axisSizeMm / 2) + (gapAdjustments.topMm ?? 0);
+  if (stretch) {
+    const nextSizeMm = Math.max(1, nextHeightMm - bottomGapMm - topGapMm);
+    const nextPositionMm = bottomGapMm + nextSizeMm / 2;
+    return { positionMm: nextPositionMm, sizeMm: nextSizeMm };
+  }
+  const anchoredBottom = bottomGapMm <= topGapMm;
+  const nextPositionMm = anchoredBottom
+    ? bottomGapMm + axisSizeMm / 2
+    : nextHeightMm - topGapMm - axisSizeMm / 2;
+  return { positionMm: nextPositionMm, sizeMm: axisSizeMm };
+}
+
+function shouldStretchAxis(part: PortableLivePart, axis: "x" | "y" | "z", spanMm: number, axisSizeMm: number) {
+  const keys = new Set(part.paramKeys ?? []);
+  if (axis === "x" && !keys.has("width")) return false;
+  if (axis === "z" && !keys.has("depth")) return false;
+  if (
+    axis === "y" &&
+    !keys.has("height") &&
+    !keys.has("plinthHeight") &&
+    !keys.has("worktopThicknessMm") &&
+    !keys.has("drawerFrontHeights")
+  ) {
+    return false;
+  }
+
+  if (axisSizeMm >= spanMm * 0.45) return true;
+  const sizes = part.sizeMm;
+  if (!sizes) return false;
+  const orthogonal = axis === "x" ? [sizes.y, sizes.z] : axis === "y" ? [sizes.x, sizes.z] : [sizes.x, sizes.y];
+  return axisSizeMm >= Math.max(...orthogonal) * 1.25;
+}
+
+function makeRuntimeMaterial(part: PortableLivePart) {
+  const firstVisibleMaterial = part.materials?.find((entry) => !!entry.colorHex);
+  const color = firstVisibleMaterial?.colorHex ?? "#b8bcc7";
+  const transparent = firstVisibleMaterial?.transparent === true;
+  const opacity = clamp(getNumber(firstVisibleMaterial?.opacity, 1), 0, 1);
+  const roughness = transparent ? 0.35 : 0.72;
+  const metalness = /screw|rail|handle|clip|leg/i.test(part.name) ? 0.35 : 0.04;
+  return new THREE.MeshStandardMaterial({
+    color,
+    transparent,
+    opacity,
+    roughness,
+    metalness
+  });
+}
+
+function buildMeshFromLivePart(
+  part: PortableLivePart,
+  currentParams: Record<string, unknown>,
+  baseParams: Record<string, unknown>
+) {
+  if (!part.sizeMm) return null;
+  const baseDims = resolveLiveDimensions(baseParams, baseParams);
+  const nextDims = resolveLiveDimensions(currentParams, baseParams);
+  const center = part.centerMm ?? part.positionMm;
+  if (!center) return null;
+
+  const stretchX = shouldStretchAxis(part, "x", baseDims.widthMm, part.sizeMm.x);
+  const stretchY = shouldStretchAxis(part, "y", baseDims.heightMm, part.sizeMm.y);
+  const stretchZ = shouldStretchAxis(part, "z", baseDims.depthMm, part.sizeMm.z);
+
+  const x = toMeshPositionCentered(center.x, part.sizeMm.x, nextDims.widthMm, stretchX);
+  const y = toMeshPositionVertical(center.y, part.sizeMm.y, baseDims.heightMm, nextDims.heightMm, {
+    bottomMm:
+      (part.paramKeys ?? []).includes("plinthHeight") ? nextDims.plinthHeightMm - baseDims.plinthHeightMm : 0,
+    topMm:
+      (part.paramKeys ?? []).includes("worktopThicknessMm")
+        ? nextDims.worktopThicknessMm - baseDims.worktopThicknessMm
+        : 0
+  }, stretchY);
+  const z = toMeshPositionCentered(
+    center.z,
+    part.sizeMm.z,
+    nextDims.depthMm,
+    stretchZ
+  );
+
+  if ((part.paramKeys ?? []).includes("plinthSetbackMm")) {
+    const delta = nextDims.plinthSetbackMm - baseDims.plinthSetbackMm;
+    const positiveFaceGap = nextDims.depthMm / 2 - (z.positionMm + z.sizeMm / 2);
+    const negativeFaceGap = z.positionMm - z.sizeMm / 2 + nextDims.depthMm / 2;
+    if (positiveFaceGap <= negativeFaceGap) {
+      z.positionMm -= delta;
+    }
+  }
+
+  const geometry = new THREE.BoxGeometry(
+    Math.max(1, x.sizeMm) * MM_TO_M,
+    Math.max(1, y.sizeMm) * MM_TO_M,
+    Math.max(1, z.sizeMm) * MM_TO_M
+  );
+  const mesh = new THREE.Mesh(geometry, makeRuntimeMaterial(part));
+  mesh.name = part.name;
+  mesh.position.set(x.positionMm * MM_TO_M, y.positionMm * MM_TO_M, z.positionMm * MM_TO_M);
+  mesh.visible = part.visible !== false;
+  mesh.userData.selectable = part.selectable !== false;
+  mesh.userData.paramKeys = [...(part.paramKeys ?? [])];
+  mesh.userData.dimensionsMm = {
+    width: x.sizeMm,
+    height: y.sizeMm,
+    depth: z.sizeMm
+  };
+  return mesh;
+}
+
+export function buildPortableLiveModuleGroup(
+  params: Record<string, unknown>,
+  snapshot: PortableLiveStateSnapshot
+): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `${snapshot.moduleType}PortableLiveModule`;
+  const baseParams = snapshot.liveRuntime?.params ?? snapshot.params ?? {};
+  const parts = snapshot.liveRuntime?.parts ?? [];
+  for (const part of parts) {
+    const mesh = buildMeshFromLivePart(part, params, baseParams);
+    if (!mesh) continue;
+    group.add(mesh);
+  }
+  return group;
 }
 
 export function buildPortableModuleGroup(
@@ -251,7 +458,7 @@ export function buildPortableModuleGroup(
         Math.max(size.height, 1) * MM_TO_M,
         Math.max(size.depth, 1) * MM_TO_M
       );
-      const mesh = new THREE.Mesh(geometry, getMaterial(part));
+      const mesh = new THREE.Mesh(geometry, getFallbackMaterial(part));
       mesh.name = quantity === 1 ? part.id : `${part.id}_${copyIndex + 1}`;
       mesh.position.copy(placePart({ part, index, size, params, snapshot, drawerHeights }));
       if (quantity > 1 && !/handle/i.test(part.id)) {

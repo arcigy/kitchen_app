@@ -1,11 +1,11 @@
 import type { Group } from "three";
-import geometrySnapshot from "./package/definitions/drawer_low.geometry.json";
-import { buildPortableModuleGroup } from "../runtime/portableGeometry";
+import liveStateSnapshot from "./package/integration/current-live-state.json";
+import { buildPortableLiveModuleGroup } from "../runtime/portableGeometry";
 import type { DrawerLowParams } from "./types";
 
 export function buildDrawerLow(params: DrawerLowParams): Group {
-  return buildPortableModuleGroup(
+  return buildPortableLiveModuleGroup(
     params as Record<string, unknown>,
-    geometrySnapshot as Parameters<typeof buildPortableModuleGroup>[1]
+    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1]
   );
 }

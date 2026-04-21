@@ -830,8 +830,23 @@ function generatePortableGeometrySource(args: {
   moduleType: string;
   paramsTypeName: string;
   builderExportName: string;
+  hasLiveState: boolean;
 }) {
-  const { moduleType, paramsTypeName, builderExportName } = args;
+  const { moduleType, paramsTypeName, builderExportName, hasLiveState } = args;
+  if (hasLiveState) {
+    return `import type { Group } from "three";
+import liveStateSnapshot from "./package/integration/current-live-state.json";
+import { buildPortableLiveModuleGroup } from "../runtime/portableGeometry";
+import type { ${paramsTypeName} } from "./types";
+
+export function ${builderExportName}(params: ${paramsTypeName}): Group {
+  return buildPortableLiveModuleGroup(
+    params as Record<string, unknown>,
+    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1]
+  );
+}
+`;
+  }
   return `import type { Group } from "three";
 import geometrySnapshot from "./package/definitions/${moduleType}.geometry.json";
 import { buildPortableModuleGroup } from "../runtime/portableGeometry";
@@ -1058,6 +1073,7 @@ function installPortablePackage(files: ZipFiles) {
     const hasSystemParameters =
       files.has(joinPosix(packageRootDir, "definitions", "system-parameters.schema.json")) &&
       files.has(joinPosix(packageRootDir, "definitions", `${moduleType}.system-parameters.json`));
+    const hasLiveState = files.has(joinPosix(packageRootDir, "integration", "current-live-state.json"));
 
     const generatedCoreFiles = [
       {
@@ -1075,7 +1091,8 @@ function installPortablePackage(files: ZipFiles) {
         contents: generatePortableGeometrySource({
           moduleType,
           paramsTypeName,
-          builderExportName
+          builderExportName,
+          hasLiveState
         })
       },
       {
