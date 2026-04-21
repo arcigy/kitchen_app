@@ -1,9 +1,12 @@
 import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { BOMResult } from "../layout/bom/bomTypes";
 import type { DrawerLowParams } from "./drawerLow/types";
 import { buildDrawerLow } from "./drawerLow/geometry";
 import { createDrawerLowControls } from "./drawerLow/controls";
+import { calculateBOM as calculateDrawerLowBOM } from "./drawerLow/calculation";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -39,6 +42,7 @@ export type ModuleDescriptor = {
     params: ModuleParams,
     args: ModuleControlsArgs
   ) => ModuleControlsApi;
+  calculateBOM: (params: ModuleParams, ctx: KitchenContext) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
 
@@ -52,6 +56,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     defaultParams: () => makeDefaultModuleParams("drawer_low"),
     build: (params) => buildDrawerLow(params as DrawerLowParams),
     createControls: (container, params, args) => createDrawerLowControls(container, params as DrawerLowParams, args),
+    calculateBOM: (params, ctx) => calculateDrawerLowBOM(params as DrawerLowParams, ctx),
     capabilities: {
           "hasWorktop": true,
           "supportsKitchenContextDimensions": true,

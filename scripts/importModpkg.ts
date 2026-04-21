@@ -597,6 +597,8 @@ function generateRegistry(installed: InstalledModule[]) {
   if (installed.length === 0) {
     return `import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { BOMResult } from "../layout/bom/bomTypes";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -632,6 +634,7 @@ export type ModuleDescriptor = {
     params: ModuleParams,
     args: ModuleControlsArgs
   ) => ModuleControlsApi;
+  calculateBOM: (params: ModuleParams, ctx: KitchenContext) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
 
@@ -663,7 +666,8 @@ export function getModuleDescriptorOrThrow(type: ModuleType): ModuleDescriptor {
     .map(
       (mod) => `import type { ${mod.paramsTypeName} } from "./${mod.moduleFolder}/types";
 import { ${mod.builderExportName} } from "./${mod.moduleFolder}/geometry";
-import { ${mod.controlsExportName} } from "./${mod.moduleFolder}/controls";`
+import { ${mod.controlsExportName} } from "./${mod.moduleFolder}/controls";
+import { calculateBOM as calculate${toPascalCase(mod.moduleType)}BOM } from "./${mod.moduleFolder}/calculation";`
     )
     .join("\n");
 
@@ -678,6 +682,7 @@ import { ${mod.controlsExportName} } from "./${mod.moduleFolder}/controls";`
     defaultParams: () => makeDefaultModuleParams(${quote(mod.moduleType)}),
     build: (params) => ${mod.builderExportName}(params as ${mod.paramsTypeName}),
     createControls: (container, params, args) => ${mod.controlsExportName}(container, params as ${mod.paramsTypeName}, args),
+    calculateBOM: (params, ctx) => calculate${toPascalCase(mod.moduleType)}BOM(params as ${mod.paramsTypeName}, ctx),
     capabilities: ${JSON.stringify(mod.capabilities, null, 6).replace(/\n/g, "\n    ")}
   }`
     )
@@ -686,6 +691,8 @@ import { ${mod.controlsExportName} } from "./${mod.moduleFolder}/controls";`
   return `import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { BOMResult } from "../layout/bom/bomTypes";
 ${imports}
 
 export type ModuleControlsApi = {
@@ -722,6 +729,7 @@ export type ModuleDescriptor = {
     params: ModuleParams,
     args: ModuleControlsArgs
   ) => ModuleControlsApi;
+  calculateBOM: (params: ModuleParams, ctx: KitchenContext) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
 
@@ -836,13 +844,15 @@ function generatePortableGeometrySource(args: {
   if (hasLiveState) {
     return `import type { Group } from "three";
 import liveStateSnapshot from "./package/integration/current-live-state.json";
+import materialsSnapshot from "./package/definitions/${moduleType}.materials.snapshot.json";
 import { buildPortableLiveModuleGroup } from "../runtime/portableGeometry";
 import type { ${paramsTypeName} } from "./types";
 
 export function ${builderExportName}(params: ${paramsTypeName}): Group {
   return buildPortableLiveModuleGroup(
     params as Record<string, unknown>,
-    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1]
+    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1],
+    materialsSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[2]
   );
 }
 `;
@@ -878,7 +888,8 @@ import systemParameterValues from "./package/definitions/${moduleType}.system-pa
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]`
     : "";
-  return `import parameterCatalog from "./package/definitions/${moduleType}.parameter-catalog.json";${systemImports}
+  return `import parameterCatalog from "./package/definitions/${moduleType}.parameter-catalog.json";
+import materialsSnapshot from "./package/definitions/${moduleType}.materials.snapshot.json";${systemImports}
 import type { ${paramsTypeName} } from "./types";
 import {
   createPortableModuleControls,
@@ -895,7 +906,8 @@ export function ${controlsExportName}(
     container,
     params: params as Record<string, unknown>,
     catalog: parameterCatalog as Parameters<typeof createPortableModuleControls>[0]["catalog"],
-    controlArgs: args${systemArgs}
+    controlArgs: args,
+    materialsSnapshot: materialsSnapshot as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"]${systemArgs}
   });
 }
 `;
@@ -909,17 +921,17 @@ function generatePortableCalculationSource(args: {
   return `import type { KitchenContext } from "../../layout/kitchenContext";
 import type { BOMResult } from "../../layout/bom/bomTypes";
 import bomSnapshot from "./package/commercial/${moduleType}.bom.json";
-import pricingSnapshot from "./package/commercial/${moduleType}.pricing.json";
+import materialsSnapshot from "./package/definitions/${moduleType}.materials.snapshot.json";
 import { buildPortableBomResult } from "../runtime/portableCalculation";
 import type { ${paramsTypeName} } from "./types";
 
 export function calculateBOM(params: ${paramsTypeName}, ctx: KitchenContext): BOMResult {
-  void params;
-  void ctx;
   return buildPortableBomResult({
     moduleType: ${quote(moduleType)},
+    params: params as Record<string, unknown>,
+    ctx,
     bom: bomSnapshot as Parameters<typeof buildPortableBomResult>[0]["bom"],
-    pricing: pricingSnapshot as Parameters<typeof buildPortableBomResult>[0]["pricing"]
+    materialsSnapshot: materialsSnapshot as Parameters<typeof buildPortableBomResult>[0]["materialsSnapshot"]
   });
 }
 `;

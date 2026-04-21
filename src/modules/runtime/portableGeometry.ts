@@ -1,4 +1,10 @@
 import * as THREE from "three";
+import {
+  getPortableMaterialsSnapshotSelections,
+  type PortableMaterialsSnapshot
+} from "./portableCommercial";
+import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
+import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
 
 export type PortableGeometryPart = {
   id: string;
@@ -366,6 +372,79 @@ function makeRuntimeMaterial(part: PortableLivePart) {
   });
 }
 
+function resolveDrawerLowBoardSlot(partName: string) {
+  if (partName === "leftSide") return "left-side";
+  if (partName === "rightSide") return "right-side";
+  if (partName === "bottom") return "bottom-panel";
+  if (partName === "topRailFront" || partName === "topRailBack") return "top-panel";
+  if (partName === "back") return "back-panel";
+  if (partName === "kick") return "plinth";
+  const frontMatch = partName.match(/^front_(\d+)$/i);
+  if (frontMatch) return `drawer-front-${frontMatch[1]}`;
+  const drawerSideMatch = partName.match(/^drawer_(\d+)_side[LR]$/i);
+  if (drawerSideMatch) return `drawer-box-${drawerSideMatch[1]}-side-panels`;
+  const drawerBackMatch = partName.match(/^drawer_(\d+)_back$/i);
+  if (drawerBackMatch) return `drawer-box-${drawerBackMatch[1]}-front-back-panels`;
+  const drawerBottomMatch = partName.match(/^drawer_(\d+)_bottom$/i);
+  if (drawerBottomMatch) return `drawer-box-${drawerBottomMatch[1]}-bottom-panel`;
+  return null;
+}
+
+function resolveDrawerLowComponentAssignment(partName: string, params: Record<string, unknown>, snapshot: PortableMaterialsSnapshot | null | undefined) {
+  const componentAssignments = snapshot?.componentAssignments ?? [];
+  const findAssigned = (assignmentKey: string) => componentAssignments.find((entry) => entry.assignmentKey === assignmentKey)?.component ?? null;
+
+  if (/^handle_/i.test(partName)) {
+    const explicit = typeof params.handleComponentId === "string" ? getComponentDefinitionById(params.handleComponentId) : null;
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("drawer-handles");
+  }
+  if (/^leg_/i.test(partName)) {
+    const explicit = typeof params.legComponentId === "string" ? getComponentDefinitionById(params.legComponentId) : null;
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("adjustable-legs");
+  }
+  if (/^drawer_\d+_rail[LR]$/i.test(partName)) {
+    const explicit = typeof params.runnerComponentId === "string" ? getComponentDefinitionById(params.runnerComponentId) : null;
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("drawer-runners");
+  }
+  if (/^kickClip_/i.test(partName) || /^plinth-clip/i.test(partName)) {
+    return findAssigned("plinth-clips");
+  }
+  return null;
+}
+
+function resolveLivePartOverride(
+  partName: string,
+  params: Record<string, unknown>,
+  snapshot: PortableMaterialsSnapshot | null | undefined
+) {
+  const boardSlot = resolveDrawerLowBoardSlot(partName);
+  if (boardSlot) {
+    const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params);
+    const selectedCatalogId = slotMaterialCatalogIds[boardSlot];
+    const selectedMaterial = selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null;
+    if (selectedMaterial) {
+      return {
+        colorHex: selectedMaterial.preview.colorHex,
+        roughness: selectedMaterial.preview.roughness,
+        metalness: selectedMaterial.preview.metalness,
+        thicknessMm: slotThicknesses[boardSlot] ?? selectedMaterial.defaultThicknessMm
+      };
+    }
+  }
+
+  const component = resolveDrawerLowComponentAssignment(partName, params, snapshot);
+  if (component) {
+    return {
+      colorHex: component.preview.colorHex,
+      roughness: component.preview.roughness,
+      metalness: component.preview.metalness,
+      thicknessMm: null as number | null
+    };
+  }
+
+  return null;
+}
+
 function getPrimaryAxis(size: PortableLiveVector): "x" | "y" | "z" {
   if (size.x >= size.y && size.x >= size.z) return "x";
   if (size.y >= size.x && size.y >= size.z) return "y";
@@ -475,7 +554,8 @@ function orientLivePartMesh(mesh: THREE.Mesh, axis: "x" | "y" | "z" | null) {
 function buildMeshFromLivePart(
   part: PortableLivePart,
   currentParams: Record<string, unknown>,
-  baseParams: Record<string, unknown>
+  baseParams: Record<string, unknown>,
+  materialsSnapshot?: PortableMaterialsSnapshot | null
 ) {
   if (!part.sizeMm) return null;
   const baseDims = resolveLiveDimensions(baseParams, baseParams);
@@ -517,8 +597,22 @@ function buildMeshFromLivePart(
     y: Math.max(1, y.sizeMm),
     z: Math.max(1, z.sizeMm)
   };
+  const override = resolveLivePartOverride(part.name, currentParams, materialsSnapshot);
+  if (override?.thicknessMm) {
+    const minAxis = (["x", "y", "z"] as const).sort((left, right) => sizeMm[left] - sizeMm[right])[0];
+    sizeMm[minAxis] = Math.max(1, override.thicknessMm);
+  }
   const { geometry, axis, rotationX, rotationY, rotationZ } = createLivePartGeometry(part, sizeMm);
-  const mesh = new THREE.Mesh(geometry, makeRuntimeMaterial(part));
+  const mesh = new THREE.Mesh(
+    geometry,
+    override
+      ? new THREE.MeshStandardMaterial({
+          color: override.colorHex,
+          roughness: override.roughness,
+          metalness: override.metalness
+        })
+      : makeRuntimeMaterial(part)
+  );
   mesh.name = part.name;
   mesh.position.set(x.positionMm * MM_TO_M, y.positionMm * MM_TO_M, z.positionMm * MM_TO_M);
   orientLivePartMesh(mesh, axis);
@@ -538,14 +632,15 @@ function buildMeshFromLivePart(
 
 export function buildPortableLiveModuleGroup(
   params: Record<string, unknown>,
-  snapshot: PortableLiveStateSnapshot
+  snapshot: PortableLiveStateSnapshot,
+  materialsSnapshot?: PortableMaterialsSnapshot | null
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = `${snapshot.moduleType}PortableLiveModule`;
   const baseParams = snapshot.liveRuntime?.params ?? snapshot.params ?? {};
   const parts = snapshot.liveRuntime?.parts ?? [];
   for (const part of parts) {
-    const mesh = buildMeshFromLivePart(part, params, baseParams);
+    const mesh = buildMeshFromLivePart(part, params, baseParams, materialsSnapshot);
     if (!mesh) continue;
     group.add(mesh);
   }

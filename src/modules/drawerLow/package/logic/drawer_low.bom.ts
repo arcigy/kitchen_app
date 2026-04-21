@@ -13,7 +13,7 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 18,
-        "height": 582,
+        "height": 562,
         "depth": 560,
         "thickness": 18
       },
@@ -22,7 +22,7 @@ export const bomSnapshot = {
         "leftSide"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -33,7 +33,7 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 18,
-        "height": 582,
+        "height": 562,
         "depth": 560,
         "thickness": 18
       },
@@ -42,7 +42,7 @@ export const bomSnapshot = {
         "rightSide"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -62,7 +62,7 @@ export const bomSnapshot = {
         "bottom"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -82,7 +82,7 @@ export const bomSnapshot = {
         "topRailFront"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -102,7 +102,7 @@ export const bomSnapshot = {
         "topRailBack"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -113,7 +113,7 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 779,
-        "height": 561,
+        "height": 541,
         "depth": 6,
         "thickness": 6
       },
@@ -122,12 +122,12 @@ export const bomSnapshot = {
         "back"
       ],
       "notes": [
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #f4f4f4",
-        "material unnamed color #b88b5a"
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1"
       ]
     },
     {
@@ -147,7 +147,7 @@ export const bomSnapshot = {
         "leg_FL"
       ],
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -167,7 +167,7 @@ export const bomSnapshot = {
         "leg_FR"
       ],
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -187,7 +187,7 @@ export const bomSnapshot = {
         "leg_BL"
       ],
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -207,207 +207,47 @@ export const bomSnapshot = {
         "leg_BR"
       ],
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
-      "id": "kickClip_FL_collar",
+      "id": "plinth-clip-fl",
       "category": "board",
-      "description": "kickClip_FL_collar",
+      "description": "plinth-clip-fl",
       "unit": "pcs",
       "quantity": 1,
       "sizeMm": {
         "width": 48,
         "height": 16,
-        "depth": 44,
+        "depth": 65,
         "thickness": 16
       },
       "materialRole": "body",
       "sourcePartIds": [
-        "kickClip_FL_collar"
+        "plinth-clip-fl"
       ],
       "notes": [
-        "material unnamed color #606772"
+        "material Plinth Clip Standard color #1e232b"
       ]
     },
     {
-      "id": "kickClip_FL_pad",
+      "id": "plinth-clip-fr",
       "category": "board",
-      "description": "kickClip_FL_pad",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 30,
-        "height": 12,
-        "depth": 12,
-        "thickness": 12
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FL_pad"
-      ],
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FL_arm",
-      "category": "board",
-      "description": "kickClip_FL_arm",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 16,
-        "height": 10,
-        "depth": 5,
-        "thickness": 5
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FL_arm"
-      ],
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FL_screw_1",
-      "category": "board",
-      "description": "kickClip_FL_screw_1",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FL_screw_1"
-      ],
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FL_screw_2",
-      "category": "board",
-      "description": "kickClip_FL_screw_2",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FL_screw_2"
-      ],
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FR_collar",
-      "category": "board",
-      "description": "kickClip_FR_collar",
+      "description": "plinth-clip-fr",
       "unit": "pcs",
       "quantity": 1,
       "sizeMm": {
         "width": 48,
         "height": 16,
-        "depth": 44,
+        "depth": 65,
         "thickness": 16
       },
       "materialRole": "body",
       "sourcePartIds": [
-        "kickClip_FR_collar"
+        "plinth-clip-fr"
       ],
       "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_pad",
-      "category": "board",
-      "description": "kickClip_FR_pad",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 30,
-        "height": 12,
-        "depth": 12,
-        "thickness": 12
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FR_pad"
-      ],
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_arm",
-      "category": "board",
-      "description": "kickClip_FR_arm",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 16,
-        "height": 10,
-        "depth": 5,
-        "thickness": 5
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FR_arm"
-      ],
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_screw_1",
-      "category": "board",
-      "description": "kickClip_FR_screw_1",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FR_screw_1"
-      ],
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FR_screw_2",
-      "category": "board",
-      "description": "kickClip_FR_screw_2",
-      "unit": "pcs",
-      "quantity": 1,
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "materialRole": "body",
-      "sourcePartIds": [
-        "kickClip_FR_screw_2"
-      ],
-      "notes": [
-        "material unnamed color #3a3f4b"
+        "material Plinth Clip Standard color #1e232b"
       ]
     },
     {
@@ -427,7 +267,7 @@ export const bomSnapshot = {
         "kick"
       ],
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -438,16 +278,16 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 796,
-        "height": 192,
-        "depth": 19,
-        "thickness": 19
+        "height": 185,
+        "depth": 18,
+        "thickness": 18
       },
       "materialRole": "front",
       "sourcePartIds": [
         "front_1"
       ],
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -499,7 +339,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -539,7 +379,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -559,7 +399,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -567,7 +407,7 @@ export const bomSnapshot = {
         "drawer_1_sideL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -579,7 +419,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -587,7 +427,7 @@ export const bomSnapshot = {
         "drawer_1_sideR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -599,7 +439,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -607,7 +447,7 @@ export const bomSnapshot = {
         "drawer_1_bottom"
       ],
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -627,7 +467,7 @@ export const bomSnapshot = {
         "drawer_1_back"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -639,7 +479,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -647,7 +487,7 @@ export const bomSnapshot = {
         "drawer_1_railL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -659,7 +499,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -667,7 +507,7 @@ export const bomSnapshot = {
         "drawer_1_railR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -678,16 +518,16 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 796,
-        "height": 191,
-        "depth": 19,
-        "thickness": 19
+        "height": 185,
+        "depth": 18,
+        "thickness": 18
       },
       "materialRole": "front",
       "sourcePartIds": [
         "front_2"
       ],
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -739,7 +579,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -779,7 +619,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -799,7 +639,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -807,7 +647,7 @@ export const bomSnapshot = {
         "drawer_2_sideL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -819,7 +659,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -827,7 +667,7 @@ export const bomSnapshot = {
         "drawer_2_sideR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -839,7 +679,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -847,7 +687,7 @@ export const bomSnapshot = {
         "drawer_2_bottom"
       ],
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -867,7 +707,7 @@ export const bomSnapshot = {
         "drawer_2_back"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -879,7 +719,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -887,7 +727,7 @@ export const bomSnapshot = {
         "drawer_2_railL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -899,7 +739,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -907,7 +747,7 @@ export const bomSnapshot = {
         "drawer_2_railR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -918,16 +758,16 @@ export const bomSnapshot = {
       "quantity": 1,
       "sizeMm": {
         "width": 796,
-        "height": 191,
-        "depth": 19,
-        "thickness": 19
+        "height": 184,
+        "depth": 18,
+        "thickness": 18
       },
       "materialRole": "front",
       "sourcePartIds": [
         "front_3"
       ],
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -979,7 +819,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -1019,7 +859,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "materialRole": "front",
@@ -1039,7 +879,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -1047,7 +887,7 @@ export const bomSnapshot = {
         "drawer_3_sideL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1059,7 +899,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -1067,7 +907,7 @@ export const bomSnapshot = {
         "drawer_3_sideR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1079,7 +919,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "materialRole": "drawer",
@@ -1087,7 +927,7 @@ export const bomSnapshot = {
         "drawer_3_bottom"
       ],
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -1107,7 +947,7 @@ export const bomSnapshot = {
         "drawer_3_back"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1119,7 +959,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -1127,7 +967,7 @@ export const bomSnapshot = {
         "drawer_3_railL"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -1139,7 +979,7 @@ export const bomSnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "materialRole": "drawer",
@@ -1147,13 +987,13 @@ export const bomSnapshot = {
         "drawer_3_railR"
       ],
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     }
   ],
   "summary": {
-    "totalItems": 57,
-    "boardItems": 41,
+    "totalItems": 49,
+    "boardItems": 33,
     "hardwareItems": 16
   }
 } as const;

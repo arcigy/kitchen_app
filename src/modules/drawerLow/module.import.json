@@ -16,8 +16,8 @@
     "supportsKitchenContextDimensions": true,
     "supportsKitchenContextMaterials": true
   },
-  "importedAt": "2026-04-21T00:38:34.769Z",
-  "importedFrom": "module-builder-drawer_low-1.0.0 (3).modpkg.zip",
+  "importedAt": "2026-04-21T21:53:07.300Z",
+  "importedFrom": "module-builder-drawer_low-1.0.0.modpkg",
   "importFormat": "portable_modpkg",
   "packageRootDir": "module-builder-drawer_low-1.0.0",
   "packageKey": "module-builder-drawer_low@1.0.0",
@@ -25,7 +25,7 @@
   "moduleParameterSnapshot": {
     "type": "drawer_low",
     "width": 800,
-    "height": 720,
+    "height": 700,
     "worktopThicknessMm": 38,
     "depth": 560,
     "boardThickness": 18,
@@ -41,7 +41,7 @@
     "topGap": 2,
     "bottomGap": 2,
     "sideClearanceMm": 4,
-    "frontThicknessMm": 19,
+    "frontThicknessMm": 18,
     "frontStackPreset": "equal",
     "topFrontHeightMm": 160,
     "handleType": "bar",
@@ -54,36 +54,19 @@
     "drawerBackReserveMm": 8,
     "drawerCount": 3,
     "drawerFrontHeights": [
-      192,
-      191,
-      191
+      185,
+      185,
+      184
     ],
     "materials": {
-      "bodyMaterialId": 2,
-      "frontMaterialId": 3,
-      "drawerMaterialId": 5,
       "bodyKey": "2",
       "frontKey": "3",
-      "drawerKey": "5",
-      "bodyColor": "#b88b5a",
-      "frontColor": "#005fb8",
-      "drawerColor": "#d8dde6",
-      "bodyPresetId": "DTD1",
-      "frontPresetId": "DTD2",
-      "drawerPresetId": "DTD16",
-      "defaultTintColor": "#ffffff",
-      "defaultTintStrength": 0,
-      "partOverrides": {},
-      "bodyPbr": {
-        "id": "wood_veneer_oak_7760_1k",
-        "rotationDeg": 0,
-        "tintStrength": 0,
-        "tintColor": "#ffffff"
-      },
-      "bodyName": "DTD Grey",
-      "frontName": "MDF Front",
-      "drawerName": "Drawer Box Board"
-    }
+      "drawerKey": "5"
+    },
+    "autoFit": true,
+    "handleComponentId": "cmp.handle.bar.160.black",
+    "heightCarcass": 662,
+    "legComponentId": "cmp.leg.adjustable.100.black"
   },
   "systemParameterSchemaVersion": "module-system-parameters.v1",
   "systemParameterValues": {
@@ -93,9 +76,9 @@
     "family": "base",
     "code": null,
     "variant": "3_drawers",
-    "version": "1.0.0-import-ready",
+    "version": "1.0.0",
     "widthMm": 800,
-    "heightMm": 720,
+    "heightMm": 700,
     "depthMm": 560,
     "positionXmm": 0,
     "positionYmm": 0,
@@ -116,8 +99,8 @@
       "base",
       "drawer_low"
     ],
-    "createdAt": "2026-04-20T16:34:20.775Z",
-    "updatedAt": "2026-04-20T16:34:20.775Z",
+    "createdAt": "2026-04-21T21:24:13.699Z",
+    "updatedAt": "2026-04-21T21:24:13.699Z",
     "exportToIfc": true,
     "ifcClass": "IfcFurniture",
     "ifcPredefinedType": null,

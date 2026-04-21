@@ -3,58 +3,19 @@
   "moduleType": "drawer_low",
   "displayName": "Drawer",
   "paramsMaterials": {
-    "bodyMaterialId": 2,
-    "frontMaterialId": 3,
-    "drawerMaterialId": 5,
     "bodyKey": "2",
     "frontKey": "3",
-    "drawerKey": "5",
-    "bodyColor": "#b88b5a",
-    "frontColor": "#005fb8",
-    "drawerColor": "#d8dde6",
-    "bodyPresetId": "DTD1",
-    "frontPresetId": "DTD2",
-    "drawerPresetId": "DTD16",
-    "defaultTintColor": "#ffffff",
-    "defaultTintStrength": 0,
-    "partOverrides": {},
-    "bodyPbr": {
-      "id": "wood_veneer_oak_7760_1k",
-      "rotationDeg": 0,
-      "tintStrength": 0,
-      "tintColor": "#ffffff"
-    },
-    "bodyName": "DTD Grey",
-    "frontName": "MDF Front",
-    "drawerName": "Drawer Box Board"
+    "drawerKey": "5"
   },
   "roleAssignments": {
     "body": {
-      "bodyMaterialId": 2,
-      "bodyKey": "2",
-      "bodyColor": "#b88b5a",
-      "bodyPresetId": "DTD1",
-      "bodyPbr": {
-        "id": "wood_veneer_oak_7760_1k",
-        "rotationDeg": 0,
-        "tintStrength": 0,
-        "tintColor": "#ffffff"
-      },
-      "bodyName": "DTD Grey"
+      "bodyKey": "2"
     },
     "front": {
-      "frontMaterialId": 3,
-      "frontKey": "3",
-      "frontColor": "#005fb8",
-      "frontPresetId": "DTD2",
-      "frontName": "MDF Front"
+      "frontKey": "3"
     },
     "drawer": {
-      "drawerMaterialId": 5,
-      "drawerKey": "5",
-      "drawerColor": "#d8dde6",
-      "drawerPresetId": "DTD16",
-      "drawerName": "Drawer Box Board"
+      "drawerKey": "5"
     }
   },
   "livePartMaterials": [
@@ -69,8 +30,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -87,8 +48,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -104,8 +65,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -121,8 +82,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -138,8 +99,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -161,38 +122,38 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#b88b5a",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         },
         {
-          "name": null,
-          "colorHex": "#b88b5a",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         },
         {
-          "name": null,
-          "colorHex": "#b88b5a",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         },
         {
-          "name": null,
-          "colorHex": "#b88b5a",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         },
         {
-          "name": null,
-          "colorHex": "#f4f4f4",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         },
         {
-          "name": null,
-          "colorHex": "#b88b5a",
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
           "transparent": false,
           "opacity": 1
         }
@@ -208,8 +169,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#2a2f3a",
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
@@ -225,8 +186,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#2a2f3a",
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
@@ -242,8 +203,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#2a2f3a",
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
@@ -259,178 +220,44 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#2a2f3a",
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
       ]
     },
     {
-      "partName": "kickClip_FL_collar",
+      "partName": "plinth-clip-fl",
       "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
+        "boardThickness",
         "depth",
-        "width",
-        "boardThickness"
+        "plinthHeight",
+        "plinthSetbackMm",
+        "width"
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#606772",
+          "name": "Plinth Clip Standard",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
       ]
     },
     {
-      "partName": "kickClip_FL_pad",
+      "partName": "plinth-clip-fr",
       "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
+        "boardThickness",
         "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#606772",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FL_arm",
-      "paramKeys": [
         "plinthHeight",
         "plinthSetbackMm",
-        "depth"
+        "width"
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#606772",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FL_screw_1",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#3a3f4b",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FL_screw_2",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#3a3f4b",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FR_collar",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "width",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#606772",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FR_pad",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#606772",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FR_arm",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#606772",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FR_screw_1",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#3a3f4b",
-          "transparent": false,
-          "opacity": 1
-        }
-      ]
-    },
-    {
-      "partName": "kickClip_FR_screw_2",
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "materials": [
-        {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Plinth Clip Standard",
+          "colorHex": "#1e232b",
           "transparent": false,
           "opacity": 1
         }
@@ -447,8 +274,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#ffffff",
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -477,8 +304,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#005fb8",
+          "name": "DTD Halifax Oak 18 mm",
+          "colorHex": "#a97f57",
           "transparent": false,
           "opacity": 1
         }
@@ -592,8 +419,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -612,8 +439,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -631,8 +458,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#d8dde6",
+          "name": "Drawer Bottom HDF White 8 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -651,8 +478,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -669,8 +496,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
@@ -687,8 +514,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
@@ -717,8 +544,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#005fb8",
+          "name": "DTD Halifax Oak 18 mm",
+          "colorHex": "#a97f57",
           "transparent": false,
           "opacity": 1
         }
@@ -832,8 +659,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -852,8 +679,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -871,8 +698,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#d8dde6",
+          "name": "Drawer Bottom HDF White 8 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -891,8 +718,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -909,8 +736,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
@@ -927,8 +754,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
@@ -957,8 +784,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#005fb8",
+          "name": "DTD Halifax Oak 18 mm",
+          "colorHex": "#a97f57",
           "transparent": false,
           "opacity": 1
         }
@@ -1072,8 +899,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -1092,8 +919,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -1111,8 +938,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#d8dde6",
+          "name": "Drawer Bottom HDF White 8 mm",
+          "colorHex": "#f3f3ef",
           "transparent": false,
           "opacity": 1
         }
@@ -1131,8 +958,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Drawer Box Plywood Birch 13 mm",
+          "colorHex": "#dbc29d",
           "transparent": false,
           "opacity": 1
         }
@@ -1149,8 +976,8 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
@@ -1167,16 +994,786 @@
       ],
       "materials": [
         {
-          "name": null,
-          "colorHex": "#3a3f4b",
+          "name": "Runner Pair 400 mm Standard",
+          "colorHex": "#9ca3ad",
           "transparent": false,
           "opacity": 1
         }
       ]
     }
   ],
+  "slotAssignments": [
+    {
+      "slotId": "back-panel",
+      "partId": "back-panel",
+      "label": "Slot back-panel",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "back",
+      "thicknessParameterKey": "backThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.6",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 6",
+        "displayName": "HDF Grey 6 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 6,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "bottom-panel",
+      "partId": "bottom-panel",
+      "label": "Slot bottom-panel",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-1-bottom-panel",
+      "partId": "drawer-box-1",
+      "label": "Drawer Box 1 Bottom Panel",
+      "description": "Saved material assignment for this drawer box bottom panel.",
+      "boardFamily": "drawer_bottom",
+      "thicknessParameterKey": "drawerBottomThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-1-front-back-panels",
+      "partId": "drawer-box-1",
+      "label": "Drawer Box 1 Front/Back Panels",
+      "description": "Saved material assignment for this drawer box front/back panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-1-side-panels",
+      "partId": "drawer-box-1",
+      "label": "Drawer Box 1 Side Panels",
+      "description": "Saved material assignment for this drawer box side panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-2-bottom-panel",
+      "partId": "drawer-box-2",
+      "label": "Drawer Box 2 Bottom Panel",
+      "description": "Saved material assignment for this drawer box bottom panel.",
+      "boardFamily": "drawer_bottom",
+      "thicknessParameterKey": "drawerBottomThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-2-front-back-panels",
+      "partId": "drawer-box-2",
+      "label": "Drawer Box 2 Front/Back Panels",
+      "description": "Saved material assignment for this drawer box front/back panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-2-side-panels",
+      "partId": "drawer-box-2",
+      "label": "Drawer Box 2 Side Panels",
+      "description": "Saved material assignment for this drawer box side panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-3-bottom-panel",
+      "partId": "drawer-box-3",
+      "label": "Drawer Box 3 Bottom Panel",
+      "description": "Saved material assignment for this drawer box bottom panel.",
+      "boardFamily": "drawer_bottom",
+      "thicknessParameterKey": "drawerBottomThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-3-front-back-panels",
+      "partId": "drawer-box-3",
+      "label": "Drawer Box 3 Front/Back Panels",
+      "description": "Saved material assignment for this drawer box front/back panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-box-3-side-panels",
+      "partId": "drawer-box-3",
+      "label": "Drawer Box 3 Side Panels",
+      "description": "Saved material assignment for this drawer box side panel group.",
+      "boardFamily": "drawer_box",
+      "thicknessParameterKey": "drawerBoxThickness",
+      "assignedMaterial": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-front-1",
+      "partId": "drawer-front-1",
+      "label": "Slot drawer-front-1",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-front-2",
+      "partId": "drawer-front-2",
+      "label": "Slot drawer-front-2",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "drawer-front-3",
+      "partId": "drawer-front-3",
+      "label": "Slot drawer-front-3",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "left-side",
+      "partId": "left-side",
+      "label": "Slot left-side",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "plinth",
+      "partId": "plinth",
+      "label": "Slot plinth",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "right-side",
+      "partId": "right-side",
+      "label": "Slot right-side",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "top-panel",
+      "partId": "top-panel",
+      "label": "Slot top-panel",
+      "description": "Saved material assignment for this slot.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    }
+  ],
+  "componentAssignments": [
+    {
+      "assignmentKey": "drawer-handles",
+      "label": "Bar Handle 160 mm Black",
+      "sourceRule": "Resolved from handleComponentId / handleType drawer_low selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "adjustable-legs",
+      "label": "Adjustable Leg 100 mm Black",
+      "sourceRule": "Resolved from legComponentId / plinthHeight drawer_low selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "drawer-runners",
+      "label": "Runner Pair 400 mm Standard",
+      "sourceRule": "Resolved from runnerComponentId drawer_low selection (400 mm).",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "componentType": "runner",
+        "geometryId": "geo.runner.pair.400.standard",
+        "name": "Runner Pair 400 Standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "brand": "DemoLine",
+        "series": "StandardBox",
+        "variant": "400 mm pair",
+        "color": "Galvanized",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 400,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#9ca3ad",
+          "roughness": 0.3,
+          "metalness": 0.82
+        }
+      }
+    },
+    {
+      "assignmentKey": "plinth-clips",
+      "label": "Plinth Clip Standard",
+      "sourceRule": "Default drawer_low plinth clip component.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "componentType": "plinth_clip",
+        "geometryId": "geo.plinth_clip.standard",
+        "name": "Plinth Clip Standard",
+        "displayName": "Plinth Clip Standard",
+        "brand": "BaseTech",
+        "series": "ClipFix",
+        "variant": "Standard clip",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "carcass-fasteners",
+      "label": "Carcass Fastener Standard",
+      "sourceRule": "Default drawer_low carcass fastener component.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.carcass.standard",
+        "componentType": "fastener",
+        "geometryId": "geo.fastener.carcass_standard",
+        "name": "Carcass Fastener Standard",
+        "displayName": "Carcass Fastener Standard",
+        "brand": "FixPro",
+        "series": "CabinetCore",
+        "variant": "Standard carcass fixing",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      }
+    }
+  ],
   "notes": [
     "Snapshot of the current material state at export time.",
+    "Includes exact board slot assignments and current component selections used by the commercial BOM exporter.",
     "Includes live mesh material captures from the preview runtime."
   ]
 }

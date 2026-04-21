@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
     "import:modpkg": "tsx scripts/importModpkg.ts",
+    "test:pricing-contract": "tsx scripts/testPricingContract.ts",
+    "test:pricing-ui": "node scripts/testPricingUi.mjs",
+    "test:module-properties": "node scripts/testModulePropertiesUi.mjs",
     "worker:dev": "tsx scripts/worker.ts",
     "dev:local": "tsx scripts/devLocal.ts"
   },
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "playwright": "^1.59.1",
     "ts-morph": "^28.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",

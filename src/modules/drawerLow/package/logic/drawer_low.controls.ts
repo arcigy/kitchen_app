@@ -43,6 +43,14 @@ export const parameterCatalog = {
   ],
   "parameters": [
     {
+      "key": "autoFit",
+      "group": "general",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter auto fit."
+    },
+    {
       "key": "backGrooveClearanceMm",
       "group": "dimensions",
       "type": "number",
@@ -144,9 +152,9 @@ export const parameterCatalog = {
       "type": "number[]",
       "required": true,
       "defaultValue": [
-        192,
-        191,
-        191
+        185,
+        185,
+        184
       ],
       "description": "Exported parameter drawer front heights."
     },
@@ -171,8 +179,16 @@ export const parameterCatalog = {
       "group": "dimensions",
       "type": "number",
       "required": true,
-      "defaultValue": 19,
+      "defaultValue": 18,
       "description": "Exported parameter front thickness mm."
+    },
+    {
+      "key": "handleComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.handle.bar.160.black",
+      "description": "Exported parameter handle component id."
     },
     {
       "key": "handleLengthMm",
@@ -219,8 +235,24 @@ export const parameterCatalog = {
       "group": "dimensions",
       "type": "number",
       "required": true,
-      "defaultValue": 720,
+      "defaultValue": 700,
       "description": "Exported parameter height."
+    },
+    {
+      "key": "heightCarcass",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 662,
+      "description": "Exported parameter height carcass."
+    },
+    {
+      "key": "legComponentId",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.leg.adjustable.100.black",
+      "description": "Exported parameter leg component id."
     },
     {
       "key": "materials",
@@ -228,30 +260,9 @@ export const parameterCatalog = {
       "type": "object",
       "required": true,
       "defaultValue": {
-        "bodyMaterialId": 2,
-        "frontMaterialId": 3,
-        "drawerMaterialId": 5,
         "bodyKey": "2",
         "frontKey": "3",
-        "drawerKey": "5",
-        "bodyColor": "#b88b5a",
-        "frontColor": "#005fb8",
-        "drawerColor": "#d8dde6",
-        "bodyPresetId": "DTD1",
-        "frontPresetId": "DTD2",
-        "drawerPresetId": "DTD16",
-        "defaultTintColor": "#ffffff",
-        "defaultTintStrength": 0,
-        "partOverrides": {},
-        "bodyPbr": {
-          "id": "wood_veneer_oak_7760_1k",
-          "rotationDeg": 0,
-          "tintStrength": 0,
-          "tintColor": "#ffffff"
-        },
-        "bodyName": "DTD Grey",
-        "frontName": "MDF Front",
-        "drawerName": "Drawer Box Board"
+        "drawerKey": "5"
       },
       "description": "Exported parameter materials."
     },

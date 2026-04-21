@@ -10,14 +10,14 @@ Fixed identity metadata required for each exported module instance.
 - `family`: "base"
 - `code`: null
 - `variant`: "3_drawers"
-- `version`: "1.0.0-import-ready"
+- `version`: "1.0.0"
 
 ## Dimensions
 
 Nominal module dimensions in millimeters.
 
 - `widthMm`: 800
-- `heightMm`: 720
+- `heightMm`: 700
 - `depthMm`: 560
 
 ## Placement
@@ -55,8 +55,8 @@ Human-facing metadata kept alongside the technical module export.
 
 - `notes`: null
 - `tags`: ["base","drawer_low"]
-- `createdAt`: "2026-04-20T16:34:20.775Z"
-- `updatedAt`: "2026-04-20T16:34:20.775Z"
+- `createdAt`: "2026-04-21T21:24:13.699Z"
+- `updatedAt`: "2026-04-21T21:24:13.699Z"
 
 ## IFC Export
 

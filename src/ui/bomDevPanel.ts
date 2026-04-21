@@ -1,10 +1,243 @@
+import type { BOMResult } from "../layout/bom/bomTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutInstance } from "../layout/appState";
 import { calculateModuleBOM } from "../layout/bom/calculateBOM";
 import { getModuleDescriptor } from "../modules/registry";
 
-function moduleTypeToLabel(type: LayoutInstance["params"]["type"]) {
-  return getModuleDescriptor(type)?.label ?? type;
+type ModulePricingView = {
+  instanceId: string;
+  label: string;
+  result: BOMResult;
+};
+
+type CatalogAggregateRow = {
+  catalogId: string;
+  displayName: string;
+  unitPrice: number;
+  quantity: number;
+  pricedQuantity?: number;
+  cost: number;
+  unit: string;
+  group?: string;
+};
+
+function formatNumber(value: number, digits = 3) {
+  return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: digits }).format(value);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("sk-SK", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 2
+  }).format(value);
+}
+
+function table(headers: string[], rows: string[][]) {
+  const wrap = document.createElement("div");
+  wrap.style.overflow = "auto";
+  wrap.style.border = "1px solid #2a3140";
+  wrap.style.borderRadius = "10px";
+  wrap.style.background = "#0d1117";
+
+  const element = document.createElement("table");
+  element.style.width = "100%";
+  element.style.borderCollapse = "collapse";
+  element.style.fontSize = "12px";
+  wrap.appendChild(element);
+
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  for (const header of headers) {
+    const th = document.createElement("th");
+    th.textContent = header;
+    th.style.textAlign = "left";
+    th.style.padding = "10px 12px";
+    th.style.borderBottom = "1px solid #2a3140";
+    th.style.color = "#9aa5ba";
+    th.style.position = "sticky";
+    th.style.top = "0";
+    th.style.background = "#0d1117";
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  element.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  if (rows.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = headers.length;
+    cell.textContent = "Žiadne dáta.";
+    cell.style.padding = "12px";
+    cell.style.color = "#9aa5ba";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  } else {
+    for (const values of rows) {
+      const row = document.createElement("tr");
+      for (const value of values) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        cell.style.padding = "10px 12px";
+        cell.style.borderBottom = "1px solid #171c25";
+        cell.style.verticalAlign = "top";
+        row.appendChild(cell);
+      }
+      tbody.appendChild(row);
+    }
+  }
+  element.appendChild(tbody);
+  return wrap;
+}
+
+function section(title: string, description?: string) {
+  const wrap = document.createElement("section");
+  wrap.style.display = "grid";
+  wrap.style.gap = "10px";
+
+  const heading = document.createElement("div");
+  heading.style.display = "grid";
+  heading.style.gap = "4px";
+
+  const titleEl = document.createElement("h3");
+  titleEl.textContent = title;
+  titleEl.style.margin = "0";
+  titleEl.style.font = "700 15px system-ui, sans-serif";
+  titleEl.style.color = "#eef2ff";
+  heading.appendChild(titleEl);
+
+  if (description) {
+    const desc = document.createElement("div");
+    desc.textContent = description;
+    desc.style.color = "#9aa5ba";
+    desc.style.fontSize = "12px";
+    heading.appendChild(desc);
+  }
+
+  wrap.appendChild(heading);
+  return wrap;
+}
+
+function moduleLabel(instance: LayoutInstance) {
+  return getModuleDescriptor(instance.params.type)?.label ?? instance.params.type;
+}
+
+function buildModuleViews(instances: LayoutInstance[], ctx: KitchenContext): ModulePricingView[] {
+  const counts = new Map<string, number>();
+  return instances.map((instance) => {
+    const label = moduleLabel(instance);
+    const nextCount = (counts.get(label) ?? 0) + 1;
+    counts.set(label, nextCount);
+    return {
+      instanceId: instance.id,
+      label: `${label} #${nextCount}`,
+      result: calculateModuleBOM(instance, ctx)
+    };
+  });
+}
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function aggregateBoards(modules: ModulePricingView[]): CatalogAggregateRow[] {
+  const buckets = new Map<string, CatalogAggregateRow>();
+  for (const module of modules) {
+    for (const item of module.result.pricing.items) {
+      if (item.pricingGroup !== "boards" || !item.material?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
+      const existing =
+        buckets.get(item.material.catalogId) ??
+        {
+          catalogId: item.material.catalogId,
+          displayName: item.material.displayName,
+          unitPrice: item.unitPrice,
+          quantity: 0,
+          pricedQuantity: 0,
+          cost: 0,
+          unit: "m2",
+          group: item.material.family ?? item.materialGroup
+        };
+      existing.quantity += item.pricingQuantityBase ?? item.metrics?.areaM2 ?? item.pricingQuantity;
+      existing.pricedQuantity = (existing.pricedQuantity ?? 0) + item.pricingQuantity;
+      existing.cost += item.itemCost;
+      buckets.set(existing.catalogId, existing);
+    }
+  }
+  return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+function aggregateEdges(modules: ModulePricingView[]): CatalogAggregateRow[] {
+  const buckets = new Map<string, CatalogAggregateRow>();
+  for (const module of modules) {
+    for (const item of module.result.pricing.items) {
+      if (item.pricingGroup !== "edge_bands" || !item.material?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
+      const existing =
+        buckets.get(item.material.catalogId) ??
+        {
+          catalogId: item.material.catalogId,
+          displayName: item.material.displayName,
+          unitPrice: item.unitPrice,
+          quantity: 0,
+          cost: 0,
+          unit: "lm",
+          group: item.material.family ?? item.materialGroup
+        };
+      existing.quantity += item.pricingQuantity;
+      existing.cost += item.itemCost;
+      buckets.set(existing.catalogId, existing);
+    }
+  }
+  return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+function aggregateComponents(modules: ModulePricingView[]): CatalogAggregateRow[] {
+  const buckets = new Map<string, CatalogAggregateRow>();
+  for (const module of modules) {
+    for (const item of module.result.pricing.items) {
+      const component = item.component;
+      if (item.pricingGroup !== "hardware" || !component?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
+      const existing =
+        buckets.get(component.catalogId) ??
+        {
+          catalogId: component.catalogId,
+          displayName: component.displayName,
+          unitPrice: item.unitPrice,
+          quantity: 0,
+          cost: 0,
+          unit: "pcs",
+          group: component.componentType
+        };
+      existing.quantity += item.pricingQuantity;
+      existing.cost += item.itemCost;
+      buckets.set(existing.catalogId, existing);
+    }
+  }
+  return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+function buildProjectPayload(modules: ModulePricingView[]) {
+  return {
+    schemaVersion: "project-commercial-pricing.v1",
+    generatedAt: new Date().toISOString(),
+    modules: modules.map((module) => ({
+      instanceId: module.instanceId,
+      label: module.label,
+      quoteBom: module.result.quoteBom,
+      pricing: module.result.pricing
+    })),
+    totals: {
+      boardsCost: round(sum(modules.map((module) => module.result.pricing.groups.boards.cost))),
+      edgesCost: round(sum(modules.map((module) => module.result.pricing.groups.edge_bands.cost))),
+      hardwareCost: round(sum(modules.map((module) => module.result.pricing.groups.hardware.cost))),
+      laborCost: round(sum(modules.map((module) => module.result.pricing.laborCostFixed))),
+      finalCost: round(sum(modules.map((module) => module.result.pricing.finalPrice)))
+    }
+  };
+}
+
+function round(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export function mountBomDevPanel(
@@ -13,287 +246,196 @@ export function mountBomDevPanel(
   ctx: KitchenContext
 ): void {
   container.innerHTML = "";
-
-  const root = document.createElement("div");
-  root.style.display = "grid";
-  root.style.gap = "14px";
-  root.style.color = "#eef2ff";
-  root.style.font = "13px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  container.appendChild(root);
+  container.style.display = "grid";
+  container.style.gap = "18px";
+  container.style.color = "#eef2ff";
+  container.style.font = "13px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
 
   if (instances.length === 0) {
     const empty = document.createElement("div");
     empty.textContent = "Nie sú umiestnené žiadne moduly.";
-    empty.style.color = "#aab2c5";
-    root.appendChild(empty);
+    empty.style.color = "#9aa5ba";
+    container.appendChild(empty);
     return;
   }
 
-  const selectLabel = document.createElement("label");
-  selectLabel.textContent = "Modul";
-  selectLabel.style.display = "grid";
-  selectLabel.style.gap = "6px";
+  const modules = buildModuleViews(instances, ctx);
+  const boards = aggregateBoards(modules);
+  const edges = aggregateEdges(modules);
+  const components = aggregateComponents(modules);
+  const payload = buildProjectPayload(modules);
 
-  const select = document.createElement("select");
-  select.style.background = "#0e1118";
-  select.style.color = "#eef2ff";
-  select.style.border = "1px solid #303746";
-  select.style.borderRadius = "6px";
-  select.style.padding = "8px";
+  const toolbar = document.createElement("div");
+  toolbar.style.display = "flex";
+  toolbar.style.justifyContent = "space-between";
+  toolbar.style.alignItems = "center";
+  toolbar.style.gap = "12px";
 
-  const typeCounts = new Map<string, number>();
-  instances.forEach((instance, index) => {
-    const moduleType = moduleTypeToLabel(instance.params.type);
-    const next = (typeCounts.get(moduleType) ?? 0) + 1;
-    typeCounts.set(moduleType, next);
+  const intro = document.createElement("div");
+  intro.style.display = "grid";
+  intro.style.gap = "4px";
+  const title = document.createElement("h2");
+  title.textContent = "Commercial BOM & Costs";
+  title.style.margin = "0";
+  title.style.font = "700 18px system-ui, sans-serif";
+  const desc = document.createElement("div");
+  desc.textContent = "Plný prehľad vstupov, cien, vzorcov a výsledných nákladov pre všetky aktuálne vložené moduly.";
+  desc.style.color = "#9aa5ba";
+  desc.style.fontSize = "12px";
+  intro.append(title, desc);
+  toolbar.appendChild(intro);
 
-    const option = document.createElement("option");
-    option.value = String(index);
-    option.textContent = `${moduleType} #${next}`;
-    select.appendChild(option);
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.textContent = "Copy Pricing JSON";
+  copyBtn.style.background = "#0e1118";
+  copyBtn.style.color = "#eef2ff";
+  copyBtn.style.border = "1px solid #303746";
+  copyBtn.style.borderRadius = "8px";
+  copyBtn.style.padding = "9px 12px";
+  copyBtn.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    copyBtn.textContent = "Copied";
+    window.setTimeout(() => {
+      copyBtn.textContent = "Copy Pricing JSON";
+    }, 1200);
   });
+  toolbar.appendChild(copyBtn);
+  container.appendChild(toolbar);
 
-  selectLabel.appendChild(select);
-  root.appendChild(selectLabel);
-
-  const content = document.createElement("div");
-  content.style.display = "grid";
-  content.style.gap = "16px";
-  root.appendChild(content);
-
-  const render = () => {
-    content.innerHTML = "";
-    const selected = instances[Number(select.value)] ?? instances[0];
-
-    content.appendChild(section("Module parameters", renderParams(selected.params)));
-    content.appendChild(section("BOM result", renderResult(selected, ctx)));
-  };
-
-  select.addEventListener("change", render);
-  render();
-}
-
-function section(title: string, body: HTMLElement) {
-  const wrap = document.createElement("section");
-  wrap.style.display = "grid";
-  wrap.style.gap = "8px";
-
-  const heading = document.createElement("h3");
-  heading.textContent = title;
-  heading.style.margin = "0";
-  heading.style.fontSize = "14px";
-  heading.style.fontWeight = "700";
-  wrap.appendChild(heading);
-  wrap.appendChild(body);
-  return wrap;
-}
-
-function renderParams(params: LayoutInstance["params"]) {
-  const list = document.createElement("div");
-  list.style.display = "grid";
-  list.style.gridTemplateColumns = "minmax(130px, 1fr) minmax(0, 2fr)";
-  list.style.gap = "4px 12px";
-
-  for (const row of flattenParams(params)) {
-    const key = document.createElement("div");
-    key.textContent = row.key;
-    key.style.color = "#9aa5ba";
-    key.style.wordBreak = "break-word";
-
-    const value = document.createElement("div");
-    value.textContent = row.value;
-    value.style.wordBreak = "break-word";
-
-    list.appendChild(key);
-    list.appendChild(value);
+  const totals = section("Totals", "Nákladový súčet naprieč všetkými modulmi v aktuálnom projekte.");
+  const totalGrid = document.createElement("div");
+  totalGrid.style.display = "grid";
+  totalGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
+  totalGrid.style.gap = "10px";
+  const cards = [
+    ["Boards", formatCurrency(payload.totals.boardsCost)],
+    ["Edge Bands", formatCurrency(payload.totals.edgesCost)],
+    ["Hardware", formatCurrency(payload.totals.hardwareCost)],
+    ["Labor", formatCurrency(payload.totals.laborCost)],
+    ["Final Cost", formatCurrency(payload.totals.finalCost)]
+  ];
+  for (const [label, value] of cards) {
+    const card = document.createElement("div");
+    card.style.padding = "14px";
+    card.style.border = "1px solid #2a3140";
+    card.style.borderRadius = "12px";
+    card.style.background = "#0d1117";
+    card.style.display = "grid";
+    card.style.gap = "4px";
+    const labelEl = document.createElement("div");
+    labelEl.textContent = label;
+    labelEl.style.color = "#9aa5ba";
+    labelEl.style.fontSize = "12px";
+    const valueEl = document.createElement("div");
+    valueEl.textContent = value;
+    valueEl.style.font = "700 20px system-ui, sans-serif";
+    card.append(labelEl, valueEl);
+    totalGrid.appendChild(card);
   }
+  totals.appendChild(totalGrid);
+  container.appendChild(totals);
 
-  return list;
-}
-
-function renderResult(instance: LayoutInstance, ctx: KitchenContext) {
-  const result = calculateModuleBOM(instance, ctx);
-  const wrap = document.createElement("div");
-  wrap.style.display = "grid";
-  wrap.style.gap = "14px";
-
-  wrap.appendChild(renderPartsTable(result.parts));
-  wrap.appendChild(renderHardwareTable(result.hardware));
-
-  const total = document.createElement("div");
-  total.textContent = `Total: ${formatPrice(result.totalPrice)}`;
-  total.style.fontWeight = "700";
-  total.style.textAlign = "right";
-  wrap.appendChild(total);
-
-  wrap.appendChild(renderJsonCopyAction(instance, ctx));
-
-  return wrap;
-}
-
-function renderJsonCopyAction(instance: LayoutInstance, ctx: KitchenContext) {
-  const row = document.createElement("div");
-  row.style.display = "flex";
-  row.style.alignItems = "center";
-  row.style.gap = "10px";
-  row.style.justifyContent = "flex-end";
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = "Kopírovať JSON";
-  button.style.background = "#0e1118";
-  button.style.color = "#eef2ff";
-  button.style.border = "1px solid #303746";
-  button.style.borderRadius = "6px";
-  button.style.padding = "7px 10px";
-
-  const status = document.createElement("span");
-  status.textContent = "Skopírované!";
-  status.style.color = "#7ddc9b";
-  status.style.opacity = "0";
-  status.style.transition = "opacity 120ms ease";
-
-  let hideTimer: number | undefined;
-  button.addEventListener("click", async () => {
-    const data = buildBomJson(instance, ctx);
-    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-
-    status.style.opacity = "1";
-    if (hideTimer !== undefined) window.clearTimeout(hideTimer);
-    hideTimer = window.setTimeout(() => {
-      status.style.opacity = "0";
-    }, 2000);
-  });
-
-  row.appendChild(button);
-  row.appendChild(status);
-  return row;
-}
-
-function buildBomJson(instance: LayoutInstance, ctx: KitchenContext) {
-  const result = calculateModuleBOM(instance, ctx);
-
-  return {
-    moduleType: result.moduleType,
-    params: instance.params,
-    bom: {
-      parts: result.parts,
-      hardware: result.hardware,
-      totalPrice: result.totalPrice
-    }
-  };
-}
-
-function renderPartsTable(parts: ReturnType<typeof calculateModuleBOM>["parts"]) {
-  return renderTable(
-    ["Názov", "Š×V×Hr", "Materiál", "Ks", "Plocha m²", "Cena"],
-    parts.map((part) => [
-      part.name,
-      `${part.widthMm}×${part.heightMm}×${part.thicknessMm}`,
-      part.materialId,
-      formatNumber(part.quantity),
-      formatNumber(part.areaMm2 / 1_000_000),
-      formatPrice(part.totalPrice)
-    ])
+  const inputs = section("Inputs & Formulas", "Všetky aktívne vstupy kalkulácie, ktoré pricing runtime používa.");
+  inputs.appendChild(
+    table(
+      ["Field", "Value"],
+      [
+        ["Currency", modules[0]?.result.pricing.priceInputs.currency ?? "EUR"],
+        ["Board waste multiplier", formatNumber(modules[0]?.result.pricing.priceInputs.boardWasteMultiplier ?? 1.1, 2)],
+        ["Labor fixed per module", formatCurrency(modules[0]?.result.pricing.laborCostFixed ?? 0)],
+        ["Formula / board priced quantity", modules[0]?.result.pricing.calculationFormulas.boardPricedQuantity ?? ""],
+        ["Formula / item cost", modules[0]?.result.pricing.calculationFormulas.itemCost ?? ""],
+        ["Formula / subtotal", modules[0]?.result.pricing.calculationFormulas.subtotalCost ?? ""],
+        ["Formula / final", modules[0]?.result.pricing.calculationFormulas.finalPrice ?? ""]
+      ]
+    )
   );
-}
+  container.appendChild(inputs);
 
-function renderHardwareTable(hardware: ReturnType<typeof calculateModuleBOM>["hardware"]) {
-  return renderTable(
-    ["Názov", "Ks", "Cena/ks", "Celkom"],
-    hardware.map((item) => [
-      item.name,
-      formatNumber(item.quantity),
-      formatPrice(item.pricePerPiece),
-      formatPrice(item.totalPrice)
-    ])
+  const boardsSection = section("Boards By Material", "Net m2, priced m2, jednotkové ceny a celkové náklady za doskové materiály.");
+  boardsSection.appendChild(
+    table(
+      ["Material", "Catalog ID", "Group", "Net m2", "Priced m2", "Unit price", "Cost"],
+      boards.map((row) => [
+        row.displayName,
+        row.catalogId,
+        row.group ?? "",
+        formatNumber(row.quantity),
+        formatNumber(row.pricedQuantity ?? row.quantity),
+        formatCurrency(row.unitPrice),
+        formatCurrency(row.cost)
+      ])
+    )
   );
-}
+  container.appendChild(boardsSection);
 
-function renderTable(headers: string[], rows: string[][]) {
-  const table = document.createElement("table");
-  table.style.width = "100%";
-  table.style.borderCollapse = "collapse";
-  table.style.fontSize = "12px";
+  const edgesSection = section("Edge Bands", "Lineárne metre pásky podľa materiálu a presné nákladové ceny.");
+  edgesSection.appendChild(
+    table(
+      ["Material", "Catalog ID", "Group", "Length lm", "Unit price", "Cost"],
+      edges.map((row) => [
+        row.displayName,
+        row.catalogId,
+        row.group ?? "",
+        formatNumber(row.quantity),
+        formatCurrency(row.unitPrice),
+        formatCurrency(row.cost)
+      ])
+    )
+  );
+  container.appendChild(edgesSection);
 
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  for (const header of headers) {
-    const th = document.createElement("th");
-    th.textContent = header;
-    th.style.textAlign = "left";
-    th.style.padding = "6px";
-    th.style.borderBottom = "1px solid #303746";
-    th.style.color = "#9aa5ba";
-    headerRow.appendChild(th);
-  }
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
+  const componentsSection = section("Components", "Kusy všetkých katalogových komponentov s jednotkovou cenou a celkom.");
+  componentsSection.appendChild(
+    table(
+      ["Component", "Catalog ID", "Type", "Pieces", "Unit price", "Cost"],
+      components.map((row) => [
+        row.displayName,
+        row.catalogId,
+        row.group ?? "",
+        formatNumber(row.quantity),
+        formatCurrency(row.unitPrice),
+        formatCurrency(row.cost)
+      ])
+    )
+  );
+  container.appendChild(componentsSection);
 
-  const tbody = document.createElement("tbody");
-  if (rows.length === 0) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = headers.length;
-    td.textContent = "Zatiaľ prázdne.";
-    td.style.padding = "8px 6px";
-    td.style.color = "#9aa5ba";
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  } else {
-    for (const row of rows) {
-      const tr = document.createElement("tr");
-      for (const value of row) {
-        const td = document.createElement("td");
-        td.textContent = value;
-        td.style.padding = "6px";
-        td.style.borderBottom = "1px solid #202632";
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-  }
+  const modulesSection = section("Modules", "Súhrn každého vloženého modulu s jeho aktuálnym výsledkom.");
+  modulesSection.appendChild(
+    table(
+      ["Module", "Boards", "Edges", "Hardware", "Labor", "Final"],
+      modules.map((module) => [
+        module.label,
+        formatCurrency(module.result.pricing.groups.boards.cost),
+        formatCurrency(module.result.pricing.groups.edge_bands.cost),
+        formatCurrency(module.result.pricing.groups.hardware.cost),
+        formatCurrency(module.result.pricing.laborCostFixed),
+        formatCurrency(module.result.pricing.finalPrice)
+      ])
+    )
+  );
+  container.appendChild(modulesSection);
 
-  table.appendChild(tbody);
-  return table;
-}
-
-function flattenParams(value: unknown, prefix = ""): Array<{ key: string; value: string }> {
-  if (!value || typeof value !== "object") {
-    return [{ key: prefix, value: formatValue(value) }];
-  }
-
-  if (Array.isArray(value)) {
-    return [{ key: prefix, value: formatValue(value) }];
-  }
-
-  const rows: Array<{ key: string; value: string }> = [];
-  for (const [key, child] of Object.entries(value)) {
-    const nextKey = prefix ? `${prefix}.${key}` : key;
-    if (child && typeof child === "object" && !Array.isArray(child)) {
-      rows.push(...flattenParams(child, nextKey));
-    } else {
-      rows.push({ key: nextKey, value: formatValue(child) });
-    }
-  }
-  return rows;
-}
-
-function formatValue(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(formatValue).join(", ")}]`;
-  if (value === null) return "null";
-  if (value === undefined) return "";
-  return String(value);
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: 3 }).format(value);
-}
-
-function formatPrice(value: number) {
-  return new Intl.NumberFormat("sk-SK", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2
-  }).format(value);
+  const breakdown = section("Item Breakdown", "Presné položky BOMu po výpočte, vrátane priced quantity, unit price a cost formula.");
+  breakdown.appendChild(
+    table(
+      ["Module", "Item", "ID", "Group", "Qty", "Priced Qty", "Unit price", "Item cost", "Formula"],
+      modules.flatMap((module) =>
+        module.result.pricing.items.map((item) => [
+          module.label,
+          item.name,
+          item.id,
+          item.pricingGroup ?? "",
+          formatNumber(item.quantity),
+          formatNumber(item.pricingQuantity),
+          item.unitPrice == null ? "-" : formatCurrency(item.unitPrice),
+          item.itemCost == null ? "-" : formatCurrency(item.itemCost),
+          item.itemCostFormula ?? ""
+        ])
+      )
+    )
+  );
+  container.appendChild(breakdown);
 }

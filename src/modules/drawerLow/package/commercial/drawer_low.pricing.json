@@ -1,32 +1,2584 @@
 {
-  "schemaVersion": "module-pricing.v1",
+  "schemaVersion": "module-commercial-pricing.v1",
   "moduleType": "drawer_low",
   "displayName": "Drawer",
-  "currency": "EUR",
-  "components": [
+  "generatedAt": "2026-04-21T21:24:13.703Z",
+  "pricingStatus": "ok",
+  "validationErrors": [],
+  "moduleInstance": {
+    "quantity": 1,
+    "widthMm": 800,
+    "heightMm": 700,
+    "depthMm": 560,
+    "wallMounted": false
+  },
+  "materials": {
+    "body": {
+      "role": "body",
+      "key": "mat.board.body.dtd.white.18",
+      "catalogId": "mat.board.body.dtd.white.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD White 18",
+      "displayName": "DTD White 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "dtd",
+      "decor": "White",
+      "color": "White",
+      "finish": "Melamine",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        18,
+        25
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "front": {
+      "role": "front",
+      "key": "mat.board.body.dtd.halifax_oak.18",
+      "catalogId": "mat.board.body.dtd.halifax_oak.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD Halifax Oak 18",
+      "displayName": "DTD Halifax Oak 18 mm",
+      "colorHex": "#a97f57",
+      "baseMaterial": "dtd",
+      "decor": "Halifax Oak",
+      "color": "Oak Brown",
+      "finish": "Textured Woodgrain",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        18,
+        25
+      ],
+      "preview": {
+        "colorHex": "#a97f57",
+        "roughness": 0.82,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "drawer": {
+      "role": "drawer",
+      "key": "mat.board.drawer_box.plywood.birch.13",
+      "catalogId": "mat.board.drawer_box.plywood.birch.13",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Drawer Box Boards",
+      "family": "drawer_box",
+      "name": "Plywood Birch 13",
+      "displayName": "Drawer Box Plywood Birch 13 mm",
+      "colorHex": "#dbc29d",
+      "baseMaterial": "plywood",
+      "decor": "Birch",
+      "color": "Light Birch",
+      "finish": "Natural Sanded",
+      "defaultThicknessMm": 13,
+      "availableThicknessesMm": [
+        13,
+        15
+      ],
+      "preview": {
+        "colorHex": "#dbc29d",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "back": {
+      "role": "back",
+      "key": "mat.board.back.hdf.grey.6",
+      "catalogId": "mat.board.back.hdf.grey.6",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Back Panels",
+      "family": "back",
+      "name": "HDF Grey 6",
+      "displayName": "HDF Grey 6 mm",
+      "colorHex": "#c8ccd1",
+      "baseMaterial": "hdf",
+      "decor": "Grey",
+      "color": "Grey",
+      "finish": "Painted Smooth",
+      "defaultThicknessMm": 6,
+      "availableThicknessesMm": [
+        6,
+        8
+      ],
+      "preview": {
+        "colorHex": "#c8ccd1",
+        "roughness": 0.72,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    }
+  },
+  "items": [
     {
-      "key": "board-material",
-      "label": "Board Material",
-      "amount": 738,
-      "formula": "41 * 18"
+      "id": "left-side",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Left Side Panel",
+      "description": "Left Side Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3462,
+      "formulas": {
+        "width": "depth",
+        "height": "height - plinthHeight - worktopThicknessMm",
+        "thickness": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 560,
+        "width": 562,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.3147,
+        "billableAreaM2": 0.3462,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "left-side"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3147,
+      "unitPrice": 24.5,
+      "itemCost": 8.48,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
     },
     {
-      "key": "hardware",
-      "label": "Hardware",
-      "amount": 104,
-      "formula": "16 * 6.5"
+      "id": "left-side-edge-band",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Left Side Panel Edge Band",
+      "description": "Visible front edge banding for Left Side Panel",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.562,
+      "formulas": {
+        "edgeLengthMm": "height",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.562
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "left-side"
+      ],
+      "notes": [
+        "Carcass side panels are edge banded only on the front visible vertical edge."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.562,
+      "unitPrice": 0.55,
+      "itemCost": 0.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
     },
     {
-      "key": "assembly",
-      "label": "Assembly",
-      "amount": 256.5,
-      "formula": "57 * 4.5"
+      "id": "right-side",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Right Side Panel",
+      "description": "Right Side Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3462,
+      "formulas": {
+        "width": "depth",
+        "height": "height - plinthHeight - worktopThicknessMm",
+        "thickness": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 560,
+        "width": 562,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.3147,
+        "billableAreaM2": 0.3462,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "right-side"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3147,
+      "unitPrice": 24.5,
+      "itemCost": 8.48,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "right-side-edge-band",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Right Side Panel Edge Band",
+      "description": "Visible front edge banding for Right Side Panel",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.562,
+      "formulas": {
+        "edgeLengthMm": "height",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.562
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "right-side"
+      ],
+      "notes": [
+        "Carcass side panels are edge banded only on the front visible vertical edge."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.562,
+      "unitPrice": 0.55,
+      "itemCost": 0.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "bottom-panel",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Bottom Panel",
+      "description": "Bottom Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.4706,
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4278,
+        "billableAreaM2": 0.4706,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "bottom-panel"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.4278,
+      "unitPrice": 24.5,
+      "itemCost": 11.53,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "bottom-panel-edge-band",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Bottom Panel Edge Band",
+      "description": "Visible front edge banding for Bottom Panel",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "width",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "bottom-panel"
+      ],
+      "notes": [
+        "Top and bottom carcass panels are edge banded only on the front visible edge."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.764,
+      "unitPrice": 0.55,
+      "itemCost": 0.42,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "top-panel",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Top Panel",
+      "description": "Top Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.4706,
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4278,
+        "billableAreaM2": 0.4706,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "top-panel"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.4278,
+      "unitPrice": 24.5,
+      "itemCost": 11.53,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "top-panel-edge-band",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Top Panel Edge Band",
+      "description": "Visible front edge banding for Top Panel",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "width",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "top-panel"
+      ],
+      "notes": [
+        "Top and bottom carcass panels are edge banded only on the front visible edge."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.764,
+      "unitPrice": 0.55,
+      "itemCost": 0.42,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "back-panel",
+      "itemType": "board",
+      "category": "back_panel",
+      "name": "HDF Grey 6 - Back Panel",
+      "description": "Back Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.4572,
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "height - plinthHeight - worktopThicknessMm - boardThickness",
+        "thickness": "backThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 764,
+        "width": 544,
+        "thickness": 6
+      },
+      "metrics": {
+        "areaM2": 0.4156,
+        "billableAreaM2": 0.4572,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "back-panel",
+      "materialGroup": "back",
+      "material": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.6",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 6",
+        "displayName": "HDF Grey 6 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 6,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "displayName": "HDF Grey 6 mm",
+        "group": "back",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.back.hdf.grey.6",
+        "sourceCatalogId": "mat.board.back.hdf.grey.6",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "back-panel"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.4156,
+      "unitPrice": 13.8,
+      "itemCost": 6.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "plinth",
+      "itemType": "board",
+      "category": "plinth",
+      "name": "DTD White 18 - Plinth",
+      "description": "Plinth",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.084,
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "plinthHeight",
+        "thickness": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 764,
+        "width": 100,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.0764,
+        "billableAreaM2": 0.084,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.0764,
+      "unitPrice": 24.5,
+      "itemCost": 2.06,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-front-1",
+      "itemType": "board",
+      "category": "front",
+      "name": "DTD Halifax Oak 18 - Drawer Front 1",
+      "description": "Drawer Front 1",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.162,
+      "formulas": {
+        "width": "width - 2 * sideGap",
+        "height": "drawerFrontHeights[0]",
+        "thickness": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 796,
+        "width": 185,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.1473,
+        "billableAreaM2": 0.162,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-front-1",
+      "materialGroup": "body",
+      "material": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "sourceCatalogId": "mat.board.body.dtd.halifax_oak.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-front-1"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1473,
+      "unitPrice": 39.8,
+      "itemCost": 6.45,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-1-side-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 1 Side Panels",
+      "description": "Drawer Box 1 Side Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1214,
+      "formulas": {
+        "lengthMm": "depth - drawerBackReserveMm - 50",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 502,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1104,
+        "billableAreaM2": 0.1214,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-1-side-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-1"
+      ],
+      "notes": [
+        "Expanded from drawer box envelope to manufacturable board parts."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1104,
+      "unitPrice": 34,
+      "itemCost": 4.13,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-1-front-back-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 1 Front/Back Panels",
+      "description": "Drawer Box 1 Front and Back Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1723,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1566,
+        "billableAreaM2": 0.1723,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-1-front-back-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-1"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1566,
+      "unitPrice": 34,
+      "itemCost": 5.86,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-1-bottom-panel",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "HDF White 8 - Drawer Box 1 Bottom Panel",
+      "description": "Drawer Box 1 Bottom Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3728,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "(drawerBoxDepth - 2 * drawerBoxThickness)",
+        "thicknessMm": "drawerBottomThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 476,
+        "thickness": 8
+      },
+      "metrics": {
+        "areaM2": 0.3389,
+        "billableAreaM2": 0.3728,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-1-bottom-panel",
+      "materialGroup": "drawer_bottom",
+      "material": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "group": "drawer_bottom",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceCatalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-1"
+      ],
+      "notes": [
+        "Bottom panel uses drawer bottom thickness and is priced as a board sheet item."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3389,
+      "unitPrice": 16.5,
+      "itemCost": 6.15,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-1-runner-pair",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Drawer Runner Pair 1",
+      "description": "Runner set for drawer 1",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 1,
+      "pricingQuantity": 1,
+      "formulas": {
+        "quantity": "1",
+        "nominalLengthMm": "400",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "runner",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "componentType": "runner",
+        "geometryId": "geo.runner.pair.400.standard",
+        "name": "Runner Pair 400 Standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "brand": "DemoLine",
+        "series": "StandardBox",
+        "variant": "400 mm pair",
+        "color": "Galvanized",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 400,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#9ca3ad",
+          "roughness": 0.3,
+          "metalness": 0.82
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "group": "runner",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.runner.pair.400.standard",
+        "sourceCatalogId": "cmp.runner.pair.400.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-1"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 1,
+      "unitPrice": 13.5,
+      "itemCost": 13.5,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-front-2",
+      "itemType": "board",
+      "category": "front",
+      "name": "DTD Halifax Oak 18 - Drawer Front 2",
+      "description": "Drawer Front 2",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.162,
+      "formulas": {
+        "width": "width - 2 * sideGap",
+        "height": "drawerFrontHeights[1]",
+        "thickness": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 796,
+        "width": 185,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.1473,
+        "billableAreaM2": 0.162,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-front-2",
+      "materialGroup": "body",
+      "material": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "sourceCatalogId": "mat.board.body.dtd.halifax_oak.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-front-2"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1473,
+      "unitPrice": 39.8,
+      "itemCost": 6.45,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-2-side-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 2 Side Panels",
+      "description": "Drawer Box 2 Side Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1214,
+      "formulas": {
+        "lengthMm": "depth - drawerBackReserveMm - 50",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 502,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1104,
+        "billableAreaM2": 0.1214,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-2-side-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-2"
+      ],
+      "notes": [
+        "Expanded from drawer box envelope to manufacturable board parts."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1104,
+      "unitPrice": 34,
+      "itemCost": 4.13,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-2-front-back-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 2 Front/Back Panels",
+      "description": "Drawer Box 2 Front and Back Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1723,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1566,
+        "billableAreaM2": 0.1723,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-2-front-back-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-2"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1566,
+      "unitPrice": 34,
+      "itemCost": 5.86,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-2-bottom-panel",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "HDF White 8 - Drawer Box 2 Bottom Panel",
+      "description": "Drawer Box 2 Bottom Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3728,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "(drawerBoxDepth - 2 * drawerBoxThickness)",
+        "thicknessMm": "drawerBottomThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 476,
+        "thickness": 8
+      },
+      "metrics": {
+        "areaM2": 0.3389,
+        "billableAreaM2": 0.3728,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-2-bottom-panel",
+      "materialGroup": "drawer_bottom",
+      "material": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "group": "drawer_bottom",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceCatalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-2"
+      ],
+      "notes": [
+        "Bottom panel uses drawer bottom thickness and is priced as a board sheet item."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3389,
+      "unitPrice": 16.5,
+      "itemCost": 6.15,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-2-runner-pair",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Drawer Runner Pair 2",
+      "description": "Runner set for drawer 2",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 1,
+      "pricingQuantity": 1,
+      "formulas": {
+        "quantity": "1",
+        "nominalLengthMm": "400",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "runner",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "componentType": "runner",
+        "geometryId": "geo.runner.pair.400.standard",
+        "name": "Runner Pair 400 Standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "brand": "DemoLine",
+        "series": "StandardBox",
+        "variant": "400 mm pair",
+        "color": "Galvanized",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 400,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#9ca3ad",
+          "roughness": 0.3,
+          "metalness": 0.82
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "group": "runner",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.runner.pair.400.standard",
+        "sourceCatalogId": "cmp.runner.pair.400.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-2"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 1,
+      "unitPrice": 13.5,
+      "itemCost": 13.5,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-front-3",
+      "itemType": "board",
+      "category": "front",
+      "name": "DTD Halifax Oak 18 - Drawer Front 3",
+      "description": "Drawer Front 3",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.1612,
+      "formulas": {
+        "width": "width - 2 * sideGap",
+        "height": "drawerFrontHeights[2]",
+        "thickness": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 796,
+        "width": 184,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.1465,
+        "billableAreaM2": 0.1612,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-front-3",
+      "materialGroup": "body",
+      "material": {
+        "role": "front",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD Halifax Oak 18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "colorHex": "#a97f57",
+        "baseMaterial": "dtd",
+        "decor": "Halifax Oak",
+        "color": "Oak Brown",
+        "finish": "Textured Woodgrain",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#a97f57",
+          "roughness": 0.82,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.halifax_oak.18",
+        "sourceCatalogId": "mat.board.body.dtd.halifax_oak.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-front-3"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1465,
+      "unitPrice": 39.8,
+      "itemCost": 6.42,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-3-side-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 3 Side Panels",
+      "description": "Drawer Box 3 Side Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1214,
+      "formulas": {
+        "lengthMm": "depth - drawerBackReserveMm - 50",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 502,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1104,
+        "billableAreaM2": 0.1214,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-3-side-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-3"
+      ],
+      "notes": [
+        "Expanded from drawer box envelope to manufacturable board parts."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1104,
+      "unitPrice": 34,
+      "itemCost": 4.13,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-3-front-back-panels",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "Plywood Birch 13 - Drawer Box 3 Front/Back Panels",
+      "description": "Drawer Box 3 Front and Back Panels",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 2,
+      "pricingQuantity": 0.1723,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "drawerBoxSideHeight",
+        "thicknessMm": "drawerBoxThickness",
+        "quantity": "2",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 110,
+        "thickness": 13
+      },
+      "metrics": {
+        "areaM2": 0.1566,
+        "billableAreaM2": 0.1723,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-3-front-back-panels",
+      "materialGroup": "drawer_box",
+      "material": {
+        "role": "drawer",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Box Boards",
+        "family": "drawer_box",
+        "name": "Plywood Birch 13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "colorHex": "#dbc29d",
+        "baseMaterial": "plywood",
+        "decor": "Birch",
+        "color": "Light Birch",
+        "finish": "Natural Sanded",
+        "defaultThicknessMm": 13,
+        "availableThicknessesMm": [
+          13,
+          15
+        ],
+        "preview": {
+          "colorHex": "#dbc29d",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "group": "drawer_box",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_box.plywood.birch.13",
+        "sourceCatalogId": "mat.board.drawer_box.plywood.birch.13",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-3"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.1566,
+      "unitPrice": 34,
+      "itemCost": 5.86,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-3-bottom-panel",
+      "itemType": "board",
+      "category": "drawer_box",
+      "name": "HDF White 8 - Drawer Box 3 Bottom Panel",
+      "description": "Drawer Box 3 Bottom Panel",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3728,
+      "formulas": {
+        "lengthMm": "(drawerBoxWidth - 2 * drawerBoxThickness)",
+        "widthMm": "(drawerBoxDepth - 2 * drawerBoxThickness)",
+        "thicknessMm": "drawerBottomThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 712,
+        "width": 476,
+        "thickness": 8
+      },
+      "metrics": {
+        "areaM2": 0.3389,
+        "billableAreaM2": 0.3728,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "drawer-box-3-bottom-panel",
+      "materialGroup": "drawer_bottom",
+      "material": {
+        "role": "back",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Drawer Bottom Boards",
+        "family": "drawer_bottom",
+        "name": "HDF White 8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "hdf",
+        "decor": "White",
+        "color": "White",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "group": "drawer_bottom",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceCatalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-3"
+      ],
+      "notes": [
+        "Bottom panel uses drawer bottom thickness and is priced as a board sheet item."
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3389,
+      "unitPrice": 16.5,
+      "itemCost": 6.15,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-box-3-runner-pair",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Drawer Runner Pair 3",
+      "description": "Runner set for drawer 3",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 1,
+      "pricingQuantity": 1,
+      "formulas": {
+        "quantity": "1",
+        "nominalLengthMm": "400",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "runner",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "componentType": "runner",
+        "geometryId": "geo.runner.pair.400.standard",
+        "name": "Runner Pair 400 Standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "brand": "DemoLine",
+        "series": "StandardBox",
+        "variant": "400 mm pair",
+        "color": "Galvanized",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 400,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#9ca3ad",
+          "roughness": 0.3,
+          "metalness": 0.82
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.runner.pair.400.standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "group": "runner",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.runner.pair.400.standard",
+        "sourceCatalogId": "cmp.runner.pair.400.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-box-3"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 1,
+      "unitPrice": 13.5,
+      "itemCost": 13.5,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "drawer-handles",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Bar Handle 160 mm Black Set",
+      "description": "One handle per drawer front.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 3,
+      "pricingQuantity": 3,
+      "formulas": {
+        "quantity": "drawerCount",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "handle",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "group": "handle",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.handle.bar.160.black",
+        "sourceCatalogId": "cmp.handle.bar.160.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "drawer-handles"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 3,
+      "unitPrice": 5.2,
+      "itemCost": 15.6,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "handle-screws",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Handle Screw Set",
+      "description": "Fixing screws for installed handles.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 6,
+      "pricingQuantity": 6,
+      "formulas": {
+        "quantity": "drawerCount * 2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "fastener",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "componentType": "fastener",
+        "geometryId": "geo.fastener.handle_screw",
+        "name": "Handle Screw M4",
+        "displayName": "Handle Screw M4",
+        "brand": "FixPro",
+        "series": "HandleFix",
+        "variant": "M4 machine screw",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "displayName": "Handle Screw M4",
+        "group": "fastener",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.fastener.handle_screw.m4",
+        "sourceCatalogId": "cmp.fastener.handle_screw.m4",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "handle-screws"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 6,
+      "unitPrice": 0.06,
+      "itemCost": 0.36,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "adjustable-legs",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Adjustable Leg 100 mm Black",
+      "description": "Support legs for the carcass.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 5,
+      "pricingQuantity": 5,
+      "formulas": {
+        "quantity": "width <= 600 ? 4 : width <= 900 ? 5 : 6",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "leg",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "group": "leg",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.leg.adjustable.100.black",
+        "sourceCatalogId": "cmp.leg.adjustable.100.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "adjustable-legs"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 5,
+      "unitPrice": 1.45,
+      "itemCost": 7.25,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "plinth-clips",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Plinth Clips",
+      "description": "Clips for mounting the plinth to support legs.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "floor(adjustableLegCount / 2)",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "plinth_clip",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "componentType": "plinth_clip",
+        "geometryId": "geo.plinth_clip.standard",
+        "name": "Plinth Clip Standard",
+        "displayName": "Plinth Clip Standard",
+        "brand": "BaseTech",
+        "series": "ClipFix",
+        "variant": "Standard clip",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "displayName": "Plinth Clip Standard",
+        "group": "plinth_clip",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.clip.plinth.standard",
+        "sourceCatalogId": "cmp.clip.plinth.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-clips"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 2,
+      "unitPrice": 0.42,
+      "itemCost": 0.84,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
+    },
+    {
+      "id": "carcass-fastener-set",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Carcass Fastener Set",
+      "description": "Base set of confirmats / screws for carcass assembly.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 20,
+      "pricingQuantity": 20,
+      "formulas": {
+        "quantity": "max(12, 8 + drawerCount * 4)",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "fastener",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.carcass.standard",
+        "componentType": "fastener",
+        "geometryId": "geo.fastener.carcass_standard",
+        "name": "Carcass Fastener Standard",
+        "displayName": "Carcass Fastener Standard",
+        "brand": "FixPro",
+        "series": "CabinetCore",
+        "variant": "Standard carcass fixing",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.carcass.standard",
+        "displayName": "Carcass Fastener Standard",
+        "group": "fastener",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.fastener.carcass.standard",
+        "sourceCatalogId": "cmp.fastener.carcass.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-fastener-set"
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 20,
+      "unitPrice": 0.12,
+      "itemCost": 2.4,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": []
     }
   ],
-  "totals": {
-    "subtotal": 1098.5,
-    "overrideApplied": false,
-    "overrideAmount": null,
-    "finalTotal": 1098.5
-  }
+  "groups": {
+    "boards": {
+      "areaM2": 4.2358,
+      "pricedAreaM2": 4.6595,
+      "cost": 116.13
+    },
+    "edge_bands": {
+      "lengthLm": 2.652,
+      "cost": 1.46
+    },
+    "hardware": {
+      "pieces": 39,
+      "cost": 66.95
+    }
+  },
+  "priceInputs": {
+    "currency": "EUR",
+    "boardWasteMultiplier": 1.1,
+    "laborCostFixed": 48,
+    "marginPercent": 0
+  },
+  "calculationFormulas": {
+    "boardPricedQuantity": "baseAreaM2 * wasteMultiplier",
+    "itemCost": "pricingQuantity * unitPrice",
+    "subtotalCost": "materialCost + laborCostFixed",
+    "marginAmount": "0",
+    "finalPrice": "subtotalCost"
+  },
+  "aggregates": {
+    "boardsByMaterial": [
+      {
+        "catalogId": "mat.board.drawer_bottom.hdf.white.8",
+        "displayName": "Drawer Bottom HDF White 8 mm",
+        "materialGroup": "drawer_bottom",
+        "netAreaM2": 1.0167,
+        "pricedAreaM2": 1.1184,
+        "wasteMultiplier": 1.1,
+        "pieces": 3,
+        "itemCount": 3
+      },
+      {
+        "catalogId": "mat.board.drawer_box.plywood.birch.13",
+        "displayName": "Drawer Box Plywood Birch 13 mm",
+        "materialGroup": "drawer_box",
+        "netAreaM2": 0.801,
+        "pricedAreaM2": 0.8811,
+        "wasteMultiplier": 1.1,
+        "pieces": 12,
+        "itemCount": 6
+      },
+      {
+        "catalogId": "mat.board.body.dtd.halifax_oak.18",
+        "displayName": "DTD Halifax Oak 18 mm",
+        "materialGroup": "body",
+        "netAreaM2": 0.4411,
+        "pricedAreaM2": 0.4852,
+        "wasteMultiplier": 1.1,
+        "pieces": 3,
+        "itemCount": 3
+      },
+      {
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "materialGroup": "body",
+        "netAreaM2": 1.5614,
+        "pricedAreaM2": 1.7176,
+        "wasteMultiplier": 1.1,
+        "pieces": 5,
+        "itemCount": 5
+      },
+      {
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "displayName": "HDF Grey 6 mm",
+        "materialGroup": "back",
+        "netAreaM2": 0.4156,
+        "pricedAreaM2": 0.4572,
+        "wasteMultiplier": 1.1,
+        "pieces": 1,
+        "itemCount": 1
+      }
+    ],
+    "edgeBandsByMaterial": [
+      {
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "materialGroup": "body",
+        "lengthLm": 2.652,
+        "pieces": 4,
+        "itemCount": 4
+      }
+    ],
+    "componentsByCatalogId": [
+      {
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "componentType": "leg",
+        "pieces": 5,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "componentType": "handle",
+        "pieces": 3,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.fastener.carcass.standard",
+        "displayName": "Carcass Fastener Standard",
+        "componentType": "fastener",
+        "pieces": 20,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "displayName": "Handle Screw M4",
+        "componentType": "fastener",
+        "pieces": 6,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.clip.plinth.standard",
+        "displayName": "Plinth Clip Standard",
+        "componentType": "plinth_clip",
+        "pieces": 2,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.runner.pair.400.standard",
+        "displayName": "Runner Pair 400 mm Standard",
+        "componentType": "runner",
+        "pieces": 3,
+        "itemCount": 3
+      }
+    ]
+  },
+  "materialCost": 184.54,
+  "laborCostFixed": 48,
+  "subtotalCost": 232.54,
+  "marginPercent": 0,
+  "marginAmount": 0,
+  "finalPrice": 232.54
 }

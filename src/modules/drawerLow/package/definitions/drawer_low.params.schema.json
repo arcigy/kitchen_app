@@ -104,15 +104,6 @@
     "materials": {
       "type": "object",
       "properties": {
-        "bodyMaterialId": {
-          "type": "number"
-        },
-        "frontMaterialId": {
-          "type": "number"
-        },
-        "drawerMaterialId": {
-          "type": "number"
-        },
         "bodyKey": {
           "type": "string"
         },
@@ -121,68 +112,25 @@
         },
         "drawerKey": {
           "type": "string"
-        },
-        "bodyColor": {
-          "type": "string"
-        },
-        "frontColor": {
-          "type": "string"
-        },
-        "drawerColor": {
-          "type": "string"
-        },
-        "bodyPresetId": {
-          "type": "string"
-        },
-        "frontPresetId": {
-          "type": "string"
-        },
-        "drawerPresetId": {
-          "type": "string"
-        },
-        "defaultTintColor": {
-          "type": "string"
-        },
-        "defaultTintStrength": {
-          "type": "number"
-        },
-        "partOverrides": {
-          "type": "object",
-          "properties": {},
-          "additionalProperties": true
-        },
-        "bodyPbr": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "rotationDeg": {
-              "type": "number"
-            },
-            "tintStrength": {
-              "type": "number"
-            },
-            "tintColor": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": true
-        },
-        "bodyName": {
-          "type": "string"
-        },
-        "frontName": {
-          "type": "string"
-        },
-        "drawerName": {
-          "type": "string"
         }
       },
       "additionalProperties": true
+    },
+    "autoFit": {
+      "type": "boolean"
+    },
+    "handleComponentId": {
+      "type": "string"
+    },
+    "heightCarcass": {
+      "type": "number"
+    },
+    "legComponentId": {
+      "type": "string"
     }
   },
   "required": [
+    "autoFit",
     "backGrooveClearanceMm",
     "backGrooveDepthMm",
     "backGrooveOffsetMm",
@@ -199,12 +147,15 @@
     "frontGap",
     "frontStackPreset",
     "frontThicknessMm",
+    "handleComponentId",
     "handleLengthMm",
     "handlePositionMm",
     "handleProjectionMm",
     "handleSizeMm",
     "handleType",
     "height",
+    "heightCarcass",
+    "legComponentId",
     "materials",
     "plinthHeight",
     "plinthSetbackMm",

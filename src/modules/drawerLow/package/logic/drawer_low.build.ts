@@ -6,7 +6,7 @@ export const displayName = "Drawer";
 export const defaultParams = {
   "type": "drawer_low",
   "width": 800,
-  "height": 720,
+  "height": 700,
   "worktopThicknessMm": 38,
   "depth": 560,
   "boardThickness": 18,
@@ -22,7 +22,7 @@ export const defaultParams = {
   "topGap": 2,
   "bottomGap": 2,
   "sideClearanceMm": 4,
-  "frontThicknessMm": 19,
+  "frontThicknessMm": 18,
   "frontStackPreset": "equal",
   "topFrontHeightMm": 160,
   "handleType": "bar",
@@ -35,36 +35,19 @@ export const defaultParams = {
   "drawerBackReserveMm": 8,
   "drawerCount": 3,
   "drawerFrontHeights": [
-    192,
-    191,
-    191
+    185,
+    185,
+    184
   ],
   "materials": {
-    "bodyMaterialId": 2,
-    "frontMaterialId": 3,
-    "drawerMaterialId": 5,
     "bodyKey": "2",
     "frontKey": "3",
-    "drawerKey": "5",
-    "bodyColor": "#b88b5a",
-    "frontColor": "#005fb8",
-    "drawerColor": "#d8dde6",
-    "bodyPresetId": "DTD1",
-    "frontPresetId": "DTD2",
-    "drawerPresetId": "DTD16",
-    "defaultTintColor": "#ffffff",
-    "defaultTintStrength": 0,
-    "partOverrides": {},
-    "bodyPbr": {
-      "id": "wood_veneer_oak_7760_1k",
-      "rotationDeg": 0,
-      "tintStrength": 0,
-      "tintColor": "#ffffff"
-    },
-    "bodyName": "DTD Grey",
-    "frontName": "MDF Front",
-    "drawerName": "Drawer Box Board"
-  }
+    "drawerKey": "5"
+  },
+  "autoFit": true,
+  "handleComponentId": "cmp.handle.bar.160.black",
+  "heightCarcass": 662,
+  "legComponentId": "cmp.leg.adjustable.100.black"
 } as const;
 
 export function buildModule(input: Record<string, unknown> = defaultParams) {
@@ -72,6 +55,6 @@ export function buildModule(input: Record<string, unknown> = defaultParams) {
   return {
     validation,
     geometry: computeGeometry(),
-    partCount: 57
+    partCount: 49
   };
 }

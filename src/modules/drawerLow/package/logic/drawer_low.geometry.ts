@@ -6,7 +6,7 @@ export const geometrySnapshot = {
   "displayName": "Drawer",
   "dimensions": {
     "widthMm": 800,
-    "heightMm": 720,
+    "heightMm": 700,
     "depthMm": 560,
     "worktopThicknessMm": 38,
     "plinthHeightMm": 100
@@ -57,7 +57,7 @@ export const geometrySnapshot = {
       "materialRole": "body",
       "sizeMm": {
         "width": 18,
-        "height": 582,
+        "height": 562,
         "depth": 560,
         "thickness": 18
       },
@@ -71,10 +71,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-391, 391, 0"
+        "positionMm": "-391, 381, 0"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -84,7 +84,7 @@ export const geometrySnapshot = {
       "materialRole": "body",
       "sizeMm": {
         "width": 18,
-        "height": 582,
+        "height": 562,
         "depth": 560,
         "thickness": 18
       },
@@ -98,10 +98,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "391, 391, 0"
+        "positionMm": "391, 381, 0"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -127,7 +127,7 @@ export const geometrySnapshot = {
         "positionMm": "0, 109, 0"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -150,10 +150,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 673, 250"
+        "positionMm": "0, 653, 250"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -176,10 +176,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 673, -250"
+        "positionMm": "0, 653, -250"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -189,7 +189,7 @@ export const geometrySnapshot = {
       "materialRole": "body",
       "sizeMm": {
         "width": 779,
-        "height": 561,
+        "height": 541,
         "depth": 6,
         "thickness": 6
       },
@@ -208,15 +208,15 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 391, -271"
+        "positionMm": "0, 381, -271"
       },
       "notes": [
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #b88b5a",
-        "material unnamed color #f4f4f4",
-        "material unnamed color #b88b5a"
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1",
+        "material HDF Grey 6 mm color #c8ccd1"
       ]
     },
     {
@@ -242,7 +242,7 @@ export const geometrySnapshot = {
         "positionMm": "-370, 50, 172"
       },
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -268,7 +268,7 @@ export const geometrySnapshot = {
         "positionMm": "370, 50, 172"
       },
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -294,7 +294,7 @@ export const geometrySnapshot = {
         "positionMm": "-370, 50, -220"
       },
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
@@ -320,267 +320,61 @@ export const geometrySnapshot = {
         "positionMm": "370, 50, -220"
       },
       "notes": [
-        "material unnamed color #2a2f3a"
+        "material Adjustable Leg 100 mm Black color #1e232b"
       ]
     },
     {
-      "id": "kickClip_FL_collar",
-      "label": "kickClip_FL_collar",
+      "id": "plinth-clip-fl",
+      "label": "plinth-clip-fl",
       "kind": "back-panel",
       "materialRole": "body",
       "sizeMm": {
         "width": 48,
         "height": 16,
-        "depth": 44,
+        "depth": 65,
         "thickness": 16
       },
       "quantity": 1,
       "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
+        "boardThickness",
         "depth",
-        "width",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 0, 0"
-      },
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FL_pad",
-      "label": "kickClip_FL_pad",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 30,
-        "height": 12,
-        "depth": 12,
-        "thickness": 12
-      },
-      "quantity": 1,
-      "paramKeys": [
         "plinthHeight",
         "plinthSetbackMm",
-        "depth",
-        "boardThickness"
+        "width"
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 0, 23"
+        "positionMm": "0, -0.2, 21.96"
       },
       "notes": [
-        "material unnamed color #606772"
+        "material Plinth Clip Standard color #1e232b"
       ]
     },
     {
-      "id": "kickClip_FL_arm",
-      "label": "kickClip_FL_arm",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 16,
-        "height": 10,
-        "depth": 5,
-        "thickness": 5
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, -1, 25.5"
-      },
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FL_screw_1",
-      "label": "kickClip_FL_screw_1",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, -3, 30.65"
-      },
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FL_screw_2",
-      "label": "kickClip_FL_screw_2",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 3, 30.65"
-      },
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FR_collar",
-      "label": "kickClip_FR_collar",
+      "id": "plinth-clip-fr",
+      "label": "plinth-clip-fr",
       "kind": "back-panel",
       "materialRole": "body",
       "sizeMm": {
         "width": 48,
         "height": 16,
-        "depth": 44,
+        "depth": 65,
         "thickness": 16
       },
       "quantity": 1,
       "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
+        "boardThickness",
         "depth",
-        "width",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 0, 0"
-      },
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_pad",
-      "label": "kickClip_FR_pad",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 30,
-        "height": 12,
-        "depth": 12,
-        "thickness": 12
-      },
-      "quantity": 1,
-      "paramKeys": [
         "plinthHeight",
         "plinthSetbackMm",
-        "depth",
-        "boardThickness"
+        "width"
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 0, 23"
+        "positionMm": "0, -0.2, 21.96"
       },
       "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_arm",
-      "label": "kickClip_FR_arm",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 16,
-        "height": 10,
-        "depth": 5,
-        "thickness": 5
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, -1, 25.5"
-      },
-      "notes": [
-        "material unnamed color #606772"
-      ]
-    },
-    {
-      "id": "kickClip_FR_screw_1",
-      "label": "kickClip_FR_screw_1",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, -3, 30.65"
-      },
-      "notes": [
-        "material unnamed color #3a3f4b"
-      ]
-    },
-    {
-      "id": "kickClip_FR_screw_2",
-      "label": "kickClip_FR_screw_2",
-      "kind": "back-panel",
-      "materialRole": "body",
-      "sizeMm": {
-        "width": 4,
-        "height": 4,
-        "depth": 27,
-        "thickness": 4
-      },
-      "quantity": 1,
-      "paramKeys": [
-        "plinthHeight",
-        "plinthSetbackMm",
-        "depth",
-        "boardThickness"
-      ],
-      "formulas": {
-        "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 3, 30.65"
-      },
-      "notes": [
-        "material unnamed color #3a3f4b"
+        "material Plinth Clip Standard color #1e232b"
       ]
     },
     {
@@ -607,7 +401,7 @@ export const geometrySnapshot = {
         "positionMm": "0, 50, 211"
       },
       "notes": [
-        "material unnamed color #ffffff"
+        "material DTD White 18 mm color #f3f3ef"
       ]
     },
     {
@@ -617,9 +411,9 @@ export const geometrySnapshot = {
       "materialRole": "front",
       "sizeMm": {
         "width": 796,
-        "height": 192,
-        "depth": 19,
-        "thickness": 19
+        "height": 185,
+        "depth": 18,
+        "thickness": 18
       },
       "quantity": 1,
       "paramKeys": [
@@ -643,10 +437,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 198, 289.5"
+        "positionMm": "0, 194.5, 289"
       },
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -671,7 +465,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 234, 306"
+        "positionMm": "0, 227, 305"
       },
       "notes": [
         "material unnamed color #3a3f4b"
@@ -699,7 +493,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 234, 278.25"
+        "positionMm": "-40, 227, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -713,7 +507,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -727,7 +521,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 234, 298"
+        "positionMm": "-40, 227, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -755,7 +549,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 234, 278.25"
+        "positionMm": "40, 227, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -769,7 +563,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -783,7 +577,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 234, 298"
+        "positionMm": "40, 227, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -797,7 +591,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -812,10 +606,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-371.5, 175, 3"
+        "positionMm": "-371.5, 197, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -826,7 +620,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -841,10 +635,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "371.5, 175, 3"
+        "positionMm": "371.5, 197, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -855,7 +649,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "quantity": 1,
@@ -869,10 +663,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 126.5, 9.5"
+        "positionMm": "0, 148.5, 15.5"
       },
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -898,10 +692,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 175, -254.5"
+        "positionMm": "0, 197, -254.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -912,7 +706,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -925,10 +719,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-374, 113, 5.5"
+        "positionMm": "-374, 135, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -939,7 +733,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -952,10 +746,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "374, 113, 5.5"
+        "positionMm": "374, 135, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -965,9 +759,9 @@ export const geometrySnapshot = {
       "materialRole": "front",
       "sizeMm": {
         "width": 796,
-        "height": 191,
-        "depth": 19,
-        "thickness": 19
+        "height": 185,
+        "depth": 18,
+        "thickness": 18
       },
       "quantity": 1,
       "paramKeys": [
@@ -991,10 +785,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 391.5, 289.5"
+        "positionMm": "0, 381.5, 289"
       },
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -1019,7 +813,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 427, 306"
+        "positionMm": "0, 414, 305"
       },
       "notes": [
         "material unnamed color #3a3f4b"
@@ -1047,7 +841,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 427, 278.25"
+        "positionMm": "-40, 414, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1061,7 +855,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -1075,7 +869,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 427, 298"
+        "positionMm": "-40, 414, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1103,7 +897,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 427, 278.25"
+        "positionMm": "40, 414, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1117,7 +911,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -1131,7 +925,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 427, 298"
+        "positionMm": "40, 414, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1145,7 +939,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -1160,10 +954,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-371.5, 354, 3"
+        "positionMm": "-371.5, 384, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1174,7 +968,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -1189,10 +983,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "371.5, 354, 3"
+        "positionMm": "371.5, 384, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1203,7 +997,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "quantity": 1,
@@ -1217,10 +1011,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 305.5, 9.5"
+        "positionMm": "0, 335.5, 15.5"
       },
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -1246,10 +1040,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 354, -254.5"
+        "positionMm": "0, 384, -254.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1260,7 +1054,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -1273,10 +1067,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-374, 292, 5.5"
+        "positionMm": "-374, 322, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -1287,7 +1081,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -1300,10 +1094,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "374, 292, 5.5"
+        "positionMm": "374, 322, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -1313,9 +1107,9 @@ export const geometrySnapshot = {
       "materialRole": "front",
       "sizeMm": {
         "width": 796,
-        "height": 191,
-        "depth": 19,
-        "thickness": 19
+        "height": 184,
+        "depth": 18,
+        "thickness": 18
       },
       "quantity": 1,
       "paramKeys": [
@@ -1339,10 +1133,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 584.5, 289.5"
+        "positionMm": "0, 568, 289"
       },
       "notes": [
-        "material unnamed color #005fb8"
+        "material DTD Halifax Oak 18 mm color #a97f57"
       ]
     },
     {
@@ -1367,7 +1161,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 620, 306"
+        "positionMm": "0, 600, 305"
       },
       "notes": [
         "material unnamed color #3a3f4b"
@@ -1395,7 +1189,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 620, 278.25"
+        "positionMm": "-40, 600, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1409,7 +1203,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -1423,7 +1217,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-40, 620, 298"
+        "positionMm": "-40, 600, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1451,7 +1245,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 620, 278.25"
+        "positionMm": "40, 600, 278.25"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1465,7 +1259,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 3,
         "height": 3,
-        "depth": 37,
+        "depth": 36,
         "thickness": 3
       },
       "quantity": 1,
@@ -1479,7 +1273,7 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "40, 620, 298"
+        "positionMm": "40, 600, 297.5"
       },
       "notes": [
         "material unnamed color #8a93a3"
@@ -1493,7 +1287,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -1508,10 +1302,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-371.5, 532, 3"
+        "positionMm": "-371.5, 571, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1522,7 +1316,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 13,
         "height": 110,
-        "depth": 528,
+        "depth": 540,
         "thickness": 13
       },
       "quantity": 1,
@@ -1537,10 +1331,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "371.5, 532, 3"
+        "positionMm": "371.5, 571, 9"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1551,7 +1345,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 730,
         "height": 13,
-        "depth": 515,
+        "depth": 527,
         "thickness": 13
       },
       "quantity": 1,
@@ -1565,10 +1359,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 483.5, 9.5"
+        "positionMm": "0, 522.5, 15.5"
       },
       "notes": [
-        "material unnamed color #d8dde6"
+        "material Drawer Bottom HDF White 8 mm color #f3f3ef"
       ]
     },
     {
@@ -1594,10 +1388,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "0, 532, -254.5"
+        "positionMm": "0, 571, -254.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Drawer Box Plywood Birch 13 mm color #dbc29d"
       ]
     },
     {
@@ -1608,7 +1402,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -1621,10 +1415,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "-374, 470, 5.5"
+        "positionMm": "-374, 509, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     },
     {
@@ -1635,7 +1429,7 @@ export const geometrySnapshot = {
       "sizeMm": {
         "width": 8,
         "height": 12,
-        "depth": 523,
+        "depth": 535,
         "thickness": 8
       },
       "quantity": 1,
@@ -1648,10 +1442,10 @@ export const geometrySnapshot = {
       ],
       "formulas": {
         "source": "live_runtime_mesh_bounds",
-        "positionMm": "374, 470, 5.5"
+        "positionMm": "374, 509, 11.5"
       },
       "notes": [
-        "material unnamed color #3a3f4b"
+        "material Runner Pair 400 mm Standard color #9ca3ad"
       ]
     }
   ]

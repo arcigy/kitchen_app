@@ -1,3 +1,20 @@
+import {
+  getBoardMaterialFamilyOptions,
+  getPortableMaterialsSnapshotSelections,
+  resolveBoardMaterialVariant,
+  type PortableMaterialSlotAssignment,
+  type PortableMaterialsSnapshot,
+  updateCommercialSelections
+} from "./portableCommercial";
+import {
+  applyDrawerLowHandleComponentToParams,
+  applyDrawerLowLegComponentToParams,
+  applyDrawerLowRunnerComponentToParams,
+  getDrawerLowHandleComponentOptions,
+  getDrawerLowLegComponentOptions,
+  getDrawerLowRunnerComponentOptions
+} from "../../data/pricing/handleComponentPresets";
+
 export type PortableJsonValue =
   | string
   | number
@@ -282,16 +299,69 @@ function createReadonlySystemControl(
   return input;
 }
 
+function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | null {
+  if (parameterKey === "handleComponentId") {
+    return getDrawerLowHandleComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  if (parameterKey === "legComponentId") {
+    return getDrawerLowLegComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  if (parameterKey === "runnerComponentId") {
+    return getDrawerLowRunnerComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  return null;
+}
+
+function formatThicknessLabel(thickness: number) {
+  return Number.isInteger(thickness) ? `${thickness} mm` : `${String(thickness).replace(".", ",")} mm`;
+}
+
+function normalizeBaseMaterialId(materialId: string) {
+  const match = materialId.match(/^(.*)\.(\d+(?:_\d+)?)$/);
+  return match ? match[1]! : materialId;
+}
+
+function groupLabelForBoardFamily(family: string | undefined) {
+  switch (family) {
+    case "body":
+      return "Cabinet Panels";
+    case "front":
+      return "Drawer Fronts";
+    case "back":
+      return "Back Panels";
+    case "drawer_box":
+      return "Drawer Box Panels";
+    case "drawer_bottom":
+      return "Drawer Box Bottoms";
+    case "shelf":
+      return "Shelves";
+    case "worktop":
+      return "Worktops";
+    default:
+      return "Board Parts";
+  }
+}
+
 export function createPortableModuleControls<T extends Record<string, unknown>>(args: {
   container: HTMLElement;
   params: T;
   catalog: PortableParameterCatalog;
   controlArgs: PortableModuleControlsArgs;
   fieldOptions?: Record<string, PortableFieldOption[]>;
+  materialsSnapshot?: PortableMaterialsSnapshot;
   systemCatalog?: PortableSystemParameterCatalog;
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
-  const { container, params, catalog, controlArgs, fieldOptions, systemCatalog, systemValues } = args;
+  const { container, params, catalog, controlArgs, fieldOptions, materialsSnapshot, systemCatalog, systemValues } = args;
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
   void controlArgs.getWorktopThicknessMm;
   void controlArgs.commitBoundary;
@@ -305,10 +375,25 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   editableRoot.className = "portable-controls";
   container.appendChild(editableRoot);
 
+  const hiddenParameterKeys = new Set<string>();
+  if (materialsSnapshot?.slotAssignments?.length) {
+    hiddenParameterKeys.add("materials");
+    hiddenParameterKeys.add("boardThickness");
+    hiddenParameterKeys.add("backThickness");
+    hiddenParameterKeys.add("frontThicknessMm");
+    hiddenParameterKeys.add("drawerBoxThickness");
+    hiddenParameterKeys.add("drawerBottomThickness");
+    hiddenParameterKeys.add("worktopThicknessMm");
+    for (const slot of materialsSnapshot.slotAssignments) {
+      if (slot.thicknessParameterKey) hiddenParameterKeys.add(slot.thicknessParameterKey);
+    }
+  }
+
   const catalogGroups = new Map(catalog.groups.map((group) => [group.key, group]));
   const groupedParameters = new Map<string, typeof catalog.parameters>();
   for (const parameter of catalog.parameters) {
     if (parameter.key === "type") continue;
+    if (hiddenParameterKeys.has(parameter.key)) continue;
     const bucket = groupedParameters.get(parameter.group) ?? [];
     bucket.push(parameter);
     groupedParameters.set(parameter.group, bucket);
@@ -383,7 +468,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       }
 
       if (parameter.type === "string" || parameter.type === "null" || parameter.type === "unknown") {
-        const options = fieldOptions?.[parameter.key];
+        const options = fieldOptions?.[parameter.key] ?? deriveComponentOptions(parameter.key) ?? undefined;
         if (options && options.length > 0) {
           const select = document.createElement("select");
           select.id = `portable_${parameter.key}`;
@@ -396,7 +481,15 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           wrapper.appendChild(select);
 
           const apply = () => {
-            setTopLevelValue(params, parameter.key, select.value);
+            if (parameter.key === "handleComponentId") {
+              Object.assign(params, applyDrawerLowHandleComponentToParams(params, select.value));
+            } else if (parameter.key === "legComponentId") {
+              Object.assign(params, applyDrawerLowLegComponentToParams(params, select.value));
+            } else if (parameter.key === "runnerComponentId") {
+              Object.assign(params, applyDrawerLowRunnerComponentToParams(params, select.value));
+            } else {
+              setTopLevelValue(params, parameter.key, select.value);
+            }
             controlArgs.onChange();
           };
 
@@ -475,6 +568,154 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           wrapper.classList.remove("error");
         }
       });
+    }
+  }
+
+  if (materialsSnapshot?.slotAssignments?.length) {
+    const sectionBody = createSection(
+      editableRoot,
+      "Part Parameters",
+      "Board material and thickness per slot. Thickness options follow the selected catalog material.",
+      "editable"
+    );
+    const materialFamilies = getBoardMaterialFamilyOptions();
+    const familyByBaseId = new Map(materialFamilies.map((family) => [family.baseId, family]));
+    const slotsByFamily = new Map<string, PortableMaterialSlotAssignment[]>();
+
+    for (const slot of materialsSnapshot.slotAssignments) {
+      const familyKey = slot.boardFamily ?? "other";
+      const bucket = slotsByFamily.get(familyKey) ?? [];
+      bucket.push(slot);
+      slotsByFamily.set(familyKey, bucket);
+    }
+
+    const syncSlotControlState = (
+      materialSelect: HTMLSelectElement,
+      thicknessSelect: HTMLSelectElement,
+      slotId: string,
+      fallbackCatalogId: string
+    ) => {
+      const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+      const selectedCatalogId = slotMaterialCatalogIds[slotId] ?? fallbackCatalogId;
+      const selectedBaseId = normalizeBaseMaterialId(selectedCatalogId);
+      const family = familyByBaseId.get(selectedBaseId) ?? materialFamilies.find((entry) => entry.variants.some((variant) => variant.id === selectedCatalogId));
+      if (!family) return;
+
+      materialSelect.value = family.baseId;
+      const currentThickness = slotThicknesses[slotId] ?? family.variants[0]?.defaultThicknessMm ?? 18;
+      thicknessSelect.innerHTML = "";
+      const availableThicknesses = family.variants.map((variant) => variant.defaultThicknessMm);
+      const nearestThickness = availableThicknesses.includes(currentThickness)
+        ? currentThickness
+        : (availableThicknesses.sort((left, right) => Math.abs(left - currentThickness) - Math.abs(right - currentThickness))[0] ?? currentThickness);
+      for (const thickness of availableThicknesses) {
+        const option = document.createElement("option");
+        option.value = String(thickness);
+        option.textContent = formatThicknessLabel(thickness);
+        option.selected = thickness === nearestThickness;
+        thicknessSelect.appendChild(option);
+      }
+    };
+
+    const createBoardSelectors = (slotIds: string[], fallbackCatalogId: string, thicknessParameterKey?: string | null) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "minmax(0, 1.25fr) minmax(0, 0.75fr)";
+      row.style.gap = "8px";
+
+      const materialSelect = document.createElement("select");
+      const thicknessSelect = document.createElement("select");
+      for (const family of materialFamilies) {
+        const option = document.createElement("option");
+        option.value = family.baseId;
+        option.textContent = family.displayName;
+        materialSelect.appendChild(option);
+      }
+
+      const applyMaterialChange = () => {
+        const targetFamily = familyByBaseId.get(materialSelect.value);
+        if (!targetFamily) return;
+        const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+        for (const slotId of slotIds) {
+          const currentThickness = slotThicknesses[slotId] ?? targetFamily.variants[0]?.defaultThicknessMm ?? 18;
+          const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, currentThickness) ?? targetFamily.variants[0];
+          if (!nextVariant) continue;
+          updateCommercialSelections(params, (current) => {
+            current.boardMaterials[slotId] = nextVariant.id;
+            current.boardThicknesses[slotId] = nextVariant.defaultThicknessMm;
+            return current;
+          });
+          if (thicknessParameterKey) {
+            setTopLevelValue(params, thicknessParameterKey, nextVariant.defaultThicknessMm);
+          }
+        }
+        syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
+        controlArgs.onChange();
+      };
+
+      const applyThicknessChange = () => {
+        const targetFamily = familyByBaseId.get(materialSelect.value);
+        const nextThickness = Number(thicknessSelect.value);
+        if (!targetFamily || !Number.isFinite(nextThickness)) return;
+        const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, nextThickness) ?? targetFamily.variants[0];
+        if (!nextVariant) return;
+        for (const slotId of slotIds) {
+          updateCommercialSelections(params, (current) => {
+            current.boardMaterials[slotId] = nextVariant.id;
+            current.boardThicknesses[slotId] = nextThickness;
+            return current;
+          });
+        }
+        if (thicknessParameterKey) {
+          setTopLevelValue(params, thicknessParameterKey, nextThickness);
+        }
+        syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
+        controlArgs.onChange();
+      };
+
+      materialSelect.addEventListener("change", applyMaterialChange);
+      thicknessSelect.addEventListener("change", applyThicknessChange);
+      row.append(materialSelect, thicknessSelect);
+
+      controls.push({
+        key: `slot:${slotIds.join(",")}`,
+        wrapper: row,
+        readFromParams: () => syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId)
+      });
+
+      syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
+      return row;
+    };
+
+    for (const [familyKey, slots] of [...slotsByFamily.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+      const groupWrapper = document.createElement("div");
+      groupWrapper.className = "portable-field";
+      groupWrapper.style.display = "grid";
+      groupWrapper.style.gap = "8px";
+
+      const heading = document.createElement("div");
+      heading.className = "portable-field__meta";
+      heading.textContent = groupLabelForBoardFamily(familyKey);
+      groupWrapper.appendChild(heading);
+
+      groupWrapper.appendChild(
+        createBoardSelectors(
+          slots.map((slot) => slot.slotId),
+          slots[0]!.assignedMaterial.catalogId,
+          slots[0]!.thicknessParameterKey ?? null
+        )
+      );
+
+      for (const slot of slots) {
+        const slotMeta = document.createElement("div");
+        slotMeta.style.color = "#9aa5ba";
+        slotMeta.style.fontSize = "12px";
+        slotMeta.textContent = slot.label;
+        groupWrapper.appendChild(slotMeta);
+        groupWrapper.appendChild(createBoardSelectors([slot.slotId], slot.assignedMaterial.catalogId, slot.thicknessParameterKey ?? null));
+      }
+
+      sectionBody.appendChild(groupWrapper);
     }
   }
 

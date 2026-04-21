@@ -13,6 +13,7 @@ import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPa
 import { exportSceneToJson } from "./core/exportScene";
 import { createTopbar } from "./ui/createTopbar";
 import { mountBomDevPanel } from "./ui/bomDevPanel";
+import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { getAllMaterials } from "./data/materials";
 import { solveWallNetwork } from "./walls2d/solver";
@@ -5331,20 +5332,20 @@ type WindowInstance = {
     overlay.style.position = "fixed";
     overlay.style.inset = "0";
     overlay.style.zIndex = "1000";
-    overlay.style.background = "rgba(0,0,0,0.45)";
+    overlay.style.background = "rgba(0,0,0,0.72)";
     overlay.style.display = "grid";
-    overlay.style.placeItems = "center";
-    overlay.style.padding = "24px";
+    overlay.style.gridTemplateRows = "1fr";
+    overlay.style.padding = "20px";
 
     const panel = document.createElement("div");
-    panel.style.width = "min(980px, calc(100vw - 48px))";
-    panel.style.maxHeight = "calc(100vh - 48px)";
+    panel.style.width = "calc(100vw - 40px)";
+    panel.style.height = "calc(100vh - 40px)";
     panel.style.overflow = "auto";
-    panel.style.background = "#12141a";
+    panel.style.background = "#0b0f14";
     panel.style.border = "1px solid #303746";
-    panel.style.borderRadius = "8px";
+    panel.style.borderRadius = "14px";
     panel.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
-    panel.style.padding = "16px";
+    panel.style.padding = "20px";
     overlay.appendChild(panel);
 
     const header = document.createElement("div");
@@ -5385,6 +5386,65 @@ type WindowInstance = {
     document.body.appendChild(overlay);
   };
 
+  const openPricingCatalog = () => {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "1000";
+    overlay.style.background = "rgba(0,0,0,0.72)";
+    overlay.style.display = "grid";
+    overlay.style.gridTemplateRows = "1fr";
+    overlay.style.padding = "20px";
+
+    const panel = document.createElement("div");
+    panel.style.width = "calc(100vw - 40px)";
+    panel.style.height = "calc(100vh - 40px)";
+    panel.style.overflow = "auto";
+    panel.style.background = "#0b0f14";
+    panel.style.border = "1px solid #303746";
+    panel.style.borderRadius = "14px";
+    panel.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
+    panel.style.padding = "20px";
+    overlay.appendChild(panel);
+
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.gap = "12px";
+    header.style.marginBottom = "14px";
+    panel.appendChild(header);
+
+    const title = document.createElement("h2");
+    title.textContent = "Pricing Catalog";
+    title.style.margin = "0";
+    title.style.color = "#eef2ff";
+    title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    header.appendChild(title);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.textContent = "Zavrieť";
+    closeBtn.style.background = "#0e1118";
+    closeBtn.style.color = "#eef2ff";
+    closeBtn.style.border = "1px solid #303746";
+    closeBtn.style.borderRadius = "6px";
+    closeBtn.style.padding = "7px 10px";
+    header.appendChild(closeBtn);
+
+    const content = document.createElement("div");
+    panel.appendChild(content);
+
+    const close = () => overlay.remove();
+    closeBtn.addEventListener("click", close);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close();
+    });
+
+    mountPricingCatalogPanel(content);
+    document.body.appendChild(overlay);
+  };
+
   const buildClassicTopbar = () => {
     const row = tb.addRow({ className: "topbar-classic-ribbon" });
 
@@ -5411,6 +5471,7 @@ type WindowInstance = {
     tb.toolButton(project, { title: "Reset Defaults", label: "Reset", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
     tb.toolButton(project, { title: "Export JSON", label: "Export", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
     tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
+    tb.toolButton(project, { title: "Pricing Catalog", iconSvg: I_BOM, label: "Catalog", onClick: openPricingCatalog });
     tb.toolButton(project, { title: "BOM", iconSvg: I_BOM, label: "BOM", onClick: openBomPanel });
     const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
     tb.toolButton(project, { title: "Reset View", label: "View", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });

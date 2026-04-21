@@ -6,9 +6,9 @@ export const commercialSummarySnapshot = {
   "displayName": "Drawer",
   "quantity": 1,
   "pricingEnabled": true,
-  "finalPriceEur": 1098.5,
+  "finalPriceEur": 232.54,
   "priceSource": "calculated",
-  "bomItems": 57
+  "bomItems": 30
 } as const;
 
 export function buildCommercialSummary() {

@@ -1,26 +1,24 @@
-export interface BOMPart {
-  name: string
-  widthMm: number
-  heightMm: number
-  thicknessMm: number
-  materialId: string
-  quantity: number
-  areaMm2: number
-  pricePerM2: number
-  totalPrice: number
-}
-
-export interface BOMHardware {
-  name: string
-  hardwareId: string
-  quantity: number
-  pricePerPiece: number
-  totalPrice: number
-}
+import type {
+  PortableCommercialPricingPayload,
+  PortableMaterialsSnapshot,
+  PortableQuoteBomPayload
+} from "../../modules/runtime/portableCommercial";
 
 export interface BOMResult {
-  moduleType: string
-  parts: BOMPart[]
-  hardware: BOMHardware[]
-  totalPrice: number
+  moduleType: string;
+  displayName: string;
+  quoteBom: PortableQuoteBomPayload;
+  pricing: PortableCommercialPricingPayload;
+  materialsSnapshot?: PortableMaterialsSnapshot | null;
+}
+
+export interface ProjectBOMResult {
+  modules: Array<BOMResult & { instanceId: string }>;
+  totals: {
+    boardsCost: number;
+    edgesCost: number;
+    hardwareCost: number;
+    laborCost: number;
+    finalCost: number;
+  };
 }
