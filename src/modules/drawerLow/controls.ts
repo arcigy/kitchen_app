@@ -11,9 +11,25 @@ import {
 } from "./frontHeights";
 import {
   createPortableModuleControls,
+  type PortableFieldOption,
   type PortableModuleControlsApi,
   type PortableModuleControlsArgs
 } from "../runtime/portableControls";
+
+const DRAWER_LOW_FIELD_OPTIONS: Record<string, PortableFieldOption[]> = {
+  handleType: [
+    { value: "none", label: "None" },
+    { value: "bar", label: "Bar" },
+    { value: "knob", label: "Knob" },
+    { value: "cup", label: "Cup" },
+    { value: "gola", label: "Gola" }
+  ],
+  frontStackPreset: [
+    { value: "equal", label: "Equal" },
+    { value: "top", label: "Top Fixed" },
+    { value: "custom", label: "Custom" }
+  ]
+};
 
 export function createDrawerLowControls(
   container: HTMLElement,
@@ -54,6 +70,7 @@ export function createDrawerLowControls(
         return args.onChange();
       }
     },
+    fieldOptions: DRAWER_LOW_FIELD_OPTIONS,
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]
   });

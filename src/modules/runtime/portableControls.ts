@@ -57,6 +57,11 @@ export type PortableModuleControlsArgs = {
   commitBoundary?: HTMLElement | null;
 };
 
+export type PortableFieldOption = {
+  value: string;
+  label: string;
+};
+
 type PortableFieldControl = {
   key: string;
   wrapper: HTMLElement;
@@ -282,10 +287,11 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   params: T;
   catalog: PortableParameterCatalog;
   controlArgs: PortableModuleControlsArgs;
+  fieldOptions?: Record<string, PortableFieldOption[]>;
   systemCatalog?: PortableSystemParameterCatalog;
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
-  const { container, params, catalog, controlArgs, systemCatalog, systemValues } = args;
+  const { container, params, catalog, controlArgs, fieldOptions, systemCatalog, systemValues } = args;
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
   void controlArgs.getWorktopThicknessMm;
   void controlArgs.commitBoundary;
@@ -377,6 +383,38 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       }
 
       if (parameter.type === "string" || parameter.type === "null" || parameter.type === "unknown") {
+        const options = fieldOptions?.[parameter.key];
+        if (options && options.length > 0) {
+          const select = document.createElement("select");
+          select.id = `portable_${parameter.key}`;
+          for (const optionDef of options) {
+            const option = document.createElement("option");
+            option.value = optionDef.value;
+            option.textContent = optionDef.label;
+            select.appendChild(option);
+          }
+          wrapper.appendChild(select);
+
+          const apply = () => {
+            setTopLevelValue(params, parameter.key, select.value);
+            controlArgs.onChange();
+          };
+
+          select.addEventListener("change", apply);
+          controls.push({
+            key: parameter.key,
+            wrapper,
+            readFromParams: () => {
+              const value = params[parameter.key];
+              const stringValue =
+                typeof value === "string" ? value : value == null ? String(parameter.defaultValue ?? "") : String(value);
+              const hasOption = options.some((option) => option.value === stringValue);
+              select.value = hasOption ? stringValue : options[0]?.value ?? "";
+            }
+          });
+          continue;
+        }
+
         const input = document.createElement("input");
         input.id = `portable_${parameter.key}`;
         input.type = "text";
