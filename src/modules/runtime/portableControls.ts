@@ -173,6 +173,8 @@ function createFieldShell(args: {
 }) {
   const wrapper = document.createElement("div");
   wrapper.className = `field portable-field${args.readOnly ? " portable-field--readonly" : ""}`;
+  const tooltip = args.description.trim();
+  if (tooltip) wrapper.title = tooltip;
 
   const meta = document.createElement("div");
   meta.className = "portable-field__meta";
@@ -183,15 +185,11 @@ function createFieldShell(args: {
   const title = document.createElement("label");
   title.textContent = args.label;
   title.htmlFor = `portable_${args.key}`;
+  if (tooltip) title.title = tooltip;
 
   head.appendChild(title);
   appendBadges(head, args.badges ?? []);
-
-  const help = document.createElement("small");
-  help.className = "portable-field__description";
-  help.textContent = args.description;
-
-  meta.append(head, help);
+  meta.appendChild(head);
   wrapper.appendChild(meta);
   args.container.appendChild(wrapper);
 
@@ -324,8 +322,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         container: sectionBody,
         key: parameter.key,
         label: formatKeyLabel(parameter.key),
-        description: parameter.description,
-        badges: [{ label: groupLabel, tone: "group" }]
+        description: parameter.description
       });
       fieldByKey.set(parameter.key, wrapper);
 
@@ -410,7 +407,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
       const input = document.createElement("textarea");
       input.id = `portable_${parameter.key}`;
-      input.rows = 4;
+      input.rows = 2;
       wrapper.appendChild(input);
       title.htmlFor = input.id;
 
@@ -483,8 +480,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const value = systemValues.values[definition.key] ?? null;
         const control = createReadonlySystemControl(definition, value);
         const badges = [
-          { label: "System", tone: "system" as const },
-          { label: groupLabel, tone: "group" as const }
+          { label: "System", tone: "system" as const }
         ];
         if (locked) {
           badges.push({ label: "Locked", tone: "locked" as const });

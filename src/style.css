@@ -392,13 +392,13 @@ body {
 
 .portable-controls {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .portable-section {
   display: grid;
-  gap: 8px;
-  padding: 8px;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid var(--border);
   background: #fbfbfb;
 }
@@ -413,7 +413,7 @@ body {
 }
 
 .portable-section__title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #2f2f2f;
   text-transform: uppercase;
@@ -421,23 +421,23 @@ body {
 }
 
 .portable-section__description {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .portable-section__body {
-  gap: 10px;
+  gap: 4px;
 }
 
 .portable-section__body--compact {
-  gap: 6px;
+  gap: 4px;
 }
 
 .portable-field {
-  grid-template-columns: minmax(0, 1fr) 132px;
-  align-items: start;
-  padding: 6px;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  padding: 4px 5px;
   border: 1px solid #dfdfdf;
   background: #ffffff;
 }
@@ -448,20 +448,22 @@ body {
 
 .portable-field__meta {
   min-width: 0;
-  display: grid;
-  gap: 4px;
+  display: block;
 }
 
 .portable-field__head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
+  min-width: 0;
 }
 
-.portable-field__description {
-  color: var(--muted);
-  line-height: 1.35;
+.portable-field__head label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .portable-field__badges {
@@ -473,12 +475,12 @@ body {
 .portable-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 16px;
-  padding: 0 5px;
+  min-height: 14px;
+  padding: 0 4px;
   border: 1px solid #d6d6d6;
   background: #f3f3f3;
   color: #555;
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -521,11 +523,11 @@ body {
   background: #eef5fc;
   outline: 1px solid #c8ddf1;
   border-radius: 0;
-  padding: 4px 6px;
+  padding: 4px 5px;
 }
 
 label {
-  font-size: 11px;
+  font-size: 10.5px;
   color: #383838;
 }
 
@@ -540,8 +542,8 @@ input,
 select,
 textarea {
   width: 100%;
-  min-height: 22px;
-  padding: 2px 6px;
+  min-height: 20px;
+  padding: 1px 5px;
   border: 1px solid #c3c3c3;
   border-radius: 0;
   background: #ffffff;
@@ -550,7 +552,7 @@ textarea {
 
 textarea {
   resize: vertical;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 button {
