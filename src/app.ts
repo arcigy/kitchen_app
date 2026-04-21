@@ -131,12 +131,28 @@ export function startApp(initialArgs: AppArgs) {
 
   const viewerTabbar = document.createElement("div");
   viewerTabbar.className = "viewer-tabbar";
-  viewerTabbar.innerHTML = `<div class="viewer-tab viewer-tab-active">L1 - Kitchen Layout</div>`;
+  const floorplanTab = document.createElement("button");
+  floorplanTab.type = "button";
+  floorplanTab.className = "viewer-tab";
+  floorplanTab.textContent = "Floorplan";
+
+  const view3dTab = document.createElement("button");
+  view3dTab.type = "button";
+  view3dTab.className = "viewer-tab";
+  view3dTab.textContent = "3D";
+
+  viewerTabbar.append(floorplanTab, view3dTab);
   args.viewerEl.appendChild(viewerTabbar);
 
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
+
+  const syncViewerTabs = () => {
+    const isFloorplan = viewMode === "2d";
+    floorplanTab.classList.toggle("viewer-tab-active", isFloorplan);
+    view3dTab.classList.toggle("viewer-tab-active", !isFloorplan);
+  };
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
   let layoutTool: LayoutTool = "select";
@@ -5243,6 +5259,18 @@ type WindowInstance = {
     setView2d(view2d.checked);
   };
 
+  floorplanTab.addEventListener("click", () => {
+    if (mode !== "layout" || viewMode === "2d") return;
+    view2d.checked = true;
+    setView2d(true);
+  });
+
+  view3dTab.addEventListener("click", () => {
+    if (mode !== "layout" || viewMode === "3d") return;
+    view2d.checked = false;
+    setView2d(false);
+  });
+
   const openBomPanel = () => {
     const overlay = document.createElement("div");
     overlay.style.position = "fixed";
@@ -6391,6 +6419,7 @@ type WindowInstance = {
     viewMode = enabled ? "2d" : "3d";
     S.viewMode = viewMode;
     setViewMode(viewMode);
+    syncViewerTabs();
 
     for (const inst of instances) {
       inst.module.visible = !enabled;
