@@ -366,6 +366,58 @@ function makeRuntimeMaterial(part: PortableLivePart) {
   });
 }
 
+function getPrimaryAxis(size: PortableLiveVector): "x" | "y" | "z" {
+  if (size.x >= size.y && size.x >= size.z) return "x";
+  if (size.y >= size.x && size.y >= size.z) return "y";
+  return "z";
+}
+
+function wantsRoundPrimitive(part: PortableLivePart) {
+  return /(^|_)(handle|screw|leg|collar)(_|$)/i.test(part.name);
+}
+
+function createRoundGeometry(part: PortableLivePart, sizeMm: PortableLiveVector) {
+  const axis = getPrimaryAxis(sizeMm);
+  const radius =
+    axis === "x"
+      ? Math.max(0.5, Math.min(sizeMm.y, sizeMm.z) / 2)
+      : axis === "y"
+        ? Math.max(0.5, Math.min(sizeMm.x, sizeMm.z) / 2)
+        : Math.max(0.5, Math.min(sizeMm.x, sizeMm.y) / 2);
+  const height = Math.max(
+    1,
+    axis === "x" ? sizeMm.x : axis === "y" ? sizeMm.y : sizeMm.z
+  );
+  return {
+    axis,
+    geometry: new THREE.CylinderGeometry(radius * MM_TO_M, radius * MM_TO_M, height * MM_TO_M, 24)
+  };
+}
+
+function createLivePartGeometry(part: PortableLivePart, sizeMm: PortableLiveVector) {
+  if (wantsRoundPrimitive(part)) {
+    return createRoundGeometry(part, sizeMm);
+  }
+  return {
+    axis: null,
+    geometry: new THREE.BoxGeometry(
+      Math.max(1, sizeMm.x) * MM_TO_M,
+      Math.max(1, sizeMm.y) * MM_TO_M,
+      Math.max(1, sizeMm.z) * MM_TO_M
+    )
+  };
+}
+
+function orientLivePartMesh(mesh: THREE.Mesh, axis: "x" | "y" | "z" | null) {
+  if (axis === "x") {
+    mesh.rotation.z = Math.PI / 2;
+    return;
+  }
+  if (axis === "z") {
+    mesh.rotation.x = Math.PI / 2;
+  }
+}
+
 function buildMeshFromLivePart(
   part: PortableLivePart,
   currentParams: Record<string, unknown>,
@@ -406,14 +458,16 @@ function buildMeshFromLivePart(
     }
   }
 
-  const geometry = new THREE.BoxGeometry(
-    Math.max(1, x.sizeMm) * MM_TO_M,
-    Math.max(1, y.sizeMm) * MM_TO_M,
-    Math.max(1, z.sizeMm) * MM_TO_M
-  );
+  const sizeMm = {
+    x: Math.max(1, x.sizeMm),
+    y: Math.max(1, y.sizeMm),
+    z: Math.max(1, z.sizeMm)
+  };
+  const { geometry, axis } = createLivePartGeometry(part, sizeMm);
   const mesh = new THREE.Mesh(geometry, makeRuntimeMaterial(part));
   mesh.name = part.name;
   mesh.position.set(x.positionMm * MM_TO_M, y.positionMm * MM_TO_M, z.positionMm * MM_TO_M);
+  orientLivePartMesh(mesh, axis);
   mesh.visible = part.visible !== false;
   mesh.userData.selectable = part.selectable !== false;
   mesh.userData.paramKeys = [...(part.paramKeys ?? [])];
