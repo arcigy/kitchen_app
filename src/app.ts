@@ -269,10 +269,10 @@ export function startApp(initialArgs: AppArgs) {
     mesh.visible = true;
   };
 
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+  const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapGeom = new THREE.CircleGeometry(0.035, 16);
   const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
     const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
@@ -349,7 +349,7 @@ export function startApp(initialArgs: AppArgs) {
       }
     }
 
-    wallSnapMarkers.visible = viewMode === "2d";
+    wallSnapMarkers.visible = mode === "layout";
   };
 
   const selectionHighlights = new THREE.Group();
@@ -366,7 +366,7 @@ export function startApp(initialArgs: AppArgs) {
       else m.material?.dispose?.();
     }
 
-    if (mode !== "layout" || viewMode !== "2d") {
+    if (mode !== "layout") {
       selectionHighlights.visible = false;
       return;
     }
@@ -378,7 +378,10 @@ export function startApp(initialArgs: AppArgs) {
       const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));
       pts.push(new THREE.Vector3(poly[0].x, 0.012, poly[0].z));
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthWrite: false }));
+      const line = new THREE.Line(
+        geom,
+        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+      );
       line.renderOrder = 60;
       selectionHighlights.add(line);
     }
@@ -389,7 +392,10 @@ export function startApp(initialArgs: AppArgs) {
         const pts = floor.params.boundary.map((p) => new THREE.Vector3(p.x / 1000, 0.018, p.z / 1000));
         pts.push(new THREE.Vector3(floor.params.boundary[0].x / 1000, 0.018, floor.params.boundary[0].z / 1000));
         const geom = new THREE.BufferGeometry().setFromPoints(pts);
-        const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthWrite: false }));
+        const line = new THREE.Line(
+          geom,
+          new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+        );
         line.renderOrder = 61;
         selectionHighlights.add(line);
       }
@@ -1933,7 +1939,7 @@ type WindowInstance = {
       const geom = new THREE.BufferGeometry().setFromPoints(linePts);
       return new THREE.Line(
         geom,
-        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthWrite: false })
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
       );
     };
 
@@ -2243,12 +2249,13 @@ type WindowInstance = {
 
     const outline = new THREE.Line(
       makeFloorOutlineGeometry(params),
-      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthWrite: false })
+      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false })
     );
     outline.name = `floorOutline_${id}`;
     outline.userData.kind = "floor";
     outline.userData.floorId = id;
     outline.renderOrder = 55;
+    outline.visible = true;
     root.add(outline);
 
     const floor: FloorInstance = { id, params: cloneFloorParams(params), root, mesh, outline };
@@ -5546,12 +5553,13 @@ type WindowInstance = {
     pick.userData.instanceId = id;
     root.add(pick);
 
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.6 });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.88, depthTest: false, depthWrite: false });
     const outline = new THREE.LineSegments(gEmpty(), lineMat);
     outline.name = `outline_${id}`;
-    outline.visible = false;
+    outline.visible = true;
     outline.userData.kind = "modulePlan";
     outline.userData.instanceId = id;
+    outline.renderOrder = 58;
     root.add(outline);
 
     const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, root, module, localBox, pick, outline };
@@ -5839,9 +5847,10 @@ type WindowInstance = {
 
     const outline = new THREE.Line(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95 })
+      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false })
     );
     outline.name = "windowOutline";
+    outline.renderOrder = 57;
     root.add(outline);
 
     const inst: WindowInstance = { params, root, pick, outline };
@@ -6422,9 +6431,9 @@ type WindowInstance = {
     syncViewerTabs();
 
     for (const inst of instances) {
-      inst.module.visible = !enabled;
-      (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.6;
-      inst.outline.visible = enabled;
+      inst.module.visible = true;
+      (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.88;
+      inst.outline.visible = true;
     }
 
     if (windowInst) {
@@ -6433,16 +6442,16 @@ type WindowInstance = {
     }
 
     for (const floor of floors) {
-      floor.mesh.visible = !enabled;
-      floor.outline.visible = enabled;
+      floor.mesh.visible = true;
+      floor.outline.visible = true;
     }
 
-    wallSnapMarkers.visible = enabled && selectedKind === "wall" && !!selectedWallId;
+    wallSnapMarkers.visible = !!selectedWallId;
     updateSelectionHighlights();
 
-    wallPlanGroup.visible = enabled;
-    if (enabled) rebuildWallPlanMesh();
-    for (const w of walls) w.mesh.visible = !enabled;
+    wallPlanGroup.visible = true;
+    rebuildWallPlanMesh();
+    for (const w of walls) w.mesh.visible = true;
     updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
   }
 
