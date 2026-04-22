@@ -1,9 +1,13 @@
 import type { Group, Object3D } from "three";
 import type { ModuleParams } from "../model/cabinetTypes";
-import { getAllMaterials } from "../data/materials";
-import type { AppState, KitchenGroup, LayoutInstance } from "./appState";
+import type { AppState, KitchenGroup, KitchenWorktopParams, LayoutInstance } from "./appState";
 import { resolveContext, type KitchenContext } from "./kitchenContext";
 import { getModuleDescriptors } from "../modules/registry";
+import {
+  getKitchenBoardMaterialSelectOptions,
+  getKitchenWorktopThicknessOptions,
+  resolveKitchenWorktopThickness
+} from "./kitchenMaterialSync";
 
 type TopbarApi = {
   clear: () => void;
@@ -29,6 +33,11 @@ type GroupInstanceSnapshot = {
   rotationY: number;
 };
 
+type GroupWorktopSnapshot = {
+  id: string;
+  params: KitchenWorktopParams;
+};
+
 type CreateKitchenEditModeArgs = {
   S: AppState;
   layoutRoot: Group;
@@ -38,6 +47,7 @@ type CreateKitchenEditModeArgs = {
 
   icons: {
     cabinet: string;
+    worktop: string;
     done: string;
     cancel: string;
   };
@@ -46,14 +56,27 @@ type CreateKitchenEditModeArgs = {
   setToolSelect: () => void;
   cancelPlacementIfActive: () => void;
   addInstance: (type: ModuleParams["type"]) => void;
-  rebuildInstance: (inst: LayoutInstance) => void;
+  rebuildInstance: (inst: LayoutInstance, opts?: { skipLayoutValidation?: boolean }) => boolean;
+  rebuildKitchenGroupLayout: (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => void;
   disposeObject3D: (obj: Object3D) => void;
   createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
   findInstance: (id: string) => LayoutInstance | null;
   setSelectedModule: (id: string | null) => void;
   updateLayoutPanel: () => void;
+  startWorktopDraw: () => void;
+  cancelWorktopDraw: (opts?: { silent?: boolean }) => void;
+  handleWorktopEscape: () => boolean;
+  refreshWorktopPreview: () => void;
+  getGroupWorktops: (groupId: string) => GroupWorktopSnapshot[];
+  replaceGroupWorktops: (
+    groupId: string,
+    worktops: GroupWorktopSnapshot[],
+    opts?: { skipHistory?: boolean }
+  ) => void;
+  rebuildGroupWorktops: (groupId: string, ctx: KitchenContext) => void;
   buildClassicTopbar: () => void;
   restoreStandardTopbar: () => void;
+  refreshProps: () => void;
 };
 
 export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
@@ -65,6 +88,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   let editingExistingGroupId: string | null = null;
   let kitchenCtxSnapshot: KitchenContext | null = null;
   let instanceSnapshots: GroupInstanceSnapshot[] = [];
+  let worktopSnapshots: GroupWorktopSnapshot[] = [];
 
   const findKitchenGroup = (groupId: string | null) => {
     if (!groupId) return null;
@@ -86,27 +110,34 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       }));
   };
 
-  const rebuildGroupModules = (groupId: string, ctx: KitchenContext) => {
-    void ctx;
-    for (const inst of args.S.instances) {
-      if (inst.kitchenGroupId !== groupId) continue;
-      args.rebuildInstance(inst);
-    }
-    args.updateLayoutPanel();
+  const captureGroupWorktops = (groupId: string) => {
+    return args.getGroupWorktops(groupId).map((worktop) => ({
+      id: worktop.id,
+      params: structuredClone(worktop.params)
+    }));
   };
 
-  const applyNormalGroupCtx = (groupId: string, next: KitchenContext) => {
+  const rebuildGroupModules = (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => {
+    args.rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
+  };
+
+  const applyNormalGroupCtx = (groupId: string, next: KitchenContext, opts?: { refreshProps?: boolean }) => {
     const group = findKitchenGroup(groupId);
     if (!group) return;
+    const prevCtx = resolveContext(structuredClone(group.ctx));
     group.ctx = resolveContext(next);
-    rebuildGroupModules(groupId, group.ctx);
+    rebuildGroupModules(groupId, group.ctx, prevCtx);
+    if (opts?.refreshProps !== false) args.refreshProps();
   };
 
-  const applyActiveGroupCtx = (next: KitchenContext) => {
+  const applyActiveGroupCtx = (next: KitchenContext, opts?: { refreshProps?: boolean }) => {
     const groupId = args.S.activeKitchenGroupId;
     if (!groupId) return;
+    const prevCtx = resolveContext(structuredClone(args.S.kitchenCtx));
     args.S.kitchenCtx = resolveContext(next);
-    rebuildGroupModules(groupId, args.S.kitchenCtx);
+    rebuildGroupModules(groupId, args.S.kitchenCtx, prevCtx);
+    args.refreshWorktopPreview();
+    if (opts?.refreshProps !== false) args.refreshProps();
   };
 
   const removeOverlay = () => {
@@ -137,9 +168,13 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     escapeHandler = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape") return;
       if (!args.S.kitchenEditMode) return;
+      if (args.handleWorktopEscape()) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       ev.preventDefault();
       ev.stopPropagation();
-      exitDiscard();
     };
     window.addEventListener("keydown", escapeHandler, { capture: true });
   };
@@ -157,6 +192,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         label,
         onClick: () => {
           args.ensureLayoutMode();
+          args.handleWorktopEscape();
           args.setToolSelect();
           args.addInstance(type);
         }
@@ -166,6 +202,18 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     for (const descriptor of getModuleDescriptors()) {
       addModule(descriptor.type, descriptor.label, descriptor.type);
     }
+
+    const worktopsGroup = args.tb.addGroup("Worktops", { row });
+    args.tb.toolButton(worktopsGroup, {
+      title: "Kresliť pracovnú dosku",
+      iconSvg: args.icons.worktop,
+      label: "Draw",
+      onClick: () => {
+        args.ensureLayoutMode();
+        args.cancelPlacementIfActive();
+        args.startWorktopDraw();
+      }
+    });
 
     args.tb.addSpacer({ row });
 
@@ -199,11 +247,13 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     editingExistingGroupId = existingGroupId;
     kitchenCtxSnapshot = structuredClone(ctx);
     instanceSnapshots = captureGroupInstances(groupId);
+    worktopSnapshots = captureGroupWorktops(groupId);
 
     args.S.kitchenCtx = resolveContext(structuredClone(ctx));
     args.S.kitchenEditMode = true;
     args.S.activeKitchenGroupId = groupId;
 
+    rebuildGroupModules(groupId, args.S.kitchenCtx);
     ensureOverlay();
     buildKitchenTopbar();
     addEscapeHandler();
@@ -230,6 +280,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     editingExistingGroupId = null;
     kitchenCtxSnapshot = null;
     instanceSnapshots = [];
+    worktopSnapshots = [];
+    args.cancelWorktopDraw({ silent: true });
     removeOverlay();
     removeEscapeHandler();
     args.restoreStandardTopbar();
@@ -239,6 +291,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   const exitFinish = () => {
     if (!args.S.kitchenEditMode) return;
 
+    args.handleWorktopEscape();
     args.cancelPlacementIfActive();
 
     const groupId = args.S.activeKitchenGroupId;
@@ -321,6 +374,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         args.S.kitchenCtx = resolveContext(structuredClone(kitchenCtxSnapshot));
       }
       restoreExistingInstances(groupId);
+      args.replaceGroupWorktops(groupId, worktopSnapshots, { skipHistory: true });
     } else {
       if (kitchenCtxSnapshot) {
         args.S.kitchenCtx = resolveContext(structuredClone(kitchenCtxSnapshot));
@@ -332,6 +386,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         args.disposeObject3D(inst.root);
         args.S.instances.splice(i, 1);
       }
+      args.replaceGroupWorktops(groupId, [], { skipHistory: true });
     }
 
     args.updateLayoutPanel();
@@ -366,58 +421,116 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       if (ev.key === "Enter") commitName();
     });
 
-    const commitCtx = (buildNext: (base: KitchenContext) => KitchenContext) => {
+    const commitCtx = (buildNext: (base: KitchenContext) => KitchenContext, opts?: { refreshProps?: boolean }) => {
       if (isEditingActive) {
-        applyActiveGroupCtx(buildNext(args.S.kitchenCtx));
+        applyActiveGroupCtx(buildNext(args.S.kitchenCtx), opts);
         return;
       }
       if (!group) return;
-      applyNormalGroupCtx(group.id, buildNext(group.ctx));
+      applyNormalGroupCtx(group.id, buildNext(group.ctx), opts);
     };
 
-    const addNumberRow = (label: string, value: number, onCommit: (value: number) => void) => {
+    const addNumberRow = (label: string, value: number, onCommit: (value: number, refreshProps: boolean) => void) => {
       const input = document.createElement("input");
       input.type = "number";
       input.step = "1";
       input.value = String(Math.round(value));
       args.props.row(section, label, input);
-      const commit = () => {
+      const applyLive = (refreshProps: boolean) => {
         const next = Number(String(input.value).trim().replace(",", "."));
         if (!Number.isFinite(next)) return;
-        onCommit(Math.round(next));
-        input.value = String(Math.round(next));
+        onCommit(Math.round(next), refreshProps);
+        if (refreshProps) input.value = String(Math.round(next));
       };
-      input.addEventListener("change", commit);
+      input.addEventListener("input", () => applyLive(false));
+      input.addEventListener("change", () => applyLive(true));
       input.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") commit();
+        if (ev.key === "Enter") applyLive(true);
       });
     };
 
-    addNumberRow("Height (mm)", ctx.heightMm, (value) => commitCtx((base) => ({ ...base, heightMm: value })));
-    addNumberRow("Worktop depth (mm)", ctx.worktopDepthMm, (value) => commitCtx((base) => ({ ...base, worktopDepthMm: value })));
-    addNumberRow("Worktop front offset (mm)", ctx.worktopFrontOffsetMm, (value) => commitCtx((base) => ({ ...base, worktopFrontOffsetMm: value })));
-    addNumberRow("Worktop back offset (mm)", ctx.worktopBackOffsetMm, (value) => commitCtx((base) => ({ ...base, worktopBackOffsetMm: value })));
-    addNumberRow("Worktop thickness (mm)", ctx.worktopThicknessMm, (value) => commitCtx((base) => ({ ...base, worktopThicknessMm: value })));
+    addNumberRow("Height (mm)", ctx.heightMm, (value, refreshProps) => commitCtx((base) => ({ ...base, heightMm: value }), { refreshProps }));
+    addNumberRow("Worktop depth (mm)", ctx.worktopDepthMm, (value, refreshProps) => commitCtx((base) => ({ ...base, worktopDepthMm: value }), { refreshProps }));
+    addNumberRow(
+      "Worktop front offset (mm)",
+      ctx.worktopFrontOffsetMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, worktopFrontOffsetMm: value }), { refreshProps })
+    );
+    addNumberRow(
+      "Worktop back offset (mm)",
+      ctx.worktopBackOffsetMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, worktopBackOffsetMm: value }), { refreshProps })
+    );
 
-    const materials = getAllMaterials();
-    const makeMaterialSelect = (value: string, onChange: (id: string) => void) => {
+    const makeMaterialSelect = (
+      family: "front" | "body" | "back" | "drawer_bottom" | "worktop",
+      value: string,
+      onChange: (id: string) => void
+    ) => {
       const select = document.createElement("select");
-      select.innerHTML = materials.map((material) => `<option value="${material.id}">${material.name}</option>`).join("");
-      select.value = value;
+      const options = getKitchenBoardMaterialSelectOptions(family);
+      select.innerHTML = options.map((material) => `<option value="${material.id}">${material.label}</option>`).join("");
+      const selectedOption = options.find((material) => material.id === value);
+      select.value = selectedOption?.id ?? options[0]?.id ?? "";
       select.addEventListener("change", () => onChange(select.value));
       return select;
     };
 
     args.props.row(
       section,
-      "Face material",
-      makeMaterialSelect(ctx.faceMaterialId, (id) => commitCtx((base) => ({ ...base, faceMaterialId: id })))
+      "Fronts",
+      makeMaterialSelect("front", ctx.frontsMaterialId, (id) => commitCtx((base) => ({ ...base, frontsMaterialId: id })))
     );
     args.props.row(
       section,
-      "Corpus material",
-      makeMaterialSelect(ctx.corpusMaterialId, (id) => commitCtx((base) => ({ ...base, corpusMaterialId: id })))
+      "Corpus",
+      makeMaterialSelect("body", ctx.corpusMaterialId, (id) => commitCtx((base) => ({ ...base, corpusMaterialId: id })))
     );
+    args.props.row(
+      section,
+      "Back",
+      makeMaterialSelect("back", ctx.backMaterialId, (id) => commitCtx((base) => ({ ...base, backMaterialId: id })))
+    );
+    args.props.row(
+      section,
+      "Drawer bottoms",
+      makeMaterialSelect(
+        "drawer_bottom",
+        ctx.drawerBottomMaterialId,
+        (id) => commitCtx((base) => ({ ...base, drawerBottomMaterialId: id }))
+      )
+    );
+    args.props.row(
+      section,
+      "Worktop",
+      makeMaterialSelect(
+        "worktop",
+        ctx.worktopMaterialId,
+        (id) =>
+          commitCtx((base) => ({
+            ...base,
+            worktopMaterialId: id,
+            worktopThicknessMm: resolveKitchenWorktopThickness(id, base.worktopThicknessMm)
+          }))
+      )
+    );
+
+    const worktopThicknessSelect = document.createElement("select");
+    const worktopThicknessOptions = getKitchenWorktopThicknessOptions(ctx.worktopMaterialId);
+    const resolvedWorktopThickness = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+    worktopThicknessSelect.innerHTML = worktopThicknessOptions
+      .map((value) => `<option value="${value}">${value} mm</option>`)
+      .join("");
+    worktopThicknessSelect.value = String(resolvedWorktopThickness);
+    worktopThicknessSelect.addEventListener("change", () => {
+      const next = Number(worktopThicknessSelect.value);
+      if (!Number.isFinite(next)) return;
+      commitCtx((base) => ({
+        ...base,
+        worktopThicknessMm: resolveKitchenWorktopThickness(base.worktopMaterialId, next)
+      }));
+    });
+    args.props.row(section, "Worktop thickness", worktopThicknessSelect);
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";

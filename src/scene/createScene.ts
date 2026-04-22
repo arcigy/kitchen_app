@@ -657,6 +657,7 @@ export function createScene(container: HTMLElement) {
     activeCamera = mode === "2d" ? camera2d : camera3d;
     controls = new OrbitControls(activeCamera, renderer.domElement);
     configureControls(mode);
+    room.visible = mode !== "2d";
   };
 
   return {

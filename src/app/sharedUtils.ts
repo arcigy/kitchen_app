@@ -1,0 +1,272 @@
+import * as THREE from "three";
+import type { GrainAlong, OverlapRow } from "../ui/createPartPanel";
+
+export function copyM16(out: Float32Array, m: THREE.Matrix4) {
+  const e = m.elements;
+  for (let i = 0; i < 16; i++) out[i] = e[i];
+}
+
+export function matrixChanged(a: Float32Array, m: THREE.Matrix4) {
+  const e = m.elements;
+  for (let i = 0; i < 16; i++) {
+    if (Math.abs(a[i] - e[i]) > 1e-7) return true;
+  }
+  return false;
+}
+
+export function planarDistanceMm(a: THREE.Vector3, b: THREE.Vector3) {
+  const dx = (b.x - a.x) * 1000;
+  const dz = (b.z - a.z) * 1000;
+  return Math.hypot(dx, dz);
+}
+
+export function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
+  const dx = Math.abs(b.x - a.x);
+  const dz = Math.abs(b.z - a.z);
+  if (dx >= dz) return new THREE.Vector3(b.x, b.y, a.z);
+  return new THREE.Vector3(a.x, b.y, b.z);
+}
+
+export function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]) {
+  const hits = raycaster.intersectObjects(meshes, false);
+  if (hits.length === 0) return null;
+  const h = hits[0];
+  return { point: h.point.clone(), object: h.object as THREE.Mesh };
+}
+
+export function snapPointXZ(point: THREE.Vector3, mesh: THREE.Mesh): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
+  const threshold = 0.015;
+  const box = new THREE.Box3().setFromObject(mesh);
+
+  const cornerCount = 4;
+  const candidates = [
+    new THREE.Vector3(box.min.x, point.y, box.min.z),
+    new THREE.Vector3(box.min.x, point.y, box.max.z),
+    new THREE.Vector3(box.max.x, point.y, box.min.z),
+    new THREE.Vector3(box.max.x, point.y, box.max.z),
+    new THREE.Vector3(box.min.x, point.y, clamp(point.z, box.min.z, box.max.z)),
+    new THREE.Vector3(box.max.x, point.y, clamp(point.z, box.min.z, box.max.z)),
+    new THREE.Vector3(clamp(point.x, box.min.x, box.max.x), point.y, box.min.z),
+    new THREE.Vector3(clamp(point.x, box.min.x, box.max.x), point.y, box.max.z)
+  ];
+
+  let best = point.clone();
+  let bestD = Infinity;
+  let bestIdx = -1;
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const c = candidates[idx];
+    const d = Math.hypot(c.x - point.x, c.z - point.z);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+      bestIdx = idx;
+    }
+  }
+
+  if (bestD > threshold) return { point: point.clone(), kind: "free" };
+  return { point: best, kind: bestIdx >= 0 && bestIdx < cornerCount ? "corner" : "edge" };
+}
+
+export function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
+
+export function formatMm(v: THREE.Vector3) {
+  return `${Math.round(v.x * 1000)}, ${Math.round(v.z * 1000)}`;
+}
+
+export function worldToScreen(world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) {
+  const p = world.clone().project(camera);
+  return {
+    x: (p.x * 0.5 + 0.5) * rect.width,
+    y: (-p.y * 0.5 + 0.5) * rect.height
+  };
+}
+
+export function getSelectableMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (m.userData?.selectable !== true) return;
+    if (typeof m.name !== "string" || m.name.length === 0) return;
+    meshes.push(m);
+  });
+  return meshes;
+}
+
+export function findSelectableMeshByName(root: THREE.Object3D, name: string): THREE.Mesh | null {
+  let found: THREE.Mesh | null = null;
+  root.traverse((o) => {
+    if (found) return;
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (m.name !== name) return;
+    if (m.userData?.selectable !== true) return;
+    found = m;
+  });
+  return found;
+}
+
+export function readDimensionsMm(mesh: THREE.Mesh) {
+  const d = mesh.userData?.dimensionsMm as { width: number; height: number; depth: number } | undefined;
+  if (d && Number.isFinite(d.width) && Number.isFinite(d.height) && Number.isFinite(d.depth)) return d;
+
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3());
+  return { width: size.x * 1000, height: size.y * 1000, depth: size.z * 1000 };
+}
+
+export function readGrainAlong(mesh: THREE.Mesh): GrainAlong {
+  const raw = mesh.userData?.grainAlong;
+  if (raw === "width" || raw === "height" || raw === "depth" || raw === "none") return raw;
+  return "none";
+}
+
+export function computeGrainArrow(mesh: THREE.Mesh): { origin: THREE.Vector3; dir: THREE.Vector3; length: number } | null {
+  const grainAlong = readGrainAlong(mesh);
+  if (grainAlong === "none") return null;
+  const n = mesh.name ?? "";
+  if (n.includes("hinge") || n.startsWith("leg")) return null;
+
+  const localAxis =
+    grainAlong === "width"
+      ? new THREE.Vector3(1, 0, 0)
+      : grainAlong === "height"
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3(0, 0, 1);
+
+  const q = new THREE.Quaternion();
+  mesh.getWorldQuaternion(q);
+
+  const dir = localAxis.applyQuaternion(q).normalize();
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3());
+  const origin = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const length = Math.max(0.08, Math.min(0.35, maxDim * 0.7));
+  return { origin, dir, length };
+}
+
+export function toggleSelectedPbr(mesh: THREE.Mesh, kind: "all" | "normal" | "roughness") {
+  const matAny = mesh.material as unknown;
+  if (!(matAny instanceof THREE.MeshStandardMaterial)) return;
+
+  const mat = matAny as THREE.MeshStandardMaterial;
+
+  if (mesh.userData?.__pbrMaterialCloned !== true) {
+    mesh.material = mat.clone();
+    mesh.userData.__pbrMaterialCloned = true;
+    return toggleSelectedPbr(mesh, kind);
+  }
+
+  const m = mesh.material as THREE.MeshStandardMaterial;
+  const backup = (m.userData.__pbrBackup as
+    | { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null }
+    | undefined) ?? { map: m.map ?? null, normalMap: m.normalMap ?? null, roughnessMap: m.roughnessMap ?? null };
+  m.userData.__pbrBackup = backup;
+
+  const toggle = (key: "map" | "normalMap" | "roughnessMap") => {
+    (m as any)[key] = (m as any)[key] ? null : (backup as any)[key];
+  };
+
+  if (kind === "all") {
+    const anyOn = Boolean(m.map || m.normalMap || m.roughnessMap);
+    m.map = anyOn ? null : backup.map;
+    m.normalMap = anyOn ? null : backup.normalMap;
+    m.roughnessMap = anyOn ? null : backup.roughnessMap;
+  } else if (kind === "normal") {
+    toggle("normalMap");
+  } else if (kind === "roughness") {
+    toggle("roughnessMap");
+  }
+
+  m.needsUpdate = true;
+}
+
+export function computeOverlaps(root: THREE.Object3D): OverlapRow[] {
+  const meshes = getSelectableMeshes(root).filter((m) => {
+    const n = m.name ?? "";
+    if (n.includes("hinge")) return false;
+    if (n.startsWith("leg")) return false;
+    return true;
+  });
+
+  const boxes = meshes.map((m) => ({ m, box: new THREE.Box3().setFromObject(m) }));
+  const eps = 0.0005;
+  const out: OverlapRow[] = [];
+
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i];
+      const b = boxes[j];
+
+      const aAllow = (a.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
+      const bAllow = (b.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
+      const allowed = aAllow.includes(b.m.name) || bAllow.includes(a.m.name);
+      const reason =
+        (a.m.userData?.allowOverlapReason as string | undefined) ?? (b.m.userData?.allowOverlapReason as string | undefined);
+
+      const minX = Math.max(a.box.min.x, b.box.min.x);
+      const minY = Math.max(a.box.min.y, b.box.min.y);
+      const minZ = Math.max(a.box.min.z, b.box.min.z);
+      const maxX = Math.min(a.box.max.x, b.box.max.x);
+      const maxY = Math.min(a.box.max.y, b.box.max.y);
+      const maxZ = Math.min(a.box.max.z, b.box.max.z);
+
+      const sx = maxX - minX;
+      const sy = maxY - minY;
+      const sz = maxZ - minZ;
+
+      if (sx <= eps || sy <= eps || sz <= eps) continue;
+
+      const overlapMm = { x: sx * 1000, y: sy * 1000, z: sz * 1000 };
+      const intersectionMm = {
+        min: { x: minX * 1000, y: minY * 1000, z: minZ * 1000 },
+        max: { x: maxX * 1000, y: maxY * 1000, z: maxZ * 1000 }
+      };
+      const aBoxMm = {
+        min: { x: a.box.min.x * 1000, y: a.box.min.y * 1000, z: a.box.min.z * 1000 },
+        max: { x: a.box.max.x * 1000, y: a.box.max.y * 1000, z: a.box.max.z * 1000 }
+      };
+      const bBoxMm = {
+        min: { x: b.box.min.x * 1000, y: b.box.min.y * 1000, z: b.box.min.z * 1000 },
+        max: { x: b.box.max.x * 1000, y: b.box.max.y * 1000, z: b.box.max.z * 1000 }
+      };
+      out.push({
+        a: a.m.name,
+        b: b.m.name,
+        status: allowed ? "allowed" : "error",
+        reason: allowed ? reason ?? "whitelisted overlap" : undefined,
+        overlapMm,
+        intersectionMm,
+        aBoxMm,
+        bBoxMm,
+        volumeMm3: overlapMm.x * overlapMm.y * overlapMm.z
+      });
+    }
+  }
+
+  out.sort((x, y) => (x.status === y.status ? y.volumeMm3 - x.volumeMm3 : x.status === "error" ? -1 : 1));
+  return out.slice(0, 40);
+}
+
+export function renderErrors(el: HTMLElement, errors: string[]) {
+  if (errors.length === 0) {
+    el.classList.remove("visible");
+    el.innerHTML = "";
+    return;
+  }
+
+  el.classList.add("visible");
+  el.innerHTML = `<ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
+}
+
+export function escapeHtml(input: string) {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}

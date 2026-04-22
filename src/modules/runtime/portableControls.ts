@@ -444,12 +444,13 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   params: T;
   catalog: PortableParameterCatalog;
   controlArgs: PortableModuleControlsArgs;
+  paramChangeHook?: (params: T, key: string) => void;
   fieldOptions?: Record<string, PortableFieldOption[]>;
   materialsSnapshot?: PortableMaterialsSnapshot;
   systemCatalog?: PortableSystemParameterCatalog;
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
-  const { container, params, catalog, controlArgs, fieldOptions, materialsSnapshot, systemCatalog, systemValues } = args;
+  const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, materialsSnapshot, systemCatalog, systemValues } = args;
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
   void controlArgs.getWorktopThicknessMm;
   void controlArgs.commitBoundary;
@@ -534,6 +535,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
             if (parameter.key === "requiresWorktop") {
               syncPortableSystemValues(systemValues, params);
             }
+            paramChangeHook?.(params, parameter.key);
           });
         };
 
@@ -561,6 +563,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           if (!Number.isFinite(next)) return;
           applyParamMutation(() => {
             setTopLevelValue(params, parameter.key, next);
+            paramChangeHook?.(params, parameter.key);
           });
         };
 
@@ -622,6 +625,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
               } else {
                 setTopLevelValue(params, parameter.key, select.value);
               }
+              paramChangeHook?.(params, parameter.key);
             });
           };
 
@@ -648,6 +652,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const apply = () => {
           applyParamMutation(() => {
             setTopLevelValue(params, parameter.key, input.value);
+            paramChangeHook?.(params, parameter.key);
           });
         };
 
@@ -684,6 +689,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         wrapper.classList.remove("error");
         applyParamMutation(() => {
           setTopLevelValue(params, parameter.key, cloneValue(parsed));
+          paramChangeHook?.(params, parameter.key);
         });
       };
 
@@ -784,6 +790,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
               setTopLevelValue(params, thicknessParameterKey, nextVariant.defaultThicknessMm);
             }
           }
+          paramChangeHook?.(params, thicknessParameterKey ?? "materials");
         });
       };
 
@@ -804,6 +811,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           if (thicknessParameterKey) {
             setTopLevelValue(params, thicknessParameterKey, nextThickness);
           }
+          paramChangeHook?.(params, thicknessParameterKey ?? "materials");
         });
       };
 
@@ -938,6 +946,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
                 params.requiresWorktop = requiresWorktop;
                 systemValues.values.requiresWorktop = requiresWorktop;
               }
+              paramChangeHook?.(params, definition.key);
             });
           };
 

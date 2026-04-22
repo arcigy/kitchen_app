@@ -6,7 +6,7 @@ import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
 
 export type AppMode = "build" | "layout";
-export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
+export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension" | "measure";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
 export type WallId = "back" | "left" | "right";
@@ -31,11 +31,14 @@ export type LayoutSnapshot = {
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
   floors?: Array<{ id: string; params: FloorParams }>;
+  worktopCounter?: number;
+  worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
   instanceCounter: number;
   instances: Array<{
     id: string;
     params: ModuleParams;
     kitchenGroupId: string | null;
+    kitchenPlacement?: KitchenPlacementBinding | null;
     positionMm: { x: number; z: number };
     rotationYDeg: number;
   }>;
@@ -94,6 +97,34 @@ export type FloorInstance = {
   outline: THREE.Line;
 };
 
+export type KitchenWorktopJustification = "center" | "back" | "front";
+
+export type KitchenWorktopParams = {
+  path: FloorBoundaryPoint[];
+  justification: KitchenWorktopJustification;
+  mirrored: boolean;
+  depthMm: number;
+  thicknessMm: number;
+  heightMm: number;
+  overhangSideMm: number;
+  materialId: string;
+};
+
+export type KitchenWorktopInstance = {
+  id: string;
+  kitchenGroupId: string;
+  params: KitchenWorktopParams;
+  root: THREE.Group;
+  mesh: THREE.Mesh;
+  outline: THREE.Line;
+};
+
+export type KitchenPlacementBinding = {
+  worktopId: string;
+  segmentIndex: number;
+  offsetAlongM: number;
+};
+
 export type AlignWallLine = "center" | "exterior" | "interior" | "endA" | "endB";
 
 export type DimensionRef = {
@@ -126,6 +157,7 @@ export type LayoutInstance = {
   id: string;
   params: ModuleParams;
   kitchenGroupId: string | null;
+  kitchenPlacement: KitchenPlacementBinding | null;
   root: THREE.Group;
   module: THREE.Group;
   localBox: THREE.Box3;
@@ -170,6 +202,8 @@ export interface AppState {
   wallUnionPolys: any | null;
   floors: FloorInstance[];
   floorCounter: number;
+  kitchenWorktops: KitchenWorktopInstance[];
+  worktopCounter: number;
 
   // Layout instances
   instances: LayoutInstance[];
@@ -253,6 +287,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     wallUnionPolys: null,
     floors: [],
     floorCounter: 1,
+    kitchenWorktops: [],
+    worktopCounter: 1,
 
     instances: [],
     instanceCounter: 1,

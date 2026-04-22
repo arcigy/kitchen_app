@@ -1,7 +1,8 @@
-import type { AppState, LayoutInstance } from "./appState";
+import type { AppState, KitchenPlacementBinding, LayoutInstance } from "./appState";
 import type { ModuleParams } from "../model/cabinetTypes";
 import { getModuleDescriptorOrThrow } from "../modules/registry";
 import { commitHistory } from "./historyManager";
+import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
 
 type PropsApi = {
   setTitle: (title: string) => void;
@@ -26,6 +27,18 @@ export interface PlacementHelpers {
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (moving: LayoutInstance) => boolean;
   autoOrientModuleToRoomWallIfSnapped: (inst: LayoutInstance) => void;
+  resolvePlacementConstraint?: (
+    ghost: LayoutInstance,
+    cursorWorld: any
+  ) => {
+    position: any;
+    rotationY: number;
+    valid: boolean;
+    kitchenPlacement?: KitchenPlacementBinding | null;
+    statusText?: string;
+    enforceRoomBounds?: boolean;
+    enforceWallOverlap?: boolean;
+  } | null;
 }
 
 export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
@@ -67,27 +80,40 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   const g = S.placement.ghost;
   if (!g) return;
 
-  const placeWithBottomLeftAtCursor = () => {
-    g.root.position.copy(cursorWorld);
+  const constrainedPlacement = helpers.resolvePlacementConstraint?.(g, cursorWorld) ?? null;
+  if (constrainedPlacement) {
+    g.root.rotation.y = constrainedPlacement.rotationY;
+    g.root.position.copy(constrainedPlacement.position);
     g.root.updateMatrixWorld(true);
-    const box = helpers.instanceWorldBox(g);
-    const desired = cursorWorld.clone();
-    desired.x += cursorWorld.x - box.min.x;
-    desired.z += cursorWorld.z - box.max.z;
-    g.root.position.copy(helpers.applyWallConstraints(g, desired));
-    g.root.updateMatrixWorld(true);
-  };
+  } else {
+    const placeWithBottomLeftAtCursor = () => {
+      g.root.position.copy(cursorWorld);
+      g.root.updateMatrixWorld(true);
+      const box = helpers.instanceWorldBox(g);
+      const desired = cursorWorld.clone();
+      desired.x += cursorWorld.x - box.min.x;
+      desired.z += cursorWorld.z - box.max.z;
+      g.root.position.copy(helpers.applyWallConstraints(g, desired));
+      g.root.updateMatrixWorld(true);
+    };
 
-  placeWithBottomLeftAtCursor();
-  helpers.autoOrientModuleToRoomWallIfSnapped(g);
-  placeWithBottomLeftAtCursor();
+    placeWithBottomLeftAtCursor();
+    helpers.autoOrientModuleToRoomWallIfSnapped(g);
+    placeWithBottomLeftAtCursor();
+  }
 
-  const inRoom = helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g));
-  const overlaps = helpers.anyOverlap(g, null) || helpers.moduleOverlapsWalls(g);
-  const ok = inRoom && !overlaps;
+  const shouldCheckRoomBounds = constrainedPlacement?.enforceRoomBounds ?? true;
+  const shouldCheckWallOverlap = constrainedPlacement?.enforceWallOverlap ?? true;
+  const inRoom = shouldCheckRoomBounds ? helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g)) : true;
+  const overlaps =
+    helpers.anyOverlap(g, null) || (shouldCheckWallOverlap ? helpers.moduleOverlapsWalls(g) : false);
+  const ok = inRoom && !overlaps && (constrainedPlacement?.valid ?? true);
   S.placement.ghostValid = ok;
 
   (g.outline.material as any).color.setHex(ok ? 0x3ddc97 : 0xff6b6b);
+  if (constrainedPlacement?.statusText) {
+    helpers.setUnderlayStatus(constrainedPlacement.statusText);
+  }
 };
 
 export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
@@ -99,9 +125,11 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
 
   const ghost = S.placement.ghost;
   const nextParams = structuredClone(S.placement.params) as ModuleParams;
+  const constrainedPlacement = helpers.resolvePlacementConstraint?.(ghost, S.placement.lastCursor) ?? null;
 
   const inst = helpers.createInstance(nextParams);
   inst.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
+  inst.kitchenPlacement = constrainedPlacement?.kitchenPlacement ?? null;
   inst.root.position.copy(ghost.root.position);
   inst.root.rotation.y = ghost.root.rotation.y;
 
@@ -181,6 +209,10 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
   const nextParams = structuredClone(
     helpers.getBuildParams(type) ?? getModuleDescriptorOrThrow(type).defaultParams()
   ) as ModuleParams;
+
+  if (S.kitchenEditMode && S.activeKitchenGroupId) {
+    applyKitchenContextToModuleParams(nextParams, S.kitchenCtx);
+  }
 
   S.placement.active = true;
   S.placement.params = nextParams;

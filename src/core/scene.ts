@@ -182,47 +182,6 @@ export function createScene(container: HTMLElement) {
   planBg.renderOrder = 0;
   planOverlay.add(planBg);
 
-  const planSheet = new THREE.Mesh(
-    new THREE.PlaneGeometry(roomW, roomD),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false })
-  );
-  planSheet.name = "planSheet";
-  planSheet.rotation.x = -Math.PI / 2;
-  planSheet.position.y = 0.0015;
-  planSheet.renderOrder = 1;
-  planOverlay.add(planSheet);
-
-  // Large plan grid so it is visible everywhere you pan/zoom in 2D.
-  const planGrid = new THREE.GridHelper(200, 2000, 0xe5e5e5, 0xf1f1f1);
-  planGrid.name = "planGrid";
-  planGrid.renderOrder = 2;
-  const planGridMats = Array.isArray(planGrid.material) ? planGrid.material : [planGrid.material];
-  for (const m of planGridMats) {
-    m.transparent = true;
-    m.opacity = 0.72;
-    m.depthWrite = false;
-  }
-  planGrid.position.y = 0.002;
-  planOverlay.add(planGrid);
-
-  const planBounds = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.PlaneGeometry(roomW, roomD)),
-    new THREE.LineBasicMaterial({ color: 0x4e4e4e, transparent: true, opacity: 0.95 })
-  );
-  planBounds.name = "planBounds";
-  planBounds.rotation.x = -Math.PI / 2;
-  planBounds.position.y = 0.003;
-  planOverlay.add(planBounds);
-
-  const planOrigin = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.15, 0.15),
-    new THREE.MeshBasicMaterial({ color: 0x7a7a7a, transparent: true, opacity: 0.35, depthWrite: false })
-  );
-  planOrigin.name = "planOrigin";
-  planOrigin.rotation.x = -Math.PI / 2;
-  planOrigin.position.y = 0.004;
-  planOverlay.add(planOrigin);
-
   const planAmbient = new THREE.AmbientLight(0xffffff, 1.25);
   planAmbient.name = "planAmbient";
   scene.add(planAmbient);

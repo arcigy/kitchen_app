@@ -29,14 +29,12 @@ export interface KitchenContext {
   backPanelThicknessMm: number
   endPanelThicknessMm: number
 
-  // Materiály — len ID referencie
-  faceMaterialId: string
+  // Materiály kuchyne
+  frontsMaterialId: string
   corpusMaterialId: string
-  interiorMaterialId: string
+  backMaterialId: string
+  drawerBottomMaterialId: string
   worktopMaterialId: string
-  backPanelMaterialId: string
-  plinthMaterialId: string
-  endPanelMaterialId: string
 
   // Správanie layoutu
   fillerStrategy: 'auto' | 'warn' | 'ignore'
@@ -48,7 +46,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
   const worktopDepthMm = 620
   const worktopFrontOffsetMm = 20
   const worktopBackOffsetMm = 20
-  const worktopThicknessMm = 40
+  const worktopThicknessMm = 38
   const heightMm = 820
 
   return {
@@ -76,13 +74,11 @@ export function makeDefaultKitchenContext(): KitchenContext {
     backPanelThicknessMm: 8,
     endPanelThicknessMm: 18,
 
-    faceMaterialId: 'mat_oak_natural',
-    corpusMaterialId: 'mat_grey_corpus',
-    interiorMaterialId: 'mat_white_melamine',
-    worktopMaterialId: 'mat_worktop_oak',
-    backPanelMaterialId: 'mat_white_melamine',
-    plinthMaterialId: 'mat_grey_corpus',
-    endPanelMaterialId: 'mat_oak_natural',
+    frontsMaterialId: 'mat.board.front.veneer.oak_natural.19',
+    corpusMaterialId: 'mat.board.body.dtd.grey.18',
+    backMaterialId: 'mat.board.back.hdf.grey.6',
+    drawerBottomMaterialId: 'mat.board.drawer_bottom.hdf.white.8',
+    worktopMaterialId: 'mat.board.worktop.laminate_oak.38',
 
     fillerStrategy: 'warn',
     gapWarningMm: 50,
@@ -142,20 +138,16 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push(`backPanelThicknessMm je ${ctx.backPanelThicknessMm}mm — nesmie byť záporný`)
   if (ctx.endPanelThicknessMm < 0)
     warnings.push(`endPanelThicknessMm je ${ctx.endPanelThicknessMm}mm — nesmie byť záporný`)
-  if (!ctx.faceMaterialId.trim())
-    warnings.push('faceMaterialId je prázdny')
+  if (!ctx.frontsMaterialId.trim())
+    warnings.push('frontsMaterialId je prázdny')
   if (!ctx.corpusMaterialId.trim())
     warnings.push('corpusMaterialId je prázdny')
-  if (!ctx.interiorMaterialId.trim())
-    warnings.push('interiorMaterialId je prázdny')
+  if (!ctx.backMaterialId.trim())
+    warnings.push('backMaterialId je prázdny')
+  if (!ctx.drawerBottomMaterialId.trim())
+    warnings.push('drawerBottomMaterialId je prázdny')
   if (!ctx.worktopMaterialId.trim())
     warnings.push('worktopMaterialId je prázdny')
-  if (!ctx.backPanelMaterialId.trim())
-    warnings.push('backPanelMaterialId je prázdny')
-  if (!ctx.plinthMaterialId.trim())
-    warnings.push('plinthMaterialId je prázdny')
-  if (!ctx.endPanelMaterialId.trim())
-    warnings.push('endPanelMaterialId je prázdny')
   if (ctx.fillerStrategy !== 'auto' && ctx.fillerStrategy !== 'warn' && ctx.fillerStrategy !== 'ignore')
     warnings.push(`fillerStrategy je neplatný: ${ctx.fillerStrategy}`)
   if (ctx.gapWarningMm < 0)

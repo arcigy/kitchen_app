@@ -11,6 +11,7 @@
     "import:modpkg": "tsx scripts/importModpkg.ts",
     "test:pricing-contract": "tsx scripts/testPricingContract.ts",
     "test:pricing-ui": "node scripts/testPricingUi.mjs",
+    "test:kitchen-context-live": "node scripts/testKitchenContextLive.mjs",
     "test:module-properties": "node scripts/testModulePropertiesUi.mjs",
     "test:portable-material-live": "node scripts/testPortableMaterialLive.mjs",
     "worker:dev": "tsx scripts/worker.ts",

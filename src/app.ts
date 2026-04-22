@@ -1,10 +1,67 @@
 ﻿import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
+import {
+  axisLockXZ,
+  clamp,
+  computeGrainArrow,
+  computeOverlaps,
+  copyM16,
+  findSelectableMeshByName,
+  formatMm,
+  getSelectableMeshes,
+  matrixChanged,
+  pickSurfacePoint,
+  planarDistanceMm,
+  readDimensionsMm,
+  readGrainAlong,
+  renderErrors,
+  snapPointXZ,
+  toggleSelectedPbr,
+  worldToScreen
+} from "./app/sharedUtils";
+import { applyMeasureAxisAssist, createMeasureTools } from "./app/measureTools";
+import { applyMeasureAxisAssist3D, axisLockPoint3D, distance3dMm, snapPoint3D } from "./app/measure3d";
+import { createPlanSnapper, getModulePlanLocalRect, type PlanSnapResult } from "./app/planSnap";
+import { createSnapOverlay } from "./app/snapOverlay";
+import {
+  createSelectionHighlights,
+  createToolHud,
+  createUnderlayController,
+  createWallSnapMarkers
+} from "./app/layoutVisuals";
+import { createViewerTabs, resolveAppArgs, type AppArgs } from "./app/bootstrap";
+import type {
+  AlignPickedLine,
+  AlignWallLine,
+  DimensionInstance,
+  DimensionParams,
+  DimensionRef,
+  FloorBoundaryPoint,
+  FloorBoundarySegment,
+  FloorBoundaryTool,
+  FloorEditDrag,
+  FloorEditVertexRef,
+  FloorInstance,
+  FloorParams,
+  KitchenWorktopInstance,
+  KitchenWorktopJustification,
+  KitchenPlacementBinding,
+  KitchenWorktopParams,
+  LayoutInstance,
+  LayoutSnapshot,
+  PickedLine2D,
+  SelectedKind,
+  WallId,
+  WallInstance,
+  WallParams,
+  WindowInstance,
+  WindowParams
+} from "./app/localTypes";
 import type { ModuleParams } from "./model/cabinetTypes";
 import { normalizeModuleParams, validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./core/scene";
-import { createPartPanel, type GrainAlong, type OverlapRow } from "./ui/createPartPanel";
+import { createPartPanel } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
 import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
@@ -16,8 +73,9 @@ import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { getAllMaterials } from "./data/materials";
+import { getMaterialDefinitionById } from "./data/pricing/materialDefinitions";
 import { solveWallNetwork } from "./walls2d/solver";
-import type { AppState } from "./layout/appState";
+import { makeAppState, type AppState } from "./layout/appState";
 import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
 import { createKitchenEditMode } from "./layout/kitchenEditMode";
 import {
@@ -53,43 +111,10 @@ import {
   rebuildGhost,
   type PlacementHelpers
 } from "./layout/placementManager";
-
-type AppArgs = {
-  viewerEl: HTMLElement;
-  ribbonEl: HTMLElement;
-  propertiesEl: HTMLElement;
-  formEl?: HTMLElement;
-  errorsEl?: HTMLElement;
-  partsEl?: HTMLElement;
-  exportOutEl?: HTMLTextAreaElement;
-  copyBtn?: HTMLButtonElement;
-  copyStatusEl?: HTMLElement;
-  measureBtn?: HTMLButtonElement;
-  clearMeasuresBtn?: HTMLButtonElement;
-  axisLockEl?: HTMLInputElement;
-  measureReadoutEl?: HTMLElement;
-  resetBtn?: HTMLButtonElement;
-  exportBtn?: HTMLButtonElement;
-  exportSceneBtn?: HTMLButtonElement;
-};
+import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
 
 export function startApp(initialArgs: AppArgs) {
-  const args = {
-    formEl: document.createElement("div"),
-    errorsEl: document.createElement("div"),
-    partsEl: document.createElement("div"),
-    exportOutEl: document.createElement("textarea"),
-    copyBtn: document.createElement("button"),
-    copyStatusEl: document.createElement("div"),
-    measureBtn: document.createElement("button"),
-    clearMeasuresBtn: document.createElement("button"),
-    axisLockEl: Object.assign(document.createElement("input"), { type: "checkbox", checked: true }),
-    measureReadoutEl: document.createElement("div"),
-    resetBtn: document.createElement("button"),
-    exportBtn: document.createElement("button"),
-    exportSceneBtn: document.createElement("button"),
-    ...initialArgs
-  };
+  const args = resolveAppArgs(initialArgs);
 
   type ParamHighlightControls = {
     highlightParamKeys?: (keys: string[]) => void;
@@ -130,32 +155,12 @@ export function startApp(initialArgs: AppArgs) {
 
   setDaylightIntensity(9);
 
-  const viewerTabbar = document.createElement("div");
-  viewerTabbar.className = "viewer-tabbar";
-  const floorplanTab = document.createElement("button");
-  floorplanTab.type = "button";
-  floorplanTab.className = "viewer-tab";
-  floorplanTab.textContent = "Floorplan";
-
-  const view3dTab = document.createElement("button");
-  view3dTab.type = "button";
-  view3dTab.className = "viewer-tab";
-  view3dTab.textContent = "3D";
-
-  viewerTabbar.append(floorplanTab, view3dTab);
-  args.viewerEl.appendChild(viewerTabbar);
-
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
+  const { floorplanTab, view3dTab, syncViewerTabs } = createViewerTabs(args.viewerEl);
 
-  const syncViewerTabs = () => {
-    const isFloorplan = viewMode === "2d";
-    floorplanTab.classList.toggle("viewer-tab-active", isFloorplan);
-    view3dTab.classList.toggle("viewer-tab-active", !isFloorplan);
-  };
-
-  type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension";
+  type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension" | "measure";
   let layoutTool: LayoutTool = "select";
 
   type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
@@ -167,19 +172,6 @@ export function startApp(initialArgs: AppArgs) {
   let photoLastLightingRevision = -1;
   let lastCameraWorld = new Float32Array(16);
   let lastCameraProj = new Float32Array(16);
-
-  const copyM16 = (out: Float32Array, m: THREE.Matrix4) => {
-    const e = m.elements;
-    for (let i = 0; i < 16; i++) out[i] = e[i];
-  };
-
-  const matrixChanged = (a: Float32Array, m: THREE.Matrix4) => {
-    const e = m.elements;
-    for (let i = 0; i < 16; i++) {
-      if (Math.abs(a[i] - e[i]) > 1e-7) return true;
-    }
-    return false;
-  };
 
   let cabinetGroup: THREE.Group | null = null;
   const hiddenParts = new Set<string>();
@@ -205,332 +197,49 @@ export function startApp(initialArgs: AppArgs) {
   let wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>> = [];
   let wallUnionPolys: any | null = null;
 
-  const wallSnapMarkers = new THREE.Group();
-  wallSnapMarkers.name = "wallSnapMarkers";
-  wallSnapMarkers.visible = false;
-  layoutRoot.add(wallSnapMarkers);
+const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
+    layoutRoot,
+    getMode: () => mode,
+    getWalls: () => walls,
+    getWallSolvedOutlines: () => wallSolvedOutlines
+  });
 
   const floorBoundaryGroup = new THREE.Group();
   floorBoundaryGroup.name = "floorBoundaryEdit";
   floorBoundaryGroup.visible = false;
   layoutRoot.add(floorBoundaryGroup);
 
-  // Tool HUD overlays (Align/Trim) in 2D
-  const toolHud = new THREE.Group();
-  toolHud.name = "toolHud";
-  layoutRoot.add(toolHud);
-
-  const hudMatHover = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false });
-  const hudMatPick1 = new THREE.MeshBasicMaterial({ color: 0x2f78c4, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
-  const hudMatPick2 = new THREE.MeshBasicMaterial({ color: 0x5c8f44, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
-
-  const makeHudLineMesh = (mat: THREE.Material) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
-    m.visible = false;
-    m.position.y = 0.05;
-    m.renderOrder = 80;
-    toolHud.add(m);
-    return m;
-  };
-
-  const hudHoverLine = makeHudLineMesh(hudMatHover);
-  const hudPickLine1 = makeHudLineMesh(hudMatPick1);
-  const hudPickLine2 = makeHudLineMesh(hudMatPick2);
-
-  const clearToolHud = () => {
-    hudHoverLine.visible = false;
-    hudPickLine1.visible = false;
-    hudPickLine2.visible = false;
-    dimPreview.root.visible = false;
-  };
-
-  const hudLineThicknessM = (rect: DOMRect) => {
-    const c = cam();
-    if (!(c instanceof THREE.OrthographicCamera)) return 0.01;
-    const visibleW = Math.abs(c.right - c.left) / Math.max(1e-6, c.zoom);
-    const worldPerPx = visibleW / Math.max(1, rect.width);
-    return Math.min(0.06, Math.max(0.004, worldPerPx * 4));
-  };
-
-  const updateHudLine = (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, thicknessM: number) => {
-    const d = b.clone().sub(a);
-    const len = d.length();
-    if (len < 1e-6) {
-      mesh.visible = false;
-      return;
-    }
-
-    const ang = Math.atan2(d.z, d.x);
-    const mid = a.clone().addScaledVector(d, 0.5);
-    const g = new THREE.BoxGeometry(len, 0.01, thicknessM);
-    mesh.geometry.dispose();
-    mesh.geometry = g;
-    mesh.position.set(mid.x, 0.05, mid.z);
-    mesh.rotation.set(0, ang, 0);
-    mesh.visible = true;
-  };
-
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapGeom = new THREE.CircleGeometry(0.035, 16);
-  const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
-    const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
-    const m = new THREE.Mesh(snapGeom, mat);
-    m.rotation.x = -Math.PI / 2;
-    m.position.y = 0.02;
-    m.renderOrder = 50;
-    m.userData.kind = "snapDot";
-    m.userData.snapKind = kind;
-    return m;
-  };
-
-  const clearWallSnapMarkers = () => {
-    for (const ch of [...wallSnapMarkers.children]) wallSnapMarkers.remove(ch);
-  };
-
-  const showWallSnapMarkersFor = (wallId: string | null) => {
-    clearWallSnapMarkers();
-    if (!wallId) {
-      wallSnapMarkers.visible = false;
-      return;
-    }
-    const w = walls.find((x) => x.id === wallId) ?? null;
-    if (!w) {
-      wallSnapMarkers.visible = false;
-      return;
-    }
-
-    const a = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
-    const b = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-    const d = b.clone().sub(a);
-    const len = d.length();
-    if (len < 1e-6) {
-      wallSnapMarkers.visible = false;
-      return;
-    }
-    d.multiplyScalar(1 / len);
-
-    const dotA = makeSnapDot("endpoint");
-    dotA.position.x = a.x;
-    dotA.position.z = a.z;
-    wallSnapMarkers.add(dotA);
-    const dotB = makeSnapDot("endpoint");
-    dotB.position.x = b.x;
-    dotB.position.z = b.z;
-    wallSnapMarkers.add(dotB);
-
-    const mid = a.clone().addScaledVector(d, len * 0.5);
-    const dotM = makeSnapDot("axis");
-    dotM.position.x = mid.x;
-    dotM.position.z = mid.z;
-    wallSnapMarkers.add(dotM);
-
-    const poly = wallSolvedOutlines.get(wallId) ?? null;
-    if (poly && poly.length >= 3) {
-      for (const p of poly) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    } else {
-      const n = new THREE.Vector3(-d.z, 0, d.x);
-      const h = Math.max(1, w.params.thicknessMm / 2) / 1000;
-      const c1 = a.clone().addScaledVector(n, h);
-      const c2 = a.clone().addScaledVector(n, -h);
-      const c3 = b.clone().addScaledVector(n, -h);
-      const c4 = b.clone().addScaledVector(n, h);
-      for (const p of [c1, c2, c3, c4]) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    }
-
-    wallSnapMarkers.visible = mode === "layout";
-  };
-
-  const selectionHighlights = new THREE.Group();
-  selectionHighlights.name = "selectionHighlights";
-  selectionHighlights.visible = false;
-  layoutRoot.add(selectionHighlights);
-
-  const updateSelectionHighlights = () => {
-    for (const ch of [...selectionHighlights.children]) {
-      selectionHighlights.remove(ch);
-      const m = ch as any;
-      m.geometry?.dispose?.();
-      if (Array.isArray(m.material)) for (const mm of m.material) mm?.dispose?.();
-      else m.material?.dispose?.();
-    }
-
-    if (mode !== "layout") {
-      selectionHighlights.visible = false;
-      return;
-    }
-
-    // Walls: draw outline of each selected wall (trimmed) when available.
-    for (const id of selectedWallIds) {
-      const poly = wallSolvedOutlines.get(id) ?? null;
-      if (!poly || poly.length < 3) continue;
-      const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));
-      pts.push(new THREE.Vector3(poly[0].x, 0.012, poly[0].z));
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(
-        geom,
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-      );
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
-    }
-
-    if (selectedKind === "floor" && selectedFloorId) {
-      const floor = floors.find((x) => x.id === selectedFloorId) ?? null;
-      if (floor && floor.params.boundary.length >= 3) {
-        const pts = floor.params.boundary.map((p) => new THREE.Vector3(p.x / 1000, 0.018, p.z / 1000));
-        pts.push(new THREE.Vector3(floor.params.boundary[0].x / 1000, 0.018, floor.params.boundary[0].z / 1000));
-        const geom = new THREE.BufferGeometry().setFromPoints(pts);
-        const line = new THREE.Line(
-          geom,
-          new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-        );
-        line.renderOrder = 61;
-        selectionHighlights.add(line);
-      }
-    }
-
-    selectionHighlights.visible = selectionHighlights.children.length > 0;
-  };
-
-  const underlayMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.65,
-    side: THREE.DoubleSide,
-    depthWrite: false
+  const { toolHud, clearToolHud, hudHoverLine, hudLineThicknessM, hudPickLine1, hudPickLine2, updateHudLine } = createToolHud({
+    layoutRoot,
+    getCamera: cam,
+    getDimPreviewRoot: () => dimPreview.root
   });
-  const underlayMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), underlayMat);
-  underlayMesh.name = "underlay";
-  underlayMesh.rotation.x = -Math.PI / 2;
-  underlayMesh.position.y = 0.006;
-  underlayMesh.visible = false;
-  underlayMesh.renderOrder = 1;
-  layoutRoot.add(underlayMesh);
 
-  const underlayState = {
-    sourceName: null as string | null,
-    sourceKind: null as "png" | "jpg" | "pdf" | null,
-    baseWidthM: 1,
-    baseHeightM: 1,
-    scale: 1,
-    rotationDeg: 0,
-    opacity: 0.65,
-    offsetMm: { x: 0, z: 0 },
-    pinned: false
-  };
+  const { updateSelectionHighlights } = createSelectionHighlights({
+    layoutRoot,
+    getMode: () => mode,
+    getSelectedWallIds: () => selectedWallIds,
+    getWallSolvedOutlines: () => wallSolvedOutlines,
+    getSelectedKind: () => selectedKind,
+    getSelectedFloorId: () => selectedFloorId,
+    getFloors: () => floors
+  });
 
-  const underlayCal = {
-    active: false,
-    first: null as THREE.Vector3 | null,
-    knownMm: 1000,
-    mode: "calibrate" as "calibrate" | "reference"
-  };
+  const {
+    underlayMat,
+    underlayMesh,
+    underlayState,
+    underlayCal,
+    roomBounds,
+    updateUnderlayTransform,
+    setUnderlayBaseSize,
+    setUnderlayFromCanvas,
+    clearUnderlay
+  } = createUnderlayController({
+    layoutRoot,
+    renderer
+  });
 
-  const roomBounds = {
-    halfW: 3, // meters (must match createScene.ts room w=6)
-    halfD: 3, // meters (must match createScene.ts room d=6)
-    h: 3 // meters (must match createScene.ts room h=3)
-  };
-
-  function updateUnderlayTransform() {
-    underlayMesh.scale.set(underlayState.scale, underlayState.scale, 1);
-    underlayMesh.rotation.y = (underlayState.rotationDeg * Math.PI) / 180;
-    underlayMat.opacity = underlayState.opacity;
-    underlayMesh.position.x = underlayState.offsetMm.x / 1000;
-    underlayMesh.position.z = underlayState.offsetMm.z / 1000;
-  }
-
-  function setUnderlayBaseSize(wM: number, hM: number) {
-    underlayState.baseWidthM = Math.max(0.001, wM);
-    underlayState.baseHeightM = Math.max(0.001, hM);
-    underlayMesh.geometry.dispose();
-    underlayMesh.geometry = new THREE.PlaneGeometry(underlayState.baseWidthM, underlayState.baseHeightM);
-  }
-
-  function setUnderlayFromCanvas(
-    canvas: HTMLCanvasElement,
-    name: string,
-    kind: "png" | "jpg" | "pdf",
-    physicalSizeMm?: { w: number; h: number } | null
-  ) {
-    const prev = underlayMat.map;
-    if (prev) prev.dispose();
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = Math.max(1, renderer.capabilities.getMaxAnisotropy());
-    tex.needsUpdate = true;
-    underlayMat.map = tex;
-    underlayMat.needsUpdate = true;
-
-    if (physicalSizeMm && Number.isFinite(physicalSizeMm.w) && Number.isFinite(physicalSizeMm.h) && physicalSizeMm.w > 0 && physicalSizeMm.h > 0) {
-      setUnderlayBaseSize(physicalSizeMm.w / 1000, physicalSizeMm.h / 1000);
-    } else {
-      const roomW = roomBounds.halfW * 2;
-      const roomD = roomBounds.halfD * 2;
-      const aspect = canvas.height / Math.max(1, canvas.width);
-
-      let w = roomW;
-      let h = w * aspect;
-      if (h > roomD) {
-        h = roomD;
-        w = h / aspect;
-      }
-
-      setUnderlayBaseSize(w, h);
-    }
-
-    underlayState.sourceName = name;
-    underlayState.sourceKind = kind;
-    underlayState.scale = 1;
-    underlayState.rotationDeg = 0;
-    underlayState.opacity = 0.65;
-    underlayState.offsetMm = { x: 0, z: 0 };
-    underlayState.pinned = false;
-    underlayMesh.visible = true;
-    updateUnderlayTransform();
-  }
-
-  function clearUnderlay() {
-    underlayState.sourceName = null;
-    underlayState.sourceKind = null;
-    underlayState.scale = 1;
-    underlayState.rotationDeg = 0;
-    underlayState.opacity = 0.65;
-    underlayState.offsetMm = { x: 0, z: 0 };
-    underlayState.pinned = false;
-    underlayMesh.visible = false;
-    if (underlayMat.map) {
-      underlayMat.map.dispose();
-      underlayMat.map = null;
-    }
-    underlayMat.needsUpdate = true;
-    updateUnderlayTransform();
-  }
-
-type LayoutInstance = {
-  id: string;
-  params: ModuleParams;
-  kitchenGroupId: string | null;
-  root: THREE.Group;
-  module: THREE.Group;
-  localBox: THREE.Box3;
-  pick: THREE.Mesh;
-  outline: THREE.LineSegments;
-};
   const instances: LayoutInstance[] = [];
   let instanceCounter = 1;
   let selectedInstanceId: string | null = null;
@@ -543,48 +252,11 @@ type LayoutInstance = {
   let selectedWallBox: THREE.BoxHelper | null = null;
   let selectedUnderlayBox: THREE.BoxHelper | null = null;
 
-  type WallId = "back" | "left" | "right";
-  type WindowParams = {
-    wall: WallId;
-    widthMm: number;
-    heightMm: number;
-    sillHeightMm: number;
-    centerMm: number; // along wall axis (x for back, z for sides)
-  };
-
-type WindowInstance = {
-  params: WindowParams;
-  root: THREE.Group;
-  pick: THREE.Mesh;
-  outline: THREE.Line;
-};
-
   let windowInst: WindowInstance | null = null;
-  type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
   let selectedKind: SelectedKind = null;
   let selectedKitchenGroupId: string | null = null;
   let selectedDimensionId: string | null = null;
   let selectedFloorId: string | null = null;
-
-  type WallParams = {
-    thicknessMm: number;
-    heightMm: number;
-    materialId: string;
-    justification?: "center" | "interior" | "exterior";
-    // +1 => exterior is left of A->B, -1 => exterior is right of A->B (Revit-like).
-    exteriorSign?: 1 | -1;
-    aMm: { x: number; z: number };
-    bMm: { x: number; z: number };
-  };
-
-  type WallInstance = {
-    id: string;
-    params: WallParams;
-    heightMm: number;
-    root: THREE.Group;
-    mesh: THREE.Mesh;
-    outline: THREE.LineSegments;
-  };
 
   const walls: WallInstance[] = [];
   let wallCounter = 1;
@@ -597,22 +269,6 @@ type WindowInstance = {
     exteriorSign: 1 as 1 | -1
   };
 
-  type FloorBoundaryPoint = { x: number; z: number };
-  type FloorParams = {
-    name: string;
-    heightMm: number;
-    thicknessMm: number;
-    materialId: string;
-    boundary: FloorBoundaryPoint[];
-  };
-  type FloorInstance = {
-    id: string;
-    params: FloorParams;
-    root: THREE.Group;
-    mesh: THREE.Mesh;
-    outline: THREE.Line;
-  };
-
   const floors: FloorInstance[] = [];
   let floorCounter = 1;
   const floorDefault = {
@@ -621,31 +277,8 @@ type WindowInstance = {
     materialId: "mat_grey_corpus"
   };
 
-  type DimensionRef = {
-    wallId: string;
-    wallLine: AlignWallLine;
-    t: number; // 0..1 along picked segment
-  };
-
-  type DimensionParams = {
-    id: string;
-    a: DimensionRef;
-    b: DimensionRef;
-    offsetM: number; // signed along normal from line A to dimension line
-  };
-
-  type DimensionInstance = {
-    id: string;
-    params: DimensionParams;
-    root: THREE.Group;
-    pick: THREE.Mesh;
-    ext1: THREE.Mesh;
-    ext2: THREE.Mesh;
-    dim: THREE.Mesh;
-    tick1: THREE.Mesh;
-    tick2: THREE.Mesh;
-    text: THREE.Sprite;
-  };
+  const kitchenWorktops: KitchenWorktopInstance[] = [];
+  let worktopCounter = 1;
 
   const dimensions: DimensionInstance[] = [];
   let dimensionCounter = 1;
@@ -654,35 +287,6 @@ type WindowInstance = {
   const dimMatSelected = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
   const dimPickMat = new THREE.MeshBasicMaterial({ visible: false });
   let dimPreview: any = null;
-
-  type LayoutSnapshot = {
-    wallCounter: number;
-    walls: Array<{ id: string; params: WallParams }>;
-    floorCounter?: number;
-    floors?: Array<{ id: string; params: FloorParams }>;
-    instanceCounter: number;
-    instances: Array<{
-      id: string;
-      params: ModuleParams;
-      kitchenGroupId: string | null;
-      positionMm: { x: number; z: number };
-      rotationYDeg: number;
-    }>;
-    dimensionCounter: number;
-    dimensions: DimensionParams[];
-    pinnedWallIds: string[];
-    pinnedInstanceIds: string[];
-    underlayPinned: boolean;
-    selected: {
-      kind: SelectedKind;
-      wallId: string | null;
-      wallIds: string[];
-      floorId?: string | null;
-      instId: string | null;
-      instIds: string[];
-      dimensionId: string | null;
-    };
-  };
 
   const history = {
     past: [] as LayoutSnapshot[],
@@ -708,60 +312,42 @@ type WindowInstance = {
     lastCursor: new THREE.Vector3(0, 0, 0)
   };
 
-  const S: AppState = {
-    mode,
-    viewMode,
-    renderMode,
-    ssgi,
-    ssgiCameraUuid,
-    photo,
-    photoCameraUuid,
-    photoLastLightingRevision: -1,
-    walls,
-    wallCounter,
-    wallPlanUnionMesh: null,
-    wallDebugEnabled: false,
-    wallSolvedJoinPolys: [],
-    wallUnionPolys: null,
-    floors,
-    floorCounter,
-    instances,
-    instanceCounter,
-    params,
-    kitchenCtx,
-    kitchenEditMode: false,
-    activeKitchenGroupId: null,
-    kitchenGroups: [],
-    layoutTool,
-    selectedKind,
-    selectedInstanceId,
-    selectedWallId,
-    selectedFloorId,
-    selectedDimensionId,
-    selectedWallIds,
-    selectedInstanceIds,
-    pinnedWallIds,
-    pinnedInstanceIds,
-    underlayState,
-    windowInst: null,
-    selectedMesh: null,
-    selectedBox: null,
-    overlapBoxes: [],
-    cabinetGroup: null,
-    grainArrow: null,
-    placement,
-    dimensions,
-    dimensionCounter,
-    undoBtnEl,
-    redoBtnEl,
-    underlayStatusEl: null,
-    underlayScaleEl: null,
-    underlayOffXEl: null,
-    underlayOffZEl: null,
-    underlayRotEl: null,
-    underlayOpacityEl: null,
-    history
-  };
+  const S: AppState = makeAppState(params);
+  S.mode = mode;
+  S.viewMode = viewMode;
+  S.renderMode = renderMode;
+  S.ssgi = ssgi;
+  S.ssgiCameraUuid = ssgiCameraUuid;
+  S.photo = photo;
+  S.photoCameraUuid = photoCameraUuid;
+  S.photoLastLightingRevision = -1;
+  S.walls = walls;
+  S.wallCounter = wallCounter;
+  S.floors = floors;
+  S.floorCounter = floorCounter;
+  S.kitchenWorktops = kitchenWorktops;
+  S.worktopCounter = worktopCounter;
+  S.instances = instances;
+  S.instanceCounter = instanceCounter;
+  S.params = params;
+  S.kitchenCtx = kitchenCtx;
+  S.layoutTool = layoutTool;
+  S.selectedKind = selectedKind;
+  S.selectedInstanceId = selectedInstanceId;
+  S.selectedWallId = selectedWallId;
+  S.selectedFloorId = selectedFloorId;
+  S.selectedDimensionId = selectedDimensionId;
+  S.selectedWallIds = selectedWallIds;
+  S.selectedInstanceIds = selectedInstanceIds;
+  S.pinnedWallIds = pinnedWallIds;
+  S.pinnedInstanceIds = pinnedInstanceIds;
+  S.underlayState = underlayState;
+  S.placement = placement;
+  S.dimensions = dimensions;
+  S.dimensionCounter = dimensionCounter;
+  S.undoBtnEl = undoBtnEl;
+  S.redoBtnEl = redoBtnEl;
+  S.history = history;
 
   function syncSelectionState() {
     S.selectedKind = selectedKind;
@@ -798,6 +384,20 @@ type WindowInstance = {
     hoverB: null as THREE.Vector3 | null,
     typedMm: "", // numeric buffer while drawing (e.g. "2500")
     lastPointerPx: { x: 0, y: 0 }
+  };
+
+  const kitchenWorktopDraw = {
+    active: false,
+    justification: "back" as KitchenWorktopJustification,
+    mirrored: false,
+    points: [] as FloorBoundaryPoint[],
+    hoverPoint: null as FloorBoundaryPoint | null,
+    typedMm: "",
+    lastPointerPx: { x: 0, y: 0 },
+    previewRoot: null as THREE.Group | null,
+    previewMesh: null as THREE.Mesh | null,
+    previewOutline: null as THREE.Line | null,
+    previewBackLine: null as THREE.Line | null
   };
 
   const transformState = {
@@ -1103,17 +703,6 @@ type WindowInstance = {
       }
       updateLayoutPanel();
     }
-  };
-
-  type AlignWallLine = "center" | "exterior" | "interior" | "endA" | "endB";
-  type AlignPickedLine = {
-    p: THREE.Vector3;
-    dir: THREE.Vector3;
-    segA: THREE.Vector3;
-    segB: THREE.Vector3;
-    label: string;
-    wallId: string;
-    wallLine: AlignWallLine;
   };
 
   const alignState = {
@@ -1529,16 +1118,6 @@ type WindowInstance = {
     return { d2: dx * dx + dy * dy, t };
   }
 
-  type PickedLine2D = {
-    wallId: string;
-    kind: "center" | "face" | "end";
-    a: THREE.Vector3;
-    b: THREE.Vector3;
-    p: THREE.Vector3; // closest point (for distance between parallels)
-    dir: THREE.Vector3;
-    label: string;
-  };
-
   function pickWallLine2D(raw: THREE.Vector3, rect: DOMRect, camera: THREE.Camera, maxPx = 14): PickedLine2D | null {
     const rawS = worldToScreen(raw, camera, rect);
     let best: { pick: PickedLine2D; d2: number } | null = null;
@@ -1689,162 +1268,6 @@ type WindowInstance = {
     return { outer: out, inner: inn };
   }
 
-  function snapPoint2D(
-    raw: THREE.Vector3,
-    rect: DOMRect,
-    camera: THREE.Camera,
-    maxPx = 14
-  ): { point: THREE.Vector3; kind: "none" | "corner" | "edge" | "endpoint" | "axis" } {
-    const candidates: Array<{ p: THREE.Vector3; kind: "corner" | "edge" | "endpoint" | "axis" }> = [];
-
-    // Wall endpoints
-    for (const w of walls) {
-      const a = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
-      const b = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-      candidates.push({ p: a, kind: "endpoint" });
-      candidates.push({ p: b, kind: "endpoint" });
-
-      // Closest point on wall axis segment
-      const ab = b.clone().sub(a);
-      const t = ab.lengthSq() > 1e-12 ? raw.clone().sub(a).dot(ab) / ab.lengthSq() : 0;
-      const tt = Math.max(0, Math.min(1, t));
-      const closest = a.clone().add(ab.multiplyScalar(tt));
-      candidates.push({ p: closest, kind: "axis" });
-    }
-
-    // Wall outline corners + edges (trimmed)
-    for (const poly of wallSolvedOutlines.values()) {
-      if (poly.length < 2) continue;
-      for (const p of poly) candidates.push({ p: new THREE.Vector3(p.x, 0, p.z), kind: "corner" });
-      for (let i = 0; i < poly.length; i++) {
-        const a = poly[i];
-        const b = poly[(i + 1) % poly.length];
-        const ax = a.x, az = a.z;
-        const bx = b.x, bz = b.z;
-        const vx = bx - ax;
-        const vz = bz - az;
-        const l2 = vx * vx + vz * vz;
-        if (l2 < 1e-12) continue;
-        const rx = raw.x - ax;
-        const rz = raw.z - az;
-        const t = Math.max(0, Math.min(1, (rx * vx + rz * vz) / l2));
-        candidates.push({ p: new THREE.Vector3(ax + vx * t, 0, az + vz * t), kind: "edge" });
-      }
-    }
-
-    // Wall join polys (miter/corner fills): needed so you can snap to true join corners.
-    for (const poly of wallSolvedJoinPolys) {
-      if (poly.length < 2) continue;
-      for (const p of poly) candidates.push({ p: new THREE.Vector3(p.x, 0, p.z), kind: "corner" });
-      for (let i = 0; i < poly.length; i++) {
-        const a = poly[i];
-        const b = poly[(i + 1) % poly.length];
-        const ax = a.x, az = a.z;
-        const bx = b.x, bz = b.z;
-        const vx = bx - ax;
-        const vz = bz - az;
-        const l2 = vx * vx + vz * vz;
-        if (l2 < 1e-12) continue;
-        const rx = raw.x - ax;
-        const rz = raw.z - az;
-        const t = Math.max(0, Math.min(1, (rx * vx + rz * vz) / l2));
-        candidates.push({ p: new THREE.Vector3(ax + vx * t, 0, az + vz * t), kind: "edge" });
-      }
-    }
-
-    // Union polygon (trimmed result): includes concave "inner" corners between two walls.
-    if (wallUnionPolys) {
-      for (const poly of wallUnionPolys as any[]) {
-        const rings = poly as any[];
-        for (const ring of rings) {
-          const pts = ring as Array<[number, number]>;
-          if (!pts || pts.length < 2) continue;
-          const n = pts.length;
-          // corners (skip last duplicate point)
-          for (let i = 0; i < n - 1; i++) {
-            const [x, y] = pts[i];
-            candidates.push({ p: new THREE.Vector3(x, 0, y), kind: "corner" });
-          }
-          // edges
-          for (let i = 0; i < n - 1; i++) {
-            const [ax, az] = pts[i];
-            const [bx, bz] = pts[i + 1];
-            const vx = bx - ax;
-            const vz = bz - az;
-            const l2 = vx * vx + vz * vz;
-            if (l2 < 1e-12) continue;
-            const rx = raw.x - ax;
-            const rz = raw.z - az;
-            const t = Math.max(0, Math.min(1, (rx * vx + rz * vz) / l2));
-            candidates.push({ p: new THREE.Vector3(ax + vx * t, 0, az + vz * t), kind: "edge" });
-          }
-        }
-      }
-    }
-
-    // Module box corners
-    for (const inst of instances) {
-      const box = instanceWorldBox(inst);
-      const y = 0;
-      candidates.push({ p: new THREE.Vector3(box.min.x, y, box.min.z), kind: "corner" });
-      candidates.push({ p: new THREE.Vector3(box.min.x, y, box.max.z), kind: "corner" });
-      candidates.push({ p: new THREE.Vector3(box.max.x, y, box.min.z), kind: "corner" });
-      candidates.push({ p: new THREE.Vector3(box.max.x, y, box.max.z), kind: "corner" });
-    }
-
-    // Floor boundary corners + edges
-    for (const floor of floors) {
-      const boundary = floor.params.boundary;
-      if (boundary.length < 2) continue;
-      for (const p of boundary) candidates.push({ p: new THREE.Vector3(p.x / 1000, 0, p.z / 1000), kind: "corner" });
-      for (let i = 0; i < boundary.length; i++) {
-        const a = boundary[i];
-        const b = boundary[(i + 1) % boundary.length];
-        const ax = a.x / 1000, az = a.z / 1000;
-        const bx = b.x / 1000, bz = b.z / 1000;
-        const vx = bx - ax;
-        const vz = bz - az;
-        const l2 = vx * vx + vz * vz;
-        if (l2 < 1e-12) continue;
-        const rx = raw.x - ax;
-        const rz = raw.z - az;
-        const t = Math.max(0, Math.min(1, (rx * vx + rz * vz) / l2));
-        candidates.push({ p: new THREE.Vector3(ax + vx * t, 0, az + vz * t), kind: "edge" });
-      }
-    }
-
-    // Chain start (to close loop)
-    if (layoutTool === "wall" && wallDraw.chainStart) {
-      candidates.push({ p: wallDraw.chainStart.clone(), kind: "endpoint" });
-    }
-
-    const rawS = worldToScreen(raw, camera, rect);
-    const bestByKind = new Map<"endpoint" | "corner" | "edge" | "axis", { p: THREE.Vector3; d2: number }>();
-    for (const c of candidates) {
-      const s = worldToScreen(c.p, camera, rect);
-      const d = dist2(rawS, s);
-      const prev = bestByKind.get(c.kind);
-      if (!prev || d < prev.d2) bestByKind.set(c.kind, { p: c.p, d2: d });
-    }
-
-    const maxD2 = maxPx * maxPx;
-    // Priority: corners/endpoints must always beat edges when both are in range.
-    const pick = (k: "endpoint" | "corner" | "edge" | "axis") => {
-      const v = bestByKind.get(k);
-      if (!v) return null;
-      if (v.d2 > maxD2) return null;
-      return { point: v.p.clone(), kind: k as any };
-    };
-
-    return (
-      pick("endpoint") ??
-      pick("corner") ??
-      pick("edge") ??
-      pick("axis") ??
-      { point: raw, kind: "none" }
-    );
-  }
-
   function updateWallMesh(
     mesh: THREE.Mesh,
     a: THREE.Vector3 | null,
@@ -1880,6 +1303,11 @@ type WindowInstance = {
     for (const m of wallJoinMeshes.splice(0, wallJoinMeshes.length)) {
       wallPlanGroup.remove(m);
       m.geometry.dispose();
+      if (Array.isArray(m.material)) {
+        for (const material of m.material) material.dispose();
+      } else {
+        m.material.dispose();
+      }
     }
 
     if (walls.length === 0) return;
@@ -1946,6 +1374,55 @@ type WindowInstance = {
         new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
       );
     };
+
+    const makePlanFillMesh = (rings: Array<Array<[number, number]>>, y = 0.01) => {
+      if (!rings || rings.length === 0) return null;
+
+      const toVec2Ring = (ring: Array<[number, number]>) => {
+        const pts = ring.length > 1 ? ring.slice(0, -1) : ring;
+        return pts.map(([x, z]) => new THREE.Vector2(x, z));
+      };
+
+      const outer = toVec2Ring(rings[0]);
+      if (outer.length < 3) return null;
+
+      const shape = new THREE.Shape(outer);
+      for (const holeRing of rings.slice(1)) {
+        const hole = toVec2Ring(holeRing);
+        if (hole.length < 3) continue;
+        shape.holes.push(new THREE.Path(hole));
+      }
+
+      const geom = new THREE.ShapeGeometry(shape);
+      const mesh = new THREE.Mesh(
+        geom,
+        new THREE.MeshBasicMaterial({
+          color: 0xb8c0cb,
+          transparent: false,
+          opacity: 1,
+          depthTest: false,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        })
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = y;
+      mesh.renderOrder = 6;
+      return mesh;
+    };
+
+    const fallbackFillSource = [
+      ...solved.walls.filter((w) => w.outline.length >= 3).map((w) => [toRing(w.outline)]),
+      ...solved.joinPolys.filter((p) => p.length >= 3).map((p) => [toRing(p)])
+    ];
+    const fillSource = merged && merged.length > 0 ? (merged as Array<Array<Array<[number, number]>>>) : fallbackFillSource;
+    for (const rings of fillSource) {
+      const mesh = makePlanFillMesh(rings);
+      if (!mesh) continue;
+      mesh.name = "wallPlanFill";
+      wallJoinMeshes.push(mesh);
+      wallPlanGroup.add(mesh);
+    }
 
     for (const solvedWall of solved.walls) {
       const line = makePlanPolyline(solvedWall.outline, 0x4f4f4f);
@@ -2338,6 +1815,869 @@ type WindowInstance = {
     }
   }
 
+  const cloneKitchenWorktopParams = (params: KitchenWorktopParams): KitchenWorktopParams => ({
+    path: params.path.map((point) => ({ x: point.x, z: point.z })),
+    justification: params.justification,
+    mirrored: !!params.mirrored,
+    depthMm: params.depthMm,
+    thicknessMm: params.thicknessMm,
+    heightMm: params.heightMm,
+    overhangSideMm: params.overhangSideMm,
+    materialId: params.materialId
+  });
+
+  const sanitizeKitchenWorktopPath = (points: FloorBoundaryPoint[]) => {
+    const roundedPoints: FloorBoundaryPoint[] = [];
+    for (const point of points) {
+      const rounded = { x: Math.round(point.x), z: Math.round(point.z) };
+      const prev = roundedPoints[roundedPoints.length - 1];
+      if (prev && Math.hypot(rounded.x - prev.x, rounded.z - prev.z) < 1) continue;
+      roundedPoints.push(rounded);
+    }
+
+    if (roundedPoints.length <= 2) return roundedPoints;
+
+    const simplified: FloorBoundaryPoint[] = [roundedPoints[0]!];
+    for (let index = 1; index < roundedPoints.length - 1; index += 1) {
+      const a = simplified[simplified.length - 1]!;
+      const b = roundedPoints[index]!;
+      const c = roundedPoints[index + 1]!;
+      const abx = b.x - a.x;
+      const abz = b.z - a.z;
+      const bcx = c.x - b.x;
+      const bcz = c.z - b.z;
+      const cross = abx * bcz - abz * bcx;
+      if (Math.abs(cross) < 1) continue;
+      simplified.push(b);
+    }
+    simplified.push(roundedPoints[roundedPoints.length - 1]!);
+    return simplified;
+  };
+
+  const kitchenWorktopPointToWorld = (point: FloorBoundaryPoint) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
+
+  const makeKitchenWorktopMaterial = (materialId: string, opts?: { preview?: boolean }) => {
+    const preview = getMaterialDefinitionById(materialId)?.preview;
+    return new THREE.MeshStandardMaterial({
+      color: preview?.colorHex ?? "#b08e6d",
+      roughness: preview?.roughness ?? 0.78,
+      metalness: preview?.metalness ?? 0.02,
+      side: THREE.DoubleSide,
+      transparent: !!opts?.preview,
+      opacity: opts?.preview ? 0.52 : 1
+    });
+  };
+
+  const kitchenWorktopOutlineColor = (materialId: string) => {
+    const color = new THREE.Color(getMaterialDefinitionById(materialId)?.preview.colorHex ?? "#b08e6d");
+    return color.offsetHSL(0, 0, -0.24).getHex();
+  };
+
+  const lineIntersectionXZPoints = (
+    a1: THREE.Vector3,
+    a2: THREE.Vector3,
+    b1: THREE.Vector3,
+    b2: THREE.Vector3
+  ) => {
+    const x1 = a1.x;
+    const z1 = a1.z;
+    const x2 = a2.x;
+    const z2 = a2.z;
+    const x3 = b1.x;
+    const z3 = b1.z;
+    const x4 = b2.x;
+    const z4 = b2.z;
+    const det = (x1 - x2) * (z3 - z4) - (z1 - z2) * (x3 - x4);
+    if (Math.abs(det) < 1e-8) return null;
+    const aDet = x1 * z2 - z1 * x2;
+    const bDet = x3 * z4 - z3 * x4;
+    const x = (aDet * (x3 - x4) - (x1 - x2) * bDet) / det;
+    const z = (aDet * (z3 - z4) - (z1 - z2) * bDet) / det;
+    return new THREE.Vector3(x, 0, z);
+  };
+
+  const offsetKitchenWorktopPath = (path: THREE.Vector3[], signedOffsetM: number) => {
+    if (path.length <= 1 || Math.abs(signedOffsetM) < 1e-8) return path.map((point) => point.clone());
+
+    const segments = path
+      .slice(0, -1)
+      .map((point, index) => {
+        const next = path[index + 1]!;
+        const dir = next.clone().sub(point);
+        dir.y = 0;
+        if (dir.lengthSq() < 1e-10) return null;
+        dir.normalize();
+        return {
+          a: point.clone(),
+          b: next.clone(),
+          normal: new THREE.Vector3(-dir.z, 0, dir.x)
+        };
+      })
+      .filter((segment): segment is { a: THREE.Vector3; b: THREE.Vector3; normal: THREE.Vector3 } => !!segment);
+
+    if (segments.length === 0) return path.map((point) => point.clone());
+
+    const pts: THREE.Vector3[] = [];
+    pts.push(segments[0]!.a.clone().addScaledVector(segments[0]!.normal, signedOffsetM));
+
+    for (let index = 1; index < path.length - 1; index += 1) {
+      const prev = segments[index - 1]!;
+      const next = segments[index]!;
+      const prevA = prev.a.clone().addScaledVector(prev.normal, signedOffsetM);
+      const prevB = prev.b.clone().addScaledVector(prev.normal, signedOffsetM);
+      const nextA = next.a.clone().addScaledVector(next.normal, signedOffsetM);
+      const nextB = next.b.clone().addScaledVector(next.normal, signedOffsetM);
+      const intersection = lineIntersectionXZPoints(prevA, prevB, nextA, nextB);
+      if (intersection) {
+        pts.push(intersection);
+        continue;
+      }
+      const averagedNormal = prev.normal.clone().add(next.normal);
+      if (averagedNormal.lengthSq() < 1e-10) averagedNormal.copy(prev.normal);
+      else averagedNormal.normalize();
+      pts.push(path[index]!.clone().addScaledVector(averagedNormal, signedOffsetM));
+    }
+
+    const last = segments[segments.length - 1]!;
+    pts.push(last.b.clone().addScaledVector(last.normal, signedOffsetM));
+    return pts;
+  };
+
+  const getKitchenWorktopPolygon = (params: KitchenWorktopParams) => {
+    const path = sanitizeKitchenWorktopPath(params.path);
+    if (path.length < 2) return [] as THREE.Vector3[];
+
+    const depthM = Math.max(1, params.depthMm) / 1000;
+    const pathWorld = path.map(kitchenWorktopPointToWorld);
+    if (pathWorld.length < 2) return [] as THREE.Vector3[];
+
+    let leftDepthM = depthM / 2;
+    let rightDepthM = depthM / 2;
+    if (params.justification === "back") {
+      leftDepthM = depthM;
+      rightDepthM = 0;
+    } else if (params.justification === "front") {
+      leftDepthM = 0;
+      rightDepthM = depthM;
+    }
+    if (params.mirrored) {
+      const nextLeftDepthM = rightDepthM;
+      rightDepthM = leftDepthM;
+      leftDepthM = nextLeftDepthM;
+    }
+
+    const left = offsetKitchenWorktopPath(pathWorld, leftDepthM);
+    const right = offsetKitchenWorktopPath(pathWorld, -rightDepthM);
+    const polygon = [...left, ...right.reverse()];
+    if (polygon.length < 4) return [] as THREE.Vector3[];
+
+    let area = 0;
+    for (let index = 0; index < polygon.length; index += 1) {
+      const current = polygon[index]!;
+      const next = polygon[(index + 1) % polygon.length]!;
+      area += current.x * next.z - next.x * current.z;
+    }
+    if (area < 0) polygon.reverse();
+    return polygon;
+  };
+
+  const getKitchenWorktopBackGuidePath = (
+    params: KitchenWorktopParams,
+    backOffsetMm = S.kitchenCtx.worktopBackOffsetMm
+  ) => {
+    const path = sanitizeKitchenWorktopPath(params.path);
+    if (path.length < 2) return [] as THREE.Vector3[];
+
+    const pathWorld = path.map(kitchenWorktopPointToWorld);
+    if (pathWorld.length < 2) return [] as THREE.Vector3[];
+
+    let pathOffsetM = Math.max(0, backOffsetMm) / 1000;
+    if (params.justification === "center") pathOffsetM -= Math.max(1, params.depthMm) / 2000;
+    else if (params.justification === "front") pathOffsetM -= Math.max(1, params.depthMm) / 1000;
+    if (params.mirrored) pathOffsetM *= -1;
+
+    return offsetKitchenWorktopPath(pathWorld, pathOffsetM);
+  };
+
+  const makeKitchenWorktopGeometry = (params: KitchenWorktopParams) => {
+    const polygon = getKitchenWorktopPolygon(params);
+    if (polygon.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
+    const shape = new THREE.Shape(polygon.map((point) => new THREE.Vector2(point.x, point.z)));
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: Math.max(1, params.thicknessMm) / 1000,
+      bevelEnabled: false
+    });
+    geometry.rotateX(Math.PI / 2);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  };
+
+  const makeKitchenWorktopOutlineGeometry = (params: KitchenWorktopParams) => {
+    const polygon = getKitchenWorktopPolygon(params);
+    if (polygon.length === 0) {
+      return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    }
+    const points = polygon.map((point) => new THREE.Vector3(point.x, 0.012, point.z));
+    points.push(points[0]!.clone());
+    return new THREE.BufferGeometry().setFromPoints(points);
+  };
+
+  const makeKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) => {
+    const guide = getKitchenWorktopBackGuidePath(params);
+    if (guide.length < 2) {
+      return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    }
+    return new THREE.BufferGeometry().setFromPoints(guide.map((point) => new THREE.Vector3(point.x, 0.018, point.z)));
+  };
+
+  function rebuildKitchenWorktop(inst: KitchenWorktopInstance) {
+    inst.params = cloneKitchenWorktopParams(inst.params);
+    inst.params.path = sanitizeKitchenWorktopPath(inst.params.path);
+    inst.params.depthMm = Math.max(1, Math.round(inst.params.depthMm));
+    inst.params.thicknessMm = Math.max(1, Math.round(inst.params.thicknessMm));
+    inst.params.heightMm = Math.round(inst.params.heightMm);
+    inst.params.overhangSideMm = Math.max(0, Math.round(inst.params.overhangSideMm));
+
+    inst.mesh.geometry.dispose();
+    inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params);
+    const prevMaterial = inst.mesh.material as THREE.Material;
+    inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId);
+    prevMaterial.dispose();
+    inst.mesh.position.y = inst.params.heightMm / 1000;
+    inst.mesh.castShadow = true;
+    inst.mesh.receiveShadow = true;
+    inst.mesh.visible = true;
+    inst.root.visible = true;
+
+    inst.outline.geometry.dispose();
+    inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params);
+    const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
+    outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId));
+    inst.outline.position.set(0, inst.params.heightMm / 1000 + 0.0015, 0);
+    inst.outline.visible = viewMode === "2d";
+    const meshMaterial = inst.mesh.material as THREE.MeshStandardMaterial;
+    meshMaterial.transparent = viewMode === "2d";
+    meshMaterial.opacity = viewMode === "2d" ? 0.35 : 1;
+    meshMaterial.depthWrite = viewMode !== "2d";
+    inst.root.updateMatrixWorld(true);
+  }
+
+  function createKitchenWorktop(
+    params: KitchenWorktopParams,
+    kitchenGroupId: string,
+    opts?: { id?: string; skipHistory?: boolean }
+  ) {
+    const id = opts?.id ?? `wt${worktopCounter++}`;
+    if (opts?.id) {
+      const match = /^wt(\d+)$/.exec(id);
+      if (match) worktopCounter = Math.max(worktopCounter, Number(match[1]) + 1);
+    }
+
+    const root = new THREE.Group();
+    root.name = `kitchenWorktopRoot_${id}`;
+    root.userData.kind = "kitchenWorktop";
+    root.userData.worktopId = id;
+    root.userData.kitchenGroupId = kitchenGroupId;
+
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId));
+    mesh.name = `kitchenWorktopMesh_${id}`;
+    mesh.renderOrder = 16;
+    mesh.frustumCulled = false;
+    mesh.userData.kind = "kitchenWorktop";
+    mesh.userData.worktopId = id;
+    mesh.userData.kitchenGroupId = kitchenGroupId;
+    root.add(mesh);
+
+    const outline = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({
+        color: kitchenWorktopOutlineColor(params.materialId),
+        transparent: true,
+        opacity: 0.92,
+        depthTest: false,
+        depthWrite: false
+      })
+    );
+    outline.name = `kitchenWorktopOutline_${id}`;
+    outline.renderOrder = 60;
+    outline.frustumCulled = false;
+    outline.userData.kind = "kitchenWorktopOutline";
+    outline.userData.worktopId = id;
+    outline.userData.kitchenGroupId = kitchenGroupId;
+    root.add(outline);
+
+    const inst: KitchenWorktopInstance = {
+      id,
+      kitchenGroupId,
+      params: cloneKitchenWorktopParams(params),
+      root,
+      mesh,
+      outline
+    };
+
+    layoutRoot.add(root);
+    kitchenWorktops.push(inst);
+    S.worktopCounter = worktopCounter;
+    rebuildKitchenWorktop(inst);
+    if (!opts?.skipHistory) commitHistory(S);
+    return inst;
+  }
+
+  function removeKitchenWorktop(id: string, opts?: { skipHistory?: boolean }) {
+    const index = kitchenWorktops.findIndex((worktop) => worktop.id === id);
+    if (index < 0) return;
+    const worktop = kitchenWorktops[index]!;
+    layoutRoot.remove(worktop.root);
+    disposeObject3D(worktop.root);
+    kitchenWorktops.splice(index, 1);
+    if (!opts?.skipHistory) commitHistory(S);
+  }
+
+  function restoreKitchenWorktopsFromSnapshot(
+    nextWorktops: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>,
+    nextCounter?: number
+  ) {
+    for (const worktop of kitchenWorktops.splice(0, kitchenWorktops.length)) {
+      layoutRoot.remove(worktop.root);
+      disposeObject3D(worktop.root);
+    }
+    worktopCounter = nextCounter ?? 1;
+    S.worktopCounter = worktopCounter;
+    for (const worktop of nextWorktops) {
+      createKitchenWorktop(cloneKitchenWorktopParams(worktop.params), worktop.kitchenGroupId, {
+        id: worktop.id,
+        skipHistory: true
+      });
+    }
+  }
+
+  const makeKitchenWorktopParamsFromPath = (path: FloorBoundaryPoint[]): KitchenWorktopParams => ({
+    path: sanitizeKitchenWorktopPath(path),
+    justification: kitchenWorktopDraw.justification,
+    mirrored: kitchenWorktopDraw.mirrored,
+    depthMm: S.kitchenCtx.worktopDepthMm,
+    thicknessMm: S.kitchenCtx.worktopThicknessMm,
+    heightMm: S.kitchenCtx.heightMm,
+    overhangSideMm: S.kitchenCtx.worktopOverhangSideMm,
+    materialId: S.kitchenCtx.worktopMaterialId
+  });
+
+  const updateKitchenWorktopPreview = () => {
+    if (!kitchenWorktopDraw.active || kitchenWorktopDraw.points.length === 0) return;
+
+    const hoverPoint =
+      kitchenWorktopDraw.hoverPoint &&
+      Math.hypot(
+        kitchenWorktopDraw.hoverPoint.x - (kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1]?.x ?? 0),
+        kitchenWorktopDraw.hoverPoint.z - (kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1]?.z ?? 0)
+      ) >= 1
+        ? kitchenWorktopDraw.hoverPoint
+        : null;
+    const previewPath =
+      hoverPoint
+        ? [...kitchenWorktopDraw.points, hoverPoint]
+        : [...kitchenWorktopDraw.points];
+    const params = makeKitchenWorktopParamsFromPath(previewPath);
+    if (params.path.length < 2) return;
+
+    if (!kitchenWorktopDraw.previewRoot || !kitchenWorktopDraw.previewMesh || !kitchenWorktopDraw.previewOutline || !kitchenWorktopDraw.previewBackLine) {
+      const root = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId, { preview: true }));
+      mesh.frustumCulled = false;
+      const outline = new THREE.Line(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({
+          color: kitchenWorktopOutlineColor(params.materialId),
+          transparent: true,
+          opacity: 0.98,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+      outline.frustumCulled = false;
+      const backLine = new THREE.Line(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({
+          color: 0x00c2ff,
+          transparent: true,
+          opacity: 0.98,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+      backLine.frustumCulled = false;
+      backLine.renderOrder = 61;
+      root.name = "kitchenWorktopPreview";
+      root.add(mesh);
+      root.add(outline);
+      root.add(backLine);
+      kitchenWorktopDraw.previewRoot = root;
+      kitchenWorktopDraw.previewMesh = mesh;
+      kitchenWorktopDraw.previewOutline = outline;
+      kitchenWorktopDraw.previewBackLine = backLine;
+      layoutRoot.add(root);
+    }
+
+    kitchenWorktopDraw.previewMesh.geometry.dispose();
+    kitchenWorktopDraw.previewMesh.geometry = makeKitchenWorktopGeometry(params);
+    const previewMaterial = kitchenWorktopDraw.previewMesh.material as THREE.Material;
+    kitchenWorktopDraw.previewMesh.material = makeKitchenWorktopMaterial(params.materialId, { preview: true });
+    previewMaterial.dispose();
+    kitchenWorktopDraw.previewMesh.position.y = params.heightMm / 1000;
+    kitchenWorktopDraw.previewMesh.visible = true;
+
+    kitchenWorktopDraw.previewOutline.geometry.dispose();
+    kitchenWorktopDraw.previewOutline.geometry = makeKitchenWorktopOutlineGeometry(params);
+    kitchenWorktopDraw.previewOutline.position.set(0, params.heightMm / 1000 + 0.0015, 0);
+    (kitchenWorktopDraw.previewOutline.material as THREE.LineBasicMaterial).color.setHex(kitchenWorktopOutlineColor(params.materialId));
+    kitchenWorktopDraw.previewOutline.visible = true;
+
+    kitchenWorktopDraw.previewBackLine.geometry.dispose();
+    kitchenWorktopDraw.previewBackLine.geometry = makeKitchenWorktopBackGuideGeometry(params);
+    kitchenWorktopDraw.previewBackLine.position.set(0, params.heightMm / 1000 + 0.0015, 0);
+    kitchenWorktopDraw.previewBackLine.visible = true;
+
+    kitchenWorktopDraw.previewRoot.visible = true;
+    kitchenWorktopDraw.previewRoot.updateMatrixWorld(true);
+  };
+
+  const cancelKitchenWorktopDraw = (opts?: { silent?: boolean }) => {
+    kitchenWorktopDraw.active = false;
+    kitchenWorktopDraw.mirrored = false;
+    worktopDrawSnap = null;
+    kitchenWorktopDraw.points = [];
+    kitchenWorktopDraw.hoverPoint = null;
+    kitchenWorktopDraw.typedMm = "";
+    if (kitchenWorktopDraw.previewRoot) {
+      layoutRoot.remove(kitchenWorktopDraw.previewRoot);
+      disposeObject3D(kitchenWorktopDraw.previewRoot);
+      kitchenWorktopDraw.previewRoot = null;
+      kitchenWorktopDraw.previewMesh = null;
+      kitchenWorktopDraw.previewOutline = null;
+      kitchenWorktopDraw.previewBackLine = null;
+    }
+    hideHoverCursor();
+    showWallSnapMarkersFor(selectedKind === "wall" ? selectedWallId : null);
+    wallTypedHud.textContent = "";
+    wallTypedHud.style.display = "none";
+    if (!opts?.silent) {
+      setUnderlayStatus("");
+      mountProps();
+    }
+  };
+
+  const getKitchenGroupWorktops = (groupId: string) =>
+    kitchenWorktops
+      .filter((worktop) => worktop.kitchenGroupId === groupId)
+      .map((worktop) => ({ id: worktop.id, params: cloneKitchenWorktopParams(worktop.params) }));
+
+  const replaceKitchenGroupWorktops = (
+    groupId: string,
+    nextWorktops: Array<{ id: string; params: KitchenWorktopParams }>,
+    opts?: { skipHistory?: boolean }
+  ) => {
+    for (let index = kitchenWorktops.length - 1; index >= 0; index -= 1) {
+      const worktop = kitchenWorktops[index]!;
+      if (worktop.kitchenGroupId !== groupId) continue;
+      removeKitchenWorktop(worktop.id, { skipHistory: true });
+    }
+    for (const worktop of nextWorktops) {
+      createKitchenWorktop(cloneKitchenWorktopParams(worktop.params), groupId, {
+        id: worktop.id,
+        skipHistory: true
+      });
+    }
+    if (!opts?.skipHistory) commitHistory(S);
+  };
+
+  const rebuildKitchenGroupWorktops = (groupId: string, ctx = S.kitchenCtx) => {
+    for (const worktop of kitchenWorktops) {
+      if (worktop.kitchenGroupId !== groupId) continue;
+      worktop.params.depthMm = ctx.worktopDepthMm;
+      worktop.params.thicknessMm = ctx.worktopThicknessMm;
+      worktop.params.heightMm = ctx.heightMm;
+      worktop.params.overhangSideMm = ctx.worktopOverhangSideMm;
+      worktop.params.materialId = ctx.worktopMaterialId;
+      rebuildKitchenWorktop(worktop);
+    }
+  };
+
+  const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const kitchenBackAnchorName = "__kitchen_back_anchor";
+  const kitchenAnchorMaxDistanceM = 0.18;
+  const kitchenAnchorMaxAngleDeltaRad = Math.PI / 3;
+
+  const normalizeAngleRad = (angle: number) => {
+    let next = angle;
+    while (next <= -Math.PI) next += Math.PI * 2;
+    while (next > Math.PI) next -= Math.PI * 2;
+    return next;
+  };
+
+  const getModuleLocalBackCenter = (inst: LayoutInstance) => {
+    inst.root.updateMatrixWorld(true);
+    const anchor = inst.module.getObjectByName(kitchenBackAnchorName);
+    if (anchor) {
+      const world = new THREE.Vector3();
+      anchor.getWorldPosition(world);
+      return inst.root.worldToLocal(world.clone());
+    }
+    return new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.min.z);
+  };
+
+  const snapPoint2D = createPlanSnapper({
+    getWalls: () => walls,
+    getInstances: () => instances,
+    getFloors: () => floors,
+    getKitchenWorktops: () => kitchenWorktops,
+    getWallSolvedOutlines: () => wallSolvedOutlines,
+    getWallSolvedJoinPolys: () => wallSolvedJoinPolys,
+    getWallUnionPolys: () => wallUnionPolys,
+    getLayoutTool: () => layoutTool,
+    getWallChainStart: () => wallDraw.chainStart,
+    getModuleLocalBackCenter,
+    getKitchenWorktopPolygon
+  });
+
+  const getKitchenGuideSegmentInfo = (
+    worktop: KitchenWorktopInstance,
+    segmentIndex: number,
+    backOffsetMm: number
+  ) => {
+    const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+    if (guidePath.length < 2) return null;
+    const safeIndex = clampNumber(segmentIndex, 0, guidePath.length - 2);
+    const start = guidePath[safeIndex]!;
+    const end = guidePath[safeIndex + 1]!;
+    const segment = end.clone().sub(start);
+    segment.y = 0;
+    const length = segment.length();
+    if (length < 1e-6) return null;
+    const dir = segment.clone().multiplyScalar(1 / length);
+    const frontNormal = new THREE.Vector3(-dir.z, 0, dir.x);
+    if (worktop.params.mirrored) frontNormal.multiplyScalar(-1);
+    const rotationY = Math.atan2(frontNormal.x, frontNormal.z);
+    return { start, end, dir, length, frontNormal, rotationY };
+  };
+
+  const inferKitchenPlacementBinding = (
+    inst: LayoutInstance,
+    groupId: string,
+    backOffsetMm: number
+  ): KitchenPlacementBinding | null => {
+    const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
+    if (groupWorktops.length === 0) return null;
+
+    const localBackCenter = getModuleLocalBackCenter(inst);
+    const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
+    let best:
+      | {
+          binding: KitchenPlacementBinding;
+          distanceSq: number;
+          angleDelta: number;
+        }
+      | null = null;
+
+    for (const worktop of groupWorktops) {
+      for (let segmentIndex = 0; segmentIndex < getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm).length - 1; segmentIndex += 1) {
+        const info = getKitchenGuideSegmentInfo(worktop, segmentIndex, backOffsetMm);
+        if (!info) continue;
+        const cursorOffset = worldBackCenter.clone().sub(info.start);
+        const projected = clampNumber(cursorOffset.dot(info.dir), 0, info.length);
+        const closestOnGuide = info.start.clone().addScaledVector(info.dir, projected);
+        const distanceSq = closestOnGuide.distanceToSquared(worldBackCenter);
+        const angleDelta = Math.abs(normalizeAngleRad(info.rotationY - inst.root.rotation.y));
+
+        if (
+          !best ||
+          distanceSq < best.distanceSq - 1e-9 ||
+          (Math.abs(distanceSq - best.distanceSq) < 1e-9 && angleDelta < best.angleDelta)
+        ) {
+          best = {
+            binding: {
+              worktopId: worktop.id,
+              segmentIndex,
+              offsetAlongM: projected
+            },
+            distanceSq,
+            angleDelta
+          };
+        }
+      }
+    }
+
+    if (!best) return null;
+    if (Math.sqrt(best.distanceSq) > kitchenAnchorMaxDistanceM) return null;
+    if (best.angleDelta > kitchenAnchorMaxAngleDeltaRad) return null;
+    return best.binding;
+  };
+
+  const applyKitchenPlacementBinding = (
+    inst: LayoutInstance,
+    binding: KitchenPlacementBinding,
+    backOffsetMm: number
+  ) => {
+    const worktop = kitchenWorktops.find((item) => item.id === binding.worktopId);
+    if (!worktop) return false;
+
+    const info = getKitchenGuideSegmentInfo(worktop, binding.segmentIndex, backOffsetMm);
+    if (!info) return false;
+
+    const localBackCenter = getModuleLocalBackCenter(inst);
+    const halfModuleWidthM = Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
+    const usableLength = info.length - halfModuleWidthM * 2;
+    const clampedAlong =
+      usableLength >= 0
+        ? clampNumber(binding.offsetAlongM, halfModuleWidthM, info.length - halfModuleWidthM)
+        : info.length * 0.5;
+    const backCenter = info.start.clone().addScaledVector(info.dir, clampedAlong);
+    const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, info.rotationY, 0));
+
+    inst.root.rotation.y = info.rotationY;
+    inst.root.position.copy(backCenter.clone().sub(rotatedBackCenter));
+    inst.root.position.y = 0;
+    inst.root.updateMatrixWorld(true);
+    inst.kitchenPlacement = {
+      worktopId: binding.worktopId,
+      segmentIndex: binding.segmentIndex,
+      offsetAlongM: clampedAlong
+    };
+    return true;
+  };
+
+  const rebuildKitchenGroupLayout = (
+    groupId: string,
+    nextCtx: ReturnType<typeof resolveContext>,
+    prevCtx: ReturnType<typeof resolveContext> = nextCtx
+  ) => {
+    const bindings = new Map<string, KitchenPlacementBinding>();
+
+    for (const inst of instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      const binding = inst.kitchenPlacement ?? inferKitchenPlacementBinding(inst, groupId, prevCtx.worktopBackOffsetMm);
+      if (!binding) continue;
+      bindings.set(inst.id, { ...binding });
+      inst.kitchenPlacement = { ...binding };
+    }
+
+    for (const inst of instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      applyKitchenContextToModuleParams(inst.params, nextCtx);
+      rebuildInstance(inst, { skipLayoutValidation: true, preserveBackAnchor: true });
+    }
+
+    rebuildKitchenGroupWorktops(groupId, nextCtx);
+
+    for (const inst of instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      const binding = bindings.get(inst.id) ?? inst.kitchenPlacement;
+      if (binding && applyKitchenPlacementBinding(inst, binding, nextCtx.worktopBackOffsetMm)) continue;
+      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, nextCtx.worktopBackOffsetMm);
+    }
+
+    updateLayoutPanel();
+  };
+
+  const getKitchenPlacementConstraint = (ghost: LayoutInstance, cursorWorld: THREE.Vector3) => {
+    if (!S.kitchenEditMode || !S.activeKitchenGroupId) return null;
+
+    const activeWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === S.activeKitchenGroupId);
+    if (activeWorktops.length === 0) return null;
+    const activeGroup = S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId) ?? null;
+    const backOffsetMm = activeGroup?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+
+    const localBackCenter = getModuleLocalBackCenter(ghost);
+    const halfModuleWidthM = Math.max(0.001, (ghost.localBox.max.x - ghost.localBox.min.x) * 0.5);
+
+    let best:
+      | {
+          binding: KitchenPlacementBinding;
+          position: THREE.Vector3;
+          rotationY: number;
+          valid: boolean;
+          distance: number;
+        }
+      | null = null;
+
+    for (const worktop of activeWorktops) {
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+      if (guidePath.length < 2) continue;
+
+      for (let index = 0; index < guidePath.length - 1; index += 1) {
+        const info = getKitchenGuideSegmentInfo(worktop, index, backOffsetMm);
+        if (!info) continue;
+        const usableLength = info.length - halfModuleWidthM * 2;
+        const guideStart = info.start;
+        const cursorOffset = cursorWorld.clone().sub(guideStart);
+        const projected = cursorOffset.dot(info.dir);
+        const closestOnGuide = guideStart.clone().addScaledVector(info.dir, clampNumber(projected, 0, info.length));
+        const backCenterDistance = closestOnGuide.distanceToSquared(cursorWorld);
+        const clampedAlongGuide =
+          usableLength >= 0
+            ? clampNumber(projected, halfModuleWidthM, info.length - halfModuleWidthM)
+            : info.length * 0.5;
+        const backCenter = guideStart.clone().addScaledVector(info.dir, clampedAlongGuide);
+        const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, info.rotationY, 0));
+        const position = backCenter.clone().sub(rotatedBackCenter);
+        position.y = 0;
+
+        if (!best || backCenterDistance < best.distance) {
+          best = {
+            binding: {
+              worktopId: worktop.id,
+              segmentIndex: index,
+              offsetAlongM: clampedAlongGuide
+            },
+            position,
+            rotationY: info.rotationY,
+            valid: usableLength >= -1e-6,
+            distance: backCenterDistance
+          };
+        }
+      }
+    }
+
+    if (!best) return null;
+    return {
+      kitchenPlacement: best.binding,
+      position: best.position,
+      rotationY: best.rotationY,
+      valid: best.valid,
+      enforceRoomBounds: false,
+      enforceWallOverlap: false,
+      statusText: best.valid
+        ? "Placement: modul sa hýbe po back línii pod pracovnou doskou."
+        : "Placement: modul je príliš široký pre zvolený úsek pracovnej dosky."
+    };
+  };
+
+  const startKitchenWorktopDraw = () => {
+    if (!S.kitchenEditMode || !S.activeKitchenGroupId) return;
+    cancelKitchenWorktopDraw({ silent: true });
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    if (viewMode !== "2d") {
+      view2d.checked = true;
+      setView2d(true);
+    } else {
+      view2d.checked = true;
+    }
+    kitchenWorktopDraw.active = true;
+    kitchenWorktopDraw.mirrored = false;
+    worktopDrawSnap = null;
+    selectedKind = null;
+    selectedWallId = null;
+    selectedFloorId = null;
+    selectedDimensionId = null;
+    selectedInstanceId = null;
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    syncSelectionState();
+    updateSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    setUnderlayStatus("Pracovná doska: klikaj body tvaru. Píš mm + Enter pre dĺžku segmentu. Esc = potvrdiť hotový tvar.");
+    mountProps();
+  };
+
+  const appendKitchenWorktopPoint = (point: FloorBoundaryPoint) => {
+    const prev = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1] ?? null;
+    if (prev && Math.hypot(point.x - prev.x, point.z - prev.z) < 5) return false;
+
+    if (kitchenWorktopDraw.points.length === 0) {
+      kitchenWorktopDraw.points = [point];
+      kitchenWorktopDraw.hoverPoint = point;
+      kitchenWorktopDraw.typedMm = "";
+      updateKitchenWorktopPreview();
+      setUnderlayStatus("Pracovná doska: druhý klik = ďalší bod. Píš mm + Enter.");
+      return true;
+    }
+
+    if (kitchenWorktopDraw.points.length === 1) {
+      kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
+      kitchenWorktopDraw.hoverPoint = point;
+      kitchenWorktopDraw.typedMm = "";
+      wallTypedHud.style.display = "none";
+      updateKitchenWorktopPreview();
+      setUnderlayStatus("Pracovná doska: pokračuj ďalším bodom alebo Esc = potvrdiť.");
+      return true;
+    }
+
+    if (kitchenWorktopDraw.points.length === 2) {
+      kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
+      kitchenWorktopDraw.hoverPoint = point;
+      kitchenWorktopDraw.typedMm = "";
+      wallTypedHud.style.display = "none";
+      updateKitchenWorktopPreview();
+      setUnderlayStatus("Pracovná doska: pokračuj ďalším rohom alebo Esc = potvrdiť tvar.");
+      return true;
+    }
+
+    kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
+    kitchenWorktopDraw.hoverPoint = point;
+    kitchenWorktopDraw.typedMm = "";
+    wallTypedHud.style.display = "none";
+    updateKitchenWorktopPreview();
+    setUnderlayStatus("Pracovná doska: ďalší klik = ďalší roh, Esc = potvrdiť hotový tvar.");
+    return true;
+  };
+
+  const commitKitchenWorktopTypedLength = () => {
+    if (!kitchenWorktopDraw.active || kitchenWorktopDraw.points.length === 0) return false;
+    const mm = Math.max(1, Math.round(Number(kitchenWorktopDraw.typedMm)));
+    if (!Number.isFinite(mm)) return false;
+
+    const start = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1];
+    if (!start) return false;
+    const startWorld = kitchenWorktopPointToWorld(start);
+    const hover = kitchenWorktopDraw.hoverPoint ?? { x: start.x + 1000, z: start.z };
+    const hoverWorld = kitchenWorktopPointToWorld(hover);
+    const dir = hoverWorld.clone().sub(startWorld);
+    if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
+    dir.normalize();
+    const endWorld = startWorld.clone().addScaledVector(dir, mm / 1000);
+    const rawPoint = { x: Math.round(endWorld.x * 1000), z: Math.round(endWorld.z * 1000) };
+    const point = floorOrthoPoint(start, rawPoint);
+    return appendKitchenWorktopPoint(point);
+  };
+
+  const mirrorKitchenWorktopDraw = () => {
+    kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
+    updateKitchenWorktopPreview();
+    setUnderlayStatus(
+      `Pracovná doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
+    );
+  };
+
+  const handleKitchenWorktopEscape = () => {
+    if (!kitchenWorktopDraw.active) return false;
+    if (kitchenWorktopDraw.points.length < 2) {
+      cancelKitchenWorktopDraw({ silent: true });
+      setUnderlayStatus("Pracovná doska: zrušené.");
+      mountProps();
+      return true;
+    }
+    const groupId = S.activeKitchenGroupId;
+    if (!groupId) {
+      cancelKitchenWorktopDraw({ silent: true });
+      mountProps();
+      return true;
+    }
+    const params = makeKitchenWorktopParamsFromPath(kitchenWorktopDraw.points);
+    if (params.path.length < 2) {
+      cancelKitchenWorktopDraw({ silent: true });
+      mountProps();
+      return true;
+    }
+    const existingId = getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${worktopCounter}`;
+    replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
+    cancelKitchenWorktopDraw({ silent: true });
+    setUnderlayStatus(params.path.length >= 3 ? "Rohová pracovná doska vytvorená." : "Pracovná doska vytvorená.");
+    mountProps();
+    return true;
+  };
+
   const wallEps = 0.002;
   const wallDefs: Record<
     WallId,
@@ -2424,22 +2764,140 @@ type WindowInstance = {
     return false;
   };
 
-  const setToolSelect = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "select";
+  const isEscapeKey = (ev: KeyboardEvent) => ev.key === "Escape" || ev.code === "Escape";
+
+  const handleGlobalMeasurementClear = (ev: KeyboardEvent) => {
+    if (!ev.shiftKey || !isEscapeKey(ev)) return false;
+    if (measureState.measures.length === 0 && !measureState.firstPoint && !measureState.hoverPoint) return false;
+    clearAllMeasurements();
+    measureState.firstPoint = null;
+    measureState.hoverPoint = null;
+    measureState.hoverSnap = "none";
+    clearPreview();
     clearToolHud();
+    measurePlanSnap = null;
+    hideHoverCursor();
+    setFirstPointMarker(null);
+    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvý bod." : "";
+    setUnderlayStatus("Measurements cleared.");
+    ev.preventDefault();
+    ev.stopPropagation();
+    return true;
+  };
+
+  const handleLayoutEscape = (ev: KeyboardEvent) => {
+    if (mode !== "layout") return false;
+
+    if (isTypingTarget(ev.target)) return false;
+
+    if (layoutTool === "align") {
+      if (alignState.ref) {
+        alignState.ref = null;
+        setUnderlayStatus("Align: canceled. Click reference line...");
+      } else {
+        setToolSelect();
+      }
+      ev.preventDefault();
+      return true;
+    }
+
+    if (layoutTool === "trim") {
+      if (trimState.step !== "pickTarget") {
+        trimState.step = "pickTarget";
+        trimState.targetWallId = null;
+        trimState.targetPick = null;
+        trimState.targetClick = null;
+        trimState.hover = null;
+        trimState.lastTarget = null;
+        trimState.lastCutter = null;
+        trimState.lastUntilMs = 0;
+        clearToolHud();
+        setUnderlayStatus("Trim: click target wall...");
+        mountProps();
+      } else {
+        setToolSelect();
+      }
+      ev.preventDefault();
+      return true;
+    }
+
+    if (layoutTool === "dimension") {
+      if (dimTool.a) {
+        dimTool.a = null;
+        dimPreview.root.visible = false;
+        setUnderlayStatus("Dimension: canceled. Click first line...");
+      } else {
+        setToolSelect();
+      }
+      ev.preventDefault();
+      return true;
+    }
+
+    if (layoutTool === "measure") {
+      measureState.enabled = false;
+      measureState.firstPoint = null;
+      measureState.hoverPoint = null;
+      measureState.hoverSnap = "none";
+      clearPreview();
+      clearToolHud();
+      hideHoverCursor();
+      setFirstPointMarker(null);
+      setToolSelect();
+      setUnderlayStatus("Measure: stopped.");
+      ev.preventDefault();
+      return true;
+    }
+
+    if (layoutTool === "wall") {
+      setToolSelect();
+      setUnderlayStatus("Wall: stopped.");
+      ev.preventDefault();
+      return true;
+    }
+
+    return false;
+  };
+
+  const clearWallDrawState = () => {
     wallDraw.active = false;
     wallDraw.a = null;
     wallDraw.chainStart = null;
     wallDraw.segments = 0;
+    wallDraw.hoverB = null;
+    wallDraw.typedMm = "";
+    wallTypedHud.textContent = "";
     if (wallDraw.preview) {
       layoutRoot.remove(wallDraw.preview);
       wallDraw.preview.geometry.dispose();
       (wallDraw.preview.material as THREE.Material).dispose();
       wallDraw.preview = null;
     }
-    wallSnapHud.style.display = "none";
+    wallDrawSnap = null;
+    hideHoverCursor();
+    showWallSnapMarkersFor(selectedKind === "wall" ? selectedWallId : null);
+    wallTypedHud.style.display = "none";
+  };
+
+  const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => {
+    measureState.enabled = false;
+    measureState.firstPoint = null;
+    measureState.hoverPoint = null;
+    measureState.hoverSnap = "none";
+    clearPreview();
+    clearToolHud();
+    measurePlanSnap = null;
+    hideHoverCursor();
+    setFirstPointMarker(null);
+    if (opts?.clearSaved) clearAllMeasurements();
+  };
+
+  const setToolSelect = () => {
+    ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    layoutTool = "select";
+    deactivateMeasureTool();
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
     setUnderlayStatus("");
     mountProps();
   };
@@ -2448,17 +2906,9 @@ type WindowInstance = {
     ensureLayoutMode();
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "wall";
-    clearToolHud();
-    wallDraw.active = false;
-    wallDraw.a = null;
-    if (wallDraw.preview) {
-      layoutRoot.remove(wallDraw.preview);
-      wallDraw.preview.geometry.dispose();
-      (wallDraw.preview.material as THREE.Material).dispose();
-      wallDraw.preview = null;
-    }
-    wallDraw.chainStart = null;
-    wallDraw.segments = 0;
+    deactivateMeasureTool();
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
     if (viewMode !== "2d") {
       view2d.checked = true;
       setView2d(true);
@@ -2481,21 +2931,9 @@ type WindowInstance = {
     ensureLayoutMode();
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "align";
-    clearToolHud();
-    wallDraw.active = false;
-    wallDraw.a = null;
-    wallDraw.chainStart = null;
-    wallDraw.segments = 0;
-    wallDraw.hoverB = null;
-    wallDraw.typedMm = "";
-    wallTypedHud.style.display = "none";
-    wallSnapHud.style.display = "none";
-    if (wallDraw.preview) {
-      layoutRoot.remove(wallDraw.preview);
-      wallDraw.preview.geometry.dispose();
-      (wallDraw.preview.material as THREE.Material).dispose();
-      wallDraw.preview = null;
-    }
+    deactivateMeasureTool();
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
     alignState.ref = null;
     alignState.hover = null;
     alignState.lastA = null;
@@ -2515,21 +2953,9 @@ type WindowInstance = {
     ensureLayoutMode();
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "trim";
-    clearToolHud();
-    wallDraw.active = false;
-    wallDraw.a = null;
-    wallDraw.chainStart = null;
-    wallDraw.segments = 0;
-    wallDraw.hoverB = null;
-    wallDraw.typedMm = "";
-    wallTypedHud.style.display = "none";
-    wallSnapHud.style.display = "none";
-    if (wallDraw.preview) {
-      layoutRoot.remove(wallDraw.preview);
-      wallDraw.preview.geometry.dispose();
-      (wallDraw.preview.material as THREE.Material).dispose();
-      wallDraw.preview = null;
-    }
+    deactivateMeasureTool();
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
     trimState.step = "pickTarget";
     trimState.targetWallId = null;
     trimState.targetPick = null;
@@ -2552,21 +2978,9 @@ type WindowInstance = {
     ensureLayoutMode();
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "dimension";
-    clearToolHud();
-    wallDraw.active = false;
-    wallDraw.a = null;
-    wallDraw.chainStart = null;
-    wallDraw.segments = 0;
-    wallDraw.hoverB = null;
-    wallDraw.typedMm = "";
-    wallTypedHud.style.display = "none";
-    wallSnapHud.style.display = "none";
-    if (wallDraw.preview) {
-      layoutRoot.remove(wallDraw.preview);
-      wallDraw.preview.geometry.dispose();
-      (wallDraw.preview.material as THREE.Material).dispose();
-      wallDraw.preview = null;
-    }
+    deactivateMeasureTool();
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
     dimTool.a = null;
     dimTool.tA = 0.5;
     dimTool.hover = null;
@@ -2582,8 +2996,93 @@ type WindowInstance = {
     mountProps();
   };
 
+  const setToolMeasure = () => {
+    if (layoutTool === "measure") {
+      setToolSelect();
+      return;
+    }
+    ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    layoutTool = "measure";
+    measureState.enabled = true;
+    measureState.firstPoint = null;
+    measureState.hoverPoint = null;
+    measureState.hoverSnap = "none";
+    clearPreview();
+    clearToolHud();
+    hideHoverCursor();
+    setFirstPointMarker(null);
+    clearWallDrawState();
+    cancelKitchenWorktopDraw({ silent: true });
+    selectedKind = null;
+    selectedWallId = null;
+    selectedFloorId = null;
+    selectedDimensionId = null;
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    syncSelectionState();
+    updateSelectionHighlights();
+    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    args.measureBtn.textContent = "Measure: On";
+    args.measureReadoutEl.textContent = "Measure: klikni prvý bod.";
+    setUnderlayStatus("Measure: klikni prvý roh alebo hranu.");
+    mountProps();
+  };
+
+  document.addEventListener(
+    "keydown",
+    (ev) => {
+      if (handleGlobalMeasurementClear(ev)) return;
+      if (ev.defaultPrevented) return;
+      if (!isEscapeKey(ev)) return;
+      handleLayoutEscape(ev);
+    },
+    true
+  );
+
   window.addEventListener("keydown", (ev) => {
-    if (isTypingTarget(ev.target)) return;
+    if (ev.defaultPrevented) return;
+    if (isTypingTarget(ev.target) && ev.key !== "Escape") return;
+    if (S.kitchenEditMode && kitchenWorktopDraw.active && mode === "layout" && viewMode === "2d") {
+      if (ev.key === " " || ev.code === "Space") {
+        mirrorKitchenWorktopDraw();
+        ev.preventDefault();
+        return;
+      }
+      const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
+      if (isDigit) {
+        kitchenWorktopDraw.typedMm = `${kitchenWorktopDraw.typedMm}${ev.key}`.slice(0, 8);
+        wallTypedHud.textContent = `${kitchenWorktopDraw.typedMm} mm`;
+        wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
+        wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
+        wallTypedHud.style.display = "block";
+        setUnderlayStatus(`Pracovná doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridať bod, Backspace = edit, Esc = potvrdiť)`);
+        ev.preventDefault();
+        return;
+      }
+      if (ev.key === "Backspace") {
+        kitchenWorktopDraw.typedMm = kitchenWorktopDraw.typedMm.slice(0, Math.max(0, kitchenWorktopDraw.typedMm.length - 1));
+        if (kitchenWorktopDraw.typedMm.trim().length > 0) {
+          wallTypedHud.textContent = `${kitchenWorktopDraw.typedMm} mm`;
+          wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
+          wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
+          wallTypedHud.style.display = "block";
+          setUnderlayStatus(`Pracovná doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridať bod, Backspace = edit, Esc = potvrdiť)`);
+        } else {
+          wallTypedHud.style.display = "none";
+          setUnderlayStatus("Pracovná doska: klikaj body alebo píš mm + Enter. Esc = potvrdiť.");
+        }
+        ev.preventDefault();
+        return;
+      }
+      if (ev.key === "Enter" && kitchenWorktopDraw.typedMm.trim().length > 0) {
+        if (commitKitchenWorktopTypedLength()) {
+          ev.preventDefault();
+          return;
+        }
+      }
+    }
     if (S.kitchenEditMode) return;
     if (floorEdit.active) {
       if (ev.key === "Escape") {
@@ -2870,70 +3369,7 @@ type WindowInstance = {
         return;
       }
 
-      if (ev.key === "Escape" && layoutTool === "align") {
-        if (alignState.ref) {
-          alignState.ref = null;
-          setUnderlayStatus("Align: canceled. Click reference line...");
-        } else {
-          setToolSelect();
-        }
-        ev.preventDefault();
-        return;
-      }
-
-      if (ev.key === "Escape" && layoutTool === "trim") {
-        if (trimState.step !== "pickTarget") {
-          trimState.step = "pickTarget";
-          trimState.targetWallId = null;
-          trimState.targetPick = null;
-          trimState.targetClick = null;
-          trimState.hover = null;
-          trimState.lastTarget = null;
-          trimState.lastCutter = null;
-          trimState.lastUntilMs = 0;
-          clearToolHud();
-          setUnderlayStatus("Trim: click target wall...");
-          mountProps();
-        } else {
-          setToolSelect();
-        }
-        ev.preventDefault();
-        return;
-      }
-
-      if (ev.key === "Escape" && layoutTool === "dimension") {
-        if (dimTool.a) {
-          dimTool.a = null;
-          dimPreview.root.visible = false;
-          setUnderlayStatus("Dimension: canceled. Click first line...");
-        } else {
-          setToolSelect();
-        }
-        ev.preventDefault();
-        return;
-      }
-
-      if (ev.key === "Escape" && layoutTool === "wall") {
-        wallDraw.active = false;
-        wallDraw.a = null;
-        wallDraw.chainStart = null;
-        wallDraw.segments = 0;
-        wallDraw.hoverB = null;
-        wallDraw.typedMm = "";
-        if (wallDraw.preview) {
-          layoutRoot.remove(wallDraw.preview);
-          wallDraw.preview.geometry.dispose();
-          (wallDraw.preview.material as THREE.Material).dispose();
-          wallDraw.preview = null;
-        }
-        wallSnapHud.style.display = "none";
-        wallTypedHud.style.display = "none";
-        setUnderlayStatus("Wall: stopped.");
-        layoutTool = "select";
-        mountProps();
-        ev.preventDefault();
-        return;
-      }
+      if (ev.key === "Escape" && handleLayoutEscape(ev)) return;
 
       // Typed length while placing wall segment (Revit-style).
       if (layoutTool === "wall" && wallDraw.active && wallDraw.a && viewMode === "2d") {
@@ -2996,17 +3432,7 @@ type WindowInstance = {
             wallTypedHud.style.display = "none";
 
             if (closes) {
-              wallDraw.active = false;
-              wallDraw.a = null;
-              wallDraw.chainStart = null;
-              wallDraw.segments = 0;
-              wallDraw.hoverB = null;
-              if (wallDraw.preview) {
-                layoutRoot.remove(wallDraw.preview);
-                wallDraw.preview.geometry.dispose();
-                (wallDraw.preview.material as THREE.Material).dispose();
-                wallDraw.preview = null;
-              }
+              clearWallDrawState();
               setUnderlayStatus("Wall: chain closed.");
               ev.preventDefault();
               return;
@@ -3085,297 +3511,55 @@ type WindowInstance = {
   });
 
   args.viewerEl.addEventListener("pointerleave", () => {
-    wallSnapHud.style.display = "none";
+    wallDrawSnap = null;
+    worktopDrawSnap = null;
+    measurePlanSnap = null;
+    selectPlanSnap = null;
+    hideHoverCursor();
+    if (layoutTool === "measure") {
+      hideHoverCursor();
+      clearToolHud();
+    }
   });
 
   let selectedMesh: THREE.Mesh | null = null;
   let selectedBox: THREE.BoxHelper | null = null;
   let grainArrow: THREE.ArrowHelper | null = null;
   let activeBuildControls: ParamHighlightControls | null = null;
+  let drawOrthoEnabled = true;
+  let drawOrthoToggleEl: HTMLButtonElement | null = null;
 
   let overlapBoxes: Array<{ mesh: THREE.Mesh; helper: THREE.BoxHelper }> = [];
+  const drawSnapOverlay = createSnapOverlay(args.viewerEl);
+  const measureSnapOverlay = createSnapOverlay(args.viewerEl);
+  let wallDrawSnap: PlanSnapResult | null = null;
+  let worktopDrawSnap: PlanSnapResult | null = null;
+  let measurePlanSnap: PlanSnapResult | null = null;
+  let selectPlanSnap: PlanSnapResult | null = null;
 
-  // Measurement (planar XZ, axis-locked by default)
-  const measureOverlay = document.createElement("div");
-  measureOverlay.style.position = "absolute";
-  measureOverlay.style.inset = "0";
-  measureOverlay.style.pointerEvents = "none";
-  args.viewerEl.appendChild(measureOverlay);
-
-  const wallSnapHud = document.createElement("div");
-  wallSnapHud.style.position = "absolute";
-  wallSnapHud.style.width = "10px";
-  wallSnapHud.style.height = "10px";
-  wallSnapHud.style.border = "2px solid #e6e8ee";
-  wallSnapHud.style.background = "transparent";
-  wallSnapHud.style.transform = "translate(-50%, -50%)";
-  wallSnapHud.style.display = "none";
-  wallSnapHud.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.45)";
-  measureOverlay.appendChild(wallSnapHud);
-
-  // Typed-length HUD while drawing walls (shows the number near cursor).
-  const wallTypedHud = document.createElement("div");
-  wallTypedHud.style.position = "absolute";
-  wallTypedHud.style.transform = "translate(10px, -28px)";
-  wallTypedHud.style.display = "none";
-  wallTypedHud.style.pointerEvents = "none";
-  wallTypedHud.style.padding = "2px 6px";
-  wallTypedHud.style.borderRadius = "8px";
-  wallTypedHud.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-  wallTypedHud.style.background = "rgba(18, 20, 26, 0.92)";
-  wallTypedHud.style.color = "rgba(230, 232, 238, 0.98)";
-  wallTypedHud.style.fontSize = "12px";
-  wallTypedHud.style.lineHeight = "18px";
-  wallTypedHud.style.whiteSpace = "nowrap";
-  measureOverlay.appendChild(wallTypedHud);
-
-  // Wall edit HUD (2D): endpoints + dimension label
-  const wallEditHud = {
-    root: document.createElement("div"),
-    label: document.createElement("div"),
-    input: document.createElement("input"),
-    lenLine: document.createElement("div"),
-    lenExtA: document.createElement("div"),
-    lenExtB: document.createElement("div"),
-    offsetLabel: document.createElement("div"),
-    offsetInput: document.createElement("input"),
-    offsetLine: document.createElement("div"),
-    offsetTickA: document.createElement("div"),
-    offsetTickB: document.createElement("div"),
-    handleA: document.createElement("div"),
-    handleB: document.createElement("div"),
-    handleMid: document.createElement("div"),
-    offsetRefWallId: null as string | null,
-    drag: null as
-      | null
-      | {
-          wallId: string;
-          kind: "a" | "b" | "move";
-          pointerId: number;
-          startWorld: THREE.Vector3;
-          startA: { x: number; z: number };
-          startB: { x: number; z: number };
-          connectedA: Array<{ wallId: string; which: "a" | "b" }>;
-          connectedB: Array<{ wallId: string; which: "a" | "b" }>;
-        }
-  };
-  {
-    const root = wallEditHud.root;
-    root.style.position = "absolute";
-    root.style.inset = "0";
-    root.style.pointerEvents = "none";
-    root.style.zIndex = "9";
-    args.viewerEl.appendChild(root);
-
-    const lineBase = (el: HTMLDivElement, color = "rgba(92, 140, 255, 0.95)") => {
-      el.style.position = "absolute";
-      el.style.height = "1px";
-      el.style.background = color;
-      el.style.transformOrigin = "0 0";
-      el.style.display = "none";
-      el.style.pointerEvents = "none";
-    };
-    lineBase(wallEditHud.lenLine, "rgba(92, 140, 255, 0.95)");
-    lineBase(wallEditHud.lenExtA, "rgba(92, 140, 255, 0.85)");
-    lineBase(wallEditHud.lenExtB, "rgba(92, 140, 255, 0.85)");
-    root.appendChild(wallEditHud.lenLine);
-    root.appendChild(wallEditHud.lenExtA);
-    root.appendChild(wallEditHud.lenExtB);
-
-    lineBase(wallEditHud.offsetLine, "rgba(92, 140, 255, 0.95)");
-    lineBase(wallEditHud.offsetTickA, "rgba(92, 140, 255, 0.95)");
-    lineBase(wallEditHud.offsetTickB, "rgba(92, 140, 255, 0.95)");
-    root.appendChild(wallEditHud.offsetLine);
-    root.appendChild(wallEditHud.offsetTickA);
-    root.appendChild(wallEditHud.offsetTickB);
-
-    const handleBase = (el: HTMLDivElement) => {
-      el.style.position = "absolute";
-      el.style.width = "10px";
-      el.style.height = "10px";
-      el.style.borderRadius = "999px";
-      el.style.border = "2px solid rgba(230, 232, 238, 0.95)";
-      el.style.background = "rgba(12, 14, 18, 0.35)";
-      el.style.transform = "translate(-50%, -50%)";
-      el.style.display = "none";
-      el.style.pointerEvents = "auto";
-      el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.45)";
-    };
-
-    handleBase(wallEditHud.handleA);
-    wallEditHud.handleA.title = "Wall start";
-    root.appendChild(wallEditHud.handleA);
-
-    handleBase(wallEditHud.handleB);
-    wallEditHud.handleB.title = "Wall end";
-    root.appendChild(wallEditHud.handleB);
-
-    const mid = wallEditHud.handleMid;
-    mid.style.position = "absolute";
-    mid.style.width = "10px";
-    mid.style.height = "10px";
-    mid.style.borderRadius = "6px";
-    mid.style.border = "2px solid rgba(61, 220, 151, 0.95)";
-    mid.style.background = "rgba(12, 14, 18, 0.35)";
-    mid.style.transform = "translate(-50%, -50%)";
-    mid.style.display = "none";
-    mid.style.pointerEvents = "auto";
-    mid.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.45)";
-    mid.title = "Move wall";
-    root.appendChild(mid);
-
-    const label = wallEditHud.label;
-    label.style.position = "absolute";
-    label.style.transform = "translate(-50%, -50%)";
-    label.style.display = "none";
-    label.style.pointerEvents = "auto";
-    label.style.cursor = "pointer";
-    label.style.padding = "2px 6px";
-    label.style.borderRadius = "8px";
-    label.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    label.style.background = "rgba(18, 20, 26, 0.92)";
-    label.style.color = "rgba(230, 232, 238, 0.98)";
-    label.style.fontSize = "12px";
-    label.style.lineHeight = "18px";
-    label.style.userSelect = "none";
-    label.style.whiteSpace = "nowrap";
-    root.appendChild(label);
-
-    const input = wallEditHud.input;
-    input.type = "text";
-    input.inputMode = "numeric";
-    input.placeholder = "mm";
-    input.style.position = "absolute";
-    input.style.display = "none";
-    input.style.pointerEvents = "auto";
-    input.style.zIndex = "12";
-    input.style.width = "88px";
-    input.style.height = "22px";
-    input.style.borderRadius = "7px";
-    input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    input.style.background = "#0f1117";
-    input.style.color = "var(--text)";
-    input.style.padding = "0 6px";
-    input.style.fontSize = "12px";
-    input.style.outline = "none";
-    root.appendChild(input);
-
-    const oLabel = wallEditHud.offsetLabel;
-    oLabel.style.position = "absolute";
-    oLabel.style.transform = "translate(-50%, -50%)";
-    oLabel.style.display = "none";
-    oLabel.style.pointerEvents = "auto";
-    oLabel.style.cursor = "pointer";
-    oLabel.style.padding = "2px 6px";
-    oLabel.style.borderRadius = "8px";
-    oLabel.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    oLabel.style.background = "rgba(18, 20, 26, 0.92)";
-    oLabel.style.color = "rgba(230, 232, 238, 0.98)";
-    oLabel.style.fontSize = "12px";
-    oLabel.style.lineHeight = "18px";
-    oLabel.style.userSelect = "none";
-    oLabel.style.whiteSpace = "nowrap";
-    root.appendChild(oLabel);
-
-    const oInput = wallEditHud.offsetInput;
-    oInput.type = "text";
-    oInput.inputMode = "numeric";
-    oInput.placeholder = "mm";
-    oInput.style.position = "absolute";
-    oInput.style.display = "none";
-    oInput.style.pointerEvents = "auto";
-    oInput.style.zIndex = "12";
-    oInput.style.width = "88px";
-    oInput.style.height = "22px";
-    oInput.style.borderRadius = "7px";
-    oInput.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    oInput.style.background = "#0f1117";
-    oInput.style.color = "var(--text)";
-    oInput.style.padding = "0 6px";
-    oInput.style.fontSize = "12px";
-    oInput.style.outline = "none";
-    root.appendChild(oInput);
-  }
-
-  const marquee = {
-    active: false,
-    pending: false,
-    pointerId: null as number | null,
-    hitSomething: false,
-    startX: 0,
-    startY: 0,
-    mode: "contain" as "contain" | "touch"
-  };
-  const marqueeEl = document.createElement("div");
-  marqueeEl.style.position = "absolute";
-  marqueeEl.style.border = "1px solid rgba(255, 209, 102, 0.95)";
-  marqueeEl.style.background = "rgba(255, 209, 102, 0.08)";
-  marqueeEl.style.display = "none";
-  marqueeEl.style.pointerEvents = "none";
-  measureOverlay.appendChild(marqueeEl);
-
-  const measureState = {
-    enabled: false,
-    axisLock: true,
-    firstPoint: null as THREE.Vector3 | null,
-    hoverPoint: null as THREE.Vector3 | null,
-    hoverSnap: "none" as "none" | "free" | "edge" | "corner",
-    previewLine: null as THREE.Line | null,
-    previewLabel: null as HTMLDivElement | null,
-    cursorEl: null as HTMLDivElement | null,
-    measures: [] as Array<{
-      a: THREE.Vector3;
-      b: THREE.Vector3;
-      line: THREE.Line;
-      label: HTMLDivElement;
-    }>
-  };
-
-  // Cursor HUD for measurement (shows snap state)
-  {
-    const el = document.createElement("div");
-    el.style.position = "absolute";
-    el.style.width = "10px";
-    el.style.height = "10px";
-    el.style.borderRadius = "999px";
-    el.style.border = "2px solid #00e5ff";
-    el.style.background = "transparent";
-    el.style.transform = "translate(-50%, -50%)";
-    el.style.display = "none";
-    el.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.4)";
-    measureOverlay.appendChild(el);
-    measureState.cursorEl = el;
-  }
-
-  args.axisLockEl.addEventListener("change", () => {
-    measureState.axisLock = args.axisLockEl.checked;
-  });
-
-  args.measureBtn.addEventListener("click", () => {
-    measureState.enabled = !measureState.enabled;
-    measureState.firstPoint = null;
-    measureState.hoverPoint = null;
-    measureState.hoverSnap = "none";
-    args.measureBtn.textContent = measureState.enabled ? "Measure: On" : "Measure: Off";
-    args.measureReadoutEl.textContent = measureState.enabled ? "Click 2 points to measure (planar X/Z)." : "";
-
-    if (!measureState.enabled) {
-      clearPreview();
-      if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
-    }
-  });
-
-  args.clearMeasuresBtn.addEventListener("click", () => {
-    for (const m of measureState.measures) {
-      scene.remove(m.line);
-      m.line.geometry.dispose();
-      (m.line.material as THREE.Material).dispose();
-      m.label.remove();
-    }
-    measureState.measures = [];
-    measureState.firstPoint = null;
-    clearPreview();
-    args.measureReadoutEl.textContent = measureState.enabled ? "Click 2 points to measure (planar X/Z)." : "";
+  const {
+    wallTypedHud,
+    wallEditHud,
+    marquee,
+    marqueeEl,
+    measureState,
+    addMeasurement,
+    updateMeasureLabels,
+    updatePreview,
+    clearPreview,
+    setFirstPointMarker,
+    clearAllMeasurements,
+    updateHoverCursor,
+    hideHoverCursor
+  } = createMeasureTools({
+    viewerEl: args.viewerEl,
+    scene,
+    getCamera: cam,
+    snapOverlay: measureSnapOverlay,
+    axisLockEl: args.axisLockEl,
+    measureBtn: args.measureBtn,
+    clearMeasuresBtn: args.clearMeasuresBtn,
+    measureReadoutEl: args.measureReadoutEl
   });
 
   // Editor UI
@@ -3434,6 +3618,28 @@ type WindowInstance = {
   viewWrap.appendChild(viewLabel);
   viewWrap.appendChild(view2d);
   layoutUi.appendChild(viewWrap);
+
+  drawOrthoToggleEl = document.createElement("button");
+  drawOrthoToggleEl.type = "button";
+  drawOrthoToggleEl.style.position = "absolute";
+  drawOrthoToggleEl.style.right = "16px";
+  drawOrthoToggleEl.style.bottom = "16px";
+  drawOrthoToggleEl.style.zIndex = "12";
+  drawOrthoToggleEl.style.padding = "10px 14px";
+  drawOrthoToggleEl.style.borderRadius = "999px";
+  drawOrthoToggleEl.style.border = "1px solid rgba(255,255,255,0.14)";
+  drawOrthoToggleEl.style.boxShadow = "0 10px 30px rgba(0,0,0,0.24)";
+  drawOrthoToggleEl.style.backdropFilter = "blur(14px)";
+  drawOrthoToggleEl.style.fontSize = "12px";
+  drawOrthoToggleEl.style.fontWeight = "700";
+  drawOrthoToggleEl.style.letterSpacing = "0.04em";
+  drawOrthoToggleEl.style.cursor = "pointer";
+  drawOrthoToggleEl.textContent = "Ortho ON";
+  drawOrthoToggleEl.style.background = "rgba(16,42,60,0.96)";
+  drawOrthoToggleEl.style.borderColor = "#53c6ff";
+  drawOrthoToggleEl.style.color = "#dff6ff";
+  drawOrthoToggleEl.addEventListener("click", () => toggleDrawOrthoMode());
+  args.viewerEl.appendChild(drawOrthoToggleEl);
 
   const sunHost = document.createElement("div");
   sunHost.className = "field";
@@ -4154,13 +4360,6 @@ type WindowInstance = {
     s.appendChild(p);
   };
 
-  type FloorBoundaryTool = "line" | "rectangle" | "circle" | "pickLines";
-  type FloorBoundarySegment = { a: FloorBoundaryPoint; b: FloorBoundaryPoint };
-  type FloorEditVertexRef = { segmentIndex: number; endpoint: "a" | "b" };
-  type FloorEditDrag =
-    | { pointerId: number; kind: "vertex"; startPoint: FloorBoundaryPoint; startSegments: FloorBoundarySegment[] }
-    | { pointerId: number; kind: "segment"; segmentIndex: number; startWorld: FloorBoundaryPoint; startSegments: FloorBoundarySegment[] };
-
   const floorEdit = {
     active: false,
     floorId: null as string | null,
@@ -4178,6 +4377,31 @@ type WindowInstance = {
     overlayEl: null as HTMLDivElement | null
   };
 
+  const syncDrawOrthoUi = () => {
+    floorEdit.ortho = drawOrthoEnabled;
+    if (drawOrthoToggleEl) {
+      drawOrthoToggleEl.textContent = `Ortho ${drawOrthoEnabled ? "ON" : "OFF"}`;
+      drawOrthoToggleEl.style.background = drawOrthoEnabled ? "rgba(16,42,60,0.96)" : "rgba(22,24,29,0.96)";
+      drawOrthoToggleEl.style.borderColor = drawOrthoEnabled ? "#53c6ff" : "rgba(255,255,255,0.14)";
+      drawOrthoToggleEl.style.color = drawOrthoEnabled ? "#dff6ff" : "#d7dde6";
+    }
+  };
+
+  const toggleDrawOrthoMode = () => {
+    drawOrthoEnabled = !drawOrthoEnabled;
+    syncDrawOrthoUi();
+    if (floorEdit.active) {
+      buildFloorBoundaryTopbar();
+      renderFloorBoundaryEdit();
+    }
+    if (kitchenWorktopDraw.active && kitchenWorktopDraw.points.length > 0) {
+      updateKitchenWorktopPreview();
+      mountProps();
+    }
+  };
+
+  syncDrawOrthoUi();
+
   const floorPointDistMm = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => Math.hypot(a.x - b.x, a.z - b.z);
   const floorPointEq = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, tolMm = 3) => floorPointDistMm(a, b) <= tolMm;
   const worldToFloorPoint = (point: THREE.Vector3): FloorBoundaryPoint => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) });
@@ -4185,7 +4409,7 @@ type WindowInstance = {
   const cloneFloorSegments = (segments: FloorBoundarySegment[]) => segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } }));
 
   const floorOrthoPoint = (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => {
-    if (!floorEdit.ortho) return raw;
+    if (!drawOrthoEnabled) return raw;
     const dx = raw.x - start.x;
     const dz = raw.z - start.z;
     return Math.abs(dx) >= Math.abs(dz) ? { x: raw.x, z: start.z } : { x: start.x, z: raw.z };
@@ -4380,9 +4604,9 @@ type WindowInstance = {
     tb.toolButton(draw, {
       title: "Ortho kreslenie",
       iconSvg: I_ALIGN,
-      label: floorEdit.ortho ? "Ortho ON" : "Ortho OFF",
+      label: drawOrthoEnabled ? "Ortho ON" : "Ortho OFF",
       onClick: () => {
-        floorEdit.ortho = !floorEdit.ortho;
+        toggleDrawOrthoMode();
         buildFloorBoundaryTopbar();
         mountProps();
       }
@@ -4627,6 +4851,48 @@ type WindowInstance = {
     });
   };
 
+  const mountKitchenWorktopToolProps = () => {
+    props.setTitle("Worktop");
+    const section = props.section();
+
+    const just = document.createElement("select");
+    just.innerHTML = `
+      <option value="center">Center</option>
+      <option value="back">Back edge</option>
+      <option value="front">Front edge</option>
+    `;
+    just.value = kitchenWorktopDraw.justification;
+    props.row(section, "Justification", just);
+
+    const depth = document.createElement("div");
+    depth.textContent = `${S.kitchenCtx.worktopDepthMm} mm`;
+    props.row(section, "Depth", depth);
+
+    const thickness = document.createElement("div");
+    thickness.textContent = `${S.kitchenCtx.worktopThicknessMm} mm`;
+    props.row(section, "Thickness", thickness);
+
+    const height = document.createElement("div");
+    height.textContent = `${S.kitchenCtx.heightMm} mm`;
+    props.row(section, "Top Height", height);
+
+    const material = document.createElement("div");
+    material.textContent = getMaterialDefinitionById(S.kitchenCtx.worktopMaterialId)?.displayName ?? S.kitchenCtx.worktopMaterialId;
+    props.row(section, "Material", material);
+
+    const hint = document.createElement("div");
+    hint.className = "muted";
+    hint.textContent =
+      "Klikaj body tvaru dosky. Môžeš pokračovať ďalšími rohmi aj pre U tvar. Esc = potvrdiť hotový tvar. Space zrkadlí dosku okolo tej istej back/front line.";
+    section.appendChild(hint);
+
+    just.addEventListener("change", () => {
+      kitchenWorktopDraw.justification =
+        just.value === "front" ? "front" : just.value === "center" ? "center" : "back";
+      updateKitchenWorktopPreview();
+    });
+  };
+
   const mountAlignToolProps = () => {
     props.setTitle("Align");
     const s = props.section();
@@ -4674,6 +4940,51 @@ type WindowInstance = {
     cur.style.marginTop = "8px";
     cur.textContent = dimTool.a ? `Prvá: ${dimTool.a.label}` : "Prvá: (žiadna)";
     s.appendChild(cur);
+  };
+
+  const mountMeasureToolProps = () => {
+    props.setTitle("Measure");
+    const s = props.section();
+
+    const hint = document.createElement("div");
+    hint.className = "muted";
+    hint.textContent =
+      "Funguje v 2D aj 3D. Klikni prvý snap bod alebo hranu. Pri druhom bode sa v 2D zapne aj perpendicular snap na hrany. Esc len vypne tool, Shift+Esc vymaže všetky uložené merania.";
+    s.appendChild(hint);
+
+    const axisWrap = document.createElement("label");
+    axisWrap.style.display = "flex";
+    axisWrap.style.alignItems = "center";
+    axisWrap.style.gap = "8px";
+    axisWrap.style.marginTop = "10px";
+    const axis = document.createElement("input");
+    axis.type = "checkbox";
+    axis.checked = measureState.axisLock;
+    axis.addEventListener("change", () => {
+      measureState.axisLock = axis.checked;
+      args.axisLockEl.checked = axis.checked;
+    });
+    axisWrap.append(axis, document.createTextNode("Axis lock (optional, 2D/3D)"));
+    s.appendChild(axisWrap);
+
+    const status = document.createElement("div");
+    status.className = "muted";
+    status.style.marginTop = "8px";
+    status.textContent = measureState.firstPoint
+      ? `Prvý bod: ${formatMm(measureState.firstPoint)}`
+      : "Prvý bod: (žiadny)";
+    s.appendChild(status);
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.textContent = "Clear";
+    clearBtn.style.marginTop = "10px";
+    clearBtn.addEventListener("click", () => {
+      clearAllMeasurements();
+      setUnderlayStatus("Measure: klikni prvý bod.");
+      mountProps();
+    });
+    s.appendChild(clearBtn);
   };
 
   const mountWallProps = (w?: WallInstance) => {
@@ -5183,6 +5494,8 @@ type WindowInstance = {
     if (floorEdit.active) return mountFloorBoundaryProps();
     if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
+    if (layoutTool === "measure") return mountMeasureToolProps();
+    if (S.kitchenEditMode && kitchenWorktopDraw.active) return mountKitchenWorktopToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
     if (layoutTool === "dimension") return mountDimensionToolProps();
@@ -5234,6 +5547,7 @@ type WindowInstance = {
     createDimension: (a, b, offset, opts) => createDimension(S, dimensionHelpers, a as any, b as any, offset, opts as any),
     rebuildWallPlanMesh,
     restoreFloors: restoreFloorsFromSnapshot,
+    restoreWorktops: restoreKitchenWorktopsFromSnapshot,
     updateAllDimensions: () => updateAllDimensions(S, dimensionHelpers),
     clearToolHud,
     mountProps,
@@ -5256,7 +5570,8 @@ type WindowInstance = {
     instanceWorldBox,
     anyOverlap,
     moduleOverlapsWalls,
-    autoOrientModuleToRoomWallIfSnapped
+    autoOrientModuleToRoomWallIfSnapped,
+    resolvePlacementConstraint: getKitchenPlacementConstraint
   };
 
 
@@ -5455,6 +5770,15 @@ type WindowInstance = {
     tb.toolButton(tools, { title: "Align", label: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
     tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
     tb.toolButton(tools, { title: "Dimension", label: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
+    tb.toolButton(tools, {
+      title: "Measure",
+      label: "Measure",
+      iconSvg: I_DIM,
+      onClick: () => {
+        if (layoutTool === "measure") setToolSelect();
+        else setToolMeasure();
+      }
+    });
     tb.toolButton(tools, { title: "Floor", label: "Floor", iconSvg: I_FLOOR, onClick: () => enterFloorBoundaryEdit() });
     tb.toolButton(tools, { title: "Underlay", label: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
     tb.toolButton(tools, { title: "Kitchen", label: "Kitchen", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
@@ -5486,7 +5810,7 @@ type WindowInstance = {
     viewerEl: args.viewerEl,
     tb,
     props,
-    icons: { cabinet: I_CABINET, done: I_DONE, cancel: I_CANCEL },
+    icons: { cabinet: I_CABINET, worktop: I_FLOOR, done: I_DONE, cancel: I_CANCEL },
     ensureLayoutMode,
     setToolSelect,
     cancelPlacementIfActive: () => {
@@ -5494,13 +5818,22 @@ type WindowInstance = {
     },
     addInstance: (type) => addInstance(S, placementHelpers, type),
     rebuildInstance,
+    rebuildKitchenGroupLayout,
     disposeObject3D,
     createInstance,
     findInstance,
     setSelectedModule,
     updateLayoutPanel,
+    startWorktopDraw: startKitchenWorktopDraw,
+    cancelWorktopDraw: cancelKitchenWorktopDraw,
+    handleWorktopEscape: handleKitchenWorktopEscape,
+    refreshWorktopPreview: updateKitchenWorktopPreview,
+    getGroupWorktops: getKitchenGroupWorktops,
+    replaceGroupWorktops: replaceKitchenGroupWorktops,
+    rebuildGroupWorktops: (groupId, ctx) => rebuildKitchenGroupWorktops(groupId, ctx),
     buildClassicTopbar,
-    restoreStandardTopbar: () => rebuildStandardTopbar()
+    restoreStandardTopbar: () => rebuildStandardTopbar(),
+    refreshProps: () => mountProps()
   });
 
   rebuildStandardTopbar = () => {
@@ -5534,14 +5867,27 @@ type WindowInstance = {
   }
 
   function ensurePickAndOutline(inst: LayoutInstance) {
-    const box = inst.localBox;
+    const rect = getModulePlanLocalRect(inst, getModuleLocalBackCenter);
+    const xs = rect.map((point) => point.x);
+    const zs = rect.map((point) => point.z);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minZ = Math.min(...zs);
+    const maxZ = Math.max(...zs);
 
     inst.pick.geometry.dispose();
-    const width = Math.max(0.001, box.max.x - box.min.x);
-    const depth = Math.max(0.001, box.max.z - box.min.z);
+    const width = Math.max(0.001, maxX - minX);
+    const depth = Math.max(0.001, maxZ - minZ);
     inst.pick.geometry = new THREE.BoxGeometry(width, 0.03, depth);
-    inst.pick.position.set((box.min.x + box.max.x) * 0.5, 0.015, (box.min.z + box.max.z) * 0.5);
+    inst.pick.position.set((minX + maxX) * 0.5, 0.015, (minZ + maxZ) * 0.5);
     inst.pick.visible = true;
+
+    const pickMaterial = inst.pick.material as THREE.MeshBasicMaterial;
+    pickMaterial.transparent = true;
+    pickMaterial.depthWrite = false;
+    pickMaterial.depthTest = false;
+    pickMaterial.color.setHex(0xb9c8d8);
+    pickMaterial.opacity = viewMode === "2d" ? 0.32 : 0;
 
     const g = buildModuleEdgeGeometry(inst, viewMode === "2d");
     inst.outline.geometry.dispose();
@@ -5550,6 +5896,21 @@ type WindowInstance = {
   }
 
   function buildModuleEdgeGeometry(inst: LayoutInstance, flattenToPlan: boolean) {
+    if (flattenToPlan) {
+      const rect = getModulePlanLocalRect(inst, getModuleLocalBackCenter);
+      const points = [
+        rect[0]!,
+        rect[1]!,
+        rect[1]!,
+        rect[2]!,
+        rect[2]!,
+        rect[3]!,
+        rect[3]!,
+        rect[0]!
+      ].map((point) => new THREE.Vector3(point.x, 0.01, point.z));
+      return new THREE.BufferGeometry().setFromPoints(points);
+    }
+
     inst.root.updateMatrixWorld(true);
     inst.module.updateMatrixWorld(true);
 
@@ -5664,6 +6025,55 @@ type WindowInstance = {
     return instances.flatMap((inst) => getInstanceGeometryMeshes(inst));
   }
 
+  function getKitchenWorktopGeometryMeshes() {
+    return kitchenWorktops.flatMap((worktop) => {
+      if (viewMode === "2d") return worktop.mesh.visible ? [worktop.mesh] : [];
+      return worktop.mesh.visible ? [worktop.mesh] : [];
+    });
+  }
+
+  function getMeasure3DSnapTargetObject(obj: THREE.Object3D | null | undefined) {
+    if (!obj) return null;
+    const instanceId = getInstanceIdFromObject(obj);
+    if (instanceId) {
+      const inst = findInstance(instanceId);
+      if (inst) return inst.module;
+    }
+
+    const worktopId = getWorktopIdFromObject(obj);
+    if (worktopId) {
+      const worktop = kitchenWorktops.find((item) => item.id === worktopId) ?? null;
+      if (worktop) return worktop.mesh;
+    }
+
+    const kind = obj.userData?.kind as string | undefined;
+    if (kind === "window" && windowInst) return windowInst.root;
+
+    const wallId = obj.userData?.wallId as string | undefined;
+    if (wallId) {
+      const wall = walls.find((item) => item.id === wallId) ?? null;
+      if (wall) return wall.mesh;
+    }
+
+    const floorId = obj.userData?.floorId as string | undefined;
+    if (floorId) {
+      const floor = floors.find((item) => item.id === floorId) ?? null;
+      if (floor) return floor.mesh;
+    }
+
+    return obj;
+  }
+
+  function getLayoutMeasureMeshes3d() {
+    const meshes: THREE.Mesh[] = [];
+    meshes.push(...getAllInstanceGeometryMeshes());
+    meshes.push(...getKitchenWorktopGeometryMeshes());
+    for (const wall of walls) if (wall.mesh.visible) meshes.push(wall.mesh);
+    for (const floor of floors) if (floor.mesh.visible) meshes.push(floor.mesh);
+    if (windowInst?.pick.visible) meshes.push(windowInst.pick);
+    return meshes;
+  }
+
   function getInstanceIdFromObject(obj: THREE.Object3D | null | undefined) {
     let current: THREE.Object3D | null | undefined = obj;
     while (current) {
@@ -5672,6 +6082,77 @@ type WindowInstance = {
       current = current.parent;
     }
     return null;
+  }
+
+  function getWorktopIdFromObject(obj: THREE.Object3D | null | undefined) {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.worktopId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  }
+
+  function findKitchenWorktop(id: string) {
+    return kitchenWorktops.find((worktop) => worktop.id === id) ?? null;
+  }
+
+  function keepStickyPlanSnap(
+    rawPoint: THREE.Vector3,
+    sticky: PlanSnapResult | null,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    thresholdPx = 20
+  ) {
+    if (!sticky || sticky.kind === "none") return null;
+    const rawScreen = worldToScreen(rawPoint, camera, rect);
+    const stickyScreen = worldToScreen(sticky.point, camera, rect);
+    const dx = rawScreen.x - stickyScreen.x;
+    const dy = rawScreen.y - stickyScreen.y;
+    if (Math.hypot(dx, dy) > thresholdPx) return null;
+    return {
+      point: sticky.point.clone(),
+      kind: sticky.kind,
+      a: sticky.a?.clone() ?? null,
+      b: sticky.b?.clone() ?? null,
+      owner: sticky.owner
+    } satisfies PlanSnapResult;
+  }
+
+  function resolveKitchenWorktopDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
+    const snapped = snapPoint2D(rawPoint, rect, cam(), 32, {
+      kindPriority: ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"],
+      sticky: worktopDrawSnap,
+      preferNearest: true
+    });
+    const activeSnap =
+      snapped.kind !== "none" ? snapped : keepStickyPlanSnap(rawPoint, worktopDrawSnap, cam(), rect, 32);
+    worktopDrawSnap = activeSnap;
+    return activeSnap;
+  }
+
+  function beginKitchenWorktopSelection(worktopId: string, ev: PointerEvent) {
+    const worktop = findKitchenWorktop(worktopId);
+    if (!worktop) return false;
+    if (marquee.pending && marquee.pointerId === ev.pointerId) {
+      marquee.hitSomething = true;
+      marquee.pending = false;
+      marquee.active = false;
+      marqueeEl.style.display = "none";
+    }
+    if (!S.kitchenEditMode && worktop.kitchenGroupId) {
+      const group = kitchenMode?.findKitchenGroup(worktop.kitchenGroupId) ?? null;
+      if (group) {
+        setSelectedKitchenGroup(group.id);
+        return true;
+      }
+    }
+    if (worktop.kitchenGroupId) {
+      setSelectedKitchenGroup(worktop.kitchenGroupId);
+      return true;
+    }
+    return false;
   }
 
   function createInstance(nextParams: ModuleParams, opts?: { id?: string }) {
@@ -5708,7 +6189,7 @@ type WindowInstance = {
     outline.renderOrder = 58;
     root.add(outline);
 
-    const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, root, module, localBox, pick, outline };
+    const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, kitchenPlacement: null, root, module, localBox, pick, outline };
     ensurePickAndOutline(inst);
     return inst;
   }
@@ -6169,7 +6650,7 @@ type WindowInstance = {
     });
   }
 
-  function rebuildInstance(inst: LayoutInstance) {
+  function rebuildInstance(inst: LayoutInstance, opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean }) {
     const normalizedParams = normalizeModuleParams(structuredClone(inst.params));
     const errors = validateModule(normalizedParams);
     renderErrors(args.errorsEl, errors);
@@ -6185,18 +6666,27 @@ type WindowInstance = {
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
     const prevPos = inst.root.position.clone();
+    const prevLocalBackCenter = getModuleLocalBackCenter(inst).clone();
 
     inst.root.remove(prevModule);
     inst.module = next;
     inst.root.add(inst.module);
     inst.localBox = new THREE.Box3().setFromObject(inst.module);
+    if (opts?.preserveBackAnchor) {
+      const nextLocalBackCenter = getModuleLocalBackCenter(inst);
+      const delta = prevLocalBackCenter.clone().sub(nextLocalBackCenter);
+      inst.module.position.add(delta);
+      inst.localBox = new THREE.Box3().setFromObject(inst.module);
+    }
     ensurePickAndOutline(inst);
 
-    const clamped = applyWallConstraints(inst, inst.root.position.clone());
-    inst.root.position.copy(clamped);
+    if (!opts?.skipLayoutValidation) {
+      const clamped = applyWallConstraints(inst, inst.root.position.clone());
+      inst.root.position.copy(clamped);
+    }
 
-    const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
-    const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst);
+    const inRoom = opts?.skipLayoutValidation ? true : roomContainsBoxXZ(instanceWorldBox(inst));
+    const overlaps = opts?.skipLayoutValidation ? false : anyOverlap(inst, null) || moduleOverlapsWalls(inst);
     if (!inRoom || overlaps) {
       // Revert (layout must never allow overlaps)
       inst.params = previousParams;
@@ -6272,6 +6762,14 @@ type WindowInstance = {
     layoutRoot.add(next.root);
     instances.push(next);
     placeWithoutOverlap(next);
+    if (next.kitchenGroupId) {
+      const group = S.kitchenGroups.find((item) => item.id === next.kitchenGroupId) ?? null;
+      next.kitchenPlacement = inferKitchenPlacementBinding(
+        next,
+        next.kitchenGroupId,
+        group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm
+      );
+    }
     setSelectedModule(next.id);
     updateLayoutPanel();
   }
@@ -6576,14 +7074,17 @@ type WindowInstance = {
   }
 
   function setView2d(enabled: boolean) {
+    if (!enabled && S.kitchenEditMode && kitchenWorktopDraw.active) {
+      handleKitchenWorktopEscape();
+    }
     viewMode = enabled ? "2d" : "3d";
     S.viewMode = viewMode;
     setViewMode(viewMode);
-    syncViewerTabs();
+  syncViewerTabs(viewMode);
 
     for (const inst of instances) {
       ensurePickAndOutline(inst);
-      inst.module.visible = true;
+      inst.module.visible = !enabled;
       (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.88;
       inst.outline.visible = true;
     }
@@ -6598,13 +7099,24 @@ type WindowInstance = {
       floor.outline.visible = true;
     }
 
+    for (const worktop of kitchenWorktops) {
+      worktop.mesh.visible = true;
+      worktop.outline.visible = enabled;
+      const outlineMaterial = worktop.outline.material as THREE.LineBasicMaterial;
+      outlineMaterial.opacity = enabled ? 0.98 : 0.78;
+      const meshMaterial = worktop.mesh.material as THREE.MeshStandardMaterial;
+      meshMaterial.transparent = enabled;
+      meshMaterial.opacity = enabled ? 0.35 : 1;
+      meshMaterial.depthWrite = !enabled;
+    }
+
     wallSnapMarkers.visible = !!selectedWallId;
     updateSelectionHighlights();
 
     wallPlanGroup.visible = enabled;
     rebuildWallPlanMesh();
     for (const w of walls) {
-      w.mesh.visible = true;
+      w.mesh.visible = !enabled;
       w.outline.visible = !enabled;
       const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
       outlineMaterial.opacity = enabled ? 0 : 0.78;
@@ -6625,24 +7137,17 @@ type WindowInstance = {
     partsLayoutHost.style.display = isLayout ? "" : "none";
 
     args.propertiesEl.hidden = !isLayout;
+    if (drawOrthoToggleEl) drawOrthoToggleEl.style.display = isLayout ? "" : "none";
     if (!isLayout) {
       layoutTool = "select";
-      wallDraw.active = false;
-      wallDraw.a = null;
-      if (wallDraw.preview) {
-        layoutRoot.remove(wallDraw.preview);
-        wallDraw.preview.geometry.dispose();
-        (wallDraw.preview.material as THREE.Material).dispose();
-        wallDraw.preview = null;
-      }
+      clearWallDrawState();
     }
 
-    // Disable measuring in layout (for now).
-    if (isLayout) {
+    if (!isLayout) {
       measureState.enabled = false;
       args.measureBtn.textContent = "Measure: Off";
-      clearPreview();
-      if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
+      clearAllMeasurements();
+      hideHoverCursor();
       args.measureReadoutEl.textContent = "";
     }
 
@@ -7066,6 +7571,14 @@ type WindowInstance = {
     const inst = instanceId ? findInstance(instanceId) : null;
     if (inst?.kitchenGroupId && !S.kitchenEditMode) {
       kitchenMode?.enterExisting(inst.kitchenGroupId);
+      return;
+    }
+
+    const worktopHit = raycaster.intersectObjects(getKitchenWorktopGeometryMeshes(), false)[0]?.object as THREE.Mesh | undefined;
+    const worktopId = getWorktopIdFromObject(worktopHit);
+    const worktop = worktopId ? findKitchenWorktop(worktopId) : null;
+    if (worktop?.kitchenGroupId && !S.kitchenEditMode) {
+      kitchenMode?.enterExisting(worktop.kitchenGroupId);
       return;
     }
 
@@ -7565,6 +8078,63 @@ type WindowInstance = {
         return;
       }
 
+      if (layoutTool === "measure") {
+        if (ev.button !== 0) return;
+        let kind: string = "none";
+        let point: THREE.Vector3 | null = null;
+
+        if (viewMode === "2d") {
+          const hitPoint = new THREE.Vector3();
+          if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+          const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
+            perpendicularFrom: measureState.firstPoint
+          });
+          kind = snapped.kind;
+          point = snapped.kind !== "none" ? snapped.point : hitPoint;
+          if (!measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
+            const axisAssist = applyMeasureAxisAssist(measureState.firstPoint, point, cam(), rect, 12);
+            if (axisAssist) {
+              point = axisAssist.point;
+              kind = "axis";
+            }
+          }
+        } else {
+          const hit = pickSurfacePoint(raycaster, getLayoutMeasureMeshes3d());
+          if (!hit) return;
+          const snapTarget = getMeasure3DSnapTargetObject(hit.object);
+          const snapped = snapPoint3D(hit.point, snapTarget ?? hit.object, cam(), rect, 32);
+          kind = snapped.kind;
+          point = snapped.point;
+          if (!measureState.axisLock && snapped.kind === "free") {
+            const axisAssist = applyMeasureAxisAssist3D(measureState.firstPoint, point, cam(), rect, 12);
+            if (axisAssist) {
+              point = axisAssist.point;
+              kind = "axis";
+            }
+          }
+        }
+        if (!point) return;
+
+        if (!measureState.firstPoint) {
+          measureState.firstPoint = point.clone();
+          setFirstPointMarker(measureState.firstPoint);
+          args.measureReadoutEl.textContent = `Prvý bod (${kind}): ${formatMm(point)} — klikni druhý bod.`;
+          setUnderlayStatus("Measure: klikni druhý bod.");
+          mountProps();
+          return;
+        }
+
+        let a = measureState.firstPoint.clone();
+        let b = point.clone();
+        if (measureState.axisLock) b = viewMode === "2d" ? axisLockXZ(a, b) : axisLockPoint3D(a, b);
+        addMeasurement(a, b, viewMode === "2d" ? planarDistanceMm(a, b) : distance3dMm(a, b));
+        measureState.firstPoint = null;
+        setFirstPointMarker(null);
+        clearPreview();
+        clearToolHud();
+        return;
+      }
+
       if (layoutTool === "dimension") {
         if (viewMode !== "2d") return;
         if (ev.button !== 0) return;
@@ -7621,6 +8191,20 @@ type WindowInstance = {
         return;
       }
 
+      if (S.kitchenEditMode && kitchenWorktopDraw.active) {
+        if (viewMode !== "2d" || ev.button !== 0) return;
+        const hitPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+        const rect2 = renderer.domElement.getBoundingClientRect();
+        const activeSnap = resolveKitchenWorktopDrawSnap(hitPoint, rect2);
+        const source = activeSnap ? activeSnap.point : hitPoint.clone();
+        const rawPoint = { x: Math.round(source.x * 1000), z: Math.round(source.z * 1000) };
+        const basePoint = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1] ?? null;
+        const point = basePoint ? floorOrthoPoint(basePoint, rawPoint) : rawPoint;
+        appendKitchenWorktopPoint(point);
+        return;
+      }
+
       if (layoutTool === "wall") {
         if (ev.button !== 0) return;
         // Place wall by 2 clicks on ground (XZ).
@@ -7628,7 +8212,7 @@ type WindowInstance = {
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
         const rect2 = renderer.domElement.getBoundingClientRect();
         const snapped = snapPoint2D(hitPoint, rect2, cam());
-        const shouldAxisSnap = !ev.shiftKey && snapped.kind === "none";
+        const shouldAxisSnap = drawOrthoEnabled && !ev.shiftKey && snapped.kind === "none";
 
       if (!wallDraw.active) {
         wallDraw.active = true;
@@ -7679,16 +8263,7 @@ type WindowInstance = {
         wallDraw.segments += 1;
 
         if (closes) {
-          wallDraw.active = false;
-          wallDraw.a = null;
-          wallDraw.chainStart = null;
-          wallDraw.segments = 0;
-          if (wallDraw.preview) {
-            layoutRoot.remove(wallDraw.preview);
-            wallDraw.preview.geometry.dispose();
-            (wallDraw.preview.material as THREE.Material).dispose();
-            wallDraw.preview = null;
-          }
+          clearWallDrawState();
           setUnderlayStatus("Wall: chain closed.");
           return;
         }
@@ -7729,6 +8304,10 @@ type WindowInstance = {
         const moduleId = getInstanceIdFromObject(moduleHit);
         const selectableModuleId = moduleId && kitchenMode ? kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
         if (selectableModuleId && beginModuleSelection(selectableModuleId, ev)) return;
+
+        const worktopHit = raycaster.intersectObjects(getKitchenWorktopGeometryMeshes(), false)[0]?.object;
+        const worktopId = getWorktopIdFromObject(worktopHit);
+        if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
 
         let bestFloor: { id: string; px: number } | null = null;
         for (const floor of floors) {
@@ -7819,6 +8398,7 @@ type WindowInstance = {
       for (const d of dimensions) picks.push(d.pick);
       const hits = raycaster.intersectObjects(picks, false);
       const first = hits[0]?.object as THREE.Mesh | undefined;
+      const worktopHit3d = raycaster.intersectObjects(getKitchenWorktopGeometryMeshes(), false)[0]?.object as THREE.Mesh | undefined;
       const kind = (first?.userData?.kind as string | undefined) ?? "module";
 
       if (kind === "window") {
@@ -7901,6 +8481,10 @@ type WindowInstance = {
         setSelectedWall(wallId);
         return;
       }
+
+      const worktopId = getWorktopIdFromObject(first) ?? getWorktopIdFromObject(worktopHit3d);
+      if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
+
       if (!id) {
         if (viewMode === "2d" && layoutTool === "select" && ev.button === 0 && underlayMesh.visible && !underlayState.pinned) {
           const underlayHit = raycaster.intersectObject(underlayMesh, false)[0];
@@ -8154,15 +8738,15 @@ type WindowInstance = {
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
 
-      const snapped = snapPoint2D(hitPoint, rect, cam(), 24);
+      const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
+        sticky: selectPlanSnap
+      });
+      selectPlanSnap = snapped.kind !== "none" ? snapped : null;
       const p = snapped.kind !== "none" ? snapped.point : hitPoint;
       if (snapped.kind !== "none") {
-        const s = worldToScreen(p, cam(), rect);
-        wallSnapHud.style.left = `${s.x}px`;
-        wallSnapHud.style.top = `${s.y}px`;
-        wallSnapHud.style.display = "block";
+        updateHoverCursor(worldToScreen(p, cam(), rect), snapped.kind);
       } else {
-        wallSnapHud.style.display = "none";
+        hideHoverCursor();
       }
 
       if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
@@ -8388,6 +8972,158 @@ type WindowInstance = {
       // no return; other pointermove handling can still run (e.g. marquee box)
     }
 
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "measure") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+        hideHoverCursor();
+        clearToolHud();
+        clearPreview();
+        return;
+      }
+
+      const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
+        perpendicularFrom: measureState.firstPoint,
+        kindPriority: ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"],
+        sticky: measurePlanSnap
+      });
+      measurePlanSnap = snapped.kind !== "none" ? snapped : null;
+      let kind = snapped.kind;
+      let point = snapped.kind !== "none" ? snapped.point : hitPoint;
+      if (!measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
+        const axisAssist = applyMeasureAxisAssist(measureState.firstPoint, point, cam(), rect, 12);
+        if (axisAssist) {
+          point = axisAssist.point;
+          kind = "axis";
+        }
+      }
+      measureState.hoverPoint = point.clone();
+      measureState.hoverSnap = kind;
+      updateHoverCursor(worldToScreen(point, cam(), rect), kind);
+
+      const thick = hudLineThicknessM(rect);
+      if (
+        snapped.a &&
+        snapped.b &&
+        (snapped.kind === "edge" ||
+          snapped.kind === "axis" ||
+          snapped.kind === "midpoint" ||
+          snapped.kind === "perpendicular")
+      ) {
+        updateHudLine(hudHoverLine, snapped.a, snapped.b, thick * 1.75);
+      } else if (kind === "axis" && measureState.firstPoint) {
+        updateHudLine(hudHoverLine, measureState.firstPoint, point, thick * 1.75);
+      } else {
+        hudHoverLine.visible = false;
+      }
+
+      if (measureState.firstPoint) {
+        let a = measureState.firstPoint.clone();
+        let b = point.clone();
+        if (measureState.axisLock) b = axisLockXZ(a, b);
+        updatePreview(a, b, rect);
+        args.measureReadoutEl.textContent = `Measure: ${Math.round(planarDistanceMm(a, b))} mm`;
+      } else {
+        clearPreview();
+        args.measureReadoutEl.textContent = `Measure hover (${kind}): ${formatMm(point)}`;
+      }
+      setFirstPointMarker(measureState.firstPoint);
+      return;
+    }
+
+    if (mode === "layout" && viewMode === "3d" && layoutTool === "measure") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+
+      const hit = pickSurfacePoint(raycaster, getLayoutMeasureMeshes3d());
+      if (!hit) {
+        measureState.hoverPoint = null;
+        measureState.hoverSnap = "none";
+        hideHoverCursor();
+        clearToolHud();
+        clearPreview();
+        args.measureReadoutEl.textContent = measureState.firstPoint
+          ? "Measure 3D: pick second point."
+          : "Measure 3D: click first point.";
+        return;
+      }
+
+      const snapTarget = getMeasure3DSnapTargetObject(hit.object);
+      const snapped = snapPoint3D(hit.point, snapTarget ?? hit.object, cam(), rect, 32);
+      let kind: typeof measureState.hoverSnap = snapped.kind;
+      let point = snapped.point.clone();
+      if (!measureState.axisLock && snapped.kind === "free") {
+        const axisAssist = applyMeasureAxisAssist3D(measureState.firstPoint, point, cam(), rect, 12);
+        if (axisAssist) {
+          point = axisAssist.point;
+          kind = "axis";
+        }
+      }
+
+      measureState.hoverPoint = point.clone();
+      measureState.hoverSnap = kind;
+      updateHoverCursor(worldToScreen(point, cam(), rect), kind);
+
+      const thick = hudLineThicknessM(rect);
+      if (kind === "axis" && measureState.firstPoint) {
+        updateHudLine(hudHoverLine, measureState.firstPoint, point, thick * 1.75);
+      } else {
+        hudHoverLine.visible = false;
+      }
+
+      if (measureState.firstPoint) {
+        const a = measureState.firstPoint.clone();
+        let b = point.clone();
+        if (measureState.axisLock) b = axisLockPoint3D(a, b);
+        updatePreview(a, b, rect, distance3dMm(a, b));
+        args.measureReadoutEl.textContent = `Measure 3D (${kind}): ${Math.round(distance3dMm(a, b))} mm`;
+      } else {
+        clearPreview();
+        args.measureReadoutEl.textContent = `Measure 3D hover (${kind}): ${Math.round(point.x * 1000)}, ${Math.round(point.y * 1000)}, ${Math.round(point.z * 1000)}`;
+      }
+      setFirstPointMarker(measureState.firstPoint);
+      return;
+    }
+
+    if (mode === "layout" && S.kitchenEditMode && kitchenWorktopDraw.active && viewMode === "2d") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      kitchenWorktopDraw.lastPointerPx.x = ev.clientX - rect.left;
+      kitchenWorktopDraw.lastPointerPx.y = ev.clientY - rect.top;
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+      const activeSnap = resolveKitchenWorktopDrawSnap(hitPoint, rect);
+      if (activeSnap) {
+        updateHoverCursor(worldToScreen(activeSnap.point, cam(), rect), activeSnap.kind);
+      } else {
+        hideHoverCursor();
+      }
+      const source = activeSnap ? activeSnap.point : hitPoint;
+      const rawPoint = { x: Math.round(source.x * 1000), z: Math.round(source.z * 1000) };
+      const basePoint = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1] ?? null;
+      kitchenWorktopDraw.hoverPoint = basePoint ? floorOrthoPoint(basePoint, rawPoint) : rawPoint;
+      if (kitchenWorktopDraw.typedMm.trim().length > 0) {
+        wallTypedHud.textContent = `${kitchenWorktopDraw.typedMm} mm`;
+        wallTypedHud.style.left = `${ev.clientX - rect.left}px`;
+        wallTypedHud.style.top = `${ev.clientY - rect.top}px`;
+        wallTypedHud.style.display = "block";
+      } else {
+        wallTypedHud.style.display = "none";
+      }
+      if (kitchenWorktopDraw.points.length > 0) updateKitchenWorktopPreview();
+      return;
+    }
+
     if (mode === "layout" && layoutTool === "wall" && wallDraw.active && wallDraw.a && wallDraw.preview) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -8398,18 +9134,19 @@ type WindowInstance = {
       raycaster.setFromCamera(pointerNdc, cam());
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-      const snapped = snapPoint2D(hitPoint, rect, cam());
-      if (snapped.kind !== "none") {
-        const s = worldToScreen(snapped.point, cam(), rect);
-        wallSnapHud.style.left = `${s.x}px`;
-        wallSnapHud.style.top = `${s.y}px`;
-        wallSnapHud.style.display = "block";
+      const snapped = snapPoint2D(hitPoint, rect, cam(), 14, {
+        sticky: wallDrawSnap
+      });
+      const activeSnap = snapped.kind !== "none" ? snapped : keepStickyPlanSnap(hitPoint, wallDrawSnap, cam(), rect, 18);
+      wallDrawSnap = activeSnap;
+      if (activeSnap) {
+        updateHoverCursor(worldToScreen(activeSnap.point, cam(), rect), activeSnap.kind);
       } else {
-        wallSnapHud.style.display = "none";
+        hideHoverCursor();
       }
 
-      const shouldAxisSnap = !ev.shiftKey && snapped.kind === "none";
-      const b0 = snapped.kind !== "none" ? snapped.point : hitPoint;
+      const shouldAxisSnap = drawOrthoEnabled && !ev.shiftKey && !activeSnap;
+      const b0 = activeSnap ? activeSnap.point : hitPoint;
       const b = shouldAxisSnap ? snapAxisXZ(wallDraw.a, b0, true) : b0;
       wallDraw.hoverB = b.clone();
       updateWallMeshWithJustification(
@@ -8442,24 +9179,15 @@ type WindowInstance = {
       raycaster.setFromCamera(pointerNdc, cam());
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-      const snapped = snapPoint2D(hitPoint, rect, cam());
-      if (snapped.kind !== "none") {
-        const s = worldToScreen(snapped.point, cam(), rect);
-        wallSnapHud.style.left = `${s.x}px`;
-        wallSnapHud.style.top = `${s.y}px`;
-        wallSnapHud.style.display = "block";
-        const c =
-          snapped.kind === "corner"
-            ? "#ff4dff"
-            : snapped.kind === "edge"
-              ? "#ffd166"
-              : snapped.kind === "endpoint"
-                ? "#3ddc97"
-                : "#00e5ff";
-        wallSnapHud.style.borderColor = c;
-        wallSnapHud.style.background = `${c}33`;
+      const snapped = snapPoint2D(hitPoint, rect, cam(), 14, {
+        sticky: wallDrawSnap
+      });
+      const activeSnap = snapped.kind !== "none" ? snapped : keepStickyPlanSnap(hitPoint, wallDrawSnap, cam(), rect, 18);
+      wallDrawSnap = activeSnap;
+      if (activeSnap) {
+        updateHoverCursor(worldToScreen(activeSnap.point, cam(), rect), activeSnap.kind);
       } else {
-        wallSnapHud.style.display = "none";
+        hideHoverCursor();
       }
     }
 
@@ -8471,14 +9199,15 @@ type WindowInstance = {
       raycaster.setFromCamera(pointerNdc, cam());
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-      const snapped = snapPoint2D(hitPoint, rect, cam(), 12);
-      if (snapped.kind !== "none") {
-        const s = worldToScreen(snapped.point, cam(), rect);
-        wallSnapHud.style.left = `${s.x}px`;
-        wallSnapHud.style.top = `${s.y}px`;
-        wallSnapHud.style.display = "block";
+      const snapped = snapPoint2D(hitPoint, rect, cam(), 12, {
+        sticky: selectPlanSnap
+      });
+      const activeSnap = snapped.kind !== "none" ? snapped : keepStickyPlanSnap(hitPoint, selectPlanSnap, cam(), rect, 16);
+      selectPlanSnap = activeSnap;
+      if (activeSnap) {
+        drawSnapOverlay.showWorld(activeSnap.point, cam(), rect, activeSnap.kind);
       } else {
-        wallSnapHud.style.display = "none";
+        drawSnapOverlay.hide();
       }
     }
 
@@ -8545,7 +9274,7 @@ type WindowInstance = {
     if (!hit) {
       measureState.hoverPoint = null;
       measureState.hoverSnap = "none";
-      if (measureState.cursorEl) measureState.cursorEl.style.display = "none";
+      hideHoverCursor();
       args.measureReadoutEl.textContent = measureState.firstPoint
         ? "Pick second pointâ€¦ (no surface)"
         : "Click 2 points to measure (planar X/Z).";
@@ -8557,16 +9286,7 @@ type WindowInstance = {
     measureState.hoverPoint = snapped.point;
     measureState.hoverSnap = snapped.kind;
 
-    // Cursor indicator
-    if (measureState.cursorEl) {
-      const s = worldToScreen(snapped.point, cam(), rect);
-      measureState.cursorEl.style.left = `${s.x}px`;
-      measureState.cursorEl.style.top = `${s.y}px`;
-      measureState.cursorEl.style.display = "block";
-      // Color by snap state: corner=magenta, edge=yellow, free=cyan
-      const c = snapped.kind === "corner" ? "#ff4dff" : snapped.kind === "edge" ? "#ffd166" : "#00e5ff";
-      measureState.cursorEl.style.borderColor = c;
-    }
+    updateHoverCursor(worldToScreen(snapped.point, cam(), rect), snapped.kind as any);
 
     // Preview line after first click
     if (measureState.firstPoint) {
@@ -9053,10 +9773,317 @@ type WindowInstance = {
     }
   };
 
+  const enforceWallDrawInvariant = () => {
+    const wallToolInactive = mode !== "layout" || viewMode !== "2d" || layoutTool !== "wall";
+    const wallDrawStale =
+      !wallDraw.active ||
+      !wallDraw.a ||
+      !wallDraw.preview;
+
+    if (wallToolInactive || wallDrawStale) {
+      if (
+        wallDraw.active ||
+        wallDraw.a ||
+        wallDraw.chainStart ||
+        wallDraw.hoverB ||
+        wallDraw.typedMm.trim().length > 0 ||
+        wallDraw.preview ||
+        drawSnapOverlay.isVisible() ||
+        wallTypedHud.style.display !== "none"
+      ) {
+        clearWallDrawState();
+      }
+    }
+  };
+
+  const enforceKitchenWorktopDrawInvariant = () => {
+    const inactive = mode !== "layout" || !S.kitchenEditMode || viewMode !== "2d" || !kitchenWorktopDraw.active;
+    if (!inactive) return;
+    if (
+      kitchenWorktopDraw.points.length > 0 ||
+      kitchenWorktopDraw.hoverPoint ||
+      kitchenWorktopDraw.previewRoot
+    ) {
+      cancelKitchenWorktopDraw({ silent: true });
+    }
+  };
+
+  const getDebugModuleSnapshot = (inst: LayoutInstance) => {
+    const box = instanceWorldBox(inst);
+    const structuralMeshes: THREE.Object3D[] = [];
+    inst.module.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const name = child.name || "";
+      if (
+        name.startsWith("handle_") ||
+        name.startsWith("gola_") ||
+        name.startsWith("plinth-clip") ||
+        name.includes("_screw_")
+      ) {
+        return;
+      }
+      structuralMeshes.push(child);
+    });
+    const structuralBox = new THREE.Box3();
+    for (const mesh of structuralMeshes) structuralBox.expandByObject(mesh);
+    const localBackCenter = getModuleLocalBackCenter(inst);
+    const localFrontCenter = new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.max.z);
+    const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
+    const worldFrontCenter = localFrontCenter.clone().applyMatrix4(inst.root.matrixWorld);
+    const worldFrontDir = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, inst.root.rotation.y, 0)).normalize();
+    return {
+      id: inst.id,
+      kitchenGroupId: inst.kitchenGroupId,
+      kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null,
+      params: structuredClone(inst.params),
+      positionM: {
+        x: inst.root.position.x,
+        y: inst.root.position.y,
+        z: inst.root.position.z
+      },
+      rotationYRad: inst.root.rotation.y,
+      localBoxM: {
+        min: { x: inst.localBox.min.x, y: inst.localBox.min.y, z: inst.localBox.min.z },
+        max: { x: inst.localBox.max.x, y: inst.localBox.max.y, z: inst.localBox.max.z }
+      },
+      worldBoxM: {
+        min: { x: box.min.x, y: box.min.y, z: box.min.z },
+        max: { x: box.max.x, y: box.max.y, z: box.max.z }
+      },
+      structuralWorldBoxM: {
+        min: { x: structuralBox.min.x, y: structuralBox.min.y, z: structuralBox.min.z },
+        max: { x: structuralBox.max.x, y: structuralBox.max.y, z: structuralBox.max.z }
+      },
+      worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
+      worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },
+      frontVectorM: { x: worldFrontDir.x, y: worldFrontDir.y, z: worldFrontDir.z },
+      realizedDepthMm: Math.round(worldFrontCenter.clone().sub(worldBackCenter).dot(worldFrontDir) * 1000),
+      structuralDepthMm: Math.round(
+        Math.abs(
+          new THREE.Vector3(
+            structuralBox.max.x - structuralBox.min.x,
+            structuralBox.max.y - structuralBox.min.y,
+            structuralBox.max.z - structuralBox.min.z
+          ).dot(new THREE.Vector3(Math.abs(worldFrontDir.x), Math.abs(worldFrontDir.y), Math.abs(worldFrontDir.z)))
+        ) * 1000
+      )
+    };
+  };
+
+  const getDebugKitchenSnapshot = (groupId: string | null) => {
+    const group = groupId ? S.kitchenGroups.find((item) => item.id === groupId) ?? null : null;
+    const groupWorktops = groupId ? kitchenWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
+    const groupInstances = groupId ? instances.filter((item) => item.kitchenGroupId === groupId) : [];
+    return {
+      selectedKitchenGroupId,
+      activeKitchenGroupId: S.activeKitchenGroupId,
+      kitchenCtx: structuredClone(S.kitchenCtx),
+      group: group
+        ? {
+            id: group.id,
+            name: group.name,
+            ctx: structuredClone(group.ctx),
+            instanceIds: [...group.instanceIds]
+          }
+        : null,
+      worktops: groupWorktops.map((worktop) => ({
+        id: worktop.id,
+        params: structuredClone(worktop.params),
+        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm).map(
+          (point) => ({ x: point.x, y: point.y, z: point.z })
+        )
+      })),
+      instances: groupInstances.map((inst) => getDebugModuleSnapshot(inst))
+    };
+  };
+
+  const debugResetKitchenScenario = () => {
+    if (S.kitchenEditMode) kitchenMode?.exitDiscard();
+    cancelKitchenWorktopDraw({ silent: true });
+    if (placement.active) cancelPlacement(S, placementHelpers);
+
+    for (let index = kitchenWorktops.length - 1; index >= 0; index -= 1) {
+      removeKitchenWorktop(kitchenWorktops[index]!.id, { skipHistory: true });
+    }
+    for (let index = instances.length - 1; index >= 0; index -= 1) {
+      deleteInstance(instances[index]!.id);
+    }
+
+    S.kitchenGroups.splice(0, S.kitchenGroups.length);
+    S.kitchenCtx = resolveContext(makeDefaultKitchenContext());
+    setSelectedKitchenGroup(null);
+    setSelectedModule(null);
+    mountProps();
+    updateLayoutPanel();
+    return getDebugKitchenSnapshot(null);
+  };
+
+  const debugSelectKitchenGroup = (groupId: string | null) => {
+    setSelectedKitchenGroup(groupId);
+    mountProps();
+    return getDebugKitchenSnapshot(groupId);
+  };
+
+  const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number }) => {
+    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
+    const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
+    if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
+
+    const nextParams = structuredClone(getModuleDescriptorOrThrow(opts?.type ?? "drawer_low").defaultParams()) as ModuleParams;
+    applyKitchenContextToModuleParams(nextParams, group.ctx);
+    const inst = createInstance(nextParams);
+    inst.kitchenGroupId = groupId;
+
+    const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
+    if (!info) throw new Error("Debug guide segment not available.");
+
+    const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
+    inst.kitchenPlacement = {
+      worktopId: worktop.id,
+      segmentIndex: opts?.segmentIndex ?? 0,
+      offsetAlongM: desiredAlongM
+    };
+    applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+
+    layoutRoot.add(inst.root);
+    instances.push(inst);
+    group.instanceIds = instances.filter((item) => item.kitchenGroupId === groupId).map((item) => item.id);
+    updateLayoutPanel();
+    return getDebugKitchenSnapshot(groupId);
+  };
+
+  const debugCreateKitchenScenario = (opts?: {
+    ctxPatch?: Partial<ReturnType<typeof resolveContext>>;
+    path?: FloorBoundaryPoint[];
+    justification?: KitchenWorktopJustification;
+    mirrored?: boolean;
+    addModule?: boolean;
+    moduleType?: ModuleParams["type"];
+    segmentIndex?: number;
+    offsetAlongMm?: number;
+  }) => {
+    debugResetKitchenScenario();
+    ensureLayoutMode();
+
+    const nextCtx = resolveContext({
+      ...makeDefaultKitchenContext(),
+      ...(opts?.ctxPatch ?? {})
+    });
+    const groupId = `dbg_kg_${Date.now()}`;
+    S.kitchenCtx = structuredClone(nextCtx);
+    S.kitchenGroups.push({
+      id: groupId,
+      name: "Debug Kitchen",
+      ctx: structuredClone(nextCtx),
+      instanceIds: []
+    });
+
+    createKitchenWorktop(
+      {
+        path: structuredClone(opts?.path ?? [{ x: 0, z: 0 }, { x: 2400, z: 0 }]),
+        justification: opts?.justification ?? "back",
+        mirrored: !!opts?.mirrored,
+        depthMm: nextCtx.worktopDepthMm,
+        thicknessMm: nextCtx.worktopThicknessMm,
+        heightMm: nextCtx.heightMm,
+        overhangSideMm: nextCtx.worktopOverhangSideMm,
+        materialId: nextCtx.worktopMaterialId
+      },
+      groupId,
+      { skipHistory: true, id: "dbg_wt1" }
+    );
+
+    if (opts?.addModule !== false) {
+      debugAddKitchenModule(groupId, {
+        type: opts?.moduleType ?? "drawer_low",
+        segmentIndex: opts?.segmentIndex ?? 0,
+        offsetAlongMm: opts?.offsetAlongMm ?? 700
+      });
+    }
+
+    debugSelectKitchenGroup(groupId);
+    return getDebugKitchenSnapshot(groupId);
+  };
+
+  const debugPatchKitchenContext = (groupId: string, patch: Partial<ReturnType<typeof resolveContext>>) => {
+    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
+    if (!group) throw new Error(`Kitchen group ${groupId} not found.`);
+    const prevCtx = resolveContext(structuredClone(group.ctx));
+    const nextCtx = resolveContext({ ...group.ctx, ...patch });
+    group.ctx = structuredClone(nextCtx);
+    if (S.activeKitchenGroupId === groupId || selectedKitchenGroupId === groupId) {
+      S.kitchenCtx = structuredClone(nextCtx);
+    }
+    rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
+    mountProps();
+    return getDebugKitchenSnapshot(groupId);
+  };
+
+  const debugEnterMeasureTool = () => {
+    setToolMeasure();
+    return {
+      layoutTool,
+      enabled: measureState.enabled
+    };
+  };
+
+  const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
+    return { x: screen.x, y: screen.y };
+  };
+
+  const debugPlanSnap = (
+    pointMm: { x: number; z: number },
+    options?: { perpendicularFromMm?: { x: number; z: number } | null }
+  ) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), 24, {
+      perpendicularFrom: options?.perpendicularFromMm
+        ? new THREE.Vector3(options.perpendicularFromMm.x / 1000, 0, options.perpendicularFromMm.z / 1000)
+        : null
+    });
+    return {
+      kind: snapped.kind,
+      owner: snapped.owner ?? null,
+      pointMm: {
+        x: Math.round(snapped.point.x * 1000),
+        z: Math.round(snapped.point.z * 1000)
+      }
+    };
+  };
+
+  const debugMeasureState = () => ({
+    layoutTool,
+    enabled: measureState.enabled,
+    firstPointMm: measureState.firstPoint
+      ? { x: Math.round(measureState.firstPoint.x * 1000), z: Math.round(measureState.firstPoint.z * 1000) }
+      : null,
+    measures: measureState.measures.map((item) => ({
+      aMm: { x: Math.round(item.a.x * 1000), z: Math.round(item.a.z * 1000) },
+      bMm: { x: Math.round(item.b.x * 1000), z: Math.round(item.b.z * 1000) }
+    }))
+  });
+
+  (window as any).__kitchenDebug = {
+    reset: debugResetKitchenScenario,
+    selectKitchenGroup: debugSelectKitchenGroup,
+    createKitchenScenario: debugCreateKitchenScenario,
+    addKitchenModule: debugAddKitchenModule,
+    patchKitchenContext: debugPatchKitchenContext,
+    snapshot: getDebugKitchenSnapshot,
+    enterMeasureTool: debugEnterMeasureTool,
+    projectPlanPoint: debugProjectPlanPoint,
+    planSnap: debugPlanSnap,
+    measureState: debugMeasureState
+  };
+
   const tick = () => {
     const dt = Math.min(0.05, navClock.getDelta());
     applyKeyboardNav(dt);
     ctl().update();
+    enforceWallDrawInvariant();
+    enforceKitchenWorktopDrawInvariant();
     if (selectedBox && selectedMesh) selectedBox.setFromObject(selectedMesh);
     if (selectedInstanceBox && selectedInstanceId) {
       const inst = findInstance(selectedInstanceId);
@@ -9149,367 +10176,4 @@ type WindowInstance = {
   };
   tick();
 
-  function addMeasurement(a: THREE.Vector3, b: THREE.Vector3) {
-    const y = Math.max(a.y, b.y) + 0.002;
-    const p1 = new THREE.Vector3(a.x, y, a.z);
-    const p2 = new THREE.Vector3(b.x, y, b.z);
-
-    const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-    const material = new THREE.LineBasicMaterial({ color: 0x00e5ff });
-    const line = new THREE.Line(geometry, material);
-    line.name = "measureLine";
-    scene.add(line);
-
-    const label = document.createElement("div");
-    label.style.position = "absolute";
-    label.style.transform = "translate(-50%, -50%)";
-    label.style.padding = "4px 8px";
-    label.style.borderRadius = "10px";
-    label.style.border = "1px solid var(--border)";
-    label.style.background = "#0f1117";
-    label.style.color = "var(--text)";
-    label.style.fontSize = "12px";
-    label.style.whiteSpace = "nowrap";
-
-    const mm = planarDistanceMm(a, b);
-    label.textContent = `${Math.round(mm)} mm`;
-    measureOverlay.appendChild(label);
-
-    measureState.measures.push({ a: a.clone(), b: b.clone(), line, label });
-    args.measureReadoutEl.textContent = `Measured: ${Math.round(mm)} mm`;
-  }
-
-  function updateMeasureLabels() {
-    if (measureState.measures.length === 0) return;
-
-    const rect = renderer.domElement.getBoundingClientRect();
-    for (const m of measureState.measures) {
-      const mid = new THREE.Vector3((m.a.x + m.b.x) / 2, (m.a.y + m.b.y) / 2 + 0.02, (m.a.z + m.b.z) / 2);
-      const p = mid.project(cam());
-      const sx = (p.x * 0.5 + 0.5) * rect.width;
-      const sy = (-p.y * 0.5 + 0.5) * rect.height;
-      m.label.style.left = `${sx}px`;
-      m.label.style.top = `${sy}px`;
-    }
-  }
-
-  function updatePreview(a: THREE.Vector3, b: THREE.Vector3, rect: DOMRect) {
-    const y = Math.max(a.y, b.y) + 0.002;
-    const p1 = new THREE.Vector3(a.x, y, a.z);
-    const p2 = new THREE.Vector3(b.x, y, b.z);
-
-    if (!measureState.previewLine) {
-      const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const material = new THREE.LineBasicMaterial({ color: 0x88f7ff });
-      const line = new THREE.Line(geometry, material);
-      line.name = "measurePreviewLine";
-      scene.add(line);
-      measureState.previewLine = line;
-    } else {
-      measureState.previewLine.geometry.setFromPoints([p1, p2]);
-    }
-
-    if (!measureState.previewLabel) {
-      const label = document.createElement("div");
-      label.style.position = "absolute";
-      label.style.transform = "translate(-50%, -50%)";
-      label.style.padding = "4px 8px";
-      label.style.borderRadius = "10px";
-      label.style.border = "1px dashed var(--border)";
-      label.style.background = "#0f1117";
-      label.style.color = "var(--text)";
-      label.style.fontSize = "12px";
-      label.style.whiteSpace = "nowrap";
-      measureOverlay.appendChild(label);
-      measureState.previewLabel = label;
-    }
-
-    const mm = planarDistanceMm(a, b);
-    measureState.previewLabel.textContent = `${Math.round(mm)} mm`;
-
-    const mid = new THREE.Vector3((a.x + b.x) / 2, (a.y + b.y) / 2 + 0.02, (a.z + b.z) / 2);
-    const s = worldToScreen(mid, cam(), rect);
-    measureState.previewLabel.style.left = `${s.x}px`;
-    measureState.previewLabel.style.top = `${s.y}px`;
-  }
-
-  function clearPreview() {
-    if (measureState.previewLine) {
-      scene.remove(measureState.previewLine);
-      measureState.previewLine.geometry.dispose();
-      (measureState.previewLine.material as THREE.Material).dispose();
-      measureState.previewLine = null;
-    }
-    if (measureState.previewLabel) {
-      measureState.previewLabel.remove();
-      measureState.previewLabel = null;
-    }
-  }
-}
-
-function planarDistanceMm(a: THREE.Vector3, b: THREE.Vector3) {
-  const dx = (b.x - a.x) * 1000;
-  const dz = (b.z - a.z) * 1000;
-  return Math.hypot(dx, dz);
-}
-
-function axisLockXZ(a: THREE.Vector3, b: THREE.Vector3) {
-  const dx = Math.abs(b.x - a.x);
-  const dz = Math.abs(b.z - a.z);
-  if (dx >= dz) return new THREE.Vector3(b.x, b.y, a.z);
-  return new THREE.Vector3(a.x, b.y, b.z);
-}
-
-function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[]) {
-  const hits = raycaster.intersectObjects(meshes, false);
-  if (hits.length === 0) return null;
-  const h = hits[0];
-  return { point: h.point.clone(), object: h.object as THREE.Mesh };
-}
-
-function snapPointXZ(point: THREE.Vector3, mesh: THREE.Mesh): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
-  const threshold = 0.015; // 15mm
-  const box = new THREE.Box3().setFromObject(mesh);
-
-  const candidates: THREE.Vector3[] = [];
-  const cornerCount = 4;
-  const corners = [
-    new THREE.Vector3(box.min.x, point.y, box.min.z),
-    new THREE.Vector3(box.min.x, point.y, box.max.z),
-    new THREE.Vector3(box.max.x, point.y, box.min.z),
-    new THREE.Vector3(box.max.x, point.y, box.max.z)
-  ];
-  candidates.push(...corners);
-
-  // Snap-to-edge projections (XZ): force x or z to min/max if close.
-  const proj = [
-    new THREE.Vector3(box.min.x, point.y, clamp(point.z, box.min.z, box.max.z)),
-    new THREE.Vector3(box.max.x, point.y, clamp(point.z, box.min.z, box.max.z)),
-    new THREE.Vector3(clamp(point.x, box.min.x, box.max.x), point.y, box.min.z),
-    new THREE.Vector3(clamp(point.x, box.min.x, box.max.x), point.y, box.max.z)
-  ];
-  candidates.push(...proj);
-
-  let best = point.clone();
-  let bestD = Infinity;
-  let bestIdx = -1;
-  for (let idx = 0; idx < candidates.length; idx++) {
-    const c = candidates[idx];
-    const d = Math.hypot(c.x - point.x, c.z - point.z);
-    if (d < bestD) {
-      bestD = d;
-      best = c;
-      bestIdx = idx;
-    }
-  }
-
-  if (bestD > threshold) return { point: point.clone(), kind: "free" };
-  return { point: best, kind: bestIdx >= 0 && bestIdx < cornerCount ? "corner" : "edge" };
-}
-
-function clamp(v: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, v));
-}
-
-function formatMm(v: THREE.Vector3) {
-  return `${Math.round(v.x * 1000)}, ${Math.round(v.z * 1000)}`;
-}
-
-function worldToScreen(world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) {
-  const p = world.clone().project(camera);
-  return {
-    x: (p.x * 0.5 + 0.5) * rect.width,
-    y: (-p.y * 0.5 + 0.5) * rect.height
-  };
-}
-
-function getSelectableMeshes(root: THREE.Object3D): THREE.Mesh[] {
-  const meshes: THREE.Mesh[] = [];
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    if (m.userData?.selectable !== true) return;
-    if (typeof m.name !== "string" || m.name.length === 0) return;
-    meshes.push(m);
-  });
-  return meshes;
-}
-
-function findSelectableMeshByName(root: THREE.Object3D, name: string): THREE.Mesh | null {
-  let found: THREE.Mesh | null = null;
-  root.traverse((o) => {
-    if (found) return;
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    if (m.name !== name) return;
-    if (m.userData?.selectable !== true) return;
-    found = m;
-  });
-  return found;
-}
-
-function readDimensionsMm(mesh: THREE.Mesh) {
-  const d = mesh.userData?.dimensionsMm as { width: number; height: number; depth: number } | undefined;
-  if (d && Number.isFinite(d.width) && Number.isFinite(d.height) && Number.isFinite(d.depth)) return d;
-
-  // Fallback for safety (shouldn't happen for our generated parts).
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = box.getSize(new THREE.Vector3());
-  return { width: size.x * 1000, height: size.y * 1000, depth: size.z * 1000 };
-}
-
-function readGrainAlong(mesh: THREE.Mesh): GrainAlong {
-  const raw = mesh.userData?.grainAlong;
-  if (raw === "width" || raw === "height" || raw === "depth" || raw === "none") return raw;
-  return "none";
-}
-
-function computeGrainArrow(mesh: THREE.Mesh): { origin: THREE.Vector3; dir: THREE.Vector3; length: number } | null {
-  const grainAlong = readGrainAlong(mesh);
-  if (grainAlong === "none") return null;
-  const n = mesh.name ?? "";
-  if (n.includes("hinge") || n.startsWith("leg")) return null;
-
-  const localAxis =
-    grainAlong === "width"
-      ? new THREE.Vector3(1, 0, 0)
-      : grainAlong === "height"
-        ? new THREE.Vector3(0, 1, 0)
-        : new THREE.Vector3(0, 0, 1);
-
-  const q = new THREE.Quaternion();
-  mesh.getWorldQuaternion(q);
-
-  const dir = localAxis.applyQuaternion(q).normalize();
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = box.getSize(new THREE.Vector3());
-  const origin = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const length = Math.max(0.08, Math.min(0.35, maxDim * 0.7));
-  return { origin, dir, length };
-}
-
-function toggleSelectedPbr(mesh: THREE.Mesh, kind: "all" | "normal" | "roughness") {
-  const matAny = mesh.material as unknown;
-  if (!(matAny instanceof THREE.MeshStandardMaterial)) return;
-
-  const mat = matAny as THREE.MeshStandardMaterial;
-
-  if (mesh.userData?.__pbrMaterialCloned !== true) {
-    mesh.material = mat.clone();
-    mesh.userData.__pbrMaterialCloned = true;
-    return toggleSelectedPbr(mesh, kind);
-  }
-
-  const m = mesh.material as THREE.MeshStandardMaterial;
-  const backup = (m.userData.__pbrBackup as
-    | { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null }
-    | undefined) ?? { map: m.map ?? null, normalMap: m.normalMap ?? null, roughnessMap: m.roughnessMap ?? null };
-  m.userData.__pbrBackup = backup;
-
-  const toggle = (key: "map" | "normalMap" | "roughnessMap") => {
-    (m as any)[key] = (m as any)[key] ? null : (backup as any)[key];
-  };
-
-  if (kind === "all") {
-    const anyOn = Boolean(m.map || m.normalMap || m.roughnessMap);
-    m.map = anyOn ? null : backup.map;
-    m.normalMap = anyOn ? null : backup.normalMap;
-    m.roughnessMap = anyOn ? null : backup.roughnessMap;
-  } else if (kind === "normal") {
-    toggle("normalMap");
-  } else if (kind === "roughness") {
-    toggle("roughnessMap");
-  }
-
-  m.needsUpdate = true;
-}
-
-function computeOverlaps(root: THREE.Object3D): OverlapRow[] {
-  const meshes = getSelectableMeshes(root).filter((m) => {
-    const n = m.name ?? "";
-    if (n.includes("hinge")) return false;
-    if (n.startsWith("leg")) return false;
-    return true;
-  });
-
-  const boxes = meshes.map((m) => ({ m, box: new THREE.Box3().setFromObject(m) }));
-
-  const eps = 0.0005; // 0.5mm: touching is OK, overlap must exceed eps on all axes
-  const out: OverlapRow[] = [];
-
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i];
-      const b = boxes[j];
-
-      // Allowed overlaps (construction joins) are still reported, but marked as allowed.
-      const aAllow = (a.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
-      const bAllow = (b.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
-      const allowed = aAllow.includes(b.m.name) || bAllow.includes(a.m.name);
-      const reason =
-        (a.m.userData?.allowOverlapReason as string | undefined) ?? (b.m.userData?.allowOverlapReason as string | undefined);
-
-      const minX = Math.max(a.box.min.x, b.box.min.x);
-      const minY = Math.max(a.box.min.y, b.box.min.y);
-      const minZ = Math.max(a.box.min.z, b.box.min.z);
-      const maxX = Math.min(a.box.max.x, b.box.max.x);
-      const maxY = Math.min(a.box.max.y, b.box.max.y);
-      const maxZ = Math.min(a.box.max.z, b.box.max.z);
-
-      const sx = maxX - minX;
-      const sy = maxY - minY;
-      const sz = maxZ - minZ;
-
-      if (sx <= eps || sy <= eps || sz <= eps) continue;
-
-      const overlapMm = { x: sx * 1000, y: sy * 1000, z: sz * 1000 };
-      const intersectionMm = {
-        min: { x: minX * 1000, y: minY * 1000, z: minZ * 1000 },
-        max: { x: maxX * 1000, y: maxY * 1000, z: maxZ * 1000 }
-      };
-      const aBoxMm = {
-        min: { x: a.box.min.x * 1000, y: a.box.min.y * 1000, z: a.box.min.z * 1000 },
-        max: { x: a.box.max.x * 1000, y: a.box.max.y * 1000, z: a.box.max.z * 1000 }
-      };
-      const bBoxMm = {
-        min: { x: b.box.min.x * 1000, y: b.box.min.y * 1000, z: b.box.min.z * 1000 },
-        max: { x: b.box.max.x * 1000, y: b.box.max.y * 1000, z: b.box.max.z * 1000 }
-      };
-      out.push({
-        a: a.m.name,
-        b: b.m.name,
-        status: allowed ? "allowed" : "error",
-        reason: allowed ? reason ?? "whitelisted overlap" : undefined,
-        overlapMm,
-        intersectionMm,
-        aBoxMm,
-        bBoxMm,
-        volumeMm3: overlapMm.x * overlapMm.y * overlapMm.z
-      });
-    }
-  }
-
-  out.sort((x, y) => (x.status === y.status ? y.volumeMm3 - x.volumeMm3 : x.status === "error" ? -1 : 1));
-  return out.slice(0, 40);
-}
-
-function renderErrors(el: HTMLElement, errors: string[]) {
-  if (errors.length === 0) {
-    el.classList.remove("visible");
-    el.innerHTML = "";
-    return;
-  }
-
-  el.classList.add("visible");
-  el.innerHTML = `<ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
-}
-
-function escapeHtml(input: string) {
-  return input
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }

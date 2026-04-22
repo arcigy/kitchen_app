@@ -1,5 +1,15 @@
 import * as THREE from "three";
-import type { AppState, LayoutSnapshot, DimensionParams, WallParams, ModuleParams, WallInstance, DimensionInstance } from "./appState";
+import type {
+  AppState,
+  LayoutSnapshot,
+  DimensionParams,
+  WallParams,
+  ModuleParams,
+  WallInstance,
+  DimensionInstance,
+  KitchenWorktopParams,
+  KitchenPlacementBinding
+} from "./appState";
 
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
@@ -16,6 +26,10 @@ export interface HistoryHelpers {
   createDimension: (a: any, b: any, offset: number, opts: { id?: string; skipHistory?: boolean }) => void;
   rebuildWallPlanMesh: () => void;
   restoreFloors?: (floors: NonNullable<LayoutSnapshot["floors"]>, floorCounter?: number) => void;
+  restoreWorktops?: (
+    worktops: NonNullable<LayoutSnapshot["worktops"]>,
+    worktopCounter?: number
+  ) => void;
   updateAllDimensions: () => void;
   clearToolHud: () => void;
   mountProps: () => void;
@@ -29,16 +43,27 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
     .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.thicknessMm}:${(x.params as any).justification ?? "center"}:${x.params.exteriorSign ?? 1}`)
     .join("|");
   const mods = (s.instances ?? [])
-    .map((m) => `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`)
+    .map(
+      (m) =>
+        `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.segmentIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
+    )
     .join("|");
   const floors = (s.floors ?? [])
     .map((f) => `${f.id}:${f.params.name}:${f.params.heightMm}:${f.params.thicknessMm}:${f.params.materialId ?? ""}:${f.params.boundary.map((p) => `${p.x},${p.z}`).join(";")}`)
+    .join("|");
+  const worktops = (s.worktops ?? [])
+    .map(
+      (w) =>
+        `${w.id}:${w.kitchenGroupId}:${w.params.justification}:${w.params.mirrored ? 1 : 0}:${w.params.depthMm}:${w.params.thicknessMm}:${w.params.heightMm}:${w.params.overhangSideMm}:${w.params.materialId}:${w.params.path
+          .map((p) => `${p.x},${p.z}`)
+          .join(";")}`
+    )
     .join("|");
   const dims = (s.dimensions ?? [])
     .map((d) => `${d.id}:${d.a.wallId}:${d.a.wallLine}:${Math.round(d.a.t * 1000)}-${d.b.wallId}:${d.b.wallLine}:${Math.round(d.b.t * 1000)}:${Math.round(d.offsetM * 1000)}`)
     .join("|");
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.instanceCounter}:${s.dimensionCounter}::${pins}::${w}::${floors}::${mods}::${dims}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.worktopCounter ?? 1}:${s.instanceCounter}:${s.dimensionCounter}::${pins}::${w}::${floors}::${worktops}::${mods}::${dims}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -69,6 +94,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
 
   S.wallCounter = snap.wallCounter;
   S.floorCounter = snap.floorCounter ?? S.floorCounter;
+  S.worktopCounter = snap.worktopCounter ?? S.worktopCounter;
   S.instanceCounter = snap.instanceCounter ?? S.instanceCounter;
   S.dimensionCounter = snap.dimensionCounter ?? S.dimensionCounter;
 
@@ -79,6 +105,10 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   
   if(S.underlayState) {
      S.underlayState.pinned = !!snap.underlayPinned;
+  }
+
+  if (helpers.restoreWorktops) {
+    helpers.restoreWorktops(snap.worktops ?? [], snap.worktopCounter);
   }
 
   // Clear modules
@@ -92,6 +122,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     for (const m of snap.instances) {
       const inst = helpers.createInstance(JSON.parse(JSON.stringify(m.params)) as ModuleParams, { id: m.id });
       inst.kitchenGroupId = m.kitchenGroupId ?? null;
+      inst.kitchenPlacement = m.kitchenPlacement ? (JSON.parse(JSON.stringify(m.kitchenPlacement)) as KitchenPlacementBinding) : null;
       inst.root.position.set(m.positionMm.x / 1000, 0, m.positionMm.z / 1000);
       inst.root.rotation.y = ((m.rotationYDeg ?? 0) * Math.PI) / 180;
       helpers.layoutRoot.add(inst.root);
@@ -153,16 +184,24 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
 
 export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
   const copyParams = (p: WallParams) => JSON.parse(JSON.stringify(p)) as WallParams;
+  const copyWorktopParams = (p: KitchenWorktopParams) => JSON.parse(JSON.stringify(p)) as KitchenWorktopParams;
   return {
     wallCounter: S.wallCounter,
     walls: S.walls.map((w) => ({ id: w.id, params: copyParams(w.params) })),
     floorCounter: S.floorCounter,
     floors: S.floors.map((floor) => ({ id: floor.id, params: JSON.parse(JSON.stringify(floor.params)) })),
+    worktopCounter: S.worktopCounter,
+    worktops: S.kitchenWorktops.map((worktop) => ({
+      id: worktop.id,
+      kitchenGroupId: worktop.kitchenGroupId,
+      params: copyWorktopParams(worktop.params)
+    })),
     instanceCounter: S.instanceCounter,
     instances: S.instances.map((i) => ({
       id: i.id,
       params: JSON.parse(JSON.stringify(i.params)) as ModuleParams,
       kitchenGroupId: i.kitchenGroupId ?? null,
+      kitchenPlacement: i.kitchenPlacement ? (JSON.parse(JSON.stringify(i.kitchenPlacement)) as KitchenPlacementBinding) : null,
       positionMm: { x: Math.round(i.root.position.x * 1000), z: Math.round(i.root.position.z * 1000) },
       rotationYDeg: (i.root.rotation.y * 180) / Math.PI
     })),
