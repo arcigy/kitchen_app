@@ -209,9 +209,13 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(label);
 
   const input = wallEditHud.input;
+  input.id = "wall-edit-length";
+  input.name = "wall-edit-length";
   input.type = "text";
   input.inputMode = "numeric";
   input.placeholder = "mm";
+  input.setAttribute("aria-label", "Wall length in millimeters");
+  input.autocomplete = "off";
   input.style.position = "absolute";
   input.style.display = "none";
   input.style.pointerEvents = "auto";
@@ -245,9 +249,13 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(oLabel);
 
   const oInput = wallEditHud.offsetInput;
+  oInput.id = "wall-edit-offset";
+  oInput.name = "wall-edit-offset";
   oInput.type = "text";
   oInput.inputMode = "numeric";
   oInput.placeholder = "mm";
+  oInput.setAttribute("aria-label", "Wall offset in millimeters");
+  oInput.autocomplete = "off";
   oInput.style.position = "absolute";
   oInput.style.display = "none";
   oInput.style.pointerEvents = "auto";
