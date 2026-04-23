@@ -53,11 +53,37 @@ export function createViewerTabs(viewerEl: HTMLElement) {
   viewerTabbar.append(floorplanTab, view3dTab);
   viewerEl.appendChild(viewerTabbar);
 
-  const syncViewerTabs = (viewMode: "3d" | "2d") => {
-    const isFloorplan = viewMode === "2d";
-    floorplanTab.classList.toggle("viewer-tab-active", isFloorplan);
-    view3dTab.classList.toggle("viewer-tab-active", !isFloorplan);
+  const dynamicTabs = new Map<string, HTMLButtonElement>();
+
+  const setExtraTabs = (tabs: Array<{ key: string; label: string; onClick: () => void }>) => {
+    const nextKeys = new Set(tabs.map((tab) => tab.key));
+    for (const [key, button] of dynamicTabs) {
+      if (nextKeys.has(key)) continue;
+      button.remove();
+      dynamicTabs.delete(key);
+    }
+
+    for (const tab of tabs) {
+      let button = dynamicTabs.get(tab.key) ?? null;
+      if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "viewer-tab";
+        dynamicTabs.set(tab.key, button);
+      }
+      button.textContent = tab.label;
+      button.onclick = tab.onClick;
+      viewerTabbar.appendChild(button);
+    }
   };
 
-  return { floorplanTab, view3dTab, syncViewerTabs };
+  const syncViewerTabs = (activeKey: string) => {
+    floorplanTab.classList.toggle("viewer-tab-active", activeKey === "floorplan");
+    view3dTab.classList.toggle("viewer-tab-active", activeKey === "3d");
+    for (const [key, button] of dynamicTabs) {
+      button.classList.toggle("viewer-tab-active", activeKey === key);
+    }
+  };
+
+  return { viewerTabbar, floorplanTab, view3dTab, setExtraTabs, syncViewerTabs };
 }
