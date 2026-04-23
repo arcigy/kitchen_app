@@ -1,3 +1,5 @@
+import { bindLabelToControl } from "./formFieldA11y";
+
 type RibbonTabSpec = {
   id: string;
   title: string;
@@ -93,6 +95,7 @@ export function ribbonRow(groupEl: HTMLElement, label: string, inputEl: HTMLElem
 
   const l = document.createElement("label");
   l.textContent = label;
+  bindLabelToControl(l, inputEl, label);
   row.appendChild(l);
   row.appendChild(inputEl);
   return row;

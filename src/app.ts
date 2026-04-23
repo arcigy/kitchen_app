@@ -93,6 +93,7 @@ import { createTopbar } from "./ui/createTopbar";
 import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
+import { bindLabelToControl } from "./ui/formFieldA11y";
 import { getAllMaterials } from "./data/materials";
 import { getMaterialDefinitionById } from "./data/pricing/materialDefinitions";
 import { solveWallNetwork } from "./walls2d/solver";
@@ -4786,6 +4787,7 @@ export function startApp(initialArgs: AppArgs) {
       r.className = "props-row";
       const l = document.createElement("label");
       l.textContent = label;
+      bindLabelToControl(l, inputEl, label);
       r.appendChild(l);
       r.appendChild(inputEl);
       sectionEl.appendChild(r);
