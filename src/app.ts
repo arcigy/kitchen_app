@@ -55,6 +55,7 @@ import {
 import {
   buildModuleSnapCandidates,
   detectModuleAdjacency,
+  detectModuleAdjacencyInfo,
   type ModuleAdjacencyLink
 } from "./app/moduleAdjacency";
 import {
@@ -651,6 +652,10 @@ export function startApp(initialArgs: AppArgs) {
           : desiredInRoom;
       inst.root.position.copy(snapped);
       autoOrientModuleToRoomWallIfSnapped(inst, ignore);
+      if (transformState.selectedInstanceIds.length === 1) {
+        const actualDelta = inst.root.position.clone().sub(st.pos);
+        nudgePinnedModuleChain(inst, actualDelta);
+      }
     }
     for (const id of transformState.selectedInstanceIds) {
       const inst = findInstance(id);
@@ -663,10 +668,9 @@ export function startApp(initialArgs: AppArgs) {
       }
     }
 
-    // Also block moving walls into any existing module.
     if (ok) {
       for (const inst of instances) {
-        if (moduleOverlapsWalls(inst)) {
+        if (!roomContainsBoxXZ(instanceWorldBox(inst)) || anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
           ok = false;
           break;
         }
@@ -704,6 +708,10 @@ export function startApp(initialArgs: AppArgs) {
             : desiredInRoom;
         inst.root.position.copy(snapped);
         autoOrientModuleToRoomWallIfSnapped(inst, ignore);
+        if (transformState.selectedInstanceIds.length === 1) {
+          const actualDelta = inst.root.position.clone().sub(st.pos);
+          nudgePinnedModuleChain(inst, actualDelta);
+        }
       }
       updateLayoutPanel();
     }
@@ -3764,6 +3772,8 @@ export function startApp(initialArgs: AppArgs) {
         let moved = false;
         const prevWalls = new Map<string, WallParams>();
         for (const w of walls) prevWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
+        const prevInstancePos = new Map<string, THREE.Vector3>();
+        for (const inst of instances) prevInstancePos.set(inst.id, inst.root.position.clone());
 
         // Walls (single or multi)
         const wallIds = selectedWallIds.size > 0 ? Array.from(selectedWallIds) : selectedKind === "wall" && selectedWallId ? [selectedWallId] : [];
@@ -3827,15 +3837,31 @@ export function startApp(initialArgs: AppArgs) {
             const prev = inst.root.position.clone();
             const desired = new THREE.Vector3(inst.root.position.x + dxMm / 1000, 0, inst.root.position.z + dzMm / 1000);
             const desiredInRoom = applyWallConstraints(inst, desired);
-            inst.root.position.copy(desiredInRoom);
+            const snapped =
+              instIds.length === 1
+                ? snapPositionDetailed(inst, desiredInRoom, { stickyNeighborId: null }).position
+                : desiredInRoom;
+            inst.root.position.copy(snapped);
             if (anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
               inst.root.position.copy(prev);
             } else {
               autoOrientModuleToRoomWallIfSnapped(inst);
+              if (instIds.length === 1) {
+                const actualDelta = inst.root.position.clone().sub(prev);
+                nudgePinnedModuleChain(inst, actualDelta);
+              }
               moved = true;
             }
           }
-          if (moved) updateLayoutPanel();
+          if (moved) {
+            for (const movedInst of instances) {
+              if (!movedInst.kitchenGroupId) continue;
+              const group = S.kitchenGroups.find((item) => item.id === movedInst.kitchenGroupId) ?? null;
+              const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+              movedInst.kitchenPlacement = inferKitchenPlacementBinding(movedInst, movedInst.kitchenGroupId, backOffsetMm);
+            }
+            updateLayoutPanel();
+          }
         }
 
         const sectionIds = selectedKind === "section" && selectedSectionId ? [selectedSectionId] : [];
@@ -3850,12 +3876,21 @@ export function startApp(initialArgs: AppArgs) {
           }
         }
 
-        // Never allow moduleâ†”wall overlap (also blocks walls moving into existing modules).
-        if (instances.some((i) => moduleOverlapsWalls(i))) {
+        const modulesInvalid = instances.some(
+          (i) => !roomContainsBoxXZ(instanceWorldBox(i)) || anyOverlap(i, null) || moduleOverlapsWalls(i)
+        );
+
+        // Never allow illegal module states (also blocks walls moving into existing modules).
+        if (modulesInvalid) {
           for (const w of walls) {
             const p = prevWalls.get(w.id);
             if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
             rebuildWall(w);
+          }
+          for (const inst of instances) {
+            const prev = prevInstancePos.get(inst.id);
+            if (!prev) continue;
+            inst.root.position.copy(prev);
           }
           rebuildWallPlanMesh();
           // best-effort: if a module nudge happened, it already reverted per-module on overlap;
@@ -4130,6 +4165,7 @@ export function startApp(initialArgs: AppArgs) {
     measureOverlay,
     wallTypedHud,
     wallEditHud,
+    moduleEditHud,
     marquee,
     marqueeEl,
     measureState,
@@ -4556,6 +4592,31 @@ export function startApp(initialArgs: AppArgs) {
     wallEditHud.offsetRefWallId = null;
   };
 
+  const hideModuleEditHud = () => {
+    moduleEditHud.widthLine.style.display = "none";
+    moduleEditHud.widthExtA.style.display = "none";
+    moduleEditHud.widthExtB.style.display = "none";
+    moduleEditHud.label.style.display = "none";
+    moduleEditHud.input.style.display = "none";
+  };
+
+  const getEditableModuleWidthMm = (inst: LayoutInstance) => {
+    const raw = (inst.params as any).widthMm ?? (inst.params as any).width;
+    return typeof raw === "number" && Number.isFinite(raw) ? Math.max(1, Math.round(raw)) : null;
+  };
+
+  const setEditableModuleWidthMm = (inst: LayoutInstance, valueMm: number) => {
+    if (typeof (inst.params as any).widthMm === "number") {
+      (inst.params as any).widthMm = valueMm;
+      return true;
+    }
+    if (typeof (inst.params as any).width === "number") {
+      (inst.params as any).width = valueMm;
+      return true;
+    }
+    return false;
+  };
+
   const commitWallLengthMm = (raw: string) => {
     if (selectedKind !== "wall" || !selectedWallId) return;
     const w = walls.find((x) => x.id === selectedWallId) ?? null;
@@ -4641,6 +4702,20 @@ export function startApp(initialArgs: AppArgs) {
     mountProps();
   };
 
+  const commitModuleWidthMm = (raw: string) => {
+    if (selectedKind !== "module" || !selectedInstanceId) return;
+    const inst = findInstance(selectedInstanceId) ?? null;
+    if (!inst) return;
+    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
+    if (!Number.isFinite(nextMm)) return;
+    const widthMm = Math.max(1, Math.round(nextMm));
+    if (!setEditableModuleWidthMm(inst, widthMm)) return;
+    const accepted = rebuildInstance(inst);
+    if (!accepted) return;
+    mountProps();
+    commitHistory(S);
+  };
+
   wallEditHud.label.addEventListener("pointerdown", (ev) => {
     if (selectedKind !== "wall" || !selectedWallId) return;
     if (mode !== "layout" || viewMode !== "2d") return;
@@ -4703,6 +4778,39 @@ export function startApp(initialArgs: AppArgs) {
   });
   wallEditHud.offsetInput.addEventListener("blur", () => {
     wallEditHud.offsetInput.style.display = "none";
+  });
+
+  moduleEditHud.label.addEventListener("pointerdown", (ev) => {
+    if (selectedKind !== "module" || !selectedInstanceId) return;
+    if (mode !== "layout" || viewMode !== "2d" || activeViewerTab !== "floorplan") return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const inst = findInstance(selectedInstanceId) ?? null;
+    const widthMm = inst ? getEditableModuleWidthMm(inst) : null;
+    if (!inst || widthMm == null) return;
+    moduleEditHud.input.value = String(widthMm);
+    moduleEditHud.input.style.left = moduleEditHud.label.style.left;
+    moduleEditHud.input.style.top = moduleEditHud.label.style.top;
+    moduleEditHud.input.style.transform = "translate(-50%, -50%)";
+    moduleEditHud.input.style.display = "block";
+    moduleEditHud.input.focus();
+    moduleEditHud.input.select();
+  });
+
+  moduleEditHud.input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      commitModuleWidthMm(moduleEditHud.input.value);
+      moduleEditHud.input.blur();
+      ev.preventDefault();
+    } else if (ev.key === "Escape") {
+      moduleEditHud.input.style.display = "none";
+      moduleEditHud.input.blur();
+      ev.preventDefault();
+    }
+  });
+  moduleEditHud.input.addEventListener("blur", () => {
+    moduleEditHud.input.style.display = "none";
   });
 
   const beginWallDrag = (
@@ -7745,8 +7853,14 @@ export function startApp(initialArgs: AppArgs) {
 
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
+    const prevWorldBox = instanceWorldBox(inst);
     const prevPos = inst.root.position.clone();
     const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
+    const prevNeighborPositions = new Map<string, THREE.Vector3>();
+    for (const other of instances) {
+      if (other.id === inst.id) continue;
+      prevNeighborPositions.set(other.id, other.root.position.clone());
+    }
 
     inst.root.remove(prevModule);
     inst.module = next;
@@ -7765,9 +7879,17 @@ export function startApp(initialArgs: AppArgs) {
       inst.root.position.copy(clamped);
     }
 
+    const propagated = opts?.skipLayoutValidation ? { ok: true, movedIds: [] as string[] } : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox);
+
     const inRoom = opts?.skipLayoutValidation ? true : roomContainsBoxXZ(instanceWorldBox(inst));
     const overlaps = opts?.skipLayoutValidation ? false : anyOverlap(inst, null) || moduleOverlapsWalls(inst);
-    if (!inRoom || overlaps) {
+    const movedNeighborInvalid =
+      !opts?.skipLayoutValidation &&
+      propagated.movedIds.some((id) => {
+        const other = findInstance(id);
+        return !!other && (!roomContainsBoxXZ(instanceWorldBox(other)) || anyOverlap(other, null) || moduleOverlapsWalls(other));
+      });
+    if (!inRoom || overlaps || movedNeighborInvalid) {
       // Revert (layout must never allow overlaps)
       inst.params = previousParams;
       inst.root.remove(inst.module);
@@ -7777,14 +7899,35 @@ export function startApp(initialArgs: AppArgs) {
       inst.localBox = prevBox;
       inst.root.position.copy(prevPos);
       inst.root.add(inst.module);
+      for (const other of instances) {
+        if (other.id === inst.id) continue;
+        const prev = prevNeighborPositions.get(other.id);
+        if (prev) other.root.position.copy(prev);
+      }
       ensurePickAndOutline(inst);
       renderErrors(args.errorsEl, [
-        !inRoom ? "Module doesn't fit inside the room bounds in layout mode." : overlaps ? "Module overlaps wall/another module in layout mode." : "Module invalid in layout mode."
+        !inRoom
+          ? "Module doesn't fit inside the room bounds in layout mode."
+          : overlaps || movedNeighborInvalid
+            ? "Module overlaps wall/another module in layout mode."
+            : "Module invalid in layout mode."
       ]);
       return false;
     }
 
     disposeObject3D(prevModule);
+    if (inst.kitchenGroupId) {
+      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+    }
+    for (const neighborId of propagated.movedIds) {
+      const neighbor = findInstance(neighborId);
+      if (!neighbor?.kitchenGroupId) continue;
+      const group = S.kitchenGroups.find((item) => item.id === neighbor.kitchenGroupId) ?? null;
+      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+      neighbor.kitchenPlacement = inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
+    }
     updateLayoutPanel();
     return true;
   }
@@ -7998,6 +8141,9 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: { stickyNeighborId?: string | null; ignoreIds?: Set<string> }) {
+    if (isCornerKitchenModule(moving)) {
+      return { position: desired.clone(), link: null };
+    }
     const currentPos = moving.root.position.clone();
     moving.root.position.copy(desired);
     const a = instanceWorldBox(moving);
@@ -8036,6 +8182,86 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     return { position: best, link: bestLink };
+  }
+
+  function collectPinnedPushChain(startId: string, side: "left" | "right" | "front" | "back") {
+    const queue = [startId];
+    const visited = new Set<string>([startId]);
+    const result: string[] = [];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const current = findInstance(currentId);
+      if (!current) continue;
+      const currentBox = instanceWorldBox(current);
+
+      for (const other of instances) {
+        if (other.id === currentId || visited.has(other.id)) continue;
+        if (current.kitchenGroupId && other.kitchenGroupId !== current.kitchenGroupId) continue;
+        const info = detectModuleAdjacencyInfo(currentBox, instanceWorldBox(other), other.id);
+        if (!info || info.side !== side) continue;
+        visited.add(other.id);
+        result.push(other.id);
+        queue.push(other.id);
+      }
+    }
+
+    return result;
+  }
+
+  function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
+    const moved: Array<{ id: string; prev: THREE.Vector3 }> = [];
+    if (!inst.kitchenGroupId) return moved;
+    const absX = Math.abs(delta.x);
+    const absZ = Math.abs(delta.z);
+    if (absX < 1e-9 && absZ < 1e-9) return moved;
+    const side =
+      absX >= absZ
+        ? delta.x >= 0
+          ? "right"
+          : "left"
+        : delta.z >= 0
+          ? "front"
+          : "back";
+    const chain = collectPinnedPushChain(inst.id, side);
+    for (const neighborId of chain) {
+      const neighbor = findInstance(neighborId);
+      if (!neighbor) continue;
+      moved.push({ id: neighbor.id, prev: neighbor.root.position.clone() });
+      neighbor.root.position.add(delta);
+      neighbor.root.updateMatrixWorld(true);
+    }
+    return moved;
+  }
+
+  function propagateModuleResizeToPinnedNeighbors(inst: LayoutInstance, prevWorldBox: THREE.Box3) {
+    if (!inst.kitchenGroupId) return { ok: true, movedIds: [] as string[] };
+
+    const nextWorldBox = instanceWorldBox(inst);
+    const moves: Array<{ side: "left" | "right" | "front" | "back"; delta: THREE.Vector3 }> = [];
+    const rightDelta = nextWorldBox.max.x - prevWorldBox.max.x;
+    const leftDelta = nextWorldBox.min.x - prevWorldBox.min.x;
+    const frontDelta = nextWorldBox.max.z - prevWorldBox.max.z;
+    const backDelta = nextWorldBox.min.z - prevWorldBox.min.z;
+
+    if (Math.abs(rightDelta) > 1e-6) moves.push({ side: "right", delta: new THREE.Vector3(rightDelta, 0, 0) });
+    if (Math.abs(leftDelta) > 1e-6) moves.push({ side: "left", delta: new THREE.Vector3(leftDelta, 0, 0) });
+    if (Math.abs(frontDelta) > 1e-6) moves.push({ side: "front", delta: new THREE.Vector3(0, 0, frontDelta) });
+    if (Math.abs(backDelta) > 1e-6) moves.push({ side: "back", delta: new THREE.Vector3(0, 0, backDelta) });
+
+    const movedIds = new Set<string>();
+    for (const move of moves) {
+      const chain = collectPinnedPushChain(inst.id, move.side);
+      for (const neighborId of chain) {
+        const neighbor = findInstance(neighborId);
+        if (!neighbor) continue;
+        neighbor.root.position.add(move.delta);
+        neighbor.root.updateMatrixWorld(true);
+        movedIds.add(neighborId);
+      }
+    }
+
+    return { ok: true, movedIds: Array.from(movedIds) };
   }
 
   function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
@@ -10272,11 +10498,30 @@ export function startApp(initialArgs: AppArgs) {
       const snapped = snapPosition(inst, desiredInRoom);
       const finalPos = applyWallConstraints(inst, snapped);
 
+      const prevPos = inst.root.position.clone();
       inst.root.position.copy(finalPos);
       autoOrientModuleToRoomWallIfSnapped(inst);
+      const pushed = nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
       if (anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
         inst.root.position.copy(dragState.lastValid);
+        for (const item of pushed) {
+          const neighbor = findInstance(item.id);
+          if (!neighbor) continue;
+          neighbor.root.position.copy(item.prev);
+        }
       } else {
+        if (inst.kitchenGroupId) {
+          const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+          const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+          inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+        }
+        for (const item of pushed) {
+          const neighbor = findInstance(item.id);
+          if (!neighbor?.kitchenGroupId) continue;
+          const group = S.kitchenGroups.find((entry) => entry.id === neighbor.kitchenGroupId) ?? null;
+          const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+          neighbor.kitchenPlacement = inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
+        }
         dragState.lastValid.copy(inst.root.position);
         updateLayoutPanel();
       }
@@ -10795,6 +11040,65 @@ export function startApp(initialArgs: AppArgs) {
     }
   };
 
+  const updateModuleEditHud = () => {
+    if (mode !== "layout" || viewMode !== "2d" || activeViewerTab !== "floorplan" || layoutTool !== "select") {
+      hideModuleEditHud();
+      return;
+    }
+    if (measureState.enabled || dragState.active || wallEditHud.drag) {
+      hideModuleEditHud();
+      return;
+    }
+    if (selectedKind !== "module" || !selectedInstanceId) {
+      hideModuleEditHud();
+      return;
+    }
+    const inst = findInstance(selectedInstanceId) ?? null;
+    const widthMm = inst ? getEditableModuleWidthMm(inst) : null;
+    if (!inst || widthMm == null) {
+      hideModuleEditHud();
+      return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    const localMin = inst.localBox.min;
+    const localMax = inst.localBox.max;
+    const midZ = (localMin.z + localMax.z) * 0.5;
+    const baseA = new THREE.Vector3(localMin.x, 0, midZ);
+    const baseB = new THREE.Vector3(localMax.x, 0, midZ);
+    const widthDir = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, inst.root.rotation.y, 0)).normalize();
+    const normal = new THREE.Vector3(-widthDir.z, 0, widthDir.x).normalize();
+    const offset = normal.multiplyScalar(0.08);
+    const a = baseA.clone().applyMatrix4(inst.root.matrixWorld).add(offset);
+    const b = baseB.clone().applyMatrix4(inst.root.matrixWorld).add(offset);
+    const aBase = baseA.clone().applyMatrix4(inst.root.matrixWorld);
+    const bBase = baseB.clone().applyMatrix4(inst.root.matrixWorld);
+    const sa = worldToScreen(a, cam(), rect);
+    const sb = worldToScreen(b, cam(), rect);
+    const saBase = worldToScreen(aBase, cam(), rect);
+    const sbBase = worldToScreen(bBase, cam(), rect);
+    const sm = { x: (sa.x + sb.x) * 0.5, y: (sa.y + sb.y) * 0.5 };
+
+    const setLine = (el: HTMLDivElement, p0: { x: number; y: number }, p1: { x: number; y: number }) => {
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      el.style.left = `${p0.x}px`;
+      el.style.top = `${p0.y}px`;
+      el.style.width = `${len}px`;
+      el.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+      el.style.display = "block";
+    };
+
+    setLine(moduleEditHud.widthLine, sa, sb);
+    setLine(moduleEditHud.widthExtA, saBase, sa);
+    setLine(moduleEditHud.widthExtB, sbBase, sb);
+    moduleEditHud.label.textContent = `${widthMm} mm`;
+    moduleEditHud.label.style.left = `${sm.x}px`;
+    moduleEditHud.label.style.top = `${sm.y}px`;
+    moduleEditHud.label.style.display = moduleEditHud.input.style.display === "block" ? "none" : "block";
+  };
+
   const refreshAssociativeMeasures = () => {
     if (measureState.measures.length === 0) return;
     const ctx = getAssociativeMeasureContext();
@@ -10946,6 +11250,7 @@ export function startApp(initialArgs: AppArgs) {
     desired: THREE.Vector3,
     opts?: { stickyNeighborId?: string | null }
   ) {
+    if (isCornerKitchenModule(moving)) return null;
     const prevGroupId = moving.kitchenGroupId;
     if (!moving.kitchenGroupId && S.kitchenEditMode && S.activeKitchenGroupId) moving.kitchenGroupId = S.activeKitchenGroupId;
     const result = snapPositionDetailed(moving, desired, { stickyNeighborId: opts?.stickyNeighborId ?? null });
@@ -11624,6 +11929,7 @@ export function startApp(initialArgs: AppArgs) {
     updateMeasureLabelInteractivity();
     updateModuleAdjacencyVisuals();
     updateWallEditHud();
+    updateModuleEditHud();
     updateDetailViewCamera();
 
     const activeCam = cam();

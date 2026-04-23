@@ -34,6 +34,15 @@ export type WallEditHud = {
       };
 };
 
+export type ModuleEditHud = {
+  root: HTMLDivElement;
+  label: HTMLDivElement;
+  input: HTMLInputElement;
+  widthLine: HTMLDivElement;
+  widthExtA: HTMLDivElement;
+  widthExtB: HTMLDivElement;
+};
+
 export type MarqueeState = {
   active: boolean;
   pending: boolean;
@@ -128,12 +137,22 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     drag: null
   };
 
+  const moduleEditHud: ModuleEditHud = {
+    root: document.createElement("div"),
+    label: document.createElement("div"),
+    input: document.createElement("input"),
+    widthLine: document.createElement("div"),
+    widthExtA: document.createElement("div"),
+    widthExtB: document.createElement("div")
+  };
+
   const root = wallEditHud.root;
   root.style.position = "absolute";
   root.style.inset = "0";
   root.style.pointerEvents = "none";
   root.style.zIndex = "9";
   args.viewerEl.appendChild(root);
+  moduleEditHud.root = root;
 
   const lineBase = (el: HTMLDivElement, color = "rgba(92, 140, 255, 0.95)") => {
     el.style.position = "absolute";
@@ -156,6 +175,13 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(wallEditHud.offsetLine);
   root.appendChild(wallEditHud.offsetTickA);
   root.appendChild(wallEditHud.offsetTickB);
+
+  lineBase(moduleEditHud.widthLine, "rgba(61, 220, 151, 0.98)");
+  lineBase(moduleEditHud.widthExtA, "rgba(61, 220, 151, 0.85)");
+  lineBase(moduleEditHud.widthExtB, "rgba(61, 220, 151, 0.85)");
+  root.appendChild(moduleEditHud.widthLine);
+  root.appendChild(moduleEditHud.widthExtA);
+  root.appendChild(moduleEditHud.widthExtB);
 
   const handleBase = (el: HTMLDivElement) => {
     el.style.position = "absolute";
@@ -273,6 +299,47 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   oInput.style.fontSize = "12px";
   oInput.style.outline = "none";
   root.appendChild(oInput);
+
+  const mLabel = moduleEditHud.label;
+  mLabel.style.position = "absolute";
+  mLabel.style.transform = "translate(-50%, -50%)";
+  mLabel.style.display = "none";
+  mLabel.style.pointerEvents = "auto";
+  mLabel.style.cursor = "pointer";
+  mLabel.style.padding = "2px 6px";
+  mLabel.style.borderRadius = "8px";
+  mLabel.style.border = "1px solid rgba(36, 40, 54, 0.95)";
+  mLabel.style.background = "rgba(18, 20, 26, 0.92)";
+  mLabel.style.color = "rgba(230, 232, 238, 0.98)";
+  mLabel.style.fontSize = "12px";
+  mLabel.style.lineHeight = "18px";
+  mLabel.style.userSelect = "none";
+  mLabel.style.whiteSpace = "nowrap";
+  root.appendChild(mLabel);
+
+  const mInput = moduleEditHud.input;
+  mInput.id = "module-edit-width";
+  mInput.name = "module-edit-width";
+  mInput.type = "text";
+  mInput.inputMode = "numeric";
+  mInput.placeholder = "mm";
+  mInput.setAttribute("aria-label", "Module width in millimeters");
+  mInput.autocomplete = "off";
+  mInput.style.position = "absolute";
+  mInput.style.display = "none";
+  mInput.style.pointerEvents = "auto";
+  mInput.style.zIndex = "12";
+  mInput.style.width = "88px";
+  mInput.style.height = "22px";
+  mInput.style.borderRadius = "7px";
+  mInput.style.border = "1px solid rgba(36, 40, 54, 0.95)";
+  mInput.style.background = "#0f1117";
+  mInput.style.color = "#ffffff";
+  mInput.style.caretColor = "#ffffff";
+  mInput.style.padding = "0 6px";
+  mInput.style.fontSize = "12px";
+  mInput.style.outline = "none";
+  root.appendChild(mInput);
 
   const marquee: MarqueeState = {
     active: false,
@@ -678,6 +745,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     measureOverlay,
     wallTypedHud,
     wallEditHud,
+    moduleEditHud,
     marquee,
     marqueeEl,
     measureState,

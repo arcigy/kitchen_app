@@ -9,13 +9,21 @@ export type ModuleAdjacencyLink = {
   lineEnd: THREE.Vector3;
 };
 
+export type ModuleAdjacencyInfo = ModuleAdjacencyLink & {
+  side: "left" | "right" | "front" | "back";
+  seam: number;
+  overlapMin: number;
+  overlapMax: number;
+  gap: number;
+};
+
 export type ModuleSnapCandidate = {
   pos: THREE.Vector3;
   score: number;
   link: ModuleAdjacencyLink;
 };
 
-const DEFAULT_SNAP_DIST_M = 0.03;
+const DEFAULT_SNAP_DIST_M = 0.08;
 const DEFAULT_MIN_OVERLAP_M = 0.05;
 const DEFAULT_VISUAL_TOL_M = 0.008;
 
@@ -38,29 +46,84 @@ function makeLink(axis: "x" | "z", seam: number, overlapMin: number, overlapMax:
   } satisfies ModuleAdjacencyLink;
 }
 
-export function detectModuleAdjacency(boxA: BoxLike, boxB: BoxLike, otherId: string, toleranceM = DEFAULT_VISUAL_TOL_M) {
+function makeInfo(
+  axis: "x" | "z",
+  side: "left" | "right" | "front" | "back",
+  seam: number,
+  overlapMin: number,
+  overlapMax: number,
+  gap: number,
+  otherId: string
+) {
+  return {
+    ...makeLink(axis, seam, overlapMin, overlapMax, otherId),
+    side,
+    seam,
+    overlapMin,
+    overlapMax,
+    gap
+  } satisfies ModuleAdjacencyInfo;
+}
+
+export function detectModuleAdjacencyInfo(boxA: BoxLike, boxB: BoxLike, otherId: string, toleranceM = DEFAULT_VISUAL_TOL_M) {
   const overlapX = Math.max(0, Math.min(boxA.max.x, boxB.max.x) - Math.max(boxA.min.x, boxB.min.x));
   const overlapZ = Math.max(0, Math.min(boxA.max.z, boxB.max.z) - Math.max(boxA.min.z, boxB.min.z));
 
   const rightGap = Math.abs(boxB.min.x - boxA.max.x);
   if (overlapZ >= DEFAULT_MIN_OVERLAP_M && rightGap <= toleranceM) {
-    return makeLink("x", (boxA.max.x + boxB.min.x) * 0.5, Math.max(boxA.min.z, boxB.min.z), Math.min(boxA.max.z, boxB.max.z), otherId);
+    return makeInfo(
+      "x",
+      "right",
+      (boxA.max.x + boxB.min.x) * 0.5,
+      Math.max(boxA.min.z, boxB.min.z),
+      Math.min(boxA.max.z, boxB.max.z),
+      boxB.min.x - boxA.max.x,
+      otherId
+    );
   }
   const leftGap = Math.abs(boxB.max.x - boxA.min.x);
   if (overlapZ >= DEFAULT_MIN_OVERLAP_M && leftGap <= toleranceM) {
-    return makeLink("x", (boxA.min.x + boxB.max.x) * 0.5, Math.max(boxA.min.z, boxB.min.z), Math.min(boxA.max.z, boxB.max.z), otherId);
+    return makeInfo(
+      "x",
+      "left",
+      (boxA.min.x + boxB.max.x) * 0.5,
+      Math.max(boxA.min.z, boxB.min.z),
+      Math.min(boxA.max.z, boxB.max.z),
+      boxA.min.x - boxB.max.x,
+      otherId
+    );
   }
 
   const frontGap = Math.abs(boxB.min.z - boxA.max.z);
   if (overlapX >= DEFAULT_MIN_OVERLAP_M && frontGap <= toleranceM) {
-    return makeLink("z", (boxA.max.z + boxB.min.z) * 0.5, Math.max(boxA.min.x, boxB.min.x), Math.min(boxA.max.x, boxB.max.x), otherId);
+    return makeInfo(
+      "z",
+      "front",
+      (boxA.max.z + boxB.min.z) * 0.5,
+      Math.max(boxA.min.x, boxB.min.x),
+      Math.min(boxA.max.x, boxB.max.x),
+      boxB.min.z - boxA.max.z,
+      otherId
+    );
   }
   const backGap = Math.abs(boxB.max.z - boxA.min.z);
   if (overlapX >= DEFAULT_MIN_OVERLAP_M && backGap <= toleranceM) {
-    return makeLink("z", (boxA.min.z + boxB.max.z) * 0.5, Math.max(boxA.min.x, boxB.min.x), Math.min(boxA.max.x, boxB.max.x), otherId);
+    return makeInfo(
+      "z",
+      "back",
+      (boxA.min.z + boxB.max.z) * 0.5,
+      Math.max(boxA.min.x, boxB.min.x),
+      Math.min(boxA.max.x, boxB.max.x),
+      boxA.min.z - boxB.max.z,
+      otherId
+    );
   }
 
   return null;
+}
+
+export function detectModuleAdjacency(boxA: BoxLike, boxB: BoxLike, otherId: string, toleranceM = DEFAULT_VISUAL_TOL_M) {
+  return detectModuleAdjacencyInfo(boxA, boxB, otherId, toleranceM);
 }
 
 export function buildModuleSnapCandidates(args: {
