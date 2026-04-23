@@ -254,7 +254,7 @@ export function startApp(initialArgs: AppArgs) {
     getSelectedFloorId: () => selectedFloorId,
     getFloors: () => floors,
     getInstances: () => instances,
-    getModuleLocalBackCenter
+    getModuleLocalBackCenter: (inst) => getModuleLocalBackCenter(inst)
   });
 
   const {
