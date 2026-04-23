@@ -10814,8 +10814,8 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
-  const commitSelectedMeasureValueMm = (measureId: string, raw: string) => {
-    const target = getCurrentMeasureSelectionTarget();
+  const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
+    const target = forcedTarget ?? getCurrentMeasureSelectionTarget();
     const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
     if (!target || !measure) return;
 
@@ -10868,7 +10868,7 @@ export function startApp(initialArgs: AppArgs) {
     measureOverlay,
     measureState,
     getCurrentSelectionTarget: getCurrentMeasureSelectionTarget,
-    onCommitMeasure: (measureId, raw) => commitSelectedMeasureValueMm(measureId, raw),
+    onCommitMeasure: (measureId, raw, target) => commitSelectedMeasureValueMm(measureId, raw, target),
     propsRow: (section, label, inputEl) => {
       props.row(section, label, inputEl);
     }

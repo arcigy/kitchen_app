@@ -15,7 +15,7 @@ type MeasureInlineEditorArgs = {
   measureOverlay: HTMLElement;
   measureState: MeasureState;
   getCurrentSelectionTarget: () => MeasureSelectionTarget | null;
-  onCommitMeasure: (measureId: string, raw: string) => void;
+  onCommitMeasure: (measureId: string, raw: string, target?: MeasureSelectionTarget | null) => void;
   propsRow: (section: HTMLElement, label: string, inputEl: HTMLElement) => void;
 };
 
@@ -88,16 +88,21 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
   args.measureOverlay.appendChild(measureInlineInput);
 
   let activeMeasureEditId: string | null = null;
+  let activeMeasureEditTarget: MeasureSelectionTarget | null = null;
 
   const hideInlineInput = () => {
     activeMeasureEditId = null;
+    activeMeasureEditTarget = null;
     measureInlineInput.style.display = "none";
   };
 
   const beginInlineEdit = (measureId: string, anchorEl: HTMLElement) => {
     const measure = args.measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
     if (!measure) return;
+    const target = args.getCurrentSelectionTarget();
+    if (!target || !getSelectionMeasureBindings(measure, target)) return;
     activeMeasureEditId = measureId;
+    activeMeasureEditTarget = target;
     measureInlineInput.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
     measureInlineInput.style.left = anchorEl.style.left;
     measureInlineInput.style.top = anchorEl.style.top;
@@ -156,24 +161,25 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
     section.appendChild(heading);
 
     for (const measure of linkedMeasures) {
+      const targetForInput = target;
       const input = document.createElement("input");
       input.type = "number";
       input.step = "1";
       input.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
       input.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter") {
-          args.onCommitMeasure(measure.id, input.value);
+          args.onCommitMeasure(measure.id, input.value, targetForInput);
           ev.preventDefault();
         }
       });
-      input.addEventListener("change", () => args.onCommitMeasure(measure.id, input.value));
+      input.addEventListener("change", () => args.onCommitMeasure(measure.id, input.value, targetForInput));
       args.propsRow(section, `Measure ${measure.id.replace("measure_", "#")}`, input);
     }
   };
 
   measureInlineInput.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") {
-      if (activeMeasureEditId) args.onCommitMeasure(activeMeasureEditId, measureInlineInput.value);
+      if (activeMeasureEditId) args.onCommitMeasure(activeMeasureEditId, measureInlineInput.value, activeMeasureEditTarget);
       hideInlineInput();
       ev.preventDefault();
       ev.stopPropagation();
@@ -187,7 +193,7 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
   });
 
   measureInlineInput.addEventListener("blur", () => {
-    if (activeMeasureEditId) args.onCommitMeasure(activeMeasureEditId, measureInlineInput.value);
+    if (activeMeasureEditId) args.onCommitMeasure(activeMeasureEditId, measureInlineInput.value, activeMeasureEditTarget);
     hideInlineInput();
   });
 
