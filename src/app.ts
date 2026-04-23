@@ -100,7 +100,7 @@ import type {
   WindowParams
 } from "./app/localTypes";
 import type { ModuleParams } from "./model/cabinetTypes";
-import { normalizeModuleParams, validateModule } from "./model/cabinetTypes";
+import { normalizeModuleParams, normalizeModuleParamsForSource, validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./core/scene";
 import { createPartPanel } from "./ui/createPartPanel";
@@ -7914,13 +7914,18 @@ export function startApp(initialArgs: AppArgs) {
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
     const prevWorldBox = instanceWorldBox(inst);
+    const prevAdjacencyInfos = collectAdjacentModuleInfos(inst, prevWorldBox);
+    const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos);
     const prevPos = inst.root.position.clone();
     const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
+    const prevWorldBoxesById = new Map<string, THREE.Box3>();
     for (const other of instances) {
       if (other.id === inst.id) continue;
       prevNeighborPositions.set(other.id, other.root.position.clone());
+      prevWorldBoxesById.set(other.id, instanceWorldBox(other).clone());
     }
+    prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
 
     inst.root.remove(prevModule);
     inst.module = next;
@@ -7933,13 +7938,16 @@ export function startApp(initialArgs: AppArgs) {
       inst.localBox = new THREE.Box3().setFromObject(inst.module);
     }
     ensurePickAndOutline(inst);
+    if (!opts?.skipLayoutValidation) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
 
     if (!opts?.skipLayoutValidation) {
       const clamped = applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
 
-    const propagated = opts?.skipLayoutValidation ? { ok: true, movedIds: [] as string[] } : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox);
+    const propagated = opts?.skipLayoutValidation
+      ? { ok: true, movedIds: [] as string[] }
+      : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
     const inRoom = opts?.skipLayoutValidation ? true : roomContainsBoxXZ(instanceWorldBox(inst));
     const overlaps = opts?.skipLayoutValidation ? false : anyOverlap(inst, null) || moduleOverlapsWalls(inst);
@@ -8309,6 +8317,103 @@ export function startApp(initialArgs: AppArgs) {
     return result;
   }
 
+  function collectPinnedPushChainFromBoxes(
+    startId: string,
+    side: "left" | "right" | "front" | "back",
+    boxesById: Map<string, THREE.Box3>,
+    kitchenGroupId: string | null
+  ) {
+    const queue = [startId];
+    const visited = new Set<string>([startId]);
+    const result: string[] = [];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const currentBox = boxesById.get(currentId);
+      if (!currentBox) continue;
+
+      for (const other of instances) {
+        if (other.id === currentId || visited.has(other.id)) continue;
+        if (kitchenGroupId && other.kitchenGroupId !== kitchenGroupId) continue;
+        const otherBox = boxesById.get(other.id);
+        if (!otherBox) continue;
+        const info = detectModuleAdjacencyInfo(currentBox, otherBox, other.id);
+        if (!info || info.side !== side) continue;
+        visited.add(other.id);
+        result.push(other.id);
+        queue.push(other.id);
+      }
+    }
+
+    return result;
+  }
+
+  function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) {
+    const infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }> = [];
+    for (const other of instances) {
+      if (other.id === inst.id) continue;
+      if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
+      const info = detectModuleAdjacencyInfo(referenceBox, instanceWorldBox(other), other.id);
+      if (!info) continue;
+      infos.push({ ...info, other });
+    }
+    return infos;
+  }
+
+  function chooseResizeAnchorSide(_inst: LayoutInstance, infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }>) {
+    if (infos.length === 0) return null;
+
+    const bySide = new Map<"left" | "right" | "front" | "back", Array<(typeof infos)[number]>>();
+    for (const info of infos) {
+      const list = bySide.get(info.side) ?? [];
+      list.push(info);
+      bySide.set(info.side, list);
+    }
+
+    const choosePreferredCornerSide = (
+      primary: "left" | "right" | "front" | "back",
+      secondary: "left" | "right" | "front" | "back"
+    ) => {
+      const primaryInfos = bySide.get(primary) ?? [];
+      const secondaryInfos = bySide.get(secondary) ?? [];
+      if (primaryInfos.length === 0 && secondaryInfos.length === 0) return null;
+      const primaryHasCorner = primaryInfos.some((item) => item.other.params.type === "corner_shelf_lower");
+      const secondaryHasCorner = secondaryInfos.some((item) => item.other.params.type === "corner_shelf_lower");
+      if (primaryHasCorner && secondaryInfos.length === 0) return primary;
+      if (secondaryHasCorner && primaryInfos.length === 0) return secondary;
+      if (primaryHasCorner !== secondaryHasCorner) return primaryHasCorner ? primary : secondary;
+      if (primaryInfos.length > 0 && secondaryInfos.length === 0) return secondary;
+      if (secondaryInfos.length > 0 && primaryInfos.length === 0) return primary;
+      return null;
+    };
+
+    return choosePreferredCornerSide("left", "right") ?? choosePreferredCornerSide("back", "front");
+  }
+
+  function preserveAnchoredResizeSide(
+    inst: LayoutInstance,
+    prevWorldBox: THREE.Box3,
+    anchorSide: "left" | "right" | "front" | "back" | null
+  ) {
+    if (!anchorSide) return;
+    const nextWorldBox = instanceWorldBox(inst);
+    switch (anchorSide) {
+      case "left":
+        inst.root.position.x += prevWorldBox.min.x - nextWorldBox.min.x;
+        break;
+      case "right":
+        inst.root.position.x += prevWorldBox.max.x - nextWorldBox.max.x;
+        break;
+      case "back":
+        inst.root.position.z += prevWorldBox.min.z - nextWorldBox.min.z;
+        break;
+      case "front":
+        inst.root.position.z += prevWorldBox.max.z - nextWorldBox.max.z;
+        break;
+    }
+    inst.root.updateMatrixWorld(true);
+  }
+
   function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
     const moved: Array<{ id: string; prev: THREE.Vector3 }> = [];
     if (!inst.kitchenGroupId) return moved;
@@ -8334,7 +8439,11 @@ export function startApp(initialArgs: AppArgs) {
     return moved;
   }
 
-  function propagateModuleResizeToPinnedNeighbors(inst: LayoutInstance, prevWorldBox: THREE.Box3) {
+  function propagateModuleResizeToPinnedNeighbors(
+    inst: LayoutInstance,
+    prevWorldBox: THREE.Box3,
+    prevBoxesById?: Map<string, THREE.Box3>
+  ) {
     if (!inst.kitchenGroupId) return { ok: true, movedIds: [] as string[] };
 
     const nextWorldBox = instanceWorldBox(inst);
@@ -8351,7 +8460,9 @@ export function startApp(initialArgs: AppArgs) {
 
     const movedIds = new Set<string>();
     for (const move of moves) {
-      const chain = collectPinnedPushChain(inst.id, move.side);
+      const chain = prevBoxesById
+        ? collectPinnedPushChainFromBoxes(inst.id, move.side, prevBoxesById, inst.kitchenGroupId)
+        : collectPinnedPushChain(inst.id, move.side);
       for (const neighborId of chain) {
         const neighbor = findInstance(neighborId);
         if (!neighbor) continue;
@@ -11495,6 +11606,13 @@ export function startApp(initialArgs: AppArgs) {
   const getDebugModuleSnapshot = (inst: LayoutInstance) => {
     const box = instanceWorldBox(inst);
     const structuralMeshes: THREE.Object3D[] = [];
+    const partSnapshots: Array<{
+      name: string;
+      positionM: { x: number; y: number; z: number };
+      scale: { x: number; y: number; z: number };
+      dimensionsMm: Record<string, unknown> | null;
+      colorHex: string | null;
+    }> = [];
     inst.module.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       const name = child.name || "";
@@ -11507,6 +11625,29 @@ export function startApp(initialArgs: AppArgs) {
         return;
       }
       structuralMeshes.push(child);
+      const material = Array.isArray(child.material) ? child.material[0] : child.material;
+      const colorHex =
+        material && "color" in material && (material as { color?: THREE.Color }).color
+          ? `#${(material as { color: THREE.Color }).color.getHexString()}`
+          : null;
+      partSnapshots.push({
+        name,
+        positionM: {
+          x: child.position.x,
+          y: child.position.y,
+          z: child.position.z
+        },
+        scale: {
+          x: child.scale.x,
+          y: child.scale.y,
+          z: child.scale.z
+        },
+        dimensionsMm:
+          child.userData?.dimensionsMm && typeof child.userData.dimensionsMm === "object"
+            ? structuredClone(child.userData.dimensionsMm as Record<string, unknown>)
+            : null,
+        colorHex
+      });
     });
     const structuralBox = new THREE.Box3();
     for (const mesh of structuralMeshes) structuralBox.expandByObject(mesh);
@@ -11541,6 +11682,7 @@ export function startApp(initialArgs: AppArgs) {
       worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
       worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },
       frontVectorM: { x: worldFrontDir.x, y: worldFrontDir.y, z: worldFrontDir.z },
+      parts: partSnapshots,
       realizedDepthMm: Math.round(worldFrontCenter.clone().sub(worldBackCenter).dot(worldFrontDir) * 1000),
       structuralDepthMm: Math.round(
         Math.abs(
@@ -11812,6 +11954,49 @@ export function startApp(initialArgs: AppArgs) {
     return { selectedKind, selectedInstanceId };
   };
 
+  const debugPatchModuleParams = (
+    instanceId: string,
+    patch: Record<string, unknown>,
+    options?: { sourceKey?: string; preserveBackAnchor?: boolean }
+  ) => {
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    inst.params = normalizeModuleParamsForSource(
+      {
+        ...structuredClone(inst.params),
+        ...structuredClone(patch)
+      } as ModuleParams,
+      options?.sourceKey
+    );
+    const ok = rebuildInstance(inst, { preserveBackAnchor: options?.preserveBackAnchor ?? true });
+    return {
+      ok,
+      snapshot: getDebugKitchenSnapshot(inst.kitchenGroupId),
+      instance: getDebugModuleSnapshot(inst)
+    };
+  };
+
+  const debugDetectModuleAdjacency = (instanceId: string) => {
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    const box = instanceWorldBox(inst);
+    return instances
+      .filter((other) => other.id !== inst.id && (!inst.kitchenGroupId || other.kitchenGroupId === inst.kitchenGroupId))
+      .map((other) => {
+        const info = detectModuleAdjacencyInfo(box, instanceWorldBox(other), other.id);
+        if (!info) return null;
+        return {
+          otherId: other.id,
+          otherType: other.params.type,
+          side: info.side,
+          axis: info.axis,
+          gapMm: Math.round(info.gap * 1000),
+          seamMm: Math.round(info.seam * 1000)
+        };
+      })
+      .filter((value): value is NonNullable<typeof value> => !!value);
+  };
+
   const debugCommitSelectedMeasureValue = (measureId: string, valueMm: number) => {
     const target = getCurrentMeasureSelectionTarget();
     const measure = measureState.measures.find((item) => item.id === measureId) ?? null;
@@ -11986,6 +12171,8 @@ export function startApp(initialArgs: AppArgs) {
     selectWall: debugSelectWall,
     selectFloor: debugSelectFloor,
     selectModule: debugSelectModule,
+    patchModuleParams: debugPatchModuleParams,
+    detectModuleAdjacency: debugDetectModuleAdjacency,
     commitWallMeasureValue: debugCommitWallMeasureValue,
     commitSelectedMeasureValue: debugCommitSelectedMeasureValue,
     snapshot: getDebugKitchenSnapshot,

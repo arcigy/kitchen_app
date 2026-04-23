@@ -39,6 +39,16 @@ export function normalizeModuleParams(params: ModuleParams): ModuleParams {
   return params;
 }
 
+export function normalizeModuleParamsForSource(params: ModuleParams, sourceKey?: string): ModuleParams {
+  switch (params.type) {
+    case "corner_shelf_lower":
+      return normalizeCornerShelfLowerImportedParams(params as CornerShelfLowerParams, { sourceKey }) as ModuleParams;
+    case "drawer_low":
+      return normalizeDrawerLowImportedParams(params as DrawerLowParams, { sourceKey }) as ModuleParams;
+  }
+  return params;
+}
+
 export function validateModule(params: ModuleParams): string[] {
   switch (params.type) {
     case "corner_shelf_lower":
