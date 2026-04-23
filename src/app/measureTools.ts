@@ -226,7 +226,8 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   input.style.borderRadius = "7px";
   input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
   input.style.background = "#0f1117";
-  input.style.color = "var(--text)";
+  input.style.color = "#ffffff";
+  input.style.caretColor = "#ffffff";
   input.style.padding = "0 6px";
   input.style.fontSize = "12px";
   input.style.outline = "none";
@@ -266,7 +267,8 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   oInput.style.borderRadius = "7px";
   oInput.style.border = "1px solid rgba(36, 40, 54, 0.95)";
   oInput.style.background = "#0f1117";
-  oInput.style.color = "var(--text)";
+  oInput.style.color = "#ffffff";
+  oInput.style.caretColor = "#ffffff";
   oInput.style.padding = "0 6px";
   oInput.style.fontSize = "12px";
   oInput.style.outline = "none";
