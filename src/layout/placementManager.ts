@@ -31,8 +31,13 @@ export interface PlacementHelpers {
   resolveModuleAdjacencySnap?: (
     moving: LayoutInstance,
     desired: any,
-    opts?: { stickyNeighborId?: string | null }
-  ) => { position: any; link: ModuleAdjacencyLink | null; kitchenPlacement?: KitchenPlacementBinding | null } | null;
+    opts?: { stickyNeighborId?: string | null; preferredKitchenPlacement?: KitchenPlacementBinding | null }
+  ) => {
+    position: any;
+    rotationY?: number;
+    link: ModuleAdjacencyLink | null;
+    kitchenPlacement?: KitchenPlacementBinding | null;
+  } | null;
   setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
   finalizePlacedInstance?: (inst: LayoutInstance) => void;
   resolvePlacementConstraint?: (
@@ -113,9 +118,13 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   }
   g.kitchenPlacement = placementKitchenBinding ?? null;
 
-  const adjacencySnap = helpers.resolveModuleAdjacencySnap?.(g, g.root.position.clone()) ?? null;
+  const adjacencySnap =
+    helpers.resolveModuleAdjacencySnap?.(g, g.root.position.clone(), {
+      preferredKitchenPlacement: placementKitchenBinding ?? g.kitchenPlacement ?? null
+    }) ?? null;
   if (adjacencySnap) {
     g.root.position.copy(adjacencySnap.position);
+    if (typeof adjacencySnap.rotationY === "number") g.root.rotation.y = adjacencySnap.rotationY;
     g.root.updateMatrixWorld(true);
     placementKitchenBinding = adjacencySnap.kitchenPlacement ?? placementKitchenBinding;
     helpers.setPlacementAdjacencyPreview?.(adjacencySnap.link);

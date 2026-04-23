@@ -8246,7 +8246,13 @@ export function startApp(initialArgs: AppArgs) {
   function snapPositionDetailed(
     moving: LayoutInstance,
     desired: THREE.Vector3,
-    opts?: { stickyNeighborId?: string | null; ignoreIds?: Set<string>; snapDistanceM?: number }
+    opts?: {
+      stickyNeighborId?: string | null;
+      ignoreIds?: Set<string>;
+      snapDistanceM?: number;
+      enforceWallConstraints?: boolean;
+      enforceWallOverlap?: boolean;
+    }
   ) {
     if (isCornerKitchenModule(moving)) {
       return { position: desired.clone(), link: null };
@@ -8275,11 +8281,15 @@ export function startApp(initialArgs: AppArgs) {
     let best = desired.clone();
     let bestScore = Infinity;
     let bestLink: ModuleAdjacencyLink | null = null;
+    const enforceWallConstraints = opts?.enforceWallConstraints ?? true;
+    const enforceWallOverlap = opts?.enforceWallOverlap ?? true;
     for (const c of candidates) {
-      const clamped = applyWallConstraints(moving, c.pos);
+      const clamped = enforceWallConstraints ? applyWallConstraints(moving, c.pos) : c.pos.clone();
       const prev = moving.root.position.clone();
       moving.root.position.copy(clamped);
-      const overlaps = (opts?.ignoreIds ? anyOverlapIgnoring(moving, opts.ignoreIds) : anyOverlap(moving, null)) || moduleOverlapsWalls(moving);
+      const overlaps =
+        (opts?.ignoreIds ? anyOverlapIgnoring(moving, opts.ignoreIds) : anyOverlap(moving, null)) ||
+        (enforceWallOverlap ? moduleOverlapsWalls(moving) : false);
       moving.root.position.copy(prev);
       if (overlaps) continue;
       if (c.score < bestScore) {
@@ -11452,30 +11462,82 @@ export function startApp(initialArgs: AppArgs) {
   function resolveModuleAdjacencySnap(
     moving: LayoutInstance,
     desired: THREE.Vector3,
-    opts?: { stickyNeighborId?: string | null }
+    opts?: { stickyNeighborId?: string | null; preferredKitchenPlacement?: KitchenPlacementBinding | null }
   ) {
     if (isCornerKitchenModule(moving)) return null;
     const prevGroupId = moving.kitchenGroupId;
     if (!moving.kitchenGroupId && S.kitchenEditMode && S.activeKitchenGroupId) moving.kitchenGroupId = S.activeKitchenGroupId;
+    const effectiveGroupId = moving.kitchenGroupId ?? (S.kitchenEditMode ? S.activeKitchenGroupId : null);
     const result = snapPositionDetailed(moving, desired, {
       stickyNeighborId: opts?.stickyNeighborId ?? null,
-      snapDistanceM: moving.kitchenGroupId ? 2.4 : undefined
+      snapDistanceM: effectiveGroupId ? 2.4 : undefined,
+      enforceWallConstraints: !effectiveGroupId,
+      enforceWallOverlap: !effectiveGroupId
     });
     moving.kitchenGroupId = prevGroupId;
     let kitchenPlacement: KitchenPlacementBinding | null = null;
-    const effectiveGroupId = moving.kitchenGroupId ?? (S.kitchenEditMode ? S.activeKitchenGroupId : null);
+    let snappedPosition = result.position.clone();
+    let snappedRotationY = moving.root.rotation.y;
     if (effectiveGroupId) {
-      const prevPos = moving.root.position.clone();
-      moving.root.position.copy(result.position);
-      moving.root.updateMatrixWorld(true);
       const group = S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null;
       const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      kitchenPlacement = inferKitchenPlacementBinding(moving, effectiveGroupId, backOffsetMm);
+      const prevPos = moving.root.position.clone();
+      const prevRot = moving.root.rotation.y;
+      const prevKitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
+      const projectedBinding = opts?.preferredKitchenPlacement ?? null;
+      if (projectedBinding) {
+        moving.kitchenPlacement = structuredClone(projectedBinding);
+        if (applyKitchenPlacementBinding(moving, projectedBinding, backOffsetMm)) {
+          const desiredBackCenter = getModuleLocalBackCenter(moving).clone().applyMatrix4(
+            new THREE.Matrix4().makeRotationY(moving.root.rotation.y).setPosition(result.position)
+          );
+          const worktop = kitchenWorktops.find((item) => item.id === projectedBinding.worktopId) ?? null;
+          const segmentInfo =
+            worktop && (projectedBinding.kind ?? "segment") !== "corner"
+              ? getKitchenGuideSegmentInfo(worktop, projectedBinding.segmentIndex, backOffsetMm)
+              : null;
+          if (segmentInfo) {
+            const halfModuleWidthM = Math.max(0.001, (moving.localBox.max.x - moving.localBox.min.x) * 0.5);
+            const projected = desiredBackCenter.clone().sub(segmentInfo.start).dot(segmentInfo.dir);
+            const usableLength = segmentInfo.length - halfModuleWidthM * 2;
+            const clampedAlong =
+              usableLength >= 0
+                ? clampNumber(projected, halfModuleWidthM, segmentInfo.length - halfModuleWidthM)
+                : segmentInfo.length * 0.5;
+            kitchenPlacement = {
+              worktopId: projectedBinding.worktopId,
+              segmentIndex: projectedBinding.segmentIndex,
+              offsetAlongM: clampedAlong
+            };
+            if (applyKitchenPlacementBinding(moving, kitchenPlacement, backOffsetMm)) {
+              snappedPosition = moving.root.position.clone();
+              snappedRotationY = moving.root.rotation.y;
+            }
+          } else {
+            kitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
+            snappedPosition = moving.root.position.clone();
+            snappedRotationY = moving.root.rotation.y;
+          }
+        }
+      }
+      if (!kitchenPlacement) {
+        moving.root.position.copy(result.position);
+        moving.root.rotation.y = prevRot;
+        moving.root.updateMatrixWorld(true);
+        kitchenPlacement = inferKitchenPlacementBinding(moving, effectiveGroupId, backOffsetMm);
+        if (kitchenPlacement && applyKitchenPlacementBinding(moving, kitchenPlacement, backOffsetMm)) {
+          snappedPosition = moving.root.position.clone();
+          snappedRotationY = moving.root.rotation.y;
+        }
+      }
       moving.root.position.copy(prevPos);
+      moving.root.rotation.y = prevRot;
+      moving.kitchenPlacement = prevKitchenPlacement;
       moving.root.updateMatrixWorld(true);
     }
     return {
-      position: result.position,
+      position: snappedPosition,
+      rotationY: snappedRotationY,
       link: result.link,
       kitchenPlacement
     };
