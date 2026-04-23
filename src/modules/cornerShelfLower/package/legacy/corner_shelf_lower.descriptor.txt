@@ -1,0 +1,1 @@
+{type:"corner_shelf_lower",label:"Corner",defaultParams:()=>cornerShelfLowerDefaultsV2(),build:n=>cornerShelfLowerBuildV2(n),createControls:(n,e,t)=>cornerShelfLowerControlsV2(n,e,t),capabilities:{hasWorktop:!0,supportsKitchenContextDimensions:!0,supportsKitchenContextMaterials:!0}}

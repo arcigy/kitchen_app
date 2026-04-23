@@ -1,0 +1,2069 @@
+{
+  "schemaVersion": "module-live-state.v1",
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "exportedAt": "2026-04-22T22:34:04.656Z",
+  "params": {
+    "type": "corner_shelf_lower",
+    "lengthX": 1000,
+    "lengthZ": 1000,
+    "depth": 560,
+    "height": 720,
+    "boardThickness": 18,
+    "backThickness": 6,
+    "plinthHeight": 100,
+    "plinthSetbackMm": 60,
+    "shelfCount": 4,
+    "shelfAutoFit": true,
+    "shelfGaps": [
+      123,
+      123,
+      123,
+      123
+    ],
+    "doorDouble": true,
+    "doorOpen": false,
+    "hingeCountPerDoor": 2,
+    "hingeTopOffsetMm": 110,
+    "hingeBottomOffsetMm": 110,
+    "frontThicknessMm": 19,
+    "sideGap": 2,
+    "topGap": 2,
+    "bottomGap": 2,
+    "handleType": "bar",
+    "handlePositionMm": 60,
+    "handleLengthMm": 160,
+    "handleSizeMm": 12,
+    "handleProjectionMm": 14,
+    "legInsetMm": 30,
+    "legDiameterMm": 40,
+    "materials": {
+      "bodyKey": "2",
+      "frontKey": "3",
+      "drawerKey": "drawer_unused"
+    },
+    "heightCarcass": 682,
+    "backGrooveDepthMm": 8,
+    "backGrooveWidthMm": 8,
+    "backGrooveOffsetMm": 12,
+    "backGrooveClearanceMm": 1,
+    "hingeComponentId": "cmp.hinge.corner.45.softclose",
+    "clipComponentId": "cmp.clip.plinth.standard",
+    "handleComponentId": "cmp.handle.bar.160.inox",
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "base",
+    "legComponentId": "cmp.leg.adjustable.100.black",
+    "requiresWorktop": true,
+    "worktopThicknessMm": 38
+  },
+  "systemParameters": {
+    "typeId": "corner_shelf_lower__type",
+    "type": "corner_shelf_lower",
+    "displayName": "Corner",
+    "family": "base",
+    "code": null,
+    "variant": "double_door",
+    "version": "1.0.0",
+    "widthMm": 1000,
+    "heightMm": 720,
+    "depthMm": 1000,
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "base",
+    "requiresWorktop": true,
+    "positionXmm": 0,
+    "positionYmm": 0,
+    "positionZmm": 0,
+    "rotationZDeg": 0,
+    "customPriceOverride": null,
+    "pricingEnabled": true,
+    "priceSource": "calculated",
+    "costOverride": null,
+    "quantity": 1,
+    "isActive": true,
+    "isVisible": true,
+    "isLocked": false,
+    "isValid": true,
+    "validationErrors": [],
+    "notes": null,
+    "tags": [
+      "base",
+      "corner_shelf_lower"
+    ],
+    "createdAt": "2026-04-22T22:34:04.656Z",
+    "updatedAt": "2026-04-22T22:34:04.656Z",
+    "exportToIfc": true,
+    "ifcClass": "IfcFurniture",
+    "ifcPredefinedType": null,
+    "ifcName": "Corner",
+    "ifcDescription": "Corner (corner_shelf_lower)",
+    "ifcObjectType": "base",
+    "ifcTag": "corner_shelf_lower__type",
+    "classificationCode": null,
+    "classificationSystem": null
+  },
+  "capabilities": null,
+  "commercial": null,
+  "assets": null,
+  "liveRuntime": {
+    "moduleType": "corner_shelf_lower",
+    "params": {
+      "type": "corner_shelf_lower",
+      "lengthX": 1000,
+      "lengthZ": 1000,
+      "depth": 560,
+      "height": 720,
+      "boardThickness": 18,
+      "backThickness": 6,
+      "plinthHeight": 100,
+      "plinthSetbackMm": 60,
+      "shelfCount": 4,
+      "shelfThickness": 18,
+      "shelfAutoFit": true,
+      "shelfGaps": [
+        123,
+        123,
+        123,
+        123
+      ],
+      "doorDouble": true,
+      "doorOpen": false,
+      "hingeCountPerDoor": 2,
+      "hingeSideFrontZ": "right",
+      "hingeSideFrontX": "right",
+      "hingeTopOffsetMm": 110,
+      "hingeBottomOffsetMm": 110,
+      "frontThicknessMm": 19,
+      "sideGap": 2,
+      "topGap": 2,
+      "bottomGap": 2,
+      "handleType": "bar",
+      "handlePositionMm": 60,
+      "handleLengthMm": 160,
+      "handleSizeMm": 12,
+      "handleProjectionMm": 14,
+      "legInsetMm": 30,
+      "legDiameterMm": 40,
+      "materials": {
+        "bodyMaterialId": 2,
+        "frontMaterialId": 3,
+        "drawerMaterialId": null,
+        "bodyKey": "2",
+        "frontKey": "3",
+        "drawerKey": "drawer_unused",
+        "bodyColor": "#d7d9dd",
+        "frontColor": "#d7d9dd",
+        "drawerColor": "#d7d9dd",
+        "backInsideColor": "#d7d9dd",
+        "bodyPresetId": "DTD1",
+        "frontPresetId": "DTD2",
+        "drawerPresetId": "DTD16",
+        "defaultTintColor": "#ffffff",
+        "defaultTintStrength": 0,
+        "partOverrides": {},
+        "bodyPbr": {
+          "id": "wood_veneer_oak_7760_1k",
+          "rotationDeg": 0,
+          "tintStrength": 0
+        },
+        "bodyName": "DTD Grey",
+        "frontName": "MDF Front",
+        "drawerName": ""
+      },
+      "heightCarcass": 682,
+      "backGrooveDepthMm": 8,
+      "backGrooveWidthMm": 8,
+      "backGrooveOffsetMm": 12,
+      "backGrooveClearanceMm": 1,
+      "hingeComponentId": "cmp.hinge.corner.45.softclose",
+      "clipComponentId": "cmp.clip.plinth.standard",
+      "handleComponentId": "cmp.handle.bar.160.inox",
+      "assemblyContext": "kitchen",
+      "kitchenModuleRole": "base",
+      "legComponentId": "cmp.leg.adjustable.100.black",
+      "requiresWorktop": true,
+      "worktopThicknessMm": 38,
+      "doorDouble_corner": true,
+      "doorOpen_corner": false,
+      "hingeCount_corner": "2",
+      "hingeSideFrontX_corner": "right",
+      "hingeSideFrontZ_corner": "right",
+      "shelfAutoFit_corner": true,
+      "shelfGaps_corner": "123, 123, 123, 123"
+    },
+    "selectedPartName": null,
+    "importedModuleType": null,
+    "importedPackageKey": null,
+    "parts": [
+      {
+        "name": "side_end_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": 491,
+          "y": 391,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 582,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 491,
+          "y": 391,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "side_end_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthZ",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": -220,
+          "y": 391,
+          "z": 491
+        },
+        "sizeMm": {
+          "x": 560,
+          "y": 582,
+          "z": 18
+        },
+        "centerMm": {
+          "x": -220,
+          "y": 391,
+          "z": 491
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "backThickness",
+          "backGrooveDepthMm",
+          "backGrooveWidthMm",
+          "backGrooveOffsetMm",
+          "backGrooveClearanceMm",
+          "plinthHeight",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 391,
+          "z": -492.5
+        },
+        "sizeMm": {
+          "x": 975.8,
+          "y": 561,
+          "z": 6
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 391,
+          "z": -492.5
+        },
+        "materials": [
+          {
+            "name": "HDF Grey 6 mm",
+            "colorHex": "#c8ccd1",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthZ",
+          "height",
+          "depth",
+          "boardThickness",
+          "backThickness",
+          "backGrooveDepthMm",
+          "backGrooveWidthMm",
+          "backGrooveOffsetMm",
+          "backGrooveClearanceMm",
+          "plinthHeight",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": -492.5,
+          "y": 391,
+          "z": 34
+        },
+        "sizeMm": {
+          "x": 6,
+          "y": 561,
+          "z": 907.8
+        },
+        "centerMm": {
+          "x": -492.5,
+          "y": 391,
+          "z": 34
+        },
+        "materials": [
+          {
+            "name": "HDF Grey 6 mm",
+            "colorHex": "#c8ccd1",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back_corner_panel",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "backThickness",
+          "backGrooveDepthMm",
+          "backGrooveWidthMm",
+          "backGrooveOffsetMm",
+          "backGrooveClearanceMm",
+          "plinthHeight",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": -491,
+          "y": 391,
+          "z": -460
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 546,
+          "z": 80
+        },
+        "centerMm": {
+          "x": -491,
+          "y": 391,
+          "z": -460
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "bottom_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm",
+          "backGrooveWidthMm",
+          "backGrooveDepthMm",
+          "backGrooveClearanceMm"
+        ],
+        "positionMm": {
+          "x": -9,
+          "y": 109,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 981.8,
+          "y": 18,
+          "z": 560
+        },
+        "centerMm": {
+          "x": -9,
+          "y": 109,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "bottom_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthZ",
+          "height",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm",
+          "backGrooveWidthMm",
+          "backGrooveDepthMm",
+          "backGrooveClearanceMm"
+        ],
+        "positionMm": {
+          "x": -220,
+          "y": 109,
+          "z": 280
+        },
+        "sizeMm": {
+          "x": 560,
+          "y": 18,
+          "z": 439.8
+        },
+        "centerMm": {
+          "x": -220,
+          "y": 109,
+          "z": 280
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "top_x_front",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm",
+          "backGrooveWidthMm",
+          "backGrooveDepthMm",
+          "backGrooveClearanceMm"
+        ],
+        "positionMm": {
+          "x": -9,
+          "y": 673,
+          "z": 19.9
+        },
+        "sizeMm": {
+          "x": 981.8,
+          "y": 18,
+          "z": 80
+        },
+        "centerMm": {
+          "x": -9,
+          "y": 673,
+          "z": 19.9
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "top_x_back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthX",
+          "height",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm",
+          "backGrooveWidthMm",
+          "backGrooveDepthMm",
+          "backGrooveClearanceMm"
+        ],
+        "positionMm": {
+          "x": -9,
+          "y": 673,
+          "z": -460
+        },
+        "sizeMm": {
+          "x": 981.8,
+          "y": 18,
+          "z": 80
+        },
+        "centerMm": {
+          "x": -9,
+          "y": 673,
+          "z": -460
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "top_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "lengthZ",
+          "height",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm",
+          "backGrooveWidthMm",
+          "backGrooveDepthMm",
+          "backGrooveClearanceMm"
+        ],
+        "positionMm": {
+          "x": -220,
+          "y": 673,
+          "z": 271
+        },
+        "sizeMm": {
+          "x": 560,
+          "y": 18,
+          "z": 421.8
+        },
+        "centerMm": {
+          "x": -220,
+          "y": 673,
+          "z": 271
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_inner_rear",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": -470,
+          "y": 50,
+          "z": -470
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -470,
+          "y": 50,
+          "z": -470
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_outer_x_rear",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 470,
+          "y": 50,
+          "z": -470
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 470,
+          "y": 50,
+          "z": -470
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_outer_x_front",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 470,
+          "y": 50,
+          "z": -34
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 470,
+          "y": 50,
+          "z": -34
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_inner_x_front",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 90,
+          "y": 50,
+          "z": -34
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 90,
+          "y": 50,
+          "z": -34
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_outer_z_rear",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": -470,
+          "y": 50,
+          "z": 470
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -470,
+          "y": 50,
+          "z": 470
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_outer_z_front",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": -34,
+          "y": 50,
+          "z": 470
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -34,
+          "y": 50,
+          "z": 470
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_inner_z_front",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "legInsetMm",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": -34,
+          "y": 50,
+          "z": 90
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -34,
+          "y": 50,
+          "z": 90
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_outer_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "boardThickness",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": 470,
+          "y": 40,
+          "z": -32.232
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_outer_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 7
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": 470,
+          "y": 40,
+          "z": -27
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_outer_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -1,
+          "z": 26.5
+        },
+        "sizeMm": {
+          "x": 16,
+          "y": 10,
+          "z": 5
+        },
+        "centerMm": {
+          "x": 470,
+          "y": 39,
+          "z": -7.5
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_inner_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "boardThickness",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": 90,
+          "y": 40,
+          "z": -32.232
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_inner_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 7
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": 90,
+          "y": 40,
+          "z": -27
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_x_inner_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": -1,
+          "z": 26.5
+        },
+        "sizeMm": {
+          "x": 16,
+          "y": 10,
+          "z": 5
+        },
+        "centerMm": {
+          "x": 90,
+          "y": 39,
+          "z": -7.5
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_outer_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "boardThickness",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": -34,
+          "y": 40,
+          "z": 471.768
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_outer_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 5,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": -29,
+          "y": 40,
+          "z": 470
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_outer_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 26.5,
+          "y": -1,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 5,
+          "y": 10,
+          "z": 16
+        },
+        "centerMm": {
+          "x": -7.5,
+          "y": 39,
+          "z": 470
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_inner_collar",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "lengthZ",
+          "boardThickness",
+          "legDiameterMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 44.463
+        },
+        "centerMm": {
+          "x": -34,
+          "y": 40,
+          "z": 91.768
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_inner_pad",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 5,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 30,
+          "y": 12,
+          "z": 12
+        },
+        "centerMm": {
+          "x": -29,
+          "y": 40,
+          "z": 90
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_z_inner_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 26.5,
+          "y": -1,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 5,
+          "y": 10,
+          "z": 16
+        },
+        "centerMm": {
+          "x": -7.5,
+          "y": 39,
+          "z": 90
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kick_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthX",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 241,
+          "y": 50,
+          "z": -9
+        },
+        "sizeMm": {
+          "x": 518,
+          "y": 100,
+          "z": 18
+        },
+        "centerMm": {
+          "x": 241,
+          "y": 50,
+          "z": -9
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kick_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "lengthZ",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": -9,
+          "y": 50,
+          "z": 250
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 100,
+          "z": 500
+        },
+        "centerMm": {
+          "x": -9,
+          "y": 50,
+          "z": 250
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_1_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -4.5,
+          "y": 250,
+          "z": -215.6
+        },
+        "sizeMm": {
+          "x": 973,
+          "y": 18,
+          "z": 550.8
+        },
+        "centerMm": {
+          "x": -4.5,
+          "y": 250,
+          "z": -215.6
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_1_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -215.6,
+          "y": 250,
+          "z": 271
+        },
+        "sizeMm": {
+          "x": 550.8,
+          "y": 18,
+          "z": 422
+        },
+        "centerMm": {
+          "x": -215.6,
+          "y": 250,
+          "z": 271
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_2_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -4.5,
+          "y": 391,
+          "z": -215.6
+        },
+        "sizeMm": {
+          "x": 973,
+          "y": 18,
+          "z": 550.8
+        },
+        "centerMm": {
+          "x": -4.5,
+          "y": 391,
+          "z": -215.6
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_2_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -215.6,
+          "y": 391,
+          "z": 271
+        },
+        "sizeMm": {
+          "x": 550.8,
+          "y": 18,
+          "z": 422
+        },
+        "centerMm": {
+          "x": -215.6,
+          "y": 391,
+          "z": 271
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_3_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -4.5,
+          "y": 532,
+          "z": -215.6
+        },
+        "sizeMm": {
+          "x": 973,
+          "y": 18,
+          "z": 550.8
+        },
+        "centerMm": {
+          "x": -4.5,
+          "y": 532,
+          "z": -215.6
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf_3_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfAutoFit",
+          "shelfGaps",
+          "height",
+          "worktopThicknessMm",
+          "plinthHeight",
+          "boardThickness",
+          "backGrooveWidthMm"
+        ],
+        "positionMm": {
+          "x": -215.6,
+          "y": 532,
+          "z": 271
+        },
+        "sizeMm": {
+          "x": 550.8,
+          "y": 18,
+          "z": 422
+        },
+        "centerMm": {
+          "x": -215.6,
+          "y": 532,
+          "z": 271
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "height",
+          "plinthHeight",
+          "worktopThicknessMm",
+          "frontThicknessMm",
+          "doorOpen",
+          "hingeSideFrontZ",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -209,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 418,
+          "y": 578,
+          "z": 19
+        },
+        "centerMm": {
+          "x": 289,
+          "y": 391,
+          "z": 69.7
+        },
+        "materials": [
+          {
+            "name": "DTD Halifax Oak 18 mm",
+            "colorHex": "#a97f57",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "doorHandle_front_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "frontThicknessMm"
+        ],
+        "positionMm": {
+          "x": -169,
+          "y": 229,
+          "z": 16.5
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 329,
+          "y": 620,
+          "z": 86.2
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Inox",
+            "colorHex": "#b3bac3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_1_door_plate",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": -239,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 152,
+          "z": 57.45
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_1_door_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": -239,
+          "z": -4.2
+        },
+        "sizeMm": {
+          "x": 25.605,
+          "y": 26,
+          "z": 10
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 152,
+          "z": 65.5
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_1_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": -239,
+          "z": -19.5
+        },
+        "sizeMm": {
+          "x": 11,
+          "y": 8,
+          "z": 12
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 152,
+          "z": 50.2
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_2_door_plate",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": 239,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 630,
+          "z": 57.45
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_2_door_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": 239,
+          "z": -4.2
+        },
+        "sizeMm": {
+          "x": 25.605,
+          "y": 26,
+          "z": 10
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 630,
+          "z": 65.5
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_z_2_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -37,
+          "y": 239,
+          "z": -19.5
+        },
+        "sizeMm": {
+          "x": 11,
+          "y": 8,
+          "z": 12
+        },
+        "centerMm": {
+          "x": 461,
+          "y": 630,
+          "z": 50.2
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "height",
+          "plinthHeight",
+          "worktopThicknessMm",
+          "frontThicknessMm",
+          "doorOpen",
+          "hingeSideFrontX",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": -209
+        },
+        "sizeMm": {
+          "x": 19,
+          "y": 578,
+          "z": 418
+        },
+        "centerMm": {
+          "x": 69.7,
+          "y": 391,
+          "z": 289
+        },
+        "materials": [
+          {
+            "name": "DTD Halifax Oak 18 mm",
+            "colorHex": "#a97f57",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "doorHandle_front_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "frontThicknessMm"
+        ],
+        "positionMm": {
+          "x": 16.5,
+          "y": 229,
+          "z": -169
+        },
+        "sizeMm": {
+          "x": 14,
+          "y": 12,
+          "z": 160
+        },
+        "centerMm": {
+          "x": 86.2,
+          "y": 620,
+          "z": 329
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Inox",
+            "colorHex": "#b3bac3",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_1_door_plate",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -12.25,
+          "y": -239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 2.5,
+          "y": 34,
+          "z": 62
+        },
+        "centerMm": {
+          "x": 57.45,
+          "y": 152,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_1_door_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -4.2,
+          "y": -239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 10,
+          "y": 25.605,
+          "z": 26
+        },
+        "centerMm": {
+          "x": 65.5,
+          "y": 152,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_1_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -19.5,
+          "y": -239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 12,
+          "y": 8,
+          "z": 11
+        },
+        "centerMm": {
+          "x": 50.2,
+          "y": 152,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_2_door_plate",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -12.25,
+          "y": 239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 2.5,
+          "y": 34,
+          "z": 62
+        },
+        "centerMm": {
+          "x": 57.45,
+          "y": 630,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_2_door_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -4.2,
+          "y": 239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 10,
+          "y": 25.605,
+          "z": 26
+        },
+        "centerMm": {
+          "x": 65.5,
+          "y": 630,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "hinge_front_x_2_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": -19.5,
+          "y": 239,
+          "z": -37
+        },
+        "sizeMm": {
+          "x": 12,
+          "y": 8,
+          "z": 11
+        },
+        "centerMm": {
+          "x": 50.2,
+          "y": 630,
+          "z": 461
+        },
+        "materials": [
+          {
+            "name": "Corner Hinge 45 Degree Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      }
+    ]
+  }
+}

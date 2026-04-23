@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": "module-params-schema.v1",
+  "moduleType": "corner_shelf_lower",
+  "title": "Corner Params",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "lengthX": {
+      "type": "number"
+    },
+    "lengthZ": {
+      "type": "number"
+    },
+    "depth": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "boardThickness": {
+      "type": "number"
+    },
+    "backThickness": {
+      "type": "number"
+    },
+    "plinthHeight": {
+      "type": "number"
+    },
+    "plinthSetbackMm": {
+      "type": "number"
+    },
+    "shelfCount": {
+      "type": "number"
+    },
+    "shelfAutoFit": {
+      "type": "boolean"
+    },
+    "shelfGaps": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "doorDouble": {
+      "type": "boolean"
+    },
+    "doorOpen": {
+      "type": "boolean"
+    },
+    "hingeCountPerDoor": {
+      "type": "number"
+    },
+    "hingeTopOffsetMm": {
+      "type": "number"
+    },
+    "hingeBottomOffsetMm": {
+      "type": "number"
+    },
+    "frontThicknessMm": {
+      "type": "number"
+    },
+    "sideGap": {
+      "type": "number"
+    },
+    "topGap": {
+      "type": "number"
+    },
+    "bottomGap": {
+      "type": "number"
+    },
+    "handleType": {
+      "type": "string"
+    },
+    "handlePositionMm": {
+      "type": "number"
+    },
+    "handleLengthMm": {
+      "type": "number"
+    },
+    "handleSizeMm": {
+      "type": "number"
+    },
+    "handleProjectionMm": {
+      "type": "number"
+    },
+    "legInsetMm": {
+      "type": "number"
+    },
+    "legDiameterMm": {
+      "type": "number"
+    },
+    "materials": {
+      "type": "object",
+      "properties": {
+        "bodyKey": {
+          "type": "string"
+        },
+        "frontKey": {
+          "type": "string"
+        },
+        "drawerKey": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "heightCarcass": {
+      "type": "number"
+    },
+    "backGrooveDepthMm": {
+      "type": "number"
+    },
+    "backGrooveWidthMm": {
+      "type": "number"
+    },
+    "backGrooveOffsetMm": {
+      "type": "number"
+    },
+    "backGrooveClearanceMm": {
+      "type": "number"
+    },
+    "hingeComponentId": {
+      "type": "string"
+    },
+    "clipComponentId": {
+      "type": "string"
+    },
+    "handleComponentId": {
+      "type": "string"
+    },
+    "assemblyContext": {
+      "type": "string"
+    },
+    "kitchenModuleRole": {
+      "type": "string"
+    },
+    "legComponentId": {
+      "type": "string"
+    },
+    "requiresWorktop": {
+      "type": "boolean"
+    },
+    "worktopThicknessMm": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "assemblyContext",
+    "backGrooveClearanceMm",
+    "backGrooveDepthMm",
+    "backGrooveOffsetMm",
+    "backGrooveWidthMm",
+    "backThickness",
+    "boardThickness",
+    "bottomGap",
+    "clipComponentId",
+    "depth",
+    "doorDouble",
+    "doorOpen",
+    "frontThicknessMm",
+    "handleComponentId",
+    "handleLengthMm",
+    "handlePositionMm",
+    "handleProjectionMm",
+    "handleSizeMm",
+    "handleType",
+    "height",
+    "heightCarcass",
+    "hingeBottomOffsetMm",
+    "hingeComponentId",
+    "hingeCountPerDoor",
+    "hingeTopOffsetMm",
+    "kitchenModuleRole",
+    "legComponentId",
+    "legDiameterMm",
+    "legInsetMm",
+    "lengthX",
+    "lengthZ",
+    "materials",
+    "plinthHeight",
+    "plinthSetbackMm",
+    "requiresWorktop",
+    "shelfAutoFit",
+    "shelfCount",
+    "shelfGaps",
+    "sideGap",
+    "topGap",
+    "type",
+    "worktopThicknessMm"
+  ],
+  "additionalProperties": true
+}

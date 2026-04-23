@@ -1,0 +1,74 @@
+{
+  "build": {
+    "path": "logic/corner_shelf_lower.build.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local build logic.",
+    "provenance": "generated"
+  },
+  "controls": {
+    "path": "logic/corner_shelf_lower.controls.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local controls definition.",
+    "provenance": "generated"
+  },
+  "validation": {
+    "path": "logic/corner_shelf_lower.validation.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local validation logic.",
+    "provenance": "generated"
+  },
+  "geometry": {
+    "path": "logic/corner_shelf_lower.geometry.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local geometry derivation logic.",
+    "provenance": "generated"
+  },
+  "bom": {
+    "path": "logic/corner_shelf_lower.bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "pricing": {
+    "path": "logic/corner_shelf_lower.pricing.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local pricing derivation logic.",
+    "provenance": "generated"
+  },
+  "commercialSummary": {
+    "path": "logic/corner_shelf_lower.commercial-summary.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local commercial summary logic.",
+    "provenance": "generated"
+  },
+  "legacyRuntime": {
+    "path": "legacy/legacy-builder.runtime.js",
+    "mediaType": "text/javascript",
+    "description": "Full legacy runtime source snapshot.",
+    "provenance": "generated"
+  },
+  "legacyDescriptor": {
+    "path": "legacy/corner_shelf_lower.descriptor.txt",
+    "mediaType": "text/plain",
+    "description": "Exact module descriptor snippet from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyDefaultParams": {
+    "path": "legacy/corner_shelf_lower.default-params.js",
+    "mediaType": "text/javascript",
+    "description": "Exact default-params function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyBuild": {
+    "path": "legacy/corner_shelf_lower.build.js",
+    "mediaType": "text/javascript",
+    "description": "Exact build function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyControls": {
+    "path": "legacy/corner_shelf_lower.controls.js",
+    "mediaType": "text/javascript",
+    "description": "Exact controls function from the legacy runtime.",
+    "provenance": "generated"
+  }
+}

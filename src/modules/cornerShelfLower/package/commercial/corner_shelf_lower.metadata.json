@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "module-commercial-summary.v1",
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "quantity": 1,
+  "pricingEnabled": true,
+  "finalPriceEur": 266.37,
+  "priceSource": "calculated",
+  "bomItems": 38
+}

@@ -1,0 +1,183 @@
+{
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "definition": {
+    "moduleType": "corner_shelf_lower",
+    "source": "package",
+    "description": "Portable module package exported from module-builder-dev.",
+    "provenance": "declared",
+    "paramsSchemaRef": {
+      "path": "definitions/corner_shelf_lower.params.schema.json",
+      "mediaType": "application/schema+json",
+      "description": "Full JSON schema for module parameters.",
+      "provenance": "generated"
+    },
+    "defaultsRef": {
+      "path": "definitions/corner_shelf_lower.defaults.json",
+      "mediaType": "application/json",
+      "description": "Current/default parameter snapshot.",
+      "provenance": "generated"
+    },
+    "parameterCatalogRef": {
+      "path": "definitions/corner_shelf_lower.parameter-catalog.json",
+      "mediaType": "application/json",
+      "description": "Human-readable parameter catalog.",
+      "provenance": "generated"
+    },
+    "geometrySnapshotRef": {
+      "path": "definitions/corner_shelf_lower.geometry.json",
+      "mediaType": "application/json",
+      "description": "Derived geometry snapshot.",
+      "provenance": "generated"
+    },
+    "bomSnapshotRef": {
+      "path": "definitions/corner_shelf_lower.bom.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Derived BOM snapshot.",
+      "provenance": "generated"
+    },
+    "materialsSnapshotRef": {
+      "path": "definitions/corner_shelf_lower.materials.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Current material state captured from params and live runtime.",
+      "provenance": "generated"
+    },
+    "liveStateSnapshotRef": {
+      "path": "definitions/corner_shelf_lower.live-state.json",
+      "mediaType": "application/json",
+      "description": "Complete live export state captured at the time of package export.",
+      "provenance": "generated"
+    }
+  },
+  "logic": {
+    "build": {
+      "path": "logic/corner_shelf_lower.build.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local build logic.",
+      "provenance": "generated"
+    },
+    "controls": {
+      "path": "logic/corner_shelf_lower.controls.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local controls definition.",
+      "provenance": "generated"
+    },
+    "validation": {
+      "path": "logic/corner_shelf_lower.validation.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local validation logic.",
+      "provenance": "generated"
+    },
+    "geometry": {
+      "path": "logic/corner_shelf_lower.geometry.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local geometry derivation logic.",
+      "provenance": "generated"
+    },
+    "bom": {
+      "path": "logic/corner_shelf_lower.bom.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local BOM derivation logic.",
+      "provenance": "generated"
+    },
+    "pricing": {
+      "path": "logic/corner_shelf_lower.pricing.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local pricing derivation logic.",
+      "provenance": "generated"
+    },
+    "commercialSummary": {
+      "path": "logic/corner_shelf_lower.commercial-summary.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local commercial summary logic.",
+      "provenance": "generated"
+    },
+    "legacyRuntime": {
+      "path": "legacy/legacy-builder.runtime.js",
+      "mediaType": "text/javascript",
+      "description": "Full legacy runtime source snapshot.",
+      "provenance": "generated"
+    },
+    "legacyDescriptor": {
+      "path": "legacy/corner_shelf_lower.descriptor.txt",
+      "mediaType": "text/plain",
+      "description": "Exact module descriptor snippet from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyDefaultParams": {
+      "path": "legacy/corner_shelf_lower.default-params.js",
+      "mediaType": "text/javascript",
+      "description": "Exact default-params function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyBuild": {
+      "path": "legacy/corner_shelf_lower.build.js",
+      "mediaType": "text/javascript",
+      "description": "Exact build function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyControls": {
+      "path": "legacy/corner_shelf_lower.controls.js",
+      "mediaType": "text/javascript",
+      "description": "Exact controls function from the legacy runtime.",
+      "provenance": "generated"
+    }
+  },
+  "commercial": {
+    "pricingConfig": {
+      "path": "commercial/corner_shelf_lower.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/corner_shelf_lower.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/corner_shelf_lower.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  },
+  "assets": {
+    "docs": [
+      {
+        "path": "docs/corner_shelf_lower.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/corner_shelf_lower.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/corner_shelf_lower.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/corner_shelf_lower.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  },
+  "tags": [
+    "base",
+    "corner_shelf_lower"
+  ],
+  "notes": [
+    "Exported from module-builder-dev browser runtime.",
+    "Includes live runtime mesh snapshot plus complete parameter schema, system parameters, geometry, BOM and portable TypeScript companion files."
+  ],
+  "status": "active"
+}

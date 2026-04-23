@@ -1,0 +1,752 @@
+{
+  "schemaVersion": "module-geometry.v1",
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "dimensions": {
+    "widthMm": 1000,
+    "heightMm": 720,
+    "depthMm": 1000,
+    "worktopThicknessMm": 38,
+    "plinthHeightMm": 100
+  },
+  "parameterEffects": [
+    {
+      "parameter": "width",
+      "effect": "corner_shelf_lower width changes carcass span, top/bottom panel width and drawer/front clear width."
+    },
+    {
+      "parameter": "height",
+      "effect": "corner_shelf_lower height changes side panels, front stack allocation and internal vertical clearances."
+    },
+    {
+      "parameter": "depth",
+      "effect": "corner_shelf_lower depth changes side panel depth, drawer box depth and back panel footprint."
+    },
+    {
+      "parameter": "boardThickness",
+      "effect": "Board thickness changes panel stock thickness and all dependent internal clear dimensions."
+    },
+    {
+      "parameter": "drawerCount",
+      "effect": "Drawer count changes number of drawer fronts, runner sets and drawer box assemblies."
+    },
+    {
+      "parameter": "drawerFrontHeights",
+      "effect": "Drawer front heights redistribute the visible front stack and drawer aperture geometry."
+    },
+    {
+      "parameter": "frontGap",
+      "effect": "Front gap changes revealed spacing between stacked fronts and side/top/bottom front edges."
+    },
+    {
+      "parameter": "worktopThicknessMm",
+      "effect": "Worktop thickness reduces effective carcass height when the module uses a worktop."
+    },
+    {
+      "parameter": "plinthHeight",
+      "effect": "Plinth height changes support geometry and usable carcass height for floor-mounted modules."
+    }
+  ],
+  "parts": [
+    {
+      "id": "left-side",
+      "label": "Left Side Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 582,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "depth",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness",
+        "lengthX",
+        "height",
+        "worktopThicknessMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "heightCarcass - plinthHeight",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "491, 391, -220"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "right-side",
+      "label": "Right Side Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 582,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "depth",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness",
+        "lengthZ",
+        "height",
+        "worktopThicknessMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "heightCarcass - plinthHeight",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-220, 391, 491"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "back-panel-x",
+      "label": "Back Panel X",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 976,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "heightCarcass",
+        "plinthHeight",
+        "backThickness",
+        "height",
+        "depth",
+        "boardThickness",
+        "backGrooveDepthMm",
+        "backGrooveWidthMm",
+        "backGrooveOffsetMm",
+        "backGrooveClearanceMm",
+        "worktopThicknessMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "heightCarcass - plinthHeight - boardThickness",
+        "thickness": "backThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 391, -492.5"
+      },
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "back-panel-z",
+      "label": "Back Panel Z",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 908,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "heightCarcass",
+        "plinthHeight",
+        "backThickness",
+        "height",
+        "depth",
+        "boardThickness",
+        "backGrooveDepthMm",
+        "backGrooveWidthMm",
+        "backGrooveOffsetMm",
+        "backGrooveClearanceMm",
+        "worktopThicknessMm"
+      ],
+      "formulas": {
+        "width": "lengthZ - 2 * boardThickness",
+        "height": "heightCarcass - plinthHeight - boardThickness",
+        "thickness": "backThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-492.5, 391, 34"
+      },
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "back-corner-panel",
+      "label": "Back Corner Support Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 546,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "depth",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness",
+        "lengthX",
+        "height",
+        "backThickness",
+        "backGrooveDepthMm",
+        "backGrooveWidthMm",
+        "backGrooveOffsetMm",
+        "backGrooveClearanceMm",
+        "worktopThicknessMm"
+      ],
+      "formulas": {
+        "width": "corner back support depth",
+        "height": "heightCarcass - plinthHeight - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-491, 391, -460"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel-x",
+      "label": "Bottom Panel X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 982,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "height",
+        "worktopThicknessMm",
+        "backGrooveWidthMm",
+        "backGrooveDepthMm",
+        "backGrooveClearanceMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-9, 109, -220"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel-z",
+      "label": "Bottom Panel Z",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 560,
+        "height": 440,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "depth",
+        "boardThickness",
+        "height",
+        "worktopThicknessMm",
+        "backGrooveWidthMm",
+        "backGrooveDepthMm",
+        "backGrooveClearanceMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "lengthZ - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-220, 109, 280"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-x-front",
+      "label": "Top Front Rail X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 982,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "height",
+        "worktopThicknessMm",
+        "backGrooveWidthMm",
+        "backGrooveDepthMm",
+        "backGrooveClearanceMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "corner front rail depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-9, 673, 19.9"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-x-back",
+      "label": "Top Rear Rail X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 982,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "height",
+        "worktopThicknessMm",
+        "backGrooveWidthMm",
+        "backGrooveDepthMm",
+        "backGrooveClearanceMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "corner rear rail depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-9, 673, -460"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-z",
+      "label": "Top Panel Z",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 560,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "depth",
+        "boardThickness",
+        "height",
+        "worktopThicknessMm",
+        "backGrooveWidthMm",
+        "backGrooveDepthMm",
+        "backGrooveClearanceMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "lengthZ - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-220, 673, 271"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "plinth-x",
+      "label": "Plinth X",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 518,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "plinthHeight",
+        "boardThickness",
+        "plinthSetbackMm",
+        "depth"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "plinthHeight",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "241, 50, -9"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "plinth-z",
+      "label": "Plinth Z",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 500,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "plinthHeight",
+        "boardThickness",
+        "plinthSetbackMm",
+        "depth"
+      ],
+      "formulas": {
+        "width": "lengthZ - 2 * boardThickness",
+        "height": "plinthHeight",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-9, 50, 250"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-1-x",
+      "label": "Shelf 1 X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-4.5, 250, -215.6"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-1-z",
+      "label": "Shelf 1 Z",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "lengthZ - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-215.6, 250, 271"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-2-x",
+      "label": "Shelf 2 X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-4.5, 391, -215.6"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-2-z",
+      "label": "Shelf 2 Z",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "lengthZ - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-215.6, 391, 271"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-3-x",
+      "label": "Shelf 3 X",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-4.5, 532, -215.6"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-3-z",
+      "label": "Shelf 3 Z",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "depth",
+        "boardThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit",
+        "height",
+        "worktopThicknessMm",
+        "plinthHeight",
+        "backGrooveWidthMm"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "lengthZ - 2 * boardThickness",
+        "thickness": "boardThickness",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-215.6, 532, 271"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "door-front-z",
+      "label": "Door Front Z",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 578,
+        "height": 418,
+        "depth": 19,
+        "thickness": 19
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthX",
+        "heightCarcass",
+        "plinthHeight",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "height",
+        "worktopThicknessMm",
+        "doorOpen",
+        "hingeSideFrontZ",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "handleComponentId",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "width": "lengthX - 2 * sideGap",
+        "height": "heightCarcass - plinthHeight - topGap - bottomGap",
+        "thickness": "frontThicknessMm",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-209, 0, 0"
+      },
+      "notes": [
+        "material DTD Halifax Oak 18 mm color #a97f57"
+      ]
+    },
+    {
+      "id": "door-front-x",
+      "label": "Door Front X",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 578,
+        "height": 418,
+        "depth": 19,
+        "thickness": 19
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "lengthZ",
+        "heightCarcass",
+        "plinthHeight",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "height",
+        "worktopThicknessMm",
+        "doorOpen",
+        "hingeSideFrontX",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "handleComponentId",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "formulas": {
+        "width": "lengthZ - 2 * sideGap",
+        "height": "heightCarcass - plinthHeight - topGap - bottomGap",
+        "thickness": "frontThicknessMm",
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 0, -209"
+      },
+      "notes": [
+        "material DTD Halifax Oak 18 mm color #a97f57"
+      ]
+    }
+  ]
+}

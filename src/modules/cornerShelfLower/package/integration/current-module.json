@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "builder-module-export.v1",
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "packageName": "module-builder-corner_shelf_lower",
+  "packageVersion": "1.0.0",
+  "geometryFile": "definitions/corner_shelf_lower.geometry.json",
+  "bomFile": "definitions/corner_shelf_lower.bom.snapshot.json"
+}

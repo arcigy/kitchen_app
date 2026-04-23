@@ -3,6 +3,10 @@ import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { BOMResult } from "../layout/bom/bomTypes";
+import type { CornerShelfLowerParams } from "./cornerShelfLower/types";
+import { buildCornerShelfLower } from "./cornerShelfLower/geometry";
+import { createCornerShelfLowerControls } from "./cornerShelfLower/controls";
+import { calculateBOM as calculateCornerShelfLowerBOM } from "./cornerShelfLower/calculation";
 import type { DrawerLowParams } from "./drawerLow/types";
 import { buildDrawerLow } from "./drawerLow/geometry";
 import { createDrawerLowControls } from "./drawerLow/controls";
@@ -47,6 +51,22 @@ export type ModuleDescriptor = {
 };
 
 export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
+  {
+    type: "corner_shelf_lower",
+    folder: "cornerShelfLower",
+    label: "Corner",
+    packageName: "module-builder-corner_shelf_lower",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("corner_shelf_lower"),
+    build: (params) => buildCornerShelfLower(params as CornerShelfLowerParams),
+    createControls: (container, params, args) => createCornerShelfLowerControls(container, params as CornerShelfLowerParams, args),
+    calculateBOM: (params, ctx) => calculateCornerShelfLowerBOM(params as CornerShelfLowerParams, ctx),
+    capabilities: {
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true,
+          "hasWorktop": true
+    }
+  },
   {
     type: "drawer_low",
     folder: "drawerLow",

@@ -1,0 +1,9 @@
+{
+  "moduleType": "corner_shelf_lower",
+  "label": "Corner",
+  "functionNames": {
+    "defaultParams": "cornerShelfLowerDefaultsV2",
+    "build": "cornerShelfLowerBuildV2",
+    "controls": "cornerShelfLowerControlsV2"
+  }
+}

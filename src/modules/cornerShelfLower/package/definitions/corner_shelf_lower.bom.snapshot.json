@@ -1,0 +1,412 @@
+{
+  "schemaVersion": "module-bom.v1",
+  "moduleType": "corner_shelf_lower",
+  "displayName": "Corner",
+  "items": [
+    {
+      "id": "left-side",
+      "category": "board",
+      "description": "Left Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 582,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "left-side"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "right-side",
+      "category": "board",
+      "description": "Right Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 582,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "right-side"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "back-panel-x",
+      "category": "board",
+      "description": "Back Panel X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 976,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back-panel-x"
+      ],
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "back-panel-z",
+      "category": "board",
+      "description": "Back Panel Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 908,
+        "height": 561,
+        "depth": 6,
+        "thickness": 6
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back-panel-z"
+      ],
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "back-corner-panel",
+      "category": "board",
+      "description": "Back Corner Support Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 546,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back-corner-panel"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel-x",
+      "category": "board",
+      "description": "Bottom Panel X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 982,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "bottom-panel-x"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel-z",
+      "category": "board",
+      "description": "Bottom Panel Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 560,
+        "height": 440,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "bottom-panel-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-x-front",
+      "category": "board",
+      "description": "Top Front Rail X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 982,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "top-panel-x-front"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-x-back",
+      "category": "board",
+      "description": "Top Rear Rail X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 982,
+        "height": 80,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "top-panel-x-back"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel-z",
+      "category": "board",
+      "description": "Top Panel Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 560,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "top-panel-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "plinth-x",
+      "category": "board",
+      "description": "Plinth X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 518,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "plinth-x"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "plinth-z",
+      "category": "board",
+      "description": "Plinth Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 500,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "plinth-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-1-x",
+      "category": "board",
+      "description": "Shelf 1 X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-1-x"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-1-z",
+      "category": "board",
+      "description": "Shelf 1 Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-1-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-2-x",
+      "category": "board",
+      "description": "Shelf 2 X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-2-x"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-2-z",
+      "category": "board",
+      "description": "Shelf 2 Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-2-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-3-x",
+      "category": "board",
+      "description": "Shelf 3 X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 973,
+        "height": 551,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-3-x"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-3-z",
+      "category": "board",
+      "description": "Shelf 3 Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 551,
+        "height": 422,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-3-z"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "door-front-z",
+      "category": "front",
+      "description": "Door Front Z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 578,
+        "height": 418,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door-front-z"
+      ],
+      "notes": [
+        "material DTD Halifax Oak 18 mm color #a97f57"
+      ]
+    },
+    {
+      "id": "door-front-x",
+      "category": "front",
+      "description": "Door Front X",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 578,
+        "height": 418,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door-front-x"
+      ],
+      "notes": [
+        "material DTD Halifax Oak 18 mm color #a97f57"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 20,
+    "boardItems": 20,
+    "hardwareItems": 0
+  }
+}

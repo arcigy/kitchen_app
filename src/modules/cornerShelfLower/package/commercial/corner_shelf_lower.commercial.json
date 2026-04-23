@@ -1,0 +1,22 @@
+{
+  "manifest": {
+    "pricingConfig": {
+      "path": "commercial/corner_shelf_lower.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/corner_shelf_lower.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/corner_shelf_lower.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  }
+}

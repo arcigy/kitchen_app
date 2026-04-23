@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "module-package.v1",
+  "packageName": "module-builder-corner_shelf_lower",
+  "packageVersion": "1.0.0",
+  "displayName": "Corner Package",
+  "description": "Portable single-module package exported from module-builder-dev for corner_shelf_lower.",
+  "engineCompatibility": {
+    "app": "module_builder_dev",
+    "moduleContract": "1.x"
+  },
+  "modules": [
+    {
+      "moduleType": "corner_shelf_lower",
+      "displayName": "Corner"
+    }
+  ]
+}
