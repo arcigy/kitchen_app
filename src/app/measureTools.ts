@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import type { AssociativeMeasureKind } from "./measureAssociative";
+import type { PlanSnapBinding } from "./planSnap";
 import { axisLockXZ, planarDistanceMm, worldToScreen } from "./sharedUtils";
 import type { SnapOverlayController } from "./snapOverlay";
 
@@ -46,6 +48,7 @@ export type MeasureState = {
   enabled: boolean;
   axisLock: boolean;
   firstPoint: THREE.Vector3 | null;
+  firstBinding: PlanSnapBinding | null;
   hoverPoint: THREE.Vector3 | null;
   hoverSnap: "none" | "free" | "edge" | "corner" | "endpoint" | "midpoint" | "perpendicular" | "axis";
   previewLine: THREE.Line | null;
@@ -54,11 +57,16 @@ export type MeasureState = {
   previewStartEl: HTMLDivElement | null;
   previewEndEl: HTMLDivElement | null;
   firstPointEl: HTMLDivElement | null;
+  nextMeasureId: number;
   measures: Array<{
+    id: string;
+    kind: AssociativeMeasureKind;
+    aBinding: PlanSnapBinding;
+    bBinding: PlanSnapBinding;
     a: THREE.Vector3;
     b: THREE.Vector3;
     line: THREE.Line;
-    label: HTMLDivElement;
+    label: HTMLDivElement | null;
     lineEl: HTMLDivElement;
     startEl: HTMLDivElement;
     endEl: HTMLDivElement;
@@ -276,6 +284,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     enabled: false,
     axisLock: false,
     firstPoint: null,
+    firstBinding: null,
     hoverPoint: null,
     hoverSnap: "none",
     previewLine: null,
@@ -284,6 +293,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     previewStartEl: null,
     previewEndEl: null,
     firstPointEl: null,
+    nextMeasureId: 1,
     measures: []
   };
 
@@ -368,6 +378,33 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     return el;
   }
 
+  function styleMeasureLine(
+    line: THREE.Line,
+    lineEl: HTMLDivElement,
+    kind: AssociativeMeasureKind
+  ) {
+    if (kind === "normalGuide") {
+      const material = line.material as THREE.LineDashedMaterial;
+      material.dashSize = 0.08;
+      material.gapSize = 0.05;
+      material.needsUpdate = true;
+      line.computeLineDistances();
+      lineEl.style.height = "3px";
+      lineEl.style.background = "transparent";
+      lineEl.style.boxShadow = "none";
+      lineEl.style.backgroundImage =
+        "repeating-linear-gradient(90deg, rgba(255,255,255,0.92) 0 10px, rgba(255,255,255,0) 10px 18px)";
+    } else {
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = 0.98;
+      material.needsUpdate = true;
+      lineEl.style.height = "6px";
+      lineEl.style.background = "rgba(136,247,255,0.95)";
+      lineEl.style.backgroundImage = "none";
+      lineEl.style.boxShadow = "0 0 0 1px rgba(255,255,255,0.24), 0 0 18px rgba(136,247,255,0.5)";
+    }
+  }
+
   function positionScreenLine(el: HTMLDivElement, a: THREE.Vector2, b: THREE.Vector2) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
@@ -428,13 +465,14 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
       args.scene.remove(m.line);
       m.line.geometry.dispose();
       (m.line.material as THREE.Material).dispose();
-      m.label.remove();
+      m.label?.remove();
       m.lineEl.remove();
       m.startEl.remove();
       m.endEl.remove();
     }
     measureState.measures = [];
     measureState.firstPoint = null;
+    measureState.firstBinding = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     clearPreview();
@@ -445,40 +483,88 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
 
   args.clearMeasuresBtn.addEventListener("click", clearAllMeasurements);
 
-  function addMeasurement(a: THREE.Vector3, b: THREE.Vector3, distanceMm = planarDistanceMm(a, b)) {
+  function updateMeasurementGeometry(
+    entry: MeasureState["measures"][number],
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    distanceMm = planarDistanceMm(a, b)
+  ) {
+    entry.a.copy(a);
+    entry.b.copy(b);
     const y = Math.max(a.y, b.y) + 0.002;
     const p1 = new THREE.Vector3(a.x, y, a.z);
     const p2 = new THREE.Vector3(b.x, y, b.z);
+    entry.line.geometry.setFromPoints([p1, p2]);
+    if (entry.kind === "normalGuide") {
+      (entry.line as THREE.Line).computeLineDistances?.();
+      if (entry.label) entry.label.style.display = "none";
+    } else if (entry.label) {
+      entry.label.textContent = `${Math.round(distanceMm)} mm`;
+      entry.label.style.display = "block";
+    }
+  }
 
-    const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-    const material = new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 0.98 });
+  function addMeasurement(
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    aBinding: PlanSnapBinding,
+    bBinding: PlanSnapBinding,
+    options?: { kind?: AssociativeMeasureKind; distanceMm?: number }
+  ) {
+    const kind = options?.kind ?? "distance";
+    const geometry = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
+    const material =
+      kind === "normalGuide"
+        ? new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.94, dashSize: 0.08, gapSize: 0.05 })
+        : new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 0.98 });
     const line = new THREE.Line(geometry, material);
-    line.name = "measureLine";
+    line.name = kind === "normalGuide" ? "measureNormalGuide" : "measureLine";
     args.scene.add(line);
 
-    const label = document.createElement("div");
-    label.style.position = "absolute";
-    label.style.transform = "translate(-50%, -50%)";
-    label.style.padding = "4px 8px";
-    label.style.borderRadius = "10px";
-    label.style.border = "1px solid rgba(255,255,255,0.35)";
-    label.style.background = "rgba(8,10,14,0.94)";
-    label.style.color = "#ffffff";
-    label.style.fontSize = "12px";
-    label.style.fontWeight = "700";
-    label.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
-    label.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-    label.style.whiteSpace = "nowrap";
-
-    label.textContent = `${Math.round(distanceMm)} mm`;
-    measureOverlay.appendChild(label);
+    const label =
+      kind === "normalGuide"
+        ? null
+        : (() => {
+            const el = document.createElement("div");
+            el.style.position = "absolute";
+            el.style.transform = "translate(-50%, -50%)";
+            el.style.padding = "4px 8px";
+            el.style.borderRadius = "10px";
+            el.style.border = "1px solid rgba(255,255,255,0.35)";
+            el.style.background = "rgba(8,10,14,0.94)";
+            el.style.color = "#ffffff";
+            el.style.fontSize = "12px";
+            el.style.fontWeight = "700";
+            el.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
+            el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
+            el.style.whiteSpace = "nowrap";
+            measureOverlay.appendChild(el);
+            return el;
+          })();
 
     const lineEl = makeScreenLine("rgba(136,247,255,0.95)");
-    const startEl = makeEndpointMarker("#ff5c8a");
-    const endEl = makeEndpointMarker("#00e5ff");
+    const startEl = makeEndpointMarker(kind === "normalGuide" ? "#ffe082" : "#ff5c8a");
+    const endEl = makeEndpointMarker(kind === "normalGuide" ? "#ffe082" : "#00e5ff");
 
-    measureState.measures.push({ a: a.clone(), b: b.clone(), line, label, lineEl, startEl, endEl });
-    args.measureReadoutEl.textContent = `Measured: ${Math.round(distanceMm)} mm`;
+    const entry = {
+      id: `measure_${measureState.nextMeasureId++}`,
+      kind,
+      aBinding,
+      bBinding,
+      a: a.clone(),
+      b: b.clone(),
+      line,
+      label,
+      lineEl,
+      startEl,
+      endEl
+    };
+    styleMeasureLine(line, lineEl, kind);
+    updateMeasurementGeometry(entry, a, b, options?.distanceMm ?? planarDistanceMm(a, b));
+    measureState.measures.push(entry);
+    args.measureReadoutEl.textContent =
+      kind === "normalGuide" ? "Normal guide created." : `Measured: ${Math.round(options?.distanceMm ?? planarDistanceMm(a, b))} mm`;
+    return entry;
   }
 
   function updateMeasureLabels() {
@@ -488,7 +574,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     for (const m of measureState.measures) {
       const sa = worldToScreen(m.a, args.getCamera(), rect);
       const sb = worldToScreen(m.b, args.getCamera(), rect);
-      positionMeasureLabel(m.label, sa, sb);
+      if (m.label) positionMeasureLabel(m.label, sa, sb);
       positionScreenLine(m.lineEl, sa, sb);
       positionMarker(m.startEl, sa);
       positionMarker(m.endEl, sb);
@@ -496,20 +582,40 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     setFirstPointMarker(measureState.firstPoint);
   }
 
-  function updatePreview(a: THREE.Vector3, b: THREE.Vector3, rect: DOMRect, distanceMm = planarDistanceMm(a, b)) {
+  function updatePreview(
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    rect: DOMRect,
+    distanceMm = planarDistanceMm(a, b),
+    options?: { kind?: AssociativeMeasureKind }
+  ) {
+    const kind = options?.kind ?? "distance";
     const y = Math.max(a.y, b.y) + 0.002;
     const p1 = new THREE.Vector3(a.x, y, a.z);
     const p2 = new THREE.Vector3(b.x, y, b.z);
 
     if (!measureState.previewLine) {
       const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const material = new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 1 });
+      const material =
+        kind === "normalGuide"
+          ? new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.94, dashSize: 0.08, gapSize: 0.05 })
+          : new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 1 });
       const line = new THREE.Line(geometry, material);
       line.name = "measurePreviewLine";
       args.scene.add(line);
       measureState.previewLine = line;
     } else {
       measureState.previewLine.geometry.setFromPoints([p1, p2]);
+    }
+    if (measureState.previewLine.material.type !== (kind === "normalGuide" ? "LineDashedMaterial" : "LineBasicMaterial")) {
+      (measureState.previewLine.material as THREE.Material).dispose();
+      measureState.previewLine.material =
+        kind === "normalGuide"
+          ? new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.94, dashSize: 0.08, gapSize: 0.05 })
+          : new THREE.LineBasicMaterial({ color: 0x88f7ff, transparent: true, opacity: 1 });
+    }
+    if (kind === "normalGuide") {
+      (measureState.previewLine as THREE.Line).computeLineDistances?.();
     }
 
     if (!measureState.previewLabel) {
@@ -534,12 +640,22 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
       measureState.previewStartEl = makeEndpointMarker("#ff5c8a");
       measureState.previewEndEl = makeEndpointMarker("#00e5ff");
     }
-
-    measureState.previewLabel.textContent = `${Math.round(distanceMm)} mm`;
+    if (kind === "normalGuide") {
+      measureState.previewLabel.style.display = "none";
+      styleMeasureLine(measureState.previewLine, measureState.previewLineEl, "normalGuide");
+      if (measureState.previewStartEl) measureState.previewStartEl.style.borderColor = "#ffe082";
+      if (measureState.previewEndEl) measureState.previewEndEl.style.borderColor = "#ffe082";
+    } else {
+      measureState.previewLabel.textContent = `${Math.round(distanceMm)} mm`;
+      measureState.previewLabel.style.display = "block";
+      styleMeasureLine(measureState.previewLine, measureState.previewLineEl, "distance");
+      if (measureState.previewStartEl) measureState.previewStartEl.style.borderColor = "#ff5c8a";
+      if (measureState.previewEndEl) measureState.previewEndEl.style.borderColor = "#00e5ff";
+    }
 
     const sa = worldToScreen(a, args.getCamera(), rect);
     const sb = worldToScreen(b, args.getCamera(), rect);
-    positionMeasureLabel(measureState.previewLabel, sa, sb);
+    if (kind !== "normalGuide") positionMeasureLabel(measureState.previewLabel, sa, sb);
     positionScreenLine(measureState.previewLineEl, sa, sb);
     if (measureState.previewStartEl) positionMarker(measureState.previewStartEl, sa);
     if (measureState.previewEndEl) positionMarker(measureState.previewEndEl, sb);
@@ -553,6 +669,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     marqueeEl,
     measureState,
     addMeasurement,
+    updateMeasurementGeometry,
     updateMeasureLabels,
     updatePreview,
     clearPreview,

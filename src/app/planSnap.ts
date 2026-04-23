@@ -9,7 +9,27 @@ import type {
 } from "./localTypes";
 
 export type PlanSnapKind = "none" | "corner" | "midpoint" | "perpendicular" | "edge" | "endpoint" | "axis";
-export type PlanSnapOwner = "wall" | "module" | "worktop" | "floor";
+export type PlanSnapOwner = "wall" | "module" | "worktop" | "floor" | "measureGuide";
+
+export type PlanSnapBinding =
+  | { type: "free"; pointMm: { x: number; y: number; z: number } }
+  | { type: "wallEndpoint"; wallId: string; endpoint: "a" | "b" }
+  | { type: "wallCenterline"; wallId: string; t: number }
+  | { type: "moduleVertex"; instanceId: string; vertexIndex: number }
+  | { type: "moduleEdge"; instanceId: string; segmentIndex: number; t: number }
+  | { type: "worktopVertex"; worktopId: string; vertexIndex: number }
+  | { type: "worktopEdge"; worktopId: string; segmentIndex: number; t: number }
+  | { type: "floorVertex"; floorId: string; vertexIndex: number }
+  | { type: "floorEdge"; floorId: string; segmentIndex: number; t: number }
+  | { type: "guideAnchor"; guideId: string }
+  | { type: "guideLine"; guideId: string; offsetM: number };
+
+export type PlanSnapGuide = {
+  id: string;
+  anchor: THREE.Vector3;
+  direction: THREE.Vector3;
+  spanM: number;
+};
 
 type PlanSnapCandidate = {
   p: THREE.Vector3;
@@ -17,6 +37,14 @@ type PlanSnapCandidate = {
   a?: THREE.Vector3 | null;
   b?: THREE.Vector3 | null;
   owner?: PlanSnapOwner;
+  binding?: PlanSnapBinding | null;
+};
+
+type PlanSnapSegment = {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  owner: PlanSnapOwner;
+  bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null;
 };
 
 export type PlanSnapResult = {
@@ -25,13 +53,19 @@ export type PlanSnapResult = {
   a?: THREE.Vector3 | null;
   b?: THREE.Vector3 | null;
   owner?: PlanSnapOwner;
+  binding?: PlanSnapBinding | null;
 };
+
+const KITCHEN_CORNER_ANCHOR_NAME = "__kitchen_corner_anchor";
+const KITCHEN_CORNER_X_ANCHOR_NAME = "__kitchen_corner_x_anchor";
+const KITCHEN_CORNER_Z_ANCHOR_NAME = "__kitchen_corner_z_anchor";
 
 type CreatePlanSnapperArgs = {
   getWalls: () => WallInstance[];
   getInstances: () => LayoutInstance[];
   getFloors: () => FloorInstance[];
   getKitchenWorktops: () => KitchenWorktopInstance[];
+  getMeasureGuides?: () => PlanSnapGuide[];
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
   getWallSolvedJoinPolys: () => Array<Array<{ x: number; z: number }>>;
   getWallUnionPolys: () => any | null;
@@ -47,6 +81,11 @@ type PlanSnapOptions = {
   sticky?: PlanSnapResult | null;
   stickyThresholdPx?: number;
   preferNearest?: boolean;
+};
+
+type LoopBindingFactory = {
+  vertexBinding?: (vertexIndex: number, point: THREE.Vector3) => PlanSnapBinding | null;
+  edgeBinding?: (segmentIndex: number, t: number, point: THREE.Vector3) => PlanSnapBinding | null;
 };
 
 const DEFAULT_KIND_ORDER = ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"] satisfies Array<
@@ -77,36 +116,122 @@ function dist2(a: { x: number; y: number }, b: { x: number; y: number }) {
   return dx * dx + dy * dy;
 }
 
+function toFreeBinding(point: THREE.Vector3): PlanSnapBinding {
+  return {
+    type: "free",
+    pointMm: {
+      x: Math.round(point.x * 1000),
+      y: Math.round(point.y * 1000),
+      z: Math.round(point.z * 1000)
+    }
+  };
+}
+
+function pushSegment(
+  segments: PlanSnapSegment[],
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  owner: PlanSnapOwner,
+  bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null
+) {
+  if (a.distanceToSquared(b) < 1e-12) return;
+  segments.push({ a: a.clone(), b: b.clone(), owner, bindingAt });
+}
+
 function addClosestEdgeCandidate(
   candidates: PlanSnapCandidate[],
+  segments: PlanSnapSegment[],
   raw: THREE.Vector3,
   a: THREE.Vector3,
   b: THREE.Vector3,
   owner: PlanSnapOwner,
-  options?: PlanSnapOptions
+  options?: PlanSnapOptions,
+  bindingAt?: (t: number, point: THREE.Vector3) => PlanSnapBinding | null
 ) {
   const ab = b.clone().sub(a);
   const denom = ab.lengthSq();
   if (denom < 1e-12) return;
   const t = Math.max(0, Math.min(1, raw.clone().sub(a).dot(ab) / denom));
   const closest = a.clone().addScaledVector(ab, t);
-  candidates.push({ p: closest, kind: "edge", a: a.clone(), b: b.clone(), owner });
-  candidates.push({ p: a.clone().lerp(b, 0.5), kind: "midpoint", a: a.clone(), b: b.clone(), owner });
+  candidates.push({
+    p: closest,
+    kind: "edge",
+    a: a.clone(),
+    b: b.clone(),
+    owner,
+    binding: bindingAt?.(t, closest) ?? null
+  });
+  const midpoint = a.clone().lerp(b, 0.5);
+  candidates.push({
+    p: midpoint,
+    kind: "midpoint",
+    a: a.clone(),
+    b: b.clone(),
+    owner,
+    binding: bindingAt?.(0.5, midpoint) ?? null
+  });
 
   const perpendicularFrom = options?.perpendicularFrom ?? null;
   if (perpendicularFrom) {
     const perpT = perpendicularFrom.clone().sub(a).dot(ab) / denom;
     if (perpT >= 0 && perpT <= 1) {
       const perpendicular = a.clone().addScaledVector(ab, perpT);
-      candidates.push({ p: perpendicular, kind: "perpendicular", a: a.clone(), b: b.clone(), owner });
+      candidates.push({
+        p: perpendicular,
+        kind: "perpendicular",
+        a: a.clone(),
+        b: b.clone(),
+        owner,
+        binding: bindingAt?.(perpT, perpendicular) ?? null
+      });
     }
   }
+
+  pushSegment(segments, a, b, owner, bindingAt ?? (() => null));
+}
+
+function getModuleLocalAnchor(inst: LayoutInstance, anchorName: string) {
+  inst.root.updateMatrixWorld(true);
+  const anchor = inst.module.getObjectByName(anchorName);
+  if (!anchor) return null;
+  const world = new THREE.Vector3();
+  anchor.getWorldPosition(world);
+  return inst.root.worldToLocal(world);
 }
 
 export function getModulePlanLocalRect(
   inst: LayoutInstance,
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3
 ) {
+  if ((inst.params as Record<string, unknown> | null | undefined)?.type === "corner_shelf_lower") {
+    const corner = getModuleLocalAnchor(inst, KITCHEN_CORNER_ANCHOR_NAME);
+    const xAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_X_ANCHOR_NAME);
+    const zAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_Z_ANCHOR_NAME);
+    if (corner && xAnchor && zAnchor) {
+      const lengthX = Number((inst.params as any)?.lengthX);
+      const lengthZ = Number((inst.params as any)?.lengthZ);
+      const xDir = xAnchor.clone().sub(corner).setY(0);
+      const zDir = zAnchor.clone().sub(corner).setY(0);
+      if (
+        xDir.lengthSq() > 1e-8 &&
+        zDir.lengthSq() > 1e-8 &&
+        Number.isFinite(lengthX) &&
+        lengthX > 0 &&
+        Number.isFinite(lengthZ) &&
+        lengthZ > 0
+      ) {
+        xDir.normalize().multiplyScalar(lengthX / 1000);
+        zDir.normalize().multiplyScalar(lengthZ / 1000);
+        const xPoint = corner.clone().add(xDir);
+        const zPoint = corner.clone().add(zDir);
+        const far = corner.clone().add(xDir).add(zDir);
+        return [corner, xPoint, far, zPoint];
+      }
+      const far = xAnchor.clone().add(zAnchor).sub(corner);
+      return [corner, xAnchor, far, zAnchor];
+    }
+  }
+
   const widthMm = Number((inst.params as any)?.width);
   const depthMm = Number((inst.params as any)?.depth);
   const backCenter = getModuleLocalBackCenter(inst);
@@ -143,21 +268,91 @@ export function getModulePlanPolygon(
 
 function appendSnapCandidatesFromLoop(
   candidates: PlanSnapCandidate[],
+  segments: PlanSnapSegment[],
   raw: THREE.Vector3,
   points: THREE.Vector3[],
   owner: PlanSnapOwner,
   closed = true,
-  options?: PlanSnapOptions
+  options?: PlanSnapOptions,
+  bindingFactory?: LoopBindingFactory | null
 ) {
   if (points.length < 2) return;
-  for (const point of points) {
-    candidates.push({ p: point.clone(), kind: "corner", owner });
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index]!;
+    candidates.push({
+      p: point.clone(),
+      kind: "corner",
+      owner,
+      binding: bindingFactory?.vertexBinding?.(index, point) ?? null
+    });
   }
   const segmentCount = closed ? points.length : points.length - 1;
   for (let index = 0; index < segmentCount; index += 1) {
     const a = points[index]!;
     const b = points[(index + 1) % points.length]!;
-    addClosestEdgeCandidate(candidates, raw, a, b, owner, options);
+    addClosestEdgeCandidate(
+      candidates,
+      segments,
+      raw,
+      a,
+      b,
+      owner,
+      options,
+      bindingFactory?.edgeBinding ? (t, point) => bindingFactory.edgeBinding!(index, t, point) : undefined
+    );
+  }
+}
+
+function intersectLinesXZ(a0: THREE.Vector3, a1: THREE.Vector3, b0: THREE.Vector3, b1: THREE.Vector3) {
+  const ax = a1.x - a0.x;
+  const az = a1.z - a0.z;
+  const bx = b1.x - b0.x;
+  const bz = b1.z - b0.z;
+  const denom = ax * bz - az * bx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const dx = b0.x - a0.x;
+  const dz = b0.z - a0.z;
+  const ta = (dx * bz - dz * bx) / denom;
+  const tb = (dx * az - dz * ax) / denom;
+  return {
+    ta,
+    tb,
+    point: new THREE.Vector3(a0.x + ax * ta, 0, a0.z + az * ta)
+  };
+}
+
+function addGuideIntersections(candidates: PlanSnapCandidate[], guides: PlanSnapGuide[], segments: PlanSnapSegment[]) {
+  for (const guide of guides) {
+    const dir = guide.direction.clone().setY(0);
+    if (dir.lengthSq() < 1e-10) continue;
+    dir.normalize();
+    const halfSpan = Math.max(0.25, guide.spanM / 2);
+    const g0 = guide.anchor.clone().addScaledVector(dir, -halfSpan);
+    const g1 = guide.anchor.clone().addScaledVector(dir, halfSpan);
+    for (const segment of segments) {
+      if (segment.owner === "measureGuide") continue;
+      const hit = intersectLinesXZ(g0, g1, segment.a, segment.b);
+      if (!hit) continue;
+      if (hit.ta < -1e-6 || hit.ta > 1 + 1e-6 || hit.tb < -1e-6 || hit.tb > 1 + 1e-6) continue;
+      const point = hit.point;
+      const guideOffset = point.clone().sub(guide.anchor).dot(dir);
+      candidates.push({
+        p: point,
+        kind: "corner",
+        a: segment.a.clone(),
+        b: segment.b.clone(),
+        owner: segment.owner,
+        binding: segment.bindingAt(Math.max(0, Math.min(1, hit.tb)), point)
+      });
+      candidates.push({
+        p: point.clone(),
+        kind: "endpoint",
+        a: g0.clone(),
+        b: g1.clone(),
+        owner: "measureGuide",
+        binding: { type: "guideLine", guideId: guide.id, offsetM: guideOffset }
+      });
+    }
   }
 }
 
@@ -170,24 +365,42 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
     options?: PlanSnapOptions
   ): PlanSnapResult {
     const candidates: PlanSnapCandidate[] = [];
+    const segments: PlanSnapSegment[] = [];
 
     for (const w of args.getWalls()) {
       const a = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
       const b = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-      candidates.push({ p: a, kind: "endpoint", owner: "wall" });
-      candidates.push({ p: b, kind: "endpoint", owner: "wall" });
-      addClosestEdgeCandidate(candidates, raw, a, b, "wall", options);
+      candidates.push({ p: a.clone(), kind: "endpoint", owner: "wall", binding: { type: "wallEndpoint", wallId: w.id, endpoint: "a" } });
+      candidates.push({ p: b.clone(), kind: "endpoint", owner: "wall", binding: { type: "wallEndpoint", wallId: w.id, endpoint: "b" } });
+      addClosestEdgeCandidate(
+        candidates,
+        segments,
+        raw,
+        a,
+        b,
+        "wall",
+        options,
+        (t) => ({ type: "wallCenterline", wallId: w.id, t })
+      );
 
       const ab = b.clone().sub(a);
       const t = ab.lengthSq() > 1e-12 ? raw.clone().sub(a).dot(ab) / ab.lengthSq() : 0;
       const tt = Math.max(0, Math.min(1, t));
       const closest = a.clone().add(ab.multiplyScalar(tt));
-      candidates.push({ p: closest, kind: "axis", a: a.clone(), b: b.clone(), owner: "wall" });
+      candidates.push({
+        p: closest,
+        kind: "axis",
+        a: a.clone(),
+        b: b.clone(),
+        owner: "wall",
+        binding: { type: "wallCenterline", wallId: w.id, t: tt }
+      });
     }
 
     for (const poly of args.getWallSolvedOutlines().values()) {
       appendSnapCandidatesFromLoop(
         candidates,
+        segments,
         raw,
         poly.map((point) => new THREE.Vector3(point.x, 0, point.z)),
         "wall",
@@ -199,6 +412,7 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
     for (const poly of args.getWallSolvedJoinPolys()) {
       appendSnapCandidatesFromLoop(
         candidates,
+        segments,
         raw,
         poly.map((point) => new THREE.Vector3(point.x, 0, point.z)),
         "wall",
@@ -212,41 +426,95 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       for (const poly of wallUnionPolys as any[]) {
         for (const ring of poly as any[]) {
           const pts = (ring as Array<[number, number]>).slice(0, -1).map(([x, z]) => new THREE.Vector3(x, 0, z));
-          appendSnapCandidatesFromLoop(candidates, raw, pts, "wall", true, options);
+          appendSnapCandidatesFromLoop(candidates, segments, raw, pts, "wall", true, options);
         }
       }
     }
 
     for (const inst of args.getInstances()) {
-      appendSnapCandidatesFromLoop(candidates, raw, getModulePlanPolygon(inst, args.getModuleLocalBackCenter), "module", true, options);
+      const polygon = getModulePlanPolygon(inst, args.getModuleLocalBackCenter);
+      appendSnapCandidatesFromLoop(
+        candidates,
+        segments,
+        raw,
+        polygon,
+        "module",
+        true,
+        options,
+        {
+          vertexBinding: (vertexIndex) => ({ type: "moduleVertex", instanceId: inst.id, vertexIndex }),
+          edgeBinding: (segmentIndex, t) => ({ type: "moduleEdge", instanceId: inst.id, segmentIndex, t })
+        }
+      );
     }
 
     for (const worktop of args.getKitchenWorktops()) {
+      const polygon = args
+        .getKitchenWorktopPolygon(worktop.params)
+        .map((point) => point.clone().setY(0));
       appendSnapCandidatesFromLoop(
         candidates,
+        segments,
         raw,
-        args.getKitchenWorktopPolygon(worktop.params).map((point) => point.clone().setY(0)),
+        polygon,
         "worktop",
         true,
-        options
+        options,
+        {
+          vertexBinding: (vertexIndex) => ({ type: "worktopVertex", worktopId: worktop.id, vertexIndex }),
+          edgeBinding: (segmentIndex, t) => ({ type: "worktopEdge", worktopId: worktop.id, segmentIndex, t })
+        }
       );
     }
 
     for (const floor of args.getFloors()) {
+      const polygon = floor.params.boundary.map((point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000));
       appendSnapCandidatesFromLoop(
         candidates,
+        segments,
         raw,
-        floor.params.boundary.map((point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000)),
+        polygon,
         "floor",
         true,
-        options
+        options,
+        {
+          vertexBinding: (vertexIndex) => ({ type: "floorVertex", floorId: floor.id, vertexIndex }),
+          edgeBinding: (segmentIndex, t) => ({ type: "floorEdge", floorId: floor.id, segmentIndex, t })
+        }
       );
     }
 
     if (args.getLayoutTool() === "wall") {
       const chainStart = args.getWallChainStart();
-      if (chainStart) candidates.push({ p: chainStart.clone(), kind: "endpoint", owner: "wall" });
+      if (chainStart) candidates.push({ p: chainStart.clone(), kind: "endpoint", owner: "wall", binding: toFreeBinding(chainStart) });
     }
+
+    const guides = args.getMeasureGuides?.() ?? [];
+    for (const guide of guides) {
+      const dir = guide.direction.clone().setY(0);
+      if (dir.lengthSq() < 1e-10) continue;
+      dir.normalize();
+      const halfSpan = Math.max(0.25, guide.spanM / 2);
+      const a = guide.anchor.clone().addScaledVector(dir, -halfSpan);
+      const b = guide.anchor.clone().addScaledVector(dir, halfSpan);
+      candidates.push({
+        p: guide.anchor.clone(),
+        kind: "endpoint",
+        owner: "measureGuide",
+        binding: { type: "guideAnchor", guideId: guide.id }
+      });
+      addClosestEdgeCandidate(
+        candidates,
+        segments,
+        raw,
+        a,
+        b,
+        "measureGuide",
+        options,
+        (_t, point) => ({ type: "guideLine", guideId: guide.id, offsetM: point.clone().sub(guide.anchor).dot(dir) })
+      );
+    }
+    addGuideIntersections(candidates, guides, segments);
 
     const rawScreen = worldToScreen(raw, camera, rect);
     const bestByKind = new Map<Exclude<PlanSnapKind, "none">, { candidate: PlanSnapCandidate; d2: number }>();
@@ -257,7 +525,6 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       if (!prev || d2 < prev.d2) bestByKind.set(candidate.kind, { candidate, d2 });
     }
 
-    const maxD2 = maxPx * maxPx;
     const pick = (kind: Exclude<PlanSnapKind, "none">) => {
       const value = bestByKind.get(kind);
       if (!value) return null;
@@ -268,12 +535,12 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         kind,
         a: value.candidate.a?.clone() ?? null,
         b: value.candidate.b?.clone() ?? null,
-        owner: value.candidate.owner
+        owner: value.candidate.owner,
+        binding: value.candidate.binding ?? null
       };
     };
 
-    const order =
-      options?.kindPriority ?? DEFAULT_KIND_ORDER;
+    const order = options?.kindPriority ?? DEFAULT_KIND_ORDER;
 
     const sticky = options?.sticky ?? null;
     const stickyThresholdPx = options?.stickyThresholdPx ?? Math.max(16, maxPx + 6);
@@ -285,7 +552,8 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
           kind: sticky.kind,
           a: sticky.a?.clone() ?? null,
           b: sticky.b?.clone() ?? null,
-          owner: sticky.owner
+          owner: sticky.owner,
+          binding: sticky.binding ?? null
         };
       }
     }
@@ -304,6 +572,7 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
           a: value.candidate.a?.clone() ?? null,
           b: value.candidate.b?.clone() ?? null,
           owner: value.candidate.owner,
+          binding: value.candidate.binding ?? null,
           d2: value.d2,
           rank,
           score: value.d2 * (KIND_SCORE_MULTIPLIER[kind] ?? 1)
@@ -322,7 +591,8 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
           kind: best.kind,
           a: best.a ?? null,
           b: best.b ?? null,
-          owner: best.owner
+          owner: best.owner,
+          binding: best.binding ?? null
         };
       }
     }
@@ -331,6 +601,6 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       const hit = pick(kind);
       if (hit) return hit;
     }
-    return { point: raw, kind: "none" };
+    return { point: raw, kind: "none", binding: toFreeBinding(raw) };
   };
 }

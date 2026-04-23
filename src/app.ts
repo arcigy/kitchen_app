@@ -21,8 +21,29 @@ import {
 } from "./app/sharedUtils";
 import { applyMeasureAxisAssist, createMeasureTools } from "./app/measureTools";
 import { applyMeasureAxisAssist3D, axisLockPoint3D, distance3dMm, snapPoint3D } from "./app/measure3d";
-import { createPlanSnapper, getModulePlanLocalRect, type PlanSnapResult } from "./app/planSnap";
+import {
+  createPlanSnapper,
+  getModulePlanLocalRect,
+  type PlanSnapBinding,
+  type PlanSnapResult
+} from "./app/planSnap";
+import {
+  buildMeasureGuides,
+  isBindingAttachedToWall,
+  resolveAssociativeMeasureWorld,
+  resolvePlanBinding,
+  toFreePlanBinding,
+  type AssociativeMeasureContext
+} from "./app/measureAssociative";
 import { createSnapOverlay } from "./app/snapOverlay";
+import {
+  buildSectionMarkerGeometry,
+  buildPlaneSliceStripGeometry,
+  computeElevationViewConfig,
+  computeSectionViewConfig,
+  createSectionPickGeometry,
+  getSectionBasis
+} from "./app/sectionViews";
 import {
   createSelectionHighlights,
   createToolHud,
@@ -33,9 +54,6 @@ import { createViewerTabs, resolveAppArgs, type AppArgs } from "./app/bootstrap"
 import type {
   AlignPickedLine,
   AlignWallLine,
-  DimensionInstance,
-  DimensionParams,
-  DimensionRef,
   FloorBoundaryPoint,
   FloorBoundarySegment,
   FloorBoundaryTool,
@@ -50,6 +68,9 @@ import type {
   LayoutInstance,
   LayoutSnapshot,
   PickedLine2D,
+  SectionElevationKey,
+  SectionInstance,
+  SectionParams,
   SelectedKind,
   WallId,
   WallInstance,
@@ -87,23 +108,6 @@ import {
   type HistoryHelpers
 } from "./layout/historyManager";
 import {
-  makeDimTextSprite,
-  updateSpriteText,
-  makeDimBarMesh,
-  updateDimBar,
-  setSpriteScreenFixedScale,
-  updateDimensionTextScale,
-  updateDimensionGeometry,
-  updateAllDimensions,
-  updateDimensionSelectionHighlights,
-  createDimension,
-  disposeDimensionInstance,
-  deleteDimension,
-  dimValueMm,
-  wallLineSegment,
-  type DimensionHelpers
-} from "./layout/dimensionManager";
-import {
   addInstance,
   cancelPlacement,
   commitPlacement,
@@ -136,6 +140,7 @@ export function startApp(initialArgs: AppArgs) {
     renderer,
     setSize,
     setViewMode,
+    setPlanPresentation,
     getCamera,
     getControls,
     setHdri,
@@ -148,19 +153,34 @@ export function startApp(initialArgs: AppArgs) {
     getWindowOpening,
     setWindowCutout,
     updateLighting,
-    getLightingRevision
+    getLightingRevision,
+    getSceneDebugState
   } = createScene(args.viewerEl);
   const cam = () => getCamera();
   const ctl = () => getControls();
+  renderer.localClippingEnabled = true;
 
   setDaylightIntensity(9);
 
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
-  const { floorplanTab, view3dTab, syncViewerTabs } = createViewerTabs(args.viewerEl);
+  const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs } = createViewerTabs(args.viewerEl);
+  let activeViewerTab = "3d";
+  let activeDetailClipPlanes: THREE.Plane[] = [];
+  const detailViewPanOffset = new THREE.Vector3();
+  const savedFloorplanView = {
+    target: new THREE.Vector3(0, 0, 0),
+    zoom: 1,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    near: 0.01,
+    far: 200
+  };
 
-  type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension" | "measure";
+  type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section";
   let layoutTool: LayoutTool = "select";
 
   type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
@@ -186,6 +206,11 @@ export function startApp(initialArgs: AppArgs) {
   wallPlanGroup.visible = false;
   layoutRoot.add(wallPlanGroup);
 
+  const detailSliceGroup = new THREE.Group();
+  detailSliceGroup.name = "detailSliceGroup";
+  detailSliceGroup.visible = false;
+  layoutRoot.add(detailSliceGroup);
+
   const wallPlanMeshes = new Map<string, THREE.Line>();
   const wallJoinMeshes: THREE.Mesh[] = [];
   const wallDebugGroup = new THREE.Group();
@@ -197,7 +222,7 @@ export function startApp(initialArgs: AppArgs) {
   let wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>> = [];
   let wallUnionPolys: any | null = null;
 
-const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
+  const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutRoot,
     getMode: () => mode,
     getWalls: () => walls,
@@ -211,8 +236,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   const { toolHud, clearToolHud, hudHoverLine, hudLineThicknessM, hudPickLine1, hudPickLine2, updateHudLine } = createToolHud({
     layoutRoot,
-    getCamera: cam,
-    getDimPreviewRoot: () => dimPreview.root
+    getCamera: cam
   });
 
   const { updateSelectionHighlights } = createSelectionHighlights({
@@ -255,8 +279,8 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   let windowInst: WindowInstance | null = null;
   let selectedKind: SelectedKind = null;
   let selectedKitchenGroupId: string | null = null;
-  let selectedDimensionId: string | null = null;
   let selectedFloorId: string | null = null;
+  let selectedSectionId: string | null = null;
 
   const walls: WallInstance[] = [];
   let wallCounter = 1;
@@ -271,6 +295,8 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   const floors: FloorInstance[] = [];
   let floorCounter = 1;
+  const sections: SectionInstance[] = [];
+  let sectionCounter = 1;
   const floorDefault = {
     heightMm: 0,
     thicknessMm: 150,
@@ -279,14 +305,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   const kitchenWorktops: KitchenWorktopInstance[] = [];
   let worktopCounter = 1;
-
-  const dimensions: DimensionInstance[] = [];
-  let dimensionCounter = 1;
-
-  const dimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
-  const dimMatSelected = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
-  const dimPickMat = new THREE.MeshBasicMaterial({ visible: false });
-  let dimPreview: any = null;
 
   const history = {
     past: [] as LayoutSnapshot[],
@@ -302,7 +320,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   let redoBtnEl: HTMLButtonElement | null = null;
   let helpers!: HistoryHelpers;
   let placementHelpers!: PlacementHelpers;
-  let dimensionHelpers!: DimensionHelpers;
 
   const placement = {
     active: false,
@@ -325,6 +342,8 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   S.wallCounter = wallCounter;
   S.floors = floors;
   S.floorCounter = floorCounter;
+  S.sections = sections;
+  S.sectionCounter = sectionCounter;
   S.kitchenWorktops = kitchenWorktops;
   S.worktopCounter = worktopCounter;
   S.instances = instances;
@@ -336,15 +355,13 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   S.selectedInstanceId = selectedInstanceId;
   S.selectedWallId = selectedWallId;
   S.selectedFloorId = selectedFloorId;
-  S.selectedDimensionId = selectedDimensionId;
+  S.selectedSectionId = selectedSectionId;
   S.selectedWallIds = selectedWallIds;
   S.selectedInstanceIds = selectedInstanceIds;
   S.pinnedWallIds = pinnedWallIds;
   S.pinnedInstanceIds = pinnedInstanceIds;
   S.underlayState = underlayState;
   S.placement = placement;
-  S.dimensions = dimensions;
-  S.dimensionCounter = dimensionCounter;
   S.undoBtnEl = undoBtnEl;
   S.redoBtnEl = redoBtnEl;
   S.history = history;
@@ -354,24 +371,8 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     S.selectedInstanceId = selectedInstanceId;
     S.selectedWallId = selectedWallId;
     S.selectedFloorId = selectedFloorId;
-    S.selectedDimensionId = selectedDimensionId;
+    S.selectedSectionId = selectedSectionId;
   }
-
-  dimensionHelpers = {
-    THREE,
-    cam,
-    hudLineThicknessM,
-    wallRefLineToCenterLine,
-    dimMat,
-    dimMatSelected,
-    dimPickMat,
-    layoutRoot,
-    getViewMode: () => viewMode,
-    getSelectedKind: () => selectedKind,
-    getSelectedDimensionId: () => selectedDimensionId,
-    setSelectedDimension,
-    getDimPreview: () => dimPreview
-  };
 
 
 
@@ -400,6 +401,17 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     previewBackLine: null as THREE.Line | null
   };
 
+  const sectionDraw = {
+    active: false,
+    mirrored: false,
+    axisLocked: false,
+    a: null as FloorBoundaryPoint | null,
+    hoverPoint: null as FloorBoundaryPoint | null,
+    previewRoot: null as THREE.Group | null,
+    previewLine: null as THREE.LineSegments | null,
+    previewArrows: null as THREE.LineSegments | null
+  };
+
   const transformState = {
     kind: null as null | "move" | "rotate",
     step: null as null | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
@@ -410,8 +422,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     lastPointerPx: { x: 0, y: 0 },
     selectedWallIds: [] as string[],
     selectedInstanceIds: [] as string[],
+    selectedSectionIds: [] as string[],
     startWalls: new Map<string, WallParams>(),
     startInstances: new Map<string, { pos: THREE.Vector3; rotY: number }>(),
+    startSections: new Map<string, SectionParams>(),
     startPointerAngle: 0,
     lastValidDelta: new THREE.Vector3(0, 0, 0),
     lastValidAngle: 0
@@ -432,9 +446,14 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
           inst.root.rotation.y = s.rotY;
         }
       }
+      for (const section of sections) {
+        const s = transformState.startSections.get(section.id);
+        if (!s) continue;
+        section.params = cloneSectionParams(s);
+        updateSectionVisual(section);
+      }
       updateLayoutPanel();
       updateSelectionHighlights();
-      updateDimensionSelectionHighlights(S, dimensionHelpers);
       mountProps();
     }
 
@@ -446,8 +465,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     transformState.lastAngleSign = 1;
     transformState.selectedWallIds = [];
     transformState.selectedInstanceIds = [];
+    transformState.selectedSectionIds = [];
     transformState.startWalls.clear();
     transformState.startInstances.clear();
+    transformState.startSections.clear();
     transformState.startPointerAngle = 0;
     transformState.lastValidDelta.set(0, 0, 0);
     transformState.lastValidAngle = 0;
@@ -467,17 +488,21 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         : selectedKind === "module" && selectedInstanceId
           ? [selectedInstanceId]
           : [];
-    if (wallIds.length + instIds.length === 0) return false;
+    const sectionIds = selectedKind === "section" && selectedSectionId ? [selectedSectionId] : [];
+    if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
+    if (wallIds.length + instIds.length + sectionIds.length === 0) return false;
 
     clearTransform();
     transformState.kind = kind;
     transformState.step = kind === "move" ? "pickBase" : "pickPivot";
     transformState.selectedWallIds = wallIds;
     transformState.selectedInstanceIds = instIds;
+    transformState.selectedSectionIds = sectionIds;
 
     // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
     for (const w of walls) transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
     for (const inst of instances) transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
+    for (const section of sections) transformState.startSections.set(section.id, cloneSectionParams(section.params));
 
     setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
     mountProps();
@@ -497,6 +522,12 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         inst.root.position.copy(s.pos);
         inst.root.rotation.y = s.rotY;
       }
+    }
+    for (const section of sections) {
+      const s = transformState.startSections.get(section.id);
+      if (!s) continue;
+      section.params = cloneSectionParams(s);
+      updateSectionVisual(section);
     }
   };
 
@@ -539,6 +570,15 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
     if (dxMm !== 0 || dzMm !== 0) {
       translateWallsByAnchors(dxMm, dzMm);
+    }
+
+    for (const id of transformState.selectedSectionIds) {
+      const section = sections.find((item) => item.id === id) ?? null;
+      const start = transformState.startSections.get(id);
+      if (!section || !start) continue;
+      section.params.aMm = { x: start.aMm.x + dxMm, z: start.aMm.z + dzMm };
+      section.params.bMm = { x: start.bMm.x + dxMm, z: start.bMm.z + dzMm };
+      updateSectionVisual(section);
     }
 
     const ignore = new Set<string>(transformState.selectedInstanceIds);
@@ -722,36 +762,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     lastTarget: null as AlignPickedLine | null,
     lastCutter: null as AlignPickedLine | null,
     lastUntilMs: 0
-  };
-
-  const dimTool = {
-    a: null as AlignPickedLine | null,
-    tA: 0.5,
-    hover: null as AlignPickedLine | null,
-    offsetM: 0.2
-  };
-
-  const dimPreviewMat = new THREE.MeshBasicMaterial({ color: 0x0b0f18, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false });
-  dimPreview = {
-    root: new THREE.Group(),
-    ext1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    ext2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    dim: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    tick1: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    tick2: makeDimBarMesh(S, dimensionHelpers, dimPreviewMat),
-    text: makeDimTextSprite(S, dimensionHelpers, "...")
-  };
-  dimPreview.root.name = "dimPreview";
-  dimPreview.root.visible = false;
-  dimPreview.root.add(dimPreview.ext1, dimPreview.ext2, dimPreview.dim, dimPreview.tick1, dimPreview.tick2, dimPreview.text);
-  toolHud.add(dimPreview.root);
-
-  const segClosestT = (p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) => {
-    const ab = b.clone().sub(a);
-    const denom = ab.lengthSq();
-    if (denom < 1e-10) return 0.5;
-    const t = p.clone().sub(a).dot(ab) / denom;
-    return Math.max(0, Math.min(1, t));
   };
 
   const distPxPointToSeg = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
@@ -1038,9 +1048,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   }
 
   function removeWall(w: WallInstance) {
-    // Remove dependent dimensions
-    const dimIds = dimensions.filter((d) => d.params.a.wallId === w.id || d.params.b.wallId === w.id).map((d) => d.id);
-    for (const id of dimIds) deleteDimension(S, dimensionHelpers, id, { skipHistory: true });
     layoutRoot.remove(w.root);
     w.outline.geometry.dispose();
     (w.outline.material as THREE.Material).dispose();
@@ -1472,8 +1479,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         wallDebugGroup.add(p);
       }
     }
-
-    updateAllDimensions(S, dimensionHelpers);
   }
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, heightMm = wallDefault.heightMm) {
@@ -1775,7 +1780,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
     const outline = new THREE.Line(
       makeFloorOutlineGeometry(params),
-      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false })
+      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthTest: true, depthWrite: false })
     );
     outline.name = `floorOutline_${id}`;
     outline.userData.kind = "floor";
@@ -1814,6 +1819,111 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       createFloor(cloneFloorParams(floor.params), { id: floor.id, skipHistory: true });
     }
   }
+
+  const cloneSectionParams = (params: SectionParams): SectionParams => ({
+    name: params.name,
+    aMm: { x: params.aMm.x, z: params.aMm.z },
+    bMm: { x: params.bMm.x, z: params.bMm.z },
+    mirrored: !!params.mirrored
+  });
+
+  const updateSectionVisual = (section: SectionInstance) => {
+    const nextParams = cloneSectionParams(section.params);
+    section.params = nextParams;
+
+    section.line.geometry.dispose();
+    section.arrows.geometry.dispose();
+    section.pick.geometry.dispose();
+
+    const geom = buildSectionMarkerGeometry(nextParams);
+    section.line.geometry = geom.line;
+    section.arrows.geometry = geom.arrows;
+    section.pick.geometry = createSectionPickGeometry(nextParams);
+
+    const selected = selectedKind === "section" && selectedSectionId === section.id;
+    (section.line.material as THREE.LineBasicMaterial).color.setHex(selected ? 0x2ac46d : 0x253245);
+    (section.arrows.material as THREE.LineBasicMaterial).color.setHex(selected ? 0x2ac46d : 0x253245);
+    const visible = mode === "layout" && viewMode === "2d" && activeViewerTab === "floorplan";
+    section.root.visible = visible;
+  };
+
+  const getNextSectionName = () => `Section ${Math.max(1, sections.length + 1)}`;
+
+  const createSectionInstance = (params: SectionParams, opts?: { id?: string; skipHistory?: boolean }) => {
+    const id = opts?.id ?? `s${sectionCounter++}`;
+    if (opts?.id) {
+      const match = /^s(\d+)$/.exec(id);
+      if (match) sectionCounter = Math.max(sectionCounter, Number(match[1]) + 1);
+    }
+    S.sectionCounter = sectionCounter;
+
+    const root = new THREE.Group();
+    root.name = `section_${id}`;
+
+    const line = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x253245, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
+    );
+    line.name = `sectionLine_${id}`;
+    line.renderOrder = 62;
+    line.userData.kind = "section";
+    line.userData.sectionId = id;
+    line.frustumCulled = false;
+    root.add(line);
+
+    const arrows = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x253245, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
+    );
+    arrows.name = `sectionArrows_${id}`;
+    arrows.renderOrder = 63;
+    arrows.userData.kind = "section";
+    arrows.userData.sectionId = id;
+    arrows.frustumCulled = false;
+    root.add(arrows);
+
+    const pick = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.001, 0.001),
+      new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0 })
+    );
+    pick.name = `sectionPick_${id}`;
+    pick.userData.kind = "section";
+    pick.userData.sectionId = id;
+    root.add(pick);
+
+    const section: SectionInstance = { id, params: cloneSectionParams(params), root, line, arrows, pick };
+    layoutRoot.add(root);
+    sections.push(section);
+    updateSectionVisual(section);
+    refreshViewerTabs();
+    if (!opts?.skipHistory) commitHistory(S);
+    return section;
+  };
+
+  const deleteSectionInstance = (id: string, opts?: { skipHistory?: boolean }) => {
+    const index = sections.findIndex((section) => section.id === id);
+    if (index < 0) return;
+    const section = sections[index]!;
+    layoutRoot.remove(section.root);
+    disposeObject3D(section.root);
+    sections.splice(index, 1);
+    if (selectedSectionId === id) selectedSectionId = null;
+    if (activeViewerTab === `section:${id}`) activeViewerTab = "floorplan";
+    updateAllSectionVisuals();
+    if (!opts?.skipHistory) commitHistory(S);
+  };
+
+  const restoreSectionsFromSnapshot = (nextSections: Array<{ id: string; params: SectionParams }>, nextCounter?: number) => {
+    for (const section of sections.splice(0, sections.length)) {
+      layoutRoot.remove(section.root);
+      disposeObject3D(section.root);
+    }
+    sectionCounter = nextCounter ?? 1;
+    S.sectionCounter = sectionCounter;
+    for (const section of nextSections) {
+      createSectionInstance(cloneSectionParams(section.params), { id: section.id, skipHistory: true });
+    }
+  };
 
   const cloneKitchenWorktopParams = (params: KitchenWorktopParams): KitchenWorktopParams => ({
     path: params.path.map((point) => ({ x: point.x, z: point.z })),
@@ -2014,14 +2124,20 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     return geometry;
   };
 
-  const makeKitchenWorktopOutlineGeometry = (params: KitchenWorktopParams) => {
-    const polygon = getKitchenWorktopPolygon(params);
-    if (polygon.length === 0) {
-      return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const makeKitchenWorktopOutlineGeometry = (params: KitchenWorktopParams, flattenToPlan = true) => {
+    if (flattenToPlan) {
+      const polygon = getKitchenWorktopPolygon(params);
+      if (polygon.length === 0) {
+        return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+      }
+      const points = polygon.map((point) => new THREE.Vector3(point.x, 0.012, point.z));
+      points.push(points[0]!.clone());
+      return new THREE.BufferGeometry().setFromPoints(points);
     }
-    const points = polygon.map((point) => new THREE.Vector3(point.x, 0.012, point.z));
-    points.push(points[0]!.clone());
-    return new THREE.BufferGeometry().setFromPoints(points);
+    const geometry = makeKitchenWorktopGeometry(params);
+    const edges = new THREE.EdgesGeometry(geometry, 1);
+    geometry.dispose();
+    return edges;
   };
 
   const makeKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) => {
@@ -2051,11 +2167,12 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     inst.mesh.visible = true;
     inst.root.visible = true;
 
+    const flattenWorktopOutline = !(viewMode === "2d" && activeViewerTab !== "floorplan");
     inst.outline.geometry.dispose();
-    inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params);
+    inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params, flattenWorktopOutline);
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
     outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId));
-    inst.outline.position.set(0, inst.params.heightMm / 1000 + 0.0015, 0);
+    inst.outline.position.set(0, inst.params.heightMm / 1000 + (flattenWorktopOutline ? 0.0015 : 0), 0);
     inst.outline.visible = viewMode === "2d";
     const meshMaterial = inst.mesh.material as THREE.MeshStandardMaterial;
     meshMaterial.transparent = viewMode === "2d";
@@ -2306,6 +2423,9 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
   const kitchenBackAnchorName = "__kitchen_back_anchor";
+  const kitchenCornerAnchorName = "__kitchen_corner_anchor";
+  const kitchenCornerXAnchorName = "__kitchen_corner_x_anchor";
+  const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
   const kitchenAnchorMaxDistanceM = 0.18;
   const kitchenAnchorMaxAngleDeltaRad = Math.PI / 3;
 
@@ -2327,11 +2447,73 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     return new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.min.z);
   };
 
+  const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) =>
+    (("params" in instOrParams ? instOrParams.params.type : instOrParams.type) ?? null) === "corner_shelf_lower";
+
+  const getModuleLocalKitchenCornerAnchor = (inst: LayoutInstance) => {
+    inst.root.updateMatrixWorld(true);
+    const anchor = inst.module.getObjectByName(kitchenCornerAnchorName);
+    if (anchor) {
+      const world = new THREE.Vector3();
+      anchor.getWorldPosition(world);
+      return inst.root.worldToLocal(world.clone());
+    }
+    return new THREE.Vector3(inst.localBox.min.x, 0, inst.localBox.min.z);
+  };
+
+  const getModuleLocalKitchenCornerAxisAnchor = (inst: LayoutInstance, axis: "x" | "z") => {
+    inst.root.updateMatrixWorld(true);
+    const anchorName = axis === "x" ? kitchenCornerXAnchorName : kitchenCornerZAnchorName;
+    const anchor = inst.module.getObjectByName(anchorName);
+    if (anchor) {
+      const world = new THREE.Vector3();
+      anchor.getWorldPosition(world);
+      return inst.root.worldToLocal(world.clone());
+    }
+    return axis === "x"
+      ? new THREE.Vector3(inst.localBox.max.x, 0, inst.localBox.min.z)
+      : new THREE.Vector3(inst.localBox.min.x, 0, inst.localBox.max.z);
+  };
+
+  const getModuleKitchenCornerExtents = (inst: LayoutInstance) => {
+    const corner = getModuleLocalKitchenCornerAnchor(inst);
+    const xAnchor = getModuleLocalKitchenCornerAxisAnchor(inst, "x");
+    const zAnchor = getModuleLocalKitchenCornerAxisAnchor(inst, "z");
+    return {
+      corner,
+      xLength: Math.max(0.001, xAnchor.clone().sub(corner).length()),
+      zLength: Math.max(0.001, zAnchor.clone().sub(corner).length())
+    };
+  };
+
+  let measureStateRef:
+    | ReturnType<typeof createMeasureTools>["measureState"]
+    | null = null;
+
+  const getAssociativeMeasureContext = (): AssociativeMeasureContext => ({
+    walls,
+    instances,
+    floors,
+    worktops: kitchenWorktops,
+    measures: (measureStateRef?.measures ?? []).map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      aBinding: item.aBinding,
+      bBinding: item.bBinding
+    })),
+    getModuleLocalBackCenter,
+    getKitchenWorktopPolygon
+  });
+
+  const bindingFromPlanSnap = (snapped: PlanSnapResult | null, fallbackPoint: THREE.Vector3): PlanSnapBinding =>
+    snapped?.binding ?? toFreePlanBinding(fallbackPoint);
+
   const snapPoint2D = createPlanSnapper({
     getWalls: () => walls,
     getInstances: () => instances,
     getFloors: () => floors,
     getKitchenWorktops: () => kitchenWorktops,
+    getMeasureGuides: () => buildMeasureGuides(getAssociativeMeasureContext()),
     getWallSolvedOutlines: () => wallSolvedOutlines,
     getWallSolvedJoinPolys: () => wallSolvedJoinPolys,
     getWallUnionPolys: () => wallUnionPolys,
@@ -2362,6 +2544,61 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     return { start, end, dir, length, frontNormal, rotationY };
   };
 
+  const getKitchenCornerPlacementInfo = (
+    worktop: KitchenWorktopInstance,
+    cornerIndex: number,
+    backOffsetMm: number,
+    inst: LayoutInstance
+  ) => {
+    const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+    if (guidePath.length < 3) return null;
+    const safeCornerIndex = clampNumber(cornerIndex, 1, guidePath.length - 2);
+    const prev = guidePath[safeCornerIndex - 1]!;
+    const corner = guidePath[safeCornerIndex]!;
+    const next = guidePath[safeCornerIndex + 1]!;
+    const prevVec = prev.clone().sub(corner);
+    const nextVec = next.clone().sub(corner);
+    prevVec.y = 0;
+    nextVec.y = 0;
+    const prevLength = prevVec.length();
+    const nextLength = nextVec.length();
+    if (prevLength < 1e-6 || nextLength < 1e-6) return null;
+
+    const prevDir = prevVec.clone().multiplyScalar(1 / prevLength);
+    const nextDir = nextVec.clone().multiplyScalar(1 / nextLength);
+    if (Math.abs(prevDir.dot(nextDir)) > 0.999) return null;
+
+    const cornerExtents = getModuleKitchenCornerExtents(inst);
+    const localCorner = cornerExtents.corner;
+    const tryAssignment = (xDir: THREE.Vector3, zDir: THREE.Vector3, xLength: number, zLength: number) => {
+      const rotationY = Math.atan2(zDir.x, zDir.z);
+      const rotatedX = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, rotationY, 0)).normalize();
+      const rotatedZ = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, rotationY, 0)).normalize();
+      if (rotatedX.dot(xDir) < 0.999 || rotatedZ.dot(zDir) < 0.999) return null;
+      const rotatedCorner = localCorner.clone().applyEuler(new THREE.Euler(0, rotationY, 0));
+      const position = corner.clone().sub(rotatedCorner);
+      position.y = 0;
+      return {
+        binding: {
+          kind: "corner" as const,
+          worktopId: worktop.id,
+          segmentIndex: safeCornerIndex - 1,
+          offsetAlongM: 0,
+          cornerIndex: safeCornerIndex
+        },
+        corner,
+        position,
+        rotationY,
+        valid: xLength + 1e-6 >= cornerExtents.xLength && zLength + 1e-6 >= cornerExtents.zLength
+      };
+    };
+
+    return (
+      tryAssignment(prevDir, nextDir, prevLength, nextLength) ??
+      tryAssignment(nextDir, prevDir, nextLength, prevLength)
+    );
+  };
+
   const inferKitchenPlacementBinding = (
     inst: LayoutInstance,
     groupId: string,
@@ -2369,6 +2606,44 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   ): KitchenPlacementBinding | null => {
     const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
     if (groupWorktops.length === 0) return null;
+
+    if (isCornerKitchenModule(inst)) {
+      const localCorner = getModuleLocalKitchenCornerAnchor(inst);
+      const worldCorner = localCorner.clone().applyMatrix4(inst.root.matrixWorld);
+      let best:
+        | {
+            binding: KitchenPlacementBinding;
+            distanceSq: number;
+            angleDelta: number;
+          }
+        | null = null;
+
+      for (const worktop of groupWorktops) {
+        const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+        for (let cornerIndex = 1; cornerIndex < guidePath.length - 1; cornerIndex += 1) {
+          const info = getKitchenCornerPlacementInfo(worktop, cornerIndex, backOffsetMm, inst);
+          if (!info) continue;
+          const distanceSq = info.corner.distanceToSquared(worldCorner);
+          const angleDelta = Math.abs(normalizeAngleRad(info.rotationY - inst.root.rotation.y));
+          if (
+            !best ||
+            distanceSq < best.distanceSq - 1e-9 ||
+            (Math.abs(distanceSq - best.distanceSq) < 1e-9 && angleDelta < best.angleDelta)
+          ) {
+            best = {
+              binding: info.binding,
+              distanceSq,
+              angleDelta
+            };
+          }
+        }
+      }
+
+      if (!best) return null;
+      if (Math.sqrt(best.distanceSq) > kitchenAnchorMaxDistanceM) return null;
+      if (best.angleDelta > kitchenAnchorMaxAngleDeltaRad) return null;
+      return best.binding;
+    }
 
     const localBackCenter = getModuleLocalBackCenter(inst);
     const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
@@ -2421,6 +2696,22 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   ) => {
     const worktop = kitchenWorktops.find((item) => item.id === binding.worktopId);
     if (!worktop) return false;
+
+    if ((binding.kind ?? "segment") === "corner" || (isCornerKitchenModule(inst) && binding.cornerIndex != null)) {
+      const info = getKitchenCornerPlacementInfo(
+        worktop,
+        binding.cornerIndex ?? binding.segmentIndex + 1,
+        backOffsetMm,
+        inst
+      );
+      if (!info) return false;
+      inst.root.rotation.y = info.rotationY;
+      inst.root.position.copy(info.position);
+      inst.root.position.y = 0;
+      inst.root.updateMatrixWorld(true);
+      inst.kitchenPlacement = { ...info.binding };
+      return true;
+    }
 
     const info = getKitchenGuideSegmentInfo(worktop, binding.segmentIndex, backOffsetMm);
     if (!info) return false;
@@ -2487,6 +2778,60 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (activeWorktops.length === 0) return null;
     const activeGroup = S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId) ?? null;
     const backOffsetMm = activeGroup?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+
+    if (isCornerKitchenModule(ghost)) {
+      let best:
+        | {
+            binding: KitchenPlacementBinding;
+            position: THREE.Vector3;
+            rotationY: number;
+            valid: boolean;
+            distance: number;
+          }
+        | null = null;
+
+      for (const worktop of activeWorktops) {
+        const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+        for (let cornerIndex = 1; cornerIndex < guidePath.length - 1; cornerIndex += 1) {
+          const info = getKitchenCornerPlacementInfo(worktop, cornerIndex, backOffsetMm, ghost);
+          if (!info) continue;
+          const distance = info.corner.distanceToSquared(cursorWorld);
+          if (!best || distance < best.distance) {
+            best = {
+              binding: info.binding,
+              position: info.position,
+              rotationY: info.rotationY,
+              valid: info.valid,
+              distance
+            };
+          }
+        }
+      }
+
+      if (!best) {
+        return {
+          kitchenPlacement: null,
+          position: ghost.root.position.clone(),
+          rotationY: ghost.root.rotation.y,
+          valid: false,
+          enforceRoomBounds: false,
+          enforceWallOverlap: false,
+          statusText: "Placement: Corner sa dá vložiť len do rohu pracovnej dosky."
+        };
+      }
+
+      return {
+        kitchenPlacement: best.binding,
+        position: best.position,
+        rotationY: best.rotationY,
+        valid: best.valid,
+        enforceRoomBounds: false,
+        enforceWallOverlap: false,
+        statusText: best.valid
+          ? "Placement: Corner sa viaže len na roh back línie pracovnej dosky."
+          : "Placement: Corner sa zmestí len do rohu s dostatočne dlhými ramenami."
+      };
+    }
 
     const localBackCenter = getModuleLocalBackCenter(ghost);
     const halfModuleWidthM = Math.max(0.001, (ghost.localBox.max.x - ghost.localBox.min.x) * 0.5);
@@ -2557,26 +2902,19 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (!S.kitchenEditMode || !S.activeKitchenGroupId) return;
     cancelKitchenWorktopDraw({ silent: true });
     if (placement.active) cancelPlacement(S, placementHelpers);
-    if (viewMode !== "2d") {
-      view2d.checked = true;
-      setView2d(true);
-    } else {
-      view2d.checked = true;
-    }
+    ensureFloorplanViewerTab();
     kitchenWorktopDraw.active = true;
     kitchenWorktopDraw.mirrored = false;
     worktopDrawSnap = null;
     selectedKind = null;
     selectedWallId = null;
     selectedFloorId = null;
-    selectedDimensionId = null;
     selectedInstanceId = null;
     selectedWallIds.clear();
     selectedInstanceIds.clear();
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
     setUnderlayStatus("Pracovná doska: klikaj body tvaru. Píš mm + Enter pre dĺžku segmentu. Esc = potvrdiť hotový tvar.");
     mountProps();
   };
@@ -2648,6 +2986,83 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     setUnderlayStatus(
       `Pracovná doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
     );
+  };
+
+  const updateSectionDrawPreview = () => {
+    if (!sectionDraw.a || !sectionDraw.hoverPoint) {
+      if (sectionDraw.previewRoot) sectionDraw.previewRoot.visible = false;
+      return;
+    }
+    if (!sectionDraw.previewRoot) {
+      sectionDraw.previewRoot = new THREE.Group();
+      sectionDraw.previewRoot.name = "sectionDrawPreview";
+      sectionDraw.previewLine = new THREE.LineSegments(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
+      );
+      sectionDraw.previewLine.renderOrder = 66;
+      sectionDraw.previewArrows = new THREE.LineSegments(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
+      );
+      sectionDraw.previewArrows.renderOrder = 67;
+      sectionDraw.previewRoot.add(sectionDraw.previewLine, sectionDraw.previewArrows);
+      layoutRoot.add(sectionDraw.previewRoot);
+    }
+    const params: SectionParams = {
+      name: "",
+      aMm: { x: sectionDraw.a.x, z: sectionDraw.a.z },
+      bMm: { x: sectionDraw.hoverPoint.x, z: sectionDraw.hoverPoint.z },
+      mirrored: sectionDraw.mirrored
+    };
+    const geom = buildSectionMarkerGeometry(params);
+    sectionDraw.previewLine!.geometry.dispose();
+    sectionDraw.previewLine!.geometry = geom.line;
+    sectionDraw.previewArrows!.geometry.dispose();
+    sectionDraw.previewArrows!.geometry = geom.arrows;
+    const color = sectionDraw.axisLocked ? 0x2ac46d : 0x3ddc97;
+    (sectionDraw.previewLine!.material as THREE.LineBasicMaterial).color.setHex(color);
+    (sectionDraw.previewArrows!.material as THREE.LineBasicMaterial).color.setHex(color);
+    sectionDraw.previewRoot.visible = true;
+  };
+
+  const cancelSectionDraw = (opts?: { silent?: boolean }) => {
+    sectionDraw.active = false;
+    sectionDraw.mirrored = false;
+    sectionDraw.axisLocked = false;
+    sectionDraw.a = null;
+    sectionDraw.hoverPoint = null;
+    sectionDrawSnap = null;
+    if (sectionDraw.previewRoot) {
+      layoutRoot.remove(sectionDraw.previewRoot);
+      disposeObject3D(sectionDraw.previewRoot);
+      sectionDraw.previewRoot = null;
+      sectionDraw.previewLine = null;
+      sectionDraw.previewArrows = null;
+    }
+    hideHoverCursor();
+    drawSnapOverlay.hide();
+    if (!opts?.silent) {
+      setUnderlayStatus("");
+      mountProps();
+    }
+  };
+
+  const commitSectionDraw = (bMm: FloorBoundaryPoint) => {
+    if (!sectionDraw.a) return false;
+    if (Math.hypot(bMm.x - sectionDraw.a.x, bMm.z - sectionDraw.a.z) < 5) return false;
+    const section = createSectionInstance({
+      name: getNextSectionName(),
+      aMm: { x: sectionDraw.a.x, z: sectionDraw.a.z },
+      bMm,
+      mirrored: sectionDraw.mirrored
+    });
+    cancelSectionDraw({ silent: true });
+    setSelectedSection(section.id);
+    activateViewerTab(`section:${section.id}`);
+    setUnderlayStatus(`Section ${section.params.name} created.`);
+    mountProps();
+    return true;
   };
 
   const handleKitchenWorktopEscape = () => {
@@ -2739,18 +3154,17 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     startOffsetMm: { x: 0, z: 0 }
   };
 
-  const dimensionDragState = {
-    active: false,
-    id: null as string | null,
-    pointerId: null as number | null,
-    startWorld: new THREE.Vector3(),
-    startOffsetM: 0
-  };
-
   const windowDragState = {
     active: false,
     wall: null as WallId | null,
     offsetMm: 0
+  };
+
+  const detailPanState = {
+    active: false,
+    pointerId: null as number | null,
+    lastClientX: 0,
+    lastClientY: 0
   };
 
   const navClock = new THREE.Clock();
@@ -2771,6 +3185,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (measureState.measures.length === 0 && !measureState.firstPoint && !measureState.hoverPoint) return false;
     clearAllMeasurements();
     measureState.firstPoint = null;
+    measureState.firstBinding = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     clearPreview();
@@ -2821,21 +3236,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       return true;
     }
 
-    if (layoutTool === "dimension") {
-      if (dimTool.a) {
-        dimTool.a = null;
-        dimPreview.root.visible = false;
-        setUnderlayStatus("Dimension: canceled. Click first line...");
-      } else {
-        setToolSelect();
-      }
-      ev.preventDefault();
-      return true;
-    }
-
     if (layoutTool === "measure") {
       measureState.enabled = false;
       measureState.firstPoint = null;
+      measureState.firstBinding = null;
       measureState.hoverPoint = null;
       measureState.hoverSnap = "none";
       clearPreview();
@@ -2844,6 +3248,23 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       setFirstPointMarker(null);
       setToolSelect();
       setUnderlayStatus("Measure: stopped.");
+      ev.preventDefault();
+      return true;
+    }
+
+    if (layoutTool === "section") {
+      if (sectionDraw.a) {
+        sectionDraw.a = null;
+        sectionDraw.hoverPoint = null;
+        updateSectionDrawPreview();
+        hideHoverCursor();
+        drawSnapOverlay.hide();
+        setUnderlayStatus("Section: canceled current line. Klikni prvý bod.");
+        mountProps();
+      } else {
+        setToolSelect();
+        setUnderlayStatus("Section: stopped.");
+      }
       ev.preventDefault();
       return true;
     }
@@ -2881,6 +3302,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => {
     measureState.enabled = false;
     measureState.firstPoint = null;
+    measureState.firstBinding = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     clearPreview();
@@ -2897,6 +3319,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutTool = "select";
     deactivateMeasureTool();
     clearWallDrawState();
+    cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
     setUnderlayStatus("");
     mountProps();
@@ -2908,13 +3331,9 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutTool = "wall";
     deactivateMeasureTool();
     clearWallDrawState();
+    cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
-    if (viewMode !== "2d") {
-      view2d.checked = true;
-      setView2d(true);
-    } else {
-      view2d.checked = true;
-    }
+    ensureFloorplanViewerTab();
     selectedKind = null;
     selectedWallId = null;
     setInstanceSelected(null);
@@ -2933,18 +3352,14 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutTool = "align";
     deactivateMeasureTool();
     clearWallDrawState();
+    cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
     alignState.ref = null;
     alignState.hover = null;
     alignState.lastA = null;
     alignState.lastB = null;
     alignState.lastUntilMs = 0;
-    if (viewMode !== "2d") {
-      view2d.checked = true;
-      setView2d(true);
-    } else {
-      view2d.checked = true;
-    }
+    ensureFloorplanViewerTab();
     setUnderlayStatus("Align: click reference line...");
     mountProps();
   };
@@ -2955,6 +3370,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutTool = "trim";
     deactivateMeasureTool();
     clearWallDrawState();
+    cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
     trimState.step = "pickTarget";
     trimState.targetWallId = null;
@@ -2964,35 +3380,45 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     trimState.lastTarget = null;
     trimState.lastCutter = null;
     trimState.lastUntilMs = 0;
-    if (viewMode !== "2d") {
-      view2d.checked = true;
-      setView2d(true);
-    } else {
-      view2d.checked = true;
-    }
+    ensureFloorplanViewerTab();
     setUnderlayStatus("Trim: click target wall...");
     mountProps();
   };
 
-  const setToolDimension = () => {
+  const setToolSection = () => {
     ensureLayoutMode();
     if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "dimension";
+    layoutTool = "section";
     deactivateMeasureTool();
     clearWallDrawState();
     cancelKitchenWorktopDraw({ silent: true });
-    dimTool.a = null;
-    dimTool.tA = 0.5;
-    dimTool.hover = null;
-    dimTool.offsetM = 0.2;
-    dimPreview.root.visible = false;
-    if (viewMode !== "2d") {
-      view2d.checked = true;
-      setView2d(true);
-    } else {
-      view2d.checked = true;
+    cancelSectionDraw({ silent: true });
+    ensureFloorplanViewerTab();
+    selectedKind = null;
+    selectedSectionId = null;
+    selectedKitchenGroupId = null;
+    selectedWallId = null;
+    selectedFloorId = null;
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    if (selectedWallBox) {
+      scene.remove(selectedWallBox);
+      selectedWallBox.geometry.dispose();
+      (selectedWallBox.material as THREE.Material).dispose();
+      selectedWallBox = null;
     }
-    setUnderlayStatus("Dimension: click first line...");
+    if (selectedUnderlayBox) {
+      scene.remove(selectedUnderlayBox);
+      selectedUnderlayBox.geometry.dispose();
+      (selectedUnderlayBox.material as THREE.Material).dispose();
+      selectedUnderlayBox = null;
+    }
+    sectionDraw.active = true;
+    syncSelectionState();
+    updateAllSectionVisuals();
+    updateSelectionHighlights();
+    setUnderlayStatus("Section: klikni prvý bod, potom druhý bod. Space = zrkadliť smer.");
     mountProps();
   };
 
@@ -3006,6 +3432,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutTool = "measure";
     measureState.enabled = true;
     measureState.firstPoint = null;
+    measureState.firstBinding = null;
     measureState.hoverPoint = null;
     measureState.hoverSnap = "none";
     clearPreview();
@@ -3013,17 +3440,16 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     hideHoverCursor();
     setFirstPointMarker(null);
     clearWallDrawState();
+    cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
     selectedKind = null;
     selectedWallId = null;
     selectedFloorId = null;
-    selectedDimensionId = null;
     selectedWallIds.clear();
     selectedInstanceIds.clear();
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
     args.measureBtn.textContent = "Measure: On";
     args.measureReadoutEl.textContent = "Measure: klikni prvý bod.";
     setUnderlayStatus("Measure: klikni prvý roh alebo hranu.");
@@ -3081,6 +3507,15 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
           ev.preventDefault();
           return;
         }
+      }
+    }
+    if (mode === "layout" && layoutTool === "section" && viewMode === "2d" && activeViewerTab === "floorplan") {
+      if (ev.key === " " || ev.code === "Space") {
+        sectionDraw.mirrored = !sectionDraw.mirrored;
+        updateSectionDrawPreview();
+        setUnderlayStatus(`Section: smer ${sectionDraw.mirrored ? "mirrored" : "default"}.`);
+        ev.preventDefault();
+        return;
       }
     }
     if (S.kitchenEditMode) return;
@@ -3257,6 +3692,18 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
           if (moved) updateLayoutPanel();
         }
 
+        const sectionIds = selectedKind === "section" && selectedSectionId ? [selectedSectionId] : [];
+        if (sectionIds.length > 0) {
+          for (const id of sectionIds) {
+            const section = sections.find((item) => item.id === id) ?? null;
+            if (!section) continue;
+            section.params.aMm = { x: section.params.aMm.x + dxMm, z: section.params.aMm.z + dzMm };
+            section.params.bMm = { x: section.params.bMm.x + dxMm, z: section.params.bMm.z + dzMm };
+            updateSectionVisual(section);
+            moved = true;
+          }
+        }
+
         // Never allow moduleâ†”wall overlap (also blocks walls moving into existing modules).
         if (instances.some((i) => moduleOverlapsWalls(i))) {
           for (const w of walls) {
@@ -3324,11 +3771,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       }
       if ((ev.key === "t" || ev.key === "T") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
         setToolTrim();
-        ev.preventDefault();
-        return;
-      }
-      if ((ev.key === "d" || ev.key === "D") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        setToolDimension();
         ev.preventDefault();
         return;
       }
@@ -3460,11 +3902,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       }
 
       if (ev.key === "Delete" || ev.key === "Backspace") {
-        if (selectedKind === "dimension" && selectedDimensionId) {
-          deleteDimension(S, dimensionHelpers, selectedDimensionId);
-          ev.preventDefault();
-          return;
-        }
         if (selectedInstanceIds.size > 0) {
           const ids = Array.from(selectedInstanceIds);
           for (const id of ids) deleteInstance(id);
@@ -3513,6 +3950,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   args.viewerEl.addEventListener("pointerleave", () => {
     wallDrawSnap = null;
     worktopDrawSnap = null;
+    sectionDrawSnap = null;
     measurePlanSnap = null;
     selectPlanSnap = null;
     hideHoverCursor();
@@ -3534,6 +3972,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   const measureSnapOverlay = createSnapOverlay(args.viewerEl);
   let wallDrawSnap: PlanSnapResult | null = null;
   let worktopDrawSnap: PlanSnapResult | null = null;
+  let sectionDrawSnap: PlanSnapResult | null = null;
   let measurePlanSnap: PlanSnapResult | null = null;
   let selectPlanSnap: PlanSnapResult | null = null;
 
@@ -3544,6 +3983,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     marqueeEl,
     measureState,
     addMeasurement,
+    updateMeasurementGeometry,
     updateMeasureLabels,
     updatePreview,
     clearPreview,
@@ -3561,6 +4001,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     clearMeasuresBtn: args.clearMeasuresBtn,
     measureReadoutEl: args.measureReadoutEl
   });
+  measureStateRef = measureState;
 
   // Editor UI
   args.formEl.innerHTML = "";
@@ -4304,6 +4745,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   const I_ALIGN = icon("M4 7h12v2H4V7zm0 8h12v2H4v-2zM18 6l4 3-4 3V6zm0 6l4 3-4 3v-6z");
   const I_TRIM = icon("M4 7h11v2H4V7zm0 8h8v2H4v-2zM18 5l4 4-2 2-4-4 2-2zm-4 4l4 4-2 2-4-4 2-2z");
   const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
+  const I_SECTION = icon("M4 6h16v2H4V6zm2 4h2v8H6v-8zm10 0h2v8h-2v-8zm-5 1 4 4-1.4 1.4L12 13.8V20h-2v-6.2l-1.6 1.6L7 14l4-4z");
   const I_FLOOR = icon("M4 15l8 4 8-4-8-4-8 4zm0-4l8 4 8-4-8-4-8 4z");
   const I_UNDO = icon("M12 5H7.8l1.6-1.6L8 2 4 6l4 4 1.4-1.4L7.8 7H12c3.3 0 6 2.7 6 6 0 1.1-.3 2.1-.8 3l1.7 1c.7-1.2 1.1-2.6 1.1-4 0-4.4-3.6-8-8-8z");
   const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
@@ -4358,6 +4800,57 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     p.className = "muted";
     p.textContent = mode === "layout" ? "Vyber objekt alebo nástroj." : "Properties sú dostupné iba v layout mode.";
     s.appendChild(p);
+  };
+
+  const mountActiveViewProps = () => {
+    props.setTitle("View");
+    const s = props.section();
+    const row = (label: string, value: string) => {
+      const el = document.createElement("div");
+      el.className = "muted";
+      el.style.marginTop = "4px";
+      el.textContent = `${label}: ${value}`;
+      s.appendChild(el);
+    };
+    const wallCountText = `${walls.length}`;
+    const moduleCountText = `${instances.length}`;
+    const worktopCountText = `${kitchenWorktops.length}`;
+    if (viewMode === "3d") {
+      row("View", "3D");
+      row("Walls", wallCountText);
+      row("Modules", moduleCountText);
+      row("Worktops", worktopCountText);
+      return;
+    }
+    if (activeViewerTab === "floorplan") {
+      row("View", "Floorplan");
+      row("Ortho", drawOrthoEnabled ? "ON" : "OFF");
+      row("Walls", wallCountText);
+      row("Modules", moduleCountText);
+      row("Sections", `${sections.length}`);
+      return;
+    }
+    if (activeViewerTab.startsWith("section:")) {
+      const sectionId = activeViewerTab.slice("section:".length);
+      const section = sections.find((item) => item.id === sectionId) ?? null;
+      if (!section) return showNoProps();
+      const basis = getSectionBasis(section.params);
+      row("View", section.params.name || section.id);
+      row("Type", "Section");
+      row("Length", basis ? `${Math.round(basis.length * 1000)} mm` : "0 mm");
+      row("Direction", section.params.mirrored ? "Mirrored" : "Default");
+      row("Cut line", `${section.params.aMm.x}, ${section.params.aMm.z} -> ${section.params.bMm.x}, ${section.params.bMm.z}`);
+      return;
+    }
+    if (activeViewerTab.startsWith("elevation:")) {
+      row("View", activeViewerTab.slice("elevation:".length));
+      row("Type", "Elevation");
+      row("Walls", wallCountText);
+      row("Modules", moduleCountText);
+      row("Worktops", worktopCountText);
+      return;
+    }
+    showNoProps();
   };
 
   const floorEdit = {
@@ -4632,8 +5125,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   const enterFloorBoundaryEdit = (floorId?: string) => {
     ensureLayoutMode();
-    view2d.checked = true;
-    setView2d(true);
+    ensureFloorplanViewerTab();
     if (placement.active) cancelPlacement(S, placementHelpers);
     setToolSelect();
 
@@ -4665,7 +5157,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceIds.clear();
-    selectedDimensionId = null;
     setInstanceSelected(null);
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
@@ -4928,20 +5419,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     s.appendChild(cur);
   };
 
-  const mountDimensionToolProps = () => {
-    props.setTitle("Dimension");
-    const s = props.section();
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Klikni 1. líniu, potom 2. rovnobežnú líniu. Kóta sa zobrazuje pod kurzorom, zostane v scéne a dá sa posúvať aj mazať.";
-    s.appendChild(hint);
-    const cur = document.createElement("div");
-    cur.className = "muted";
-    cur.style.marginTop = "8px";
-    cur.textContent = dimTool.a ? `Prvá: ${dimTool.a.label}` : "Prvá: (žiadna)";
-    s.appendChild(cur);
-  };
-
   const mountMeasureToolProps = () => {
     props.setTitle("Measure");
     const s = props.section();
@@ -4949,7 +5426,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.textContent =
-      "Funguje v 2D aj 3D. Klikni prvý snap bod alebo hranu. Pri druhom bode sa v 2D zapne aj perpendicular snap na hrany. Esc len vypne tool, Shift+Esc vymaže všetky uložené merania.";
+      "Funguje v 2D aj 3D. Klikni prvý snap bod alebo hranu. Pri druhom bode sa v 2D zapne aj perpendicular snap na hrany. Drž Shift pre normal guide mode. Esc len vypne tool, Shift+Esc vymaže všetky uložené merania.";
     s.appendChild(hint);
 
     const axisWrap = document.createElement("label");
@@ -5094,6 +5571,45 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       firstWall.params.materialId = mat.value || "default";
       commitHistory(S);
     });
+
+    const linkedMeasures = measureState.measures
+      .filter((item) => item.kind === "distance")
+      .map((item) => {
+        const attached =
+          isBindingAttachedToWall(item.aBinding, firstWall.id) || isBindingAttachedToWall(item.bBinding, firstWall.id);
+        if (!attached) return null;
+        const dir = item.b.clone().sub(item.a).setY(0);
+        const wallDir = fromMmPoint(firstWall.params.bMm).sub(fromMmPoint(firstWall.params.aMm)).setY(0);
+        if (dir.lengthSq() < 1e-8 || wallDir.lengthSq() < 1e-8) return null;
+        dir.normalize();
+        wallDir.normalize();
+        if (Math.abs(dir.dot(wallDir)) > 0.35) return null;
+        return item;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    if (linkedMeasures.length > 0) {
+      const heading = document.createElement("div");
+      heading.className = "muted";
+      heading.style.marginTop = "10px";
+      heading.textContent = "Linked measures";
+      s.appendChild(heading);
+
+      for (const measure of linkedMeasures) {
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = "1";
+        input.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") {
+            commitWallMeasureValueMm(measure.id, input.value);
+            ev.preventDefault();
+          }
+        });
+        input.addEventListener("change", () => commitWallMeasureValueMm(measure.id, input.value));
+        props.row(s, `Measure ${measure.id.replace("measure_", "#")}`, input);
+      }
+    }
   };
 
   const mountFloorProps = (floor: FloorInstance) => {
@@ -5147,6 +5663,60 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     thickness.addEventListener("change", commit);
     mat.addEventListener("change", commit);
     edit.addEventListener("click", () => enterFloorBoundaryEdit(floor.id));
+  };
+
+  const mountSectionToolProps = () => {
+    props.setTitle("Section");
+    const s = props.section();
+    const info = document.createElement("div");
+    info.className = "muted";
+    info.textContent = sectionDraw.a
+      ? `Klikni druhý bod. Ortho ${drawOrthoEnabled ? "ON" : "OFF"}, Shift = bez axis snap, Space = zrkadliť smer. Aktuálne: ${sectionDraw.mirrored ? "mirrored" : "default"}.`
+      : "Klikni prvý bod section line. Po druhom bode sa section vytvorí a otvorí.";
+    s.appendChild(info);
+  };
+
+  const mountSectionProps = (id: string) => {
+    const section = sections.find((item) => item.id === id) ?? null;
+    if (!section) return showNoProps();
+    props.setTitle(`Section (${section.id})`);
+    const s = props.section();
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = section.params.name;
+    props.row(s, "Name", name);
+
+    const info = document.createElement("div");
+    info.className = "muted";
+    info.style.marginTop = "8px";
+    const basis = getSectionBasis(section.params);
+    info.textContent = `A: ${section.params.aMm.x}, ${section.params.aMm.z} mm | B: ${section.params.bMm.x}, ${section.params.bMm.z} mm | Dĺžka: ${basis ? Math.round(basis.length * 1000) : 0} mm`;
+    s.appendChild(info);
+
+    const dir = document.createElement("div");
+    dir.className = "muted";
+    dir.style.marginTop = "6px";
+    dir.textContent = `Smer: ${section.params.mirrored ? "Mirrored" : "Default"}`;
+    s.appendChild(dir);
+
+    const commit = () => {
+      const nextName = name.value.trim() || section.params.name;
+      if (nextName === section.params.name) {
+        name.value = section.params.name;
+        return;
+      }
+      section.params.name = nextName;
+      name.value = section.params.name;
+      updateAllSectionVisuals();
+      mountProps();
+      commitHistory(S);
+    };
+
+    name.addEventListener("change", commit);
+    name.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") commit();
+    });
   };
 
   const mountModuleProps = (id: string) => {
@@ -5232,79 +5802,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       onChange,
       textInputCommitMode: "explicit",
       commitBoundary: args.propertiesEl
-    });
-  };
-
-  const setDimensionValueMm = (d: DimensionInstance, desiredMm: number) => {
-    const v = dimValueMm(S, dimensionHelpers, d.params);
-    if (!v) {
-      setUnderlayStatus("Dimension: invalid refs.");
-      return;
-    }
-    const desiredM = Math.max(1, desiredMm) / 1000;
-    const curM = Math.abs(v.signedM);
-    const deltaM = desiredM - curM;
-    if (Math.abs(deltaM) < 1e-6) return;
-
-    const dirInc = v.signedM >= 0 ? v.n.clone() : v.n.clone().multiplyScalar(-1);
-    const moveB = !pinnedWallIds.has(d.params.b.wallId);
-    const moveA = !pinnedWallIds.has(d.params.a.wallId);
-    if (!moveB && !moveA) {
-      setUnderlayStatus("Dimension: both walls are pinned.");
-      return;
-    }
-
-    if (moveB) {
-      const wb = walls.find((x) => x.id === d.params.b.wallId) ?? null;
-      if (!wb) {
-        setUnderlayStatus("Dimension: target wall missing.");
-        return;
-      }
-      const shift = dirInc.clone().multiplyScalar(deltaM);
-      translateWallAndConnected(wb, Math.round(shift.x * 1000), Math.round(shift.z * 1000));
-    } else {
-      const wa = walls.find((x) => x.id === d.params.a.wallId) ?? null;
-      if (!wa) {
-        setUnderlayStatus("Dimension: target wall missing.");
-        return;
-      }
-      const shift = dirInc.clone().multiplyScalar(-deltaM);
-      translateWallAndConnected(wa, Math.round(shift.x * 1000), Math.round(shift.z * 1000));
-    }
-
-    commitHistory(S);
-    setUnderlayStatus("Dimension: updated.");
-    mountProps();
-  };
-
-  const mountDimensionProps = (id: string) => {
-    const d = dimensions.find((x) => x.id === id) ?? null;
-    if (!d) return showNoProps();
-    props.setTitle(`Dimension (${d.id})`);
-    const s = props.section();
-    const v = dimValueMm(S, dimensionHelpers, d.params);
-    const curMm = v?.absMm ?? 0;
-
-    const inp = document.createElement("input");
-    inp.type = "number";
-    inp.step = "1";
-    inp.value = String(curMm);
-    props.row(s, "Value (mm)", inp);
-
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.style.marginTop = "8px";
-    hint.textContent = "Enter/blur = použiť (posunie jednu stenu). Potiahni kótu = zmena odsadenia.";
-    s.appendChild(hint);
-
-    const apply = () => {
-      const n = Number(String(inp.value).trim().replace(",", "."));
-      if (!n || !Number.isFinite(n) || n <= 0) return;
-      setDimensionValueMm(d, Math.round(n));
-    };
-    inp.addEventListener("change", apply);
-    inp.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") apply();
     });
   };
 
@@ -5495,10 +5992,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (placement.active) return mountPlacementControls(S, placementHelpers);
     if (layoutTool === "wall") return mountWallToolProps();
     if (layoutTool === "measure") return mountMeasureToolProps();
+    if (layoutTool === "section") return mountSectionToolProps();
     if (S.kitchenEditMode && kitchenWorktopDraw.active) return mountKitchenWorktopToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
-    if (layoutTool === "dimension") return mountDimensionToolProps();
     if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) return;
     if (selectedKind === "underlay") return mountUnderlayProps();
     if (selectedWallIds.size > 1 && selectedInstanceIds.size === 0) return mountWallProps();
@@ -5526,31 +6023,28 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       return showNoProps();
     }
     if (selectedKind === "window") return mountWindowProps();
+    if (selectedKind === "section" && selectedSectionId) return mountSectionProps(selectedSectionId);
     if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
-    if (selectedKind === "dimension" && selectedDimensionId) return mountDimensionProps(selectedDimensionId);
     if (kitchenMode && kitchenMode.tryMountActiveKitchenGroupProps()) return;
-    showNoProps();
+    mountActiveViewProps();
   };
 
   helpers = {
     setSelectedWall,
     setSelectedFloor,
     setSelectedModule,
-    setSelectedDimension,
     updateSelectionHighlights,
-    updateDimensionSelectionHighlights: () => updateDimensionSelectionHighlights(S, dimensionHelpers),
-    disposeDimensionInstance: (d) => disposeDimensionInstance(S, dimensionHelpers, d as any),
     disposeObject3D,
     createInstance,
     createWallMesh,
     rebuildWall,
-    createDimension: (a, b, offset, opts) => createDimension(S, dimensionHelpers, a as any, b as any, offset, opts as any),
     rebuildWallPlanMesh,
     restoreFloors: restoreFloorsFromSnapshot,
+    restoreSections: restoreSectionsFromSnapshot,
     restoreWorktops: restoreKitchenWorktopsFromSnapshot,
-    updateAllDimensions: () => updateAllDimensions(S, dimensionHelpers),
     clearToolHud,
     mountProps,
+    setSelectedSection,
     updateLayoutPanel,
     layoutRoot
   };
@@ -5600,8 +6094,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   const deleteSelected = () => {
     ensureLayoutMode();
     if (selectedKind === "kitchenGroup") return;
-    if (selectedKind === "dimension" && selectedDimensionId) {
-      deleteDimension(S, dimensionHelpers, selectedDimensionId);
+    if (selectedKind === "section" && selectedSectionId) {
+      deleteSectionInstance(selectedSectionId);
+      setSelectedSection(null);
+      mountProps();
       return;
     }
     if (selectedKind === "floor" && selectedFloorId) {
@@ -5632,15 +6128,13 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   };
 
   floorplanTab.addEventListener("click", () => {
-    if (mode !== "layout" || viewMode === "2d") return;
-    view2d.checked = true;
-    setView2d(true);
+    if (mode !== "layout") return;
+    activateViewerTab("floorplan");
   });
 
   view3dTab.addEventListener("click", () => {
-    if (mode !== "layout" || viewMode === "3d") return;
-    view2d.checked = false;
-    setView2d(false);
+    if (mode !== "layout") return;
+    activateViewerTab("3d");
   });
 
   const openBomPanel = () => {
@@ -5769,7 +6263,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     tb.toolButton(tools, { title: "Wall", label: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
     tb.toolButton(tools, { title: "Align", label: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
     tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
-    tb.toolButton(tools, { title: "Dimension", label: "Dimension", iconSvg: I_DIM, onClick: () => setToolDimension() });
+    tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: I_SECTION, onClick: () => setToolSection() });
     tb.toolButton(tools, {
       title: "Measure",
       label: "Measure",
@@ -5866,7 +6360,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     );
   }
 
-  function ensurePickAndOutline(inst: LayoutInstance) {
+  function ensurePickAndOutline(inst: LayoutInstance, flattenToPlan = viewMode === "2d" && activeViewerTab === "floorplan") {
     const rect = getModulePlanLocalRect(inst, getModuleLocalBackCenter);
     const xs = rect.map((point) => point.x);
     const zs = rect.map((point) => point.z);
@@ -5889,7 +6383,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     pickMaterial.color.setHex(0xb9c8d8);
     pickMaterial.opacity = viewMode === "2d" ? 0.32 : 0;
 
-    const g = buildModuleEdgeGeometry(inst, viewMode === "2d");
+    const g = buildModuleEdgeGeometry(inst, flattenToPlan);
     inst.outline.geometry.dispose();
     inst.outline.geometry = g;
     inst.outline.position.set(0, 0, 0);
@@ -6094,6 +6588,20 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     return null;
   }
 
+  function getSectionIdFromObject(obj: THREE.Object3D | null | undefined) {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.sectionId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  }
+
+  function getSectionPickMeshes() {
+    return sections.map((section) => section.pick);
+  }
+
   function findKitchenWorktop(id: string) {
     return kitchenWorktops.find((worktop) => worktop.id === id) ?? null;
   }
@@ -6120,6 +6628,301 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     } satisfies PlanSnapResult;
   }
 
+  const getDetailViewBounds = () => {
+    const box = new THREE.Box3();
+    for (const wall of walls) box.expandByObject(wall.root);
+    for (const floor of floors) box.expandByObject(floor.root);
+    for (const inst of instances) box.expandByObject(inst.root);
+    for (const worktop of kitchenWorktops) box.expandByObject(worktop.root);
+    if (windowInst) box.expandByObject(windowInst.root);
+    if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2.6, 1));
+    return box.expandByScalar(0.05);
+  };
+
+  const panCustomOrthoViewByPixels = (deltaX: number, deltaY: number, rect: DOMRect) => {
+    const activeCam = cam();
+    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
+    const zoom = Math.max(0.0001, activeCam.zoom);
+    const unitsPerPixelX = (activeCam.right - activeCam.left) / (rect.width * zoom);
+    const unitsPerPixelY = (activeCam.top - activeCam.bottom) / (rect.height * zoom);
+    const forward = new THREE.Vector3();
+    activeCam.getWorldDirection(forward);
+    const up = activeCam.up.clone().normalize();
+    const right = forward.clone().cross(up).normalize();
+    const pan = right.multiplyScalar(-deltaX * unitsPerPixelX).add(up.multiplyScalar(deltaY * unitsPerPixelY));
+    detailViewPanOffset.add(pan);
+    activeCam.position.add(pan);
+    ctl().target.add(pan);
+    activeCam.updateProjectionMatrix();
+    ctl().update();
+  };
+
+  const applyMaterialClippingPlanes = (material: THREE.Material | THREE.Material[] | undefined, planes: THREE.Plane[]) => {
+    const nextPlanes = planes.map((plane) => plane.clone());
+    const applyOne = (mat: THREE.Material) => {
+      (mat as THREE.Material & { clippingPlanes?: THREE.Plane[] }).clippingPlanes = nextPlanes;
+      mat.needsUpdate = true;
+    };
+    if (Array.isArray(material)) {
+      for (const mat of material) applyOne(mat);
+      return;
+    }
+    if (material) applyOne(material);
+  };
+
+  const applyMaterialOpacityMode = (
+    material: THREE.Material | THREE.Material[] | undefined,
+    transparent: boolean,
+    opacity: number,
+    depthWrite: boolean
+  ) => {
+    const applyOne = (mat: THREE.Material) => {
+      if (!("opacity" in mat)) return;
+      mat.transparent = transparent;
+      mat.opacity = opacity;
+      mat.depthWrite = depthWrite;
+      mat.needsUpdate = true;
+    };
+    if (Array.isArray(material)) {
+      for (const mat of material) applyOne(mat);
+      return;
+    }
+    if (material) applyOne(material);
+  };
+
+  const syncDetailClippingAndMaterials = () => {
+    const detailPlanes = viewMode === "2d" && activeViewerTab !== "floorplan" ? activeDetailClipPlanes : [];
+    const isSectionDetailView = viewMode === "2d" && activeViewerTab.startsWith("section:");
+    renderer.clippingPlanes = [];
+
+    for (const wall of walls) {
+      applyMaterialClippingPlanes(wall.mesh.material, detailPlanes);
+      applyMaterialOpacityMode(
+        wall.mesh.material,
+        viewMode === "2d",
+        viewMode === "2d" ? (activeViewerTab === "floorplan" ? 1 : isSectionDetailView ? 0.07 : 0.16) : 1,
+        viewMode !== "2d"
+      );
+    }
+
+    for (const floor of floors) {
+      applyMaterialClippingPlanes(floor.mesh.material, detailPlanes);
+      applyMaterialOpacityMode(floor.mesh.material, false, 1, true);
+    }
+
+    for (const worktop of kitchenWorktops) {
+      applyMaterialClippingPlanes(worktop.mesh.material, detailPlanes);
+      applyMaterialOpacityMode(
+        worktop.mesh.material,
+        viewMode === "2d",
+        viewMode === "2d" ? (activeViewerTab === "floorplan" ? 0.35 : 0.16) : 1,
+        viewMode !== "2d"
+      );
+    }
+
+    for (const inst of instances) {
+      inst.module.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        applyMaterialClippingPlanes(mesh.material as THREE.Material | THREE.Material[], detailPlanes);
+        applyMaterialOpacityMode(
+          mesh.material as THREE.Material | THREE.Material[],
+          viewMode === "2d" && activeViewerTab !== "floorplan",
+          viewMode === "2d" && activeViewerTab !== "floorplan" ? (isSectionDetailView ? 0.1 : 0.18) : 1,
+          viewMode !== "2d"
+        );
+      });
+    }
+  };
+
+  const applyOrthoViewConfig = (config: ReturnType<typeof computeElevationViewConfig> | ReturnType<typeof computeSectionViewConfig>) => {
+    const activeCam = cam();
+    if (!(activeCam instanceof THREE.OrthographicCamera) || !config) return;
+    activeDetailClipPlanes = [config.clipPlane.clone()];
+    syncDetailClippingAndMaterials();
+    activeCam.position.copy(config.position).add(detailViewPanOffset);
+    activeCam.up.copy(config.up);
+    activeCam.left = config.left;
+    activeCam.right = config.right;
+    activeCam.top = config.top;
+    activeCam.bottom = config.bottom;
+    activeCam.near = config.near;
+    activeCam.far = config.far;
+    const nextTarget = config.target.clone().add(detailViewPanOffset);
+    activeCam.lookAt(nextTarget);
+    activeCam.updateProjectionMatrix();
+    ctl().target.copy(nextTarget);
+    ctl().update();
+  };
+
+  const updateDetailSliceOverlay = () => {
+    for (const child of [...detailSliceGroup.children]) {
+      detailSliceGroup.remove(child);
+      disposeObject3D(child);
+    }
+    const isSectionView = viewMode === "2d" && activeViewerTab.startsWith("section:") && activeDetailClipPlanes.length > 0;
+    detailSliceGroup.visible = isSectionView;
+    if (!isSectionView) return;
+    const plane = activeDetailClipPlanes[0]?.clone();
+    if (!plane) return;
+    const addSliceMesh = (targets: THREE.Object3D[], thicknessM: number, color: number) => {
+      const sliceGeometry = buildPlaneSliceStripGeometry(targets, plane, thicknessM);
+      if (!sliceGeometry.getAttribute("position")?.count) return;
+      const mesh = new THREE.Mesh(
+        sliceGeometry,
+        new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
+      );
+      mesh.renderOrder = 75;
+      mesh.frustumCulled = false;
+      detailSliceGroup.add(mesh);
+    };
+
+    addSliceMesh(walls.map((wall) => wall.mesh), 0.09, 0x0b0f14);
+    addSliceMesh(instances.map((inst) => inst.module), 0.055, 0x1c2430);
+    addSliceMesh(kitchenWorktops.map((worktop) => worktop.mesh), 0.045, 0x202a37);
+  };
+
+  const viewerElevations: Array<{ key: `elevation:${SectionElevationKey}`; label: string; direction: SectionElevationKey }> = [
+    { key: "elevation:north", label: "North", direction: "north" },
+    { key: "elevation:east", label: "East", direction: "east" },
+    { key: "elevation:south", label: "South", direction: "south" },
+    { key: "elevation:west", label: "West", direction: "west" }
+  ];
+
+  const refreshViewerTabs = () => {
+    const sectionTabs = sections.map((section) => ({
+      key: `section:${section.id}`,
+      label: section.params.name,
+      onClick: () => activateViewerTab(`section:${section.id}`)
+    }));
+    const elevationTabs = viewerElevations.map((item) => ({
+      key: item.key,
+      label: item.label,
+      onClick: () => activateViewerTab(item.key)
+    }));
+    setExtraTabs([...sectionTabs, ...elevationTabs]);
+    syncViewerTabs(activeViewerTab);
+  };
+
+  const isPlanFloorView = () => viewMode === "2d" && activeViewerTab === "floorplan";
+  const isCustomOrthoView = () => viewMode === "2d" && activeViewerTab !== "floorplan";
+  const captureFloorplanView = () => {
+    const activeCam = cam();
+    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
+    savedFloorplanView.target.copy(ctl().target);
+    savedFloorplanView.zoom = activeCam.zoom;
+    savedFloorplanView.left = activeCam.left;
+    savedFloorplanView.right = activeCam.right;
+    savedFloorplanView.top = activeCam.top;
+    savedFloorplanView.bottom = activeCam.bottom;
+    savedFloorplanView.near = activeCam.near;
+    savedFloorplanView.far = activeCam.far;
+  };
+  const restoreFloorplanView = () => {
+    const activeCam = cam();
+    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
+    activeCam.up.set(0, 0, -1);
+    if (savedFloorplanView.right !== savedFloorplanView.left) {
+      activeCam.left = savedFloorplanView.left;
+      activeCam.right = savedFloorplanView.right;
+      activeCam.top = savedFloorplanView.top;
+      activeCam.bottom = savedFloorplanView.bottom;
+    }
+    activeCam.near = savedFloorplanView.near;
+    activeCam.far = savedFloorplanView.far;
+    ctl().target.copy(savedFloorplanView.target);
+    activeCam.zoom = savedFloorplanView.zoom;
+    activeCam.position.set(savedFloorplanView.target.x, 10, savedFloorplanView.target.z);
+    activeCam.lookAt(savedFloorplanView.target.x, 0, savedFloorplanView.target.z);
+    activeCam.updateProjectionMatrix();
+    ctl().update();
+  };
+  const sync2dControlBindings = (isFloorplanView: boolean, isDetailOrthoView: boolean) => {
+    const controls = ctl();
+    if (viewMode !== "2d") return;
+    controls.enableRotate = false;
+    controls.enableZoom = true;
+    controls.enablePan = isFloorplanView;
+    (controls as any).mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: isFloorplanView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.ROTATE
+    };
+    controls.update();
+  };
+  const ensureFloorplanViewerTab = () => {
+    if (activeViewerTab !== "floorplan" || viewMode !== "2d") {
+      activateViewerTab("floorplan");
+    } else {
+      view2d.checked = true;
+      setView2d(true);
+    }
+  };
+
+  const activateViewerTab = (key: string) => {
+    if (activeViewerTab === "floorplan" && key !== "floorplan" && viewMode === "2d") {
+      captureFloorplanView();
+    }
+    if (key === "3d") {
+      activeViewerTab = "3d";
+      detailViewPanOffset.set(0, 0, 0);
+      activeDetailClipPlanes = [];
+      view2d.checked = false;
+      setView2d(false);
+      syncViewerTabs(activeViewerTab);
+      return;
+    }
+
+    activeViewerTab = key;
+    view2d.checked = true;
+    setView2d(true);
+    if (key === "floorplan") {
+      detailViewPanOffset.set(0, 0, 0);
+      activeDetailClipPlanes = [];
+      syncDetailClippingAndMaterials();
+      restoreFloorplanView();
+      updateDetailSliceOverlay();
+      syncViewerTabs(activeViewerTab);
+      return;
+    }
+
+    const bounds = getDetailViewBounds();
+    detailViewPanOffset.set(0, 0, 0);
+    if (key.startsWith("section:")) {
+      const sectionId = key.slice("section:".length);
+      const section = sections.find((item) => item.id === sectionId) ?? null;
+      if (section) applyOrthoViewConfig(computeSectionViewConfig(section.params, bounds));
+    } else if (key.startsWith("elevation:")) {
+      const direction = key.slice("elevation:".length) as SectionElevationKey;
+      applyOrthoViewConfig(computeElevationViewConfig(direction, bounds));
+    }
+    updateDetailSliceOverlay();
+    syncViewerTabs(activeViewerTab);
+  };
+
+  const updateDetailViewCamera = () => {
+    if (!isCustomOrthoView()) return;
+    const bounds = getDetailViewBounds();
+    if (activeViewerTab.startsWith("section:")) {
+      const sectionId = activeViewerTab.slice("section:".length);
+      const section = sections.find((item) => item.id === sectionId) ?? null;
+      if (section) applyOrthoViewConfig(computeSectionViewConfig(section.params, bounds));
+      updateDetailSliceOverlay();
+      return;
+    }
+    if (activeViewerTab.startsWith("elevation:")) {
+      const direction = activeViewerTab.slice("elevation:".length) as SectionElevationKey;
+      applyOrthoViewConfig(computeElevationViewConfig(direction, bounds));
+    }
+    updateDetailSliceOverlay();
+  };
+
+  const updateAllSectionVisuals = () => {
+    for (const section of sections) updateSectionVisual(section);
+    refreshViewerTabs();
+  };
+  refreshViewerTabs();
+
   function resolveKitchenWorktopDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
     const snapped = snapPoint2D(rawPoint, rect, cam(), 32, {
       kindPriority: ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"],
@@ -6130,6 +6933,36 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       snapped.kind !== "none" ? snapped : keepStickyPlanSnap(rawPoint, worktopDrawSnap, cam(), rect, 32);
     worktopDrawSnap = activeSnap;
     return activeSnap;
+  }
+
+  function resolveSectionDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
+    const snapped = snapPoint2D(rawPoint, rect, cam(), 24, {
+      kindPriority: ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"],
+      sticky: sectionDrawSnap,
+      preferNearest: true
+    });
+    const activeSnap =
+      snapped.kind !== "none" ? snapped : keepStickyPlanSnap(rawPoint, sectionDrawSnap, cam(), rect, 28);
+    sectionDrawSnap = activeSnap;
+    return activeSnap;
+  }
+
+  function resolveSectionDrawPoint(rawPoint: THREE.Vector3, rect: DOMRect, allowAxis = true) {
+    const activeSnap = resolveSectionDrawSnap(rawPoint, rect);
+    if (activeSnap && activeSnap.kind !== "none") {
+      return { point: activeSnap.point.clone(), kind: activeSnap.kind as PlanSnapResult["kind"], axisLocked: false };
+    }
+    if (allowAxis && drawOrthoEnabled && sectionDraw.a) {
+      const orthoPoint = floorOrthoPoint(sectionDraw.a, { x: Math.round(rawPoint.x * 1000), z: Math.round(rawPoint.z * 1000) });
+      if (orthoPoint.x !== Math.round(rawPoint.x * 1000) || orthoPoint.z !== Math.round(rawPoint.z * 1000)) {
+        return {
+          point: new THREE.Vector3(orthoPoint.x / 1000, 0, orthoPoint.z / 1000),
+          kind: "axis" as PlanSnapResult["kind"],
+          axisLocked: true
+        };
+      }
+    }
+    return { point: rawPoint.clone(), kind: "none" as PlanSnapResult["kind"], axisLocked: false };
   }
 
   function beginKitchenWorktopSelection(worktopId: string, ev: PointerEvent) {
@@ -6180,7 +7013,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     pick.userData.instanceId = id;
     root.add(pick);
 
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.88, depthTest: false, depthWrite: false });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.88, depthTest: true, depthWrite: false });
     const outline = new THREE.LineSegments(gEmpty(), lineMat);
     outline.name = `outline_${id}`;
     outline.visible = true;
@@ -6227,11 +7060,11 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   function setSelectedKitchenGroup(groupId: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = groupId ? "kitchenGroup" : null;
+    selectedSectionId = null;
     selectedKitchenGroupId = groupId;
     selectedFloorId = null;
     selectedWallId = null;
     selectedWallIds.clear();
-    selectedDimensionId = null;
     selectedInstanceIds.clear();
     if (groupId) {
       for (const inst of instances) {
@@ -6255,7 +7088,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     showWallSnapMarkersFor(null);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
@@ -6264,6 +7097,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (layoutTool !== "wall") layoutTool = "select";
     if (id && pinnedInstanceIds.has(id)) id = null;
     selectedKind = id ? "module" : null;
+    selectedSectionId = null;
     selectedKitchenGroupId = null;
     selectedFloorId = null;
     selectedInstanceId = id;
@@ -6271,7 +7105,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (id) selectedInstanceIds.add(id);
     selectedWallId = null;
     selectedWallIds.clear();
-    selectedDimensionId = null;
     setInstanceSelected(id);
     if (selectedUnderlayBox) {
       scene.remove(selectedUnderlayBox);
@@ -6281,17 +7114,17 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     }
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
   function setSelectedWindow() {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = "window";
+    selectedSectionId = null;
     selectedKitchenGroupId = null;
     selectedFloorId = null;
     selectedWallId = null;
-    selectedDimensionId = null;
     setInstanceSelected(null);
     if (selectedUnderlayBox) {
       scene.remove(selectedUnderlayBox);
@@ -6300,7 +7133,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       selectedUnderlayBox = null;
     }
     syncSelectionState();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
@@ -6308,13 +7141,13 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (layoutTool !== "wall") layoutTool = "select";
     if (!underlayMesh.visible || underlayState.pinned) return;
     selectedKind = "underlay";
+    selectedSectionId = null;
     selectedKitchenGroupId = null;
     selectedFloorId = null;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
     selectedInstanceIds.clear();
-    selectedDimensionId = null;
     setInstanceSelected(null);
     if (selectedWallBox) {
       scene.remove(selectedWallBox);
@@ -6332,15 +7165,16 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     selectedUnderlayBox.name = "underlaySelectionBox";
     scene.add(selectedUnderlayBox);
     syncSelectionState();
+    updateAllSectionVisuals();
     mountProps();
   }
 
-  function setSelectedDimension(id: string | null) {
+  function setSelectedSection(id: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
-    selectedKind = id ? "dimension" : null;
+    selectedKind = id ? "section" : null;
+    selectedSectionId = id;
     selectedKitchenGroupId = null;
     selectedFloorId = null;
-    selectedDimensionId = id;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
@@ -6361,7 +7195,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     showWallSnapMarkersFor(null);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
@@ -6369,6 +7203,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (layoutTool !== "wall") layoutTool = "select";
     if (id && pinnedWallIds.has(id)) id = null;
     selectedKind = id ? "wall" : null;
+    selectedSectionId = null;
     selectedKitchenGroupId = null;
     selectedFloorId = null;
     selectedWallId = id;
@@ -6376,7 +7211,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     if (id) selectedWallIds.add(id);
     setInstanceSelected(null);
     selectedInstanceIds.clear();
-    selectedDimensionId = null;
     if (selectedUnderlayBox) {
       scene.remove(selectedUnderlayBox);
       selectedUnderlayBox.geometry.dispose();
@@ -6396,6 +7230,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       showWallSnapMarkersFor(null);
       syncSelectionState();
       updateSelectionHighlights();
+      updateAllSectionVisuals();
       mountProps();
       return;
     }
@@ -6406,20 +7241,20 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     showWallSnapMarkersFor(id);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
   function setSelectedFloor(id: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
     selectedKind = id ? "floor" : null;
+    selectedSectionId = null;
     selectedKitchenGroupId = null;
     selectedFloorId = id;
     selectedWallId = null;
     selectedWallIds.clear();
     selectedInstanceId = null;
     selectedInstanceIds.clear();
-    selectedDimensionId = null;
     setInstanceSelected(null);
     if (selectedWallBox) {
       scene.remove(selectedWallBox);
@@ -6436,7 +7271,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     showWallSnapMarkersFor(null);
     syncSelectionState();
     updateSelectionHighlights();
-    updateDimensionSelectionHighlights(S, dimensionHelpers);
+    updateAllSectionVisuals();
     mountProps();
   }
 
@@ -6474,7 +7309,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
     const outline = new THREE.Line(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false })
+      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95, depthTest: true, depthWrite: false })
     );
     outline.name = "windowOutline";
     outline.renderOrder = 57;
@@ -6666,15 +7501,15 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
     const prevPos = inst.root.position.clone();
-    const prevLocalBackCenter = getModuleLocalBackCenter(inst).clone();
+    const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
 
     inst.root.remove(prevModule);
     inst.module = next;
     inst.root.add(inst.module);
     inst.localBox = new THREE.Box3().setFromObject(inst.module);
     if (opts?.preserveBackAnchor) {
-      const nextLocalBackCenter = getModuleLocalBackCenter(inst);
-      const delta = prevLocalBackCenter.clone().sub(nextLocalBackCenter);
+      const nextLocalAnchor = isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
+      const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
       inst.module.position.add(delta);
       inst.localBox = new THREE.Box3().setFromObject(inst.module);
     }
@@ -7080,48 +7915,68 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     viewMode = enabled ? "2d" : "3d";
     S.viewMode = viewMode;
     setViewMode(viewMode);
-  syncViewerTabs(viewMode);
+    if (!enabled) activeViewerTab = "3d";
+    if (enabled && activeViewerTab === "3d") activeViewerTab = "floorplan";
+    syncViewerTabs(activeViewerTab);
+    const isFloorplanView = enabled && activeViewerTab === "floorplan";
+    const isDetailOrthoView = enabled && activeViewerTab !== "floorplan";
+    setPlanPresentation(isFloorplanView);
+    sync2dControlBindings(isFloorplanView, isDetailOrthoView);
+    if (!isDetailOrthoView) {
+      activeDetailClipPlanes = [];
+    }
 
     for (const inst of instances) {
-      ensurePickAndOutline(inst);
-      inst.module.visible = !enabled;
-      (inst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.95 : 0.88;
-      inst.outline.visible = true;
+      ensurePickAndOutline(inst, isFloorplanView);
+      inst.module.visible = !enabled || isDetailOrthoView;
+      const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
+      outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
+      outlineMaterial.depthTest = !enabled;
+      inst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
     }
 
     if (windowInst) {
-      (windowInst.outline.material as THREE.LineBasicMaterial).opacity = enabled ? 0.98 : 0.75;
-      windowInst.outline.visible = true;
+      const outlineMaterial = windowInst.outline.material as THREE.LineBasicMaterial;
+      outlineMaterial.opacity = isFloorplanView ? 0.98 : 0.75;
+      outlineMaterial.depthTest = !enabled;
+      windowInst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
     }
 
     for (const floor of floors) {
-      floor.mesh.visible = true;
-      floor.outline.visible = true;
+      floor.mesh.visible = !enabled || isFloorplanView;
+      (floor.outline.material as THREE.LineBasicMaterial).depthTest = !enabled;
+      floor.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
     }
 
     for (const worktop of kitchenWorktops) {
-      worktop.mesh.visible = true;
-      worktop.outline.visible = enabled;
+      worktop.outline.geometry.dispose();
+      worktop.outline.geometry = makeKitchenWorktopOutlineGeometry(worktop.params, isFloorplanView);
+      worktop.outline.position.set(0, worktop.params.heightMm / 1000 + (isFloorplanView ? 0.0015 : 0), 0);
+      worktop.mesh.visible = !enabled || isFloorplanView || isDetailOrthoView;
+      worktop.outline.visible = isFloorplanView || isDetailOrthoView;
       const outlineMaterial = worktop.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = enabled ? 0.98 : 0.78;
-      const meshMaterial = worktop.mesh.material as THREE.MeshStandardMaterial;
-      meshMaterial.transparent = enabled;
-      meshMaterial.opacity = enabled ? 0.35 : 1;
-      meshMaterial.depthWrite = !enabled;
+      outlineMaterial.opacity = isFloorplanView ? 0.98 : 0.94;
     }
 
-    wallSnapMarkers.visible = !!selectedWallId;
+    wallSnapMarkers.visible = isFloorplanView && !!selectedWallId;
+    if (!isFloorplanView) {
+      drawSnapOverlay.hide();
+      hideHoverCursor();
+    }
     updateSelectionHighlights();
+    updateAllSectionVisuals();
+    updateDetailSliceOverlay();
 
-    wallPlanGroup.visible = enabled;
+    wallPlanGroup.visible = isFloorplanView;
     rebuildWallPlanMesh();
     for (const w of walls) {
-      w.mesh.visible = !enabled;
-      w.outline.visible = !enabled;
+      w.mesh.visible = !enabled || isFloorplanView || isDetailOrthoView;
+      w.outline.visible = !enabled || isDetailOrthoView;
       const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = enabled ? 0 : 0.78;
+      outlineMaterial.opacity = isFloorplanView ? 0 : 0.94;
+      outlineMaterial.depthTest = !(isFloorplanView || isDetailOrthoView);
     }
-    updateAllDimensions(S, dimensionHelpers, renderer.domElement.getBoundingClientRect());
+    syncDetailClippingAndMaterials();
   }
 
   function setMode(next: AppMode) {
@@ -7161,6 +8016,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       setView2d(view2d.checked);
       updateLayoutPanel();
       if (selectedKind === "window") setSelectedWindow();
+      else if (selectedKind === "section") setSelectedSection(selectedSectionId);
       else if (selectedKind === "wall") setSelectedWall(selectedWallId);
       else if (selectedKind === "floor") setSelectedFloor(selectedFloorId);
       else setSelectedModule(selectedInstanceId);
@@ -7191,6 +8047,10 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       floors: floors.map((floor) => ({
         id: floor.id,
         params: floor.params
+      })),
+      sections: sections.map((section) => ({
+        id: section.id,
+        params: section.params
       })),
       modules: instances.map((i) => ({
         id: i.id,
@@ -7392,7 +8252,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     const camera = cam() as THREE.PerspectiveCamera;
     controls.target.copy(center);
     camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
-    camera.near = Math.max(0.01, maxDim / 100);
+    camera.near = Math.max(0.001, maxDim / 1000);
     camera.far = Math.max(50, maxDim * 20);
     camera.updateProjectionMatrix();
     controls.update();
@@ -7588,26 +8448,36 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       enterFloorBoundaryEdit(floorId);
       return;
     }
-
-    if (viewMode !== "2d") return;
-    const picks = dimensions.map((d) => d.pick);
-    const hit = raycaster.intersectObjects(picks, false)[0]?.object as THREE.Mesh | undefined;
-    const dimId = (hit?.userData?.dimensionId as string | undefined) ?? null;
-    if (!dimId) return;
-    const d = dimensions.find((x) => x.id === dimId) ?? null;
-    if (!d) return;
-    setSelectedDimension(dimId);
-    const cur = dimValueMm(S, dimensionHelpers, d.params)?.absMm ?? 0;
-    const s = window.prompt("Dimension (mm)", String(cur));
-    if (!s) return;
-    const n = Number(s.trim().replace(",", "."));
-    if (!n || !Number.isFinite(n) || n <= 0) return;
-    setDimensionValueMm(d, Math.round(n));
   });
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
+    if (ev.button === 1) {
+      if (mode === "layout" && viewMode === "2d" && activeViewerTab !== "floorplan") {
+        detailPanState.active = true;
+        detailPanState.pointerId = ev.pointerId;
+        detailPanState.lastClientX = ev.clientX;
+        detailPanState.lastClientY = ev.clientY;
+        try {
+          renderer.domElement.setPointerCapture(ev.pointerId);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
     // Marquee selection in 2D layout select tool (left button) - start pending, activate on drag.
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !floorEdit.active && !transformState.kind && !placement.active && ev.button === 0 && !measureState.enabled) {
+    if (
+      mode === "layout" &&
+      viewMode === "2d" &&
+      activeViewerTab === "floorplan" &&
+      layoutTool === "select" &&
+      !floorEdit.active &&
+      !transformState.kind &&
+      !placement.active &&
+      ev.button === 0 &&
+      !measureState.enabled
+    ) {
       const rect = renderer.domElement.getBoundingClientRect();
       marquee.pending = true;
       marquee.active = false;
@@ -7784,7 +8654,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         return;
       }
 
-      if (placement.active && viewMode === "2d" && layoutTool === "select") {
+      if (placement.active && viewMode === "2d" && activeViewerTab === "floorplan" && layoutTool === "select") {
         if (ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
@@ -7795,7 +8665,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         return;
       }
 
-      if (layoutTool === "select" && viewMode === "2d" && transformState.kind) {
+      if (layoutTool === "select" && viewMode === "2d" && activeViewerTab === "floorplan" && transformState.kind) {
         if (ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
@@ -8082,20 +8952,24 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         if (ev.button !== 0) return;
         let kind: string = "none";
         let point: THREE.Vector3 | null = null;
+        let binding: PlanSnapBinding | null = null;
+        const normalMode = viewMode === "2d" && ev.shiftKey;
 
         if (viewMode === "2d") {
           const hitPoint = new THREE.Vector3();
           if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
           const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
-            perpendicularFrom: measureState.firstPoint
+            perpendicularFrom: normalMode ? null : measureState.firstPoint
           });
           kind = snapped.kind;
           point = snapped.kind !== "none" ? snapped.point : hitPoint;
+          binding = bindingFromPlanSnap(snapped, point);
           if (!measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
             const axisAssist = applyMeasureAxisAssist(measureState.firstPoint, point, cam(), rect, 12);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
+              binding = toFreePlanBinding(point);
             }
           }
         } else {
@@ -8105,11 +8979,13 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
           const snapped = snapPoint3D(hit.point, snapTarget ?? hit.object, cam(), rect, 32);
           kind = snapped.kind;
           point = snapped.point;
+          binding = toFreePlanBinding(point);
           if (!measureState.axisLock && snapped.kind === "free") {
             const axisAssist = applyMeasureAxisAssist3D(measureState.firstPoint, point, cam(), rect, 12);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
+              binding = toFreePlanBinding(point);
             }
           }
         }
@@ -8117,9 +8993,13 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
         if (!measureState.firstPoint) {
           measureState.firstPoint = point.clone();
+          measureState.firstBinding = binding ?? toFreePlanBinding(point);
           setFirstPointMarker(measureState.firstPoint);
-          args.measureReadoutEl.textContent = `Prvý bod (${kind}): ${formatMm(point)} — klikni druhý bod.`;
-          setUnderlayStatus("Measure: klikni druhý bod.");
+          args.measureReadoutEl.textContent =
+            normalMode
+              ? `Normála (${kind}): ${formatMm(point)} — klikni druhý bod smernice.`
+              : `Prvý bod (${kind}): ${formatMm(point)} — klikni druhý bod.`;
+          setUnderlayStatus(normalMode ? "Measure: klikni druhý bod smernice pre normálu." : "Measure: klikni druhý bod.");
           mountProps();
           return;
         }
@@ -8127,67 +9007,57 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         let a = measureState.firstPoint.clone();
         let b = point.clone();
         if (measureState.axisLock) b = viewMode === "2d" ? axisLockXZ(a, b) : axisLockPoint3D(a, b);
-        addMeasurement(a, b, viewMode === "2d" ? planarDistanceMm(a, b) : distance3dMm(a, b));
+        const aBinding = measureState.firstBinding ?? toFreePlanBinding(a);
+        const bBinding = binding ?? toFreePlanBinding(b);
+        if (normalMode) {
+          const baseDir = b.clone().sub(a).setY(0);
+          if (baseDir.lengthSq() > 1e-10) {
+            baseDir.normalize();
+            const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
+            const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
+            addMeasurement(
+              a.clone().addScaledVector(normalDir, -spanM / 2),
+              a.clone().addScaledVector(normalDir, spanM / 2),
+              aBinding,
+              bBinding,
+              { kind: "normalGuide" }
+            );
+          }
+        } else {
+          addMeasurement(a, b, aBinding, bBinding, {
+            kind: "distance",
+            distanceMm: viewMode === "2d" ? planarDistanceMm(a, b) : distance3dMm(a, b)
+          });
+        }
         measureState.firstPoint = null;
+        measureState.firstBinding = null;
         setFirstPointMarker(null);
         clearPreview();
         clearToolHud();
         return;
       }
 
-      if (layoutTool === "dimension") {
-        if (viewMode !== "2d") return;
-        if (ev.button !== 0) return;
-
+      if (layoutTool === "section") {
+        if (viewMode !== "2d" || activeViewerTab !== "floorplan" || ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+        const resolved = resolveSectionDrawPoint(hitPoint, rect, !ev.shiftKey);
+        sectionDraw.axisLocked = resolved.axisLocked;
+        const point = { x: Math.round(resolved.point.x * 1000), z: Math.round(resolved.point.z * 1000) };
 
-        const rect2 = renderer.domElement.getBoundingClientRect();
-        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
-        const picked = pickAlignLineAt(hitPoint, mouse, rect2);
-        if (!picked) {
-          setUnderlayStatus(dimTool.a ? "Dimension: click second parallel line." : "Dimension: click first line.");
-          return;
-        }
-
-        if (!dimTool.a) {
-          dimTool.a = picked;
-          dimTool.tA = segClosestT(hitPoint, picked.segA, picked.segB);
-          setUnderlayStatus("Dimension: click second parallel line...");
+        if (!sectionDraw.a) {
+          sectionDraw.a = point;
+          sectionDraw.hoverPoint = point;
+          updateSectionDrawPreview();
+          setUnderlayStatus("Section: klikni druhý bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliť smer.");
           mountProps();
           return;
         }
 
-        const a = dimTool.a;
-        if (!alignParallel(a, picked)) {
-          setUnderlayStatus("Dimension: lines must be parallel.");
-          return;
+        if (commitSectionDraw(point)) {
+          ev.preventDefault();
+          ev.stopPropagation();
         }
-        if (a.wallId === picked.wallId) {
-          setUnderlayStatus("Dimension: pick a different wall.");
-          return;
-        }
-        if (a.wallLine === "endA" || a.wallLine === "endB" || picked.wallLine === "endA" || picked.wallLine === "endB") {
-          setUnderlayStatus("Dimension: pick face/center lines (not end lines).");
-          return;
-        }
-
-        const tB = segClosestT(hitPoint, picked.segA, picked.segB);
-        const dir = a.dir.clone().normalize();
-        const n = new THREE.Vector3(-dir.z, 0, dir.x);
-        const aPt = a.segA.clone().lerp(a.segB, dimTool.tA);
-        dimTool.offsetM = n.dot(hitPoint.clone().sub(aPt));
-
-        createDimension(S, dimensionHelpers,
-          { wallId: a.wallId, wallLine: a.wallLine, t: dimTool.tA },
-          { wallId: picked.wallId, wallLine: picked.wallLine, t: tB },
-          dimTool.offsetM
-        );
-
-        dimTool.a = null;
-        dimPreview.root.visible = false;
-        setUnderlayStatus("Dimension: placed. Click first line...");
-        mountProps();
         return;
       }
 
@@ -8293,12 +9163,25 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       if (measureState.enabled) return;
 
       // 2D wall selection without raycasting (walls are hidden in 2D; plan mesh is merged).
-      if (viewMode === "2d" && layoutTool === "select" && ev.button === 0) {
+      if (viewMode === "2d" && activeViewerTab === "floorplan" && layoutTool === "select" && ev.button === 0) {
         const hitPoint = new THREE.Vector3();
         if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
         const pMm = toMmPoint(hitPoint);
         const rect2 = renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
+
+        const sectionHit = raycaster.intersectObjects(getSectionPickMeshes(), false)[0]?.object;
+        const sectionId = getSectionIdFromObject(sectionHit);
+        if (sectionId) {
+          if (marquee.pending && marquee.pointerId === ev.pointerId) {
+            marquee.hitSomething = true;
+            marquee.pending = false;
+            marquee.active = false;
+            marqueeEl.style.display = "none";
+          }
+          setSelectedSection(sectionId);
+          return;
+        }
 
         const moduleHit = raycaster.intersectObjects(getAllInstanceGeometryMeshes(), false)[0]?.object;
         const moduleId = getInstanceIdFromObject(moduleHit);
@@ -8395,7 +9278,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       if (windowInst) picks.push(windowInst.pick);
       for (const w of walls) picks.push(w.mesh);
       for (const floor of floors) picks.push(floor.mesh, floor.outline as any);
-      for (const d of dimensions) picks.push(d.pick);
       const hits = raycaster.intersectObjects(picks, false);
       const first = hits[0]?.object as THREE.Mesh | undefined;
       const worktopHit3d = raycaster.intersectObjects(getKitchenWorktopGeometryMeshes(), false)[0]?.object as THREE.Mesh | undefined;
@@ -8426,34 +9308,27 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         return;
       }
 
-      if (kind === "dimension") {
-        const dimId = (first?.userData?.dimensionId as string | undefined) ?? null;
-        if (!dimId) return;
-        if (marquee.pending && marquee.pointerId === ev.pointerId) {
-          marquee.hitSomething = true;
-          marquee.pending = false;
-          marquee.active = false;
-          marqueeEl.style.display = "none";
-        }
-        setSelectedDimension(dimId);
-        if (viewMode !== "2d" || layoutTool !== "select" || ev.button !== 0) return;
-        const d = dimensions.find((x) => x.id === dimId) ?? null;
-        if (!d) return;
-        const hitPoint = new THREE.Vector3();
-        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-        dimensionDragState.active = true;
-        dimensionDragState.id = dimId;
-        dimensionDragState.pointerId = ev.pointerId;
-        dimensionDragState.startWorld.copy(hitPoint);
-        dimensionDragState.startOffsetM = d.params.offsetM;
-        renderer.domElement.setPointerCapture(ev.pointerId);
-        return;
-      }
-
       const id = getInstanceIdFromObject(first);
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       const floorId = (first?.userData?.floorId as string | undefined) ?? null;
       if (kind === "floor") {
+        if (viewMode === "2d" && activeViewerTab !== "floorplan") {
+          selectedKind = null;
+          selectedSectionId = null;
+          selectedKitchenGroupId = null;
+          selectedFloorId = null;
+          selectedWallId = null;
+          selectedWallIds.clear();
+          selectedInstanceId = null;
+          selectedInstanceIds.clear();
+          setInstanceSelected(null);
+          showWallSnapMarkersFor(null);
+          syncSelectionState();
+          updateSelectionHighlights();
+          updateAllSectionVisuals();
+          mountProps();
+          return;
+        }
         if (!floorId) {
           setSelectedFloor(null);
           return;
@@ -8540,6 +9415,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       const snapped = snapPointXZ(hit.point, hit.object);
       if (!measureState.firstPoint) {
         measureState.firstPoint = snapped.point;
+        measureState.firstBinding = toFreePlanBinding(snapped.point);
         args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} â€” pick second pointâ€¦`;
         return;
       }
@@ -8548,8 +9424,12 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       let b = snapped.point;
       if (measureState.axisLock) b = axisLockXZ(a, b);
 
-      addMeasurement(a, b);
+      addMeasurement(a, b, measureState.firstBinding ?? toFreePlanBinding(a), toFreePlanBinding(b), {
+        kind: "distance",
+        distanceMm: planarDistanceMm(a, b)
+      });
       measureState.firstPoint = null;
+      measureState.firstBinding = null;
       clearPreview();
       return;
     }
@@ -8561,6 +9441,16 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (detailPanState.active && detailPanState.pointerId === ev.pointerId) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const deltaX = ev.clientX - detailPanState.lastClientX;
+      const deltaY = ev.clientY - detailPanState.lastClientY;
+      detailPanState.lastClientX = ev.clientX;
+      detailPanState.lastClientY = ev.clientY;
+      panCustomOrthoViewByPixels(deltaX, deltaY, rect);
+      return;
+    }
+
     if (mode === "layout" && viewMode === "2d" && floorEdit.active) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -8831,29 +9721,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       return;
     }
 
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && dimensionDragState.active && dimensionDragState.pointerId === ev.pointerId) {
-      const d = dimensions.find((x) => x.id === dimensionDragState.id) ?? null;
-      if (!d) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      pointerNdc.set(x, y);
-      raycaster.setFromCamera(pointerNdc, cam());
-      const hitPoint = new THREE.Vector3();
-      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-
-      const la = wallLineSegment(S, dimensionHelpers, d.params.a.wallId, d.params.a.wallLine);
-      if (!la) return;
-      const dir = la.dir.clone().normalize();
-      const n = new THREE.Vector3(-dir.z, 0, dir.x);
-      const delta = hitPoint.clone().sub(dimensionDragState.startWorld);
-      d.params.offsetM = dimensionDragState.startOffsetM + n.dot(delta);
-      updateDimensionGeometry(S, dimensionHelpers, d, rect);
-      return;
-    }
-
-    // Align/Trim/Dimension hover highlight
-    if (mode === "layout" && viewMode === "2d" && (layoutTool === "align" || layoutTool === "trim" || layoutTool === "dimension")) {
+    if (mode === "layout" && viewMode === "2d" && (layoutTool === "align" || layoutTool === "trim")) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
@@ -8886,7 +9754,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
             hudPickLine1.visible = false;
             hudPickLine2.visible = false;
           }
-        } else if (layoutTool === "trim") {
+        } else {
           trimState.hover = picked;
           if (picked) updateHudLine(hudHoverLine, picked.segA, picked.segB, thick);
           else hudHoverLine.visible = false;
@@ -8910,63 +9778,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
               }
             }
           }
-          dimPreview.root.visible = false;
-        } else {
-          // dimension
-          dimTool.hover = picked;
-          if (picked) updateHudLine(hudHoverLine, picked.segA, picked.segB, thick);
-          else hudHoverLine.visible = false;
-
-          if (dimTool.a) {
-            updateHudLine(hudPickLine1, dimTool.a.segA, dimTool.a.segB, thick);
-            if (picked && alignParallel(dimTool.a, picked) && picked.wallId !== dimTool.a.wallId) {
-              updateHudLine(hudPickLine2, picked.segA, picked.segB, thick);
-            } else {
-              hudPickLine2.visible = false;
-            }
-          } else {
-            hudPickLine1.visible = false;
-            hudPickLine2.visible = false;
-          }
-
-          // preview dimension (first ref + hovered parallel line)
-          if (dimTool.a && picked && alignParallel(dimTool.a, picked) && picked.wallId !== dimTool.a.wallId && picked.wallLine !== "endA" && picked.wallLine !== "endB" && dimTool.a.wallLine !== "endA" && dimTool.a.wallLine !== "endB") {
-            const dir = dimTool.a.dir.clone().normalize();
-            const n = new THREE.Vector3(-dir.z, 0, dir.x);
-            const aPt = dimTool.a.segA.clone().lerp(dimTool.a.segB, dimTool.tA);
-            const bT = segClosestT(hitPoint, picked.segA, picked.segB);
-            const bPt = picked.segA.clone().lerp(picked.segB, bT);
-            const off = n.dot(hitPoint.clone().sub(aPt));
-            dimTool.offsetM = off;
-            const aDim = aPt.clone().addScaledVector(n, off);
-            const bDim = bPt.clone().addScaledVector(n, off);
-
-            const thickDim = thick * 1.2;
-            updateDimBar(S, dimensionHelpers, dimPreview.ext1, aPt, aDim, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.ext2, bPt, bDim, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.dim, aDim, bDim, thickDim);
-
-            const dimDir = bDim.clone().sub(aDim);
-            const len = dimDir.length();
-            const u = len > 1e-6 ? dimDir.clone().multiplyScalar(1 / len) : new THREE.Vector3(1, 0, 0);
-            const tickDir = u.clone().add(n.clone().normalize()).normalize();
-            const tickLen = Math.max(thickDim * 10, thickDim * 8);
-            const t1a = aDim.clone().addScaledVector(tickDir, tickLen / 2);
-            const t1b = aDim.clone().addScaledVector(tickDir, -tickLen / 2);
-            const t2a = bDim.clone().addScaledVector(tickDir, tickLen / 2);
-            const t2b = bDim.clone().addScaledVector(tickDir, -tickLen / 2);
-            updateDimBar(S, dimensionHelpers, dimPreview.tick1, t1a, t1b, thickDim);
-            updateDimBar(S, dimensionHelpers, dimPreview.tick2, t2a, t2b, thickDim);
-
-            const mid = aDim.clone().add(bDim).multiplyScalar(0.5);
-            dimPreview.text.position.set(mid.x, 0.06, mid.z);
-            const mm = Math.round(Math.abs(n.dot(bPt.clone().sub(aPt))) * 1000);
-            updateSpriteText(S, dimensionHelpers, dimPreview.text, `${mm}`);
-            setSpriteScreenFixedScale(S, dimensionHelpers, dimPreview.text, rect);
-            dimPreview.root.visible = true;
-          } else {
-            dimPreview.root.visible = false;
-          }
         }
       }
       // no return; other pointermove handling can still run (e.g. marquee box)
@@ -8986,8 +9797,9 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         return;
       }
 
+      const normalMode = ev.shiftKey;
       const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
-        perpendicularFrom: measureState.firstPoint,
+        perpendicularFrom: normalMode ? null : measureState.firstPoint,
         kindPriority: ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"],
         sticky: measurePlanSnap
       });
@@ -9025,11 +9837,32 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         let a = measureState.firstPoint.clone();
         let b = point.clone();
         if (measureState.axisLock) b = axisLockXZ(a, b);
-        updatePreview(a, b, rect);
-        args.measureReadoutEl.textContent = `Measure: ${Math.round(planarDistanceMm(a, b))} mm`;
+        if (normalMode) {
+          const baseDir = b.clone().sub(a).setY(0);
+          if (baseDir.lengthSq() > 1e-10) {
+            baseDir.normalize();
+            const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
+            const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
+            updatePreview(
+              a.clone().addScaledVector(normalDir, -spanM / 2),
+              a.clone().addScaledVector(normalDir, spanM / 2),
+              rect,
+              planarDistanceMm(a, b),
+              { kind: "normalGuide" }
+            );
+          } else {
+            clearPreview();
+          }
+          args.measureReadoutEl.textContent = `Normal: ${Math.round(planarDistanceMm(a, b))} mm`;
+        } else {
+          updatePreview(a, b, rect);
+          args.measureReadoutEl.textContent = `Measure: ${Math.round(planarDistanceMm(a, b))} mm`;
+        }
       } else {
         clearPreview();
-        args.measureReadoutEl.textContent = `Measure hover (${kind}): ${formatMm(point)}`;
+        args.measureReadoutEl.textContent = normalMode
+          ? `Normal hover (${kind}): ${formatMm(point)}`
+          : `Measure hover (${kind}): ${formatMm(point)}`;
       }
       setFirstPointMarker(measureState.firstPoint);
       return;
@@ -9089,6 +9922,32 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
         args.measureReadoutEl.textContent = `Measure 3D hover (${kind}): ${Math.round(point.x * 1000)}, ${Math.round(point.y * 1000)}, ${Math.round(point.z * 1000)}`;
       }
       setFirstPointMarker(measureState.firstPoint);
+      return;
+    }
+
+    if (mode === "layout" && layoutTool === "section" && viewMode === "2d" && activeViewerTab === "floorplan") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+        hideHoverCursor();
+        drawSnapOverlay.hide();
+        return;
+      }
+      const resolved = resolveSectionDrawPoint(hitPoint, rect, !ev.shiftKey);
+      sectionDraw.axisLocked = resolved.axisLocked;
+      if (resolved.kind !== "none") {
+        updateHoverCursor(worldToScreen(resolved.point, cam(), rect), resolved.kind);
+        drawSnapOverlay.showWorld(resolved.point, cam(), rect, resolved.kind);
+      } else {
+        hideHoverCursor();
+        drawSnapOverlay.hide();
+      }
+      sectionDraw.hoverPoint = { x: Math.round(resolved.point.x * 1000), z: Math.round(resolved.point.z * 1000) };
+      updateSectionDrawPreview();
       return;
     }
 
@@ -9191,7 +10050,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       }
     }
 
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select" && !dragState.active && !windowDragState.active && !wallEditHud.drag && !marquee.active) {
+    if (mode === "layout" && viewMode === "2d" && activeViewerTab === "floorplan" && layoutTool === "select" && !dragState.active && !windowDragState.active && !wallEditHud.drag && !marquee.active) {
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
@@ -9302,6 +10161,19 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
   });
 
   renderer.domElement.addEventListener("pointerup", (ev) => {
+    if (ev.button === 1) {
+      if (detailPanState.active && detailPanState.pointerId === ev.pointerId) {
+        detailPanState.active = false;
+        detailPanState.pointerId = null;
+        try {
+          renderer.domElement.releasePointerCapture(ev.pointerId);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
     if (mode !== "layout") return;
 
     if (floorEdit.drag && floorEdit.drag.pointerId === ev.pointerId) {
@@ -9339,19 +10211,6 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       underlayDragState.active = false;
       underlayDragState.pointerId = null;
       setUnderlayStatus("Underlay moved.");
-      commitHistory(S);
-      try {
-        renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-
-    if (dimensionDragState.active && dimensionDragState.pointerId === ev.pointerId) {
-      dimensionDragState.active = false;
-      dimensionDragState.pointerId = null;
-      dimensionDragState.id = null;
       commitHistory(S);
       try {
         renderer.domElement.releasePointerCapture(ev.pointerId);
@@ -9773,6 +10632,85 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     }
   };
 
+  const refreshAssociativeMeasures = () => {
+    if (measureState.measures.length === 0) return;
+    const ctx = getAssociativeMeasureContext();
+    for (const item of measureState.measures) {
+      const resolved = resolveAssociativeMeasureWorld(
+        {
+          id: item.id,
+          kind: item.kind,
+          aBinding: item.aBinding,
+          bBinding: item.bBinding
+        },
+        ctx
+      );
+      if (!resolved) continue;
+      const distanceMm =
+        item.kind === "normalGuide"
+          ? 0
+          : Math.abs(resolved.a.y - resolved.b.y) > 1e-6
+            ? distance3dMm(resolved.a, resolved.b)
+            : planarDistanceMm(resolved.a, resolved.b);
+      updateMeasurementGeometry(item, resolved.a, resolved.b, distanceMm);
+    }
+  };
+
+  const commitWallMeasureValueMm = (measureId: string, raw: string) => {
+    if (selectedKind !== "wall" || !selectedWallId) return;
+    const wall = walls.find((item) => item.id === selectedWallId) ?? null;
+    const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
+    if (!wall || !measure) return;
+
+    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
+    if (!Number.isFinite(nextMm)) return;
+    const desiredMm = Math.max(0, Math.round(nextMm));
+    const ctx = getAssociativeMeasureContext();
+    const attachedBinding = isBindingAttachedToWall(measure.aBinding, wall.id)
+      ? measure.aBinding
+      : isBindingAttachedToWall(measure.bBinding, wall.id)
+        ? measure.bBinding
+        : null;
+    if (!attachedBinding) return;
+
+    const wallPoint = resolvePlanBinding(attachedBinding, ctx);
+    const otherPoint = resolvePlanBinding(attachedBinding === measure.aBinding ? measure.bBinding : measure.aBinding, ctx);
+    if (!wallPoint || !otherPoint) return;
+
+    const a = fromMmPoint(wall.params.aMm);
+    const b = fromMmPoint(wall.params.bMm);
+    const d = b.clone().sub(a);
+    if (d.lengthSq() < 1e-10) return;
+    d.normalize();
+    const n = new THREE.Vector3(-d.z, 0, d.x).normalize();
+    const signed = otherPoint.clone().sub(wallPoint).dot(n);
+    const sign = signed >= 0 ? 1 : -1;
+    const desiredSigned = sign * (desiredMm / 1000);
+    const shift = signed - desiredSigned;
+    if (Math.abs(shift) < 1e-6) return;
+    const shiftMm = { x: Math.round(n.x * shift * 1000), z: Math.round(n.z * shift * 1000) };
+
+    const oldA = { ...wall.params.aMm };
+    const oldB = { ...wall.params.bMm };
+    wall.params.aMm = { x: wall.params.aMm.x + shiftMm.x, z: wall.params.aMm.z + shiftMm.z };
+    wall.params.bMm = { x: wall.params.bMm.x + shiftMm.x, z: wall.params.bMm.z + shiftMm.z };
+
+    for (const otherWall of walls) {
+      if (otherWall.id === wall.id) continue;
+      const wa = wallEndpointWhich(otherWall, oldA, wallJoinTolMm);
+      if (wa) setWallEndpointMm(otherWall, wa, wall.params.aMm);
+      const wb = wallEndpointWhich(otherWall, oldB, wallJoinTolMm);
+      if (wb) setWallEndpointMm(otherWall, wb, wall.params.bMm);
+    }
+
+    rebuildWall(wall);
+    autoJoinAtMmPoint(wall.params.aMm);
+    autoJoinAtMmPoint(wall.params.bMm);
+    rebuildWallPlanMesh();
+    commitHistory(S);
+    mountProps();
+  };
+
   const enforceWallDrawInvariant = () => {
     const wallToolInactive = mode !== "layout" || viewMode !== "2d" || layoutTool !== "wall";
     const wallDrawStale =
@@ -9805,6 +10743,14 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       kitchenWorktopDraw.previewRoot
     ) {
       cancelKitchenWorktopDraw({ silent: true });
+    }
+  };
+
+  const enforceSectionDrawInvariant = () => {
+    const inactive = mode !== "layout" || viewMode !== "2d" || activeViewerTab !== "floorplan" || layoutTool !== "section";
+    if (!inactive) return;
+    if (sectionDraw.active || sectionDraw.a || sectionDraw.hoverPoint || sectionDraw.previewRoot) {
+      cancelSectionDraw({ silent: true });
     }
   };
 
@@ -9934,16 +10880,29 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     const inst = createInstance(nextParams);
     inst.kitchenGroupId = groupId;
 
-    const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
-    if (!info) throw new Error("Debug guide segment not available.");
+    if (nextParams.type === "corner_shelf_lower") {
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, group.ctx.worktopBackOffsetMm);
+      let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
+      for (let cornerIndex = 1; cornerIndex < guidePath.length - 1; cornerIndex += 1) {
+        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, group.ctx.worktopBackOffsetMm, inst);
+        if (info?.valid) break;
+      }
+      if (!info) throw new Error("Debug kitchen corner not available.");
+      inst.kitchenPlacement = { ...info.binding };
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+    } else {
+      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
+      if (!info) throw new Error("Debug guide segment not available.");
 
-    const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
-    inst.kitchenPlacement = {
-      worktopId: worktop.id,
-      segmentIndex: opts?.segmentIndex ?? 0,
-      offsetAlongM: desiredAlongM
-    };
-    applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
+      inst.kitchenPlacement = {
+        kind: "segment",
+        worktopId: worktop.id,
+        segmentIndex: opts?.segmentIndex ?? 0,
+        offsetAlongM: desiredAlongM
+      };
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+    }
 
     layoutRoot.add(inst.root);
     instances.push(inst);
@@ -10027,6 +10986,80 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     };
   };
 
+  const debugCreateWall = (params: { aMm: { x: number; z: number }; bMm: { x: number; z: number }; thicknessMm?: number }) => {
+    const wall = addWall(
+      new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000),
+      new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000),
+      params.thicknessMm ?? wallDefault.thicknessMm
+    );
+    return wall ? { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } } : null;
+  };
+
+  const debugMoveWall = (wallId: string, shiftMm: { x: number; z: number }) => {
+    const wall = walls.find((item) => item.id === wallId) ?? null;
+    if (!wall) throw new Error(`Wall ${wallId} not found.`);
+    const oldA = { ...wall.params.aMm };
+    const oldB = { ...wall.params.bMm };
+    wall.params.aMm = { x: wall.params.aMm.x + shiftMm.x, z: wall.params.aMm.z + shiftMm.z };
+    wall.params.bMm = { x: wall.params.bMm.x + shiftMm.x, z: wall.params.bMm.z + shiftMm.z };
+    for (const otherWall of walls) {
+      if (otherWall.id === wall.id) continue;
+      const wa = wallEndpointWhich(otherWall, oldA, wallJoinTolMm);
+      if (wa) setWallEndpointMm(otherWall, wa, wall.params.aMm);
+      const wb = wallEndpointWhich(otherWall, oldB, wallJoinTolMm);
+      if (wb) setWallEndpointMm(otherWall, wb, wall.params.bMm);
+    }
+    rebuildWall(wall);
+    autoJoinAtMmPoint(wall.params.aMm);
+    autoJoinAtMmPoint(wall.params.bMm);
+    rebuildWallPlanMesh();
+    return { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } };
+  };
+
+  const debugCreateMeasure = (params: {
+    aMm: { x: number; z: number };
+    bMm: { x: number; z: number };
+    normal?: boolean;
+  }) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const aRaw = new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000);
+    const bRaw = new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000);
+    const snappedA = snapPoint2D(aRaw, rect, cam(), 24);
+    const snappedB = snapPoint2D(bRaw, rect, cam(), 24, {
+      perpendicularFrom: params.normal ? null : snappedA.point
+    });
+    const a = snappedA.kind === "none" ? aRaw : snappedA.point;
+    const b = snappedB.kind === "none" ? bRaw : snappedB.point;
+    const aBinding = bindingFromPlanSnap(snappedA, a);
+    const bBinding = bindingFromPlanSnap(snappedB, b);
+
+    if (params.normal) {
+      const baseDir = b.clone().sub(a).setY(0);
+      if (baseDir.lengthSq() < 1e-10) throw new Error("Normal guide requires 2 distinct points.");
+      baseDir.normalize();
+      const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
+      const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
+      return addMeasurement(
+        a.clone().addScaledVector(normalDir, -spanM / 2),
+        a.clone().addScaledVector(normalDir, spanM / 2),
+        aBinding,
+        bBinding,
+        { kind: "normalGuide" }
+      );
+    }
+
+    return addMeasurement(a, b, aBinding, bBinding, {
+      kind: "distance",
+      distanceMm: planarDistanceMm(a, b)
+    });
+  };
+
+  const debugCommitWallMeasureValue = (wallId: string, measureId: string, valueMm: number) => {
+    setSelectedWall(wallId);
+    commitWallMeasureValueMm(measureId, String(valueMm));
+    return getDebugKitchenSnapshot(null);
+  };
+
   const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
     const rect = renderer.domElement.getBoundingClientRect();
     const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
@@ -10060,10 +11093,51 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       ? { x: Math.round(measureState.firstPoint.x * 1000), z: Math.round(measureState.firstPoint.z * 1000) }
       : null,
     measures: measureState.measures.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      aBinding: item.aBinding,
+      bBinding: item.bBinding,
       aMm: { x: Math.round(item.a.x * 1000), z: Math.round(item.a.z * 1000) },
       bMm: { x: Math.round(item.b.x * 1000), z: Math.round(item.b.z * 1000) }
     }))
   });
+
+  const debugViewState = () => {
+    const activeCam = cam();
+    const sceneDebug = getSceneDebugState();
+    return {
+      viewMode,
+      activeViewerTab,
+      layoutTool,
+      wallCount: walls.length,
+      wallPlanVisible: wallPlanGroup.visible,
+      wallPlanChildren: wallPlanGroup.children.length,
+      clippingPlanes: renderer.clippingPlanes.length,
+      detailSliceVisible: detailSliceGroup.visible,
+      detailSliceChildren: detailSliceGroup.children.length,
+      camera: {
+        type: activeCam.type,
+        position: { x: activeCam.position.x, y: activeCam.position.y, z: activeCam.position.z },
+        target: { x: ctl().target.x, y: ctl().target.y, z: ctl().target.z },
+        zoom: activeCam instanceof THREE.OrthographicCamera ? activeCam.zoom : null,
+        left: activeCam instanceof THREE.OrthographicCamera ? activeCam.left : null,
+        right: activeCam instanceof THREE.OrthographicCamera ? activeCam.right : null,
+        top: activeCam instanceof THREE.OrthographicCamera ? activeCam.top : null,
+        bottom: activeCam instanceof THREE.OrthographicCamera ? activeCam.bottom : null
+      },
+      scene: {
+        planOverlayVisible: sceneDebug.planOverlayVisible,
+        planAmbientVisible: sceneDebug.planAmbientVisible
+      },
+      walls: walls.map((wall) => ({
+        id: wall.id,
+        meshVisible: wall.mesh.visible,
+        outlineVisible: wall.outline.visible,
+        aMm: { ...wall.params.aMm },
+        bMm: { ...wall.params.bMm }
+      }))
+    };
+  };
 
   (window as any).__kitchenDebug = {
     reset: debugResetKitchenScenario,
@@ -10071,11 +11145,16 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     createKitchenScenario: debugCreateKitchenScenario,
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
+    createWall: debugCreateWall,
+    moveWall: debugMoveWall,
+    createMeasure: debugCreateMeasure,
+    commitWallMeasureValue: debugCommitWallMeasureValue,
     snapshot: getDebugKitchenSnapshot,
     enterMeasureTool: debugEnterMeasureTool,
     projectPlanPoint: debugProjectPlanPoint,
     planSnap: debugPlanSnap,
-    measureState: debugMeasureState
+    measureState: debugMeasureState,
+    viewState: debugViewState
   };
 
   const tick = () => {
@@ -10084,6 +11163,7 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     ctl().update();
     enforceWallDrawInvariant();
     enforceKitchenWorktopDrawInvariant();
+    enforceSectionDrawInvariant();
     if (selectedBox && selectedMesh) selectedBox.setFromObject(selectedMesh);
     if (selectedInstanceBox && selectedInstanceId) {
       const inst = findInstance(selectedInstanceId);
@@ -10098,17 +11178,12 @@ const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
       }
     }
     for (const o of overlapBoxes) o.helper.setFromObject(o.mesh);
+    refreshAssociativeMeasures();
     updateMeasureLabels();
     updateWallEditHud();
+    updateDetailViewCamera();
 
     const activeCam = cam();
-    if (mode === "layout" && viewMode === "2d" && activeCam instanceof THREE.OrthographicCamera) {
-      // Frame-driven scale update (no threshold) to avoid any zoom "jitter" on dimension text.
-      if (S.dimensions.length > 0 || dimPreview.root.visible) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        updateDimensionTextScale(S, dimensionHelpers, rect);
-      }
-    }
     const isPhoto = renderMode === "photo_pathtrace" && ENABLE_PHOTO && activeCam instanceof THREE.PerspectiveCamera;
     const isSsgi = renderMode === "realtime_ssgi" && ENABLE_SSGI && activeCam instanceof THREE.PerspectiveCamera;
 
