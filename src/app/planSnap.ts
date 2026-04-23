@@ -54,6 +54,7 @@ export type PlanSnapResult = {
   b?: THREE.Vector3 | null;
   owner?: PlanSnapOwner;
   binding?: PlanSnapBinding | null;
+  cycleCount?: number;
 };
 
 const KITCHEN_CORNER_ANCHOR_NAME = "__kitchen_corner_anchor";
@@ -81,6 +82,7 @@ type PlanSnapOptions = {
   sticky?: PlanSnapResult | null;
   stickyThresholdPx?: number;
   preferNearest?: boolean;
+  cycleIndex?: number;
 };
 
 type LoopBindingFactory = {
@@ -88,15 +90,15 @@ type LoopBindingFactory = {
   edgeBinding?: (segmentIndex: number, t: number, point: THREE.Vector3) => PlanSnapBinding | null;
 };
 
-const DEFAULT_KIND_ORDER = ["corner", "endpoint", "midpoint", "perpendicular", "edge", "axis"] satisfies Array<
+const DEFAULT_KIND_ORDER = ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"] satisfies Array<
   Exclude<PlanSnapKind, "none">
 >;
 
 const KIND_RADIUS_MULTIPLIER: Record<Exclude<PlanSnapKind, "none">, number> = {
   corner: 2.1,
   endpoint: 1.8,
-  midpoint: 1.2,
-  perpendicular: 1.15,
+  midpoint: 1.15,
+  perpendicular: 1.6,
   edge: 1,
   axis: 0.95
 };
@@ -104,8 +106,8 @@ const KIND_RADIUS_MULTIPLIER: Record<Exclude<PlanSnapKind, "none">, number> = {
 const KIND_SCORE_MULTIPLIER: Record<Exclude<PlanSnapKind, "none">, number> = {
   corner: 0.42,
   endpoint: 0.58,
-  midpoint: 0.82,
-  perpendicular: 0.88,
+  midpoint: 0.9,
+  perpendicular: 0.72,
   edge: 1,
   axis: 1.08
 };
@@ -199,7 +201,7 @@ function getModuleLocalAnchor(inst: LayoutInstance, anchorName: string) {
   return inst.root.worldToLocal(world);
 }
 
-export function getModulePlanLocalRect(
+export function getModulePlanLocalPolygon(
   inst: LayoutInstance,
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3
 ) {
@@ -220,12 +222,22 @@ export function getModulePlanLocalRect(
         Number.isFinite(lengthZ) &&
         lengthZ > 0
       ) {
-        xDir.normalize().multiplyScalar(lengthX / 1000);
-        zDir.normalize().multiplyScalar(lengthZ / 1000);
-        const xPoint = corner.clone().add(xDir);
-        const zPoint = corner.clone().add(zDir);
-        const far = corner.clone().add(xDir).add(zDir);
-        return [corner, xPoint, far, zPoint];
+        const depthMm = Number((inst.params as any)?.depth);
+        const armDepthM = (Number.isFinite(depthMm) && depthMm > 0 ? depthMm : Math.min(lengthX, lengthZ)) / 1000;
+        const xUnit = xDir.clone().normalize();
+        const zUnit = zDir.clone().normalize();
+        const xArm = xUnit.clone().multiplyScalar(lengthX / 1000);
+        const zArm = zUnit.clone().multiplyScalar(lengthZ / 1000);
+        const xInset = xUnit.clone().multiplyScalar(Math.min(lengthX / 1000, armDepthM));
+        const zInset = zUnit.clone().multiplyScalar(Math.min(lengthZ / 1000, armDepthM));
+        return [
+          corner.clone(),
+          corner.clone().add(xArm),
+          corner.clone().add(xArm).add(zInset),
+          corner.clone().add(xInset).add(zInset),
+          corner.clone().add(xInset).add(zArm),
+          corner.clone().add(zArm)
+        ];
       }
       const far = xAnchor.clone().add(zAnchor).sub(corner);
       return [corner, xAnchor, far, zAnchor];
@@ -256,12 +268,31 @@ export function getModulePlanLocalRect(
   ];
 }
 
+export function getModulePlanLocalRect(
+  inst: LayoutInstance,
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3
+) {
+  const polygon = getModulePlanLocalPolygon(inst, getModuleLocalBackCenter);
+  const xs = polygon.map((point) => point.x);
+  const zs = polygon.map((point) => point.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  return [
+    new THREE.Vector3(minX, 0, minZ),
+    new THREE.Vector3(maxX, 0, minZ),
+    new THREE.Vector3(maxX, 0, maxZ),
+    new THREE.Vector3(minX, 0, maxZ)
+  ];
+}
+
 export function getModulePlanPolygon(
   inst: LayoutInstance,
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3
 ) {
   inst.root.updateMatrixWorld(true);
-  return getModulePlanLocalRect(inst, getModuleLocalBackCenter).map((point) =>
+  return getModulePlanLocalPolygon(inst, getModuleLocalBackCenter).map((point) =>
     point.clone().applyMatrix4(inst.root.matrixWorld).setY(0)
   );
 }
@@ -605,49 +636,75 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       }
     }
 
-    if (options?.preferNearest) {
-      let best: (PlanSnapResult & { d2: number; rank: number; score: number }) | null = null;
-      for (let rank = 0; rank < order.length; rank += 1) {
-        const kind = order[rank]!;
-        const value = bestByKind.get(kind);
-        if (!value) continue;
+    const validHits = candidates
+      .map((candidate) => {
+        const kind = candidate.kind;
+        const rank = order.indexOf(kind);
+        if (rank < 0) return null;
+        const screen = worldToScreen(candidate.p, camera, rect);
+        const d2 = dist2(rawScreen, screen);
         const limit = maxPx * (KIND_RADIUS_MULTIPLIER[kind] ?? 1);
-        if (value.d2 > limit * limit) continue;
-        const hit = {
-          point: value.candidate.p.clone(),
-          kind,
-          a: value.candidate.a?.clone() ?? null,
-          b: value.candidate.b?.clone() ?? null,
-          owner: value.candidate.owner,
-          binding: value.candidate.binding ?? null,
-          d2: value.d2,
-          rank,
-          score: value.d2 * (KIND_SCORE_MULTIPLIER[kind] ?? 1)
-        };
-        if (
-          !best ||
-          hit.score < best.score - 1e-6 ||
-          (Math.abs(hit.score - best.score) <= 1e-6 && hit.rank < best.rank)
-        ) {
-          best = hit;
-        }
-      }
-      if (best) {
+        if (d2 > limit * limit) return null;
         return {
-          point: best.point,
-          kind: best.kind,
-          a: best.a ?? null,
-          b: best.b ?? null,
-          owner: best.owner,
-          binding: best.binding ?? null
+          point: candidate.p.clone(),
+          kind,
+          a: candidate.a?.clone() ?? null,
+          b: candidate.b?.clone() ?? null,
+          owner: candidate.owner,
+          binding: candidate.binding ?? null,
+          d2,
+          rank,
+          score: d2 * (KIND_SCORE_MULTIPLIER[kind] ?? 1)
         };
-      }
+      })
+      .filter((hit): hit is NonNullable<typeof hit> => !!hit)
+      .sort((a, b) => (Math.abs(a.score - b.score) > 1e-6 ? a.score - b.score : a.rank - b.rank));
+
+    const dedupedHits: typeof validHits = [];
+    const seen = new Set<string>();
+    for (const hit of validHits) {
+      const key = [
+        hit.kind,
+        Math.round(hit.point.x * 1000),
+        Math.round(hit.point.z * 1000),
+        hit.owner ?? "",
+        JSON.stringify(hit.binding ?? null)
+      ].join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      dedupedHits.push(hit);
+    }
+
+    if (dedupedHits.length > 0 && options?.cycleIndex != null) {
+      const chosen = dedupedHits[((options.cycleIndex % dedupedHits.length) + dedupedHits.length) % dedupedHits.length]!;
+      return {
+        point: chosen.point,
+        kind: chosen.kind,
+        a: chosen.a ?? null,
+        b: chosen.b ?? null,
+        owner: chosen.owner,
+        binding: chosen.binding ?? null,
+        cycleCount: dedupedHits.length
+      };
+    }
+
+    if (options?.preferNearest && dedupedHits.length > 0) {
+      const best = dedupedHits[0]!;
+      return {
+        point: best.point,
+        kind: best.kind,
+        a: best.a ?? null,
+        b: best.b ?? null,
+        owner: best.owner,
+        binding: best.binding ?? null,
+        cycleCount: dedupedHits.length
+      };
     }
 
     for (const kind of order) {
       const hit = pick(kind);
-      if (hit) return hit;
+      if (hit) return { ...hit, cycleCount: dedupedHits.length };
     }
-    return { point: raw, kind: "none", binding: toFreeBinding(raw) };
+    return { point: raw, kind: "none", binding: toFreeBinding(raw), cycleCount: dedupedHits.length };
   };
 }
