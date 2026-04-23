@@ -41,6 +41,15 @@ function lerpSegment(a: THREE.Vector3, b: THREE.Vector3, t: number) {
   return a.clone().lerp(b, Math.max(0, Math.min(1, t)));
 }
 
+function applyWallNormalOffset(a: THREE.Vector3, b: THREE.Vector3, point: THREE.Vector3, normalOffsetMm?: number) {
+  if (!normalOffsetMm) return point;
+  const dir = b.clone().sub(a).setY(0);
+  if (dir.lengthSq() < 1e-10) return point;
+  dir.normalize();
+  const normal = new THREE.Vector3(-dir.z, 0, dir.x);
+  return point.clone().addScaledVector(normal, normalOffsetMm / 1000);
+}
+
 function getModulePolygon(ctx: AssociativeMeasureContext, instanceId: string) {
   const inst = ctx.instances.find((item) => item.id === instanceId) ?? null;
   if (!inst) return null;
@@ -98,12 +107,18 @@ export function resolvePlanBinding(binding: PlanSnapBinding, ctx: AssociativeMea
     case "wallEndpoint": {
       const wall = ctx.walls.find((item) => item.id === binding.wallId) ?? null;
       if (!wall) return null;
-      return fromMmPoint(binding.endpoint === "a" ? wall.params.aMm : wall.params.bMm);
+      const a = fromMmPoint(wall.params.aMm);
+      const b = fromMmPoint(wall.params.bMm);
+      const endpoint = binding.endpoint === "a" ? a : b;
+      return applyWallNormalOffset(a, b, endpoint, binding.normalOffsetMm);
     }
     case "wallCenterline": {
       const wall = ctx.walls.find((item) => item.id === binding.wallId) ?? null;
       if (!wall) return null;
-      return lerpSegment(fromMmPoint(wall.params.aMm), fromMmPoint(wall.params.bMm), binding.t);
+      const a = fromMmPoint(wall.params.aMm);
+      const b = fromMmPoint(wall.params.bMm);
+      const point = lerpSegment(a, b, binding.t);
+      return applyWallNormalOffset(a, b, point, binding.normalOffsetMm);
     }
     case "moduleVertex": {
       const polygon = getModulePolygon(ctx, binding.instanceId);

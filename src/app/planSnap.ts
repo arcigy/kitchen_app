@@ -13,8 +13,8 @@ export type PlanSnapOwner = "wall" | "module" | "worktop" | "floor" | "measureGu
 
 export type PlanSnapBinding =
   | { type: "free"; pointMm: { x: number; y: number; z: number } }
-  | { type: "wallEndpoint"; wallId: string; endpoint: "a" | "b" }
-  | { type: "wallCenterline"; wallId: string; t: number }
+  | { type: "wallEndpoint"; wallId: string; endpoint: "a" | "b"; normalOffsetMm?: number }
+  | { type: "wallCenterline"; wallId: string; t: number; normalOffsetMm?: number }
   | { type: "moduleVertex"; instanceId: string; vertexIndex: number }
   | { type: "moduleEdge"; instanceId: string; segmentIndex: number; t: number }
   | { type: "worktopVertex"; worktopId: string; vertexIndex: number }
@@ -363,9 +363,14 @@ function getWallProjectionBinding(wall: WallInstance, point: THREE.Vector3, endp
   const denom = ab.lengthSq();
   if (denom < 1e-12) return { type: "wallEndpoint", wallId: wall.id, endpoint: "a" };
   const t = Math.max(0, Math.min(1, point.clone().sub(a).dot(ab) / denom));
-  if (t <= endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "a" };
-  if (t >= 1 - endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "b" };
-  return { type: "wallCenterline", wallId: wall.id, t };
+  const closest = a.clone().addScaledVector(ab, t);
+  const dir = ab.normalize();
+  const normal = new THREE.Vector3(-dir.z, 0, dir.x);
+  const normalOffsetMm = Math.round(point.clone().sub(closest).dot(normal) * 1000);
+  const bindingOffset = Math.abs(normalOffsetMm) > 1 ? { normalOffsetMm } : {};
+  if (t <= endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "a", ...bindingOffset };
+  if (t >= 1 - endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "b", ...bindingOffset };
+  return { type: "wallCenterline", wallId: wall.id, t, ...bindingOffset };
 }
 
 function getNearestWallBindingAtPoint(walls: WallInstance[], point: THREE.Vector3, maxDistanceM = 0.35): PlanSnapBinding | null {
