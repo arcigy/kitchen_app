@@ -90,6 +90,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   const measureOverlay = document.createElement("div");
   measureOverlay.style.position = "absolute";
   measureOverlay.style.inset = "0";
+  measureOverlay.style.zIndex = "14";
   measureOverlay.style.pointerEvents = "none";
   args.viewerEl.appendChild(measureOverlay);
 
@@ -534,6 +535,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
         ? null
         : (() => {
             const el = document.createElement("div");
+            el.dataset.measureLabel = "true";
             el.style.position = "absolute";
             el.style.transform = "translate(-50%, -50%)";
             el.style.padding = "4px 8px";
@@ -567,6 +569,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
       startEl,
       endEl
     };
+    if (label) label.dataset.measureId = entry.id;
     styleMeasureLine(line, lineEl, kind);
     updateMeasurementGeometry(entry, a, b, options?.distanceMm ?? planarDistanceMm(a, b));
     measureState.measures.push(entry);

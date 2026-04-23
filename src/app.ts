@@ -29,7 +29,6 @@ import {
 } from "./app/planSnap";
 import {
   buildMeasureGuides,
-  isBindingAttachedToWall,
   resolveAssociativeMeasureWorld,
   resolvePlanBinding,
   toFreePlanBinding,
@@ -3984,6 +3983,7 @@ export function startApp(initialArgs: AppArgs) {
   let selectPlanSnap: PlanSnapResult | null = null;
 
   const {
+    measureOverlay,
     wallTypedHud,
     wallEditHud,
     marquee,
@@ -4009,6 +4009,69 @@ export function startApp(initialArgs: AppArgs) {
     measureReadoutEl: args.measureReadoutEl
   });
   measureStateRef = measureState;
+
+  const measureInlineInput = document.createElement("input");
+  measureInlineInput.type = "text";
+  measureInlineInput.inputMode = "numeric";
+  measureInlineInput.placeholder = "mm";
+  measureInlineInput.id = "measure-inline-value";
+  measureInlineInput.name = "measure-inline-value";
+  measureInlineInput.setAttribute("aria-label", "Measure value in millimeters");
+  measureInlineInput.autocomplete = "off";
+  measureInlineInput.style.position = "absolute";
+  measureInlineInput.style.display = "none";
+  measureInlineInput.style.pointerEvents = "auto";
+  measureInlineInput.style.zIndex = "12";
+  measureInlineInput.style.width = "96px";
+  measureInlineInput.style.height = "24px";
+  measureInlineInput.style.borderRadius = "8px";
+  measureInlineInput.style.border = "1px solid rgba(36, 40, 54, 0.95)";
+  measureInlineInput.style.background = "#0f1117";
+  measureInlineInput.style.color = "var(--text)";
+  measureInlineInput.style.padding = "0 8px";
+  measureInlineInput.style.fontSize = "12px";
+  measureInlineInput.style.fontWeight = "700";
+  measureInlineInput.style.outline = "none";
+  measureInlineInput.style.transform = "translate(-50%, -50%)";
+  measureOverlay.appendChild(measureInlineInput);
+
+  let activeMeasureEditId: string | null = null;
+
+  const hideMeasureInlineInput = () => {
+    activeMeasureEditId = null;
+    measureInlineInput.style.display = "none";
+  };
+
+  const beginMeasureInlineEdit = (measureId: string, anchorEl: HTMLElement) => {
+    const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
+    if (!measure) return;
+    activeMeasureEditId = measureId;
+    measureInlineInput.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+    measureInlineInput.style.left = anchorEl.style.left;
+    measureInlineInput.style.top = anchorEl.style.top;
+    measureInlineInput.style.display = "block";
+    measureInlineInput.focus();
+    measureInlineInput.select();
+  };
+
+  measureInlineInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      if (activeMeasureEditId) commitSelectedMeasureValueMm(activeMeasureEditId, measureInlineInput.value);
+      hideMeasureInlineInput();
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+    if (ev.key === "Escape") {
+      hideMeasureInlineInput();
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  });
+  measureInlineInput.addEventListener("blur", () => {
+    if (activeMeasureEditId) commitSelectedMeasureValueMm(activeMeasureEditId, measureInlineInput.value);
+    hideMeasureInlineInput();
+  });
 
   // Editor UI
   args.formEl.innerHTML = "";
@@ -5580,44 +5643,7 @@ export function startApp(initialArgs: AppArgs) {
       commitHistory(S);
     });
 
-    const linkedMeasures = measureState.measures
-      .filter((item) => item.kind === "distance")
-      .map((item) => {
-        const attached =
-          isBindingAttachedToWall(item.aBinding, firstWall.id) || isBindingAttachedToWall(item.bBinding, firstWall.id);
-        if (!attached) return null;
-        const dir = item.b.clone().sub(item.a).setY(0);
-        const wallDir = fromMmPoint(firstWall.params.bMm).sub(fromMmPoint(firstWall.params.aMm)).setY(0);
-        if (dir.lengthSq() < 1e-8 || wallDir.lengthSq() < 1e-8) return null;
-        dir.normalize();
-        wallDir.normalize();
-        if (Math.abs(dir.dot(wallDir)) > 0.35) return null;
-        return item;
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-    if (linkedMeasures.length > 0) {
-      const heading = document.createElement("div");
-      heading.className = "muted";
-      heading.style.marginTop = "10px";
-      heading.textContent = "Linked measures";
-      s.appendChild(heading);
-
-      for (const measure of linkedMeasures) {
-        const input = document.createElement("input");
-        input.type = "number";
-        input.step = "1";
-        input.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
-        input.addEventListener("keydown", (ev) => {
-          if (ev.key === "Enter") {
-            commitWallMeasureValueMm(measure.id, input.value);
-            ev.preventDefault();
-          }
-        });
-        input.addEventListener("change", () => commitWallMeasureValueMm(measure.id, input.value));
-        props.row(s, `Measure ${measure.id.replace("measure_", "#")}`, input);
-      }
-    }
+    appendLinkedMeasureInputs(s, { kind: "wall", wallId: firstWall.id });
   };
 
   const mountFloorProps = (floor: FloorInstance) => {
@@ -5671,6 +5697,8 @@ export function startApp(initialArgs: AppArgs) {
     thickness.addEventListener("change", commit);
     mat.addEventListener("change", commit);
     edit.addEventListener("click", () => enterFloorBoundaryEdit(floor.id));
+
+    appendLinkedMeasureInputs(s, { kind: "floor", floorId: floor.id });
   };
 
   const mountSectionToolProps = () => {
@@ -5811,6 +5839,8 @@ export function startApp(initialArgs: AppArgs) {
       textInputCommitMode: "explicit",
       commitBoundary: args.propertiesEl
     });
+
+    appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
   };
 
   const mountWindowProps = () => {
@@ -6004,7 +6034,20 @@ export function startApp(initialArgs: AppArgs) {
     if (S.kitchenEditMode && kitchenWorktopDraw.active) return mountKitchenWorktopToolProps();
     if (layoutTool === "align") return mountAlignToolProps();
     if (layoutTool === "trim") return mountTrimToolProps();
-    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) return;
+    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) {
+      const section = args.propertiesEl.querySelector(".props-section:last-of-type") as HTMLElement | null;
+      if (section) {
+        appendLinkedMeasureInputs(section, {
+          kind: "kitchenGroup",
+          groupId: selectedKitchenGroupId,
+          instanceIds: new Set(instances.filter((inst) => inst.kitchenGroupId === selectedKitchenGroupId).map((inst) => inst.id)),
+          worktopIds: new Set(
+            kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === selectedKitchenGroupId).map((worktop) => worktop.id)
+          )
+        });
+      }
+      return;
+    }
     if (selectedKind === "underlay") return mountUnderlayProps();
     if (selectedWallIds.size > 1 && selectedInstanceIds.size === 0) return mountWallProps();
     if (selectedWallIds.size + selectedInstanceIds.size > 1) {
@@ -10665,44 +10708,158 @@ export function startApp(initialArgs: AppArgs) {
     }
   };
 
-  const commitWallMeasureValueMm = (measureId: string, raw: string) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    const wall = walls.find((item) => item.id === selectedWallId) ?? null;
-    const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
-    if (!wall || !measure) return;
+  type MeasureSelectionTarget =
+    | { kind: "wall"; wallId: string }
+    | { kind: "module"; instanceId: string }
+    | { kind: "floor"; floorId: string }
+    | { kind: "kitchenGroup"; groupId: string; instanceIds: Set<string>; worktopIds: Set<string> };
 
-    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
-    if (!Number.isFinite(nextMm)) return;
-    const desiredMm = Math.max(0, Math.round(nextMm));
-    const ctx = getAssociativeMeasureContext();
-    const attachedBinding = isBindingAttachedToWall(measure.aBinding, wall.id)
-      ? measure.aBinding
-      : isBindingAttachedToWall(measure.bBinding, wall.id)
-        ? measure.bBinding
-        : null;
-    if (!attachedBinding) return;
+  const getCurrentMeasureSelectionTarget = (): MeasureSelectionTarget | null => {
+    if (selectedKind === "wall" && selectedWallId) return { kind: "wall", wallId: selectedWallId };
+    if (selectedKind === "module" && selectedInstanceId) return { kind: "module", instanceId: selectedInstanceId };
+    if (selectedKind === "floor" && selectedFloorId) return { kind: "floor", floorId: selectedFloorId };
+    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId) {
+      const instanceIds = new Set(instances.filter((inst) => inst.kitchenGroupId === selectedKitchenGroupId).map((inst) => inst.id));
+      const worktopIds = new Set(
+        kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === selectedKitchenGroupId).map((worktop) => worktop.id)
+      );
+      return { kind: "kitchenGroup", groupId: selectedKitchenGroupId, instanceIds, worktopIds };
+    }
+    return null;
+  };
 
-    const wallPoint = resolvePlanBinding(attachedBinding, ctx);
-    const otherPoint = resolvePlanBinding(attachedBinding === measure.aBinding ? measure.bBinding : measure.aBinding, ctx);
-    if (!wallPoint || !otherPoint) return;
+  const bindingMatchesMeasureSelectionTarget = (binding: PlanSnapBinding, target: MeasureSelectionTarget) => {
+    switch (target.kind) {
+      case "wall":
+        return (
+          (binding.type === "wallEndpoint" && binding.wallId === target.wallId) ||
+          (binding.type === "wallCenterline" && binding.wallId === target.wallId)
+        );
+      case "module":
+        return (
+          (binding.type === "moduleVertex" && binding.instanceId === target.instanceId) ||
+          (binding.type === "moduleEdge" && binding.instanceId === target.instanceId)
+        );
+      case "floor":
+        return (
+          (binding.type === "floorVertex" && binding.floorId === target.floorId) ||
+          (binding.type === "floorEdge" && binding.floorId === target.floorId)
+        );
+      case "kitchenGroup":
+        return (
+          ((binding.type === "worktopVertex" || binding.type === "worktopEdge") && target.worktopIds.has(binding.worktopId)) ||
+          ((binding.type === "moduleVertex" || binding.type === "moduleEdge") && target.instanceIds.has(binding.instanceId))
+        );
+      default:
+        return false;
+    }
+  };
 
-    const a = fromMmPoint(wall.params.aMm);
-    const b = fromMmPoint(wall.params.bMm);
-    const d = b.clone().sub(a);
-    if (d.lengthSq() < 1e-10) return;
-    d.normalize();
-    const n = new THREE.Vector3(-d.z, 0, d.x).normalize();
-    const signed = otherPoint.clone().sub(wallPoint).dot(n);
-    const sign = signed >= 0 ? 1 : -1;
-    const desiredSigned = sign * (desiredMm / 1000);
-    const shift = signed - desiredSigned;
-    if (Math.abs(shift) < 1e-6) return;
-    const shiftMm = { x: Math.round(n.x * shift * 1000), z: Math.round(n.z * shift * 1000) };
+  const getSelectionMeasureBindings = (
+    measure: (typeof measureState.measures)[number],
+    target: MeasureSelectionTarget
+  ) => {
+    const aMatches = bindingMatchesMeasureSelectionTarget(measure.aBinding, target);
+    const bMatches = bindingMatchesMeasureSelectionTarget(measure.bBinding, target);
+    if (aMatches === bMatches) return null;
+    return aMatches
+      ? { attachedBinding: measure.aBinding, otherBinding: measure.bBinding }
+      : { attachedBinding: measure.bBinding, otherBinding: measure.aBinding };
+  };
 
+  const getLinkedDistanceMeasuresForTarget = (target: MeasureSelectionTarget | null) => {
+    if (!target) return [] as Array<(typeof measureState.measures)[number]>;
+    return measureState.measures.filter(
+      (item) => item.kind === "distance" && !!getSelectionMeasureBindings(item, target)
+    );
+  };
+
+  const getEditableMeasureEntriesForCurrentSelection = () => {
+    const target = getCurrentMeasureSelectionTarget();
+    if (!target) return [] as Array<(typeof measureState.measures)[number]>;
+    return getLinkedDistanceMeasuresForTarget(target);
+  };
+
+  const canEditSelectedMeasure = (measureId: string) => {
+    return getEditableMeasureEntriesForCurrentSelection().some((measure) => measure.id === measureId);
+  };
+
+  const findEditableMeasureLabelAtClientPoint = (clientX: number, clientY: number) => {
+    let best: { measureId: string; label: HTMLElement; area: number } | null = null;
+    for (const measure of getEditableMeasureEntriesForCurrentSelection()) {
+      const label = measure.label;
+      if (!label || label.style.display === "none") continue;
+      const rect = label.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) continue;
+      const area = rect.width * rect.height;
+      if (!best || area < best.area) best = { measureId: measure.id, label, area };
+    }
+    return best;
+  };
+
+  const updateMeasureLabelInteractivity = () => {
+    const target = getCurrentMeasureSelectionTarget();
+    for (const measure of measureState.measures) {
+      if (!measure.label) continue;
+      const editable = !!(target && measure.kind === "distance" && getSelectionMeasureBindings(measure, target));
+      measure.label.style.cursor = editable ? "pointer" : "default";
+      measure.label.style.pointerEvents = editable ? "auto" : "none";
+      measure.label.style.borderColor = editable ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)";
+      measure.label.style.boxShadow = editable
+        ? "0 10px 28px rgba(0,0,0,0.36), 0 0 0 1px rgba(136,247,255,0.45)"
+        : "0 8px 24px rgba(0,0,0,0.3)";
+    }
+    if (activeMeasureEditId && !canEditSelectedMeasure(activeMeasureEditId)) hideMeasureInlineInput();
+  };
+
+  args.viewerEl.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (ev.button !== 0) return;
+      if (measureInlineInput.style.display !== "none" && measureInlineInput.contains(ev.target as Node | null)) return;
+      const hit = findEditableMeasureLabelAtClientPoint(ev.clientX, ev.clientY);
+      if (!hit) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      beginMeasureInlineEdit(hit.measureId, hit.label);
+    },
+    true
+  );
+
+  const appendLinkedMeasureInputs = (section: HTMLElement, target: MeasureSelectionTarget | null) => {
+    const linkedMeasures = getLinkedDistanceMeasuresForTarget(target);
+    if (linkedMeasures.length === 0) return;
+
+    const heading = document.createElement("div");
+    heading.className = "muted";
+    heading.style.marginTop = "10px";
+    heading.textContent = "Linked measures";
+    section.appendChild(heading);
+
+    for (const measure of linkedMeasures) {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "1";
+      input.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          commitSelectedMeasureValueMm(measure.id, input.value);
+          ev.preventDefault();
+        }
+      });
+      input.addEventListener("change", () => commitSelectedMeasureValueMm(measure.id, input.value));
+      props.row(section, `Measure ${measure.id.replace("measure_", "#")}`, input);
+    }
+  };
+
+  const translateWallByMeasure = (wallId: string, dxMm: number, dzMm: number) => {
+    const wall = walls.find((item) => item.id === wallId) ?? null;
+    if (!wall) return false;
     const oldA = { ...wall.params.aMm };
     const oldB = { ...wall.params.bMm };
-    wall.params.aMm = { x: wall.params.aMm.x + shiftMm.x, z: wall.params.aMm.z + shiftMm.z };
-    wall.params.bMm = { x: wall.params.bMm.x + shiftMm.x, z: wall.params.bMm.z + shiftMm.z };
+    wall.params.aMm = { x: wall.params.aMm.x + dxMm, z: wall.params.aMm.z + dzMm };
+    wall.params.bMm = { x: wall.params.bMm.x + dxMm, z: wall.params.bMm.z + dzMm };
 
     for (const otherWall of walls) {
       if (otherWall.id === wall.id) continue;
@@ -10716,8 +10873,105 @@ export function startApp(initialArgs: AppArgs) {
     autoJoinAtMmPoint(wall.params.aMm);
     autoJoinAtMmPoint(wall.params.bMm);
     rebuildWallPlanMesh();
+    return true;
+  };
+
+  const translateModuleByMeasure = (instanceId: string, dxMm: number, dzMm: number) => {
+    const inst = findInstance(instanceId);
+    if (!inst) return false;
+    const prevPos = inst.root.position.clone();
+    inst.root.position.x += dxMm / 1000;
+    inst.root.position.z += dzMm / 1000;
+    const valid = roomContainsBoxXZ(instanceWorldBox(inst)) && !anyOverlap(inst, null) && !moduleOverlapsWalls(inst);
+    if (!valid) {
+      inst.root.position.copy(prevPos);
+      return false;
+    }
+    if (inst.kitchenGroupId) {
+      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+    }
+    return true;
+  };
+
+  const translateFloorByMeasure = (floorId: string, dxMm: number, dzMm: number) => {
+    const floor = floors.find((item) => item.id === floorId) ?? null;
+    if (!floor) return false;
+    floor.params.boundary = floor.params.boundary.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
+    rebuildFloor(floor);
+    updateSelectionHighlights();
+    return true;
+  };
+
+  const translateKitchenGroupByMeasure = (groupId: string, dxMm: number, dzMm: number) => {
+    const groupInstances = instances.filter((inst) => inst.kitchenGroupId === groupId);
+    const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
+    if (groupInstances.length === 0 && groupWorktops.length === 0) return false;
+
+    for (const inst of groupInstances) {
+      inst.root.position.x += dxMm / 1000;
+      inst.root.position.z += dzMm / 1000;
+    }
+    for (const worktop of groupWorktops) {
+      worktop.params.path = worktop.params.path.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
+      rebuildKitchenWorktop(worktop);
+    }
+
+    return true;
+  };
+
+  const commitSelectedMeasureValueMm = (measureId: string, raw: string) => {
+    const target = getCurrentMeasureSelectionTarget();
+    const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
+    if (!target || !measure) return;
+
+    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
+    if (!Number.isFinite(nextMm)) return;
+    const desiredMm = Math.max(0, Math.round(nextMm));
+    const bindings = getSelectionMeasureBindings(measure, target);
+    if (!bindings) return;
+
+    const ctx = getAssociativeMeasureContext();
+    const attachedPoint = resolvePlanBinding(bindings.attachedBinding, ctx);
+    const otherPoint = resolvePlanBinding(bindings.otherBinding, ctx);
+    if (!attachedPoint || !otherPoint) return;
+
+    const delta = attachedPoint.clone().sub(otherPoint);
+    if (delta.lengthSq() < 1e-10) return;
+    const currentDistanceMm = Math.round(delta.length() * 1000);
+    if (currentDistanceMm === desiredMm) return;
+    delta.normalize().multiplyScalar((desiredMm - currentDistanceMm) / 1000);
+    const dxMm = Math.round(delta.x * 1000);
+    const dzMm = Math.round(delta.z * 1000);
+    if (dxMm === 0 && dzMm === 0) return;
+
+    let applied = false;
+    switch (target.kind) {
+      case "wall":
+        applied = translateWallByMeasure(target.wallId, dxMm, dzMm);
+        break;
+      case "module":
+        applied = translateModuleByMeasure(target.instanceId, dxMm, dzMm);
+        break;
+      case "floor":
+        applied = translateFloorByMeasure(target.floorId, dxMm, dzMm);
+        break;
+      case "kitchenGroup":
+        applied = translateKitchenGroupByMeasure(target.groupId, dxMm, dzMm);
+        break;
+    }
+
+    if (!applied) return;
+    refreshAssociativeMeasures();
+    updateMeasureLabelInteractivity();
+    updateLayoutPanel();
     commitHistory(S);
     mountProps();
+  };
+
+  const commitWallMeasureValueMm = (measureId: string, raw: string) => {
+    commitSelectedMeasureValueMm(measureId, raw);
   };
 
   const enforceWallDrawInvariant = () => {
@@ -11063,6 +11317,46 @@ export function startApp(initialArgs: AppArgs) {
     });
   };
 
+  const debugCreateFloor = (params: FloorParams) => {
+    const floor = createFloor(cloneFloorParams(params), { skipHistory: true });
+    return { id: floor.id, boundary: structuredClone(floor.params.boundary) };
+  };
+
+  const debugSelectFloor = (floorId: string) => {
+    setSelectedFloor(floorId);
+    return { selectedKind, selectedFloorId };
+  };
+
+  const debugSelectWall = (wallId: string) => {
+    setSelectedWall(wallId);
+    return { selectedKind, selectedWallId };
+  };
+
+  const debugSelectModule = (instanceId: string) => {
+    setSelectedModule(instanceId);
+    return { selectedKind, selectedInstanceId };
+  };
+
+  const debugCommitSelectedMeasureValue = (measureId: string, valueMm: number) => {
+    const target = getCurrentMeasureSelectionTarget();
+    const measure = measureState.measures.find((item) => item.id === measureId) ?? null;
+    const bindings = target && measure ? getSelectionMeasureBindings(measure, target) : null;
+    const before = captureLayoutSnapshot(S);
+    commitSelectedMeasureValueMm(measureId, String(valueMm));
+    const after = captureLayoutSnapshot(S);
+    return {
+      selectedKind,
+      selectedKitchenGroupId,
+      target:
+        target?.kind === "kitchenGroup"
+          ? { kind: target.kind, groupId: target.groupId, worktopIds: Array.from(target.worktopIds), instanceIds: Array.from(target.instanceIds) }
+          : target,
+      bindings,
+      before,
+      after
+    };
+  };
+
   const debugCommitWallMeasureValue = (wallId: string, measureId: string, valueMm: number) => {
     setSelectedWall(wallId);
     commitWallMeasureValueMm(measureId, String(valueMm));
@@ -11148,6 +11442,8 @@ export function startApp(initialArgs: AppArgs) {
     };
   };
 
+  const debugLayoutSnapshot = () => captureLayoutSnapshot(S);
+
   (window as any).__kitchenDebug = {
     reset: debugResetKitchenScenario,
     selectKitchenGroup: debugSelectKitchenGroup,
@@ -11155,15 +11451,21 @@ export function startApp(initialArgs: AppArgs) {
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,
+    createFloor: debugCreateFloor,
     moveWall: debugMoveWall,
     createMeasure: debugCreateMeasure,
+    selectWall: debugSelectWall,
+    selectFloor: debugSelectFloor,
+    selectModule: debugSelectModule,
     commitWallMeasureValue: debugCommitWallMeasureValue,
+    commitSelectedMeasureValue: debugCommitSelectedMeasureValue,
     snapshot: getDebugKitchenSnapshot,
     enterMeasureTool: debugEnterMeasureTool,
     projectPlanPoint: debugProjectPlanPoint,
     planSnap: debugPlanSnap,
     measureState: debugMeasureState,
-    viewState: debugViewState
+    viewState: debugViewState,
+    layoutSnapshot: debugLayoutSnapshot
   };
 
   const tick = () => {
@@ -11189,6 +11491,7 @@ export function startApp(initialArgs: AppArgs) {
     for (const o of overlapBoxes) o.helper.setFromObject(o.mesh);
     refreshAssociativeMeasures();
     updateMeasureLabels();
+    updateMeasureLabelInteractivity();
     updateWallEditHud();
     updateDetailViewCamera();
 
