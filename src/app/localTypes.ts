@@ -30,7 +30,25 @@ export type WindowInstance = {
   outline: THREE.Line;
 };
 
-export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
+export type SectionParams = {
+  name: string;
+  aMm: FloorBoundaryPoint;
+  bMm: FloorBoundaryPoint;
+  mirrored: boolean;
+};
+
+export type SectionInstance = {
+  id: string;
+  params: SectionParams;
+  root: THREE.Group;
+  line: THREE.LineSegments;
+  arrows: THREE.LineSegments;
+  pick: THREE.Mesh;
+};
+
+export type SectionElevationKey = "north" | "east" | "south" | "west";
+
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "section" | null;
 
 export type WallParams = {
   thicknessMm: number;
@@ -93,36 +111,10 @@ export type KitchenWorktopInstance = {
 
 export type KitchenPlacementBinding = {
   worktopId: string;
+  kind?: "segment" | "corner";
   segmentIndex: number;
   offsetAlongM: number;
-};
-
-export type AlignWallLine = "center" | "exterior" | "interior" | "endA" | "endB";
-
-export type DimensionRef = {
-  wallId: string;
-  wallLine: AlignWallLine;
-  t: number;
-};
-
-export type DimensionParams = {
-  id: string;
-  a: DimensionRef;
-  b: DimensionRef;
-  offsetM: number;
-};
-
-export type DimensionInstance = {
-  id: string;
-  params: DimensionParams;
-  root: THREE.Group;
-  pick: THREE.Mesh;
-  ext1: THREE.Mesh;
-  ext2: THREE.Mesh;
-  dim: THREE.Mesh;
-  tick1: THREE.Mesh;
-  tick2: THREE.Mesh;
-  text: THREE.Sprite;
+  cornerIndex?: number | null;
 };
 
 export type LayoutSnapshot = {
@@ -130,6 +122,8 @@ export type LayoutSnapshot = {
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
   floors?: Array<{ id: string; params: FloorParams }>;
+  sectionCounter?: number;
+  sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
   worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
   instanceCounter: number;
@@ -141,8 +135,6 @@ export type LayoutSnapshot = {
     positionMm: { x: number; z: number };
     rotationYDeg: number;
   }>;
-  dimensionCounter: number;
-  dimensions: DimensionParams[];
   pinnedWallIds: string[];
   pinnedInstanceIds: string[];
   underlayPinned: boolean;
@@ -151,9 +143,9 @@ export type LayoutSnapshot = {
     wallId: string | null;
     wallIds: string[];
     floorId?: string | null;
+    sectionId?: string | null;
     instId: string | null;
     instIds: string[];
-    dimensionId: string | null;
   };
 };
 
@@ -164,7 +156,7 @@ export type AlignPickedLine = {
   segB: THREE.Vector3;
   label: string;
   wallId: string;
-  wallLine: AlignWallLine;
+  wallLine: "center" | "exterior" | "interior" | "endA" | "endB";
 };
 
 export type PickedLine2D = {

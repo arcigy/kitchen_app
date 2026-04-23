@@ -6,9 +6,9 @@ import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
 
 export type AppMode = "build" | "layout";
-export type LayoutTool = "select" | "wall" | "align" | "trim" | "dimension" | "measure";
+export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
-export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "dimension" | null;
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "section" | null;
 export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {
@@ -31,6 +31,8 @@ export type LayoutSnapshot = {
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
   floors?: Array<{ id: string; params: FloorParams }>;
+  sectionCounter?: number;
+  sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
   worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
   instanceCounter: number;
@@ -42,8 +44,6 @@ export type LayoutSnapshot = {
     positionMm: { x: number; z: number };
     rotationYDeg: number;
   }>;
-  dimensionCounter: number;
-  dimensions: DimensionParams[];
   pinnedWallIds: string[];
   pinnedInstanceIds: string[];
   underlayPinned: boolean;
@@ -52,9 +52,9 @@ export type LayoutSnapshot = {
     wallId: string | null;
     wallIds: string[];
     floorId?: string | null;
+    sectionId?: string | null;
     instId: string | null;
     instIds: string[];
-    dimensionId: string | null;
   };
 };
 
@@ -97,6 +97,24 @@ export type FloorInstance = {
   outline: THREE.Line;
 };
 
+export type SectionParams = {
+  name: string;
+  aMm: FloorBoundaryPoint;
+  bMm: FloorBoundaryPoint;
+  mirrored: boolean;
+};
+
+export type SectionInstance = {
+  id: string;
+  params: SectionParams;
+  root: THREE.Group;
+  line: THREE.Line;
+  arrows: THREE.LineSegments;
+  pick: THREE.Mesh;
+};
+
+export type SectionElevationKey = "north" | "east" | "south" | "west";
+
 export type KitchenWorktopJustification = "center" | "back" | "front";
 
 export type KitchenWorktopParams = {
@@ -121,36 +139,10 @@ export type KitchenWorktopInstance = {
 
 export type KitchenPlacementBinding = {
   worktopId: string;
+  kind?: "segment" | "corner";
   segmentIndex: number;
   offsetAlongM: number;
-};
-
-export type AlignWallLine = "center" | "exterior" | "interior" | "endA" | "endB";
-
-export type DimensionRef = {
-  wallId: string;
-  wallLine: AlignWallLine;
-  t: number;
-};
-
-export type DimensionParams = {
-  id: string;
-  a: DimensionRef;
-  b: DimensionRef;
-  offsetM: number;
-};
-
-export type DimensionInstance = {
-  id: string;
-  params: DimensionParams;
-  root: THREE.Group;
-  pick: THREE.Mesh;
-  ext1: THREE.Mesh;
-  ext2: THREE.Mesh;
-  dim: THREE.Mesh;
-  tick1: THREE.Mesh;
-  tick2: THREE.Mesh;
-  text: THREE.Sprite;
+  cornerIndex?: number | null;
 };
 
 export type LayoutInstance = {
@@ -202,6 +194,8 @@ export interface AppState {
   wallUnionPolys: any | null;
   floors: FloorInstance[];
   floorCounter: number;
+  sections: SectionInstance[];
+  sectionCounter: number;
   kitchenWorktops: KitchenWorktopInstance[];
   worktopCounter: number;
 
@@ -220,7 +214,7 @@ export interface AppState {
   selectedInstanceId: string | null;
   selectedWallId: string | null;
   selectedFloorId: string | null;
-  selectedDimensionId: string | null;
+  selectedSectionId: string | null;
   selectedWallIds: Set<string>;
   selectedInstanceIds: Set<string>;
   pinnedWallIds: Set<string>;
@@ -241,10 +235,6 @@ export interface AppState {
     ghostValid: boolean;
     lastCursor: THREE.Vector3;
   };
-
-  // Dimensions
-  dimensions: DimensionInstance[];
-  dimensionCounter: number;
 
   // UI elements
   undoBtnEl: HTMLButtonElement | null;
@@ -287,6 +277,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     wallUnionPolys: null,
     floors: [],
     floorCounter: 1,
+    sections: [],
+    sectionCounter: 1,
     kitchenWorktops: [],
     worktopCounter: 1,
 
@@ -303,7 +295,7 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     selectedInstanceId: null,
     selectedWallId: null,
     selectedFloorId: null,
-    selectedDimensionId: null,
+    selectedSectionId: null,
     selectedWallIds: new Set(),
     selectedInstanceIds: new Set(),
     pinnedWallIds: new Set(),
@@ -323,9 +315,6 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
       ghostValid: false,
       lastCursor: new THREE.Vector3(0, 0, 0)
     },
-
-    dimensions: [],
-    dimensionCounter: 1,
 
     undoBtnEl: null,
     redoBtnEl: null,
