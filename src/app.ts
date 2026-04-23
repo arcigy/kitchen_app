@@ -53,6 +53,11 @@ import {
   shiftPolylineSegment
 } from "./app/alignTool";
 import {
+  buildModuleSnapCandidates,
+  detectModuleAdjacency,
+  type ModuleAdjacencyLink
+} from "./app/moduleAdjacency";
+import {
   buildSectionMarkerGeometry,
   buildPlaneSliceStripGeometry,
   computeElevationViewConfig,
@@ -216,6 +221,16 @@ export function startApp(initialArgs: AppArgs) {
   layoutRoot.name = "layoutRoot";
   layoutRoot.visible = false;
   scene.add(layoutRoot);
+  const moduleAdjacencyGroup = new THREE.Group();
+  moduleAdjacencyGroup.name = "moduleAdjacencyGroup";
+  layoutRoot.add(moduleAdjacencyGroup);
+  const placementAdjacencyPreview = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+    new THREE.LineBasicMaterial({ color: 0x7ee787, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false })
+  );
+  placementAdjacencyPreview.visible = false;
+  placementAdjacencyPreview.renderOrder = 62;
+  moduleAdjacencyGroup.add(placementAdjacencyPreview);
 
   const wallPlanGroup = new THREE.Group();
   wallPlanGroup.name = "wallPlanGroup";
@@ -444,6 +459,7 @@ export function startApp(initialArgs: AppArgs) {
     selectedSectionIds: [] as string[],
     startWalls: new Map<string, WallParams>(),
     startInstances: new Map<string, { pos: THREE.Vector3; rotY: number }>(),
+    startInstanceAdjacency: new Map<string, string | null>(),
     startSections: new Map<string, SectionParams>(),
     startPointerAngle: 0,
     lastValidDelta: new THREE.Vector3(0, 0, 0),
@@ -487,6 +503,7 @@ export function startApp(initialArgs: AppArgs) {
     transformState.selectedSectionIds = [];
     transformState.startWalls.clear();
     transformState.startInstances.clear();
+    transformState.startInstanceAdjacency.clear();
     transformState.startSections.clear();
     transformState.startPointerAngle = 0;
     transformState.lastValidDelta.set(0, 0, 0);
@@ -521,6 +538,21 @@ export function startApp(initialArgs: AppArgs) {
     // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
     for (const w of walls) transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
     for (const inst of instances) transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
+    for (const inst of instances) {
+      if (!instIds.includes(inst.id)) continue;
+      const box = instanceWorldBox(inst);
+      let neighborId: string | null = null;
+      for (const other of instances) {
+        if (other.id === inst.id) continue;
+        if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
+        const link = detectModuleAdjacency(box, instanceWorldBox(other), other.id);
+        if (link) {
+          neighborId = other.id;
+          break;
+        }
+      }
+      transformState.startInstanceAdjacency.set(inst.id, neighborId);
+    }
     for (const section of sections) transformState.startSections.set(section.id, cloneSectionParams(section.params));
 
     setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
@@ -610,7 +642,14 @@ export function startApp(initialArgs: AppArgs) {
       if (!inst || !st) continue;
       const desired = st.pos.clone().add(delta);
       const desiredInRoom = applyWallConstraints(inst, desired);
-      inst.root.position.copy(desiredInRoom);
+      const snapped =
+        transformState.selectedInstanceIds.length === 1
+          ? snapPositionDetailed(inst, desiredInRoom, {
+              ignoreIds: ignore,
+              stickyNeighborId: transformState.startInstanceAdjacency.get(id) ?? null
+            }).position
+          : desiredInRoom;
+      inst.root.position.copy(snapped);
       autoOrientModuleToRoomWallIfSnapped(inst, ignore);
     }
     for (const id of transformState.selectedInstanceIds) {
@@ -635,6 +674,13 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     if (ok) {
+      for (const id of transformState.selectedInstanceIds) {
+        const inst = findInstance(id);
+        if (!inst?.kitchenGroupId) continue;
+        const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+        const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+        inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+      }
       transformState.lastValidDelta.copy(delta);
       updateLayoutPanel();
     } else {
@@ -648,7 +694,15 @@ export function startApp(initialArgs: AppArgs) {
         const st = transformState.startInstances.get(id);
         if (!inst || !st) continue;
         const desired = st.pos.clone().add(d);
-        inst.root.position.copy(applyWallConstraints(inst, desired));
+        const desiredInRoom = applyWallConstraints(inst, desired);
+        const snapped =
+          transformState.selectedInstanceIds.length === 1
+            ? snapPositionDetailed(inst, desiredInRoom, {
+                ignoreIds: ignore,
+                stickyNeighborId: transformState.startInstanceAdjacency.get(id) ?? null
+              }).position
+            : desiredInRoom;
+        inst.root.position.copy(snapped);
         autoOrientModuleToRoomWallIfSnapped(inst, ignore);
       }
       updateLayoutPanel();
@@ -6237,6 +6291,9 @@ export function startApp(initialArgs: AppArgs) {
     anyOverlap,
     moduleOverlapsWalls,
     autoOrientModuleToRoomWallIfSnapped,
+    resolveModuleAdjacencySnap,
+    setPlacementAdjacencyPreview,
+    finalizePlacedInstance,
     resolvePlacementConstraint: getKitchenPlacementConstraint
   };
 
@@ -7940,83 +7997,96 @@ export function startApp(initialArgs: AppArgs) {
     return false;
   }
 
-  function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
-    const snapDist = 0.03; // 30mm
-    const minOverlap = 0.05; // 50mm
-    const alignBackMaxShift = 0.25; // 250mm (align "backs" when snapping side-by-side)
-
+  function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: { stickyNeighborId?: string | null; ignoreIds?: Set<string> }) {
     const currentPos = moving.root.position.clone();
     moving.root.position.copy(desired);
     const a = instanceWorldBox(moving);
-
-    const candidates: Array<{ pos: THREE.Vector3; score: number }> = [];
-    candidates.push({ pos: desired.clone(), score: 0 });
-
-    for (const other of instances) {
-      if (other.id === moving.id) continue;
-      const b = instanceWorldBox(other);
-
-      const overlapX = Math.max(0, Math.min(a.max.x, b.max.x) - Math.max(a.min.x, b.min.x));
-      const overlapZ = Math.max(0, Math.min(a.max.z, b.max.z) - Math.max(a.min.z, b.min.z));
-      const backAlignDz = b.min.z - a.min.z;
-
-      // Snap along X (requires Z overlap)
-      if (overlapZ >= minOverlap) {
-        const d1 = b.min.x - a.max.x;
-        const d2 = b.max.x - a.min.x;
-
-        const pushCandidate = (dx: number) => {
-          const base = desired.clone().add(new THREE.Vector3(dx, 0, 0));
-          const scoreBase = Math.abs(dx);
-          candidates.push({ pos: base, score: scoreBase });
-
-          // When snapping modules together side-by-side, also align "backs" (min.z) to avoid staggered back edges.
-          if (Math.abs(backAlignDz) <= alignBackMaxShift) {
-            candidates.push({
-              pos: base.clone().add(new THREE.Vector3(0, 0, backAlignDz)),
-              score: scoreBase + Math.abs(backAlignDz) * 0.15
-            });
-          }
-        };
-
-        if (Math.abs(d1) <= snapDist) pushCandidate(d1);
-        if (Math.abs(d2) <= snapDist) pushCandidate(d2);
-      }
-
-      // Snap along Z (requires X overlap)
-      if (overlapX >= minOverlap) {
-        const d1 = b.min.z - a.max.z;
-        const d2 = b.max.z - a.min.z;
-
-        const pushCandidate = (dz: number) => {
-          const base = desired.clone().add(new THREE.Vector3(0, 0, dz));
-          const scoreBase = Math.abs(dz);
-          candidates.push({ pos: base, score: scoreBase });
-        };
-
-        if (Math.abs(d1) <= snapDist) pushCandidate(d1);
-        if (Math.abs(d2) <= snapDist) pushCandidate(d2);
-      }
-    }
-
     moving.root.position.copy(currentPos);
+    const others = instances
+      .filter((other) => other.id !== moving.id && !(opts?.ignoreIds?.has(other.id)))
+      .filter((other) => !moving.kitchenGroupId || other.kitchenGroupId === moving.kitchenGroupId)
+      .map((other) => ({ id: other.id, box: instanceWorldBox(other) }));
+    const adjacencyCandidates = buildModuleSnapCandidates({
+      movingId: moving.id,
+      movingBox: a,
+      desired,
+      others,
+      stickyNeighborId: opts?.stickyNeighborId ?? null
+    });
+
+    const candidates: Array<{ pos: THREE.Vector3; score: number; link: ModuleAdjacencyLink | null }> = [];
+    candidates.push({ pos: desired.clone(), score: 0, link: null });
+    for (const candidate of adjacencyCandidates) candidates.push(candidate);
 
     let best = desired.clone();
     let bestScore = Infinity;
+    let bestLink: ModuleAdjacencyLink | null = null;
     for (const c of candidates) {
       const clamped = applyWallConstraints(moving, c.pos);
       const prev = moving.root.position.clone();
       moving.root.position.copy(clamped);
-      const overlaps = anyOverlap(moving, null) || moduleOverlapsWalls(moving);
+      const overlaps = (opts?.ignoreIds ? anyOverlapIgnoring(moving, opts.ignoreIds) : anyOverlap(moving, null)) || moduleOverlapsWalls(moving);
       moving.root.position.copy(prev);
       if (overlaps) continue;
       if (c.score < bestScore) {
         bestScore = c.score;
         best = clamped;
+        bestLink = c.link ?? null;
       }
     }
 
-    return best;
+    return { position: best, link: bestLink };
+  }
+
+  function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
+    return snapPositionDetailed(moving, desired).position;
+  }
+
+  function setPlacementAdjacencyPreview(link: ModuleAdjacencyLink | null) {
+    if (!link) {
+      placementAdjacencyPreview.visible = false;
+      return;
+    }
+    placementAdjacencyPreview.geometry.dispose();
+    placementAdjacencyPreview.geometry = new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]);
+    placementAdjacencyPreview.visible = true;
+  }
+
+  function updateModuleAdjacencyVisuals() {
+    for (const child of [...moduleAdjacencyGroup.children]) {
+      if (child === placementAdjacencyPreview) continue;
+      moduleAdjacencyGroup.remove(child);
+      const line = child as THREE.Line;
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+
+    if (viewMode !== "2d" || activeViewerTab !== "floorplan") {
+      moduleAdjacencyGroup.visible = placementAdjacencyPreview.visible;
+      return;
+    }
+
+    const done = new Set<string>();
+    for (const inst of instances) {
+      if (!inst.kitchenGroupId) continue;
+      const box = instanceWorldBox(inst);
+      for (const other of instances) {
+        if (other.id === inst.id || other.kitchenGroupId !== inst.kitchenGroupId) continue;
+        const key = [inst.id, other.id].sort().join("|");
+        if (done.has(key)) continue;
+        done.add(key);
+        const link = detectModuleAdjacency(box, instanceWorldBox(other), other.id);
+        if (!link) continue;
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]),
+          new THREE.LineBasicMaterial({ color: 0x7ee787, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false })
+        );
+        line.renderOrder = 61;
+        moduleAdjacencyGroup.add(line);
+      }
+    }
+
+    moduleAdjacencyGroup.visible = moduleAdjacencyGroup.children.length > 0;
   }
 
   function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) {
@@ -10871,6 +10941,41 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
+  function resolveModuleAdjacencySnap(
+    moving: LayoutInstance,
+    desired: THREE.Vector3,
+    opts?: { stickyNeighborId?: string | null }
+  ) {
+    const prevGroupId = moving.kitchenGroupId;
+    if (!moving.kitchenGroupId && S.kitchenEditMode && S.activeKitchenGroupId) moving.kitchenGroupId = S.activeKitchenGroupId;
+    const result = snapPositionDetailed(moving, desired, { stickyNeighborId: opts?.stickyNeighborId ?? null });
+    moving.kitchenGroupId = prevGroupId;
+    let kitchenPlacement: KitchenPlacementBinding | null = null;
+    const effectiveGroupId = moving.kitchenGroupId ?? (S.kitchenEditMode ? S.activeKitchenGroupId : null);
+    if (effectiveGroupId) {
+      const prevPos = moving.root.position.clone();
+      moving.root.position.copy(result.position);
+      moving.root.updateMatrixWorld(true);
+      const group = S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null;
+      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+      kitchenPlacement = inferKitchenPlacementBinding(moving, effectiveGroupId, backOffsetMm);
+      moving.root.position.copy(prevPos);
+      moving.root.updateMatrixWorld(true);
+    }
+    return {
+      position: result.position,
+      link: result.link,
+      kitchenPlacement
+    };
+  }
+
+  function finalizePlacedInstance(inst: LayoutInstance) {
+    if (!inst.kitchenGroupId) return;
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+    inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+  }
+
   const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
     const target = forcedTarget ?? getCurrentMeasureSelectionTarget();
     const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
@@ -11517,6 +11622,7 @@ export function startApp(initialArgs: AppArgs) {
     refreshAssociativeMeasures();
     updateMeasureLabels();
     updateMeasureLabelInteractivity();
+    updateModuleAdjacencyVisuals();
     updateWallEditHud();
     updateDetailViewCamera();
 

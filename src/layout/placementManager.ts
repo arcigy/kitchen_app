@@ -1,5 +1,6 @@
 import type { AppState, KitchenPlacementBinding, LayoutInstance } from "./appState";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
 import { getModuleDescriptorOrThrow } from "../modules/registry";
 import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
@@ -27,6 +28,13 @@ export interface PlacementHelpers {
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (moving: LayoutInstance) => boolean;
   autoOrientModuleToRoomWallIfSnapped: (inst: LayoutInstance) => void;
+  resolveModuleAdjacencySnap?: (
+    moving: LayoutInstance,
+    desired: any,
+    opts?: { stickyNeighborId?: string | null }
+  ) => { position: any; link: ModuleAdjacencyLink | null; kitchenPlacement?: KitchenPlacementBinding | null } | null;
+  setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
+  finalizePlacedInstance?: (inst: LayoutInstance) => void;
   resolvePlacementConstraint?: (
     ghost: LayoutInstance,
     cursorWorld: any
@@ -43,6 +51,8 @@ export interface PlacementHelpers {
 
 export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   if (!S.placement.active) return;
+
+  helpers.setPlacementAdjacencyPreview?.(null);
 
   if (S.placement.ghost) {
     helpers.layoutRoot.remove(S.placement.ghost.root);
@@ -79,8 +89,8 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
 
   const g = S.placement.ghost;
   if (!g) return;
-
   const constrainedPlacement = helpers.resolvePlacementConstraint?.(g, cursorWorld) ?? null;
+  let placementKitchenBinding = constrainedPlacement?.kitchenPlacement ?? null;
   if (constrainedPlacement) {
     g.root.rotation.y = constrainedPlacement.rotationY;
     g.root.position.copy(constrainedPlacement.position);
@@ -100,6 +110,17 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
     placeWithBottomLeftAtCursor();
     helpers.autoOrientModuleToRoomWallIfSnapped(g);
     placeWithBottomLeftAtCursor();
+  }
+  g.kitchenPlacement = placementKitchenBinding ?? null;
+
+  const adjacencySnap = helpers.resolveModuleAdjacencySnap?.(g, g.root.position.clone()) ?? null;
+  if (adjacencySnap) {
+    g.root.position.copy(adjacencySnap.position);
+    g.root.updateMatrixWorld(true);
+    placementKitchenBinding = adjacencySnap.kitchenPlacement ?? placementKitchenBinding;
+    helpers.setPlacementAdjacencyPreview?.(adjacencySnap.link);
+  } else {
+    helpers.setPlacementAdjacencyPreview?.(null);
   }
 
   const shouldCheckRoomBounds = constrainedPlacement?.enforceRoomBounds ?? true;
@@ -129,9 +150,10 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
 
   const inst = helpers.createInstance(nextParams);
   inst.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
-  inst.kitchenPlacement = constrainedPlacement?.kitchenPlacement ?? null;
+  inst.kitchenPlacement = ghost.kitchenPlacement ?? constrainedPlacement?.kitchenPlacement ?? null;
   inst.root.position.copy(ghost.root.position);
   inst.root.rotation.y = ghost.root.rotation.y;
+  helpers.finalizePlacedInstance?.(inst);
 
   inst.module.visible = true;
   inst.outline.visible = false;
