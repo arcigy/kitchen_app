@@ -248,10 +248,13 @@ export function startApp(initialArgs: AppArgs) {
     layoutRoot,
     getMode: () => mode,
     getSelectedWallIds: () => selectedWallIds,
+    getSelectedInstanceIds: () => selectedInstanceIds,
     getWallSolvedOutlines: () => wallSolvedOutlines,
     getSelectedKind: () => selectedKind,
     getSelectedFloorId: () => selectedFloorId,
-    getFloors: () => floors
+    getFloors: () => floors,
+    getInstances: () => instances,
+    getModuleLocalBackCenter
   });
 
   const {

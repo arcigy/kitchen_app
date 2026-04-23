@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { FloorInstance, SelectedKind, WallInstance } from "../layout/appState";
+import type { LayoutInstance } from "./localTypes";
+import { getModulePlanPolygon } from "./planSnap";
 
 type GetCamera = () => THREE.Camera;
 
@@ -176,10 +178,13 @@ export function createSelectionHighlights(args: {
   layoutRoot: THREE.Group;
   getMode: () => string;
   getSelectedWallIds: () => Set<string>;
+  getSelectedInstanceIds: () => Set<string>;
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
   getSelectedKind: () => SelectedKind;
   getSelectedFloorId: () => string | null;
   getFloors: () => FloorInstance[];
+  getInstances: () => LayoutInstance[];
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
 }) {
   const selectionHighlights = new THREE.Group();
   selectionHighlights.name = "selectionHighlights";
@@ -205,6 +210,22 @@ export function createSelectionHighlights(args: {
       if (!poly || poly.length < 3) continue;
       const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));
       pts.push(new THREE.Vector3(poly[0].x, 0.012, poly[0].z));
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(
+        geom,
+        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+      );
+      line.renderOrder = 60;
+      selectionHighlights.add(line);
+    }
+
+    for (const id of args.getSelectedInstanceIds()) {
+      const inst = args.getInstances().find((item) => item.id === id) ?? null;
+      if (!inst) continue;
+      const poly = getModulePlanPolygon(inst, args.getModuleLocalBackCenter);
+      if (poly.length < 3) continue;
+      const pts = poly.map((p) => p.clone().setY(0.016));
+      pts.push(poly[0]!.clone().setY(0.016));
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(
         geom,
