@@ -78,7 +78,8 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
   measureInlineInput.style.borderRadius = "8px";
   measureInlineInput.style.border = "1px solid rgba(36, 40, 54, 0.95)";
   measureInlineInput.style.background = "#0f1117";
-  measureInlineInput.style.color = "var(--text)";
+  measureInlineInput.style.color = "#ffffff";
+  measureInlineInput.style.caretColor = "#ffffff";
   measureInlineInput.style.padding = "0 8px";
   measureInlineInput.style.fontSize = "12px";
   measureInlineInput.style.fontWeight = "700";
