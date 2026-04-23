@@ -356,6 +356,35 @@ function addGuideIntersections(candidates: PlanSnapCandidate[], guides: PlanSnap
   }
 }
 
+function getWallProjectionBinding(wall: WallInstance, point: THREE.Vector3, endpointTolT = 0.06): PlanSnapBinding {
+  const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+  const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+  const ab = b.clone().sub(a);
+  const denom = ab.lengthSq();
+  if (denom < 1e-12) return { type: "wallEndpoint", wallId: wall.id, endpoint: "a" };
+  const t = Math.max(0, Math.min(1, point.clone().sub(a).dot(ab) / denom));
+  if (t <= endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "a" };
+  if (t >= 1 - endpointTolT) return { type: "wallEndpoint", wallId: wall.id, endpoint: "b" };
+  return { type: "wallCenterline", wallId: wall.id, t };
+}
+
+function getNearestWallBindingAtPoint(walls: WallInstance[], point: THREE.Vector3, maxDistanceM = 0.35): PlanSnapBinding | null {
+  let best: { wall: WallInstance; distSq: number } | null = null;
+  for (const wall of walls) {
+    const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+    const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+    const ab = b.clone().sub(a);
+    const denom = ab.lengthSq();
+    if (denom < 1e-12) continue;
+    const t = Math.max(0, Math.min(1, point.clone().sub(a).dot(ab) / denom));
+    const closest = a.clone().addScaledVector(ab, t);
+    const distSq = closest.distanceToSquared(point);
+    if (!best || distSq < best.distSq) best = { wall, distSq };
+  }
+  if (!best || best.distSq > maxDistanceM * maxDistanceM) return null;
+  return getWallProjectionBinding(best.wall, point);
+}
+
 export function createPlanSnapper(args: CreatePlanSnapperArgs) {
   return function snapPoint2D(
     raw: THREE.Vector3,
@@ -397,7 +426,9 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       });
     }
 
-    for (const poly of args.getWallSolvedOutlines().values()) {
+    for (const [wallId, poly] of args.getWallSolvedOutlines().entries()) {
+      const wall = args.getWalls().find((item) => item.id === wallId) ?? null;
+      if (!wall) continue;
       appendSnapCandidatesFromLoop(
         candidates,
         segments,
@@ -405,7 +436,11 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         poly.map((point) => new THREE.Vector3(point.x, 0, point.z)),
         "wall",
         true,
-        options
+        options,
+        {
+          vertexBinding: (_vertexIndex, point) => getWallProjectionBinding(wall, point),
+          edgeBinding: (_segmentIndex, _t, point) => getWallProjectionBinding(wall, point)
+        }
       );
     }
 
@@ -417,7 +452,11 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         poly.map((point) => new THREE.Vector3(point.x, 0, point.z)),
         "wall",
         true,
-        options
+        options,
+        {
+          vertexBinding: (_vertexIndex, point) => getNearestWallBindingAtPoint(args.getWalls(), point),
+          edgeBinding: (_segmentIndex, _t, point) => getNearestWallBindingAtPoint(args.getWalls(), point)
+        }
       );
     }
 
@@ -426,7 +465,10 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
       for (const poly of wallUnionPolys as any[]) {
         for (const ring of poly as any[]) {
           const pts = (ring as Array<[number, number]>).slice(0, -1).map(([x, z]) => new THREE.Vector3(x, 0, z));
-          appendSnapCandidatesFromLoop(candidates, segments, raw, pts, "wall", true, options);
+          appendSnapCandidatesFromLoop(candidates, segments, raw, pts, "wall", true, options, {
+            vertexBinding: (_vertexIndex, point) => getNearestWallBindingAtPoint(args.getWalls(), point),
+            edgeBinding: (_segmentIndex, _t, point) => getNearestWallBindingAtPoint(args.getWalls(), point)
+          });
         }
       }
     }
