@@ -33,7 +33,7 @@ export function createScene(container: HTMLElement) {
 
   RectAreaLightUniformsLib.init();
 
-  const camera3d = new THREE.PerspectiveCamera(50, 1, 0.01, 200);
+  const camera3d = new THREE.PerspectiveCamera(50, 1, 0.001, 200);
   camera3d.position.set(1.4, 1.0, 1.6);
 
   // Orthographic top-down for 2D layout
@@ -54,7 +54,12 @@ export function createScene(container: HTMLElement) {
     controls.enableDamping = mode === "3d";
     controls.dampingFactor = 0.08;
     controls.screenSpacePanning = true;
-    (controls as any).zoomToCursor = true;
+    controls.zoomSpeed = mode === "3d" ? 1.15 : 1;
+    controls.minDistance = mode === "3d" ? 0.001 : 0;
+    controls.maxDistance = mode === "3d" ? 500 : Infinity;
+    (controls as any).minTargetRadius = 0;
+    (controls as any).maxTargetRadius = Infinity;
+    (controls as any).zoomToCursor = mode === "2d";
 
     if (mode === "2d") {
       controls.enableRotate = false;
@@ -656,11 +661,20 @@ export function createScene(container: HTMLElement) {
     }
   };
 
+  const setPlanPresentation = (enabled: boolean) => {
+    planOverlay.visible = enabled;
+    planAmbient.visible = enabled;
+    const color = enabled ? 0xf5f5f5 : 0xf3f3f3;
+    scene.background = new THREE.Color(color);
+    renderer.setClearColor(color, 1);
+  };
+
   return {
     scene,
     renderer,
     setSize,
     setViewMode,
+    setPlanPresentation,
     setHdri,
     getHdriSettings: () => ({
       id: hdriId,
@@ -686,7 +700,15 @@ export function createScene(container: HTMLElement) {
     updateLighting,
     getLightingRevision: () => lightingRevision,
     getCamera: () => activeCamera,
-    getControls: () => controls
+    getControls: () => controls,
+    getSceneDebugState: () => ({
+      planOverlayVisible: planOverlay.visible,
+      planAmbientVisible: planAmbient.visible,
+      activeCameraType: activeCamera.type,
+      activeCameraPosition: activeCamera.position.clone(),
+      activeCameraUp: activeCamera.up.clone(),
+      controlsTarget: controls.target.clone()
+    })
   };
 }
 
