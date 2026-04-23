@@ -1505,7 +1505,7 @@ export function startApp(initialArgs: AppArgs) {
     return mesh;
   }
 
-  function createWallOutline(geometry: THREE.BufferGeometry) {
+  function createWallOutline(geometry: THREE.BufferGeometry, wallId?: string) {
     const outline = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry, 1),
       new THREE.LineBasicMaterial({
@@ -1517,10 +1517,19 @@ export function startApp(initialArgs: AppArgs) {
       })
     );
     outline.renderOrder = 12;
+    if (wallId) {
+      outline.name = `wallOutline_${wallId}`;
+      outline.userData.kind = "wallOutline";
+      outline.userData.wallId = wallId;
+    }
     return outline;
   }
 
   function syncWallOutline(w: WallInstance) {
+    if (!w.outline || !w.outline.parent) {
+      w.outline = createWallOutline(w.mesh.geometry as THREE.BufferGeometry, w.id);
+      w.mesh.add(w.outline);
+    }
     const nextGeometry = new THREE.EdgesGeometry(w.mesh.geometry as THREE.BufferGeometry, 1);
     w.outline.geometry.dispose();
     w.outline.geometry = nextGeometry;
@@ -1666,10 +1675,7 @@ export function startApp(initialArgs: AppArgs) {
     mesh.userData.wallId = id;
     root.add(mesh);
 
-    const outline = createWallOutline(mesh.geometry as THREE.BufferGeometry);
-    outline.name = `wallOutline_${id}`;
-    outline.userData.kind = "wallOutline";
-    outline.userData.wallId = id;
+    const outline = createWallOutline(mesh.geometry as THREE.BufferGeometry, id);
     mesh.add(outline);
 
     const aMm = toMmPoint(a);
@@ -6039,6 +6045,7 @@ export function startApp(initialArgs: AppArgs) {
     disposeObject3D,
     createInstance,
     createWallMesh,
+    createWallOutline,
     rebuildWall,
     rebuildWallPlanMesh,
     restoreFloors: restoreFloorsFromSnapshot,

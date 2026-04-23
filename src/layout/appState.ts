@@ -74,6 +74,7 @@ export type WallInstance = {
   heightMm: number;
   root: THREE.Group;
   mesh: THREE.Mesh;
+  outline: THREE.LineSegments;
 };
 
 export type FloorBoundaryPoint = {

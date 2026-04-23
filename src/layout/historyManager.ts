@@ -18,6 +18,7 @@ export interface HistoryHelpers {
   disposeObject3D: (obj: THREE.Object3D) => void;
   createInstance: (params: ModuleParams, opts: { id?: string }) => any; // Return type to match your LayoutInstance
   createWallMesh: (a: THREE.Vector3, b: THREE.Vector3, thickness: number, heightMm?: number) => THREE.Mesh;
+  createWallOutline: (geometry: THREE.BufferGeometry, wallId?: string) => THREE.LineSegments;
   rebuildWall: (inst: WallInstance) => void;
   rebuildWallPlanMesh: () => void;
   restoreFloors?: (floors: NonNullable<LayoutSnapshot["floors"]>, floorCounter?: number) => void;
@@ -135,8 +136,10 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     mesh.name = `wallMesh_${id}`;
     mesh.userData.kind = "wall";
     mesh.userData.wallId = id;
+    const outline = helpers.createWallOutline(mesh.geometry as THREE.BufferGeometry, id);
+    mesh.add(outline);
     root.add(mesh);
-    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh };
+    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
     helpers.layoutRoot.add(root);
     S.walls.push(inst);
     helpers.rebuildWall(inst);
