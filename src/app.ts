@@ -6797,8 +6797,8 @@ export function startApp(initialArgs: AppArgs) {
     pickMaterial.transparent = true;
     pickMaterial.depthWrite = false;
     pickMaterial.depthTest = false;
-    pickMaterial.color.setHex(0xb9c8d8);
-    pickMaterial.opacity = viewMode === "2d" ? 0.32 : 0;
+    pickMaterial.color.setHex(0xc5cfdb);
+    pickMaterial.opacity = viewMode === "2d" ? 0.18 : 0;
 
     const g = buildModuleEdgeGeometry(inst, flattenToPlan);
     inst.outline.geometry.dispose();
@@ -7426,7 +7426,7 @@ export function startApp(initialArgs: AppArgs) {
     pick.userData.instanceId = id;
     root.add(pick);
 
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x7a8499, transparent: true, opacity: 0.88, depthTest: true, depthWrite: false });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x525c70, transparent: true, opacity: 0.92, depthTest: true, depthWrite: false });
     const outline = new THREE.LineSegments(gEmpty(), lineMat);
     outline.name = `outline_${id}`;
     outline.visible = true;
@@ -7894,7 +7894,7 @@ export function startApp(initialArgs: AppArgs) {
 
     getModuleDescriptorOrThrow(inst.params.type).createControls(instanceEditorHost, inst.params, {
       ...worktopArgs,
-      onChange: () => rebuildInstance(inst)
+      onChange: () => rebuildInstance(inst, { preserveBackAnchor: true })
     });
   }
 
@@ -7917,6 +7917,7 @@ export function startApp(initialArgs: AppArgs) {
     const prevAdjacencyInfos = collectAdjacentModuleInfos(inst, prevWorldBox);
     const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos);
     const prevPos = inst.root.position.clone();
+    const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
     const prevWorldBoxesById = new Map<string, THREE.Box3>();
@@ -7944,6 +7945,13 @@ export function startApp(initialArgs: AppArgs) {
       const clamped = applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
+    if (inst.kitchenGroupId && prevKitchenPlacement) {
+      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+      if (applyKitchenPlacementBinding(inst, prevKitchenPlacement, backOffsetMm)) {
+        inst.kitchenPlacement = structuredClone(prevKitchenPlacement);
+      }
+    }
 
     const propagated = opts?.skipLayoutValidation
       ? { ok: true, movedIds: [] as string[] }
@@ -7966,6 +7974,7 @@ export function startApp(initialArgs: AppArgs) {
       tagModuleGeometry(inst.module, inst.id);
       inst.localBox = prevBox;
       inst.root.position.copy(prevPos);
+      inst.kitchenPlacement = prevKitchenPlacement ? structuredClone(prevKitchenPlacement) : null;
       inst.root.add(inst.module);
       for (const other of instances) {
         if (other.id === inst.id) continue;
@@ -8515,20 +8524,29 @@ export function startApp(initialArgs: AppArgs) {
 
     const done = new Set<string>();
     for (const inst of instances) {
-      if (!inst.kitchenGroupId) continue;
       const box = instanceWorldBox(inst);
       for (const other of instances) {
-        if (other.id === inst.id || other.kitchenGroupId !== inst.kitchenGroupId) continue;
+        if (other.id === inst.id) continue;
         const key = [inst.id, other.id].sort().join("|");
         if (done.has(key)) continue;
         done.add(key);
-        const link = detectModuleAdjacency(box, instanceWorldBox(other), other.id);
-        if (!link) continue;
+        const info = detectModuleAdjacencyInfo(box, instanceWorldBox(other), other.id);
+        if (!info) continue;
+        const linePoints =
+          info.axis === "x"
+            ? [
+                new THREE.Vector3(info.seam, 0.014, info.overlapMin),
+                new THREE.Vector3(info.seam, 0.014, info.overlapMax)
+              ]
+            : [
+                new THREE.Vector3(info.overlapMin, 0.014, info.seam),
+                new THREE.Vector3(info.overlapMax, 0.014, info.seam)
+              ];
         const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]),
-          new THREE.LineBasicMaterial({ color: 0x7ee787, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false })
+          new THREE.BufferGeometry().setFromPoints(linePoints),
+          new THREE.LineBasicMaterial({ color: 0x384253, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
         );
-        line.renderOrder = 61;
+        line.renderOrder = 59;
         moduleAdjacencyGroup.add(line);
       }
     }
