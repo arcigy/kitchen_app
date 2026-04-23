@@ -182,8 +182,6 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         ev.stopPropagation();
         return;
       }
-      ev.preventDefault();
-      ev.stopPropagation();
     };
     window.addEventListener("keydown", escapeHandler, { capture: true });
   };
