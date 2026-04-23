@@ -6,7 +6,6 @@ type GetCamera = () => THREE.Camera;
 export function createToolHud(args: {
   layoutRoot: THREE.Group;
   getCamera: GetCamera;
-  getDimPreviewRoot: () => THREE.Object3D;
 }) {
   const toolHud = new THREE.Group();
   toolHud.name = "toolHud";
@@ -33,7 +32,6 @@ export function createToolHud(args: {
     hudHoverLine.visible = false;
     hudPickLine1.visible = false;
     hudPickLine2.visible = false;
-    args.getDimPreviewRoot().visible = false;
   };
 
   const hudLineThicknessM = (rect: DOMRect) => {
