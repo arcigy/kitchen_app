@@ -430,6 +430,9 @@ export function startApp(initialArgs: AppArgs) {
     hoverPoint: null as FloorBoundaryPoint | null,
     typedMm: "",
     lastPointerPx: { x: 0, y: 0 },
+    previewUpdatePending: false,
+    previewSignature: "",
+    previewMaterialId: "",
     previewRoot: null as THREE.Group | null,
     previewMesh: null as THREE.Mesh | null,
     previewOutline: null as THREE.Line | null,
@@ -2251,6 +2254,17 @@ export function startApp(initialArgs: AppArgs) {
     return geometry;
   };
 
+  const makeKitchenWorktopPreviewGeometry = (params: KitchenWorktopParams) => {
+    const polygon = getKitchenWorktopPolygon(params);
+    if (polygon.length < 3) return new THREE.PlaneGeometry(0.001, 0.001);
+    const shape = new THREE.Shape(polygon.map((point) => new THREE.Vector2(point.x, point.z)));
+    const geometry = new THREE.ShapeGeometry(shape);
+    geometry.rotateX(Math.PI / 2);
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  };
+
   const makeKitchenWorktopOutlineGeometry = (params: KitchenWorktopParams, flattenToPlan = true) => {
     if (flattenToPlan) {
       const polygon = getKitchenWorktopPolygon(params);
@@ -2425,10 +2439,19 @@ export function startApp(initialArgs: AppArgs) {
         : [...kitchenWorktopDraw.points];
     const params = makeKitchenWorktopParamsFromPath(previewPath);
     if (params.path.length < 2) return;
+    const signature = JSON.stringify({
+      path: params.path,
+      justification: params.justification,
+      mirrored: params.mirrored,
+      depthMm: params.depthMm,
+      heightMm: params.heightMm,
+      materialId: params.materialId
+    });
 
     if (!kitchenWorktopDraw.previewRoot || !kitchenWorktopDraw.previewMesh || !kitchenWorktopDraw.previewOutline || !kitchenWorktopDraw.previewBackLine) {
       const root = new THREE.Group();
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId, { preview: true }));
+      const mesh = new THREE.Mesh(makeKitchenWorktopPreviewGeometry(params), makeKitchenWorktopMaterial(params.materialId, { preview: true }));
+      (mesh.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
       mesh.frustumCulled = false;
       const outline = new THREE.Line(
         new THREE.BufferGeometry(),
@@ -2464,27 +2487,45 @@ export function startApp(initialArgs: AppArgs) {
       layoutRoot.add(root);
     }
 
-    kitchenWorktopDraw.previewMesh.geometry.dispose();
-    kitchenWorktopDraw.previewMesh.geometry = makeKitchenWorktopGeometry(params);
-    const previewMaterial = kitchenWorktopDraw.previewMesh.material as THREE.Material;
-    kitchenWorktopDraw.previewMesh.material = makeKitchenWorktopMaterial(params.materialId, { preview: true });
-    previewMaterial.dispose();
+    if (kitchenWorktopDraw.previewSignature !== signature) {
+      kitchenWorktopDraw.previewMesh.geometry.dispose();
+      kitchenWorktopDraw.previewMesh.geometry = makeKitchenWorktopPreviewGeometry(params);
+
+      kitchenWorktopDraw.previewOutline.geometry.dispose();
+      kitchenWorktopDraw.previewOutline.geometry = makeKitchenWorktopOutlineGeometry(params);
+
+      kitchenWorktopDraw.previewBackLine.geometry.dispose();
+      kitchenWorktopDraw.previewBackLine.geometry = makeKitchenWorktopBackGuideGeometry(params);
+      kitchenWorktopDraw.previewSignature = signature;
+    }
+    if (kitchenWorktopDraw.previewMaterialId !== params.materialId) {
+      const previewMaterial = kitchenWorktopDraw.previewMesh.material as THREE.Material;
+      kitchenWorktopDraw.previewMesh.material = makeKitchenWorktopMaterial(params.materialId, { preview: true });
+      (kitchenWorktopDraw.previewMesh.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+      previewMaterial.dispose();
+      kitchenWorktopDraw.previewMaterialId = params.materialId;
+    }
     kitchenWorktopDraw.previewMesh.position.y = params.heightMm / 1000;
     kitchenWorktopDraw.previewMesh.visible = true;
 
-    kitchenWorktopDraw.previewOutline.geometry.dispose();
-    kitchenWorktopDraw.previewOutline.geometry = makeKitchenWorktopOutlineGeometry(params);
     kitchenWorktopDraw.previewOutline.position.set(0, params.heightMm / 1000 + 0.0015, 0);
     (kitchenWorktopDraw.previewOutline.material as THREE.LineBasicMaterial).color.setHex(kitchenWorktopOutlineColor(params.materialId));
     kitchenWorktopDraw.previewOutline.visible = true;
 
-    kitchenWorktopDraw.previewBackLine.geometry.dispose();
-    kitchenWorktopDraw.previewBackLine.geometry = makeKitchenWorktopBackGuideGeometry(params);
     kitchenWorktopDraw.previewBackLine.position.set(0, params.heightMm / 1000 + 0.0015, 0);
     kitchenWorktopDraw.previewBackLine.visible = true;
 
     kitchenWorktopDraw.previewRoot.visible = true;
     kitchenWorktopDraw.previewRoot.updateMatrixWorld(true);
+  };
+
+  const scheduleKitchenWorktopPreviewUpdate = () => {
+    if (kitchenWorktopDraw.previewUpdatePending) return;
+    kitchenWorktopDraw.previewUpdatePending = true;
+    requestAnimationFrame(() => {
+      kitchenWorktopDraw.previewUpdatePending = false;
+      updateKitchenWorktopPreview();
+    });
   };
 
   const cancelKitchenWorktopDraw = (opts?: { silent?: boolean }) => {
@@ -2494,6 +2535,9 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.points = [];
     kitchenWorktopDraw.hoverPoint = null;
     kitchenWorktopDraw.typedMm = "";
+    kitchenWorktopDraw.previewUpdatePending = false;
+    kitchenWorktopDraw.previewSignature = "";
+    kitchenWorktopDraw.previewMaterialId = "";
     if (kitchenWorktopDraw.previewRoot) {
       layoutRoot.remove(kitchenWorktopDraw.previewRoot);
       disposeObject3D(kitchenWorktopDraw.previewRoot);
@@ -3054,7 +3098,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.points = [point];
       kitchenWorktopDraw.hoverPoint = point;
       kitchenWorktopDraw.typedMm = "";
-      updateKitchenWorktopPreview();
+      scheduleKitchenWorktopPreviewUpdate();
       setUnderlayStatus("Pracovná doska: druhý klik = ďalší bod. Píš mm + Enter.");
       return true;
     }
@@ -3064,7 +3108,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.hoverPoint = point;
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
-      updateKitchenWorktopPreview();
+      scheduleKitchenWorktopPreviewUpdate();
       setUnderlayStatus("Pracovná doska: pokračuj ďalším bodom alebo Esc = potvrdiť.");
       return true;
     }
@@ -3083,7 +3127,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.hoverPoint = point;
     kitchenWorktopDraw.typedMm = "";
     wallTypedHud.style.display = "none";
-    updateKitchenWorktopPreview();
+    scheduleKitchenWorktopPreviewUpdate();
     setUnderlayStatus("Pracovná doska: ďalší klik = ďalší roh, Esc = potvrdiť hotový tvar.");
     return true;
   };
@@ -3109,7 +3153,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const mirrorKitchenWorktopDraw = () => {
     kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
-    updateKitchenWorktopPreview();
+    scheduleKitchenWorktopPreviewUpdate();
     setUnderlayStatus(
       `Pracovná doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
     );
@@ -3835,15 +3879,31 @@ export function startApp(initialArgs: AppArgs) {
             const inst = findInstance(id);
             if (!inst) continue;
             const prev = inst.root.position.clone();
+            const prevRotationY = inst.root.rotation.y;
+            const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
             const desired = new THREE.Vector3(inst.root.position.x + dxMm / 1000, 0, inst.root.position.z + dzMm / 1000);
             const desiredInRoom = applyWallConstraints(inst, desired);
+            let desiredPlaced = desiredInRoom.clone();
+            if (instIds.length === 1 && inst.kitchenGroupId) {
+              const kitchenConstraint = getKitchenPlacementConstraint(inst, desiredInRoom);
+              if (kitchenConstraint) {
+                desiredPlaced.copy(kitchenConstraint.position);
+                inst.root.rotation.y = kitchenConstraint.rotationY;
+                inst.kitchenPlacement = kitchenConstraint.kitchenPlacement ?? prevKitchenPlacement;
+              }
+            }
             const snapped =
               instIds.length === 1
-                ? snapPositionDetailed(inst, desiredInRoom, { stickyNeighborId: null }).position
-                : desiredInRoom;
+                ? snapPositionDetailed(inst, desiredPlaced, {
+                    stickyNeighborId: null,
+                    snapDistanceM: inst.kitchenGroupId ? 0.12 : undefined
+                  }).position
+                : desiredPlaced;
             inst.root.position.copy(snapped);
             if (anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
               inst.root.position.copy(prev);
+              inst.root.rotation.y = prevRotationY;
+              inst.kitchenPlacement = prevKitchenPlacement;
             } else {
               autoOrientModuleToRoomWallIfSnapped(inst);
               if (instIds.length === 1) {
@@ -5241,7 +5301,7 @@ export function startApp(initialArgs: AppArgs) {
       renderFloorBoundaryEdit();
     }
     if (kitchenWorktopDraw.active && kitchenWorktopDraw.points.length > 0) {
-      updateKitchenWorktopPreview();
+      scheduleKitchenWorktopPreviewUpdate();
       mountProps();
     }
   };
@@ -5733,7 +5793,7 @@ export function startApp(initialArgs: AppArgs) {
     just.addEventListener("change", () => {
       kitchenWorktopDraw.justification =
         just.value === "front" ? "front" : just.value === "center" ? "center" : "back";
-      updateKitchenWorktopPreview();
+      scheduleKitchenWorktopPreviewUpdate();
     });
   };
 
@@ -7963,6 +8023,41 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   }
 
+  function pointInPlanPolygon(point: { x: number; z: number }, poly: Array<{ x: number; z: number }>) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i]!.x;
+      const zi = poly[i]!.z;
+      const xj = poly[j]!.x;
+      const zj = poly[j]!.z;
+      const intersect = (zi > point.z) !== (zj > point.z) && point.x < ((xj - xi) * (point.z - zi)) / (zj - zi + 1e-12) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function findSelectableFloorplanModuleAtPoint(
+    pointMm: { x: number; z: number },
+    mousePx: { x: number; y: number },
+    rect: DOMRect
+  ) {
+    const pointWorld = { x: pointMm.x / 1000, z: pointMm.z / 1000 };
+    let best: { id: string; score: number } | null = null;
+
+    for (const inst of instances) {
+      const selectableId = kitchenMode ? kitchenMode.filterSelectableInstanceId(inst.id) : inst.id;
+      if (!selectableId) continue;
+      const poly = getModulePlanPolygon(inst, getModuleLocalBackCenter).map((p) => ({ x: p.x, z: p.z }));
+      if (poly.length < 3) continue;
+      if (!pointInPlanPolygon(pointWorld, poly)) continue;
+      const center = worldToScreen(inst.root.position.clone(), cam(), rect);
+      const score = Math.hypot(center.x - mousePx.x, center.y - mousePx.y);
+      if (!best || score < best.score) best = { id: selectableId, score };
+    }
+
+    return best?.id ?? null;
+  }
+
   function selectInstanceById(id: string) {
     if (mode !== "layout") return;
     const inst = findInstance(id);
@@ -8140,7 +8235,11 @@ export function startApp(initialArgs: AppArgs) {
     return false;
   }
 
-  function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: { stickyNeighborId?: string | null; ignoreIds?: Set<string> }) {
+  function snapPositionDetailed(
+    moving: LayoutInstance,
+    desired: THREE.Vector3,
+    opts?: { stickyNeighborId?: string | null; ignoreIds?: Set<string>; snapDistanceM?: number }
+  ) {
     if (isCornerKitchenModule(moving)) {
       return { position: desired.clone(), link: null };
     }
@@ -8157,7 +8256,8 @@ export function startApp(initialArgs: AppArgs) {
       movingBox: a,
       desired,
       others,
-      stickyNeighborId: opts?.stickyNeighborId ?? null
+      stickyNeighborId: opts?.stickyNeighborId ?? null,
+      snapDistanceM: opts?.snapDistanceM
     });
 
     const candidates: Array<{ pos: THREE.Vector3; score: number; link: ModuleAdjacencyLink | null }> = [];
@@ -9643,6 +9743,9 @@ export function startApp(initialArgs: AppArgs) {
         const selectableModuleId = moduleId && kitchenMode ? kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
         if (selectableModuleId && beginModuleSelection(selectableModuleId, ev)) return;
 
+        const fallbackModuleId = findSelectableFloorplanModuleAtPoint(pMm, mouse, rect2);
+        if (fallbackModuleId && beginModuleSelection(fallbackModuleId, ev)) return;
+
         const worktopHit = raycaster.intersectObjects(getKitchenWorktopGeometryMeshes(), false)[0]?.object;
         const worktopId = getWorktopIdFromObject(worktopHit);
         if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
@@ -9671,17 +9774,6 @@ export function startApp(initialArgs: AppArgs) {
           setSelectedFloor(bestFloor.id);
           return;
         }
-
-        const pointInPoly = (p: { x: number; z: number }, poly: Array<{ x: number; z: number }>) => {
-          let inside = false;
-          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-            const xi = poly[i].x, zi = poly[i].z;
-            const xj = poly[j].x, zj = poly[j].z;
-            const intersect = (zi > p.z) !== (zj > p.z) && p.x < ((xj - xi) * (p.z - zi)) / (zj - zi + 1e-12) + xi;
-            if (intersect) inside = !inside;
-          }
-          return inside;
-        };
 
         // Prefer polygon hit-testing when available.
         let bestPoly: { id: string; px: number } | null = null;
@@ -9812,10 +9904,9 @@ export function startApp(initialArgs: AppArgs) {
         return;
       }
 
-      const worktopId = getWorktopIdFromObject(first) ?? getWorktopIdFromObject(worktopHit3d);
-      if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
-
       if (!id) {
+        const worktopId = getWorktopIdFromObject(first) ?? getWorktopIdFromObject(worktopHit3d);
+        if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
         if (viewMode === "2d" && layoutTool === "select" && ev.button === 0 && underlayMesh.visible && !underlayState.pinned) {
           const underlayHit = raycaster.intersectObject(underlayMesh, false)[0];
           if (underlayHit) {
@@ -9850,6 +9941,8 @@ export function startApp(initialArgs: AppArgs) {
 
       const selectableId = kitchenMode ? kitchenMode.filterSelectableInstanceId(id) : id;
       if (!selectableId) {
+        const worktopId = getWorktopIdFromObject(first) ?? getWorktopIdFromObject(worktopHit3d);
+        if (worktopId && beginKitchenWorktopSelection(worktopId, ev)) return;
         setSelectedModule(null);
         clearWindowLightIfMissing();
         return;
@@ -10368,7 +10461,7 @@ export function startApp(initialArgs: AppArgs) {
       } else {
         wallTypedHud.style.display = "none";
       }
-      if (kitchenWorktopDraw.points.length > 0) updateKitchenWorktopPreview();
+      if (kitchenWorktopDraw.points.length > 0) scheduleKitchenWorktopPreviewUpdate();
       return;
     }
 
@@ -11253,7 +11346,10 @@ export function startApp(initialArgs: AppArgs) {
     if (isCornerKitchenModule(moving)) return null;
     const prevGroupId = moving.kitchenGroupId;
     if (!moving.kitchenGroupId && S.kitchenEditMode && S.activeKitchenGroupId) moving.kitchenGroupId = S.activeKitchenGroupId;
-    const result = snapPositionDetailed(moving, desired, { stickyNeighborId: opts?.stickyNeighborId ?? null });
+    const result = snapPositionDetailed(moving, desired, {
+      stickyNeighborId: opts?.stickyNeighborId ?? null,
+      snapDistanceM: moving.kitchenGroupId ? 2.4 : undefined
+    });
     moving.kitchenGroupId = prevGroupId;
     let kitchenPlacement: KitchenPlacementBinding | null = null;
     const effectiveGroupId = moving.kitchenGroupId ?? (S.kitchenEditMode ? S.activeKitchenGroupId : null);

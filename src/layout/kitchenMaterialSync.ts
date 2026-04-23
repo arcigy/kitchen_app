@@ -121,6 +121,7 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     materials.bodyKey = corpus.id;
+    materials.bodyMaterialId = corpus.id;
     materials.bodyName = corpus.displayName;
     materials.bodyColor = corpus.preview.colorHex;
   }
@@ -129,6 +130,7 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     materials.frontKey = fronts.id;
+    materials.frontMaterialId = fronts.id;
     materials.frontName = fronts.displayName;
     materials.frontColor = fronts.preview.colorHex;
   }
@@ -136,6 +138,10 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
   const back = getKitchenMaterial(ctx, "back");
   if (back) {
     record.backThickness = back.defaultThicknessMm;
+    materials.backKey = back.id;
+    materials.backMaterialId = back.id;
+    materials.backName = back.displayName;
+    materials.backColor = back.preview.colorHex;
   }
 
   const drawerBottom = getKitchenMaterial(ctx, "drawer_bottom");
@@ -180,6 +186,7 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     materials.bodyKey = corpus.id;
+    materials.bodyMaterialId = corpus.id;
     materials.bodyName = corpus.displayName;
     materials.bodyColor = corpus.preview.colorHex;
   }
@@ -188,6 +195,7 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     materials.frontKey = fronts.id;
+    materials.frontMaterialId = fronts.id;
     materials.frontName = fronts.displayName;
     materials.frontColor = fronts.preview.colorHex;
   }
@@ -195,6 +203,10 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   const back = getKitchenMaterial(ctx, "back");
   if (back) {
     record.backThickness = back.defaultThicknessMm;
+    materials.backKey = back.id;
+    materials.backMaterialId = back.id;
+    materials.backName = back.displayName;
+    materials.backColor = back.preview.colorHex;
   }
 
   if ("worktopThicknessMm" in record) {

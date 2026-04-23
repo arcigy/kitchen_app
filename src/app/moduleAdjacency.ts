@@ -133,6 +133,7 @@ export function buildModuleSnapCandidates(args: {
   others: Array<{ id: string; box: BoxLike }>;
   stickyNeighborId?: string | null;
   detachDistanceM?: number;
+  snapDistanceM?: number;
 }) {
   const stickyNeighborId = args.stickyNeighborId ?? null;
   const detachDistanceM = args.detachDistanceM ?? 0.14;
@@ -144,7 +145,7 @@ export function buildModuleSnapCandidates(args: {
     const a = args.movingBox;
     const overlapX = Math.max(0, Math.min(a.max.x, b.max.x) - Math.max(a.min.x, b.min.x));
     const overlapZ = Math.max(0, Math.min(a.max.z, b.max.z) - Math.max(a.min.z, b.min.z));
-    const snapDist = other.id === stickyNeighborId ? detachDistanceM : DEFAULT_SNAP_DIST_M;
+    const snapDist = other.id === stickyNeighborId ? detachDistanceM : (args.snapDistanceM ?? DEFAULT_SNAP_DIST_M);
 
     if (overlapZ >= DEFAULT_MIN_OVERLAP_M) {
       const d1 = b.min.x - a.max.x;
