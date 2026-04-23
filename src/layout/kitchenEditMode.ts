@@ -117,6 +117,14 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     }));
   };
 
+  const getNextKitchenName = () => {
+    const base = "Kuchyňa";
+    const used = new Set(args.S.kitchenGroups.map((group) => group.name.trim()).filter(Boolean));
+    let index = 1;
+    while (used.has(`${base} ${index}`)) index += 1;
+    return `${base} ${index}`;
+  };
+
   const rebuildGroupModules = (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => {
     args.rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
   };
@@ -261,9 +269,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const enterNew = () => {
-    const name = prompt("Názov kuchyne:", "Kuchyňa 1");
-    if (name === null) return;
-    beginEdit("kg_" + Date.now(), name, args.S.kitchenCtx, null);
+    beginEdit("kg_" + Date.now(), getNextKitchenName(), args.S.kitchenCtx, null);
   };
 
   const enterExisting = (groupId: string) => {
