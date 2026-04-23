@@ -175,6 +175,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     removeEscapeHandler();
     escapeHandler = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape") return;
+      if (ev.shiftKey) return;
       if (!args.S.kitchenEditMode) return;
       if (args.handleWorktopEscape()) {
         ev.preventDefault();
