@@ -8,6 +8,8 @@ const kitchenCornerAnchorName = "__kitchen_corner_anchor";
 const kitchenCornerXAnchorName = "__kitchen_corner_x_anchor";
 const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
 const baseLiveRuntime = liveStateSnapshot.liveRuntime;
+const baseLengthXMm = typeof baseLiveRuntime?.params?.lengthX === "number" ? baseLiveRuntime.params.lengthX : 1000;
+const baseLengthZMm = typeof baseLiveRuntime?.params?.lengthZ === "number" ? baseLiveRuntime.params.lengthZ : 1000;
 const baseDepthMm = typeof baseLiveRuntime?.params?.depth === "number" ? baseLiveRuntime.params.depth : 560;
 const baseFrontThicknessMm =
   typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 19;
@@ -157,6 +159,97 @@ function applyCornerDepthAdjustments(group: THREE.Group, params: CornerShelfLowe
   }
 }
 
+function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
+  const nextLengthXMm = Math.max(400, Math.round(getNumber(params.lengthX, baseLengthXMm)));
+  const nextLengthZMm = Math.max(400, Math.round(getNumber(params.lengthZ, baseLengthZMm)));
+  const deltaLengthXMm = nextLengthXMm - baseLengthXMm;
+  const deltaLengthZMm = nextLengthZMm - baseLengthZMm;
+  if (Math.abs(deltaLengthXMm) < 1e-6 && Math.abs(deltaLengthZMm) < 1e-6) return;
+
+  const resizeAlongX = ["back_x", "bottom_x", "top_x_front", "top_x_back", "kick_x"];
+  const resizeAlongZ = ["back_z", "bottom_z", "top_z", "kick_z"];
+  const shiftAlongX = ["side_end_x", "leg_outer_x_rear", "leg_outer_x_front"];
+  const shiftAlongZ = ["side_end_z", "leg_outer_z_rear", "leg_outer_z_front"];
+  const shiftAlongDoorX = [
+    "doorHandle_front_z",
+    "hinge_front_z_1_door_plate",
+    "hinge_front_z_1_door_cup",
+    "hinge_front_z_1_arm",
+    "hinge_front_z_2_door_plate",
+    "hinge_front_z_2_door_cup",
+    "hinge_front_z_2_arm",
+    "kickClip_x_outer_collar",
+    "kickClip_x_outer_pad",
+    "kickClip_x_outer_arm"
+  ];
+  const shiftAlongDoorZ = [
+    "doorHandle_front_x",
+    "hinge_front_x_1_door_plate",
+    "hinge_front_x_1_door_cup",
+    "hinge_front_x_1_arm",
+    "hinge_front_x_2_door_plate",
+    "hinge_front_x_2_door_cup",
+    "hinge_front_x_2_arm",
+    "kickClip_z_outer_collar",
+    "kickClip_z_outer_pad",
+    "kickClip_z_outer_arm"
+  ];
+
+  for (const child of group.children) {
+    const mesh = child as THREE.Mesh;
+    if (!(mesh instanceof THREE.Mesh)) continue;
+    const name = mesh.name;
+
+    if (/^shelf_\d+_x$/i.test(name) && Math.abs(deltaLengthXMm) > 1e-6) {
+      resizeMeshAxis(mesh, "x", ((mesh.userData?.dimensionsMm?.width as number | undefined) ?? 0) + deltaLengthXMm);
+      shiftMeshAxis(mesh, "x", deltaLengthXMm * 0.5);
+      continue;
+    }
+    if (/^shelf_\d+_z$/i.test(name) && Math.abs(deltaLengthZMm) > 1e-6) {
+      resizeMeshAxis(mesh, "z", ((mesh.userData?.dimensionsMm?.depth as number | undefined) ?? 0) + deltaLengthZMm);
+      shiftMeshAxis(mesh, "z", deltaLengthZMm * 0.5);
+      continue;
+    }
+
+    if (name === "door_front_z" && Math.abs(deltaLengthXMm) > 1e-6) {
+      resizeMeshAxis(mesh, "x", ((mesh.userData?.dimensionsMm?.width as number | undefined) ?? 0) + deltaLengthXMm);
+      shiftMeshAxis(mesh, "x", deltaLengthXMm * 0.5);
+      continue;
+    }
+    if (name === "door_front_x" && Math.abs(deltaLengthZMm) > 1e-6) {
+      resizeMeshAxis(mesh, "z", ((mesh.userData?.dimensionsMm?.depth as number | undefined) ?? 0) + deltaLengthZMm);
+      shiftMeshAxis(mesh, "z", deltaLengthZMm * 0.5);
+      continue;
+    }
+
+    if (Math.abs(deltaLengthXMm) > 1e-6 && resizeAlongX.includes(name)) {
+      resizeMeshAxis(mesh, "x", ((mesh.userData?.dimensionsMm?.width as number | undefined) ?? 0) + deltaLengthXMm);
+      shiftMeshAxis(mesh, "x", deltaLengthXMm * 0.5);
+      continue;
+    }
+    if (Math.abs(deltaLengthZMm) > 1e-6 && resizeAlongZ.includes(name)) {
+      resizeMeshAxis(mesh, "z", ((mesh.userData?.dimensionsMm?.depth as number | undefined) ?? 0) + deltaLengthZMm);
+      shiftMeshAxis(mesh, "z", deltaLengthZMm * 0.5);
+      continue;
+    }
+    if (Math.abs(deltaLengthXMm) > 1e-6 && shiftAlongX.includes(name)) {
+      shiftMeshAxis(mesh, "x", deltaLengthXMm);
+      continue;
+    }
+    if (Math.abs(deltaLengthZMm) > 1e-6 && shiftAlongZ.includes(name)) {
+      shiftMeshAxis(mesh, "z", deltaLengthZMm);
+      continue;
+    }
+    if (Math.abs(deltaLengthXMm) > 1e-6 && shiftAlongDoorX.includes(name)) {
+      shiftMeshAxis(mesh, "x", deltaLengthXMm);
+      continue;
+    }
+    if (Math.abs(deltaLengthZMm) > 1e-6 && shiftAlongDoorZ.includes(name)) {
+      shiftMeshAxis(mesh, "z", deltaLengthZMm);
+    }
+  }
+}
+
 function alignCornerFrontSupports(group: THREE.Group) {
   const legClearanceBehindKickMm = 10;
   const xKickBounds = getObjectBoundsMm(group.getObjectByName("kick_x"));
@@ -225,6 +318,7 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Gro
   );
 
   applyCornerDepthAdjustments(group, params);
+  applyCornerLengthAdjustments(group, params);
   alignCornerFrontSupports(group);
 
   group.updateMatrixWorld(true);

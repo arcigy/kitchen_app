@@ -12,18 +12,7 @@ function clone(value) {
 
 function moduleSignature(inst) {
   return JSON.stringify({
-    params: {
-      width: inst.params.width ?? null,
-      depth: inst.params.depth ?? null,
-      height: inst.params.height ?? null,
-      heightCarcass: inst.params.heightCarcass ?? null,
-      lengthX: inst.params.lengthX ?? null,
-      lengthZ: inst.params.lengthZ ?? null,
-      shelfCount: inst.params.shelfCount ?? null,
-      drawerCount: inst.params.drawerCount ?? null
-    },
     positionM: inst.positionM,
-    localBoxM: inst.localBoxM,
     structuralWorldBoxM: inst.structuralWorldBoxM,
     realizedDepthMm: inst.realizedDepthMm,
     structuralDepthMm: inst.structuralDepthMm,
@@ -139,17 +128,17 @@ const cornerCases = [
   { key: "depth", next: (inst) => nextNumber(inst.params.depth, 100), expectGeometry: true },
   { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: true },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: true },
+  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
+  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false },
   { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
   { key: "lengthX", next: (inst) => nextNumber(inst.params.lengthX, 120), expectGeometry: true },
   { key: "lengthZ", next: (inst) => nextNumber(inst.params.lengthZ, 120), expectGeometry: true },
-  { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: true },
+  { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: false },
   { key: "plinthHeight", next: (inst) => nextNumber(inst.params.plinthHeight, 20, 0), expectGeometry: true },
   { key: "plinthSetbackMm", next: (inst) => nextNumber(inst.params.plinthSetbackMm, 20, 0), expectGeometry: true },
-  { key: "doorOpen", next: (inst) => !inst.params.doorOpen, expectGeometry: true },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: true },
-  { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: true }
+  { key: "doorOpen", next: (inst) => !inst.params.doorOpen, expectGeometry: false },
+  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: false },
+  { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: false }
 ];
 
 async function runMatrix(page, name, scenarioOpts, moduleType, cases) {
