@@ -171,8 +171,12 @@ export type AlignPickedLine = {
   segA: THREE.Vector3;
   segB: THREE.Vector3;
   label: string;
-  wallId: string;
-  wallLine: AlignWallLine;
+  targetKind: "wall" | "module" | "worktop";
+  lineRole: "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB";
+  wallId?: string;
+  instanceId?: string;
+  worktopId?: string;
+  segmentIndex?: number;
 };
 
 export interface AppState {

@@ -117,6 +117,9 @@ export type KitchenPlacementBinding = {
   cornerIndex?: number | null;
 };
 
+export type AlignTargetKind = "wall" | "module" | "worktop";
+export type AlignLineRole = "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB";
+
 export type LayoutSnapshot = {
   wallCounter: number;
   walls: Array<{ id: string; params: WallParams }>;
@@ -155,8 +158,12 @@ export type AlignPickedLine = {
   segA: THREE.Vector3;
   segB: THREE.Vector3;
   label: string;
-  wallId: string;
-  wallLine: "center" | "exterior" | "interior" | "endA" | "endB";
+  targetKind: AlignTargetKind;
+  lineRole: AlignLineRole;
+  wallId?: string;
+  instanceId?: string;
+  worktopId?: string;
+  segmentIndex?: number;
 };
 
 export type PickedLine2D = {

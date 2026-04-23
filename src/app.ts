@@ -25,6 +25,7 @@ import {
   createPlanSnapper,
   getModulePlanLocalPolygon,
   getModulePlanLocalRect,
+  getModulePlanPolygon,
   type PlanSnapBinding,
   type PlanSnapResult
 } from "./app/planSnap";
@@ -42,6 +43,16 @@ import {
 } from "./app/measureEditing";
 import { createSnapOverlay } from "./app/snapOverlay";
 import {
+  areAlignLinesParallel,
+  buildModuleAlignCandidates,
+  buildWallAlignCandidates,
+  buildWorktopAlignCandidates,
+  getAlignShiftVector,
+  pickBestAlignLine,
+  shiftPolylinePoint,
+  shiftPolylineSegment
+} from "./app/alignTool";
+import {
   buildSectionMarkerGeometry,
   buildPlaneSliceStripGeometry,
   computeElevationViewConfig,
@@ -58,7 +69,6 @@ import {
 import { createViewerTabs, resolveAppArgs, type AppArgs } from "./app/bootstrap";
 import type {
   AlignPickedLine,
-  AlignWallLine,
   FloorBoundaryPoint,
   FloorBoundarySegment,
   FloorBoundaryTool,
@@ -787,77 +797,60 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
-    if (walls.length === 0) return null as AlignPickedLine | null;
-
-    let best: { line: AlignPickedLine; px: number } | null = null;
+    const candidates: AlignPickedLine[] = [];
 
     for (const w of walls) {
       const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
       const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
       const just = w.params.justification ?? "center";
       const s = (w.params.exteriorSign ?? 1) as 1 | -1;
-
       const center = wallRefLineToCenterLine(refA, refB, w.params.thicknessMm, just, s);
       const d = center.b.clone().sub(center.a);
       if (d.lengthSq() < 1e-10) continue;
       d.normalize();
       const n = new THREE.Vector3(-d.z, 0, d.x);
-      const half = Math.max(10, w.params.thicknessMm) / 2000; // meters
+      const half = Math.max(10, w.params.thicknessMm) / 2000;
       const exteriorA = center.a.clone().addScaledVector(n, s * half);
       const exteriorB = center.b.clone().addScaledVector(n, s * half);
       const interiorA = center.a.clone().addScaledVector(n, -s * half);
       const interiorB = center.b.clone().addScaledVector(n, -s * half);
-
-      const candidates: Array<{ kind: AlignWallLine; a: THREE.Vector3; b: THREE.Vector3; p: THREE.Vector3; dir: THREE.Vector3; label: string }> = [
-        { kind: "center", a: center.a, b: center.b, p: center.a, dir: d, label: `Wall ${w.id}: centerline` },
-        { kind: "exterior", a: exteriorA, b: exteriorB, p: exteriorA, dir: d, label: `Wall ${w.id}: exterior face` },
-        { kind: "interior", a: interiorA, b: interiorB, p: interiorA, dir: d, label: `Wall ${w.id}: interior face` }
-      ];
-
-      const endLen = Math.max(0.5, w.params.thicknessMm / 1000 + 0.25);
-      const endA1 = center.a.clone().addScaledVector(n, -endLen / 2);
-      const endA2 = center.a.clone().addScaledVector(n, endLen / 2);
-      const endB1 = center.b.clone().addScaledVector(n, -endLen / 2);
-      const endB2 = center.b.clone().addScaledVector(n, endLen / 2);
-      candidates.push({ kind: "endA", a: endA1, b: endA2, p: center.a, dir: n.clone().normalize(), label: `Wall ${w.id}: end A` });
-      candidates.push({ kind: "endB", a: endB1, b: endB2, p: center.b, dir: n.clone().normalize(), label: `Wall ${w.id}: end B` });
-
-      for (const c of candidates) {
-        const sa = worldToScreen(c.a, cam(), rect);
-        const sb = worldToScreen(c.b, cam(), rect);
-        const px = distPxPointToSeg(mousePx.x, mousePx.y, sa.x, sa.y, sb.x, sb.y);
-        if (!best || px < best.px) {
-          best = {
-            px,
-            line: {
-              p: c.p.clone(),
-              dir: c.dir.clone().normalize(),
-              segA: c.a.clone(),
-              segB: c.b.clone(),
-              label: c.label,
-              wallId: w.id,
-              wallLine: c.kind
-            }
-          };
-        }
-      }
+      candidates.push(
+        ...buildWallAlignCandidates({
+          wall: w,
+          centerA: center.a,
+          centerB: center.b,
+          exteriorA,
+          exteriorB,
+          interiorA,
+          interiorB
+        })
+      );
     }
 
-    if (!best) return null;
-    if (best.px > 12) return null;
-    return best.line;
-  };
+    for (const inst of instances) {
+      const polygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
+      candidates.push(...buildModuleAlignCandidates(inst, polygon));
+    }
 
-  const alignParallel = (a: AlignPickedLine, b: AlignPickedLine) => {
-    const dot = Math.abs(a.dir.clone().normalize().dot(b.dir.clone().normalize()));
-    return dot >= 0.999;
-  };
+    for (const worktop of kitchenWorktops) {
+      const path = sanitizeKitchenWorktopPath(worktop.params.path);
+      if (path.length < 2) continue;
+      const rawPath = path.map(kitchenWorktopPointToWorld);
+      const centerPath = getKitchenWorktopGuidePathForAlign(worktop.params, "center");
+      const backPath = getKitchenWorktopGuidePathForAlign(worktop.params, "back");
+      const frontPath = getKitchenWorktopGuidePathForAlign(worktop.params, "front");
+      candidates.push(
+        ...buildWorktopAlignCandidates({
+          worktop,
+          rawPath,
+          centerPath,
+          backPath,
+          frontPath
+        })
+      );
+    }
 
-  const alignShiftVec = (ref: AlignPickedLine, moving: AlignPickedLine) => {
-    const dir = ref.dir.clone().normalize();
-    const n = new THREE.Vector3(-dir.z, 0, dir.x);
-    const off = n.dot(moving.p.clone().sub(ref.p));
-    return n.multiplyScalar(-off);
+    return pickBestAlignLine(mousePx, rect, cam(), candidates, 12);
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -1940,6 +1933,39 @@ export function startApp(initialArgs: AppArgs) {
     }
   };
 
+  const applyAlignBetweenPickedLines = (ref: AlignPickedLine, picked: AlignPickedLine) => {
+    if (!areAlignLinesParallel(ref, picked)) {
+      return { ok: false, reason: "Align: lines must be parallel." };
+    }
+
+    const shift = getAlignShiftVector(ref, picked);
+    const dxMm = Math.round(shift.x * 1000);
+    const dzMm = Math.round(shift.z * 1000);
+    if (dxMm === 0 && dzMm === 0) {
+      return { ok: false, reason: "Align: already aligned." };
+    }
+
+    if (picked.targetKind === "wall") {
+      const w = picked.wallId ? walls.find((x) => x.id === picked.wallId) ?? null : null;
+      if (!w) return { ok: false, reason: "Align: wall not found." };
+      if (pinnedWallIds.has(w.id)) return { ok: false, reason: "Align: target wall is pinned." };
+      if (picked.lineRole === "endA" || picked.lineRole === "endB") {
+        moveWallEndpointAndConnected(w, picked.lineRole === "endA" ? "a" : "b", dxMm, dzMm);
+      } else {
+        translateWallAndConnected(w, dxMm, dzMm);
+      }
+      return { ok: true, reason: "Align: done. Click reference line..." };
+    }
+
+    if (picked.targetKind === "module") {
+      const aligned = !!(picked.instanceId && translateModuleByMeasure(picked.instanceId, dxMm, dzMm));
+      return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: module move blocked." };
+    }
+
+    const aligned = alignKitchenWorktopLine(picked, dxMm, dzMm);
+    return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: worktop move blocked." };
+  };
+
   const cloneKitchenWorktopParams = (params: KitchenWorktopParams): KitchenWorktopParams => ({
     path: params.path.map((point) => ({ x: point.x, z: point.z })),
     justification: params.justification,
@@ -2122,6 +2148,30 @@ export function startApp(initialArgs: AppArgs) {
     if (params.mirrored) pathOffsetM *= -1;
 
     return offsetKitchenWorktopPath(pathWorld, pathOffsetM);
+  };
+
+  const getKitchenWorktopGuidePathForAlign = (
+    params: KitchenWorktopParams,
+    role: "center" | "back" | "front"
+  ) => {
+    const path = sanitizeKitchenWorktopPath(params.path);
+    if (path.length < 2) return [] as THREE.Vector3[];
+    const pathWorld = path.map(kitchenWorktopPointToWorld);
+    if (pathWorld.length < 2) return [] as THREE.Vector3[];
+    const depthM = Math.max(1, params.depthMm) / 1000;
+    let offsetM = 0;
+    if (params.justification === "center") {
+      if (role === "back") offsetM = depthM / 2;
+      else if (role === "front") offsetM = -depthM / 2;
+    } else if (params.justification === "back") {
+      if (role === "center") offsetM = -depthM / 2;
+      else if (role === "front") offsetM = -depthM;
+    } else {
+      if (role === "center") offsetM = depthM / 2;
+      else if (role === "back") offsetM = depthM;
+    }
+    if (params.mirrored) offsetM *= -1;
+    return Math.abs(offsetM) < 1e-9 ? pathWorld : offsetKitchenWorktopPath(pathWorld, offsetM);
   };
 
   const makeKitchenWorktopGeometry = (params: KitchenWorktopParams) => {
@@ -8859,7 +8909,7 @@ export function startApp(initialArgs: AppArgs) {
         const picked = pickAlignLineAt(hitPoint, mouse, rect2);
 
         if (!picked) {
-          setUnderlayStatus("Align: click a wall line (center/face/end).");
+          setUnderlayStatus("Align: click a wall/module/worktop line.");
           return;
         }
 
@@ -8874,48 +8924,21 @@ export function startApp(initialArgs: AppArgs) {
         }
 
         const ref = alignState.ref;
-        if (!alignParallel(ref, picked)) {
-          setUnderlayStatus("Align: lines must be parallel.");
-          return;
-        }
-
-        const shift = alignShiftVec(ref, picked);
-        const dxMm = Math.round(shift.x * 1000);
-        const dzMm = Math.round(shift.z * 1000);
-
-        const w = walls.find((x) => x.id === picked.wallId) ?? null;
-        if (!w) {
-          setUnderlayStatus("Align: wall not found.");
+        const result = applyAlignBetweenPickedLines(ref, picked);
+        if (!result.ok) {
+          setUnderlayStatus(result.reason);
           alignState.ref = null;
           mountProps();
           return;
         }
-        if (pinnedWallIds.has(w.id)) {
-          setUnderlayStatus("Align: target wall is pinned.");
-          alignState.ref = null;
-          mountProps();
-          return;
-        }
-
-        if (dxMm === 0 && dzMm === 0) {
-          setUnderlayStatus("Align: already aligned.");
-          alignState.ref = null;
-          mountProps();
-          return;
-        }
-
-        if (picked.wallLine === "endA" || picked.wallLine === "endB") {
-          moveWallEndpointAndConnected(w, picked.wallLine === "endA" ? "a" : "b", dxMm, dzMm);
-        } else {
-          translateWallAndConnected(w, dxMm, dzMm);
-        }
+        updateSelectionHighlights();
         commitHistory(S);
 
         alignState.lastA = ref;
         alignState.lastB = picked;
         alignState.lastUntilMs = performance.now() + 2500;
         alignState.ref = null;
-        setUnderlayStatus("Align: done. Click reference line...");
+        setUnderlayStatus(result.reason);
         mountProps();
         return;
       }
@@ -10814,6 +10837,40 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
+  const reapplyKitchenGroupPlacementBindings = (groupId: string) => {
+    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+    for (const inst of instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      const binding = inst.kitchenPlacement ?? inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
+      if (binding && applyKitchenPlacementBinding(inst, binding, backOffsetMm)) continue;
+      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
+    }
+  };
+
+  const alignKitchenWorktopLine = (picked: AlignPickedLine, dxMm: number, dzMm: number) => {
+    if (picked.targetKind !== "worktop" || !picked.worktopId || picked.segmentIndex == null) return false;
+    const worktop = findKitchenWorktop(picked.worktopId);
+    if (!worktop) return false;
+    const prevPath = structuredClone(worktop.params.path);
+    const groupId = worktop.kitchenGroupId;
+    const pointIndex = picked.lineRole === "endB" ? picked.segmentIndex + 1 : picked.segmentIndex;
+    worktop.params.path =
+      picked.lineRole === "endA" || picked.lineRole === "endB"
+        ? shiftPolylinePoint(worktop.params.path, pointIndex, dxMm, dzMm)
+        : shiftPolylineSegment(worktop.params.path, picked.segmentIndex, dxMm, dzMm);
+    worktop.params.path = sanitizeKitchenWorktopPath(worktop.params.path);
+    if (worktop.params.path.length < 2) {
+      worktop.params.path = prevPath;
+      return false;
+    }
+    rebuildKitchenWorktop(worktop);
+    reapplyKitchenGroupPlacementBindings(groupId);
+    updateSelectionHighlights();
+    updateLayoutPanel();
+    return true;
+  };
+
   const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
     const target = forcedTarget ?? getCurrentMeasureSelectionTarget();
     const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
@@ -11281,6 +11338,60 @@ export function startApp(initialArgs: AppArgs) {
     return { x: screen.x, y: screen.y };
   };
 
+  const debugPickAlignLine = (pointMm: { x: number; z: number }) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const world = new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000);
+    const screen = worldToScreen(world, cam(), rect);
+    const picked = pickAlignLineAt(world, { x: screen.x, y: screen.y }, rect);
+    if (!picked) return null;
+    return {
+      label: picked.label,
+      targetKind: picked.targetKind,
+      lineRole: picked.lineRole,
+      wallId: picked.wallId ?? null,
+      instanceId: picked.instanceId ?? null,
+      worktopId: picked.worktopId ?? null,
+      segmentIndex: picked.segmentIndex ?? null
+    };
+  };
+
+  const debugAlignLines = (refMm: { x: number; z: number }, targetMm: { x: number; z: number }) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const refWorld = new THREE.Vector3(refMm.x / 1000, 0, refMm.z / 1000);
+    const targetWorld = new THREE.Vector3(targetMm.x / 1000, 0, targetMm.z / 1000);
+    const refScreen = worldToScreen(refWorld, cam(), rect);
+    const targetScreen = worldToScreen(targetWorld, cam(), rect);
+    const ref = pickAlignLineAt(refWorld, { x: refScreen.x, y: refScreen.y }, rect);
+    const picked = pickAlignLineAt(targetWorld, { x: targetScreen.x, y: targetScreen.y }, rect);
+    if (!ref || !picked) {
+      return {
+        ok: false,
+        ref: ref ? { label: ref.label, targetKind: ref.targetKind, lineRole: ref.lineRole } : null,
+        picked: picked ? { label: picked.label, targetKind: picked.targetKind, lineRole: picked.lineRole } : null
+      };
+    }
+    const result = applyAlignBetweenPickedLines(ref, picked);
+    if (result.ok) {
+      updateSelectionHighlights();
+      commitHistory(S);
+      mountProps();
+    }
+    return {
+      ok: result.ok,
+      reason: result.reason,
+      ref: { label: ref.label, targetKind: ref.targetKind, lineRole: ref.lineRole },
+      picked: {
+        label: picked.label,
+        targetKind: picked.targetKind,
+        lineRole: picked.lineRole,
+        wallId: picked.wallId ?? null,
+        instanceId: picked.instanceId ?? null,
+        worktopId: picked.worktopId ?? null,
+        segmentIndex: picked.segmentIndex ?? null
+      }
+    };
+  };
+
   const debugPlanSnap = (
     pointMm: { x: number; z: number },
     options?: { perpendicularFromMm?: { x: number; z: number } | null }
@@ -11374,6 +11485,8 @@ export function startApp(initialArgs: AppArgs) {
     snapshot: getDebugKitchenSnapshot,
     enterMeasureTool: debugEnterMeasureTool,
     projectPlanPoint: debugProjectPlanPoint,
+    pickAlignLine: debugPickAlignLine,
+    alignLines: debugAlignLines,
     planSnap: debugPlanSnap,
     measureState: debugMeasureState,
     viewState: debugViewState,
