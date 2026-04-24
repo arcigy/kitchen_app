@@ -652,12 +652,12 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         const hingeName = `hinge_front_z_${index + 1}_${suffix}`;
         const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
+        const hingeThicknessMm = getMeshDimensionsMm(hinge)?.depth ?? getBasePart(hingeName)?.sizeMm?.z ?? 0;
+        const outsideCenterZMm =
+          doorFrontZCenter.z + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z");
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterX(hinge, doorFrontZCenter.x + doorFrontZWidthMm * 0.5 - baseHingeInsetXMm);
-        setObjectCenterZ(
-          hinge,
-          doorFrontZCenter.z + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z")
-        );
+        setObjectCenterZ(hinge, outsideCenterZMm - frontThicknessMm - hingeThicknessMm);
       }
     }
   }
@@ -680,12 +680,12 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         const hingeName = `hinge_front_x_${index + 1}_${suffix}`;
         const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
+        const hingeThicknessMm = getMeshDimensionsMm(hinge)?.width ?? getBasePart(hingeName)?.sizeMm?.x ?? 0;
+        const outsideCenterXMm =
+          doorFrontXCenter.x + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x");
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterZ(hinge, doorFrontXCenter.z + doorFrontXDepthMm * 0.5 - baseHingeInsetZMm);
-        setObjectCenterX(
-          hinge,
-          doorFrontXCenter.x + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x")
-        );
+        setObjectCenterX(hinge, outsideCenterXMm - frontThicknessMm - hingeThicknessMm);
       }
     }
   }
