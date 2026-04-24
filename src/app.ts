@@ -140,6 +140,7 @@ import {
   type PlacementHelpers
 } from "./layout/placementManager";
 import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
+import { createViewNavigation } from "./app/viewNavigation";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -193,20 +194,11 @@ export function startApp(initialArgs: AppArgs) {
   const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs } = createViewerTabs(args.viewerEl);
   let activeViewerTab = "3d";
   let activeDetailClipPlanes: THREE.Plane[] = [];
-  const detailViewPanOffset = new THREE.Vector3();
-  const savedFloorplanView = {
-    target: new THREE.Vector3(0, 0, 0),
-    zoom: 1,
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    near: 0.01,
-    far: 200
-  };
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section";
   let layoutTool: LayoutTool = "select";
+  let viewNavigation: ReturnType<typeof createViewNavigation>;
+  let detailViewPanOffset!: THREE.Vector3;
 
   type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
   let renderMode: RenderMode = "realtime";
@@ -3334,15 +3326,7 @@ export function startApp(initialArgs: AppArgs) {
     offsetMm: 0
   };
 
-  const detailPanState = {
-    active: false,
-    pointerId: null as number | null,
-    lastClientX: 0,
-    lastClientY: 0
-  };
-
   const navClock = new THREE.Clock();
-  const navKeys = new Set<string>();
   const isTypingTarget = (t: EventTarget | null) => {
     const el = t as HTMLElement | null;
     if (!el) return false;
@@ -3353,6 +3337,33 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const isEscapeKey = (ev: KeyboardEvent) => ev.key === "Escape" || ev.code === "Escape";
+  const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
+  viewNavigation = createViewNavigation({
+    viewerEl: args.viewerEl,
+    canvasEl: renderer.domElement,
+    resetViewButton: resetViewBtn,
+    getCamera: cam,
+    getControls: ctl,
+    getState: () => ({ mode, viewMode, activeViewerTab }),
+    isTypingTarget,
+    isInteractionBlocked: () =>
+      dragState.active ||
+      windowDragState.active ||
+      wallEditHud.drag ||
+      marquee.active ||
+      marquee.pending ||
+      floorEdit.active ||
+      underlayDragState.active ||
+      !!transformState.kind,
+    getSceneBounds: () => getNavigationSceneBounds(),
+    refreshDetailView: () => {
+      activeDetailClipPlanes = [];
+      updateDetailViewCamera();
+      updateDetailSliceOverlay();
+    }
+  });
+  detailViewPanOffset = viewNavigation.detailViewPanOffset;
+  viewNavigation.syncControls();
 
   const handleGlobalMeasurementClear = (ev: KeyboardEvent) => {
     if (!ev.shiftKey || !isEscapeKey(ev)) return false;
@@ -4166,29 +4177,6 @@ export function startApp(initialArgs: AppArgs) {
       }
     }
 
-    const code = ev.code;
-    if (
-      code !== "KeyW" &&
-      code !== "KeyA" &&
-      code !== "KeyS" &&
-      code !== "KeyD" &&
-      code !== "KeyQ" &&
-      code !== "KeyE" &&
-      code !== "ShiftLeft" &&
-      code !== "ShiftRight" &&
-      code !== "Space"
-    )
-      return;
-    navKeys.add(code);
-    if (code === "Space") ev.preventDefault();
-  });
-
-  window.addEventListener("keyup", (ev) => {
-    navKeys.delete(ev.code);
-  });
-
-  window.addEventListener("blur", () => {
-    navKeys.clear();
   });
 
   args.viewerEl.addEventListener("pointerleave", () => {
@@ -7036,8 +7024,13 @@ export function startApp(initialArgs: AppArgs) {
     } satisfies PlanSnapResult;
   }
 
-  const getDetailViewBounds = () => {
+  const getNavigationSceneBounds = () => {
     const box = new THREE.Box3();
+    if (mode !== "layout") {
+      if (cabinetGroup) box.expandByObject(cabinetGroup);
+      if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
+      return box.expandByScalar(0.08);
+    }
     for (const wall of walls) box.expandByObject(wall.root);
     for (const floor of floors) box.expandByObject(floor.root);
     for (const inst of instances) box.expandByObject(inst.root);
@@ -7045,24 +7038,6 @@ export function startApp(initialArgs: AppArgs) {
     if (windowInst) box.expandByObject(windowInst.root);
     if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2.6, 1));
     return box.expandByScalar(0.05);
-  };
-
-  const panCustomOrthoViewByPixels = (deltaX: number, deltaY: number, rect: DOMRect) => {
-    const activeCam = cam();
-    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
-    const zoom = Math.max(0.0001, activeCam.zoom);
-    const unitsPerPixelX = (activeCam.right - activeCam.left) / (rect.width * zoom);
-    const unitsPerPixelY = (activeCam.top - activeCam.bottom) / (rect.height * zoom);
-    const forward = new THREE.Vector3();
-    activeCam.getWorldDirection(forward);
-    const up = activeCam.up.clone().normalize();
-    const right = forward.clone().cross(up).normalize();
-    const pan = right.multiplyScalar(-deltaX * unitsPerPixelX).add(up.multiplyScalar(deltaY * unitsPerPixelY));
-    detailViewPanOffset.add(pan);
-    activeCam.position.add(pan);
-    ctl().target.add(pan);
-    activeCam.updateProjectionMatrix();
-    ctl().update();
   };
 
   const applyMaterialClippingPlanes = (material: THREE.Material | THREE.Material[] | undefined, planes: THREE.Plane[]) => {
@@ -7212,52 +7187,7 @@ export function startApp(initialArgs: AppArgs) {
     syncViewerTabs(activeViewerTab);
   };
 
-  const isPlanFloorView = () => viewMode === "2d" && activeViewerTab === "floorplan";
   const isCustomOrthoView = () => viewMode === "2d" && activeViewerTab !== "floorplan";
-  const captureFloorplanView = () => {
-    const activeCam = cam();
-    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
-    savedFloorplanView.target.copy(ctl().target);
-    savedFloorplanView.zoom = activeCam.zoom;
-    savedFloorplanView.left = activeCam.left;
-    savedFloorplanView.right = activeCam.right;
-    savedFloorplanView.top = activeCam.top;
-    savedFloorplanView.bottom = activeCam.bottom;
-    savedFloorplanView.near = activeCam.near;
-    savedFloorplanView.far = activeCam.far;
-  };
-  const restoreFloorplanView = () => {
-    const activeCam = cam();
-    if (!(activeCam instanceof THREE.OrthographicCamera)) return;
-    activeCam.up.set(0, 0, -1);
-    if (savedFloorplanView.right !== savedFloorplanView.left) {
-      activeCam.left = savedFloorplanView.left;
-      activeCam.right = savedFloorplanView.right;
-      activeCam.top = savedFloorplanView.top;
-      activeCam.bottom = savedFloorplanView.bottom;
-    }
-    activeCam.near = savedFloorplanView.near;
-    activeCam.far = savedFloorplanView.far;
-    ctl().target.copy(savedFloorplanView.target);
-    activeCam.zoom = savedFloorplanView.zoom;
-    activeCam.position.set(savedFloorplanView.target.x, 10, savedFloorplanView.target.z);
-    activeCam.lookAt(savedFloorplanView.target.x, 0, savedFloorplanView.target.z);
-    activeCam.updateProjectionMatrix();
-    ctl().update();
-  };
-  const sync2dControlBindings = (isFloorplanView: boolean, isDetailOrthoView: boolean) => {
-    const controls = ctl();
-    if (viewMode !== "2d") return;
-    controls.enableRotate = false;
-    controls.enableZoom = true;
-    controls.enablePan = isFloorplanView;
-    (controls as any).mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: isFloorplanView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE,
-      RIGHT: THREE.MOUSE.ROTATE
-    };
-    controls.update();
-  };
   const ensureFloorplanViewerTab = () => {
     if (activeViewerTab !== "floorplan" || viewMode !== "2d") {
       activateViewerTab("floorplan");
@@ -7269,7 +7199,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const activateViewerTab = (key: string) => {
     if (activeViewerTab === "floorplan" && key !== "floorplan" && viewMode === "2d") {
-      captureFloorplanView();
+      viewNavigation.captureFloorplanView();
     }
     if (key === "3d") {
       activeViewerTab = "3d";
@@ -7288,13 +7218,13 @@ export function startApp(initialArgs: AppArgs) {
       detailViewPanOffset.set(0, 0, 0);
       activeDetailClipPlanes = [];
       syncDetailClippingAndMaterials();
-      restoreFloorplanView();
+      viewNavigation.restoreFloorplanView();
       updateDetailSliceOverlay();
       syncViewerTabs(activeViewerTab);
       return;
     }
 
-    const bounds = getDetailViewBounds();
+    const bounds = getNavigationSceneBounds();
     detailViewPanOffset.set(0, 0, 0);
     if (key.startsWith("section:")) {
       const sectionId = key.slice("section:".length);
@@ -7310,7 +7240,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const updateDetailViewCamera = () => {
     if (!isCustomOrthoView()) return;
-    const bounds = getDetailViewBounds();
+    const bounds = getNavigationSceneBounds();
     if (activeViewerTab.startsWith("section:")) {
       const sectionId = activeViewerTab.slice("section:".length);
       const section = sections.find((item) => item.id === sectionId) ?? null;
@@ -8639,7 +8569,7 @@ export function startApp(initialArgs: AppArgs) {
     const isFloorplanView = enabled && activeViewerTab === "floorplan";
     const isDetailOrthoView = enabled && activeViewerTab !== "floorplan";
     setPlanPresentation(isFloorplanView);
-    sync2dControlBindings(isFloorplanView, isDetailOrthoView);
+    viewNavigation.syncControls();
     if (!isDetailOrthoView) {
       activeDetailClipPlanes = [];
     }
@@ -9212,18 +9142,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
-    if (ev.button === 1) {
-      if (mode === "layout" && viewMode === "2d" && activeViewerTab !== "floorplan") {
-        detailPanState.active = true;
-        detailPanState.pointerId = ev.pointerId;
-        detailPanState.lastClientX = ev.clientX;
-        detailPanState.lastClientY = ev.clientY;
-        try {
-          renderer.domElement.setPointerCapture(ev.pointerId);
-        } catch {
-          // ignore
-        }
-      }
+    if (viewNavigation.handlePointerDown(ev)) {
       return;
     }
 
@@ -10166,13 +10085,7 @@ export function startApp(initialArgs: AppArgs) {
 
   // Live hover + preview (SketchUp-like)
   renderer.domElement.addEventListener("pointermove", (ev) => {
-    if (detailPanState.active && detailPanState.pointerId === ev.pointerId) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const deltaX = ev.clientX - detailPanState.lastClientX;
-      const deltaY = ev.clientY - detailPanState.lastClientY;
-      detailPanState.lastClientX = ev.clientX;
-      detailPanState.lastClientY = ev.clientY;
-      panCustomOrthoViewByPixels(deltaX, deltaY, rect);
+    if (viewNavigation.handlePointerMove(ev)) {
       return;
     }
 
@@ -10839,16 +10752,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   renderer.domElement.addEventListener("pointerup", (ev) => {
-    if (ev.button === 1) {
-      if (detailPanState.active && detailPanState.pointerId === ev.pointerId) {
-        detailPanState.active = false;
-        detailPanState.pointerId = null;
-        try {
-          renderer.domElement.releasePointerCapture(ev.pointerId);
-        } catch {
-          // ignore
-        }
-      }
+    if (viewNavigation.handlePointerUp(ev)) {
       return;
     }
 
@@ -11067,65 +10971,6 @@ export function startApp(initialArgs: AppArgs) {
   history.past = [];
   history.future = [];
   updateUndoRedoUi(S);
-
-  const navForward = new THREE.Vector3();
-  const navRight = new THREE.Vector3();
-  const navMove = new THREE.Vector3();
-  const navUp = new THREE.Vector3(0, 1, 0);
-
-  function applyKeyboardNav(dt: number) {
-    if (navKeys.size === 0) return;
-    if (mode === "layout" && dragState.active) return;
-
-    const shift = navKeys.has("ShiftLeft") || navKeys.has("ShiftRight");
-    const space = navKeys.has("Space");
-
-    let speedMult = 1;
-    if (shift && space) speedMult = 4;
-    else if (shift) speedMult = 2.5;
-    else if (space) speedMult = 0.35;
-
-    const baseSpeedMps = 1.4;
-    const speed = baseSpeedMps * speedMult;
-
-    const xAxis = (navKeys.has("KeyD") ? 1 : 0) - (navKeys.has("KeyA") ? 1 : 0);
-    const zAxis = (navKeys.has("KeyW") ? 1 : 0) - (navKeys.has("KeyS") ? 1 : 0);
-    const yAxis = (navKeys.has("KeyQ") ? 1 : 0) - (navKeys.has("KeyE") ? 1 : 0);
-
-    if (xAxis === 0 && zAxis === 0 && yAxis === 0) return;
-
-    const camera = cam() as any;
-    const controls = ctl() as any;
-
-    if (viewMode === "2d") {
-      navMove.set(xAxis, 0, -zAxis);
-      if (navMove.lengthSq() > 1) navMove.normalize();
-      navMove.multiplyScalar(speed * dt);
-      camera.position.add(navMove);
-      controls.target.add(navMove);
-      controls.update();
-      return;
-    }
-
-    navForward.set(0, 0, -1);
-    navForward.applyQuaternion(camera.quaternion);
-    navForward.y = 0;
-    if (navForward.lengthSq() < 1e-8) navForward.set(0, 0, -1);
-    navForward.normalize();
-
-    navRight.copy(navForward).cross(navUp).normalize();
-
-    navMove.set(0, 0, 0);
-    if (xAxis) navMove.addScaledVector(navRight, xAxis);
-    if (zAxis) navMove.addScaledVector(navForward, zAxis);
-    if (yAxis) navMove.addScaledVector(navUp, yAxis);
-    if (navMove.lengthSq() > 1) navMove.normalize();
-    navMove.multiplyScalar(speed * dt);
-
-    camera.position.add(navMove);
-    controls.target.add(navMove);
-    controls.update();
-  }
 
   const updateWallEditHud = () => {
     if (mode !== "layout" || viewMode !== "2d" || layoutTool !== "select") {
@@ -12306,7 +12151,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const tick = () => {
     const dt = Math.min(0.05, navClock.getDelta());
-    applyKeyboardNav(dt);
+    viewNavigation.update(dt);
     ctl().update();
     enforceWallDrawInvariant();
     enforceKitchenWorktopDrawInvariant();
