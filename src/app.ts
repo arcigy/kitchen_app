@@ -669,7 +669,7 @@ export function startApp(initialArgs: AppArgs) {
     for (const id of transformState.selectedInstanceIds) {
       const inst = findInstance(id);
       if (!inst) continue;
-      const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
+      const inRoom = instanceFitsRoom(inst);
       const overlaps = anyOverlapIgnoring(inst, ignore);
       if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
         ok = false;
@@ -680,7 +680,7 @@ export function startApp(initialArgs: AppArgs) {
     if (ok) {
       for (const inst of instances) {
         if (
-          !roomContainsBoxXZ(instanceWorldBox(inst)) ||
+          !instanceFitsRoom(inst) ||
           anyOverlap(inst, null) ||
           moduleOverlapsWalls(inst) ||
           moduleOverlapsKitchenWorktops(inst)
@@ -803,7 +803,7 @@ export function startApp(initialArgs: AppArgs) {
     for (const id of transformState.selectedInstanceIds) {
       const inst = findInstance(id);
       if (!inst) continue;
-      const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
+      const inRoom = instanceFitsRoom(inst);
       const overlaps = anyOverlapIgnoring(inst, ignore);
       if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
         ok = false;
@@ -2651,6 +2651,85 @@ export function startApp(initialArgs: AppArgs) {
     );
   };
 
+  const getKitchenCornerArmBindingInfo = (inst: LayoutInstance, backOffsetMm: number) => {
+    if (!isCornerKitchenModule(inst)) return null;
+    const binding = inst.kitchenPlacement;
+    if (!binding || (binding.kind ?? "segment") !== "corner") return null;
+
+    const worktop = kitchenWorktops.find((item) => item.id === binding.worktopId) ?? null;
+    if (!worktop) return null;
+
+    const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+    const cornerIndex = Math.max(1, Math.min(binding.cornerIndex, guidePath.length - 2));
+    const cornerPoint = guidePath[cornerIndex];
+    const prevPoint = guidePath[cornerIndex - 1];
+    const nextPoint = guidePath[cornerIndex + 1];
+    if (!cornerPoint || !prevPoint || !nextPoint) return null;
+
+    const prevDir = prevPoint.clone().sub(cornerPoint).setY(0);
+    const nextDir = nextPoint.clone().sub(cornerPoint).setY(0);
+    if (prevDir.lengthSq() < 1e-8 || nextDir.lengthSq() < 1e-8) return null;
+    prevDir.normalize();
+    nextDir.normalize();
+
+    const localCorner = getModuleLocalKitchenCornerAnchor(inst);
+    const localXAnchor = getModuleLocalKitchenCornerAxisAnchor(inst, "x");
+    const localZAnchor = getModuleLocalKitchenCornerAxisAnchor(inst, "z");
+    const worldCorner = localCorner.clone().applyMatrix4(inst.root.matrixWorld);
+    const xDir = localXAnchor.clone().applyMatrix4(inst.root.matrixWorld).sub(worldCorner).setY(0);
+    const zDir = localZAnchor.clone().applyMatrix4(inst.root.matrixWorld).sub(worldCorner).setY(0);
+    if (xDir.lengthSq() < 1e-8 || zDir.lengthSq() < 1e-8) return null;
+    xDir.normalize();
+    zDir.normalize();
+
+    const resolveSegmentIndex = (axisDir: THREE.Vector3) => {
+      const prevDot = axisDir.dot(prevDir);
+      const nextDot = axisDir.dot(nextDir);
+      if (prevDot >= nextDot && prevDot > 0.9) return cornerIndex - 1;
+      if (nextDot > 0.9) return cornerIndex;
+      return null;
+    };
+
+    const extents = getModuleKitchenCornerExtents(inst);
+    return {
+      worktopId: binding.worktopId,
+      cornerIndex,
+      xSegmentIndex: resolveSegmentIndex(xDir),
+      zSegmentIndex: resolveSegmentIndex(zDir),
+      xLengthM: extents.xLength,
+      zLengthM: extents.zLength
+    };
+  };
+
+  const getKitchenSegmentReservedMargins = (
+    groupId: string | null,
+    worktopId: string,
+    segmentIndex: number,
+    backOffsetMm: number,
+    ignoreInstanceId?: string | null
+  ) => {
+    if (!groupId) return { startM: 0, endM: 0 };
+    let startM = 0;
+    let endM = 0;
+
+    for (const other of instances) {
+      if (other.id === ignoreInstanceId || other.kitchenGroupId !== groupId || !isCornerKitchenModule(other)) continue;
+      const armInfo = getKitchenCornerArmBindingInfo(other, backOffsetMm);
+      if (!armInfo || armInfo.worktopId !== worktopId) continue;
+
+      if (armInfo.xSegmentIndex === segmentIndex) {
+        if (segmentIndex < armInfo.cornerIndex) endM = Math.max(endM, armInfo.xLengthM);
+        else startM = Math.max(startM, armInfo.xLengthM);
+      }
+      if (armInfo.zSegmentIndex === segmentIndex) {
+        if (segmentIndex < armInfo.cornerIndex) endM = Math.max(endM, armInfo.zLengthM);
+        else startM = Math.max(startM, armInfo.zLengthM);
+      }
+    }
+
+    return { startM, endM };
+  };
+
   const inferKitchenPlacementBinding = (
     inst: LayoutInstance,
     groupId: string,
@@ -2712,8 +2791,13 @@ export function startApp(initialArgs: AppArgs) {
       for (let segmentIndex = 0; segmentIndex < getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm).length - 1; segmentIndex += 1) {
         const info = getKitchenGuideSegmentInfo(worktop, segmentIndex, backOffsetMm);
         if (!info) continue;
+        const reserved = getKitchenSegmentReservedMargins(groupId, worktop.id, segmentIndex, backOffsetMm, inst.id);
+        const halfModuleWidthM = Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
+        const minAlong = reserved.startM + halfModuleWidthM;
+        const maxAlong = info.length - reserved.endM - halfModuleWidthM;
+        if (maxAlong + 1e-6 < minAlong) continue;
         const cursorOffset = worldBackCenter.clone().sub(info.start);
-        const projected = clampNumber(cursorOffset.dot(info.dir), 0, info.length);
+        const projected = clampNumber(cursorOffset.dot(info.dir), minAlong, maxAlong);
         const closestOnGuide = info.start.clone().addScaledVector(info.dir, projected);
         const distanceSq = closestOnGuide.distanceToSquared(worldBackCenter);
         const angleDelta = Math.abs(normalizeAngleRad(info.rotationY - inst.root.rotation.y));
@@ -2771,11 +2855,12 @@ export function startApp(initialArgs: AppArgs) {
 
     const localBackCenter = getModuleLocalBackCenter(inst);
     const halfModuleWidthM = Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
-    const usableLength = info.length - halfModuleWidthM * 2;
+    const reserved = getKitchenSegmentReservedMargins(inst.kitchenGroupId ?? worktop.kitchenGroupId, worktop.id, binding.segmentIndex, backOffsetMm, inst.id);
+    const minAlong = reserved.startM + halfModuleWidthM;
+    const maxAlong = info.length - reserved.endM - halfModuleWidthM;
+    if (maxAlong + 1e-6 < minAlong) return false;
     const clampedAlong =
-      usableLength >= 0
-        ? clampNumber(binding.offsetAlongM, halfModuleWidthM, info.length - halfModuleWidthM)
-        : info.length * 0.5;
+      clampNumber(binding.offsetAlongM, minAlong, maxAlong);
     const backCenter = info.start.clone().addScaledVector(info.dir, clampedAlong);
     const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, info.rotationY, 0));
 
@@ -2994,16 +3079,16 @@ export function startApp(initialArgs: AppArgs) {
       for (let index = 0; index < guidePath.length - 1; index += 1) {
         const info = getKitchenGuideSegmentInfo(worktop, index, backOffsetMm);
         if (!info) continue;
-        const usableLength = info.length - halfModuleWidthM * 2;
+        const reserved = getKitchenSegmentReservedMargins(S.activeKitchenGroupId, worktop.id, index, backOffsetMm, ghost.id);
+        const minAlong = reserved.startM + halfModuleWidthM;
+        const maxAlong = info.length - reserved.endM - halfModuleWidthM;
+        if (maxAlong + 1e-6 < minAlong) continue;
         const guideStart = info.start;
         const cursorOffset = cursorWorld.clone().sub(guideStart);
         const projected = cursorOffset.dot(info.dir);
         const closestOnGuide = guideStart.clone().addScaledVector(info.dir, clampNumber(projected, 0, info.length));
         const backCenterDistance = closestOnGuide.distanceToSquared(cursorWorld);
-        const clampedAlongGuide =
-          usableLength >= 0
-            ? clampNumber(projected, halfModuleWidthM, info.length - halfModuleWidthM)
-            : info.length * 0.5;
+        const clampedAlongGuide = clampNumber(projected, minAlong, maxAlong);
         const backCenter = guideStart.clone().addScaledVector(info.dir, clampedAlongGuide);
         const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, info.rotationY, 0));
         const position = backCenter.clone().sub(rotatedBackCenter);
@@ -3018,7 +3103,7 @@ export function startApp(initialArgs: AppArgs) {
             },
             position,
             rotationY: info.rotationY,
-            valid: usableLength >= -1e-6,
+            valid: true,
             distance: backCenterDistance
           };
         }
@@ -3927,7 +4012,7 @@ export function startApp(initialArgs: AppArgs) {
 
         const modulesInvalid = instances.some(
           (i) =>
-            !roomContainsBoxXZ(instanceWorldBox(i)) ||
+            !instanceFitsRoom(i) ||
             anyOverlap(i, null) ||
             moduleOverlapsWalls(i) ||
             moduleOverlapsKitchenWorktops(i)
@@ -6101,7 +6186,7 @@ export function startApp(initialArgs: AppArgs) {
       const next = (deg * Math.PI) / 180;
       const prevRot = inst.root.rotation.y;
       inst.root.rotation.y = next;
-      const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
+      const inRoom = instanceFitsRoom(inst);
       const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
       if (!inRoom || overlaps) {
         inst.root.rotation.y = prevRot;
@@ -6737,9 +6822,29 @@ export function startApp(initialArgs: AppArgs) {
     return instances.find((x) => x.id === id) ?? null;
   }
 
-  function instanceWorldBox(inst: LayoutInstance) {
+  function instanceVisualWorldBox(inst: LayoutInstance) {
     inst.root.updateMatrixWorld(true);
     return new THREE.Box3().setFromObject(inst.module);
+  }
+
+  function instanceWorldBox(inst: LayoutInstance) {
+    return instanceVisualWorldBox(inst);
+  }
+
+  function instanceLayoutWorldBox(inst: LayoutInstance) {
+    const visualBox = instanceVisualWorldBox(inst);
+    const polygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
+    if (polygon.length === 0) return visualBox;
+    const xs = polygon.map((point) => point.x);
+    const zs = polygon.map((point) => point.z);
+    return new THREE.Box3(
+      new THREE.Vector3(Math.min(...xs), visualBox.min.y, Math.min(...zs)),
+      new THREE.Vector3(Math.max(...xs), visualBox.max.y, Math.max(...zs))
+    );
+  }
+
+  function instanceFitsRoom(inst: LayoutInstance) {
+    return roomContainsBoxXZ(instanceLayoutWorldBox(inst));
   }
 
   function roomContainsBoxXZ(box: THREE.Box3, eps = 0.0005) {
@@ -7901,18 +8006,21 @@ export function startApp(initialArgs: AppArgs) {
     }
     const propagated = opts?.skipLayoutValidation
       ? { ok: true, movedIds: [] as string[] }
-      : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
+      : isCornerKitchenModule(inst)
+        ? propagateCornerResizeToPinnedNeighbors(inst, previousParams)
+        : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
-    const inRoom = opts?.skipLayoutValidation ? true : roomContainsBoxXZ(instanceWorldBox(inst));
-    const overlaps = opts?.skipLayoutValidation
-      ? false
-      : anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
+    const inRoom = opts?.skipLayoutValidation ? true : instanceFitsRoom(inst);
+    const overlapsModules = opts?.skipLayoutValidation ? false : anyOverlap(inst, null);
+    const overlapsWalls = opts?.skipLayoutValidation ? false : moduleOverlapsWalls(inst);
+    const overlapsWorktops = opts?.skipLayoutValidation ? false : moduleOverlapsKitchenWorktops(inst);
+    const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
     const movedNeighborInvalid =
       !opts?.skipLayoutValidation &&
       propagated.movedIds.some((id) => {
         const other = findInstance(id);
         return !!other &&
-          (!roomContainsBoxXZ(instanceWorldBox(other)) ||
+          (!instanceFitsRoom(other) ||
             anyOverlap(other, null) ||
             moduleOverlapsWalls(other) ||
             moduleOverlapsKitchenWorktops(other));
@@ -8083,7 +8191,7 @@ export function startApp(initialArgs: AppArgs) {
           const desired = new THREE.Vector3(origin.x + dx * step, 0, origin.z + dz * step);
           const clamped = applyWallConstraints(inst, desired);
           inst.root.position.copy(clamped);
-          if (!roomContainsBoxXZ(instanceWorldBox(inst))) continue;
+          if (!instanceFitsRoom(inst)) continue;
           if (!anyOverlap(inst, null) && !moduleOverlapsWalls(inst) && !moduleOverlapsKitchenWorktops(inst)) return;
         }
       }
@@ -8103,23 +8211,43 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function anyOverlap(moving: LayoutInstance, ignoreId: string | null) {
-    const a = instanceWorldBox(moving);
+    const a = instanceLayoutWorldBox(moving);
+    const movingRing = moduleWorldRing(moving);
+    const movingMp = movingRing.length >= 4 ? [[movingRing]] : null;
     for (const other of instances) {
       if (other.id === moving.id) continue;
       if (ignoreId && other.id === ignoreId) continue;
-      const b = instanceWorldBox(other);
-      if (aabbOverlapXZ(a, b)) return true;
+      const b = instanceLayoutWorldBox(other);
+      if (!aabbOverlapXZ(a, b)) continue;
+      const otherRing = moduleWorldRing(other);
+      if (!movingMp || otherRing.length < 4) return true;
+      try {
+        const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
+        if (multiPolyArea(inter) > 1e-6) return true;
+      } catch {
+        return true;
+      }
     }
     return false;
   }
 
   function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) {
-    const a = instanceWorldBox(moving);
+    const a = instanceLayoutWorldBox(moving);
+    const movingRing = moduleWorldRing(moving);
+    const movingMp = movingRing.length >= 4 ? [[movingRing]] : null;
     for (const other of instances) {
       if (other.id === moving.id) continue;
       if (ignoreIds.has(other.id)) continue;
-      const b = instanceWorldBox(other);
-      if (aabbOverlapXZ(a, b)) return true;
+      const b = instanceLayoutWorldBox(other);
+      if (!aabbOverlapXZ(a, b)) continue;
+      const otherRing = moduleWorldRing(other);
+      if (!movingMp || otherRing.length < 4) return true;
+      try {
+        const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
+        if (multiPolyArea(inter) > 1e-6) return true;
+      } catch {
+        return true;
+      }
     }
     return false;
   }
@@ -8154,15 +8282,8 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function moduleWorldRing(inst: LayoutInstance) {
-    inst.root.updateMatrixWorld(true);
-    const b = inst.localBox;
-    const pts = [
-      new THREE.Vector3(b.min.x, 0, b.min.z),
-      new THREE.Vector3(b.max.x, 0, b.min.z),
-      new THREE.Vector3(b.max.x, 0, b.max.z),
-      new THREE.Vector3(b.min.x, 0, b.max.z)
-    ].map((p) => p.applyMatrix4(inst.root.matrixWorld));
-    const ring: Array<[number, number]> = pts.map((p) => [p.x, p.z]);
+    const polygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
+    const ring: Array<[number, number]> = polygon.map((point) => [point.x, point.z]);
     if (ring.length > 0) ring.push(ring[0]);
     return ring;
   }
@@ -8180,12 +8301,12 @@ export function startApp(initialArgs: AppArgs) {
     const relatedWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === inst.kitchenGroupId);
     if (relatedWorktops.length === 0) return false;
 
-    const moduleMp = [[[moduleWorldRing(inst)]]];
+    const moduleMp = [[moduleWorldRing(inst)]];
     for (const worktop of relatedWorktops) {
       const ring = worktopWorldRing(worktop);
       if (ring.length < 4) continue;
       try {
-        const inter = (polygonClipping as any).intersection([[[ring]]], moduleMp);
+        const inter = (polygonClipping as any).intersection([[ring]], moduleMp);
         if (multiPolyArea(inter) > 1e-6) return true;
       } catch {
         // ignore broken clipping input and keep fallback-free behavior
@@ -8197,7 +8318,7 @@ export function startApp(initialArgs: AppArgs) {
   function moduleOverlapsWalls(inst: LayoutInstance) {
     if (walls.length === 0) return false;
     const ring = moduleWorldRing(inst);
-    const moduleMp = [[[ring]]];
+    const moduleMp = [[ring]];
 
     const wallMp = wallUnionPolys;
     if (wallMp) {
@@ -8217,8 +8338,8 @@ export function startApp(initialArgs: AppArgs) {
       return r;
     };
     const polys: any[] = [];
-    for (const poly of wallSolvedOutlines.values()) if (poly.length >= 3) polys.push([[[toRing(poly)]]]);
-    for (const poly of wallSolvedJoinPolys) if (poly.length >= 3) polys.push([[[toRing(poly)]]]);
+    for (const poly of wallSolvedOutlines.values()) if (poly.length >= 3) polys.push([[toRing(poly)]]);
+    for (const poly of wallSolvedJoinPolys) if (poly.length >= 3) polys.push([[toRing(poly)]]);
     for (const wmp of polys) {
       try {
         const inter = (polygonClipping as any).intersection(wmp, moduleMp);
@@ -8437,6 +8558,32 @@ export function startApp(initialArgs: AppArgs) {
     return moved;
   }
 
+  function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) {
+    if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+    if (!group) return { ok: true, movedIds: [] as string[] };
+    void previousParams;
+
+    const armInfo = getKitchenCornerArmBindingInfo(inst, group.ctx.worktopBackOffsetMm);
+    if (!armInfo) return { ok: true, movedIds: [] as string[] };
+    const touchedSegments = new Set([armInfo.xSegmentIndex, armInfo.zSegmentIndex].filter((value): value is number => value != null));
+    if (touchedSegments.size === 0) return { ok: true, movedIds: [] as string[] };
+
+    const movedIds = new Set<string>();
+    for (const other of instances) {
+      if (other.id === inst.id || other.kitchenGroupId !== inst.kitchenGroupId) continue;
+      const otherBinding = other.kitchenPlacement;
+      if (!otherBinding || otherBinding.worktopId !== armInfo.worktopId) continue;
+      if ((otherBinding.kind ?? "segment") === "corner") continue;
+      if (!touchedSegments.has(otherBinding.segmentIndex)) continue;
+      const before = other.root.position.clone();
+      if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), group.ctx.worktopBackOffsetMm)) continue;
+      if (before.distanceToSquared(other.root.position) > 1e-10) movedIds.add(other.id);
+    }
+
+    return { ok: true, movedIds: Array.from(movedIds) };
+  }
+
   function propagateModuleResizeToPinnedNeighbors(
     inst: LayoutInstance,
     prevWorldBox: THREE.Box3,
@@ -8538,7 +8685,7 @@ export function startApp(initialArgs: AppArgs) {
 
     const currentPos = moving.root.position.clone();
     moving.root.position.copy(desired);
-    const a = instanceWorldBox(moving);
+    const a = instanceLayoutWorldBox(moving);
     moving.root.position.copy(currentPos);
 
     const next = desired.clone();
@@ -8560,7 +8707,7 @@ export function startApp(initialArgs: AppArgs) {
 
     const currentPos2 = moving.root.position.clone();
     moving.root.position.copy(next);
-    const b = instanceWorldBox(moving);
+    const b = instanceLayoutWorldBox(moving);
     moving.root.position.copy(currentPos2);
 
     const dxL = -roomBounds.halfW - b.min.x;
@@ -8578,7 +8725,7 @@ export function startApp(initialArgs: AppArgs) {
 
   function autoOrientModuleToRoomWallIfSnapped(inst: LayoutInstance, ignoreIds?: Set<string>) {
     const snapDist = 0.03; // 30mm
-    const box = instanceWorldBox(inst);
+    const box = instanceLayoutWorldBox(inst);
     const dxL = -roomBounds.halfW - box.min.x;
     const dxR = roomBounds.halfW - box.max.x;
     const dzB = -roomBounds.halfD - box.min.z; // back (-Z)
@@ -8599,7 +8746,7 @@ export function startApp(initialArgs: AppArgs) {
 
     inst.root.rotation.y = targetRot;
     inst.root.position.copy(applyWallConstraints(inst, inst.root.position.clone()));
-    const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
+    const inRoom = instanceFitsRoom(inst);
     const overlaps = ignoreIds ? anyOverlapIgnoring(inst, ignoreIds) : anyOverlap(inst, null);
     if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
       inst.root.rotation.y = prevRot;
@@ -11342,7 +11489,7 @@ export function startApp(initialArgs: AppArgs) {
     inst.root.position.x += dxMm / 1000;
     inst.root.position.z += dzMm / 1000;
     const valid =
-      roomContainsBoxXZ(instanceWorldBox(inst)) &&
+      instanceFitsRoom(inst) &&
       !anyOverlap(inst, null) &&
       !moduleOverlapsWalls(inst) &&
       !moduleOverlapsKitchenWorktops(inst);
@@ -11625,7 +11772,7 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const getDebugModuleSnapshot = (inst: LayoutInstance) => {
-    const box = instanceWorldBox(inst);
+    const box = instanceVisualWorldBox(inst);
     const structuralMeshes: THREE.Object3D[] = [];
     const partSnapshots: Array<{
       name: string;

@@ -179,7 +179,7 @@ async function runAdjacencyCases(page) {
   const lPath = [
     { x: 0, z: 0 },
     { x: 2400, z: 0 },
-    { x: 2400, z: 1400 }
+    { x: 2400, z: 2000 }
   ];
 
   {
@@ -216,6 +216,40 @@ async function runAdjacencyCases(page) {
         seamStable,
         beforeCornerPos: corner.positionM,
         afterCornerPos: afterCorner?.positionM
+      });
+    }
+  }
+
+  {
+    const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "corner_shelf_lower" });
+    const groupId = created.group.id;
+    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 1, offsetAlongMm: 700 });
+    const before = await snapshot(page, groupId);
+    const corner = before.instances.find((item) => item.params.type === "corner_shelf_lower");
+    const drawer = before.instances.find((item) => item.params.type === "drawer_low");
+    expect(corner && drawer, "corner lengthX adjacency scenario missing modules", before);
+    const result = await patchModule(
+      page,
+      corner.id,
+      { lengthX: Number(corner.params.lengthX ?? 1000) + 120 },
+      { sourceKey: "lengthX", preserveBackAnchor: true }
+    );
+    const after = await snapshot(page, groupId);
+    const afterCorner = after.instances.find((item) => item.id === corner.id);
+    const afterDrawer = after.instances.find((item) => item.id === drawer.id);
+    const drawerMoved =
+      Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
+    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerMoved) {
+      failures.push({
+        case: "corner_lengthX_growth_pushes_attached_drawer",
+        ok: result.ok,
+        beforeLengthX: corner.params.lengthX,
+        afterLengthX: afterCorner.params.lengthX,
+        drawerMoved,
+        beforeCornerPos: corner.positionM,
+        afterCornerPos: afterCorner.positionM,
+        beforeDrawerPos: drawer.positionM,
+        afterDrawerPos: afterDrawer.positionM
       });
     }
   }
@@ -314,6 +348,7 @@ async function main() {
             cornerCases: cornerCases.map((item) => item.key),
             adjacencyCases: [
               "drawer_width_growth_next_to_corner_grows_away",
+              "corner_lengthX_growth_pushes_attached_drawer",
               "drawer_width_growth_keeps_adjacent_drawer_fixed"
             ]
           }
