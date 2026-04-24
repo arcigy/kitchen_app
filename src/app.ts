@@ -7865,7 +7865,7 @@ export function startApp(initialArgs: AppArgs) {
     inst.module = next;
     inst.root.add(inst.module);
     inst.localBox = new THREE.Box3().setFromObject(inst.module);
-    if (opts?.preserveBackAnchor && !keepRootPositionStable) {
+    if (opts?.preserveBackAnchor) {
       const nextLocalAnchor = isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
       const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
       inst.module.position.add(delta);
