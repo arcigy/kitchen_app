@@ -741,17 +741,14 @@ function createLivePartGeometry(
       });
     }
     if (componentGeometry.archetype === "handle_bar") {
-      const axis = isVerticalHandlePart(part, sizeMm) ? "y" : isFrontFacingZPartName(part.name) ? "x" : "z";
-      const radiusMm =
-        axis === "x"
-          ? Math.max(sizeMm.y, sizeMm.z) / 2
-          : axis === "y"
-            ? Math.max(sizeMm.x, sizeMm.z) / 2
-            : Math.max(sizeMm.x, sizeMm.y) / 2;
-      const heightMm = axis === "x" ? sizeMm.x : axis === "y" ? sizeMm.y : sizeMm.z;
-      return createCylinderGeometry(axis, radiusMm, heightMm, {
-        radialSegments: 18
-      });
+      return {
+        axis: null,
+        geometry: new THREE.BoxGeometry(
+          Math.max(1, sizeMm.x) * MM_TO_M,
+          Math.max(1, sizeMm.y) * MM_TO_M,
+          Math.max(1, sizeMm.z) * MM_TO_M
+        )
+      };
     }
   }
   if (/^leg_/i.test(part.name)) {
