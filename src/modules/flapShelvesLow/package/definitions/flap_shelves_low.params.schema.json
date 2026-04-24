@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": "module-params-schema.v1",
+  "moduleType": "flap_shelves_low",
+  "title": "Flap Params",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "assemblyContext": {
+      "type": "string"
+    },
+    "kitchenModuleRole": {
+      "type": "string"
+    },
+    "requiresWorktop": {
+      "type": "boolean"
+    },
+    "worktopThicknessMm": {
+      "type": "number"
+    },
+    "width": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "depth": {
+      "type": "number"
+    },
+    "boardThickness": {
+      "type": "number"
+    },
+    "backThickness": {
+      "type": "number"
+    },
+    "frontThicknessMm": {
+      "type": "number"
+    },
+    "wallMounted": {
+      "type": "boolean"
+    },
+    "plinthHeight": {
+      "type": "number"
+    },
+    "plinthSetbackMm": {
+      "type": "number"
+    },
+    "frontGap": {
+      "type": "number"
+    },
+    "sideGap": {
+      "type": "number"
+    },
+    "topGap": {
+      "type": "number"
+    },
+    "bottomGap": {
+      "type": "number"
+    },
+    "shelfCount": {
+      "type": "number"
+    },
+    "shelfThickness": {
+      "type": "number"
+    },
+    "shelfAutoFit": {
+      "type": "boolean"
+    },
+    "shelfGaps": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "doorSystem": {
+      "type": "string"
+    },
+    "doorOpen": {
+      "type": "boolean"
+    },
+    "handleComponentId": {
+      "type": "string"
+    },
+    "handlePositionMm": {
+      "type": "number"
+    },
+    "handleHorizontalPositionMm": {
+      "type": "number"
+    },
+    "liftUpComponentId": {
+      "type": "string"
+    },
+    "hingeComponentId": {
+      "type": "string"
+    },
+    "hangingBracketComponentId": {
+      "type": "string"
+    },
+    "shelfSupportComponentId": {
+      "type": "string"
+    },
+    "materials": {
+      "type": "object",
+      "properties": {
+        "bodyKey": {
+          "type": "string"
+        },
+        "bodyColor": {
+          "type": "string"
+        },
+        "frontKey": {
+          "type": "string"
+        },
+        "frontColor": {
+          "type": "string"
+        },
+        "drawerKey": {
+          "type": "string"
+        },
+        "drawerColor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "handleType": {
+      "type": "string"
+    },
+    "handleLengthMm": {
+      "type": "number"
+    },
+    "handleSizeMm": {
+      "type": "number"
+    },
+    "handleProjectionMm": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "assemblyContext",
+    "backThickness",
+    "boardThickness",
+    "bottomGap",
+    "depth",
+    "doorOpen",
+    "doorSystem",
+    "frontGap",
+    "frontThicknessMm",
+    "handleComponentId",
+    "handleHorizontalPositionMm",
+    "handleLengthMm",
+    "handlePositionMm",
+    "handleProjectionMm",
+    "handleSizeMm",
+    "handleType",
+    "hangingBracketComponentId",
+    "height",
+    "hingeComponentId",
+    "kitchenModuleRole",
+    "liftUpComponentId",
+    "materials",
+    "plinthHeight",
+    "plinthSetbackMm",
+    "requiresWorktop",
+    "shelfAutoFit",
+    "shelfCount",
+    "shelfGaps",
+    "shelfSupportComponentId",
+    "shelfThickness",
+    "sideGap",
+    "topGap",
+    "type",
+    "wallMounted",
+    "width",
+    "worktopThicknessMm"
+  ],
+  "additionalProperties": true
+}

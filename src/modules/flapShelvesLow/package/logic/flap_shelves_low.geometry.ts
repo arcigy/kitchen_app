@@ -1,0 +1,293 @@
+export const moduleType = "flap_shelves_low";
+export const displayName = "Flap";
+export const geometrySnapshot = {
+  "schemaVersion": "module-geometry.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "dimensions": {
+    "widthMm": 900,
+    "heightMm": 720,
+    "depthMm": 560,
+    "worktopThicknessMm": 0,
+    "plinthHeightMm": 0
+  },
+  "parameterEffects": [
+    {
+      "parameter": "width",
+      "effect": "Width changes carcass span, top and bottom panel width, shelf width and the exported flap or door-front widths."
+    },
+    {
+      "parameter": "height",
+      "effect": "Height changes total module height and therefore side panel height, back panel height and front opening height."
+    },
+    {
+      "parameter": "depth",
+      "effect": "Depth changes side panel depth, shelf depth, top and bottom footprint and back panel footprint."
+    },
+    {
+      "parameter": "boardThickness",
+      "effect": "Board thickness changes carcass stock thickness and all dependent internal clear dimensions."
+    },
+    {
+      "parameter": "backThickness",
+      "effect": "Back thickness changes the rear panel stock and the usable internal shelf depth."
+    },
+    {
+      "parameter": "frontThicknessMm",
+      "effect": "Front thickness changes the exported flap front or both hinged door fronts."
+    },
+    {
+      "parameter": "shelfCount",
+      "effect": "Shelf count changes the number of internal shelves and the shelf-support hardware count."
+    },
+    {
+      "parameter": "shelfThickness",
+      "effect": "Shelf thickness changes the stock used for each internal shelf board."
+    },
+    {
+      "parameter": "shelfAutoFit",
+      "effect": "Shelf auto-fit switches between equalized shelf spacing and manually defined shelf gaps."
+    },
+    {
+      "parameter": "shelfGaps",
+      "effect": "Shelf gaps manually redistribute the internal shelf spacing when auto-fit is disabled."
+    },
+    {
+      "parameter": "doorSystem",
+      "effect": "Door system switches between a single lift-up flap front and a split pair of hinged door fronts."
+    },
+    {
+      "parameter": "doorOpen",
+      "effect": "Door open changes preview state only; it does not change manufacturable board dimensions."
+    },
+    {
+      "parameter": "liftUpComponentId",
+      "effect": "Lift-up component selection changes the exported lift-up hardware set when doorSystem is flap_up."
+    },
+    {
+      "parameter": "hingeComponentId",
+      "effect": "Hinge component selection changes the exported hinge hardware set when doorSystem is double_hinged."
+    },
+    {
+      "parameter": "hangingBracketComponentId",
+      "effect": "Hanging bracket selection changes the exported wall bracket hardware set."
+    },
+    {
+      "parameter": "shelfSupportComponentId",
+      "effect": "Shelf support selection changes the exported shelf-support hardware count for internal shelves."
+    }
+  ],
+  "parts": [
+    {
+      "id": "left-side",
+      "label": "Left Side Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 560,
+        "height": 720,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "depth",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "height - (wallMounted ? 0 : plinthHeight)",
+        "thickness": "boardThickness"
+      }
+    },
+    {
+      "id": "right-side",
+      "label": "Right Side Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 560,
+        "height": 720,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "depth",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness"
+      ],
+      "formulas": {
+        "width": "depth",
+        "height": "height - (wallMounted ? 0 : plinthHeight)",
+        "thickness": "boardThickness"
+      }
+    },
+    {
+      "id": "bottom-panel",
+      "label": "Bottom Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness"
+      }
+    },
+    {
+      "id": "top-panel",
+      "label": "Top Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "boardThickness"
+      }
+    },
+    {
+      "id": "back-panel",
+      "label": "Back Panel",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 864,
+        "height": 702,
+        "depth": 8,
+        "thickness": 8
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness",
+        "backThickness"
+      ],
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "height - (wallMounted ? 0 : plinthHeight) - boardThickness",
+        "thickness": "backThickness"
+      }
+    },
+    {
+      "id": "shelf-1",
+      "label": "Shelf 1",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfAutoFit",
+        "shelfGaps"
+      ],
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "shelfThickness"
+      }
+    },
+    {
+      "id": "shelf-2",
+      "label": "Shelf 2",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfAutoFit",
+        "shelfGaps"
+      ],
+      "formulas": {
+        "width": "width - 2 * boardThickness",
+        "height": "depth",
+        "thickness": "shelfThickness"
+      }
+    },
+    {
+      "id": "door-front",
+      "label": "Flap Front",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 896,
+        "height": 716,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "doorSystem"
+      ],
+      "formulas": {
+        "width": "width - 2 * sideGap",
+        "height": "height - (wallMounted ? 0 : plinthHeight) - topGap - bottomGap",
+        "thickness": "frontThicknessMm"
+      }
+    }
+  ]
+} as const;
+
+export function computeGeometry() {
+  return geometrySnapshot;
+}
+
+export function explainParameterEffects() {
+  return geometrySnapshot.parameterEffects;
+}

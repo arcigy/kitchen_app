@@ -1,0 +1,207 @@
+{
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "definition": {
+    "moduleType": "flap_shelves_low",
+    "source": "package",
+    "description": "Portable module package exported from module-builder-dev.",
+    "provenance": "declared",
+    "paramsSchemaRef": {
+      "path": "definitions/flap_shelves_low.params.schema.json",
+      "mediaType": "application/schema+json",
+      "description": "Full JSON schema for module parameters.",
+      "provenance": "generated"
+    },
+    "defaultsRef": {
+      "path": "definitions/flap_shelves_low.defaults.json",
+      "mediaType": "application/json",
+      "description": "Current/default parameter snapshot.",
+      "provenance": "generated"
+    },
+    "parameterCatalogRef": {
+      "path": "definitions/flap_shelves_low.parameter-catalog.json",
+      "mediaType": "application/json",
+      "description": "Human-readable parameter catalog.",
+      "provenance": "generated"
+    },
+    "geometrySnapshotRef": {
+      "path": "definitions/flap_shelves_low.geometry.json",
+      "mediaType": "application/json",
+      "description": "Derived geometry snapshot.",
+      "provenance": "generated"
+    },
+    "manufacturablePartMapRef": {
+      "path": "definitions/flap_shelves_low.part-map.json",
+      "mediaType": "application/json",
+      "description": "Manufacturable part map prepared for BOM, pricing and debugging.",
+      "provenance": "generated"
+    },
+    "boardBomSnapshotRef": {
+      "path": "definitions/flap_shelves_low.board-bom.json",
+      "mediaType": "application/json",
+      "description": "Board-only BOM snapshot generated from manufacturable part map.",
+      "provenance": "generated"
+    },
+    "edgeBomSnapshotRef": {
+      "path": "definitions/flap_shelves_low.edge-bom.json",
+      "mediaType": "application/json",
+      "description": "Edge-band BOM snapshot generated from explicit manufacturable edge metadata.",
+      "provenance": "generated"
+    },
+    "hardwareBomSnapshotRef": {
+      "path": "definitions/flap_shelves_low.hardware-bom.json",
+      "mediaType": "application/json",
+      "description": "Hardware BOM snapshot generated from explicit manufacturable hardware anchors.",
+      "provenance": "generated"
+    },
+    "bomSnapshotRef": {
+      "path": "definitions/flap_shelves_low.bom.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Derived BOM snapshot.",
+      "provenance": "generated"
+    },
+    "materialsSnapshotRef": {
+      "path": "definitions/flap_shelves_low.materials.snapshot.json",
+      "mediaType": "application/json",
+      "description": "Current material state captured from params and live runtime.",
+      "provenance": "generated"
+    },
+    "liveStateSnapshotRef": {
+      "path": "definitions/flap_shelves_low.live-state.json",
+      "mediaType": "application/json",
+      "description": "Complete live export state captured at the time of package export.",
+      "provenance": "generated"
+    }
+  },
+  "logic": {
+    "build": {
+      "path": "logic/flap_shelves_low.build.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local build logic.",
+      "provenance": "generated"
+    },
+    "controls": {
+      "path": "logic/flap_shelves_low.controls.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local controls definition.",
+      "provenance": "generated"
+    },
+    "validation": {
+      "path": "logic/flap_shelves_low.validation.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local validation logic.",
+      "provenance": "generated"
+    },
+    "geometry": {
+      "path": "logic/flap_shelves_low.geometry.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local geometry derivation logic.",
+      "provenance": "generated"
+    },
+    "bom": {
+      "path": "logic/flap_shelves_low.bom.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local BOM derivation logic.",
+      "provenance": "generated"
+    },
+    "pricing": {
+      "path": "logic/flap_shelves_low.pricing.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local pricing derivation logic.",
+      "provenance": "generated"
+    },
+    "commercialSummary": {
+      "path": "logic/flap_shelves_low.commercial-summary.ts",
+      "mediaType": "text/typescript",
+      "description": "Package-local commercial summary logic.",
+      "provenance": "generated"
+    },
+    "legacyRuntime": {
+      "path": "legacy/legacy-builder.runtime.js",
+      "mediaType": "text/javascript",
+      "description": "Full legacy runtime source snapshot.",
+      "provenance": "generated"
+    },
+    "legacyDescriptor": {
+      "path": "legacy/flap_shelves_low.descriptor.txt",
+      "mediaType": "text/plain",
+      "description": "Exact module descriptor snippet from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyDefaultParams": {
+      "path": "legacy/flap_shelves_low.default-params.js",
+      "mediaType": "text/javascript",
+      "description": "Exact default-params function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyBuild": {
+      "path": "legacy/flap_shelves_low.build.js",
+      "mediaType": "text/javascript",
+      "description": "Exact build function from the legacy runtime.",
+      "provenance": "generated"
+    },
+    "legacyControls": {
+      "path": "legacy/flap_shelves_low.controls.js",
+      "mediaType": "text/javascript",
+      "description": "Exact controls function from the legacy runtime.",
+      "provenance": "generated"
+    }
+  },
+  "commercial": {
+    "pricingConfig": {
+      "path": "commercial/flap_shelves_low.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/flap_shelves_low.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/flap_shelves_low.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  },
+  "assets": {
+    "docs": [
+      {
+        "path": "docs/flap_shelves_low.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/flap_shelves_low.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/flap_shelves_low.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/flap_shelves_low.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  },
+  "tags": [
+    "wall",
+    "flap_shelves_low"
+  ],
+  "notes": [
+    "Exported from module-builder-dev browser runtime.",
+    "Includes complete parameter schema, system parameters, geometry, BOM and portable TypeScript companion files."
+  ],
+  "status": "active"
+}

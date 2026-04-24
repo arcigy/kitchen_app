@@ -2,7 +2,7 @@ export type KitchenModuleRole = "base" | "upper" | "tall";
 
 export function getKitchenModuleRole(params: Record<string, unknown> | null | undefined): KitchenModuleRole {
   const rawRole = typeof params?.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "base";
-  if (rawRole === "upper" || rawRole === "wall") return "upper";
+  if (rawRole === "upper" || rawRole === "wall" || rawRole === "top") return "upper";
   if (rawRole === "tall") return "tall";
   return "base";
 }

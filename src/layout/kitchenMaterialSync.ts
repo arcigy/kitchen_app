@@ -10,6 +10,11 @@ import { getKitchenModuleRole } from "./kitchenModuleRules";
 import cornerShelfLowerMaterialsSnapshot from "../modules/cornerShelfLower/package/definitions/corner_shelf_lower.materials.snapshot.json";
 import drawerLowMaterialsSnapshot from "../modules/drawerLow/package/definitions/drawer_low.materials.snapshot.json";
 import {
+  normalizeFlapShelvesLowParams,
+  type FlapShelvesLowParams
+} from "../modules/flapShelvesLow/types";
+import flapShelvesLowMaterialsSnapshot from "../modules/flapShelvesLow/package/definitions/flap_shelves_low.materials.snapshot.json";
+import {
   normalizeFridgeTallParams,
   type FridgeTallParams
 } from "../modules/fridgeTall/types";
@@ -47,6 +52,7 @@ const kitchenMaterialFieldByFamily: KitchenMaterialField = {
 
 const cornerShelfLowerSnapshot = cornerShelfLowerMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const drawerLowSnapshot = drawerLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
+const flapShelvesLowSnapshot = flapShelvesLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const fridgeTallSnapshot = fridgeTallMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const swingShelvesLowSnapshot = swingShelvesLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 
@@ -345,6 +351,48 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
 }
 
+function applyFlapShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+  const record = params as Record<string, unknown>;
+  const materials = ensureRecord(record.materials);
+  record.materials = materials;
+  record.kitchenModuleRole = "top";
+  record.requiresWorktop = false;
+  record.worktopThicknessMm = 0;
+  record.wallMounted = true;
+  record.height = ctx.upperHeightMm;
+  record.depth = ctx.upperDepthMm;
+  record.plinthHeight = 0;
+
+  const corpus = getKitchenMaterial(ctx, "body");
+  if (corpus) {
+    record.boardThickness = corpus.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "body", corpus);
+  }
+
+  const shelf = getKitchenMaterial(ctx, "shelf");
+  if (shelf) {
+    record.shelfThickness = shelf.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "shelf", shelf);
+  }
+
+  const fronts = getKitchenMaterial(ctx, "front");
+  if (fronts) {
+    record.frontThicknessMm = fronts.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "front", fronts);
+  }
+
+  const back = getKitchenMaterial(ctx, "back");
+  if (back) {
+    record.backThickness = back.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "back", back);
+  }
+
+  applyKitchenHandleSelection(record, ctx);
+  applyKitchenCommercialSelections(record, ctx, flapShelvesLowSnapshot);
+
+  Object.assign(record, normalizeFlapShelvesLowParams(record as FlapShelvesLowParams));
+}
+
 function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
@@ -409,6 +457,9 @@ export function applyKitchenContextToModuleParams(params: ModuleParams, ctx: Kit
   }
   if (params.type === "fridge_tall") {
     applyFridgeTallKitchenMaterials(params, ctx);
+  }
+  if (params.type === "flap_shelves_low") {
+    applyFlapShelvesLowKitchenMaterials(params, ctx);
   }
   if (params.type === "swing_shelves_low") {
     applySwingShelvesLowKitchenMaterials(params, ctx);

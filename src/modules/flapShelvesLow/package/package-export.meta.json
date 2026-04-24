@@ -1,0 +1,13 @@
+{
+  "exportedAt": "2026-04-24T17:27:40.819Z",
+  "source": "builder_portable_export",
+  "scope": "single_module",
+  "generator": {
+    "name": "module-package-export-shape",
+    "version": 3
+  },
+  "notes": [
+    "Portable browser export generated from the current module builder state.",
+    "Archive includes full parameter schema, system parameters, current material snapshot, live export state, derived geometry, BOM and package-local TypeScript companion files."
+  ]
+}

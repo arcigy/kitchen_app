@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "builder-module-export.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "packageName": "module-builder-flap_shelves_low",
+  "packageVersion": "1.0.0",
+  "geometryFile": "definitions/flap_shelves_low.geometry.json",
+  "partMapFile": "definitions/flap_shelves_low.part-map.json",
+  "boardBomFile": "definitions/flap_shelves_low.board-bom.json",
+  "edgeBomFile": "definitions/flap_shelves_low.edge-bom.json",
+  "hardwareBomFile": "definitions/flap_shelves_low.hardware-bom.json",
+  "bomFile": "definitions/flap_shelves_low.bom.snapshot.json"
+}

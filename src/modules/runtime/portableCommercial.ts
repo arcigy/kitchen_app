@@ -527,6 +527,18 @@ function resolveComponentForItem(
               ? typeof params.clipComponentId === "string"
                 ? params.clipComponentId
                 : null
+              : normalizedItemId.includes("lift-up")
+                ? typeof params.liftUpComponentId === "string"
+                  ? params.liftUpComponentId
+                  : null
+                : normalizedItemId.includes("hanging-brackets")
+                  ? typeof params.hangingBracketComponentId === "string"
+                    ? params.hangingBracketComponentId
+                    : null
+                  : normalizedItemId.includes("shelf-supports")
+                    ? typeof params.shelfSupportComponentId === "string"
+                      ? params.shelfSupportComponentId
+                      : null
           : null;
 
   if (explicitComponentId) {
@@ -558,6 +570,18 @@ function resolveComponentForItem(
 
   if (normalizedItemId.includes("hinge")) {
     return findAssigned("door-hinges") ?? current ?? null;
+  }
+
+  if (normalizedItemId.includes("lift-up")) {
+    return findAssigned("lift-up-fittings") ?? current ?? null;
+  }
+
+  if (normalizedItemId.includes("hanging-brackets")) {
+    return findAssigned("hanging-brackets") ?? current ?? null;
+  }
+
+  if (normalizedItemId.includes("shelf-supports")) {
+    return findAssigned("shelf-supports") ?? current ?? null;
   }
 
   return current ?? null;

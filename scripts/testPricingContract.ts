@@ -9,6 +9,8 @@ import { calculateBOM as calculateCornerShelfLowerBOM } from "../src/modules/cor
 import { makeDefaultCornerShelfLowerParams } from "../src/modules/cornerShelfLower/types";
 import { calculateBOM as calculateDrawerLowBOM } from "../src/modules/drawerLow/calculation";
 import { makeDefaultDrawerLowParams } from "../src/modules/drawerLow/types";
+import { calculateBOM as calculateFlapShelvesLowBOM } from "../src/modules/flapShelvesLow/calculation";
+import { makeDefaultFlapShelvesLowParams } from "../src/modules/flapShelvesLow/types";
 import { calculateBOM as calculateFridgeTallBOM } from "../src/modules/fridgeTall/calculation";
 import { makeDefaultFridgeTallParams } from "../src/modules/fridgeTall/types";
 import { calculateBOM as calculateSwingShelvesLowBOM } from "../src/modules/swingShelvesLow/calculation";
@@ -168,6 +170,81 @@ function runFridgeTallScenario() {
   assert.equal(
     syncedResult.pricing.items.find((item) => item.id === "door-handles")?.component?.catalogId,
     ctx.handleComponentId
+  );
+}
+
+function runFlapShelvesLowScenario() {
+  const params = makeDefaultFlapShelvesLowParams();
+  const result = calculateFlapShelvesLowBOM(params, ctx);
+
+  assert.equal(result.quoteBom.moduleType, "flap_shelves_low");
+  assert.equal(result.pricing.pricingStatus, "ok");
+  assert.equal(result.pricing.validationErrors.length, 0);
+  assert.equal(result.quoteBom.moduleInstance.widthMm, 900);
+  assert.equal(result.quoteBom.moduleInstance.depthMm, 560);
+
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "door-handles")?.component?.catalogId,
+    "cmp.handle.bar.160.black"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "lift-up-fittings")?.component?.catalogId,
+    "cmp.lift_up.softclose.600"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "hanging-brackets")?.component?.catalogId,
+    "cmp.hanging_bracket.wall.standard"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "shelf-supports")?.component?.catalogId,
+    "cmp.shelf_support.standard.nickel"
+  );
+
+  const synced = structuredClone(params);
+  applyKitchenContextToModuleParams(synced, ctx);
+  assert.equal(synced.height, ctx.upperHeightMm);
+  assert.equal(synced.depth, ctx.upperDepthMm);
+  assert.equal(synced.worktopThicknessMm, 0);
+  assert.equal(synced.requiresWorktop, false);
+  assert.equal(synced.wallMounted, true);
+
+  const syncedResult = calculateFlapShelvesLowBOM(synced, ctx);
+  assert.equal(syncedResult.pricing.pricingStatus, "ok");
+  assert.equal(
+    syncedResult.quoteBom.items.find((item) => item.id === "carcass-side-left")?.material?.catalogId,
+    ctx.corpusMaterialId
+  );
+  assert.equal(
+    syncedResult.quoteBom.items.find((item) => item.id === "door-front")?.material?.catalogId,
+    ctx.frontsMaterialId
+  );
+  assert.equal(
+    syncedResult.quoteBom.items.find((item) => item.id === "carcass-back")?.material?.catalogId,
+    ctx.backMaterialId
+  );
+  assert.equal(
+    syncedResult.pricing.items.find((item) => item.id === "door-handles")?.component?.catalogId,
+    ctx.handleComponentId
+  );
+
+  const changed = structuredClone(synced) as Record<string, unknown>;
+  changed.liftUpComponentId = "cmp.lift_up.standard.600";
+  changed.hangingBracketComponentId = "cmp.hanging_bracket.wall.heavy";
+  changed.shelfSupportComponentId = "cmp.shelf_support.glass.nickel";
+
+  const changedResult = calculateFlapShelvesLowBOM(changed as typeof params, ctx);
+  assert.equal(changedResult.pricing.pricingStatus, "ok");
+  assert.equal(
+    changedResult.pricing.items.find((item) => item.id === "lift-up-fittings")?.component?.catalogId,
+    "cmp.lift_up.standard.600"
+  );
+  assert.equal(
+    changedResult.pricing.items.find((item) => item.id === "hanging-brackets")?.component?.catalogId,
+    "cmp.hanging_bracket.wall.heavy"
+  );
+  assert.equal(
+    changedResult.pricing.items.find((item) => item.id === "shelf-supports")?.component?.catalogId,
+    "cmp.shelf_support.glass.nickel"
   );
 }
 
@@ -400,6 +477,7 @@ function runInvalidBomScenario() {
 async function main() {
   runDrawerLowScenario();
   runCornerShelfLowerScenario();
+  runFlapShelvesLowScenario();
   runFridgeTallScenario();
   runSwingShelvesLowScenario();
   runGenericBomScenario();
@@ -408,7 +486,15 @@ async function main() {
     JSON.stringify(
       {
         ok: true,
-        checks: ["drawer_low", "corner_shelf_lower", "fridge_tall", "swing_shelves_low", "generic_bom", "invalid_bom"]
+        checks: [
+          "drawer_low",
+          "corner_shelf_lower",
+          "flap_shelves_low",
+          "fridge_tall",
+          "swing_shelves_low",
+          "generic_bom",
+          "invalid_bom"
+        ]
       },
       null,
       2

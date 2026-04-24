@@ -1,0 +1,261 @@
+{
+  "schemaVersion": "module-hardware-bom.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "generatedAt": "2026-04-24T17:27:40.819Z",
+  "items": [
+    {
+      "id": "door-handles",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Bar Handle 160 mm Black Door Handle Set",
+      "description": "Handle assemblies mounted to the exported door fronts.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 1,
+      "pricingQuantity": 1,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle])",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "handle",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "group": "handle",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.handle.bar.160.black",
+        "sourceCatalogId": "cmp.handle.bar.160.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front"
+      ],
+      "notes": [
+        "door-front.handle-mount: explicit handle anchor"
+      ]
+    },
+    {
+      "id": "lift-up-fittings",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Lift-Up System Softclose 600 mm",
+      "description": "Lift-up fitting assemblies for the exported flap front.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "lift_up",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.lift_up.softclose.600",
+        "componentType": "lift_up",
+        "geometryId": "geo.lift_up.600.softclose",
+        "name": "Lift-Up Softclose 600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "brand": "LiftMotion",
+        "series": "Avent Silent",
+        "variant": "Softclose 600 mm",
+        "color": "Grey",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 600,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#757d88",
+          "roughness": 0.34,
+          "metalness": 0.72
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.lift_up.softclose.600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "group": "lift_up",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.lift_up.softclose.600",
+        "sourceCatalogId": "cmp.lift_up.softclose.600",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front"
+      ],
+      "notes": [
+        "door-front.lift-up-left: explicit hardware anchor",
+        "door-front.lift-up-right: explicit hardware anchor"
+      ]
+    },
+    {
+      "id": "hanging-brackets",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Wall Hanging Bracket Standard",
+      "description": "Wall hanging brackets for the exported flap cabinet.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "hanging_bracket",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "componentType": "hanging_bracket",
+        "geometryId": "geo.hanging_bracket.wall.standard",
+        "name": "Hanging Bracket Wall Standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "brand": "WallFix",
+        "series": "Cabinet Hang",
+        "variant": "Standard bracket",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "group": "hanging_bracket",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.hanging_bracket.wall.standard",
+        "sourceCatalogId": "cmp.hanging_bracket.wall.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "carcass-top.hanging-bracket-left: explicit hardware anchor",
+        "carcass-top.hanging-bracket-right: explicit hardware anchor"
+      ]
+    },
+    {
+      "id": "shelf-supports",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Shelf Support Standard Nickel",
+      "description": "Shelf support hardware for the exported internal shelves.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 8,
+      "pricingQuantity": 8,
+      "formulas": {
+        "quantity": "2 * 4",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "shelf_support",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "componentType": "shelf_support",
+        "geometryId": "geo.shelf_support.standard",
+        "name": "Shelf Support Standard Nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "brand": "FixPro",
+        "series": "ShelfFit",
+        "variant": "Standard",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 4,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "group": "shelf_support",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.shelf_support.standard.nickel",
+        "sourceCatalogId": "cmp.shelf_support.standard.nickel",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1",
+        "shelf-2"
+      ],
+      "notes": [
+        "shelf-1.support-front-left: explicit hardware anchor",
+        "shelf-1.support-front-right: explicit hardware anchor",
+        "shelf-1.support-rear-left: explicit hardware anchor",
+        "shelf-1.support-rear-right: explicit hardware anchor",
+        "shelf-2.support-front-left: explicit hardware anchor",
+        "shelf-2.support-front-right: explicit hardware anchor",
+        "shelf-2.support-rear-left: explicit hardware anchor",
+        "shelf-2.support-rear-right: explicit hardware anchor"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 4,
+    "hardwarePieces": 13
+  },
+  "notes": [
+    "No carcass-fastener-set item: No explicit carcass joinery anchors or fastener count rules are exported for flap_shelves_low."
+  ]
+}

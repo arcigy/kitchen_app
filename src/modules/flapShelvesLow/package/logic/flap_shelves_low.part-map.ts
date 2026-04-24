@@ -1,0 +1,884 @@
+export const moduleType = "flap_shelves_low";
+export const displayName = "Flap";
+export const manufacturablePartMap = {
+  "schemaVersion": "module-manufacturable-parts.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "generatedFrom": "canonical_geometry_contract",
+  "parts": [
+    {
+      "partId": "carcass-side-left",
+      "sourceGeometryPartIds": [
+        "left-side"
+      ],
+      "label": "Carcass Side Left",
+      "partType": "side-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 720,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "yz",
+        "lengthAxis": "y",
+        "widthAxis": "z",
+        "thicknessAxis": "x",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_exterior_left",
+        "secondaryFaceRole": "carcass_interior_left",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "depth",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front vertical edge is visible at the cabinet opening."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves toward the back panel zone."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "concealed",
+          "reason": "Top edge is enclosed by the top panel assembly."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "concealed",
+          "reason": "Bottom edge resolves into the bottom or plinth zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "carcass-side-right",
+      "sourceGeometryPartIds": [
+        "right-side"
+      ],
+      "label": "Carcass Side Right",
+      "partType": "side-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 720,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "yz",
+        "lengthAxis": "y",
+        "widthAxis": "z",
+        "thicknessAxis": "x",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_exterior_right",
+        "secondaryFaceRole": "carcass_interior_right",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "depth",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front vertical edge is visible at the cabinet opening."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves toward the back panel zone."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "concealed",
+          "reason": "Top edge is enclosed by the top panel assembly."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "concealed",
+          "reason": "Bottom edge resolves into the bottom or plinth zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "carcass-bottom",
+      "sourceGeometryPartIds": [
+        "bottom-panel"
+      ],
+      "label": "Carcass Bottom",
+      "partType": "bottom-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_interior_bottom",
+        "secondaryFaceRole": "underside_service_face",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front bottom edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves into the back panel zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "carcass-top",
+      "sourceGeometryPartIds": [
+        "top-panel"
+      ],
+      "label": "Carcass Top",
+      "partType": "top-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_top_outer",
+        "secondaryFaceRole": "carcass_interior_top",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front top edge is visible at the opening line."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves into the back panel zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "carcass-top.hanging-bracket-left",
+          "anchorType": "hanging_bracket",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "hanging-brackets",
+          "instanceIndex": 1,
+          "mountFace": "carcass_top_outer",
+          "sourceParamKeys": [
+            "hangingBracketComponentId",
+            "wallMounted"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit top-left hanging bracket anchor",
+            "rationale": "Wall-mounted flap cabinet uses two hanging brackets."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "hangingBracketComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "carcass-top.hanging-bracket-right",
+          "anchorType": "hanging_bracket",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "hanging-brackets",
+          "instanceIndex": 2,
+          "mountFace": "carcass_top_outer",
+          "sourceParamKeys": [
+            "hangingBracketComponentId",
+            "wallMounted"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit top-right hanging bracket anchor",
+            "rationale": "Wall-mounted flap cabinet uses two hanging brackets."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "hangingBracketComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "carcass-back",
+      "sourceGeometryPartIds": [
+        "back-panel"
+      ],
+      "label": "Carcass Back",
+      "partType": "back-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": false,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "backThickness",
+      "dimensionsMm": {
+        "length": 864,
+        "width": 702,
+        "thickness": 8
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "y",
+        "widthAxis": "x",
+        "thicknessAxis": "z",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "rear_service_face",
+        "secondaryFaceRole": "carcass_interior_back",
+        "visibleFaceRole": null
+      },
+      "sourceParamKeys": [
+        "width",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "boardThickness",
+        "backThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "shelf-1",
+      "sourceGeometryPartIds": [
+        "shelf-1"
+      ],
+      "label": "Shelf 1",
+      "partType": "shelf-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "shelfThickness",
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "interior_shelf_top",
+        "secondaryFaceRole": "interior_shelf_bottom",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfAutoFit",
+        "shelfGaps"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Shelf front edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Shelf rear edge resolves toward the back panel zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "shelf-1.support-front-left",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 1,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-1.support-front-right",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 2,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-1.support-rear-left",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 3,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-1.support-rear-right",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 4,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "shelf-2",
+      "sourceGeometryPartIds": [
+        "shelf-2"
+      ],
+      "label": "Shelf 2",
+      "partType": "shelf-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "mat.board.body.dtd.white.18",
+      "materialParamKey": "materials.body",
+      "thicknessKey": "shelfThickness",
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "interior_shelf_top",
+        "secondaryFaceRole": "interior_shelf_bottom",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfAutoFit",
+        "shelfGaps"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Shelf front edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Shelf rear edge resolves toward the back panel zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "shelf-2.support-front-left",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 5,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-2.support-front-right",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 6,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-2.support-rear-left",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 7,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "shelf-2.support-rear-right",
+          "anchorType": "shelf_support",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "shelf-supports",
+          "instanceIndex": 8,
+          "mountFace": "interior_shelf_bottom",
+          "sourceParamKeys": [
+            "shelfSupportComponentId",
+            "shelfCount"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit shelf support anchor",
+            "rationale": "Each internal shelf uses four support points."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "shelfSupportComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "door-front",
+      "sourceGeometryPartIds": [
+        "door-front"
+      ],
+      "label": "Flap Front",
+      "partType": "door-front",
+      "boardCandidate": true,
+      "edgeBandCandidate": false,
+      "materialRole": "front",
+      "materialKey": "mat.board.front.mdf.white_supermat.18",
+      "materialParamKey": "materials.front",
+      "thicknessKey": "frontThicknessMm",
+      "dimensionsMm": {
+        "length": 896,
+        "width": 716,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "y",
+        "widthAxis": "x",
+        "thicknessAxis": "z",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "visible_front_face",
+        "secondaryFaceRole": "carcass_facing_back_face",
+        "visibleFaceRole": "customer_visible_front"
+      },
+      "sourceParamKeys": [
+        "width",
+        "height",
+        "plinthHeight",
+        "wallMounted",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "doorSystem"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "non_candidate",
+          "reason": "Selected front board base material is MDF, so front edge banding is intentionally omitted."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "non_candidate",
+          "reason": "Selected front board base material is MDF, so front edge banding is intentionally omitted."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "non_candidate",
+          "reason": "Selected front board base material is MDF, so front edge banding is intentionally omitted."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "non_candidate",
+          "reason": "Selected front board base material is MDF, so front edge banding is intentionally omitted."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "door-front.handle-mount",
+          "anchorType": "handle",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "door-handles",
+          "instanceIndex": 1,
+          "mountFace": "visible_front_face",
+          "sourceParamKeys": [
+            "handleComponentId",
+            "handlePositionMm",
+            "handleHorizontalPositionMm"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "one handle per flap front",
+            "rationale": "Single flap front exposes one handle mounting location."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "handleComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "door-front.lift-up-left",
+          "anchorType": "lift_up",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "lift-up-fittings",
+          "instanceIndex": 1,
+          "mountFace": "carcass_facing_back_face",
+          "sourceParamKeys": [
+            "liftUpComponentId",
+            "doorSystem"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit left lift-up fitting",
+            "rationale": "Lift-up flap system uses one left and one right fitting."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "liftUpComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "door-front.lift-up-right",
+          "anchorType": "lift_up",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "lift-up-fittings",
+          "instanceIndex": 2,
+          "mountFace": "carcass_facing_back_face",
+          "sourceParamKeys": [
+            "liftUpComponentId",
+            "doorSystem"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit right lift-up fitting",
+            "rationale": "Lift-up flap system uses one left and one right fitting."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "liftUpComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    }
+  ],
+  "hardwareRules": {
+    "hinges": {
+      "rulesByDoor": []
+    },
+    "handles": {
+      "componentParamKey": "handleComponentId",
+      "placementParamKeys": [
+        "handlePositionMm",
+        "doorHandleOffsetFromSplitMm"
+      ],
+      "screwPolicySource": "component_definition",
+      "sourceAnchorIds": [
+        "door-front.handle-mount"
+      ]
+    },
+    "legs": {
+      "componentParamKey": "legComponentId",
+      "countRule": "0",
+      "rationale": "Wall-mounted flap cabinet exports no support legs.",
+      "sourceAnchorIds": []
+    },
+    "plinthClips": {
+      "componentId": "cmp.clip.plinth.standard",
+      "countRule": "0",
+      "rationale": "Wall-mounted flap cabinet exports no plinth clips.",
+      "sourceAnchorIds": []
+    },
+    "liftUp": {
+      "componentParamKey": "liftUpComponentId",
+      "countRule": "2",
+      "rationale": "Lift-up flap system exports left and right fitting assemblies.",
+      "sourceAnchorIds": [
+        "door-front.lift-up-left",
+        "door-front.lift-up-right"
+      ]
+    },
+    "hangingBrackets": {
+      "componentParamKey": "hangingBracketComponentId",
+      "countRule": "2",
+      "rationale": "Wall-mounted flap cabinet exports two hanging brackets.",
+      "sourceAnchorIds": [
+        "carcass-top.hanging-bracket-left",
+        "carcass-top.hanging-bracket-right"
+      ]
+    },
+    "shelfSupports": {
+      "componentParamKey": "shelfSupportComponentId",
+      "countRule": "2 * 4",
+      "rationale": "Each internal shelf exports four shelf supports.",
+      "sourceAnchorIds": [
+        "shelf-1.support-front-left",
+        "shelf-1.support-front-right",
+        "shelf-1.support-rear-left",
+        "shelf-1.support-rear-right",
+        "shelf-2.support-front-left",
+        "shelf-2.support-front-right",
+        "shelf-2.support-rear-left",
+        "shelf-2.support-rear-right"
+      ]
+    },
+    "carcassFasteners": {
+      "policy": "excluded_until_joinery_metadata",
+      "reason": "No explicit carcass joinery anchors or fastener count rules are exported for flap_shelves_low."
+    }
+  },
+  "summary": {
+    "totalParts": 8,
+    "boardCandidates": 8,
+    "edgeBandCandidates": 6,
+    "hardwareAnchorCount": 13
+  }
+} as const;
+
+export function listManufacturableParts() {
+  return manufacturablePartMap.parts;
+}
+
+export function summarizeManufacturableParts() {
+  return manufacturablePartMap.summary;
+}

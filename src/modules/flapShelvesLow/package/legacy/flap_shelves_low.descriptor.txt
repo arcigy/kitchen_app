@@ -1,0 +1,1 @@
+{type:"flap_shelves_low",label:"Flap",defaultParams:()=>Jc(),build:n=>flapShelfBuildV2(n),createControls:(n,e,t)=>__(n,e,t),capabilities:{hasWorktop:!1,supportsKitchenContextDimensions:!0,supportsKitchenContextMaterials:!0}}

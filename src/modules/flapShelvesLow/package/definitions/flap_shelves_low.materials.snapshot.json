@@ -1,0 +1,426 @@
+{
+  "schemaVersion": "module-materials.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "paramsMaterials": {
+    "bodyKey": "mat.board.body.dtd.white.18",
+    "bodyColor": "#f3f3ef",
+    "frontKey": "mat.board.front.mdf.white_supermat.18",
+    "frontColor": "#d7d9dd",
+    "drawerKey": "mat.board.front.mdf.white_supermat.18",
+    "drawerColor": "#d7d9dd"
+  },
+  "roleAssignments": {
+    "body": {
+      "bodyKey": "mat.board.body.dtd.white.18",
+      "bodyColor": "#f3f3ef"
+    },
+    "front": {
+      "frontKey": "mat.board.front.mdf.white_supermat.18",
+      "frontColor": "#d7d9dd"
+    },
+    "drawer": {
+      "drawerKey": "mat.board.front.mdf.white_supermat.18",
+      "drawerColor": "#d7d9dd"
+    }
+  },
+  "livePartMaterials": [],
+  "slotAssignments": [
+    {
+      "slotId": "back-panel",
+      "partId": "back-panel",
+      "label": "Back Panel",
+      "description": "Shared legacy assignment for back panels.",
+      "boardFamily": "back",
+      "thicknessParameterKey": "backThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.8",
+        "catalogId": "mat.board.back.hdf.grey.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 8",
+        "displayName": "HDF Grey 8 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "bottom-panel",
+      "partId": "bottom-panel",
+      "label": "Bottom Panel",
+      "description": "Shared legacy assignment for bottom panels.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "door-front",
+      "partId": "door-front",
+      "label": "Door Front",
+      "description": "Shared legacy assignment for door fronts.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 18",
+        "displayName": "MDF White Supermat 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "left-side",
+      "partId": "left-side",
+      "label": "Left Side Panel",
+      "description": "Material assignment for the left side panel.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "right-side",
+      "partId": "right-side",
+      "label": "Right Side Panel",
+      "description": "Material assignment for the right side panel.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "shelf",
+      "partId": "shelf",
+      "label": "Shelves",
+      "description": "Shared material assignment for internal shelves.",
+      "boardFamily": "shelf",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.shelf.dtd.white.18",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Shelf Boards",
+        "family": "shelf",
+        "name": "Shelf DTD White 18",
+        "displayName": "Shelf DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "top-panel",
+      "partId": "top-panel",
+      "label": "Top Panel",
+      "description": "Shared legacy assignment for top panels.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    }
+  ],
+  "componentAssignments": [
+    {
+      "assignmentKey": "door-handles",
+      "label": "Bar Handle 160 mm Black",
+      "sourceRule": "Resolved from handleComponentId / handleType selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "adjustable-legs",
+      "label": "Adjustable Leg 100 mm Black",
+      "sourceRule": "Resolved from legComponentId / plinthHeight selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "lift-up-fittings",
+      "label": "Lift-Up System Softclose 600 mm",
+      "sourceRule": "Resolved from liftUpComponentId flap_shelves_low selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.lift_up.softclose.600",
+        "componentType": "lift_up",
+        "geometryId": "geo.lift_up.600.softclose",
+        "name": "Lift-Up Softclose 600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "brand": "LiftMotion",
+        "series": "Avent Silent",
+        "variant": "Softclose 600 mm",
+        "color": "Grey",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 600,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#757d88",
+          "roughness": 0.34,
+          "metalness": 0.72
+        }
+      }
+    },
+    {
+      "assignmentKey": "hanging-brackets",
+      "label": "Wall Hanging Bracket Standard",
+      "sourceRule": "Resolved from hangingBracketComponentId flap_shelves_low selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "componentType": "hanging_bracket",
+        "geometryId": "geo.hanging_bracket.wall.standard",
+        "name": "Hanging Bracket Wall Standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "brand": "WallFix",
+        "series": "Cabinet Hang",
+        "variant": "Standard bracket",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      }
+    },
+    {
+      "assignmentKey": "shelf-supports",
+      "label": "Shelf Support Standard Nickel",
+      "sourceRule": "Resolved from shelfSupportComponentId flap_shelves_low selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "componentType": "shelf_support",
+        "geometryId": "geo.shelf_support.standard",
+        "name": "Shelf Support Standard Nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "brand": "FixPro",
+        "series": "ShelfFit",
+        "variant": "Standard",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 4,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      }
+    }
+  ],
+  "notes": [
+    "Snapshot of the current material state at export time.",
+    "Includes exact board slot assignments and current component selections used by the commercial BOM exporter.",
+    "No live mesh material capture was available during export."
+  ]
+}

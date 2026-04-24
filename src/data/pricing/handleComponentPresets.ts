@@ -33,6 +33,24 @@ export type CornerClipComponentOption = {
   component: ComponentDefinition;
 };
 
+export type FlapLiftUpComponentOption = {
+  componentId: string;
+  displayName: string;
+  component: ComponentDefinition;
+};
+
+export type FlapHangingBracketComponentOption = {
+  componentId: string;
+  displayName: string;
+  component: ComponentDefinition;
+};
+
+export type FlapShelfSupportComponentOption = {
+  componentId: string;
+  displayName: string;
+  component: ComponentDefinition;
+};
+
 export type DrawerLowHandlePreset = {
   componentId: string;
   displayName: string;
@@ -69,6 +87,24 @@ export type CornerClipPreset = {
   exactType: string;
 };
 
+export type FlapLiftUpPreset = {
+  componentId: string;
+  displayName: string;
+  exactType: string;
+};
+
+export type FlapHangingBracketPreset = {
+  componentId: string;
+  displayName: string;
+  exactType: string;
+};
+
+export type FlapShelfSupportPreset = {
+  componentId: string;
+  displayName: string;
+  exactType: string;
+};
+
 const DEFAULT_BAR_HANDLE_COMPONENT_ID = "cmp.handle.bar.160.black";
 const DEFAULT_PROFILE_HANDLE_COMPONENT_ID = "cmp.handle.profile.aluminium";
 const DEFAULT_KNOB_HANDLE_COMPONENT_ID = "cmp.handle.knob.round.black";
@@ -76,6 +112,9 @@ const DEFAULT_LEG_COMPONENT_ID = "cmp.leg.adjustable.100.black";
 const DEFAULT_RUNNER_COMPONENT_ID = "cmp.runner.pair.400.standard";
 const DEFAULT_CORNER_HINGE_COMPONENT_ID = "cmp.hinge.corner.45.softclose";
 const DEFAULT_CORNER_CLIP_COMPONENT_ID = "cmp.clip.plinth.standard";
+const DEFAULT_FLAP_LIFT_UP_COMPONENT_ID = "cmp.lift_up.softclose.600";
+const DEFAULT_FLAP_HANGING_BRACKET_COMPONENT_ID = "cmp.hanging_bracket.wall.standard";
+const DEFAULT_FLAP_SHELF_SUPPORT_COMPONENT_ID = "cmp.shelf_support.standard.nickel";
 
 function resolveHandleGeometryKind(componentId: string): Exclude<DrawerLowHandleGeometryKind, "none"> {
   if (componentId.includes(".knob.")) return "knob";
@@ -146,6 +185,33 @@ export const cornerClipComponentOptions: CornerClipComponentOption[] = component
   }))
   .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
+export const flapLiftUpComponentOptions: FlapLiftUpComponentOption[] = componentDefinitions
+  .filter((component): component is ComponentDefinition => component.componentType === "lift_up" && component.isActive)
+  .map((component) => ({
+    componentId: component.id,
+    displayName: component.displayName,
+    component
+  }))
+  .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+export const flapHangingBracketComponentOptions: FlapHangingBracketComponentOption[] = componentDefinitions
+  .filter((component): component is ComponentDefinition => component.componentType === "hanging_bracket" && component.isActive)
+  .map((component) => ({
+    componentId: component.id,
+    displayName: component.displayName,
+    component
+  }))
+  .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+export const flapShelfSupportComponentOptions: FlapShelfSupportComponentOption[] = componentDefinitions
+  .filter((component): component is ComponentDefinition => component.componentType === "shelf_support" && component.isActive)
+  .map((component) => ({
+    componentId: component.id,
+    displayName: component.displayName,
+    component
+  }))
+  .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
 export function getDrawerLowHandleComponentOptions(): DrawerLowHandleComponentOption[] {
   return drawerLowHandleComponentOptions.map((option) => ({
     ...option,
@@ -176,6 +242,27 @@ export function getCornerHingeComponentOptions(): CornerHingeComponentOption[] {
 
 export function getCornerClipComponentOptions(): CornerClipComponentOption[] {
   return cornerClipComponentOptions.map((option) => ({
+    ...option,
+    component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
+  }));
+}
+
+export function getFlapLiftUpComponentOptions(): FlapLiftUpComponentOption[] {
+  return flapLiftUpComponentOptions.map((option) => ({
+    ...option,
+    component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
+  }));
+}
+
+export function getFlapHangingBracketComponentOptions(): FlapHangingBracketComponentOption[] {
+  return flapHangingBracketComponentOptions.map((option) => ({
+    ...option,
+    component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
+  }));
+}
+
+export function getFlapShelfSupportComponentOptions(): FlapShelfSupportComponentOption[] {
+  return flapShelfSupportComponentOptions.map((option) => ({
     ...option,
     component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
   }));
@@ -279,6 +366,48 @@ export function getCornerClipPresetById(componentId: string | null | undefined):
     exactType: component.id.includes(".heavy")
       ? "Clip Component / Heavy Plinth Clip"
       : "Clip Component / Plinth Clip"
+  };
+}
+
+export function getFlapLiftUpPresetById(componentId: string | null | undefined): FlapLiftUpPreset | null {
+  if (!componentId) return null;
+  const component = getComponentDefinitionById(componentId);
+  if (!component || component.componentType !== "lift_up") return null;
+
+  return {
+    componentId: component.id,
+    displayName: component.displayName,
+    exactType: component.id.includes(".softclose")
+      ? "Lift-Up Component / Softclose"
+      : "Lift-Up Component / Standard"
+  };
+}
+
+export function getFlapHangingBracketPresetById(componentId: string | null | undefined): FlapHangingBracketPreset | null {
+  if (!componentId) return null;
+  const component = getComponentDefinitionById(componentId);
+  if (!component || component.componentType !== "hanging_bracket") return null;
+
+  return {
+    componentId: component.id,
+    displayName: component.displayName,
+    exactType: component.id.includes(".heavy")
+      ? "Hanging Bracket Component / Heavy"
+      : "Hanging Bracket Component / Standard"
+  };
+}
+
+export function getFlapShelfSupportPresetById(componentId: string | null | undefined): FlapShelfSupportPreset | null {
+  if (!componentId) return null;
+  const component = getComponentDefinitionById(componentId);
+  if (!component || component.componentType !== "shelf_support") return null;
+
+  return {
+    componentId: component.id,
+    displayName: component.displayName,
+    exactType: component.id.includes(".glass")
+      ? "Shelf Support Component / Glass"
+      : "Shelf Support Component / Standard"
   };
 }
 
@@ -411,6 +540,51 @@ export function applyCornerClipComponentToParams(
   return nextParams;
 }
 
+export function applyFlapLiftUpComponentToParams(
+  params: Record<string, unknown>,
+  componentId: string | null | undefined
+): Record<string, unknown> {
+  const nextParams: Record<string, unknown> = { ...params };
+  const preset = getFlapLiftUpPresetById(componentId ?? null);
+  if (!preset) {
+    delete nextParams.liftUpComponentId;
+    return nextParams;
+  }
+
+  nextParams.liftUpComponentId = preset.componentId;
+  return nextParams;
+}
+
+export function applyFlapHangingBracketComponentToParams(
+  params: Record<string, unknown>,
+  componentId: string | null | undefined
+): Record<string, unknown> {
+  const nextParams: Record<string, unknown> = { ...params };
+  const preset = getFlapHangingBracketPresetById(componentId ?? null);
+  if (!preset) {
+    delete nextParams.hangingBracketComponentId;
+    return nextParams;
+  }
+
+  nextParams.hangingBracketComponentId = preset.componentId;
+  return nextParams;
+}
+
+export function applyFlapShelfSupportComponentToParams(
+  params: Record<string, unknown>,
+  componentId: string | null | undefined
+): Record<string, unknown> {
+  const nextParams: Record<string, unknown> = { ...params };
+  const preset = getFlapShelfSupportPresetById(componentId ?? null);
+  if (!preset) {
+    delete nextParams.shelfSupportComponentId;
+    return nextParams;
+  }
+
+  nextParams.shelfSupportComponentId = preset.componentId;
+  return nextParams;
+}
+
 export function getDefaultDrawerLowHandleComponentId(): string {
   return DEFAULT_BAR_HANDLE_COMPONENT_ID;
 }
@@ -429,4 +603,16 @@ export function getDefaultCornerHingeComponentId(): string {
 
 export function getDefaultCornerClipComponentId(): string {
   return DEFAULT_CORNER_CLIP_COMPONENT_ID;
+}
+
+export function getDefaultFlapLiftUpComponentId(): string {
+  return DEFAULT_FLAP_LIFT_UP_COMPONENT_ID;
+}
+
+export function getDefaultFlapHangingBracketComponentId(): string {
+  return DEFAULT_FLAP_HANGING_BRACKET_COMPONENT_ID;
+}
+
+export function getDefaultFlapShelfSupportComponentId(): string {
+  return DEFAULT_FLAP_SHELF_SUPPORT_COMPONENT_ID;
 }

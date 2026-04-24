@@ -1,0 +1,74 @@
+{
+  "build": {
+    "path": "logic/flap_shelves_low.build.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local build logic.",
+    "provenance": "generated"
+  },
+  "controls": {
+    "path": "logic/flap_shelves_low.controls.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local controls definition.",
+    "provenance": "generated"
+  },
+  "validation": {
+    "path": "logic/flap_shelves_low.validation.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local validation logic.",
+    "provenance": "generated"
+  },
+  "geometry": {
+    "path": "logic/flap_shelves_low.geometry.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local geometry derivation logic.",
+    "provenance": "generated"
+  },
+  "bom": {
+    "path": "logic/flap_shelves_low.bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "pricing": {
+    "path": "logic/flap_shelves_low.pricing.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local pricing derivation logic.",
+    "provenance": "generated"
+  },
+  "commercialSummary": {
+    "path": "logic/flap_shelves_low.commercial-summary.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local commercial summary logic.",
+    "provenance": "generated"
+  },
+  "legacyRuntime": {
+    "path": "legacy/legacy-builder.runtime.js",
+    "mediaType": "text/javascript",
+    "description": "Full legacy runtime source snapshot.",
+    "provenance": "generated"
+  },
+  "legacyDescriptor": {
+    "path": "legacy/flap_shelves_low.descriptor.txt",
+    "mediaType": "text/plain",
+    "description": "Exact module descriptor snippet from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyDefaultParams": {
+    "path": "legacy/flap_shelves_low.default-params.js",
+    "mediaType": "text/javascript",
+    "description": "Exact default-params function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyBuild": {
+    "path": "legacy/flap_shelves_low.build.js",
+    "mediaType": "text/javascript",
+    "description": "Exact build function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyControls": {
+    "path": "legacy/flap_shelves_low.controls.js",
+    "mediaType": "text/javascript",
+    "description": "Exact controls function from the legacy runtime.",
+    "provenance": "generated"
+  }
+}

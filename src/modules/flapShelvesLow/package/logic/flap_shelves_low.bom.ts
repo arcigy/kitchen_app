@@ -1,0 +1,158 @@
+export const moduleType = "flap_shelves_low";
+export const displayName = "Flap";
+export const bomSnapshot = {
+  "schemaVersion": "module-bom.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "items": [
+    {
+      "id": "left-side",
+      "category": "board",
+      "description": "Left Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 560,
+        "height": 720,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "left-side"
+      ]
+    },
+    {
+      "id": "right-side",
+      "category": "board",
+      "description": "Right Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 560,
+        "height": 720,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "right-side"
+      ]
+    },
+    {
+      "id": "bottom-panel",
+      "category": "board",
+      "description": "Bottom Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "bottom-panel"
+      ]
+    },
+    {
+      "id": "top-panel",
+      "category": "board",
+      "description": "Top Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "top-panel"
+      ]
+    },
+    {
+      "id": "back-panel",
+      "category": "board",
+      "description": "Back Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 864,
+        "height": 702,
+        "depth": 8,
+        "thickness": 8
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back-panel"
+      ]
+    },
+    {
+      "id": "shelf-1",
+      "category": "board",
+      "description": "Shelf 1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-1"
+      ]
+    },
+    {
+      "id": "shelf-2",
+      "category": "board",
+      "description": "Shelf 2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 864,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-2"
+      ]
+    },
+    {
+      "id": "door-front",
+      "category": "front",
+      "description": "Flap Front",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 896,
+        "height": 716,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door-front"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 8,
+    "boardItems": 8,
+    "hardwareItems": 0
+  }
+} as const;
+
+export function generateBom() {
+  return bomSnapshot;
+}
+
+export function summarizeBom() {
+  return bomSnapshot.summary;
+}

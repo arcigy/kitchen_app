@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "module-commercial-summary.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "quantity": 1,
+  "pricingEnabled": true,
+  "finalPriceEur": 325.74,
+  "priceSource": "calculated",
+  "bomItems": 18
+}

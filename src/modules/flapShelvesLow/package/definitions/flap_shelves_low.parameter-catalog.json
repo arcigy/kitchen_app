@@ -1,0 +1,348 @@
+{
+  "schemaVersion": "module-parameter-catalog.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "groups": [
+    {
+      "key": "general",
+      "label": "General",
+      "description": "Primary module identity and behavior parameters."
+    },
+    {
+      "key": "dimensions",
+      "label": "Dimensions",
+      "description": "Overall sizing, spacing, thicknesses and clearances."
+    },
+    {
+      "key": "materials",
+      "label": "Materials",
+      "description": "Material and finish parameters."
+    },
+    {
+      "key": "fronts",
+      "label": "Fronts & Doors",
+      "description": "Front, handle and opening-related parameters."
+    },
+    {
+      "key": "placement",
+      "label": "Placement",
+      "description": "Scene placement and mounting parameters."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "assemblyContext",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "kitchen",
+      "description": "Exported parameter assembly context."
+    },
+    {
+      "key": "backThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter back thickness."
+    },
+    {
+      "key": "boardThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter board thickness."
+    },
+    {
+      "key": "bottomGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter bottom gap."
+    },
+    {
+      "key": "depth",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 560,
+      "description": "Exported parameter depth."
+    },
+    {
+      "key": "doorHandleOffsetFromSplitMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 0,
+      "description": "Exported parameter door handle offset from split mm."
+    },
+    {
+      "key": "doorOpen",
+      "group": "fronts",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": false,
+      "description": "Exported parameter door open."
+    },
+    {
+      "key": "doorSystem",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "flap_up",
+      "description": "Exported parameter door system."
+    },
+    {
+      "key": "flapOpen",
+      "group": "fronts",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": false,
+      "description": "Exported parameter flap open."
+    },
+    {
+      "key": "frontGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter front gap."
+    },
+    {
+      "key": "frontThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter front thickness mm."
+    },
+    {
+      "key": "handleComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.handle.bar.160.black",
+      "description": "Exported parameter handle component id."
+    },
+    {
+      "key": "handleHorizontalPositionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 0,
+      "description": "Exported parameter handle horizontal position mm."
+    },
+    {
+      "key": "handleLengthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 160,
+      "description": "Exported parameter handle length mm."
+    },
+    {
+      "key": "handlePositionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter handle position mm."
+    },
+    {
+      "key": "handleProjectionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 14,
+      "description": "Exported parameter handle projection mm."
+    },
+    {
+      "key": "handleSizeMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 12,
+      "description": "Exported parameter handle size mm."
+    },
+    {
+      "key": "handleType",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "bar",
+      "description": "Exported parameter handle type."
+    },
+    {
+      "key": "hangingBracketComponentId",
+      "group": "placement",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.hanging_bracket.wall.standard",
+      "description": "Exported parameter hanging bracket component id."
+    },
+    {
+      "key": "height",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 720,
+      "description": "Exported parameter height."
+    },
+    {
+      "key": "hingeComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.hinge.clip_on.softclose",
+      "description": "Exported parameter hinge component id."
+    },
+    {
+      "key": "kitchenModuleRole",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "top",
+      "description": "Exported parameter kitchen module role."
+    },
+    {
+      "key": "liftUpComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.lift_up.softclose.600",
+      "description": "Exported parameter lift up component id."
+    },
+    {
+      "key": "materials",
+      "group": "materials",
+      "type": "object",
+      "required": true,
+      "defaultValue": {
+        "bodyKey": "mat.board.body.dtd.white.18",
+        "bodyColor": "#f3f3ef",
+        "frontKey": "mat.board.front.mdf.white_supermat.18",
+        "frontColor": "#d7d9dd",
+        "drawerKey": "mat.board.front.mdf.white_supermat.18",
+        "drawerColor": "#d7d9dd"
+      },
+      "description": "Exported parameter materials."
+    },
+    {
+      "key": "plinthHeight",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 0,
+      "description": "Exported parameter plinth height."
+    },
+    {
+      "key": "plinthSetbackMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter plinth setback mm."
+    },
+    {
+      "key": "requiresWorktop",
+      "group": "general",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": false,
+      "description": "Exported parameter requires worktop."
+    },
+    {
+      "key": "shelfAutoFit",
+      "group": "general",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": false,
+      "description": "Exported parameter shelf auto fit."
+    },
+    {
+      "key": "shelfCount",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 3,
+      "description": "Exported parameter shelf count."
+    },
+    {
+      "key": "shelfGaps",
+      "group": "dimensions",
+      "type": "number[]",
+      "required": true,
+      "defaultValue": [
+        210,
+        430
+      ],
+      "description": "Exported parameter shelf gaps."
+    },
+    {
+      "key": "shelfSupportComponentId",
+      "group": "dimensions",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.shelf_support.standard.nickel",
+      "description": "Exported parameter shelf support component id."
+    },
+    {
+      "key": "shelfThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter shelf thickness."
+    },
+    {
+      "key": "sideGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter side gap."
+    },
+    {
+      "key": "topGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter top gap."
+    },
+    {
+      "key": "type",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "flap_shelves_low",
+      "description": "Exported parameter type."
+    },
+    {
+      "key": "wallMounted",
+      "group": "general",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter wall mounted."
+    },
+    {
+      "key": "width",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 900,
+      "description": "Exported parameter width."
+    },
+    {
+      "key": "worktopThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 0,
+      "description": "Exported parameter worktop thickness mm."
+    }
+  ]
+}

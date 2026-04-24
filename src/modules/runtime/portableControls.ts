@@ -12,11 +12,17 @@ import {
   applyDrawerLowHandleComponentToParams,
   applyDrawerLowLegComponentToParams,
   applyDrawerLowRunnerComponentToParams,
+  applyFlapHangingBracketComponentToParams,
+  applyFlapLiftUpComponentToParams,
+  applyFlapShelfSupportComponentToParams,
   getCornerClipComponentOptions,
   getCornerHingeComponentOptions,
   getDrawerLowHandleComponentOptions,
   getDrawerLowLegComponentOptions,
-  getDrawerLowRunnerComponentOptions
+  getDrawerLowRunnerComponentOptions,
+  getFlapHangingBracketComponentOptions,
+  getFlapLiftUpComponentOptions,
+  getFlapShelfSupportComponentOptions
 } from "../../data/pricing/handleComponentPresets";
 import { t, translateEnumLabel, translateParamDescription, translateParamLabel } from "../../i18n";
 
@@ -261,7 +267,7 @@ function createSystemFieldControl(
         ? ["calculated", "override", "manual", "catalog"]
         : definition.key === "assemblyContext"
           ? ["kitchen", "generic", "wardrobe", "bathroom", "laundry"]
-          : ["base", "wall", "tall"];
+          : ["base", "wall", "top", "tall"];
     for (const optionValue of options) {
       const option = document.createElement("option");
       option.value = optionValue;
@@ -387,6 +393,24 @@ function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | n
       label: option.displayName
     }));
   }
+  if (parameterKey === "liftUpComponentId") {
+    return getFlapLiftUpComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  if (parameterKey === "hangingBracketComponentId") {
+    return getFlapHangingBracketComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  if (parameterKey === "shelfSupportComponentId") {
+    return getFlapShelfSupportComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
   return null;
 }
 
@@ -398,7 +422,7 @@ function deriveScalarOptions(parameterKey: string): PortableFieldOption[] | null
     }));
   }
   if (parameterKey === "kitchenModuleRole") {
-    return ["base", "wall", "tall"].map((value) => ({
+    return ["base", "wall", "top", "tall"].map((value) => ({
       value,
       label: translateEnumLabel(value)
     }));
@@ -654,6 +678,12 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
                 Object.assign(params, applyCornerHingeComponentToParams(params, select.value));
               } else if (parameter.key === "clipComponentId") {
                 Object.assign(params, applyCornerClipComponentToParams(params, select.value));
+              } else if (parameter.key === "liftUpComponentId") {
+                Object.assign(params, applyFlapLiftUpComponentToParams(params, select.value));
+              } else if (parameter.key === "hangingBracketComponentId") {
+                Object.assign(params, applyFlapHangingBracketComponentToParams(params, select.value));
+              } else if (parameter.key === "shelfSupportComponentId") {
+                Object.assign(params, applyFlapShelfSupportComponentToParams(params, select.value));
               } else if (parameter.key === "assemblyContext") {
                 setTopLevelValue(params, parameter.key, select.value);
                 if (select.value !== "kitchen") {

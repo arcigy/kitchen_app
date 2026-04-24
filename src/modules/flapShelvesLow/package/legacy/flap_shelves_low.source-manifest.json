@@ -1,0 +1,9 @@
+{
+  "moduleType": "flap_shelves_low",
+  "label": "Flap",
+  "functionNames": {
+    "defaultParams": "Jc",
+    "build": "flapShelfBuildV2",
+    "controls": "__"
+  }
+}

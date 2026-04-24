@@ -1,0 +1,1609 @@
+{
+  "schemaVersion": "module-quote-bom.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "generatedAt": "2026-04-24T17:27:40.829Z",
+  "moduleInstance": {
+    "quantity": 1,
+    "widthMm": 900,
+    "heightMm": 720,
+    "depthMm": 560,
+    "wallMounted": true
+  },
+  "systemParameters": {
+    "typeId": "flap_shelves_low__type",
+    "type": "flap_shelves_low",
+    "displayName": "Flap",
+    "family": "wall",
+    "code": null,
+    "variant": null,
+    "version": "1.0.0",
+    "widthMm": 900,
+    "heightMm": 720,
+    "depthMm": 560,
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "top",
+    "requiresWorktop": false,
+    "positionXmm": 0,
+    "positionYmm": 0,
+    "positionZmm": 0,
+    "rotationZDeg": 0,
+    "customPriceOverride": null,
+    "pricingEnabled": true,
+    "priceSource": "calculated",
+    "costOverride": null,
+    "quantity": 1,
+    "isActive": true,
+    "isVisible": true,
+    "isLocked": false,
+    "isValid": true,
+    "validationErrors": [],
+    "notes": null,
+    "tags": [
+      "wall",
+      "flap_shelves_low"
+    ],
+    "createdAt": "2026-04-24T17:27:40.829Z",
+    "updatedAt": "2026-04-24T17:27:40.829Z",
+    "exportToIfc": true,
+    "ifcClass": "IfcFurniture",
+    "ifcPredefinedType": null,
+    "ifcName": "Flap",
+    "ifcDescription": "Flap (flap_shelves_low)",
+    "ifcObjectType": "wall",
+    "ifcTag": "flap_shelves_low__type",
+    "classificationCode": null,
+    "classificationSystem": null
+  },
+  "materials": {
+    "body": {
+      "role": "body",
+      "key": "mat.board.body.dtd.white.18",
+      "catalogId": "mat.board.body.dtd.white.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD White 18",
+      "displayName": "DTD White 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "dtd",
+      "decor": "White",
+      "color": "White",
+      "finish": "Melamine",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20,
+        25
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "front": {
+      "role": "front",
+      "key": "mat.board.front.mdf.white_supermat.18",
+      "catalogId": "mat.board.front.mdf.white_supermat.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Front Boards",
+      "family": "front",
+      "name": "MDF White Supermat 18",
+      "displayName": "MDF White Supermat 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "mdf",
+      "decor": "White Supermat",
+      "color": "White",
+      "finish": "Supermat Lacquer",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.9,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "drawer": {
+      "role": "drawer",
+      "key": "mat.board.body.dtd.white.18",
+      "catalogId": "mat.board.body.dtd.white.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD White 18",
+      "displayName": "DTD White 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "dtd",
+      "decor": "White",
+      "color": "White",
+      "finish": "Melamine",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20,
+        25
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "back": {
+      "role": "back",
+      "key": "mat.board.back.hdf.grey.8",
+      "catalogId": "mat.board.back.hdf.grey.8",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Back Panels",
+      "family": "back",
+      "name": "HDF Grey 8",
+      "displayName": "HDF Grey 8 mm",
+      "colorHex": "#c8ccd1",
+      "baseMaterial": "hdf",
+      "decor": "Grey",
+      "color": "Grey",
+      "finish": "Painted Smooth",
+      "defaultThicknessMm": 8,
+      "availableThicknessesMm": [
+        6,
+        8
+      ],
+      "preview": {
+        "colorHex": "#c8ccd1",
+        "roughness": 0.72,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    }
+  },
+  "items": [
+    {
+      "id": "carcass-side-left",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Side Left",
+      "description": "Carcass Side Left",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.4435,
+      "formulas": {
+        "lengthMm": "partMap(carcass-side-left).dimensionsMm.length",
+        "widthMm": "partMap(carcass-side-left).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 720,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4032,
+        "billableAreaM2": 0.4435,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "corpus",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "partType=side-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=boardThickness"
+      ]
+    },
+    {
+      "id": "carcass-side-right",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Side Right",
+      "description": "Carcass Side Right",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.4435,
+      "formulas": {
+        "lengthMm": "partMap(carcass-side-right).dimensionsMm.length",
+        "widthMm": "partMap(carcass-side-right).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 720,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4032,
+        "billableAreaM2": 0.4435,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "corpus",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "partType=side-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=boardThickness"
+      ]
+    },
+    {
+      "id": "carcass-bottom",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Bottom",
+      "description": "Carcass Bottom",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.5322,
+      "formulas": {
+        "lengthMm": "partMap(carcass-bottom).dimensionsMm.length",
+        "widthMm": "partMap(carcass-bottom).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4838,
+        "billableAreaM2": 0.5322,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "corpus",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "partType=bottom-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=boardThickness"
+      ]
+    },
+    {
+      "id": "carcass-top",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Top",
+      "description": "Carcass Top",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.5322,
+      "formulas": {
+        "lengthMm": "partMap(carcass-top).dimensionsMm.length",
+        "widthMm": "partMap(carcass-top).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4838,
+        "billableAreaM2": 0.5322,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "corpus",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "partType=top-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=boardThickness"
+      ]
+    },
+    {
+      "id": "carcass-back",
+      "itemType": "board",
+      "category": "back_panel",
+      "name": "HDF Grey 8 - Carcass Back",
+      "description": "Carcass Back",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.6672,
+      "formulas": {
+        "lengthMm": "partMap(carcass-back).dimensionsMm.length",
+        "widthMm": "partMap(carcass-back).dimensionsMm.width",
+        "thicknessMm": "backThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 864,
+        "width": 702,
+        "thickness": 8
+      },
+      "metrics": {
+        "areaM2": 0.6065,
+        "billableAreaM2": 0.6672,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "back-panel",
+      "materialGroup": "back",
+      "material": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.8",
+        "catalogId": "mat.board.back.hdf.grey.8",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 8",
+        "displayName": "HDF Grey 8 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 8,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.back.hdf.grey.8",
+        "displayName": "HDF Grey 8 mm",
+        "group": "back",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.back.hdf.grey.8",
+        "sourceCatalogId": "mat.board.back.hdf.grey.8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-back"
+      ],
+      "notes": [
+        "partType=back-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=backThickness"
+      ]
+    },
+    {
+      "id": "shelf-1",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "Shelf DTD White 18 - Shelf 1",
+      "description": "Shelf 1",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.5322,
+      "formulas": {
+        "lengthMm": "partMap(shelf-1).dimensionsMm.length",
+        "widthMm": "partMap(shelf-1).dimensionsMm.width",
+        "thicknessMm": "shelfThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4838,
+        "billableAreaM2": 0.5322,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelves",
+      "material": {
+        "role": "body",
+        "key": "mat.board.shelf.dtd.white.18",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Shelf Boards",
+        "family": "shelf",
+        "name": "Shelf DTD White 18",
+        "displayName": "Shelf DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "displayName": "Shelf DTD White 18 mm",
+        "group": "shelf",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.shelf.dtd.white.18",
+        "sourceCatalogId": "mat.board.shelf.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1"
+      ],
+      "notes": [
+        "partType=shelf-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=shelfThickness"
+      ]
+    },
+    {
+      "id": "shelf-2",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "Shelf DTD White 18 - Shelf 2",
+      "description": "Shelf 2",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.5322,
+      "formulas": {
+        "lengthMm": "partMap(shelf-2).dimensionsMm.length",
+        "widthMm": "partMap(shelf-2).dimensionsMm.width",
+        "thicknessMm": "shelfThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 864,
+        "width": 560,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.4838,
+        "billableAreaM2": 0.5322,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelves",
+      "material": {
+        "role": "body",
+        "key": "mat.board.shelf.dtd.white.18",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Shelf Boards",
+        "family": "shelf",
+        "name": "Shelf DTD White 18",
+        "displayName": "Shelf DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "displayName": "Shelf DTD White 18 mm",
+        "group": "shelf",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.shelf.dtd.white.18",
+        "sourceCatalogId": "mat.board.shelf.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-2"
+      ],
+      "notes": [
+        "partType=shelf-panel",
+        "materialParamKey=materials.body",
+        "thicknessKey=shelfThickness"
+      ]
+    },
+    {
+      "id": "door-front",
+      "itemType": "board",
+      "category": "front",
+      "name": "MDF White Supermat 18 - Flap Front",
+      "description": "Flap Front",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.7057,
+      "formulas": {
+        "lengthMm": "partMap(door-front).dimensionsMm.length",
+        "widthMm": "partMap(door-front).dimensionsMm.width",
+        "thicknessMm": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 896,
+        "width": 716,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.6415,
+        "billableAreaM2": 0.7057,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "door-front",
+      "materialGroup": "fronts",
+      "material": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 18",
+        "displayName": "MDF White Supermat 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "displayName": "MDF White Supermat 18 mm",
+        "group": "front",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "sourceCatalogId": "mat.board.front.mdf.white_supermat.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front"
+      ],
+      "notes": [
+        "partType=door-front",
+        "materialParamKey=materials.front",
+        "thicknessKey=frontThicknessMm"
+      ]
+    },
+    {
+      "id": "carcass-side-left-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Left front Edge Band",
+      "description": "Carcass Side Left front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.72,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-left).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.72
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-side-right-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Right front Edge Band",
+      "description": "Carcass Side Right front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.72,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-right).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.72
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-bottom-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Bottom front Edge Band",
+      "description": "Carcass Bottom front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-bottom).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front bottom edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "carcass-top-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Top front Edge Band",
+      "description": "Carcass Top front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-top).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front top edge is visible at the opening line."
+      ]
+    },
+    {
+      "id": "shelf-1-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 1 front Edge Band",
+      "description": "Shelf 1 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-1).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "shelf-2-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 2 front Edge Band",
+      "description": "Shelf 2 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-2).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-2"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "door-handles",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Bar Handle 160 mm Black Door Handle Set",
+      "description": "Handle assemblies mounted to the exported door fronts.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 1,
+      "pricingQuantity": 1,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle])",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "handle",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "group": "handle",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.handle.bar.160.black",
+        "sourceCatalogId": "cmp.handle.bar.160.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front"
+      ],
+      "notes": [
+        "door-front.handle-mount: explicit handle anchor"
+      ]
+    },
+    {
+      "id": "lift-up-fittings",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Lift-Up System Softclose 600 mm",
+      "description": "Lift-up fitting assemblies for the exported flap front.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "lift_up",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.lift_up.softclose.600",
+        "componentType": "lift_up",
+        "geometryId": "geo.lift_up.600.softclose",
+        "name": "Lift-Up Softclose 600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "brand": "LiftMotion",
+        "series": "Avent Silent",
+        "variant": "Softclose 600 mm",
+        "color": "Grey",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 600,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#757d88",
+          "roughness": 0.34,
+          "metalness": 0.72
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.lift_up.softclose.600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "group": "lift_up",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.lift_up.softclose.600",
+        "sourceCatalogId": "cmp.lift_up.softclose.600",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front"
+      ],
+      "notes": [
+        "door-front.lift-up-left: explicit hardware anchor",
+        "door-front.lift-up-right: explicit hardware anchor"
+      ]
+    },
+    {
+      "id": "hanging-brackets",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Wall Hanging Bracket Standard",
+      "description": "Wall hanging brackets for the exported flap cabinet.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "hanging_bracket",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "componentType": "hanging_bracket",
+        "geometryId": "geo.hanging_bracket.wall.standard",
+        "name": "Hanging Bracket Wall Standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "brand": "WallFix",
+        "series": "Cabinet Hang",
+        "variant": "Standard bracket",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "group": "hanging_bracket",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.hanging_bracket.wall.standard",
+        "sourceCatalogId": "cmp.hanging_bracket.wall.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "carcass-top.hanging-bracket-left: explicit hardware anchor",
+        "carcass-top.hanging-bracket-right: explicit hardware anchor"
+      ]
+    },
+    {
+      "id": "shelf-supports",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Shelf Support Standard Nickel",
+      "description": "Shelf support hardware for the exported internal shelves.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 8,
+      "pricingQuantity": 8,
+      "formulas": {
+        "quantity": "2 * 4",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "shelf_support",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "componentType": "shelf_support",
+        "geometryId": "geo.shelf_support.standard",
+        "name": "Shelf Support Standard Nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "brand": "FixPro",
+        "series": "ShelfFit",
+        "variant": "Standard",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 4,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "group": "shelf_support",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.shelf_support.standard.nickel",
+        "sourceCatalogId": "cmp.shelf_support.standard.nickel",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1",
+        "shelf-2"
+      ],
+      "notes": [
+        "shelf-1.support-front-left: explicit hardware anchor",
+        "shelf-1.support-front-right: explicit hardware anchor",
+        "shelf-1.support-rear-left: explicit hardware anchor",
+        "shelf-1.support-rear-right: explicit hardware anchor",
+        "shelf-2.support-front-left: explicit hardware anchor",
+        "shelf-2.support-front-right: explicit hardware anchor",
+        "shelf-2.support-rear-left: explicit hardware anchor",
+        "shelf-2.support-rear-right: explicit hardware anchor"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 18,
+    "boardAreaM2": 3.9896,
+    "boardAreaM2Priced": 4.3887,
+    "edgeLengthLm": 4.896,
+    "hardwarePieces": 13
+  },
+  "aggregates": {
+    "boardsByMaterial": [
+      {
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "materialGroup": "corpus",
+        "netAreaM2": 1.774,
+        "pricedAreaM2": 1.9514,
+        "wasteMultiplier": 1.1,
+        "pieces": 4,
+        "itemCount": 4
+      },
+      {
+        "catalogId": "mat.board.back.hdf.grey.8",
+        "displayName": "HDF Grey 8 mm",
+        "materialGroup": "back",
+        "netAreaM2": 0.6065,
+        "pricedAreaM2": 0.6672,
+        "wasteMultiplier": 1.1,
+        "pieces": 1,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "displayName": "MDF White Supermat 18 mm",
+        "materialGroup": "fronts",
+        "netAreaM2": 0.6415,
+        "pricedAreaM2": 0.7057,
+        "wasteMultiplier": 1.1,
+        "pieces": 1,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "displayName": "Shelf DTD White 18 mm",
+        "materialGroup": "shelves",
+        "netAreaM2": 0.9676,
+        "pricedAreaM2": 1.0644,
+        "wasteMultiplier": 1.1,
+        "pieces": 2,
+        "itemCount": 2
+      }
+    ],
+    "edgeBandsByMaterial": [
+      {
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "materialGroup": "body",
+        "lengthLm": 3.168,
+        "pieces": 4,
+        "itemCount": 4
+      },
+      {
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "materialGroup": "shelf",
+        "lengthLm": 1.728,
+        "pieces": 2,
+        "itemCount": 2
+      }
+    ],
+    "componentsByCatalogId": [
+      {
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "componentType": "handle",
+        "pieces": 1,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.lift_up.softclose.600",
+        "displayName": "Lift-Up System Softclose 600 mm",
+        "componentType": "lift_up",
+        "pieces": 2,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.shelf_support.standard.nickel",
+        "displayName": "Shelf Support Standard Nickel",
+        "componentType": "shelf_support",
+        "pieces": 8,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.hanging_bracket.wall.standard",
+        "displayName": "Wall Hanging Bracket Standard",
+        "componentType": "hanging_bracket",
+        "pieces": 2,
+        "itemCount": 1
+      }
+    ]
+  }
+}

@@ -192,9 +192,28 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     args.buildClassicTopbar();
 
     const row = args.tb.addRow({ title: "Kitchen settings", className: "topbar-kitchen-ribbon" });
-    const modulesGroup = args.tb.addGroup("Modules", { row });
+    const modulesByVisualRole = {
+      low: [] as ReturnType<typeof getModuleDescriptors>,
+      top: [] as ReturnType<typeof getModuleDescriptors>,
+      tall: [] as ReturnType<typeof getModuleDescriptors>
+    };
+    for (const descriptor of getModuleDescriptors()) {
+      const params = descriptor.defaultParams() as Record<string, unknown>;
+      const rawRole = typeof params.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "base";
+      if (rawRole === "tall") {
+        modulesByVisualRole.tall.push(descriptor);
+        continue;
+      }
+      if (rawRole === "top" || rawRole === "upper" || rawRole === "wall") {
+        modulesByVisualRole.top.push(descriptor);
+        continue;
+      }
+      modulesByVisualRole.low.push(descriptor);
+    }
+
     const addModule = (title: string, label: string, type: ModuleParams["type"]) => {
-      args.tb.toolButton(modulesGroup, {
+      return (toolsEl: HTMLElement) =>
+        args.tb.toolButton(toolsEl, {
         title,
         iconSvg: args.icons.cabinet,
         label,
@@ -204,11 +223,27 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           args.setToolSelect();
           args.addInstance(type);
         }
-      });
+        });
     };
 
-    for (const descriptor of getModuleDescriptors()) {
-      addModule(descriptor.type, descriptor.label, descriptor.type);
+    const addModuleGroup = (groupLabel: string, descriptors: ReturnType<typeof getModuleDescriptors>) => {
+      if (descriptors.length === 0) return;
+      const groupEl = args.tb.addGroup(groupLabel, { row });
+      for (const descriptor of descriptors) {
+        addModule(descriptor.type, descriptor.label, descriptor.type)(groupEl);
+      }
+    };
+
+    addModuleGroup("Low", modulesByVisualRole.low);
+    addModuleGroup("Top", modulesByVisualRole.top);
+    addModuleGroup("Tall", modulesByVisualRole.tall);
+
+    if (
+      modulesByVisualRole.low.length > 0 ||
+      modulesByVisualRole.top.length > 0 ||
+      modulesByVisualRole.tall.length > 0
+    ) {
+      args.tb.addSpacer({ row });
     }
 
     const worktopsGroup = args.tb.addGroup("Worktops", { row });

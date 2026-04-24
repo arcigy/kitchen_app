@@ -11,6 +11,10 @@ import type { DrawerLowParams } from "./drawerLow/types";
 import { buildDrawerLow } from "./drawerLow/geometry";
 import { createDrawerLowControls } from "./drawerLow/controls";
 import { calculateBOM as calculateDrawerLowBOM } from "./drawerLow/calculation";
+import type { FlapShelvesLowParams } from "./flapShelvesLow/types";
+import { buildFlapShelvesLow } from "./flapShelvesLow/geometry";
+import { createFlapShelvesLowControls } from "./flapShelvesLow/controls";
+import { calculateBOM as calculateFlapShelvesLowBOM } from "./flapShelvesLow/calculation";
 import type { FridgeTallParams } from "./fridgeTall/types";
 import { buildFridgeTall } from "./fridgeTall/geometry";
 import { createFridgeTallControls } from "./fridgeTall/controls";
@@ -28,7 +32,7 @@ export type ModuleControlsApi = {
 };
 
 export type ModuleControlsArgs = {
-  onChange: (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
+  onChange: () => void | boolean;
   getWorktopThicknessMm: () => number;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
@@ -87,6 +91,21 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     calculateBOM: (params, ctx) => calculateDrawerLowBOM(params as DrawerLowParams, ctx),
     capabilities: {
           "hasWorktop": true,
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  },
+  {
+    type: "flap_shelves_low",
+    folder: "flapShelvesLow",
+    label: "Flap Top",
+    packageName: "module-builder-flap_shelves_low",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("flap_shelves_low"),
+    build: (params) => buildFlapShelvesLow(params as FlapShelvesLowParams),
+    createControls: (container, params, args) => createFlapShelvesLowControls(container, params as FlapShelvesLowParams, args),
+    calculateBOM: (params, ctx) => calculateFlapShelvesLowBOM(params as FlapShelvesLowParams, ctx),
+    capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
     }

@@ -1,0 +1,454 @@
+export const moduleType = "flap_shelves_low";
+export const displayName = "Flap";
+export const edgeBomSnapshot = {
+  "schemaVersion": "module-edge-bom.v1",
+  "moduleType": "flap_shelves_low",
+  "displayName": "Flap",
+  "generatedAt": "2026-04-24T17:27:40.819Z",
+  "items": [
+    {
+      "id": "carcass-side-left-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Left front Edge Band",
+      "description": "Carcass Side Left front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.72,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-left).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.72
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-side-right-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Right front Edge Band",
+      "description": "Carcass Side Right front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.72,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-right).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.72
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-bottom-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Bottom front Edge Band",
+      "description": "Carcass Bottom front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-bottom).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front bottom edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "carcass-top-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Top front Edge Band",
+      "description": "Carcass Top front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-top).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front top edge is visible at the opening line."
+      ]
+    },
+    {
+      "id": "shelf-1-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 1 front Edge Band",
+      "description": "Shelf 1 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-1).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "shelf-2-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 2 front Edge Band",
+      "description": "Shelf 2 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.864,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-2).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.864
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-2"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 6,
+    "edgeLengthLm": 4.896
+  },
+  "notes": [
+    "carcass-side-left: skipped back(concealed), top(concealed), bottom(concealed) based on explicit edgeTargets metadata.",
+    "carcass-side-right: skipped back(concealed), top(concealed), bottom(concealed) based on explicit edgeTargets metadata.",
+    "carcass-bottom: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "carcass-top: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "shelf-1: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "shelf-2: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata."
+  ]
+} as const;
+
+export function generateEdgeBom() {
+  return edgeBomSnapshot;
+}
+
+export function summarizeEdgeBom() {
+  return edgeBomSnapshot.summary;
+}
