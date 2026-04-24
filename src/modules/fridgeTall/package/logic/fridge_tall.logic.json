@@ -1,0 +1,98 @@
+{
+  "build": {
+    "path": "logic/fridge_tall.build.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local build logic.",
+    "provenance": "generated"
+  },
+  "controls": {
+    "path": "logic/fridge_tall.controls.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local controls definition.",
+    "provenance": "generated"
+  },
+  "validation": {
+    "path": "logic/fridge_tall.validation.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local validation logic.",
+    "provenance": "generated"
+  },
+  "geometry": {
+    "path": "logic/fridge_tall.geometry.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local geometry derivation logic.",
+    "provenance": "generated"
+  },
+  "partMap": {
+    "path": "logic/fridge_tall.part-map.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local manufacturable part-map derivation logic.",
+    "provenance": "generated"
+  },
+  "boardBom": {
+    "path": "logic/fridge_tall.board-bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local board-only BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "edgeBom": {
+    "path": "logic/fridge_tall.edge-bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local edge-band BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "hardwareBom": {
+    "path": "logic/fridge_tall.hardware-bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local hardware BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "bom": {
+    "path": "logic/fridge_tall.bom.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local BOM derivation logic.",
+    "provenance": "generated"
+  },
+  "pricing": {
+    "path": "logic/fridge_tall.pricing.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local pricing derivation logic.",
+    "provenance": "generated"
+  },
+  "commercialSummary": {
+    "path": "logic/fridge_tall.commercial-summary.ts",
+    "mediaType": "text/typescript",
+    "description": "Package-local commercial summary logic.",
+    "provenance": "generated"
+  },
+  "legacyRuntime": {
+    "path": "legacy/legacy-builder.runtime.js",
+    "mediaType": "text/javascript",
+    "description": "Full legacy runtime source snapshot.",
+    "provenance": "generated"
+  },
+  "legacyDescriptor": {
+    "path": "legacy/fridge_tall.descriptor.txt",
+    "mediaType": "text/plain",
+    "description": "Exact module descriptor snippet from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyDefaultParams": {
+    "path": "legacy/fridge_tall.default-params.js",
+    "mediaType": "text/javascript",
+    "description": "Exact default-params function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyBuild": {
+    "path": "legacy/fridge_tall.build.js",
+    "mediaType": "text/javascript",
+    "description": "Exact build function from the legacy runtime.",
+    "provenance": "generated"
+  },
+  "legacyControls": {
+    "path": "legacy/fridge_tall.controls.js",
+    "mediaType": "text/javascript",
+    "description": "Exact controls function from the legacy runtime.",
+    "provenance": "generated"
+  }
+}

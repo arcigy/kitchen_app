@@ -8,6 +8,11 @@ import {
 } from "../modules/cornerShelfLower/types";
 import cornerShelfLowerMaterialsSnapshot from "../modules/cornerShelfLower/package/definitions/corner_shelf_lower.materials.snapshot.json";
 import drawerLowMaterialsSnapshot from "../modules/drawerLow/package/definitions/drawer_low.materials.snapshot.json";
+import {
+  normalizeFridgeTallParams,
+  type FridgeTallParams
+} from "../modules/fridgeTall/types";
+import fridgeTallMaterialsSnapshot from "../modules/fridgeTall/package/definitions/fridge_tall.materials.snapshot.json";
 import type { PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
 import type { KitchenContext } from "./kitchenContext";
 
@@ -37,6 +42,7 @@ const kitchenMaterialFieldByFamily: KitchenMaterialField = {
 
 const cornerShelfLowerSnapshot = cornerShelfLowerMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const drawerLowSnapshot = drawerLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
+const fridgeTallSnapshot = fridgeTallMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 
 function matchesKitchenBoardFamily(material: MaterialDefinition, family: KitchenBoardFamily) {
   if (family === "shelf") return material.boardFamily === "body";
@@ -307,6 +313,40 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   );
 }
 
+function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+  const record = params as Record<string, unknown>;
+  const materials = ensureRecord(record.materials);
+  record.materials = materials;
+
+  record.depth = ctx.moduleDepthMm;
+  record.plinthHeight = ctx.plinthHeightMm;
+  record.plinthSetbackMm = ctx.plinthDepthMm;
+  record.worktopThicknessMm = 0;
+
+  const corpus = getKitchenMaterial(ctx, "body");
+  if (corpus) {
+    record.boardThickness = corpus.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "body", corpus);
+  }
+
+  const fronts = getKitchenMaterial(ctx, "front");
+  if (fronts) {
+    record.frontThicknessMm = fronts.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "front", fronts);
+  }
+
+  const back = getKitchenMaterial(ctx, "back");
+  if (back) {
+    record.backThickness = back.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "back", back);
+  }
+
+  applyKitchenHandleSelection(record, ctx);
+  applyKitchenCommercialSelections(record, ctx, fridgeTallSnapshot);
+
+  Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
+}
+
 export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily): KitchenMaterialSelectOption[] {
   const options = new Map<string, KitchenMaterialSelectOption>();
 
@@ -328,6 +368,9 @@ export function applyKitchenContextToModuleParams(params: ModuleParams, ctx: Kit
   }
   if (params.type === "drawer_low") {
     applyDrawerLowKitchenMaterials(params, ctx);
+  }
+  if (params.type === "fridge_tall") {
+    applyFridgeTallKitchenMaterials(params, ctx);
   }
   return params;
 }

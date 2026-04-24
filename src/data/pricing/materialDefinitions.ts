@@ -275,6 +275,21 @@ export const materialDefinitions: MaterialDefinition[] = [
   }),
 
   defineBoard("front", {
+    id: "mat.board.front.mdf.white_supermat.18",
+    name: "MDF White Supermat 18",
+    displayName: "MDF White Supermat 18 mm",
+    category: "Front Boards",
+    baseMaterial: "mdf",
+    decor: "White Supermat",
+    color: "White",
+    finish: "Supermat Lacquer",
+    availableThicknessesMm: [16, 18, 20],
+    defaultThicknessMm: 18,
+    grainDirectionRelevant: false,
+    recommendedUse: "Standard matte lacquered fronts for clean modern kitchens.",
+    tags: ["front", "mdf", "white", "supermat", "lacquer", "standard"]
+  }),
+  defineBoard("front", {
     id: "mat.board.front.mdf.white_supermat.19",
     name: "MDF White Supermat 19",
     displayName: "MDF White Supermat 19 mm",

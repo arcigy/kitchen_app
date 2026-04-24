@@ -10,6 +10,7 @@ const priceEntries = [
   ["mat.board.body.plywood.birch.18", 46.5],
   ["mat.board.body.moisture_resistant.green.18", 51.9],
 
+  ["mat.board.front.mdf.white_supermat.18", 54],
   ["mat.board.front.mdf.white_supermat.19", 55],
   ["mat.board.front.mdf.cashmere_supermat.19", 61],
   ["mat.board.front.mdf.graphite_supermat.19", 63.5],
@@ -110,6 +111,7 @@ const priceEntries = [
   ["cmp.hinge.clip_on.softclose", 5.6],
   ["cmp.hinge.corner.45.softclose", 7.8],
   ["cmp.hinge.wide_angle.155.softclose", 9.5],
+  ["cmp.hinge.fridge_integrated.softclose", 5.6],
 
   ["cmp.push_to_open.standard.grey", 5.4],
   ["cmp.push_to_open.magnetic.white", 8.9],

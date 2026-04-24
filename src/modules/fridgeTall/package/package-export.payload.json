@@ -1,0 +1,643 @@
+{
+  "exportMeta": {
+    "exportedAt": "2026-04-24T13:35:45.700Z",
+    "source": "builder_portable_export",
+    "scope": "single_module",
+    "generator": {
+      "name": "module-package-export-shape",
+      "version": 3
+    },
+    "notes": [
+      "Portable browser export generated from the current module builder state.",
+      "Archive includes full parameter schema, system parameters, current material snapshot, live export state, derived geometry, BOM and package-local TypeScript companion files."
+    ]
+  },
+  "manifest": {
+    "schemaVersion": "module-package.v1",
+    "packageName": "module-builder-fridge_tall",
+    "packageVersion": "1.0.0",
+    "displayName": "Fridge Package",
+    "description": "Portable single-module package exported from module-builder-dev for fridge_tall.",
+    "engineCompatibility": {
+      "app": "module_builder_dev",
+      "moduleContract": "1.x"
+    },
+    "modules": [
+      {
+        "moduleType": "fridge_tall",
+        "displayName": "Fridge"
+      }
+    ]
+  },
+  "moduleEntries": [
+    {
+      "moduleType": "fridge_tall",
+      "displayName": "Fridge",
+      "definition": {
+        "moduleType": "fridge_tall",
+        "source": "package",
+        "description": "Portable module package exported from module-builder-dev.",
+        "provenance": "declared",
+        "paramsSchemaRef": {
+          "path": "definitions/fridge_tall.params.schema.json",
+          "mediaType": "application/schema+json",
+          "description": "Full JSON schema for module parameters.",
+          "provenance": "generated"
+        },
+        "defaultsRef": {
+          "path": "definitions/fridge_tall.defaults.json",
+          "mediaType": "application/json",
+          "description": "Current/default parameter snapshot.",
+          "provenance": "generated"
+        },
+        "parameterCatalogRef": {
+          "path": "definitions/fridge_tall.parameter-catalog.json",
+          "mediaType": "application/json",
+          "description": "Human-readable parameter catalog.",
+          "provenance": "generated"
+        },
+        "geometrySnapshotRef": {
+          "path": "definitions/fridge_tall.geometry.json",
+          "mediaType": "application/json",
+          "description": "Derived geometry snapshot.",
+          "provenance": "generated"
+        },
+        "manufacturablePartMapRef": {
+          "path": "definitions/fridge_tall.part-map.json",
+          "mediaType": "application/json",
+          "description": "Manufacturable part map prepared for BOM, pricing and debugging.",
+          "provenance": "generated"
+        },
+        "boardBomSnapshotRef": {
+          "path": "definitions/fridge_tall.board-bom.json",
+          "mediaType": "application/json",
+          "description": "Board-only BOM snapshot generated from manufacturable part map.",
+          "provenance": "generated"
+        },
+        "edgeBomSnapshotRef": {
+          "path": "definitions/fridge_tall.edge-bom.json",
+          "mediaType": "application/json",
+          "description": "Edge-band BOM snapshot generated from explicit manufacturable edge metadata.",
+          "provenance": "generated"
+        },
+        "hardwareBomSnapshotRef": {
+          "path": "definitions/fridge_tall.hardware-bom.json",
+          "mediaType": "application/json",
+          "description": "Hardware BOM snapshot generated from explicit manufacturable hardware anchors.",
+          "provenance": "generated"
+        },
+        "bomSnapshotRef": {
+          "path": "definitions/fridge_tall.bom.snapshot.json",
+          "mediaType": "application/json",
+          "description": "Derived BOM snapshot.",
+          "provenance": "generated"
+        },
+        "materialsSnapshotRef": {
+          "path": "definitions/fridge_tall.materials.snapshot.json",
+          "mediaType": "application/json",
+          "description": "Current material state captured from params and live runtime.",
+          "provenance": "generated"
+        },
+        "liveStateSnapshotRef": {
+          "path": "definitions/fridge_tall.live-state.json",
+          "mediaType": "application/json",
+          "description": "Complete live export state captured at the time of package export.",
+          "provenance": "generated"
+        }
+      },
+      "capabilities": {},
+      "logic": {
+        "build": {
+          "path": "logic/fridge_tall.build.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local build logic.",
+          "provenance": "generated"
+        },
+        "controls": {
+          "path": "logic/fridge_tall.controls.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local controls definition.",
+          "provenance": "generated"
+        },
+        "validation": {
+          "path": "logic/fridge_tall.validation.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local validation logic.",
+          "provenance": "generated"
+        },
+        "geometry": {
+          "path": "logic/fridge_tall.geometry.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local geometry derivation logic.",
+          "provenance": "generated"
+        },
+        "partMap": {
+          "path": "logic/fridge_tall.part-map.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local manufacturable part-map derivation logic.",
+          "provenance": "generated"
+        },
+        "boardBom": {
+          "path": "logic/fridge_tall.board-bom.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local board-only BOM derivation logic.",
+          "provenance": "generated"
+        },
+        "edgeBom": {
+          "path": "logic/fridge_tall.edge-bom.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local edge-band BOM derivation logic.",
+          "provenance": "generated"
+        },
+        "hardwareBom": {
+          "path": "logic/fridge_tall.hardware-bom.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local hardware BOM derivation logic.",
+          "provenance": "generated"
+        },
+        "bom": {
+          "path": "logic/fridge_tall.bom.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local BOM derivation logic.",
+          "provenance": "generated"
+        },
+        "pricing": {
+          "path": "logic/fridge_tall.pricing.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local pricing derivation logic.",
+          "provenance": "generated"
+        },
+        "commercialSummary": {
+          "path": "logic/fridge_tall.commercial-summary.ts",
+          "mediaType": "text/typescript",
+          "description": "Package-local commercial summary logic.",
+          "provenance": "generated"
+        },
+        "legacyRuntime": {
+          "path": "legacy/legacy-builder.runtime.js",
+          "mediaType": "text/javascript",
+          "description": "Full legacy runtime source snapshot.",
+          "provenance": "generated"
+        },
+        "legacyDescriptor": {
+          "path": "legacy/fridge_tall.descriptor.txt",
+          "mediaType": "text/plain",
+          "description": "Exact module descriptor snippet from the legacy runtime.",
+          "provenance": "generated"
+        },
+        "legacyDefaultParams": {
+          "path": "legacy/fridge_tall.default-params.js",
+          "mediaType": "text/javascript",
+          "description": "Exact default-params function from the legacy runtime.",
+          "provenance": "generated"
+        },
+        "legacyBuild": {
+          "path": "legacy/fridge_tall.build.js",
+          "mediaType": "text/javascript",
+          "description": "Exact build function from the legacy runtime.",
+          "provenance": "generated"
+        },
+        "legacyControls": {
+          "path": "legacy/fridge_tall.controls.js",
+          "mediaType": "text/javascript",
+          "description": "Exact controls function from the legacy runtime.",
+          "provenance": "generated"
+        }
+      },
+      "commercial": {
+        "pricingConfig": {
+          "path": "commercial/fridge_tall.pricing.json",
+          "mediaType": "application/json",
+          "description": "Pricing snapshot and configuration.",
+          "provenance": "generated"
+        },
+        "bomConfig": {
+          "path": "commercial/fridge_tall.bom.json",
+          "mediaType": "application/json",
+          "description": "BOM snapshot.",
+          "provenance": "generated"
+        },
+        "commercialMetadata": {
+          "path": "commercial/fridge_tall.metadata.json",
+          "mediaType": "application/json",
+          "description": "Commercial summary snapshot.",
+          "provenance": "generated"
+        }
+      },
+      "assets": {
+        "docs": [
+          {
+            "path": "docs/fridge_tall.README.md",
+            "mediaType": "text/markdown",
+            "description": "Module package overview.",
+            "provenance": "declared"
+          },
+          {
+            "path": "docs/fridge_tall.system-parameters.md",
+            "mediaType": "text/markdown",
+            "description": "Module system parameter reference.",
+            "provenance": "declared"
+          },
+          {
+            "path": "docs/fridge_tall.geometry.md",
+            "mediaType": "text/markdown",
+            "description": "Module geometry explanation.",
+            "provenance": "declared"
+          },
+          {
+            "path": "docs/fridge_tall.bom.md",
+            "mediaType": "text/markdown",
+            "description": "Module BOM explanation.",
+            "provenance": "declared"
+          }
+        ]
+      },
+      "tags": [
+        "tall",
+        "fridge_tall"
+      ],
+      "status": "active",
+      "notes": [
+        "Exported from module-builder-dev browser runtime.",
+        "Includes live runtime mesh snapshot plus complete parameter schema, system parameters, geometry, BOM and portable TypeScript companion files."
+      ]
+    }
+  ],
+  "systemParameters": {
+    "schemaVersion": "module-system-parameters.v1",
+    "groups": [
+      {
+        "key": "identity",
+        "label": "Identity",
+        "description": "Fixed identity metadata required for each exported module instance."
+      },
+      {
+        "key": "dimensions",
+        "label": "Dimensions",
+        "description": "Nominal module dimensions in millimeters."
+      },
+      {
+        "key": "assembly",
+        "label": "Assembly",
+        "description": "Assembly context and kitchen-only module role for the exported module."
+      },
+      {
+        "key": "placement",
+        "label": "Placement",
+        "description": "Scene placement metadata plus placement-level flags such as requiresWorktop."
+      },
+      {
+        "key": "pricing",
+        "label": "Pricing",
+        "description": "Pricing overrides and commercial state used by downstream systems."
+      },
+      {
+        "key": "state",
+        "label": "State",
+        "description": "Lifecycle and validation state flags for the module."
+      },
+      {
+        "key": "metadata",
+        "label": "Metadata",
+        "description": "Human-facing metadata kept alongside the technical module export."
+      },
+      {
+        "key": "ifc",
+        "label": "IFC Export",
+        "description": "IFC export defaults and BIM classification metadata."
+      }
+    ],
+    "definitions": [
+      {
+        "key": "typeId",
+        "group": "identity",
+        "type": "string",
+        "description": "Stable identifier of the module type used across exports and downstream mappings.",
+        "required": true
+      },
+      {
+        "key": "type",
+        "group": "identity",
+        "type": "string",
+        "description": "Technical module type.",
+        "required": true
+      },
+      {
+        "key": "displayName",
+        "group": "identity",
+        "type": "string",
+        "description": "Human-readable module name.",
+        "required": true
+      },
+      {
+        "key": "family",
+        "group": "identity",
+        "type": "string",
+        "description": "Higher-level module family.",
+        "required": true
+      },
+      {
+        "key": "code",
+        "group": "identity",
+        "type": "string | null",
+        "description": "Internal or catalog code.",
+        "required": true
+      },
+      {
+        "key": "variant",
+        "group": "identity",
+        "type": "string | null",
+        "description": "Concrete module variant.",
+        "required": true
+      },
+      {
+        "key": "version",
+        "group": "identity",
+        "type": "string",
+        "description": "Module data-model/export version.",
+        "required": true
+      },
+      {
+        "key": "widthMm",
+        "group": "dimensions",
+        "type": "number",
+        "description": "Nominal width in mm.",
+        "required": true
+      },
+      {
+        "key": "heightMm",
+        "group": "dimensions",
+        "type": "number",
+        "description": "Nominal height in mm.",
+        "required": true
+      },
+      {
+        "key": "depthMm",
+        "group": "dimensions",
+        "type": "number",
+        "description": "Nominal depth in mm.",
+        "required": true
+      },
+      {
+        "key": "assemblyContext",
+        "group": "assembly",
+        "type": "\"kitchen\" | \"generic\" | \"wardrobe\" | \"bathroom\" | \"laundry\" | null",
+        "description": "System-managed top-level assembly/domain this module belongs to.",
+        "required": true
+      },
+      {
+        "key": "kitchenModuleRole",
+        "group": "assembly",
+        "type": "\"base\" | \"top\" | \"tall\" | null",
+        "description": "Kitchen role used only when assemblyContext is kitchen.",
+        "required": true
+      },
+      {
+        "key": "requiresWorktop",
+        "group": "placement",
+        "type": "boolean",
+        "description": "Placement-level flag for whether the module should receive a worktop in kitchen composition flows.",
+        "required": true
+      },
+      {
+        "key": "positionXmm",
+        "group": "placement",
+        "type": "number",
+        "description": "X position in mm.",
+        "required": true
+      },
+      {
+        "key": "positionYmm",
+        "group": "placement",
+        "type": "number",
+        "description": "Y position in mm.",
+        "required": true
+      },
+      {
+        "key": "positionZmm",
+        "group": "placement",
+        "type": "number",
+        "description": "Z position in mm.",
+        "required": true
+      },
+      {
+        "key": "rotationZDeg",
+        "group": "placement",
+        "type": "number",
+        "description": "Rotation around Z in degrees.",
+        "required": true
+      },
+      {
+        "key": "customPriceOverride",
+        "group": "pricing",
+        "type": "number | null",
+        "description": "Sales price override.",
+        "required": true
+      },
+      {
+        "key": "pricingEnabled",
+        "group": "pricing",
+        "type": "boolean",
+        "description": "Pricing enabled flag.",
+        "required": true
+      },
+      {
+        "key": "priceSource",
+        "group": "pricing",
+        "type": "\"calculated\" | \"override\" | \"manual\" | \"catalog\"",
+        "description": "Final price source.",
+        "required": true
+      },
+      {
+        "key": "costOverride",
+        "group": "pricing",
+        "type": "number | null",
+        "description": "Internal cost override.",
+        "required": true
+      },
+      {
+        "key": "quantity",
+        "group": "pricing",
+        "type": "number",
+        "description": "Quantity.",
+        "required": true
+      },
+      {
+        "key": "isActive",
+        "group": "state",
+        "type": "boolean",
+        "description": "Active state.",
+        "required": true
+      },
+      {
+        "key": "isVisible",
+        "group": "state",
+        "type": "boolean",
+        "description": "Visibility state.",
+        "required": true
+      },
+      {
+        "key": "isLocked",
+        "group": "state",
+        "type": "boolean",
+        "description": "Lock state.",
+        "required": true
+      },
+      {
+        "key": "isValid",
+        "group": "state",
+        "type": "boolean",
+        "description": "Validation state.",
+        "required": true
+      },
+      {
+        "key": "validationErrors",
+        "group": "state",
+        "type": "string[]",
+        "description": "Validation errors/warnings.",
+        "required": true
+      },
+      {
+        "key": "notes",
+        "group": "metadata",
+        "type": "string | null",
+        "description": "Internal note.",
+        "required": true
+      },
+      {
+        "key": "tags",
+        "group": "metadata",
+        "type": "string[]",
+        "description": "Module tags.",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "group": "metadata",
+        "type": "string | null",
+        "description": "Creation timestamp.",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "group": "metadata",
+        "type": "string | null",
+        "description": "Update timestamp.",
+        "required": true
+      },
+      {
+        "key": "exportToIfc",
+        "group": "ifc",
+        "type": "boolean",
+        "description": "IFC export flag.",
+        "required": true
+      },
+      {
+        "key": "ifcClass",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC class.",
+        "required": true
+      },
+      {
+        "key": "ifcPredefinedType",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC predefined type.",
+        "required": true
+      },
+      {
+        "key": "ifcName",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC name.",
+        "required": true
+      },
+      {
+        "key": "ifcDescription",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC description.",
+        "required": true
+      },
+      {
+        "key": "ifcObjectType",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC object type.",
+        "required": true
+      },
+      {
+        "key": "ifcTag",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "IFC tag.",
+        "required": true
+      },
+      {
+        "key": "classificationCode",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "Classification code.",
+        "required": true
+      },
+      {
+        "key": "classificationSystem",
+        "group": "ifc",
+        "type": "string | null",
+        "description": "Classification system.",
+        "required": true
+      }
+    ],
+    "modules": [
+      {
+        "moduleType": "fridge_tall",
+        "values": {
+          "typeId": "fridge_tall__type",
+          "type": "fridge_tall",
+          "displayName": "Fridge",
+          "family": "tall",
+          "code": null,
+          "variant": "integrated_fridge",
+          "version": "1.0.0",
+          "widthMm": 600,
+          "heightMm": 1916,
+          "depthMm": 600,
+          "assemblyContext": "kitchen",
+          "kitchenModuleRole": "tall",
+          "requiresWorktop": false,
+          "positionXmm": 0,
+          "positionYmm": 0,
+          "positionZmm": 0,
+          "rotationZDeg": 0,
+          "customPriceOverride": null,
+          "pricingEnabled": true,
+          "priceSource": "calculated",
+          "costOverride": null,
+          "quantity": 1,
+          "isActive": true,
+          "isVisible": true,
+          "isLocked": false,
+          "isValid": true,
+          "validationErrors": [],
+          "notes": null,
+          "tags": [
+            "tall",
+            "fridge_tall"
+          ],
+          "createdAt": "2026-04-22T23:32:43.819Z",
+          "updatedAt": "2026-04-22T23:32:43.819Z",
+          "exportToIfc": true,
+          "ifcClass": "IfcFurniture",
+          "ifcPredefinedType": null,
+          "ifcName": "Fridge",
+          "ifcDescription": "Fridge (fridge_tall)",
+          "ifcObjectType": "tall",
+          "ifcTag": "fridge_tall__type",
+          "classificationCode": null,
+          "classificationSystem": null
+        }
+      }
+    ]
+  }
+}

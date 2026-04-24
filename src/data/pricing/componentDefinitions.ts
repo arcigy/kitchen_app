@@ -596,6 +596,19 @@ export const componentDefinitions: ComponentDefinition[] = [
     recommendedUse: "Wide opening hinge for pull-out adjacent doors and special access doors.",
     tags: ["hinge", "wide-angle", "155", "softclose", "premium"]
   }),
+  defineComponent("hinge", {
+    id: "cmp.hinge.fridge_integrated.softclose",
+    name: "Integrated Fridge Hinge Softclose",
+    displayName: "Integrated Fridge Hinge Softclose",
+    brand: "HingeWorks",
+    series: "Fridge",
+    variant: "integrated appliance softclose",
+    color: "Nickel",
+    defaultQuantity: 1,
+    recommendedUse:
+      "Integrated refrigerator door hinge for fridge-front applications where the hinge assembly is supplied with the appliance system.",
+    tags: ["hinge", "fridge", "integrated", "softclose", "appliance"]
+  }),
 
   defineComponent("push_system", {
     id: "cmp.push_to_open.standard.grey",

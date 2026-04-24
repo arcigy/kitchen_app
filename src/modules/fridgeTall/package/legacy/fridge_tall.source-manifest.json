@@ -1,0 +1,9 @@
+{
+  "moduleType": "fridge_tall",
+  "label": "Fridge",
+  "functionNames": {
+    "defaultParams": "fridgeTallDefaultsV2",
+    "build": "fridgeTallBuildV2",
+    "controls": "fridgeTallControlsV2"
+  }
+}

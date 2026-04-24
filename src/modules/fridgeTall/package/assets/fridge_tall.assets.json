@@ -1,0 +1,28 @@
+{
+  "docs": [
+    {
+      "path": "docs/fridge_tall.README.md",
+      "mediaType": "text/markdown",
+      "description": "Module package overview.",
+      "provenance": "declared"
+    },
+    {
+      "path": "docs/fridge_tall.system-parameters.md",
+      "mediaType": "text/markdown",
+      "description": "Module system parameter reference.",
+      "provenance": "declared"
+    },
+    {
+      "path": "docs/fridge_tall.geometry.md",
+      "mediaType": "text/markdown",
+      "description": "Module geometry explanation.",
+      "provenance": "declared"
+    },
+    {
+      "path": "docs/fridge_tall.bom.md",
+      "mediaType": "text/markdown",
+      "description": "Module BOM explanation.",
+      "provenance": "declared"
+    }
+  ]
+}

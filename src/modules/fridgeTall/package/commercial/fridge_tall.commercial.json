@@ -1,0 +1,20 @@
+{
+  "pricingConfig": {
+    "path": "commercial/fridge_tall.pricing.json",
+    "mediaType": "application/json",
+    "description": "Pricing snapshot and configuration.",
+    "provenance": "generated"
+  },
+  "bomConfig": {
+    "path": "commercial/fridge_tall.bom.json",
+    "mediaType": "application/json",
+    "description": "BOM snapshot.",
+    "provenance": "generated"
+  },
+  "commercialMetadata": {
+    "path": "commercial/fridge_tall.metadata.json",
+    "mediaType": "application/json",
+    "description": "Commercial summary snapshot.",
+    "provenance": "generated"
+  }
+}

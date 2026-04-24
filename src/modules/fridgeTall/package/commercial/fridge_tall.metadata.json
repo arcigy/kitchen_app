@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "module-commercial-summary.v1",
+  "moduleType": "fridge_tall",
+  "displayName": "Fridge",
+  "quantity": 1,
+  "pricingEnabled": true,
+  "finalPriceEur": 232.59,
+  "priceSource": "incomplete",
+  "bomItems": 28
+}

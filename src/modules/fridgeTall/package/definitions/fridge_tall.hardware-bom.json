@@ -1,0 +1,326 @@
+{
+  "schemaVersion": "module-hardware-bom.v1",
+  "moduleType": "fridge_tall",
+  "displayName": "Fridge",
+  "generatedAt": "2026-04-24T13:35:45.700Z",
+  "items": [
+    {
+      "id": "door-handles",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Bar Handle 160 mm Black Door Handle Set",
+      "description": "Handle assemblies mounted to the upper and lower integrated fridge doors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle])",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "handle",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "group": "handle",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.handle.bar.160.black",
+        "sourceCatalogId": "cmp.handle.bar.160.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "door-front-lower"
+      ],
+      "notes": [
+        "door-front-upper.handle-mount: Driven by handleComponentId, handlePositionMm and doorHandleOffsetFromSplitMm.",
+        "door-front-lower.handle-mount: Driven by handleComponentId, handlePositionMm and doorHandleOffsetFromSplitMm."
+      ]
+    },
+    {
+      "id": "handle-screws",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Handle Screw M4",
+      "description": "Fixing screws resolved from the selected fridge handle component policy.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 4,
+      "pricingQuantity": 4,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle]) * 2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "fastener",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "componentType": "fastener",
+        "geometryId": "geo.fastener.handle_screw",
+        "name": "Handle Screw M4",
+        "displayName": "Handle Screw M4",
+        "brand": "FixPro",
+        "series": "HandleFix",
+        "variant": "M4 machine screw",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "displayName": "Handle Screw M4",
+        "group": "fastener",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.fastener.handle_screw.m4",
+        "sourceCatalogId": "cmp.fastener.handle_screw.m4",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "door-front-lower"
+      ],
+      "notes": [
+        "Resolved from handle component 'cmp.handle.bar.160.black' fastener policy.",
+        "Bar handles use two machine screws per handle assembly."
+      ]
+    },
+    {
+      "id": "door-hinges",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Integrated Fridge Hinge Softclose",
+      "description": "Integrated door hinge assemblies for the upper and lower fridge doors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 6,
+      "pricingQuantity": 6,
+      "formulas": {
+        "quantity": "door-front-upper: 3 hinges per upper integrated fridge door + door-front-lower: 3 hinges per lower integrated fridge door",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "hinge",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hinge.fridge_integrated.softclose",
+        "componentType": "hinge",
+        "geometryId": "geo.hinge.clip_on.softclose",
+        "name": "Integrated Fridge Hinge Softclose",
+        "displayName": "Integrated Fridge Hinge Softclose",
+        "brand": "HingeWorks",
+        "series": "Fridge",
+        "variant": "integrated appliance softclose",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.hinge.fridge_integrated.softclose",
+        "displayName": "Integrated Fridge Hinge Softclose",
+        "group": "hinge",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.hinge.fridge_integrated.softclose",
+        "sourceCatalogId": "cmp.hinge.fridge_integrated.softclose",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "carcass-side-left",
+        "carcass-side-right",
+        "door-front-lower"
+      ],
+      "notes": [
+        "door-front-upper: Formalized from the current fridge_tall preview/export contract, which uses three hinges on the upper door.",
+        "door-front-lower: Formalized from the current fridge_tall preview/export contract, which uses three hinges on the lower door.",
+        "Mounting plates are included in the hinge assembly."
+      ]
+    },
+    {
+      "id": "adjustable-legs",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Adjustable Leg 100 mm Black",
+      "description": "Adjustable support legs for the floor-mounted integrated fridge carcass.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 4,
+      "pricingQuantity": 4,
+      "formulas": {
+        "quantity": "width <= 600 ? 4 : width <= 900 ? 5 : 6",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "leg",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "group": "leg",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.leg.adjustable.100.black",
+        "sourceCatalogId": "cmp.leg.adjustable.100.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "carcass-bottom.leg-front-left: Corner support leg at the front-left service position.",
+        "carcass-bottom.leg-front-right: Corner support leg at the front-right service position.",
+        "carcass-bottom.leg-rear-left: Corner support leg at the rear-left service position.",
+        "carcass-bottom.leg-rear-right: Corner support leg at the rear-right service position."
+      ]
+    },
+    {
+      "id": "plinth-clips",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Plinth Clip Standard",
+      "description": "Front plinth clips resolved from explicit fridge clip anchors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "front-left + front-right clip only",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "plinth_clip",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "componentType": "plinth_clip",
+        "geometryId": "geo.plinth_clip.standard",
+        "name": "Plinth Clip Standard",
+        "displayName": "Plinth Clip Standard",
+        "brand": "BaseTech",
+        "series": "ClipFix",
+        "variant": "Standard clip",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "displayName": "Plinth Clip Standard",
+        "group": "plinth_clip",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.clip.plinth.standard",
+        "sourceCatalogId": "cmp.clip.plinth.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front",
+        "carcass-bottom"
+      ],
+      "notes": [
+        "plinth-front.clip-front-left: Front-left plinth clip follows the fridge runtime clip placement on the front-left leg.",
+        "plinth-front.clip-front-right: Front-right plinth clip follows the fridge runtime clip placement on the front-right leg."
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 5,
+    "hardwarePieces": 18
+  },
+  "notes": [
+    "Handle screws are generated from handle component BOM policy: 2 screw(s) per handle via cmp.fastener.handle_screw.m4.",
+    "Hinge mounting plates are explicitly treated as included in the hinge assembly for fridge_tall.",
+    "No carcass-fastener-set item: No explicit carcass joinery anchors or per-joint count rules exist yet for fridge_tall."
+  ]
+}

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": "module-params-schema.v1",
+  "moduleType": "fridge_tall",
+  "title": "Fridge Params",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "assemblyContext": {
+      "type": "string"
+    },
+    "kitchenModuleRole": {
+      "type": "string"
+    },
+    "requiresWorktop": {
+      "type": "boolean"
+    },
+    "worktopThicknessMm": {
+      "type": "number"
+    },
+    "width": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "depth": {
+      "type": "number"
+    },
+    "boardThickness": {
+      "type": "number"
+    },
+    "backThickness": {
+      "type": "number"
+    },
+    "frontThicknessMm": {
+      "type": "number"
+    },
+    "doorOpen": {
+      "type": "boolean"
+    },
+    "handlePositionMm": {
+      "type": "number"
+    },
+    "doorHandleOffsetFromSplitMm": {
+      "type": "number"
+    },
+    "__fridgeHandleSplitScaleVersion": {
+      "type": "number"
+    },
+    "freezerDoorHeightMm": {
+      "type": "number"
+    },
+    "fridgeBottomClearanceMm": {
+      "type": "number"
+    },
+    "fridgeDepthMm": {
+      "type": "number"
+    },
+    "fridgeDoorGapMm": {
+      "type": "number"
+    },
+    "fridgeHeightMm": {
+      "type": "number"
+    },
+    "fridgeSideClearanceMm": {
+      "type": "number"
+    },
+    "fridgeTopClearanceMm": {
+      "type": "number"
+    },
+    "fridgeWidthMm": {
+      "type": "number"
+    },
+    "hingeComponentId": {
+      "type": "string"
+    },
+    "legComponentId": {
+      "type": "string"
+    },
+    "plinthHeight": {
+      "type": "number"
+    },
+    "plinthSetbackMm": {
+      "type": "number"
+    },
+    "materials": {
+      "type": "object",
+      "properties": {
+        "bodyKey": {
+          "type": "string"
+        },
+        "bodyColor": {
+          "type": "string"
+        },
+        "frontKey": {
+          "type": "string"
+        },
+        "frontColor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "handleComponentId": {
+      "type": "string"
+    },
+    "handleType": {
+      "type": "string"
+    },
+    "handleLengthMm": {
+      "type": "number"
+    },
+    "handleSizeMm": {
+      "type": "number"
+    },
+    "handleProjectionMm": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "__fridgeHandleSplitScaleVersion",
+    "assemblyContext",
+    "backThickness",
+    "boardThickness",
+    "depth",
+    "doorHandleOffsetFromSplitMm",
+    "doorOpen",
+    "freezerDoorHeightMm",
+    "fridgeBottomClearanceMm",
+    "fridgeDepthMm",
+    "fridgeDoorGapMm",
+    "fridgeHeightMm",
+    "fridgeSideClearanceMm",
+    "fridgeTopClearanceMm",
+    "fridgeWidthMm",
+    "frontThicknessMm",
+    "handleComponentId",
+    "handleLengthMm",
+    "handlePositionMm",
+    "handleProjectionMm",
+    "handleSizeMm",
+    "handleType",
+    "height",
+    "hingeComponentId",
+    "kitchenModuleRole",
+    "legComponentId",
+    "materials",
+    "plinthHeight",
+    "plinthSetbackMm",
+    "requiresWorktop",
+    "type",
+    "width",
+    "worktopThicknessMm"
+  ],
+  "additionalProperties": true
+}

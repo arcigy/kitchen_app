@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "module-package.v1",
+  "packageName": "module-builder-fridge_tall",
+  "packageVersion": "1.0.0",
+  "displayName": "Fridge Package",
+  "description": "Portable single-module package exported from module-builder-dev for fridge_tall.",
+  "engineCompatibility": {
+    "app": "module_builder_dev",
+    "moduleContract": "1.x"
+  },
+  "modules": [
+    {
+      "moduleType": "fridge_tall",
+      "displayName": "Fridge"
+    }
+  ]
+}

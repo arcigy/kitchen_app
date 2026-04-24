@@ -1,0 +1,5965 @@
+{
+  "schemaVersion": "module-commercial-pricing.v1",
+  "moduleType": "fridge_tall",
+  "displayName": "Fridge",
+  "generatedAt": "2026-04-24T13:35:45.706Z",
+  "pricingStatus": "incomplete",
+  "validationErrors": [
+    "Item door-hinges does not have a unit price for cmp.hinge.fridge_integrated.softclose."
+  ],
+  "moduleInstance": {
+    "quantity": 1,
+    "widthMm": 600,
+    "heightMm": 1916,
+    "depthMm": 600,
+    "wallMounted": false
+  },
+  "materials": {
+    "body": {
+      "role": "body",
+      "key": "mat.board.body.dtd.white.18",
+      "catalogId": "mat.board.body.dtd.white.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD White 18",
+      "displayName": "DTD White 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "dtd",
+      "decor": "White",
+      "color": "White",
+      "finish": "Melamine",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20,
+        25
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "front": {
+      "role": "front",
+      "key": "mat.board.front.mdf.white_supermat.18",
+      "catalogId": "mat.board.front.mdf.white_supermat.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Front Boards",
+      "family": "front",
+      "name": "MDF White Supermat 18",
+      "displayName": "MDF White Supermat 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "mdf",
+      "decor": "White Supermat",
+      "color": "White",
+      "finish": "Supermat Lacquer",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.9,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "drawer": {
+      "role": "drawer",
+      "key": "mat.board.body.dtd.white.18",
+      "catalogId": "mat.board.body.dtd.white.18",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Body Boards",
+      "family": "body",
+      "name": "DTD White 18",
+      "displayName": "DTD White 18 mm",
+      "colorHex": "#f3f3ef",
+      "baseMaterial": "dtd",
+      "decor": "White",
+      "color": "White",
+      "finish": "Melamine",
+      "defaultThicknessMm": 18,
+      "availableThicknessesMm": [
+        16,
+        18,
+        20,
+        25
+      ],
+      "preview": {
+        "colorHex": "#f3f3ef",
+        "roughness": 0.78,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    },
+    "back": {
+      "role": "back",
+      "key": "mat.board.back.hdf.grey.6",
+      "catalogId": "mat.board.back.hdf.grey.6",
+      "entityType": "material",
+      "materialType": "board",
+      "category": "Back Panels",
+      "family": "back",
+      "name": "HDF Grey 6",
+      "displayName": "HDF Grey 6 mm",
+      "colorHex": "#c8ccd1",
+      "baseMaterial": "hdf",
+      "decor": "Grey",
+      "color": "Grey",
+      "finish": "Painted Smooth",
+      "defaultThicknessMm": 6,
+      "availableThicknessesMm": [
+        6,
+        8
+      ],
+      "preview": {
+        "colorHex": "#c8ccd1",
+        "roughness": 0.72,
+        "metalness": 0.02
+      },
+      "assignmentSource": "catalog"
+    }
+  },
+  "items": [
+    {
+      "id": "carcass-side-left",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Side Left",
+      "description": "Carcass Side Left",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 1.1986,
+      "formulas": {
+        "lengthMm": "partMap(carcass-side-left).dimensionsMm.length",
+        "widthMm": "partMap(carcass-side-left).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 1816,
+        "width": 600,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 1.0896,
+        "billableAreaM2": 1.1986,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "partType=side-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=boardThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 1.0896,
+      "unitPrice": 24.5,
+      "itemCost": 29.37,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.body.dtd.white.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.body.dtd.white.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.0896,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1816,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0896,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1986,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.1986,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1816,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0896,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1986,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 24.5,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.body.dtd.white.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 29.37,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.1986,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 24.5,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-side-right",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Side Right",
+      "description": "Carcass Side Right",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 1.1986,
+      "formulas": {
+        "lengthMm": "partMap(carcass-side-right).dimensionsMm.length",
+        "widthMm": "partMap(carcass-side-right).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 1816,
+        "width": 600,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 1.0896,
+        "billableAreaM2": 1.1986,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "partType=side-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=boardThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 1.0896,
+      "unitPrice": 24.5,
+      "itemCost": 29.37,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.body.dtd.white.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.body.dtd.white.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.0896,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1816,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0896,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1986,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.1986,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1816,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0896,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1986,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 24.5,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.body.dtd.white.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 29.37,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.1986,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 24.5,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-top",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Top",
+      "description": "Carcass Top",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3722,
+      "formulas": {
+        "lengthMm": "partMap(carcass-top).dimensionsMm.length",
+        "widthMm": "partMap(carcass-top).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 600,
+        "width": 564,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.3384,
+        "billableAreaM2": 0.3722,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "partType=top-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=boardThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3384,
+      "unitPrice": 24.5,
+      "itemCost": 9.12,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.body.dtd.white.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.body.dtd.white.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.3384,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.3384,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.3722,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.3722,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.3384,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.3722,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 24.5,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.body.dtd.white.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 9.12,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.3722,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 24.5,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-bottom",
+      "itemType": "board",
+      "category": "carcass",
+      "name": "DTD White 18 - Carcass Bottom",
+      "description": "Carcass Bottom",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.3722,
+      "formulas": {
+        "lengthMm": "partMap(carcass-bottom).dimensionsMm.length",
+        "widthMm": "partMap(carcass-bottom).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 600,
+        "width": 564,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.3384,
+        "billableAreaM2": 0.3722,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "partType=bottom-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=boardThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.3384,
+      "unitPrice": 24.5,
+      "itemCost": 9.12,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.body.dtd.white.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.body.dtd.white.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.3384,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.3384,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.3722,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.3722,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.3384,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.3722,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 24.5,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.body.dtd.white.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 9.12,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.3722,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 24.5,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-back",
+      "itemType": "board",
+      "category": "back_panel",
+      "name": "HDF Grey 6 - Carcass Back",
+      "description": "Carcass Back",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 1.1155,
+      "formulas": {
+        "lengthMm": "partMap(carcass-back).dimensionsMm.length",
+        "widthMm": "partMap(carcass-back).dimensionsMm.width",
+        "thicknessMm": "backThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 1798,
+        "width": 564,
+        "thickness": 6
+      },
+      "metrics": {
+        "areaM2": 1.0141,
+        "billableAreaM2": 1.1155,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "back-panel",
+      "materialGroup": "back",
+      "material": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.6",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 6",
+        "displayName": "HDF Grey 6 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 6,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "displayName": "HDF Grey 6 mm",
+        "group": "back",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.back.hdf.grey.6",
+        "sourceCatalogId": "mat.board.back.hdf.grey.6",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-back"
+      ],
+      "notes": [
+        "Uses body material routing with dedicated fridge back thickness until the slot-based BOM phase.",
+        "partType=back-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=backThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 1.0141,
+      "unitPrice": 13.8,
+      "itemCost": 15.39,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.back.hdf.grey.6",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.back.hdf.grey.6"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.0141,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1798,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0141,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1155,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 1.1155,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1798,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 1.0141,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 1.1155,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 13.8,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.back.hdf.grey.6"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 15.39,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.1155,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 13.8,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-upper",
+      "itemType": "board",
+      "category": "front",
+      "name": "MDF White Supermat 18 - Door Front Upper",
+      "description": "Door Front Upper",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.462,
+      "formulas": {
+        "lengthMm": "partMap(door-front-upper).dimensionsMm.length",
+        "widthMm": "partMap(door-front-upper).dimensionsMm.width",
+        "thicknessMm": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 700,
+        "width": 600,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.42,
+        "billableAreaM2": 0.462,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "freezer-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 18",
+        "displayName": "MDF White Supermat 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "displayName": "MDF White Supermat 18 mm",
+        "group": "front",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "sourceCatalogId": "mat.board.front.mdf.white_supermat.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper"
+      ],
+      "notes": [
+        "partType=door-front",
+        "materialParamKey=materials.frontKey",
+        "thicknessKey=frontThicknessMm"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.42,
+      "unitPrice": 54,
+      "itemCost": 24.95,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.front.mdf.white_supermat.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.front.mdf.white_supermat.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.42,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 700,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.42,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.462,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.462,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 700,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.42,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.462,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 54,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.front.mdf.white_supermat.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 24.95,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.462,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 54,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-lower",
+      "itemType": "board",
+      "category": "front",
+      "name": "MDF White Supermat 18 - Door Front Lower",
+      "description": "Door Front Lower",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.7352,
+      "formulas": {
+        "lengthMm": "partMap(door-front-lower).dimensionsMm.length",
+        "widthMm": "partMap(door-front-lower).dimensionsMm.width",
+        "thicknessMm": "frontThicknessMm",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 1114,
+        "width": 600,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.6684,
+        "billableAreaM2": 0.7352,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "fridge-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 18",
+        "displayName": "MDF White Supermat 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "displayName": "MDF White Supermat 18 mm",
+        "group": "front",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.front.mdf.white_supermat.18",
+        "sourceCatalogId": "mat.board.front.mdf.white_supermat.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-lower"
+      ],
+      "notes": [
+        "partType=door-front",
+        "materialParamKey=materials.frontKey",
+        "thicknessKey=frontThicknessMm"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.6684,
+      "unitPrice": 54,
+      "itemCost": 39.7,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.front.mdf.white_supermat.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.front.mdf.white_supermat.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.6684,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1114,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.6684,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.7352,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.7352,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 1114,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 600,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.6684,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.7352,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 54,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.front.mdf.white_supermat.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 39.7,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.7352,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 54,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plinth-front",
+      "itemType": "board",
+      "category": "plinth",
+      "name": "DTD White 18 - Plinth Front",
+      "description": "Plinth Front",
+      "pricingBasis": "sheet_area",
+      "pricingUnit": "m2",
+      "quantity": 1,
+      "pricingQuantity": 0.062,
+      "formulas": {
+        "lengthMm": "partMap(plinth-front).dimensionsMm.length",
+        "widthMm": "partMap(plinth-front).dimensionsMm.width",
+        "thicknessMm": "boardThickness",
+        "quantity": "1",
+        "areaM2": "(lengthMm * widthMm * quantity) / 1000000",
+        "wasteMultiplier": "1.1",
+        "pricingQuantity": "areaM2 * wasteMultiplier"
+      },
+      "dimensionsMm": {
+        "length": 564,
+        "width": 100,
+        "thickness": 18
+      },
+      "metrics": {
+        "areaM2": 0.0564,
+        "billableAreaM2": 0.062,
+        "wasteMultiplier": 1.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "group": "body",
+        "pricingBasis": "sheet_area",
+        "pricingUnit": "m2"
+      },
+      "pricingLookup": {
+        "catalogType": "board_sheet",
+        "key": "mat.board.body.dtd.white.18",
+        "sourceCatalogId": "mat.board.body.dtd.white.18",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "partType=plinth-panel",
+        "materialParamKey=materials.bodyKey",
+        "thicknessKey=boardThickness"
+      ],
+      "pricingGroup": "boards",
+      "pricingQuantityBase": 0.0564,
+      "unitPrice": 24.5,
+      "itemCost": 1.52,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.board.body.dtd.white.18",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.board.body.dtd.white.18"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "board_sheet"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.0564,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 100,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.0564,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.062,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "(lengthMm * widthMm * quantity) / 1000000",
+            "result": 0.062,
+            "unit": "m2",
+            "inputs": [
+              {
+                "key": "length",
+                "label": "Length",
+                "value": 564,
+                "unit": "mm"
+              },
+              {
+                "key": "width",
+                "label": "Width",
+                "value": 100,
+                "unit": "mm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "netArea",
+                "label": "Net Area",
+                "value": 0.0564,
+                "unit": "m2"
+              },
+              {
+                "key": "wasteMultiplier",
+                "label": "Waste Multiplier",
+                "value": 1.1
+              },
+              {
+                "key": "billableArea",
+                "label": "Priced Area",
+                "value": 0.062,
+                "unit": "m2"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 24.5,
+            "unit": "EUR/m2",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.board.body.dtd.white.18"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 1.52,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.062,
+                "unit": "m2"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 24.5,
+                "unit": "EUR/m2"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-side-left-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Left front Edge Band",
+      "description": "Carcass Side Left front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 1.816,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-left).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 1.816
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the carcass opening."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 1.816,
+      "unitPrice": 0.55,
+      "itemCost": 1,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 1.816,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.816,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 1.816,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.816,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 1,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-side-right-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Right front Edge Band",
+      "description": "Carcass Side Right front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 1.816,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-right).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 1.816
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the carcass opening."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 1.816,
+      "unitPrice": 0.55,
+      "itemCost": 1,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 1.816,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.816,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 1.816,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.816,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 1,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.816,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-top-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Top front Edge Band",
+      "description": "Carcass Top front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.564,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-top).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.564
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front horizontal edge is visible at the opening line."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.564,
+      "unitPrice": 0.55,
+      "itemCost": 0.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.31,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "carcass-bottom-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Bottom front Edge Band",
+      "description": "Carcass Bottom front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.564,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-bottom).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.564
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front horizontal edge remains exposed above the plinth line."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.564,
+      "unitPrice": 0.55,
+      "itemCost": 0.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.31,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-upper-edge-left",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Upper left Edge Band",
+      "description": "Door Front Upper left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.7,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-upper).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.7
+      },
+      "materialSlotId": "freezer-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Perimeter edge of the upper visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.7,
+      "unitPrice": 0.95,
+      "itemCost": 0.66,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.7,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.7,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.7,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.7,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.66,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-upper-edge-right",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Upper right Edge Band",
+      "description": "Door Front Upper right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.7,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-upper).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.7
+      },
+      "materialSlotId": "freezer-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Perimeter edge of the upper visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.7,
+      "unitPrice": 0.95,
+      "itemCost": 0.66,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.7,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.7,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.7,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.7,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.66,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.7,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-upper-edge-top",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Upper top Edge Band",
+      "description": "Door Front Upper top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.6,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-upper).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.6
+      },
+      "materialSlotId": "freezer-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Perimeter edge of the upper visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.6,
+      "unitPrice": 0.95,
+      "itemCost": 0.57,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.57,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-upper-edge-bottom",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Upper bottom Edge Band",
+      "description": "Door Front Upper bottom edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.6,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-upper).edgeTargets.bottom",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.6
+      },
+      "materialSlotId": "freezer-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper"
+      ],
+      "notes": [
+        "edgeId=bottom",
+        "reason=Perimeter edge of the upper visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.6,
+      "unitPrice": 0.95,
+      "itemCost": 0.57,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.57,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-lower-edge-left",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Lower left Edge Band",
+      "description": "Door Front Lower left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 1.114,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-lower).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 1.114
+      },
+      "materialSlotId": "fridge-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-lower"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Perimeter edge of the lower visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 1.114,
+      "unitPrice": 0.95,
+      "itemCost": 1.06,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 1.114,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.114,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 1.114,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.114,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 1.06,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-lower-edge-right",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Lower right Edge Band",
+      "description": "Door Front Lower right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 1.114,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-lower).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 1.114
+      },
+      "materialSlotId": "fridge-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-lower"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Perimeter edge of the lower visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 1.114,
+      "unitPrice": 0.95,
+      "itemCost": 1.06,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 1.114,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.114,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 1.114,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 1.114,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 1.06,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 1.114,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-lower-edge-top",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Lower top Edge Band",
+      "description": "Door Front Lower top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.6,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-lower).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.6
+      },
+      "materialSlotId": "fridge-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-lower"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Perimeter edge of the lower visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.6,
+      "unitPrice": 0.95,
+      "itemCost": 0.57,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.57,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-front-lower-edge-bottom",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Lower bottom Edge Band",
+      "description": "Door Front Lower bottom edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.6,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-lower).edgeTargets.bottom",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.6
+      },
+      "materialSlotId": "fridge-door-front",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-lower"
+      ],
+      "notes": [
+        "edgeId=bottom",
+        "reason=Perimeter edge of the lower visible door front."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.6,
+      "unitPrice": 0.95,
+      "itemCost": 0.57,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.front.abs.white.1",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.front.abs.white.1"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.6,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.6,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.95,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.front.abs.white.1"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.57,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.6,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.95,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plinth-front-edge-left",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front left Edge Band",
+      "description": "Plinth Front left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.1,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Plinth side return can remain visible at a cabinet run termination."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.1,
+      "unitPrice": 0.55,
+      "itemCost": 0.06,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.1,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.1,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.1,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.1,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.06,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plinth-front-edge-right",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front right Edge Band",
+      "description": "Plinth Front right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.1,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Plinth side return can remain visible at a cabinet run termination."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.1,
+      "unitPrice": 0.55,
+      "itemCost": 0.06,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.1,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.1,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.1,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.1,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.06,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.1,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plinth-front-edge-top",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front top Edge Band",
+      "description": "Plinth Front top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.564,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.564
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Top edge remains visually exposed at the plinth line."
+      ],
+      "pricingGroup": "edge_bands",
+      "pricingQuantityBase": 0.564,
+      "unitPrice": 0.55,
+      "itemCost": 0.31,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "mat.edge.body.abs.white.0_8",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "mat.edge.body.abs.white.0_8"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "edge_band"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "edgeLengthMm * quantity / 1000",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "pricingQuantity",
+            "result": 0.564,
+            "unit": "lm",
+            "inputs": [
+              {
+                "key": "edgeLength",
+                "label": "Edge Length",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 1,
+                "unit": "pcs"
+              },
+              {
+                "key": "pricedLength",
+                "label": "Priced Length",
+                "value": 0.564,
+                "unit": "lm"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.55,
+            "unit": "EUR/lm",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "mat.edge.body.abs.white.0_8"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.31,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 0.564,
+                "unit": "lm"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.55,
+                "unit": "EUR/lm"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-handles",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Bar Handle 160 mm Black Door Handle Set",
+      "description": "Handle assemblies mounted to the upper and lower integrated fridge doors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle])",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "handle",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "group": "handle",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.handle.bar.160.black",
+        "sourceCatalogId": "cmp.handle.bar.160.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "door-front-lower"
+      ],
+      "notes": [
+        "door-front-upper.handle-mount: Driven by handleComponentId, handlePositionMm and doorHandleOffsetFromSplitMm.",
+        "door-front-lower.handle-mount: Driven by handleComponentId, handlePositionMm and doorHandleOffsetFromSplitMm."
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 2,
+      "unitPrice": 5.2,
+      "itemCost": 10.4,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "cmp.handle.bar.160.black",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "cmp.handle.bar.160.black"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "hardware_piece"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "count(partMap.hardwareAnchors[type=handle])",
+            "result": 2,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 2,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "count(partMap.hardwareAnchors[type=handle])",
+            "result": 2,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 2,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 5.2,
+            "unit": "EUR/pcs",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "cmp.handle.bar.160.black"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 10.4,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 2,
+                "unit": "pcs"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 5.2,
+                "unit": "EUR/pcs"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "handle-screws",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Handle Screw M4",
+      "description": "Fixing screws resolved from the selected fridge handle component policy.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 4,
+      "pricingQuantity": 4,
+      "formulas": {
+        "quantity": "count(partMap.hardwareAnchors[type=handle]) * 2",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "fastener",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "componentType": "fastener",
+        "geometryId": "geo.fastener.handle_screw",
+        "name": "Handle Screw M4",
+        "displayName": "Handle Screw M4",
+        "brand": "FixPro",
+        "series": "HandleFix",
+        "variant": "M4 machine screw",
+        "color": "Zinc",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#a7adb8",
+          "roughness": 0.32,
+          "metalness": 0.8
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "displayName": "Handle Screw M4",
+        "group": "fastener",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.fastener.handle_screw.m4",
+        "sourceCatalogId": "cmp.fastener.handle_screw.m4",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "door-front-lower"
+      ],
+      "notes": [
+        "Resolved from handle component 'cmp.handle.bar.160.black' fastener policy.",
+        "Bar handles use two machine screws per handle assembly."
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 4,
+      "unitPrice": 0.06,
+      "itemCost": 0.24,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "cmp.fastener.handle_screw.m4",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "cmp.fastener.handle_screw.m4"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "hardware_piece"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "count(partMap.hardwareAnchors[type=handle]) * 2",
+            "result": 4,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 4,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "count(partMap.hardwareAnchors[type=handle]) * 2",
+            "result": 4,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 4,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.06,
+            "unit": "EUR/pcs",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "cmp.fastener.handle_screw.m4"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.24,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 4,
+                "unit": "pcs"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.06,
+                "unit": "EUR/pcs"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "door-hinges",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Integrated Fridge Hinge Softclose",
+      "description": "Integrated door hinge assemblies for the upper and lower fridge doors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 6,
+      "pricingQuantity": 6,
+      "formulas": {
+        "quantity": "door-front-upper: 3 hinges per upper integrated fridge door + door-front-lower: 3 hinges per lower integrated fridge door",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "hinge",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hinge.fridge_integrated.softclose",
+        "componentType": "hinge",
+        "geometryId": "geo.hinge.clip_on.softclose",
+        "name": "Integrated Fridge Hinge Softclose",
+        "displayName": "Integrated Fridge Hinge Softclose",
+        "brand": "HingeWorks",
+        "series": "Fridge",
+        "variant": "integrated appliance softclose",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.hinge.fridge_integrated.softclose",
+        "displayName": "Integrated Fridge Hinge Softclose",
+        "group": "hinge",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.hinge.fridge_integrated.softclose",
+        "sourceCatalogId": "cmp.hinge.fridge_integrated.softclose",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-upper",
+        "carcass-side-left",
+        "carcass-side-right",
+        "door-front-lower"
+      ],
+      "notes": [
+        "door-front-upper: Formalized from the current fridge_tall preview/export contract, which uses three hinges on the upper door.",
+        "door-front-lower: Formalized from the current fridge_tall preview/export contract, which uses three hinges on the lower door.",
+        "Mounting plates are included in the hinge assembly."
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 6,
+      "unitPrice": null,
+      "itemCost": null,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [
+        "Item door-hinges does not have a unit price for cmp.hinge.fridge_integrated.softclose."
+      ],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "cmp.hinge.fridge_integrated.softclose",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "cmp.hinge.fridge_integrated.softclose"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "hardware_piece"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "door-front-upper: 3 hinges per upper integrated fridge door + door-front-lower: 3 hinges per lower integrated fridge door",
+            "result": 6,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 6,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "door-front-upper: 3 hinges per upper integrated fridge door + door-front-lower: 3 hinges per lower integrated fridge door",
+            "result": 6,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 6,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": null,
+            "unit": "EUR/pcs",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "cmp.hinge.fridge_integrated.softclose"
+              }
+            ],
+            "notes": [
+              "Item door-hinges does not have a unit price for cmp.hinge.fridge_integrated.softclose."
+            ]
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": null,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 6,
+                "unit": "pcs"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": null,
+                "unit": "EUR/pcs"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "adjustable-legs",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Adjustable Leg 100 mm Black",
+      "description": "Adjustable support legs for the floor-mounted integrated fridge carcass.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 4,
+      "pricingQuantity": 4,
+      "formulas": {
+        "quantity": "width <= 600 ? 4 : width <= 900 ? 5 : 6",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "leg",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "group": "leg",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.leg.adjustable.100.black",
+        "sourceCatalogId": "cmp.leg.adjustable.100.black",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "carcass-bottom.leg-front-left: Corner support leg at the front-left service position.",
+        "carcass-bottom.leg-front-right: Corner support leg at the front-right service position.",
+        "carcass-bottom.leg-rear-left: Corner support leg at the rear-left service position.",
+        "carcass-bottom.leg-rear-right: Corner support leg at the rear-right service position."
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 4,
+      "unitPrice": 1.45,
+      "itemCost": 5.8,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "cmp.leg.adjustable.100.black",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "cmp.leg.adjustable.100.black"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "hardware_piece"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "width <= 600 ? 4 : width <= 900 ? 5 : 6",
+            "result": 4,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 4,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "width <= 600 ? 4 : width <= 900 ? 5 : 6",
+            "result": 4,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 4,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 1.45,
+            "unit": "EUR/pcs",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "cmp.leg.adjustable.100.black"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 5.8,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 4,
+                "unit": "pcs"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 1.45,
+                "unit": "EUR/pcs"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "plinth-clips",
+      "itemType": "hardware",
+      "category": "hardware",
+      "name": "Plinth Clip Standard",
+      "description": "Front plinth clips resolved from explicit fridge clip anchors.",
+      "pricingBasis": "piece",
+      "pricingUnit": "pcs",
+      "quantity": 2,
+      "pricingQuantity": 2,
+      "formulas": {
+        "quantity": "front-left + front-right clip only",
+        "pricingQuantity": "quantity"
+      },
+      "materialGroup": "plinth_clip",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "componentType": "plinth_clip",
+        "geometryId": "geo.plinth_clip.standard",
+        "name": "Plinth Clip Standard",
+        "displayName": "Plinth Clip Standard",
+        "brand": "BaseTech",
+        "series": "ClipFix",
+        "variant": "Standard clip",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      },
+      "catalogRef": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "displayName": "Plinth Clip Standard",
+        "group": "plinth_clip",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs"
+      },
+      "pricingLookup": {
+        "catalogType": "hardware_piece",
+        "key": "cmp.clip.plinth.standard",
+        "sourceCatalogId": "cmp.clip.plinth.standard",
+        "sourceEntityType": "component",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front",
+        "carcass-bottom"
+      ],
+      "notes": [
+        "plinth-front.clip-front-left: Front-left plinth clip follows the fridge runtime clip placement on the front-left leg.",
+        "plinth-front.clip-front-right: Front-right plinth clip follows the fridge runtime clip placement on the front-right leg."
+      ],
+      "pricingGroup": "hardware",
+      "pricingQuantityBase": 2,
+      "unitPrice": 0.42,
+      "itemCost": 0.84,
+      "itemCostFormula": "pricingQuantity * unitPrice",
+      "validationErrors": [],
+      "calculationTrace": {
+        "steps": [
+          {
+            "key": "lookup",
+            "label": "Pricing Lookup",
+            "formula": "resolveLookupKey(item)",
+            "result": "cmp.clip.plinth.standard",
+            "inputs": [
+              {
+                "key": "declaredLookup",
+                "label": "Declared Lookup",
+                "value": "cmp.clip.plinth.standard"
+              },
+              {
+                "key": "catalogType",
+                "label": "Catalog Type",
+                "value": "hardware_piece"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "base-quantity",
+            "label": "Base Quantity",
+            "formula": "front-left + front-right clip only",
+            "result": 2,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 2,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "priced-quantity",
+            "label": "Priced Quantity",
+            "formula": "front-left + front-right clip only",
+            "result": 2,
+            "unit": "pcs",
+            "inputs": [
+              {
+                "key": "pieces",
+                "label": "Pieces",
+                "value": 2,
+                "unit": "pcs"
+              }
+            ]
+          },
+          {
+            "key": "unit-price",
+            "label": "Unit Price",
+            "formula": "catalog[lookupKey]",
+            "result": 0.42,
+            "unit": "EUR/pcs",
+            "inputs": [
+              {
+                "key": "lookupKey",
+                "label": "Lookup Key",
+                "value": "cmp.clip.plinth.standard"
+              }
+            ],
+            "notes": []
+          },
+          {
+            "key": "item-cost",
+            "label": "Item Cost",
+            "formula": "pricingQuantity * unitPrice",
+            "result": 0.84,
+            "unit": "EUR",
+            "inputs": [
+              {
+                "key": "pricingQuantity",
+                "label": "Pricing Quantity",
+                "value": 2,
+                "unit": "pcs"
+              },
+              {
+                "key": "unitPrice",
+                "label": "Unit Price",
+                "value": 0.42,
+                "unit": "EUR/pcs"
+              }
+            ],
+            "notes": []
+          }
+        ]
+      }
+    }
+  ],
+  "groups": {
+    "boards": {
+      "areaM2": 5.0149,
+      "pricedAreaM2": 5.5163,
+      "cost": 158.54
+    },
+    "edge_bands": {
+      "lengthLm": 11.552,
+      "cost": 8.77
+    },
+    "hardware": {
+      "pieces": 12,
+      "cost": 17.28
+    }
+  },
+  "priceInputs": {
+    "currency": "EUR",
+    "boardWasteMultiplier": 1.1,
+    "laborCostFixed": 48,
+    "marginPercent": 0
+  },
+  "calculationFormulas": {
+    "boardPricedQuantity": "baseAreaM2 * wasteMultiplier",
+    "itemCost": "pricingQuantity * unitPrice",
+    "subtotalCost": "materialCost + laborCostFixed",
+    "marginAmount": "subtotalCost * marginPercent",
+    "finalPrice": "subtotalCost + marginAmount"
+  },
+  "aggregates": {
+    "boardsByMaterial": [
+      {
+        "catalogId": "mat.board.body.dtd.white.18",
+        "displayName": "DTD White 18 mm",
+        "materialGroup": "body",
+        "netAreaM2": 2.9124,
+        "pricedAreaM2": 3.2036,
+        "wasteMultiplier": 1.1,
+        "pieces": 5,
+        "itemCount": 5
+      },
+      {
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "displayName": "HDF Grey 6 mm",
+        "materialGroup": "back",
+        "netAreaM2": 1.0141,
+        "pricedAreaM2": 1.1155,
+        "wasteMultiplier": 1.1,
+        "pieces": 1,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "mat.board.front.mdf.white_supermat.18",
+        "displayName": "MDF White Supermat 18 mm",
+        "materialGroup": "front",
+        "netAreaM2": 1.0884,
+        "pricedAreaM2": 1.1972,
+        "wasteMultiplier": 1.1,
+        "pieces": 2,
+        "itemCount": 2
+      }
+    ],
+    "edgeBandsByMaterial": [
+      {
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "materialGroup": "body",
+        "lengthLm": 5.524,
+        "pieces": 7,
+        "itemCount": 7
+      },
+      {
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "materialGroup": "front",
+        "lengthLm": 6.028,
+        "pieces": 8,
+        "itemCount": 8
+      }
+    ],
+    "componentsByCatalogId": [
+      {
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "componentType": "leg",
+        "pieces": 4,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.handle.bar.160.black",
+        "displayName": "Bar Handle 160 mm Black",
+        "componentType": "handle",
+        "pieces": 2,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.fastener.handle_screw.m4",
+        "displayName": "Handle Screw M4",
+        "componentType": "fastener",
+        "pieces": 4,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.hinge.fridge_integrated.softclose",
+        "displayName": "Integrated Fridge Hinge Softclose",
+        "componentType": "hinge",
+        "pieces": 6,
+        "itemCount": 1
+      },
+      {
+        "catalogId": "cmp.clip.plinth.standard",
+        "displayName": "Plinth Clip Standard",
+        "componentType": "plinth_clip",
+        "pieces": 2,
+        "itemCount": 1
+      }
+    ]
+  },
+  "calculationTrace": {
+    "groups": {
+      "boards": [
+        {
+          "key": "boards-area-net",
+          "label": "Boards Net Area",
+          "formula": "sum(item.pricingQuantityBase for board items)",
+          "result": 5.0149,
+          "unit": "m2"
+        },
+        {
+          "key": "boards-area-priced",
+          "label": "Boards Priced Area",
+          "formula": "sum(item.pricingQuantity for board items)",
+          "result": 5.5163,
+          "unit": "m2"
+        },
+        {
+          "key": "boards-cost",
+          "label": "Boards Cost",
+          "formula": "sum(item.itemCost for board items)",
+          "result": 158.54,
+          "unit": "EUR"
+        }
+      ],
+      "edge_bands": [
+        {
+          "key": "edges-length",
+          "label": "Edge Length",
+          "formula": "sum(item.pricingQuantity for edge_band items)",
+          "result": 11.552,
+          "unit": "lm"
+        },
+        {
+          "key": "edges-cost",
+          "label": "Edge Cost",
+          "formula": "sum(item.itemCost for edge_band items)",
+          "result": 8.77,
+          "unit": "EUR"
+        }
+      ],
+      "hardware": [
+        {
+          "key": "hardware-pieces",
+          "label": "Hardware Pieces",
+          "formula": "sum(item.pricingQuantity for hardware items)",
+          "result": 12,
+          "unit": "pcs"
+        },
+        {
+          "key": "hardware-cost",
+          "label": "Hardware Cost",
+          "formula": "sum(item.itemCost for hardware items)",
+          "result": 17.28,
+          "unit": "EUR"
+        }
+      ]
+    },
+    "totals": [
+      {
+        "key": "material-cost",
+        "label": "Material Cost",
+        "formula": "boards.cost + edge_bands.cost + hardware.cost",
+        "result": 184.59,
+        "unit": "EUR",
+        "inputs": [
+          {
+            "key": "boardsCost",
+            "label": "Boards Cost",
+            "value": 158.54,
+            "unit": "EUR"
+          },
+          {
+            "key": "edgesCost",
+            "label": "Edges Cost",
+            "value": 8.77,
+            "unit": "EUR"
+          },
+          {
+            "key": "hardwareCost",
+            "label": "Hardware Cost",
+            "value": 17.28,
+            "unit": "EUR"
+          }
+        ]
+      },
+      {
+        "key": "labor-cost-fixed",
+        "label": "Labor Cost Fixed",
+        "formula": "catalog.laborCostFixed",
+        "result": 48,
+        "unit": "EUR"
+      },
+      {
+        "key": "subtotal-cost",
+        "label": "Subtotal Cost",
+        "formula": "materialCost + laborCostFixed",
+        "result": 232.59,
+        "unit": "EUR",
+        "inputs": [
+          {
+            "key": "materialCost",
+            "label": "Material Cost",
+            "value": 184.59,
+            "unit": "EUR"
+          },
+          {
+            "key": "laborCostFixed",
+            "label": "Labor Cost Fixed",
+            "value": 48,
+            "unit": "EUR"
+          }
+        ]
+      },
+      {
+        "key": "margin-amount",
+        "label": "Margin Amount",
+        "formula": "subtotalCost * marginPercent",
+        "result": 0,
+        "unit": "EUR",
+        "inputs": [
+          {
+            "key": "subtotalCost",
+            "label": "Subtotal Cost",
+            "value": 232.59,
+            "unit": "EUR"
+          },
+          {
+            "key": "marginPercent",
+            "label": "Margin Percent",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "key": "final-price",
+        "label": "Final Price",
+        "formula": "subtotalCost + marginAmount",
+        "result": 232.59,
+        "unit": "EUR",
+        "inputs": [
+          {
+            "key": "subtotalCost",
+            "label": "Subtotal Cost",
+            "value": 232.59,
+            "unit": "EUR"
+          },
+          {
+            "key": "marginAmount",
+            "label": "Margin Amount",
+            "value": 0,
+            "unit": "EUR"
+          }
+        ]
+      }
+    ]
+  },
+  "materialCost": 184.59,
+  "laborCostFixed": 48,
+  "subtotalCost": 232.59,
+  "marginPercent": 0,
+  "marginAmount": 0,
+  "finalPrice": 232.59
+}

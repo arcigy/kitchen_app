@@ -498,15 +498,20 @@ function resolveComponentForItem(
   const current = item.component;
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const normalizedItemId = item.id.toLowerCase();
+  const isHandleItem = normalizedItemId.includes("handle") && !normalizedItemId.includes("screw");
   const findAssigned = (...assignmentKeys: string[]) =>
     componentAssignments.find((entry) => assignmentKeys.includes(entry.assignmentKey))?.component ?? null;
+
+  if (current?.componentType === "fastener") {
+    return current;
+  }
 
   const explicitComponentId =
     normalizedItemId.includes("runner")
       ? typeof params.runnerComponentId === "string"
         ? params.runnerComponentId
         : null
-      : normalizedItemId.includes("handle")
+      : isHandleItem
         ? typeof params.handleComponentId === "string"
           ? params.handleComponentId
           : null
@@ -543,7 +548,7 @@ function resolveComponentForItem(
     return findAssigned("drawer-runners") ?? current ?? null;
   }
 
-  if (normalizedItemId.includes("handle")) {
+  if (isHandleItem) {
     return findAssigned("door-handles", "drawer-handles") ?? current ?? null;
   }
 

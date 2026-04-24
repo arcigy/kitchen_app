@@ -11,6 +11,10 @@ import type { DrawerLowParams } from "./drawerLow/types";
 import { buildDrawerLow } from "./drawerLow/geometry";
 import { createDrawerLowControls } from "./drawerLow/controls";
 import { calculateBOM as calculateDrawerLowBOM } from "./drawerLow/calculation";
+import type { FridgeTallParams } from "./fridgeTall/types";
+import { buildFridgeTall } from "./fridgeTall/geometry";
+import { createFridgeTallControls } from "./fridgeTall/controls";
+import { calculateBOM as calculateFridgeTallBOM } from "./fridgeTall/calculation";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -79,6 +83,21 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     calculateBOM: (params, ctx) => calculateDrawerLowBOM(params as DrawerLowParams, ctx),
     capabilities: {
           "hasWorktop": true,
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  },
+  {
+    type: "fridge_tall",
+    folder: "fridgeTall",
+    label: "Fridge",
+    packageName: "module-builder-fridge_tall",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("fridge_tall"),
+    build: (params) => buildFridgeTall(params as FridgeTallParams),
+    createControls: (container, params, args) => createFridgeTallControls(container, params as FridgeTallParams, args),
+    calculateBOM: (params, ctx) => calculateFridgeTallBOM(params as FridgeTallParams, ctx),
+    capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
     }

@@ -1,0 +1,586 @@
+export const moduleType = "fridge_tall";
+export const displayName = "Fridge";
+export const geometrySnapshot = {
+  "schemaVersion": "module-geometry.v1",
+  "moduleType": "fridge_tall",
+  "displayName": "Fridge",
+  "dimensions": {
+    "widthMm": 600,
+    "heightMm": 1916,
+    "depthMm": 600,
+    "worktopThicknessMm": 0,
+    "plinthHeightMm": 100
+  },
+  "parameterEffects": [
+    {
+      "parameter": "width",
+      "effect": "Fridge width changes carcass span, appliance niche width and both door front widths."
+    },
+    {
+      "parameter": "height",
+      "effect": "Fridge height changes side panels, niche height and overall front stack height."
+    },
+    {
+      "parameter": "depth",
+      "effect": "Fridge depth changes carcass depth, niche depth envelope and top/bottom panel footprint."
+    },
+    {
+      "parameter": "boardThickness",
+      "effect": "Board thickness changes carcass stock thickness and the resulting internal niche width."
+    },
+    {
+      "parameter": "backThickness",
+      "effect": "Back thickness changes the rear panel stock and usable internal appliance depth."
+    },
+    {
+      "parameter": "frontThicknessMm",
+      "effect": "Front thickness changes both door front boards and the selected front material thickness."
+    },
+    {
+      "parameter": "freezerDoorHeightMm",
+      "effect": "Freezer door height changes the split between the upper freezer front and lower fridge front."
+    },
+    {
+      "parameter": "fridgeDoorGapMm",
+      "effect": "Door gap changes the visible spacing between the upper and lower fridge fronts."
+    },
+    {
+      "parameter": "fridgeWidthMm",
+      "effect": "Fridge niche width changes appliance opening width and side clearances inside the carcass."
+    },
+    {
+      "parameter": "fridgeHeightMm",
+      "effect": "Fridge niche height changes appliance opening height and remaining door proportions."
+    },
+    {
+      "parameter": "fridgeDepthMm",
+      "effect": "Fridge niche depth changes appliance fit and the rear clearance envelope."
+    },
+    {
+      "parameter": "plinthHeight",
+      "effect": "Plinth height changes support geometry and shifts the usable appliance niche upward."
+    }
+  ],
+  "parts": [
+    {
+      "id": "left-side",
+      "label": "Left Side Panel",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1816,
+        "height": 600,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-291, 1008, 0"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "right-side",
+      "label": "Right Side Panel",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1816,
+        "height": 600,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "291, 1008, 0"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel",
+      "label": "Bottom Panel",
+      "kind": "support",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 600,
+        "height": 564,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 109, 0"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel",
+      "label": "Top Panel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 600,
+        "height": 564,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "depth",
+        "height",
+        "boardThickness"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 1907, 0"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "back-panel",
+      "label": "Back Panel",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1816,
+        "height": 600,
+        "depth": 6,
+        "thickness": 6
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "width",
+        "height",
+        "depth",
+        "backThickness",
+        "plinthHeight"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 1008, -303"
+      },
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "leg_FL",
+      "label": "leg_FL",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-270, 50, 192"
+      },
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_FR",
+      "label": "leg_FR",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "270, 50, 192"
+      },
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_BL",
+      "label": "leg_BL",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-270, 50, -240"
+      },
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_BR",
+      "label": "leg_BR",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "width",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "270, 50, -240"
+      },
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "plinth",
+      "label": "Plinth",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 600,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "width",
+        "depth"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 50, 231"
+      },
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "fridge_dummy_trim",
+      "label": "fridge_dummy_trim",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1790,
+        "height": 580,
+        "depth": 10,
+        "thickness": 10
+      },
+      "quantity": 1,
+      "paramKeys": [],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 1008, 303.5"
+      },
+      "notes": [
+        "material unnamed color #141821"
+      ]
+    },
+    {
+      "id": "fridge_dummy_body",
+      "label": "fridge_dummy_body",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1770,
+        "height": 560,
+        "depth": 520,
+        "thickness": 520
+      },
+      "quantity": 1,
+      "paramKeys": [],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 1008, 8"
+      },
+      "notes": [
+        "material unnamed color #141821"
+      ]
+    },
+    {
+      "id": "fridge_dummy_bezel",
+      "label": "fridge_dummy_bezel",
+      "kind": "panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 1770,
+        "height": 560,
+        "depth": 30,
+        "thickness": 30
+      },
+      "quantity": 1,
+      "paramKeys": [],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "0, 1008, 283"
+      },
+      "notes": [
+        "material unnamed color #141821"
+      ]
+    },
+    {
+      "id": "kickClip_FL",
+      "label": "kickClip_FL",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 49,
+        "height": 48,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "-270, 40, 192"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "kickClip_FR",
+      "label": "kickClip_FR",
+      "kind": "back-panel",
+      "materialRole": "body",
+      "sizeMm": {
+        "width": 49,
+        "height": 48,
+        "depth": 18,
+        "thickness": 18
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness",
+        "legComponentId"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "270, 40, 192"
+      },
+      "notes": [
+        "material unnamed color #606772"
+      ]
+    },
+    {
+      "id": "freezer-door-front",
+      "label": "Freezer Door Front",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 718,
+        "height": 600,
+        "depth": 32,
+        "thickness": 32
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "freezerDoorHeightMm",
+        "fridgeDoorGapMm",
+        "fridgeHeightMm",
+        "fridgeTopClearanceMm",
+        "fridgeBottomClearanceMm",
+        "sideGap",
+        "frontThicknessMm",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm",
+        "doorOpen",
+        "doorHandleOffsetFromSplitMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "300, 0, 0"
+      },
+      "notes": [
+        "material MDF White Supermat 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "freezer-door-handle",
+      "label": "Freezer Door Handle",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 160,
+        "height": 14,
+        "depth": 12,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleComponentId",
+        "handleType",
+        "handlePositionMm",
+        "doorHandleOffsetFromSplitMm",
+        "frontThicknessMm",
+        "doorOpen"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "220, 279, 16"
+      },
+      "notes": [
+        "material Bar Handle 160 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "fridge-door-front",
+      "label": "Fridge Door Front",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 1096,
+        "height": 600,
+        "depth": 32,
+        "thickness": 32
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "freezerDoorHeightMm",
+        "fridgeDoorGapMm",
+        "fridgeHeightMm",
+        "fridgeTopClearanceMm",
+        "fridgeBottomClearanceMm",
+        "sideGap",
+        "frontThicknessMm",
+        "handleType",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm",
+        "doorOpen",
+        "doorHandleOffsetFromSplitMm"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "300, 0, 0"
+      },
+      "notes": [
+        "material MDF White Supermat 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "fridge-door-handle",
+      "label": "Fridge Door Handle",
+      "kind": "front",
+      "materialRole": "front",
+      "sizeMm": {
+        "width": 160,
+        "height": 14,
+        "depth": 12,
+        "thickness": 12
+      },
+      "quantity": 1,
+      "paramKeys": [
+        "handleComponentId",
+        "handleType",
+        "handlePositionMm",
+        "doorHandleOffsetFromSplitMm",
+        "frontThicknessMm",
+        "doorOpen"
+      ],
+      "formulas": {
+        "source": "live_runtime_mesh_bounds",
+        "positionMm": "220, -468, 16"
+      },
+      "notes": [
+        "material Bar Handle 160 mm Black color #1e232b"
+      ]
+    }
+  ]
+} as const;
+
+export function computeGeometry() {
+  return geometrySnapshot;
+}
+
+export function explainParameterEffects() {
+  return geometrySnapshot.parameterEffects;
+}

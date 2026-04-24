@@ -1,0 +1,855 @@
+{
+  "schemaVersion": "module-live-state.v1",
+  "moduleType": "fridge_tall",
+  "displayName": "Fridge",
+  "exportedAt": "2026-04-24T13:35:45.700Z",
+  "params": {
+    "type": "fridge_tall",
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "tall",
+    "requiresWorktop": false,
+    "worktopThicknessMm": 0,
+    "width": 600,
+    "height": 1916,
+    "depth": 600,
+    "boardThickness": 18,
+    "backThickness": 6,
+    "frontThicknessMm": 18,
+    "doorOpen": false,
+    "handlePositionMm": 60,
+    "doorHandleOffsetFromSplitMm": 0,
+    "__fridgeHandleSplitScaleVersion": 2,
+    "freezerDoorHeightMm": 700,
+    "fridgeBottomClearanceMm": 5,
+    "fridgeDepthMm": 550,
+    "fridgeDoorGapMm": 2,
+    "fridgeHeightMm": 1770,
+    "fridgeSideClearanceMm": 2,
+    "fridgeTopClearanceMm": 5,
+    "fridgeWidthMm": 560,
+    "hingeComponentId": "cmp.hinge.fridge_integrated.softclose",
+    "legComponentId": "cmp.leg.adjustable.100.black",
+    "plinthHeight": 100,
+    "plinthSetbackMm": 60,
+    "materials": {
+      "bodyKey": "mat.board.body.dtd.white.18",
+      "bodyColor": "#f3f3ef",
+      "frontKey": "mat.board.front.mdf.white_supermat.18",
+      "frontColor": "#d7d9dd"
+    },
+    "handleComponentId": "cmp.handle.bar.160.black",
+    "handleType": "bar",
+    "handleLengthMm": 160,
+    "handleSizeMm": 12,
+    "handleProjectionMm": 14
+  },
+  "systemParameters": {
+    "typeId": "fridge_tall__type",
+    "type": "fridge_tall",
+    "displayName": "Fridge",
+    "family": "tall",
+    "code": null,
+    "variant": "integrated_fridge",
+    "version": "1.0.0",
+    "widthMm": 600,
+    "heightMm": 1916,
+    "depthMm": 600,
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "tall",
+    "requiresWorktop": false,
+    "positionXmm": 0,
+    "positionYmm": 0,
+    "positionZmm": 0,
+    "rotationZDeg": 0,
+    "customPriceOverride": null,
+    "pricingEnabled": true,
+    "priceSource": "calculated",
+    "costOverride": null,
+    "quantity": 1,
+    "isActive": true,
+    "isVisible": true,
+    "isLocked": false,
+    "isValid": true,
+    "validationErrors": [],
+    "notes": null,
+    "tags": [
+      "tall",
+      "fridge_tall"
+    ],
+    "createdAt": "2026-04-22T23:32:43.819Z",
+    "updatedAt": "2026-04-22T23:32:43.819Z",
+    "exportToIfc": true,
+    "ifcClass": "IfcFurniture",
+    "ifcPredefinedType": null,
+    "ifcName": "Fridge",
+    "ifcDescription": "Fridge (fridge_tall)",
+    "ifcObjectType": "tall",
+    "ifcTag": "fridge_tall__type",
+    "classificationCode": null,
+    "classificationSystem": null
+  },
+  "capabilities": {},
+  "commercial": {
+    "pricingConfig": {
+      "path": "commercial/fridge_tall.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/fridge_tall.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/fridge_tall.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  },
+  "assets": {
+    "docs": [
+      {
+        "path": "docs/fridge_tall.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/fridge_tall.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/fridge_tall.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/fridge_tall.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  },
+  "liveRuntime": {
+    "moduleType": "fridge_tall",
+    "params": {
+      "type": "fridge_tall",
+      "width": 600,
+      "height": 1916,
+      "depth": 600,
+      "boardThickness": 18,
+      "backThickness": 6,
+      "plinthHeight": 100,
+      "plinthSetbackMm": 60,
+      "sideGap": 0,
+      "topGap": 0,
+      "bottomGap": 0,
+      "frontThicknessMm": 18,
+      "handleType": "bar",
+      "handlePositionMm": 60,
+      "fridgeWidthMm": 560,
+      "fridgeHeightMm": 1770,
+      "fridgeDepthMm": 550,
+      "fridgeSideClearanceMm": 2,
+      "fridgeTopClearanceMm": 5,
+      "fridgeBottomClearanceMm": 5,
+      "freezerDoorHeightMm": 700,
+      "fridgeDoorGapMm": 2,
+      "doorHandleOffsetFromSplitMm": 0,
+      "materials": {
+        "bodyKey": "mat.board.body.dtd.white.18",
+        "bodyColor": "#f3f3ef",
+        "frontKey": "mat.board.front.mdf.white_supermat.18",
+        "frontColor": "#d7d9dd"
+      },
+      "assemblyContext": "kitchen",
+      "kitchenModuleRole": "tall",
+      "requiresWorktop": false,
+      "worktopThicknessMm": 0,
+      "__fridgeHandleSplitScaleVersion": 2,
+      "hingeComponentId": "cmp.hinge.fridge_integrated.softclose",
+      "legComponentId": "cmp.leg.adjustable.100.black",
+      "doorOpen": false,
+      "handleComponentId": "cmp.handle.bar.160.black",
+      "handleLengthMm": 160,
+      "handleSizeMm": 12,
+      "handleProjectionMm": 14
+    },
+    "selectedPartName": null,
+    "importedModuleType": "fridge_tall",
+    "importedPackageKey": "module-builder-fridge_tall@1.0.0",
+    "parts": [
+      {
+        "name": "leftSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": -291,
+          "y": 1008,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 1816,
+          "z": 600
+        },
+        "centerMm": {
+          "x": -291,
+          "y": 1008,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "rightSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 291,
+          "y": 1008,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 1816,
+          "z": 600
+        },
+        "centerMm": {
+          "x": 291,
+          "y": 1008,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 564,
+          "y": 18,
+          "z": 600
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "top",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "height",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 1907,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 564,
+          "y": 18,
+          "z": 600
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1907,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "height",
+          "depth",
+          "backThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 1008,
+          "z": -303
+        },
+        "sizeMm": {
+          "x": 600,
+          "y": 1816,
+          "z": 6
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1008,
+          "z": -303
+        },
+        "materials": [
+          {
+            "name": "HDF Grey 6 mm",
+            "colorHex": "#c8ccd1",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -270,
+          "y": 50,
+          "z": 192
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -270,
+          "y": 50,
+          "z": 192
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 270,
+          "y": 50,
+          "z": 192
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 270,
+          "y": 50,
+          "z": 192
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -270,
+          "y": 50,
+          "z": -240
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -270,
+          "y": 50,
+          "z": -240
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "width",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 270,
+          "y": 50,
+          "z": -240
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 270,
+          "y": 50,
+          "z": -240
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickboard",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "width",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 50,
+          "z": 231
+        },
+        "sizeMm": {
+          "x": 600,
+          "y": 100,
+          "z": 18
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 50,
+          "z": 231
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "fridge_dummy_trim",
+        "selectable": false,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 303.5
+        },
+        "sizeMm": {
+          "x": 580,
+          "y": 1790,
+          "z": 10
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 303.5
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#141821",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "fridge_dummy_body",
+        "selectable": false,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 8
+        },
+        "sizeMm": {
+          "x": 560,
+          "y": 1770,
+          "z": 520
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 8
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#141821",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "fridge_dummy_bezel",
+        "selectable": false,
+        "visible": true,
+        "paramKeys": [],
+        "positionMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 283
+        },
+        "sizeMm": {
+          "x": 560,
+          "y": 1770,
+          "z": 30
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1008,
+          "z": 283
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#141821",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -270,
+          "y": 40,
+          "z": 192
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 17.7,
+          "z": 49.16
+        },
+        "centerMm": {
+          "x": -270,
+          "y": 40.85,
+          "z": 196.116
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "kickClip_FR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 270,
+          "y": 40,
+          "z": 192
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 17.7,
+          "z": 49.16
+        },
+        "centerMm": {
+          "x": 270,
+          "y": 40.85,
+          "z": 196.116
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#606772",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "freezerDoorFront",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "freezerDoorHeightMm",
+          "fridgeDoorGapMm",
+          "fridgeHeightMm",
+          "fridgeTopClearanceMm",
+          "fridgeBottomClearanceMm",
+          "sideGap",
+          "frontThicknessMm",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "doorOpen",
+          "doorHandleOffsetFromSplitMm"
+        ],
+        "positionMm": {
+          "x": 300,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 600,
+          "y": 718,
+          "z": 32
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 459,
+          "z": 316
+        },
+        "materials": [
+          {
+            "name": "MDF White Supermat 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "freezerDoor_handle",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "doorHandleOffsetFromSplitMm",
+          "frontThicknessMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 220,
+          "y": 279,
+          "z": 16
+        },
+        "sizeMm": {
+          "x": 12,
+          "y": 160,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 220,
+          "y": 738,
+          "z": 325
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "fridgeDoorFront",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "freezerDoorHeightMm",
+          "fridgeDoorGapMm",
+          "fridgeHeightMm",
+          "fridgeTopClearanceMm",
+          "fridgeBottomClearanceMm",
+          "sideGap",
+          "frontThicknessMm",
+          "handleType",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm",
+          "doorOpen",
+          "doorHandleOffsetFromSplitMm"
+        ],
+        "positionMm": {
+          "x": 300,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 600,
+          "y": 1096,
+          "z": 32
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 1368,
+          "z": 316
+        },
+        "materials": [
+          {
+            "name": "MDF White Supermat 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "fridgeDoor_handle",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handleType",
+          "handlePositionMm",
+          "doorHandleOffsetFromSplitMm",
+          "frontThicknessMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 220,
+          "y": -468,
+          "z": 16
+        },
+        "sizeMm": {
+          "x": 12,
+          "y": 160,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 220,
+          "y": 900,
+          "z": 325
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      }
+    ]
+  }
+}

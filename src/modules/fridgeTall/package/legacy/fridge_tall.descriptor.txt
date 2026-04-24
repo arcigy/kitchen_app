@@ -1,0 +1,1 @@
+{type:"fridge_tall",label:"Fridge",defaultParams:()=>fridgeTallDefaultsV2(),build:n=>fridgeTallBuildV2(n),createControls:(n,e,t)=>fridgeTallControlsV2(n,e,t),capabilities:{hasWorktop:!1,supportsKitchenContextDimensions:!0,supportsKitchenContextMaterials:!0}}
