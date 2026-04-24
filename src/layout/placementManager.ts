@@ -108,7 +108,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
       const desired = cursorWorld.clone();
       desired.x += cursorWorld.x - box.min.x;
       desired.z += cursorWorld.z - box.max.z;
-      g.root.position.copy(helpers.applyWallConstraints(g, desired));
+      g.root.position.copy(desired);
       g.root.updateMatrixWorld(true);
     };
 
@@ -133,8 +133,9 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   }
 
   const shouldCheckRoomBounds = constrainedPlacement?.enforceRoomBounds ?? true;
+  const enforceRoomBounds = constrainedPlacement ? shouldCheckRoomBounds : false;
   const shouldCheckWallOverlap = constrainedPlacement?.enforceWallOverlap ?? true;
-  const inRoom = shouldCheckRoomBounds ? helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g)) : true;
+  const inRoom = enforceRoomBounds ? helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g)) : true;
   const overlaps =
     helpers.anyOverlap(g, null) || (shouldCheckWallOverlap ? helpers.moduleOverlapsWalls(g) : false);
   const ok = inRoom && !overlaps && (constrainedPlacement?.valid ?? true);
@@ -149,7 +150,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
 export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   if (!S.placement.active || !S.placement.params || !S.placement.ghost) return false;
   if (!S.placement.ghostValid) {
-    helpers.setUnderlayStatus("Placement: invalid (overlap/outside). Move cursor.");
+    helpers.setUnderlayStatus("Placement: invalid (overlap/constraint). Move cursor.");
     return false;
   }
 
