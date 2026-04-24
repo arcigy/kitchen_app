@@ -4731,8 +4731,9 @@ export function startApp(initialArgs: AppArgs) {
     const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
     if (!Number.isFinite(nextMm)) return;
     const widthMm = Math.max(1, Math.round(nextMm));
+    const previousParams = structuredClone(inst.params);
     if (!setEditableModuleWidthMm(inst, widthMm)) return;
-    const accepted = rebuildInstance(inst);
+    const accepted = rebuildInstance(inst, { previousParams });
     if (!accepted) return;
     mountProps();
     commitHistory(S);
@@ -6129,8 +6130,8 @@ export function startApp(initialArgs: AppArgs) {
     s.appendChild(editorHost);
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
-    const onChange = () => {
-      const accepted = rebuildInstance(inst);
+    const onChange = (previousParams?: Record<string, unknown>) => {
+      const accepted = rebuildInstance(inst, { previousParams: previousParams as ModuleParams | undefined });
       if (!accepted) return false;
       commitHistory(S);
       pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
@@ -7821,17 +7822,24 @@ export function startApp(initialArgs: AppArgs) {
 
     getModuleDescriptorOrThrow(inst.params.type).createControls(instanceEditorHost, inst.params, {
       ...worktopArgs,
-      onChange: () => rebuildInstance(inst, { preserveBackAnchor: true })
+      onChange: (previousParams?: Record<string, unknown>) =>
+        rebuildInstance(inst, {
+          preserveBackAnchor: true,
+          previousParams: previousParams as ModuleParams | undefined
+        })
     });
   }
 
-  function rebuildInstance(inst: LayoutInstance, opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean }) {
+  function rebuildInstance(
+    inst: LayoutInstance,
+    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams }
+  ) {
     const normalizedParams = normalizeModuleParams(structuredClone(inst.params));
     const errors = validateModule(normalizedParams);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return false;
 
-    const previousParams = structuredClone(inst.params);
+    const previousParams = structuredClone(opts?.previousParams ?? inst.params);
     inst.params = normalizedParams;
 
     const next = buildModule(inst.params);
@@ -11980,6 +11988,7 @@ export function startApp(initialArgs: AppArgs) {
   ) => {
     const inst = findInstance(instanceId);
     if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    const previousParams = structuredClone(inst.params);
     inst.params = normalizeModuleParamsForSource(
       {
         ...structuredClone(inst.params),
@@ -11987,7 +11996,10 @@ export function startApp(initialArgs: AppArgs) {
       } as ModuleParams,
       options?.sourceKey
     );
-    const ok = rebuildInstance(inst, { preserveBackAnchor: options?.preserveBackAnchor ?? true });
+    const ok = rebuildInstance(inst, {
+      preserveBackAnchor: options?.preserveBackAnchor ?? true,
+      previousParams
+    });
     return {
       ok,
       snapshot: getDebugKitchenSnapshot(inst.kitchenGroupId),

@@ -73,7 +73,7 @@ export type PortableModuleControlsApi = {
 };
 
 export type PortableModuleControlsArgs = {
-  onChange: () => void | boolean;
+  onChange: (previousParams?: Record<string, unknown>) => void | boolean;
   getWorktopThicknessMm: () => number;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
@@ -496,7 +496,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   const applyParamMutation = (mutate: () => void) => {
     const previous = cloneValue(params);
     mutate();
-    const accepted = controlArgs.onChange();
+    const accepted = controlArgs.onChange(previous as Record<string, unknown>);
     if (accepted === false) {
       replaceRecordValues(params, previous);
       syncFromParams();
