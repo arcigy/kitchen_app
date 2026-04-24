@@ -7,13 +7,18 @@ import {
   updateCommercialSelections
 } from "./portableCommercial";
 import {
+  applyCornerClipComponentToParams,
+  applyCornerHingeComponentToParams,
   applyDrawerLowHandleComponentToParams,
   applyDrawerLowLegComponentToParams,
   applyDrawerLowRunnerComponentToParams,
+  getCornerClipComponentOptions,
+  getCornerHingeComponentOptions,
   getDrawerLowHandleComponentOptions,
   getDrawerLowLegComponentOptions,
   getDrawerLowRunnerComponentOptions
 } from "../../data/pricing/handleComponentPresets";
+import { t, translateEnumLabel, translateParamDescription, translateParamLabel } from "../../i18n";
 
 export type PortableJsonValue =
   | string
@@ -136,12 +141,7 @@ function setTopLevelValue(params: Record<string, unknown>, key: string, value: P
 }
 
 function formatKeyLabel(key: string) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^./, (char) => char.toUpperCase());
+  return translateParamLabel(key);
 }
 
 function createSection(container: HTMLElement, title: string, description: string, modifier?: string) {
@@ -153,11 +153,11 @@ function createSection(container: HTMLElement, title: string, description: strin
 
   const heading = document.createElement("div");
   heading.className = "portable-section__title";
-  heading.textContent = title;
+  heading.textContent = t(title);
 
   const help = document.createElement("div");
   help.className = "portable-section__description";
-  help.textContent = description;
+  help.textContent = translateParamDescription(description);
 
   header.append(heading, help);
 
@@ -184,7 +184,7 @@ function appendBadges(
   for (const badge of badges) {
     const badgeEl = document.createElement("span");
     badgeEl.className = `portable-badge portable-badge--${badge.tone}`;
-    badgeEl.textContent = badge.label;
+    badgeEl.textContent = t(badge.label);
     badgesEl.appendChild(badgeEl);
   }
 
@@ -205,7 +205,7 @@ function createFieldShell(args: {
   const wrapper = document.createElement("div");
   wrapper.className = `field portable-field${args.readOnly ? " portable-field--readonly" : ""}`;
   const tooltip = args.description.trim();
-  if (tooltip) wrapper.title = tooltip;
+  if (tooltip) wrapper.title = translateParamDescription(tooltip);
 
   const meta = document.createElement("div");
   meta.className = "portable-field__meta";
@@ -214,9 +214,9 @@ function createFieldShell(args: {
   head.className = "portable-field__head";
 
   const title = document.createElement("label");
-  title.textContent = args.label;
+  title.textContent = translateParamLabel(args.key);
   title.htmlFor = `portable_${args.key}`;
-  if (tooltip) title.title = tooltip;
+  if (tooltip) title.title = translateParamDescription(tooltip);
 
   head.appendChild(title);
   appendBadges(head, args.badges ?? []);
@@ -258,7 +258,7 @@ function createSystemFieldControl(
     for (const optionValue of options) {
       const option = document.createElement("option");
       option.value = optionValue;
-      option.textContent = optionValue;
+      option.textContent = translateEnumLabel(optionValue);
       option.selected = value === optionValue;
       select.appendChild(option);
     }
@@ -276,7 +276,7 @@ function createSystemFieldControl(
     input.disabled = locked;
 
     const text = document.createElement("span");
-    text.textContent = input.checked ? "Enabled" : "Disabled";
+    text.textContent = input.checked ? t("Enabled") : t("Disabled");
 
     toggle.append(input, text);
     return toggle;
@@ -368,6 +368,18 @@ function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | n
       label: option.displayName
     }));
   }
+  if (parameterKey === "hingeComponentId") {
+    return getCornerHingeComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
+  if (parameterKey === "clipComponentId") {
+    return getCornerClipComponentOptions().map((option) => ({
+      value: option.componentId,
+      label: option.displayName
+    }));
+  }
   return null;
 }
 
@@ -375,13 +387,13 @@ function deriveScalarOptions(parameterKey: string): PortableFieldOption[] | null
   if (parameterKey === "assemblyContext") {
     return ["kitchen", "generic", "wardrobe", "bathroom", "laundry"].map((value) => ({
       value,
-      label: value
+      label: translateEnumLabel(value)
     }));
   }
   if (parameterKey === "kitchenModuleRole") {
     return ["base", "wall", "tall"].map((value) => ({
       value,
-      label: value
+      label: translateEnumLabel(value)
     }));
   }
   return null;
@@ -421,21 +433,21 @@ function normalizeBaseMaterialId(materialId: string) {
 function groupLabelForBoardFamily(family: string | undefined) {
   switch (family) {
     case "body":
-      return "Cabinet Panels";
+      return t("Cabinet Panels");
     case "front":
-      return "Drawer Fronts";
+      return t("Fronts");
     case "back":
-      return "Back Panels";
+      return t("Back Panels");
     case "drawer_box":
-      return "Drawer Box Panels";
+      return t("Drawer Box Panels");
     case "drawer_bottom":
-      return "Drawer Box Bottoms";
+      return t("Drawer Box Bottoms");
     case "shelf":
-      return "Shelves";
+      return t("Shelves");
     case "worktop":
-      return "Worktops";
+      return t("Worktops");
     default:
-      return "Board Parts";
+      return t("Board Parts");
   }
 }
 
@@ -518,7 +530,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         container: sectionBody,
         key: parameter.key,
         label: formatKeyLabel(parameter.key),
-        description: parameter.description
+        description: translateParamDescription(parameter.description)
       });
       fieldByKey.set(parameter.key, wrapper);
 
@@ -591,7 +603,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           for (const optionDef of options) {
             const option = document.createElement("option");
             option.value = optionDef.value;
-            option.textContent = optionDef.label;
+            option.textContent = translateEnumLabel(optionDef.label);
             select.appendChild(option);
           }
           wrapper.appendChild(select);
@@ -604,6 +616,10 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
                 Object.assign(params, applyDrawerLowLegComponentToParams(params, select.value));
               } else if (parameter.key === "runnerComponentId") {
                 Object.assign(params, applyDrawerLowRunnerComponentToParams(params, select.value));
+              } else if (parameter.key === "hingeComponentId") {
+                Object.assign(params, applyCornerHingeComponentToParams(params, select.value));
+              } else if (parameter.key === "clipComponentId") {
+                Object.assign(params, applyCornerClipComponentToParams(params, select.value));
               } else if (parameter.key === "assemblyContext") {
                 setTopLevelValue(params, parameter.key, select.value);
                 if (select.value !== "kitchen") {
@@ -768,7 +784,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       for (const family of materialFamilies) {
         const option = document.createElement("option");
         option.value = family.baseId;
-        option.textContent = family.displayName;
+        option.textContent = t(family.displayName);
         materialSelect.appendChild(option);
       }
 
@@ -884,7 +900,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
     const introHint = document.createElement("p");
     introHint.className = "muted portable-system-summary";
-    introHint.textContent = `Module ${systemValues.moduleType} exposes ${systemCatalog.definitions.length} system parameter(s).`;
+    introHint.textContent = t(
+      `Module ${systemValues.moduleType} exposes ${systemCatalog.definitions.length} system parameter(s).`
+    );
     systemIntro.appendChild(introHint);
 
     for (const groupKey of getOrderedGroupKeys(systemCatalog.definitions, systemCatalog.groups)) {
@@ -912,7 +930,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           container: sectionBody,
           key: definition.key,
           label: formatKeyLabel(definition.key),
-          description: definition.description,
+          description: translateParamDescription(definition.description),
           badges,
           readOnly: true
         });

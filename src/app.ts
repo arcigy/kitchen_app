@@ -111,10 +111,12 @@ import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline"
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { exportSceneToJson } from "./core/exportScene";
 import { createTopbar } from "./ui/createTopbar";
+import { attachFileMenu } from "./ui/createFileMenu";
 import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
+import { downloadCanvasPng, saveTextFile, saveTextFileAs, type WritableHandle } from "./core/filePersistence";
 import { getAllMaterials } from "./data/materials";
 import { getMaterialDefinitionById } from "./data/pricing/materialDefinitions";
 import { solveWallNetwork } from "./walls2d/solver";
@@ -151,6 +153,7 @@ export function startApp(initialArgs: AppArgs) {
   const hasImportedModules = availableModuleDescriptors.length > 0;
   const noModulesMessage =
     'No imported modules installed. Run `npm run import:modpkg -- "<path-to.modpkg>"` and reload the app.';
+  let layoutSaveHandle: WritableHandle | null = null;
   let params: ModuleParams = hasImportedModules
     ? getModuleDescriptorOrThrow(availableModuleDescriptors[0].type).defaultParams()
     : ({ type: "__empty__" } as ModuleParams);
@@ -4545,20 +4548,12 @@ export function startApp(initialArgs: AppArgs) {
   photoStatus.style.marginTop = "6px";
   photoWrap.appendChild(photoStatus);
 
-  const downloadPng = (name: string) => {
-    const url = renderer.domElement.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-  };
-
   photoReset.addEventListener("click", () => {
     photo?.reset();
   });
 
   photoSave.addEventListener("click", () => {
-    downloadPng(`kitchen-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.png`);
+    downloadViewportPng();
   });
 
   const hdriSel = document.createElement("select");
@@ -5171,7 +5166,7 @@ export function startApp(initialArgs: AppArgs) {
     title: "Kitchen Layout 2026 - Floor Plan",
     projectLabel: "Project 1",
     tabs: [
-      { label: "File", accent: true },
+      { id: "file", label: "File", accent: true },
       { label: "Architecture" },
       { label: "Modify", active: true },
       { label: "View" },
@@ -8981,6 +8976,88 @@ export function startApp(initialArgs: AppArgs) {
     controls.update();
   };
 
+  const buildTimestampedFileName = (prefix: string, extension: string) =>
+    `${prefix}-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.${extension}`;
+
+  const copyTextToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const buildLayoutExportJson = () => {
+    const json = JSON.stringify(buildLayoutExportPayload(), null, 2);
+    args.exportOutEl.value = json;
+    return json;
+  };
+
+  const buildSceneExportPayload = () => {
+    const hdri = getHdriSettings();
+    const opening = getWindowOpening();
+    const sunDirection = opening ? opening.inwardNormal.clone().normalize() : undefined;
+    const cameraTarget = (ctl() as any)?.target instanceof THREE.Vector3 ? ((ctl() as any).target as THREE.Vector3) : undefined;
+    const daylightIntensity = getDaylightIntensity();
+
+    return exportSceneToJson({
+      scene,
+      camera: cam(),
+      cameraTarget,
+      environment: {
+        hdriPath: hdri.id,
+        hdriStrength: 5,
+        hdriBackground: hdri.background,
+        hdriBackgroundStrength: 5,
+        hdriRotationDeg: 60
+      },
+      colorManagement: { viewTransform: "AgX", exposure: 0.5, look: "Medium High Contrast" },
+      lighting: { sunDirection, sunStrength: 5, sunAngle: 30 },
+      window: { opening, daylightIntensity },
+      includeInvisible: false
+    });
+  };
+
+  const buildSceneExportJson = () => {
+    const payload = buildSceneExportPayload();
+    const json = JSON.stringify(payload, null, 2);
+    args.exportOutEl.value = json;
+    return { payload, json };
+  };
+
+  const downloadViewportPng = () => {
+    downloadCanvasPng(renderer.domElement, buildTimestampedFileName("kitchen", "png"));
+  };
+
+  const saveLayoutFile = async () => {
+    layoutSaveHandle = await saveTextFile(
+      buildLayoutExportJson(),
+      buildTimestampedFileName("kitchen-layout", "json"),
+      layoutSaveHandle
+    );
+  };
+
+  const saveLayoutFileAs = async () => {
+    layoutSaveHandle = await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-layout", "json"));
+  };
+
+  const exportLayoutJsonFile = async () => {
+    await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-export", "json"));
+  };
+
+  const exportSceneJsonFile = async () => {
+    await saveTextFileAs(buildSceneExportJson().json, buildTimestampedFileName("kitchen-scene", "json"));
+  };
+
+  const copyCurrentExport = async () => {
+    args.copyStatusEl.textContent = "";
+    const text = args.exportOutEl.value.trim().length > 0 ? args.exportOutEl.value : buildLayoutExportJson();
+    args.exportOutEl.value = text;
+    const copied = await copyTextToClipboard(text);
+    args.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
+  };
+
   args.resetBtn.addEventListener("click", () => {
     if (!selectedInstanceId) return;
     const inst = findInstance(selectedInstanceId);
@@ -8993,19 +9070,9 @@ export function startApp(initialArgs: AppArgs) {
 
   args.exportBtn.addEventListener("click", async () => {
     args.copyStatusEl.textContent = "";
-
-    const payload = buildLayoutExportPayload();
-    const json = JSON.stringify(payload, null, 2);
-
-    args.exportOutEl.value = json;
-
-    // Best-effort copy to clipboard.
-    try {
-      await navigator.clipboard.writeText(json);
-      args.copyStatusEl.textContent = "Copied.";
-    } catch {
-      args.copyStatusEl.textContent = "Copy failed (browser permission).";
-    }
+    const json = buildLayoutExportJson();
+    const copied = await copyTextToClipboard(json);
+    args.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
   });
 
   args.exportSceneBtn.addEventListener("click", async () => {
@@ -9031,40 +9098,7 @@ export function startApp(initialArgs: AppArgs) {
       if (previewLinkEl) previewLinkEl.style.display = state === "done" ? "inline" : "none";
     };
 
-    const hdri = getHdriSettings();
-    const opening = getWindowOpening();
-    const sunDirection = opening ? opening.inwardNormal.clone().normalize() : undefined;
-    const cameraTarget = (ctl() as any)?.target instanceof THREE.Vector3 ? ((ctl() as any).target as THREE.Vector3) : undefined;
-    const daylightIntensity = getDaylightIntensity();
-
-    const payload = exportSceneToJson({
-      scene,
-      camera: cam(),
-      cameraTarget,
-      environment: {
-        hdriPath: hdri.id,
-        hdriStrength: 5,
-        hdriBackground: hdri.background,
-        hdriBackgroundStrength: 5,
-        hdriRotationDeg: 60
-      },
-      colorManagement: { viewTransform: "AgX", exposure: 0.5, look: "Medium High Contrast" },
-      lighting: { sunDirection, sunStrength: 5, sunAngle: 30 },
-      window: { opening, daylightIntensity },
-      includeInvisible: false
-    });
-
-    const json = JSON.stringify(payload, null, 2);
-    args.exportOutEl.value = json;
-
-    const tryCopy = async () => {
-      try {
-        await navigator.clipboard.writeText(json);
-        return true;
-      } catch {
-        return false;
-      }
-    };
+    const { payload, json } = buildSceneExportJson();
 
     args.exportSceneBtn.disabled = true;
     setUi("running", "Running Blender (up to 60s)â€¦");
@@ -9093,7 +9127,7 @@ export function startApp(initialArgs: AppArgs) {
         throw new Error((data && typeof data.error === "string" && data.error) || text || `HTTP ${res.status}`);
       }
 
-      const copyOk = await tryCopy();
+      const copyOk = await copyTextToClipboard(json);
       const previewUrl = typeof data.previewUrl === "string" ? data.previewUrl : null;
       if (!previewUrl) throw new Error("Backend did not return previewUrl.");
 
@@ -9112,17 +9146,21 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   args.copyBtn.addEventListener("click", async () => {
-    args.copyStatusEl.textContent = "";
-    const fallback = JSON.stringify(buildLayoutExportPayload(), null, 2);
-    const text = args.exportOutEl.value.trim().length > 0 ? args.exportOutEl.value : fallback;
-    args.exportOutEl.value = text;
-    try {
-      await navigator.clipboard.writeText(text);
-      args.copyStatusEl.textContent = "Copied.";
-    } catch {
-      args.copyStatusEl.textContent = "Copy failed (browser permission).";
-    }
+    await copyCurrentExport();
   });
+
+  const fileTab = tb.getTab("file");
+  if (fileTab) {
+    attachFileMenu(fileTab, {
+      save: saveLayoutFile,
+      saveAs: saveLayoutFileAs,
+      exportLayoutJson: exportLayoutJsonFile,
+      exportSceneJson: exportSceneJsonFile,
+      exportPng: downloadViewportPng,
+      copyJson: copyCurrentExport,
+      onLanguageChange: () => window.location.reload()
+    });
+  }
 
   const ro = new ResizeObserver(() => {
     const w = args.viewerEl.clientWidth;

@@ -7,9 +7,11 @@ type ToolButtonArgs = {
 };
 
 type ChromeTabArgs = {
+  id?: string;
   label: string;
   active?: boolean;
   accent?: boolean;
+  onClick?: () => void;
 };
 
 type ChromeArgs = {
@@ -55,6 +57,7 @@ export function createTopbar(container: HTMLElement) {
   const tabs = document.createElement("div");
   tabs.className = "revit-tabs";
   chrome.appendChild(tabs);
+  const tabMap = new Map<string, HTMLButtonElement>();
 
   const rows = document.createElement("div");
   rows.className = "topbar-rows";
@@ -64,11 +67,15 @@ export function createTopbar(container: HTMLElement) {
     title.textContent = args.title;
     project.textContent = args.projectLabel ?? "";
     tabs.innerHTML = "";
+    tabMap.clear();
 
     for (const tab of args.tabs) {
-      const el = document.createElement("div");
+      const el = document.createElement("button");
+      el.type = "button";
       el.className = ["revit-tab", tab.active ? "active" : "", tab.accent ? "accent" : ""].filter(Boolean).join(" ");
       el.textContent = tab.label;
+      if (tab.onClick) el.addEventListener("click", tab.onClick);
+      if (tab.id) tabMap.set(tab.id, el);
       tabs.appendChild(el);
     }
   };
@@ -149,7 +156,7 @@ export function createTopbar(container: HTMLElement) {
     title: "Kitchen Layout 2026 - Floor Plan",
     projectLabel: "Project 1",
     tabs: [
-      { label: "File", accent: true },
+      { id: "file", label: "File", accent: true },
       { label: "Architecture" },
       { label: "Modify", active: true },
       { label: "View" },
@@ -157,6 +164,14 @@ export function createTopbar(container: HTMLElement) {
     ]
   });
 
-  return { clear, addRow, addGroup, addSpacer, toolButton, setChrome };
+  return {
+    clear,
+    addRow,
+    addGroup,
+    addSpacer,
+    toolButton,
+    setChrome,
+    getTab: (id: string) => tabMap.get(id) ?? null
+  };
 }
 

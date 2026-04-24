@@ -109,9 +109,13 @@ body {
   padding: 7px 12px 6px;
   border: 1px solid transparent;
   border-bottom: none;
+  background: transparent;
   color: #333;
   font-size: 12px;
   line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
 }
 
 .revit-tab.active {
@@ -120,7 +124,18 @@ body {
   border-bottom-color: #ffffff;
 }
 
-.revit-tab.accent {
+.revit-tab.accent,
+.revit-tab.open {
+  background: #2d7fbe;
+  color: #fff;
+}
+
+.revit-tab:hover {
+  background: linear-gradient(#ffffff, #f5f9fd);
+}
+
+.revit-tab.accent:hover,
+.revit-tab.open:hover {
   background: #2d7fbe;
   color: #fff;
 }
@@ -517,6 +532,71 @@ body {
 
 .portable-system-summary {
   margin: 0;
+}
+
+.app-menu {
+  min-width: 220px;
+  display: grid;
+  padding: 4px;
+  border: 1px solid #bfc7d1;
+  background: #fbfbfb;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
+}
+
+.app-menu-root {
+  position: fixed;
+  z-index: 200;
+}
+
+.app-menu--nested {
+  min-width: 210px;
+}
+
+.app-menu-item {
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: #222;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-menu-item:hover,
+.app-menu-item--submenu:hover {
+  background: #dcecfb;
+}
+
+.app-menu-item--submenu {
+  position: relative;
+}
+
+.app-menu-submenu {
+  position: absolute;
+  top: -5px;
+  left: calc(100% - 2px);
+  display: none;
+}
+
+.app-menu-item--submenu:hover > .app-menu-submenu {
+  display: grid;
+}
+
+.app-menu-arrow,
+.app-menu-check {
+  color: #5c6775;
+}
+
+.app-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: #d8dde4;
 }
 
 .field.is-related {
