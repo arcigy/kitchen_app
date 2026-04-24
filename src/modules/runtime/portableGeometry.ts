@@ -401,9 +401,13 @@ function canonicalizePortableBoardPartName(partName: string) {
   if (partName === "leftSide") return "left-side";
   if (partName === "rightSide") return "right-side";
   if (partName === "bottom") return "bottom-panel";
+  if (partName === "top") return "top-panel";
+  if (partName === "kickboard") return "plinth";
   if (partName === "topRailFront" || partName === "topRailBack") return "top-panel";
   if (partName === "back") return "back-panel";
   if (partName === "kick") return "plinth";
+  if (partName === "freezerDoorFront") return "freezer-door-front";
+  if (partName === "fridgeDoorFront") return "fridge-door-front";
   const frontMatch = partName.match(/^front_(\d+)$/i);
   if (frontMatch) return `drawer-front-${frontMatch[1]}`;
   const drawerSideMatch = partName.match(/^drawer_(\d+)_side[LR]$/i);
@@ -475,7 +479,7 @@ function resolvePortableComponentAssignment(partName: string, params: Record<str
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const findAssigned = (assignmentKey: string) => componentAssignments.find((entry) => entry.assignmentKey === assignmentKey)?.component ?? null;
 
-  if (/^handle_/i.test(partName) || /^doorHandle_/i.test(partName)) {
+  if (isDoorHandlePartName(partName)) {
     const explicit = typeof params.handleComponentId === "string" ? getComponentDefinitionById(params.handleComponentId) : null;
     return explicit ? { ...explicit, catalogId: explicit.id } : (findAssigned("door-handles") ?? findAssigned("drawer-handles"));
   }
@@ -555,6 +559,23 @@ function resolveLivePartOverride(
   return null;
 }
 
+function isDoorHandlePartName(partName: string) {
+  return /^handle_/i.test(partName) || /^doorHandle_/i.test(partName) || /(?:door|freezer).*_handle$/i.test(partName);
+}
+
+function isIntegratedApplianceHandlePartName(partName: string) {
+  return /(?:door|freezer).*_handle$/i.test(partName);
+}
+
+function isFrontFacingZPartName(partName: string) {
+  return /front_z/i.test(partName) || /doorFront/i.test(partName) || /(?:door|freezer).*_handle$/i.test(partName);
+}
+
+function isVerticalHandlePart(part: PortableLivePart, sizeMm: PortableLiveVector) {
+  if (!isDoorHandlePartName(part.name)) return false;
+  return sizeMm.y >= sizeMm.x && sizeMm.y >= sizeMm.z;
+}
+
 function applyComponentGeometrySize(
   part: PortableLivePart,
   sizeMm: { x: number; y: number; z: number },
@@ -568,7 +589,7 @@ function applyComponentGeometrySize(
     if (componentGeometry.archetype === "handle_knob") {
       const diameterMm = Math.max(1, dims.diameterMm ?? dims.widthMm ?? sizeMm.y);
       const projectionMm = Math.max(1, dims.projectionMm ?? dims.depthMm ?? sizeMm.z);
-      if (/front_z/i.test(part.name)) {
+      if (isFrontFacingZPartName(part.name)) {
         next.x = diameterMm;
         next.y = diameterMm;
         next.z = projectionMm;
@@ -583,7 +604,11 @@ function applyComponentGeometrySize(
     const lengthMm = Math.max(1, dims.lengthMm ?? sizeMm.x ?? sizeMm.z);
     const heightMm = Math.max(1, dims.heightMm ?? dims.thicknessMm ?? sizeMm.y);
     const projectionMm = Math.max(1, dims.projectionMm ?? dims.depthMm ?? sizeMm.z);
-    if (/front_z/i.test(part.name)) {
+    if (isVerticalHandlePart(part, sizeMm)) {
+      next.x = heightMm;
+      next.y = lengthMm;
+      next.z = projectionMm;
+    } else if (isFrontFacingZPartName(part.name)) {
       next.x = lengthMm;
       next.y = heightMm;
       next.z = projectionMm;
@@ -603,7 +628,7 @@ function applyComponentGeometrySize(
   }
 
   if (componentGeometry.componentType === "hinge") {
-    if (/front_z/i.test(part.name)) {
+    if (isFrontFacingZPartName(part.name)) {
       next.x = Math.max(1, dims.widthMm ?? sizeMm.x);
       next.y = Math.max(1, dims.heightMm ?? sizeMm.y);
       next.z = Math.max(1, dims.depthMm ?? sizeMm.z);
@@ -708,7 +733,7 @@ function createLivePartGeometry(
 ): LivePartGeometry {
   if (componentGeometry?.componentType === "handle") {
     if (componentGeometry.archetype === "handle_knob") {
-      const axis = /front_z/i.test(part.name) ? "z" : "x";
+      const axis = isFrontFacingZPartName(part.name) ? "z" : "x";
       const radiusMm = Math.max(sizeMm.x, sizeMm.y, sizeMm.z) / 2;
       const heightMm = axis === "z" ? sizeMm.z : sizeMm.x;
       return createCylinderGeometry(axis, radiusMm, heightMm, {
@@ -716,9 +741,9 @@ function createLivePartGeometry(
       });
     }
     if (componentGeometry.archetype === "handle_bar") {
-      const axis = /front_z/i.test(part.name) ? "x" : "z";
+      const axis = isVerticalHandlePart(part, sizeMm) ? "y" : isFrontFacingZPartName(part.name) ? "x" : "z";
       const radiusMm = Math.max(sizeMm.y, Math.min(sizeMm.x, sizeMm.z)) / 2;
-      const heightMm = axis === "x" ? sizeMm.x : sizeMm.z;
+      const heightMm = axis === "x" ? sizeMm.x : axis === "y" ? sizeMm.y : sizeMm.z;
       return createCylinderGeometry(axis, radiusMm, heightMm, {
         radialSegments: 18
       });
@@ -806,6 +831,9 @@ function buildMeshFromLivePart(
     sizeMm[minAxis] = Math.max(1, override.thicknessMm);
   }
   const geometrySize = applyComponentGeometrySize(part, sizeMm, componentGeometry);
+  if (isIntegratedApplianceHandlePartName(part.name) && isFrontFacingZPartName(part.name)) {
+    z.positionMm += geometrySize.z;
+  }
   const { geometry, axis, rotationX, rotationY, rotationZ } = createLivePartGeometry(part, geometrySize, componentGeometry);
   const mesh = new THREE.Mesh(
     geometry,

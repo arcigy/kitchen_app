@@ -7844,6 +7844,12 @@ export function startApp(initialArgs: AppArgs) {
     const prevAdjacencyInfos = collectAdjacentModuleInfos(inst, prevWorldBox);
     const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos);
     const prevPos = inst.root.position.clone();
+    const footprintStable =
+      (previousParams as Record<string, unknown>).width === (inst.params as Record<string, unknown>).width &&
+      (previousParams as Record<string, unknown>).height === (inst.params as Record<string, unknown>).height &&
+      ((previousParams as Record<string, unknown>).depth === (inst.params as Record<string, unknown>).depth ||
+        (previousParams as Record<string, unknown>).lengthZ === (inst.params as Record<string, unknown>).lengthZ);
+    const keepRootPositionStable = moduleStaysOutsideKitchenWorktop(inst) && footprintStable;
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
@@ -7859,14 +7865,18 @@ export function startApp(initialArgs: AppArgs) {
     inst.module = next;
     inst.root.add(inst.module);
     inst.localBox = new THREE.Box3().setFromObject(inst.module);
-    if (opts?.preserveBackAnchor) {
+    if (opts?.preserveBackAnchor && !keepRootPositionStable) {
       const nextLocalAnchor = isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
       const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
       inst.module.position.add(delta);
       inst.localBox = new THREE.Box3().setFromObject(inst.module);
     }
     ensurePickAndOutline(inst);
-    if (!opts?.skipLayoutValidation) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
+    if (!opts?.skipLayoutValidation && !keepRootPositionStable) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
+    if (keepRootPositionStable) {
+      inst.root.position.copy(prevPos);
+      inst.root.updateMatrixWorld(true);
+    }
 
     if (!opts?.skipLayoutValidation) {
       const clamped = applyWallConstraints(inst, inst.root.position.clone());
