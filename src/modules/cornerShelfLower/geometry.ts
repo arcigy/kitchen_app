@@ -81,6 +81,21 @@ const baseHingeInsetXMm =
 const baseHingeInsetZMm =
   ((getBasePart("door_front_x")?.sizeMm?.z ?? 418) * 0.5) -
     ((getBasePart("hinge_front_x_1_door_plate")?.centerMm?.z ?? 0) - (getBasePart("door_front_x")?.centerMm?.z ?? 0)) || 37;
+const baseDoorFrontZCenterZMm = getBasePart("door_front_z")?.centerMm?.z ?? 69.7;
+const baseDoorFrontXCenterXMm = getBasePart("door_front_x")?.centerMm?.x ?? 69.7;
+const baseDoorFrontZBackFaceZMm = baseDoorFrontZCenterZMm - baseFrontThicknessMm * 0.5;
+const baseDoorFrontXBackFaceXMm = baseDoorFrontXCenterXMm - baseFrontThicknessMm * 0.5;
+
+function getBasePartCenterAxisMm(name: string, axis: "x" | "y" | "z") {
+  const center = getBasePart(name)?.centerMm;
+  const value = center?.[axis];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function getBaseHingeBackFaceOffsetMm(partName: string, axis: "x" | "z") {
+  const baseCenter = getBasePartCenterAxisMm(partName, axis);
+  return axis === "z" ? baseCenter - baseDoorFrontZBackFaceZMm : baseCenter - baseDoorFrontXBackFaceXMm;
+}
 
 function getShelfGapValues(params: CornerShelfLowerParams) {
   const raw = Array.isArray(params.shelfGaps)
@@ -634,10 +649,15 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
     const hingeCenters = getHingeCenterOffsetsMm(doorFrontZCenter.y, doorFrontZHeightMm, hingeCount, hingeTopOffsetMm, hingeBottomOffsetMm);
     for (let index = 0; index < hingeCenters.length; index += 1) {
       for (const suffix of ["door_plate", "door_cup", "arm"] as const) {
-        const hinge = group.getObjectByName(`hinge_front_z_${index + 1}_${suffix}`);
+        const hingeName = `hinge_front_z_${index + 1}_${suffix}`;
+        const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterX(hinge, doorFrontZCenter.x + doorFrontZWidthMm * 0.5 - baseHingeInsetXMm);
+        setObjectCenterZ(
+          hinge,
+          doorFrontZCenter.z - frontThicknessMm * 0.5 + getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z")
+        );
       }
     }
   }
@@ -657,10 +677,15 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
     const hingeCenters = getHingeCenterOffsetsMm(doorFrontXCenter.y, doorFrontXHeightMm, hingeCount, hingeTopOffsetMm, hingeBottomOffsetMm);
     for (let index = 0; index < hingeCenters.length; index += 1) {
       for (const suffix of ["door_plate", "door_cup", "arm"] as const) {
-        const hinge = group.getObjectByName(`hinge_front_x_${index + 1}_${suffix}`);
+        const hingeName = `hinge_front_x_${index + 1}_${suffix}`;
+        const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterZ(hinge, doorFrontXCenter.z + doorFrontXDepthMm * 0.5 - baseHingeInsetZMm);
+        setObjectCenterX(
+          hinge,
+          doorFrontXCenter.x - frontThicknessMm * 0.5 + getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x")
+        );
       }
     }
   }
