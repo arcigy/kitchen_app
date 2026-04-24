@@ -1,14 +1,8 @@
-import type { BOMResult } from "../layout/bom/bomTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
-import type { LayoutInstance } from "../layout/appState";
-import { calculateModuleBOM } from "../layout/bom/calculateBOM";
-import { getModuleDescriptor } from "../modules/registry";
-
-type ModulePricingView = {
-  instanceId: string;
-  label: string;
-  result: BOMResult;
-};
+import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import type { BOMResult } from "../layout/bom/bomTypes";
+import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
+import { buildProjectPricingPayload, buildProjectPricingViews, type ProjectPricingView } from "../layout/bom/projectPricing";
 
 type CatalogAggregateRow = {
   catalogId: string;
@@ -119,32 +113,10 @@ function section(title: string, description?: string) {
   return wrap;
 }
 
-function moduleLabel(instance: LayoutInstance) {
-  return getModuleDescriptor(instance.params.type)?.label ?? instance.params.type;
-}
-
-function buildModuleViews(instances: LayoutInstance[], ctx: KitchenContext): ModulePricingView[] {
-  const counts = new Map<string, number>();
-  return instances.map((instance) => {
-    const label = moduleLabel(instance);
-    const nextCount = (counts.get(label) ?? 0) + 1;
-    counts.set(label, nextCount);
-    return {
-      instanceId: instance.id,
-      label: `${label} #${nextCount}`,
-      result: calculateModuleBOM(instance, ctx)
-    };
-  });
-}
-
-function sum(values: number[]) {
-  return values.reduce((total, value) => total + value, 0);
-}
-
-function aggregateBoards(modules: ModulePricingView[]): CatalogAggregateRow[] {
+function aggregateBoards(entries: ProjectPricingView[]): CatalogAggregateRow[] {
   const buckets = new Map<string, CatalogAggregateRow>();
-  for (const module of modules) {
-    for (const item of module.result.pricing.items) {
+  for (const entry of entries) {
+    for (const item of entry.result.pricing.items) {
       if (item.pricingGroup !== "boards" || !item.material?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
       const existing =
         buckets.get(item.material.catalogId) ??
@@ -167,10 +139,10 @@ function aggregateBoards(modules: ModulePricingView[]): CatalogAggregateRow[] {
   return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
-function aggregateEdges(modules: ModulePricingView[]): CatalogAggregateRow[] {
+function aggregateEdges(entries: ProjectPricingView[]): CatalogAggregateRow[] {
   const buckets = new Map<string, CatalogAggregateRow>();
-  for (const module of modules) {
-    for (const item of module.result.pricing.items) {
+  for (const entry of entries) {
+    for (const item of entry.result.pricing.items) {
       if (item.pricingGroup !== "edge_bands" || !item.material?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
       const existing =
         buckets.get(item.material.catalogId) ??
@@ -191,10 +163,10 @@ function aggregateEdges(modules: ModulePricingView[]): CatalogAggregateRow[] {
   return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
-function aggregateComponents(modules: ModulePricingView[]): CatalogAggregateRow[] {
+function aggregateComponents(entries: ProjectPricingView[]): CatalogAggregateRow[] {
   const buckets = new Map<string, CatalogAggregateRow>();
-  for (const module of modules) {
-    for (const item of module.result.pricing.items) {
+  for (const entry of entries) {
+    for (const item of entry.result.pricing.items) {
       const component = item.component;
       if (item.pricingGroup !== "hardware" || !component?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
       const existing =
@@ -214,30 +186,6 @@ function aggregateComponents(modules: ModulePricingView[]): CatalogAggregateRow[
     }
   }
   return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
-}
-
-function buildProjectPayload(modules: ModulePricingView[]) {
-  return {
-    schemaVersion: "project-commercial-pricing.v1",
-    generatedAt: new Date().toISOString(),
-    modules: modules.map((module) => ({
-      instanceId: module.instanceId,
-      label: module.label,
-      quoteBom: module.result.quoteBom,
-      pricing: module.result.pricing
-    })),
-    totals: {
-      boardsCost: round(sum(modules.map((module) => module.result.pricing.groups.boards.cost))),
-      edgesCost: round(sum(modules.map((module) => module.result.pricing.groups.edge_bands.cost))),
-      hardwareCost: round(sum(modules.map((module) => module.result.pricing.groups.hardware.cost))),
-      laborCost: round(sum(modules.map((module) => module.result.pricing.laborCostFixed))),
-      finalCost: round(sum(modules.map((module) => module.result.pricing.finalPrice)))
-    }
-  };
-}
-
-function round(value: number) {
-  return Math.round(value * 100) / 100;
 }
 
 function itemDisplayName(item: BOMResult["pricing"]["items"][number]) {
@@ -265,6 +213,7 @@ function itemThicknessLabel(item: BOMResult["pricing"]["items"][number]) {
 export function mountBomDevPanel(
   container: HTMLElement,
   instances: LayoutInstance[],
+  worktops: KitchenWorktopInstance[],
   ctx: KitchenContext
 ): void {
   container.innerHTML = "";
@@ -273,7 +222,7 @@ export function mountBomDevPanel(
   container.style.color = "#eef2ff";
   container.style.font = "13px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
 
-  if (instances.length === 0) {
+  if (instances.length === 0 && worktops.length === 0) {
     const empty = document.createElement("div");
     empty.textContent = "Nie sú umiestnené žiadne moduly.";
     empty.style.color = "#9aa5ba";
@@ -281,11 +230,11 @@ export function mountBomDevPanel(
     return;
   }
 
-  const modules = buildModuleViews(instances, ctx);
-  const boards = aggregateBoards(modules);
-  const edges = aggregateEdges(modules);
-  const components = aggregateComponents(modules);
-  const payload = buildProjectPayload(modules);
+  const entries = buildProjectPricingViews(instances, worktops, ctx);
+  const boards = aggregateBoards(entries);
+  const edges = aggregateEdges(entries);
+  const components = aggregateComponents(entries);
+  const payload = buildProjectPricingPayload(entries);
 
   const toolbar = document.createElement("div");
   toolbar.style.display = "flex";
@@ -307,6 +256,23 @@ export function mountBomDevPanel(
   intro.append(title, desc);
   toolbar.appendChild(intro);
 
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "10px";
+
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.textContent = "Create Sheet";
+  exportBtn.style.background = "#0e1118";
+  exportBtn.style.color = "#eef2ff";
+  exportBtn.style.border = "1px solid #303746";
+  exportBtn.style.borderRadius = "8px";
+  exportBtn.style.padding = "9px 12px";
+  exportBtn.addEventListener("click", () => {
+    exportProjectPricingWorkbook(entries);
+  });
+  actions.appendChild(exportBtn);
+
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.textContent = "Copy Pricing JSON";
@@ -322,7 +288,8 @@ export function mountBomDevPanel(
       copyBtn.textContent = "Copy Pricing JSON";
     }, 1200);
   });
-  toolbar.appendChild(copyBtn);
+  actions.appendChild(copyBtn);
+  toolbar.appendChild(actions);
   container.appendChild(toolbar);
 
   const totals = section("Totals", "Nákladový súčet naprieč všetkými modulmi v aktuálnom projekte.");
@@ -363,13 +330,13 @@ export function mountBomDevPanel(
     table(
       ["Field", "Value"],
       [
-        ["Currency", modules[0]?.result.pricing.priceInputs.currency ?? "EUR"],
-        ["Board waste multiplier", formatNumber(modules[0]?.result.pricing.priceInputs.boardWasteMultiplier ?? 1.1, 2)],
-        ["Labor fixed per module", formatCurrency(modules[0]?.result.pricing.laborCostFixed ?? 0)],
-        ["Formula / board priced quantity", modules[0]?.result.pricing.calculationFormulas.boardPricedQuantity ?? ""],
-        ["Formula / item cost", modules[0]?.result.pricing.calculationFormulas.itemCost ?? ""],
-        ["Formula / subtotal", modules[0]?.result.pricing.calculationFormulas.subtotalCost ?? ""],
-        ["Formula / final", modules[0]?.result.pricing.calculationFormulas.finalPrice ?? ""]
+        ["Currency", entries[0]?.result.pricing.priceInputs.currency ?? "EUR"],
+        ["Board waste multiplier", formatNumber(entries[0]?.result.pricing.priceInputs.boardWasteMultiplier ?? 1.1, 2)],
+        ["Labor fixed per module", formatCurrency(entries[0]?.result.pricing.laborCostFixed ?? 0)],
+        ["Formula / board priced quantity", entries[0]?.result.pricing.calculationFormulas.boardPricedQuantity ?? ""],
+        ["Formula / item cost", entries[0]?.result.pricing.calculationFormulas.itemCost ?? ""],
+        ["Formula / subtotal", entries[0]?.result.pricing.calculationFormulas.subtotalCost ?? ""],
+        ["Formula / final", entries[0]?.result.pricing.calculationFormulas.finalPrice ?? ""]
       ]
     )
   );
@@ -428,13 +395,13 @@ export function mountBomDevPanel(
   modulesSection.appendChild(
     table(
       ["Module", "Boards", "Edges", "Hardware", "Labor", "Final"],
-      modules.map((module) => [
-        module.label,
-        formatCurrency(module.result.pricing.groups.boards.cost),
-        formatCurrency(module.result.pricing.groups.edge_bands.cost),
-        formatCurrency(module.result.pricing.groups.hardware.cost),
-        formatCurrency(module.result.pricing.laborCostFixed),
-        formatCurrency(module.result.pricing.finalPrice)
+      entries.map((entry) => [
+        entry.label,
+        formatCurrency(entry.result.pricing.groups.boards.cost),
+        formatCurrency(entry.result.pricing.groups.edge_bands.cost),
+        formatCurrency(entry.result.pricing.groups.hardware.cost),
+        formatCurrency(entry.result.pricing.laborCostFixed),
+        formatCurrency(entry.result.pricing.finalPrice)
       ])
     )
   );
@@ -444,9 +411,9 @@ export function mountBomDevPanel(
   breakdown.appendChild(
     table(
       ["Module", "Item", "Material / Component", "Thickness", "ID", "Group", "Qty", "Priced Qty", "Unit price", "Item cost", "Formula"],
-      modules.flatMap((module) =>
-        module.result.pricing.items.map((item) => [
-          module.label,
+      entries.flatMap((entry) =>
+        entry.result.pricing.items.map((item) => [
+          entry.label,
           itemDisplayName(item),
           itemResourceLabel(item),
           itemThicknessLabel(item),

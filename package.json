@@ -26,7 +26,8 @@
     "realism-effects": "^1.1.2",
     "three": "^0.168.0",
     "three-gpu-pathtracer": "0.0.20",
-    "three-mesh-bvh": "^0.9.9"
+    "three-mesh-bvh": "^0.9.9",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
