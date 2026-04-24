@@ -2539,6 +2539,31 @@ export function startApp(initialArgs: AppArgs) {
     };
   };
 
+  const getModuleLocalKitchenAnchor = (inst: LayoutInstance) =>
+    isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
+
+  const getModuleWorldKitchenAnchor = (inst: LayoutInstance) => getModuleLocalKitchenAnchor(inst).applyMatrix4(inst.root.matrixWorld);
+
+  const preserveWorldKitchenAnchor = (inst: LayoutInstance, previousWorldAnchor: THREE.Vector3) => {
+    const nextWorldAnchor = getModuleWorldKitchenAnchor(inst);
+    if (isCornerKitchenModule(inst)) {
+      const delta = previousWorldAnchor.clone().sub(nextWorldAnchor);
+      delta.y = 0;
+      if (delta.lengthSq() <= 1e-12) return;
+      inst.root.position.add(delta);
+      inst.root.position.y = 0;
+      inst.root.updateMatrixWorld(true);
+      return;
+    }
+
+    const frontDir = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, inst.root.rotation.y, 0)).normalize();
+    const deltaDepth = previousWorldAnchor.clone().sub(nextWorldAnchor).dot(frontDir);
+    if (Math.abs(deltaDepth) <= 1e-9) return;
+    inst.root.position.addScaledVector(frontDir, deltaDepth);
+    inst.root.position.y = 0;
+    inst.root.updateMatrixWorld(true);
+  };
+
   let measureStateRef:
     | ReturnType<typeof createMeasureTools>["measureState"]
     | null = null;
@@ -7972,7 +7997,8 @@ export function startApp(initialArgs: AppArgs) {
     const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? inferTallResizeAnchorSide(inst);
     const prevPos = inst.root.position.clone();
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
-    const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
+    const prevLocalAnchor = getModuleLocalKitchenAnchor(inst).clone();
+    const prevWorldAnchor = prevLocalAnchor.clone().applyMatrix4(inst.root.matrixWorld);
     const prevModule = inst.module;
     const prevBox = inst.localBox.clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
@@ -7995,7 +8021,7 @@ export function startApp(initialArgs: AppArgs) {
     inst.root.add(inst.module);
     inst.localBox = new THREE.Box3().setFromObject(inst.module);
     if (opts?.preserveBackAnchor) {
-      const nextLocalAnchor = isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
+      const nextLocalAnchor = getModuleLocalKitchenAnchor(inst);
       const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
       inst.module.position.add(delta);
       inst.localBox = new THREE.Box3().setFromObject(inst.module);
@@ -8003,12 +8029,14 @@ export function startApp(initialArgs: AppArgs) {
     ensurePickAndOutline(inst);
     const keepRootPositionStable = footprintExtentsMatchXZ(prevWorldBox, instanceWorldBox(inst));
     if (!opts?.skipLayoutValidation && !keepRootPositionStable) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
-    if (keepRootPositionStable) {
+    if (opts?.preserveBackAnchor) {
+      preserveWorldKitchenAnchor(inst, prevWorldAnchor);
+    } else if (keepRootPositionStable) {
       inst.root.position.copy(prevPos);
       inst.root.updateMatrixWorld(true);
     }
 
-    if (!opts?.skipLayoutValidation) {
+    if (!opts?.skipLayoutValidation && !opts?.preserveBackAnchor) {
       const clamped = applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
@@ -11905,6 +11933,7 @@ export function startApp(initialArgs: AppArgs) {
     const structuralBox = new THREE.Box3();
     for (const mesh of structuralMeshes) structuralBox.expandByObject(mesh);
     const localBackCenter = getModuleLocalBackCenter(inst);
+    const worldKitchenAnchor = getModuleWorldKitchenAnchor(inst);
     const localFrontCenter = new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.max.z);
     const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
     const worldFrontCenter = localFrontCenter.clone().applyMatrix4(inst.root.matrixWorld);
@@ -11931,6 +11960,11 @@ export function startApp(initialArgs: AppArgs) {
       structuralWorldBoxM: {
         min: { x: structuralBox.min.x, y: structuralBox.min.y, z: structuralBox.min.z },
         max: { x: structuralBox.max.x, y: structuralBox.max.y, z: structuralBox.max.z }
+      },
+      worldKitchenAnchorM: {
+        x: worldKitchenAnchor.x,
+        y: worldKitchenAnchor.y,
+        z: worldKitchenAnchor.z
       },
       worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
       worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },

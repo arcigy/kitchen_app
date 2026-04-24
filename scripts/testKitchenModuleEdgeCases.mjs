@@ -36,6 +36,17 @@ function expect(condition, message, context) {
   }
 }
 
+function dominantFrontAxis(inst) {
+  return Math.abs(inst.frontVectorM?.x ?? 0) >= Math.abs(inst.frontVectorM?.z ?? 0) ? "x" : "z";
+}
+
+function backLockedDeltaMm(before, after) {
+  const axis = dominantFrontAxis(before);
+  const beforeValue = axis === "x" ? before.worldBackCenterM.x : before.worldBackCenterM.z;
+  const afterValue = axis === "x" ? after.worldBackCenterM.x : after.worldBackCenterM.z;
+  return Math.round(Math.abs(afterValue - beforeValue) * 1000);
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -417,7 +428,7 @@ async function runClusterCases(page) {
     const result = await patchModule(
       page,
       currentRight.id,
-      { width: Number(currentRight.params.width ?? 800) + 120 },
+      { width: Number(currentRight.params.width ?? 800) + 80 },
       { sourceKey: "width", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);
@@ -439,6 +450,140 @@ async function runClusterCases(page) {
         beforeRightPos: currentRight.positionM,
         afterRightPos: nextRight.positionM
       });
+    }
+  }
+
+  return failures;
+}
+
+async function runBackAnchorLockCases(page) {
+  const failures = [];
+
+  {
+    const created = await createScenario(page, {
+      path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }],
+      addModule: true,
+      moduleType: "drawer_low",
+      offsetAlongMm: 700
+    });
+    const groupId = created.group.id;
+    const before = getPrimaryModule(await snapshot(page, groupId), "drawer_low");
+    const result = await patchModule(
+      page,
+      before.id,
+      { width: Number(before.params.width ?? 800) + 120 },
+      { sourceKey: "width", preserveBackAnchor: true }
+    );
+    const after = result.instance;
+    const backDeltaMm = backLockedDeltaMm(before, after);
+    if (!result.ok || backDeltaMm > 1) {
+      failures.push({
+        case: "drawer_width_keeps_back_anchor_straight",
+        ok: result.ok,
+        backDeltaMm,
+        beforeBackCenter: before.worldBackCenterM,
+        afterBackCenter: after.worldBackCenterM
+      });
+    }
+  }
+
+  {
+    const created = await createScenario(page, {
+      path: [
+        { x: 0, z: 0 },
+        { x: 2400, z: 0 },
+        { x: 2400, z: 1800 }
+      ],
+      addModule: true,
+      moduleType: "drawer_low",
+      segmentIndex: 1,
+      offsetAlongMm: 700
+    });
+    const groupId = created.group.id;
+    const before = getPrimaryModule(await snapshot(page, groupId), "drawer_low");
+    const result = await patchModule(
+      page,
+      before.id,
+      { width: Number(before.params.width ?? 800) + 120 },
+      { sourceKey: "width", preserveBackAnchor: true }
+    );
+    const after = result.instance;
+    const backDeltaMm = backLockedDeltaMm(before, after);
+    if (!result.ok || backDeltaMm > 1) {
+      failures.push({
+        case: "drawer_width_keeps_back_anchor_rotated",
+        ok: result.ok,
+        backDeltaMm,
+        beforeBackCenter: before.worldBackCenterM,
+        afterBackCenter: after.worldBackCenterM
+      });
+    }
+  }
+
+  {
+    const created = await createScenario(page, {
+      path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }],
+      addModule: true,
+      moduleType: "swing_shelves_low",
+      offsetAlongMm: 700
+    });
+    const groupId = created.group.id;
+    const before = getPrimaryModule(await snapshot(page, groupId), "swing_shelves_low");
+    const result = await patchModule(
+      page,
+      before.id,
+      { width: Number(before.params.width ?? 800) + 120 },
+      { sourceKey: "width", preserveBackAnchor: true }
+    );
+    const after = result.instance;
+    const backDeltaMm = backLockedDeltaMm(before, after);
+    if (!result.ok || backDeltaMm > 1) {
+      failures.push({
+        case: "swing_width_keeps_back_anchor",
+        ok: result.ok,
+        backDeltaMm,
+        beforeBackCenter: before.worldBackCenterM,
+        afterBackCenter: after.worldBackCenterM
+      });
+    }
+  }
+
+  {
+    const created = await createScenario(page, {
+      path: [
+        { x: 0, z: 0 },
+        { x: 2400, z: 0 },
+        { x: 2400, z: 1600 }
+      ],
+      addModule: true,
+      moduleType: "corner_shelf_lower",
+      cornerIndex: 1
+    });
+    const groupId = created.group.id;
+    let before = getPrimaryModule(await snapshot(page, groupId), "corner_shelf_lower");
+
+    for (const key of ["lengthX", "lengthZ"]) {
+      const beforeAnchor = before.worldKitchenAnchorM;
+      const result = await patchModule(
+        page,
+        before.id,
+        { [key]: Number(before.params[key] ?? 1000) + 120 },
+        { sourceKey: key, preserveBackAnchor: true }
+      );
+      const after = result.instance;
+      const anchorDeltaMm = Math.round(
+        Math.hypot((after.worldKitchenAnchorM.x - beforeAnchor.x) * 1000, (after.worldKitchenAnchorM.z - beforeAnchor.z) * 1000)
+      );
+      if (!result.ok || anchorDeltaMm > 1) {
+        failures.push({
+          case: `corner_${key}_keeps_corner_anchor`,
+          ok: result.ok,
+          anchorDeltaMm,
+          beforeAnchor,
+          afterAnchor: after.worldKitchenAnchorM
+        });
+      }
+      before = after;
     }
   }
 
@@ -502,8 +647,17 @@ async function main() {
     );
 
     const clusterFailures = await runClusterCases(page);
+    const backAnchorFailures = await runBackAnchorLockCases(page);
 
-    const failures = [...drawerFailures, ...cornerFailures, ...swingFailures, ...fridgeFailures, ...adjacencyFailures, ...clusterFailures];
+    const failures = [
+      ...drawerFailures,
+      ...cornerFailures,
+      ...swingFailures,
+      ...fridgeFailures,
+      ...adjacencyFailures,
+      ...clusterFailures,
+      ...backAnchorFailures
+    ];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
     }
@@ -527,6 +681,13 @@ async function main() {
               "cluster_swing_heightCarcass_commits_without_shift",
               "cluster_drawer_frontThickness_commits_without_shift",
               "cluster_edge_drawer_width_grows_without_shifting_neighbors"
+            ],
+            backAnchorCases: [
+              "drawer_width_keeps_back_anchor_straight",
+              "drawer_width_keeps_back_anchor_rotated",
+              "swing_width_keeps_back_anchor",
+              "corner_lengthX_keeps_corner_anchor",
+              "corner_lengthZ_keeps_corner_anchor"
             ]
           }
         },
