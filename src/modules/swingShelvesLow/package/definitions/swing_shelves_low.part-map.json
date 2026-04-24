@@ -1,0 +1,1038 @@
+{
+  "schemaVersion": "module-manufacturable-parts.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "generatedFrom": "canonical_geometry_contract",
+  "parts": [
+    {
+      "partId": "carcass-side-left",
+      "sourceGeometryPartIds": [
+        "left-side"
+      ],
+      "label": "Carcass Side Left",
+      "partType": "side-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "corpus",
+      "materialParamKey": "materials.corpus",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 562,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "yz",
+        "lengthAxis": "y",
+        "widthAxis": "z",
+        "thicknessAxis": "x",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_exterior_left",
+        "secondaryFaceRole": "carcass_interior_left",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "depth",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front vertical edge is visible at the cabinet opening."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge is captured by the back panel rebate zone."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "concealed",
+          "reason": "Top edge is enclosed by the top panel assembly."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "concealed",
+          "reason": "Bottom edge resolves into the bottom/plinth zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "carcass-side-left.hinge-mount",
+          "anchorType": "hinge",
+          "anchorRole": "mount_zone",
+          "mountFace": "carcass_interior_left",
+          "relatedAnchorIds": [
+            "door-front-left.hinge-cup-mount"
+          ],
+          "sourceParamKeys": [
+            "hingeCountPerDoor",
+            "hingeTopOffsetMm",
+            "hingeBottomOffsetMm"
+          ],
+          "notes": [
+            "Mounting-side hinge preparation zone for the left door."
+          ]
+        }
+      ]
+    },
+    {
+      "partId": "carcass-side-right",
+      "sourceGeometryPartIds": [
+        "right-side"
+      ],
+      "label": "Carcass Side Right",
+      "partType": "side-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "corpus",
+      "materialParamKey": "materials.corpus",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 562,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "yz",
+        "lengthAxis": "y",
+        "widthAxis": "z",
+        "thicknessAxis": "x",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_exterior_right",
+        "secondaryFaceRole": "carcass_interior_right",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "depth",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front vertical edge is visible at the cabinet opening."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge is captured by the back panel rebate zone."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "concealed",
+          "reason": "Top edge is enclosed by the top panel assembly."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "concealed",
+          "reason": "Bottom edge resolves into the bottom/plinth zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "carcass-side-right.hinge-mount",
+          "anchorType": "hinge",
+          "anchorRole": "mount_zone",
+          "mountFace": "carcass_interior_right",
+          "relatedAnchorIds": [
+            "door-front-right.hinge-cup-mount"
+          ],
+          "sourceParamKeys": [
+            "hingeCountPerDoor",
+            "hingeTopOffsetMm",
+            "hingeBottomOffsetMm"
+          ],
+          "notes": [
+            "Mounting-side hinge preparation zone for the right door."
+          ]
+        }
+      ]
+    },
+    {
+      "partId": "carcass-bottom",
+      "sourceGeometryPartIds": [
+        "bottom-panel"
+      ],
+      "label": "Carcass Bottom",
+      "partType": "bottom-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "corpus",
+      "materialParamKey": "materials.corpus",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_interior_bottom",
+        "secondaryFaceRole": "underside_service_face",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front edge remains visible above the plinth line."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Side edge is captured between the side panels."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Side edge is captured between the side panels."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves into the back panel zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "carcass-bottom.leg-front-left",
+          "anchorType": "leg",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "adjustable-legs",
+          "instanceIndex": 1,
+          "mountFace": "underside_service_face",
+          "sourceParamKeys": [
+            "legComponentId",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit front-left leg anchor",
+            "rationale": "Straight shelf module uses a four-leg base support contract."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "legComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "carcass-bottom.leg-front-right",
+          "anchorType": "leg",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "adjustable-legs",
+          "instanceIndex": 2,
+          "mountFace": "underside_service_face",
+          "sourceParamKeys": [
+            "legComponentId",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit front-right leg anchor",
+            "rationale": "Straight shelf module uses a four-leg base support contract."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "legComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "carcass-bottom.leg-rear-left",
+          "anchorType": "leg",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "adjustable-legs",
+          "instanceIndex": 3,
+          "mountFace": "underside_service_face",
+          "sourceParamKeys": [
+            "legComponentId",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit rear-left leg anchor",
+            "rationale": "Straight shelf module uses a four-leg base support contract."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "legComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "carcass-bottom.leg-rear-right",
+          "anchorType": "leg",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "adjustable-legs",
+          "instanceIndex": 4,
+          "mountFace": "underside_service_face",
+          "sourceParamKeys": [
+            "legComponentId",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit rear-right leg anchor",
+            "rationale": "Straight shelf module uses a four-leg base support contract."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "legComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "carcass-top",
+      "sourceGeometryPartIds": [
+        "top-panel"
+      ],
+      "label": "Carcass Top",
+      "partType": "top-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "corpus",
+      "materialParamKey": "materials.corpus",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "carcass_top_outer",
+        "secondaryFaceRole": "carcass_interior_top",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Front top edge is visible at the opening line."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Side edge is enclosed by the side panel assembly."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Rear edge resolves into the back panel zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "carcass-back",
+      "sourceGeometryPartIds": [
+        "back-panel"
+      ],
+      "label": "Carcass Back",
+      "partType": "back-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": false,
+      "materialRole": "body",
+      "materialKey": "back",
+      "materialParamKey": "materials.back",
+      "thicknessKey": "backThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 544,
+        "thickness": 6
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "y",
+        "widthAxis": "x",
+        "thicknessAxis": "z",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "rear_service_face",
+        "secondaryFaceRole": "carcass_interior_back",
+        "visibleFaceRole": null
+      },
+      "sourceParamKeys": [
+        "width",
+        "heightCarcass",
+        "plinthHeight",
+        "boardThickness",
+        "backThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "non_candidate",
+          "reason": "Back panel edges stay concealed inside the carcass."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "shelf-1",
+      "sourceGeometryPartIds": [
+        "shelf-1-x"
+      ],
+      "label": "Shelf 1",
+      "partType": "shelf-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "shelves",
+      "materialParamKey": "materials.shelves",
+      "thicknessKey": "shelfThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "interior_shelf_top",
+        "secondaryFaceRole": "interior_shelf_bottom",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Shelf front edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Shelf rear edge resolves toward the back panel zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "shelf-2",
+      "sourceGeometryPartIds": [
+        "shelf-2-x"
+      ],
+      "label": "Shelf 2",
+      "partType": "shelf-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "shelves",
+      "materialParamKey": "materials.shelves",
+      "thicknessKey": "shelfThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "interior_shelf_top",
+        "secondaryFaceRole": "interior_shelf_bottom",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Shelf front edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Shelf rear edge resolves toward the back panel zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "shelf-3",
+      "sourceGeometryPartIds": [
+        "shelf-3-x"
+      ],
+      "label": "Shelf 3",
+      "partType": "shelf-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "shelves",
+      "materialParamKey": "materials.shelves",
+      "thicknessKey": "shelfThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 560,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xz",
+        "lengthAxis": "x",
+        "widthAxis": "z",
+        "thicknessAxis": "y",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "interior_shelf_top",
+        "secondaryFaceRole": "interior_shelf_bottom",
+        "visibleFaceRole": "front_edge_at_opening"
+      },
+      "sourceParamKeys": [
+        "width",
+        "depth",
+        "shelfThickness",
+        "shelfCount",
+        "shelfGaps",
+        "shelfAutoFit"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "front",
+          "eligibility": "candidate",
+          "reason": "Shelf front edge is visible at the opening."
+        },
+        {
+          "edgeId": "left",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "concealed",
+          "reason": "Shelf side edge is enclosed inside the carcass."
+        },
+        {
+          "edgeId": "back",
+          "eligibility": "concealed",
+          "reason": "Shelf rear edge resolves toward the back panel zone."
+        }
+      ],
+      "hardwareAnchors": []
+    },
+    {
+      "partId": "door-front-left",
+      "sourceGeometryPartIds": [
+        "door-front-z"
+      ],
+      "label": "Door Front Left",
+      "partType": "door-front",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "front",
+      "materialKey": "fronts",
+      "materialParamKey": "materials.fronts",
+      "thicknessKey": "frontThicknessMm",
+      "dimensionsMm": {
+        "length": 558,
+        "width": 397,
+        "thickness": 19
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "y",
+        "widthAxis": "x",
+        "thicknessAxis": "z",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "visible_front_face",
+        "secondaryFaceRole": "carcass_facing_back_face",
+        "visibleFaceRole": "customer_visible_front"
+      },
+      "sourceParamKeys": [
+        "width",
+        "heightCarcass",
+        "plinthHeight",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "doorDouble"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "door-front-left.handle-mount",
+          "anchorType": "handle",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "door-handles",
+          "instanceIndex": 1,
+          "mountFace": "visible_front_face",
+          "sourceParamKeys": [
+            "handleComponentId",
+            "handlePositionMm",
+            "handleLengthMm"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "one handle per visible door front",
+            "rationale": "Swing shelf module exposes one handle location per door front."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "handleComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "door-front-left.hinge-cup-mount",
+          "anchorType": "hinge",
+          "anchorRole": "cup_preparation_zone",
+          "mountFace": "carcass_facing_back_face",
+          "relatedAnchorIds": [
+            "carcass-side-left.hinge-mount"
+          ],
+          "sourceParamKeys": [
+            "hingeCountPerDoor",
+            "hingeTopOffsetMm",
+            "hingeBottomOffsetMm"
+          ],
+          "countRule": {
+            "mode": "fixed_per_part",
+            "quantity": 2,
+            "formula": "hingeCountPerDoor",
+            "rationale": "Hinge cup preparation count follows hingeCountPerDoor."
+          },
+          "componentPolicy": {
+            "mode": "fixed_component",
+            "componentId": "cmp.hinge.clip_on.softclose",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "door-front-right",
+      "sourceGeometryPartIds": [
+        "door-front-x"
+      ],
+      "label": "Door Front Right",
+      "partType": "door-front",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "front",
+      "materialKey": "fronts",
+      "materialParamKey": "materials.fronts",
+      "thicknessKey": "frontThicknessMm",
+      "dimensionsMm": {
+        "length": 558,
+        "width": 397,
+        "thickness": 19
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "y",
+        "widthAxis": "x",
+        "thicknessAxis": "z",
+        "grainAxis": "length"
+      },
+      "faceRole": {
+        "primaryFaceRole": "visible_front_face",
+        "secondaryFaceRole": "carcass_facing_back_face",
+        "visibleFaceRole": "customer_visible_front"
+      },
+      "sourceParamKeys": [
+        "width",
+        "heightCarcass",
+        "plinthHeight",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "doorDouble"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "candidate",
+          "reason": "Door perimeter edge remains visible."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "door-front-right.handle-mount",
+          "anchorType": "handle",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "door-handles",
+          "instanceIndex": 2,
+          "mountFace": "visible_front_face",
+          "sourceParamKeys": [
+            "handleComponentId",
+            "handlePositionMm",
+            "handleLengthMm"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "one handle per visible door front",
+            "rationale": "Swing shelf module exposes one handle location per door front."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "handleComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "door-front-right.hinge-cup-mount",
+          "anchorType": "hinge",
+          "anchorRole": "cup_preparation_zone",
+          "mountFace": "carcass_facing_back_face",
+          "relatedAnchorIds": [
+            "carcass-side-right.hinge-mount"
+          ],
+          "sourceParamKeys": [
+            "hingeCountPerDoor",
+            "hingeTopOffsetMm",
+            "hingeBottomOffsetMm"
+          ],
+          "countRule": {
+            "mode": "fixed_per_part",
+            "quantity": 2,
+            "formula": "hingeCountPerDoor",
+            "rationale": "Hinge cup preparation count follows hingeCountPerDoor."
+          },
+          "componentPolicy": {
+            "mode": "fixed_component",
+            "componentId": "cmp.hinge.clip_on.softclose",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    },
+    {
+      "partId": "plinth-front",
+      "sourceGeometryPartIds": [
+        "plinth"
+      ],
+      "label": "Plinth Front",
+      "partType": "plinth-panel",
+      "boardCandidate": true,
+      "edgeBandCandidate": true,
+      "materialRole": "body",
+      "materialKey": "corpus",
+      "materialParamKey": "materials.corpus",
+      "thicknessKey": "boardThickness",
+      "dimensionsMm": {
+        "length": 764,
+        "width": 100,
+        "thickness": 18
+      },
+      "orientation": {
+        "panelPlane": "xy",
+        "lengthAxis": "x",
+        "widthAxis": "y",
+        "thicknessAxis": "z",
+        "grainAxis": "width"
+      },
+      "faceRole": {
+        "primaryFaceRole": "visible_plinth_front_face",
+        "secondaryFaceRole": "plinth_rear_face",
+        "visibleFaceRole": "customer_visible_front"
+      },
+      "sourceParamKeys": [
+        "width",
+        "plinthHeight",
+        "boardThickness"
+      ],
+      "edgeTargets": [
+        {
+          "edgeId": "left",
+          "eligibility": "candidate",
+          "reason": "Plinth side return may stay visible at run termination."
+        },
+        {
+          "edgeId": "right",
+          "eligibility": "candidate",
+          "reason": "Plinth side return may stay visible at run termination."
+        },
+        {
+          "edgeId": "top",
+          "eligibility": "candidate",
+          "reason": "Top plinth edge is visible on the front elevation."
+        },
+        {
+          "edgeId": "bottom",
+          "eligibility": "non_candidate",
+          "reason": "Bottom edge resolves into the floor zone."
+        }
+      ],
+      "hardwareAnchors": [
+        {
+          "anchorId": "plinth-front.clip-front-left",
+          "anchorType": "plinth_clip",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "plinth-clips",
+          "instanceIndex": 1,
+          "mountFace": "plinth_rear_face",
+          "relatedAnchorIds": [
+            "carcass-bottom.leg-front-left"
+          ],
+          "sourceParamKeys": [
+            "clipComponentId",
+            "plinthSetbackMm",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit front-left plinth clip anchor",
+            "rationale": "Straight shelf module clips the plinth to the front-left leg."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "clipComponentId",
+            "bomDisposition": "separate_item"
+          }
+        },
+        {
+          "anchorId": "plinth-front.clip-front-right",
+          "anchorType": "plinth_clip",
+          "anchorRole": "counted_instance",
+          "instanceGroup": "plinth-clips",
+          "instanceIndex": 2,
+          "mountFace": "plinth_rear_face",
+          "relatedAnchorIds": [
+            "carcass-bottom.leg-front-right"
+          ],
+          "sourceParamKeys": [
+            "clipComponentId",
+            "plinthSetbackMm",
+            "plinthHeight"
+          ],
+          "countRule": {
+            "mode": "explicit_instance",
+            "quantity": 1,
+            "formula": "explicit front-right plinth clip anchor",
+            "rationale": "Straight shelf module clips the plinth to the front-right leg."
+          },
+          "componentPolicy": {
+            "mode": "param_component",
+            "componentParamKey": "clipComponentId",
+            "bomDisposition": "separate_item"
+          }
+        }
+      ]
+    }
+  ],
+  "hardwareRules": {
+    "hinges": {
+      "rulesByDoor": [
+        {
+          "doorPartId": "door-front-left",
+          "hingeCount": 2,
+          "formula": "hingeCountPerDoor",
+          "rationale": "Swing shelf door hinge count follows hingeCountPerDoor.",
+          "hingeComponentId": "cmp.hinge.clip_on.softclose",
+          "mountingPlatePolicy": "included_in_hinge_assembly",
+          "sourceAnchorIds": [
+            "door-front-left.hinge-cup-mount",
+            "carcass-side-left.hinge-mount"
+          ]
+        },
+        {
+          "doorPartId": "door-front-right",
+          "hingeCount": 2,
+          "formula": "hingeCountPerDoor",
+          "rationale": "Swing shelf door hinge count follows hingeCountPerDoor.",
+          "hingeComponentId": "cmp.hinge.clip_on.softclose",
+          "mountingPlatePolicy": "included_in_hinge_assembly",
+          "sourceAnchorIds": [
+            "door-front-right.hinge-cup-mount",
+            "carcass-side-right.hinge-mount"
+          ]
+        }
+      ]
+    },
+    "handles": {
+      "componentParamKey": "handleComponentId",
+      "placementParamKeys": [
+        "handlePositionMm",
+        "doorHandleOffsetFromSplitMm"
+      ],
+      "screwPolicySource": "component_definition",
+      "sourceAnchorIds": [
+        "door-front-left.handle-mount",
+        "door-front-right.handle-mount"
+      ]
+    },
+    "legs": {
+      "componentParamKey": "legComponentId",
+      "countRule": "4",
+      "rationale": "Straight shelf module exports a canonical four-leg support set.",
+      "sourceAnchorIds": [
+        "carcass-bottom.leg-front-left",
+        "carcass-bottom.leg-front-right",
+        "carcass-bottom.leg-rear-left",
+        "carcass-bottom.leg-rear-right"
+      ]
+    },
+    "plinthClips": {
+      "componentId": "cmp.clip.plinth.standard",
+      "countRule": "2",
+      "rationale": "Straight shelf module exports two front plinth clips.",
+      "sourceAnchorIds": [
+        "plinth-front.clip-front-left",
+        "plinth-front.clip-front-right"
+      ]
+    },
+    "carcassFasteners": {
+      "policy": "excluded_until_joinery_metadata",
+      "reason": "No explicit carcass joinery anchors or fastener count rules are exported for swing_shelves_low."
+    }
+  },
+  "summary": {
+    "totalParts": 11,
+    "boardCandidates": 11,
+    "edgeBandCandidates": 10,
+    "hardwareAnchorCount": 12
+  }
+}

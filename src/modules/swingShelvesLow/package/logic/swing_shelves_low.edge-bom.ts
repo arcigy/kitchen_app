@@ -1,0 +1,1299 @@
+export const moduleType = "swing_shelves_low";
+export const displayName = "Shelf Doors";
+export const edgeBomSnapshot = {
+  "schemaVersion": "module-edge-bom.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "generatedAt": "2026-04-24T16:38:04.892Z",
+  "items": [
+    {
+      "id": "carcass-side-left-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Left front Edge Band",
+      "description": "Carcass Side Left front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.562,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-left).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.562
+      },
+      "materialSlotId": "left-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-left"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-side-right-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Side Right front Edge Band",
+      "description": "Carcass Side Right front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.562,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-side-right).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.562
+      },
+      "materialSlotId": "right-side",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-side-right"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front vertical edge is visible at the cabinet opening."
+      ]
+    },
+    {
+      "id": "carcass-bottom-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Bottom front Edge Band",
+      "description": "Carcass Bottom front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-bottom).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "bottom-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-bottom"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front edge remains visible above the plinth line."
+      ]
+    },
+    {
+      "id": "carcass-top-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Carcass Top front Edge Band",
+      "description": "Carcass Top front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(carcass-top).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "top-panel",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "carcass-top"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Front top edge is visible at the opening line."
+      ]
+    },
+    {
+      "id": "shelf-1-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 1 front Edge Band",
+      "description": "Shelf 1 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-1).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-1"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "shelf-2-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 2 front Edge Band",
+      "description": "Shelf 2 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-2).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-2"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "shelf-3-edge-front",
+      "itemType": "edge_band",
+      "category": "carcass",
+      "name": "Shelf 3 front Edge Band",
+      "description": "Shelf 3 front edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(shelf-3).edgeTargets.front",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "shelf",
+      "materialGroup": "shelf",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.shelf.abs.white.2",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Shelf Edge Bands",
+        "family": "shelf",
+        "name": "ABS Shelf White 2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 2,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.shelf.abs.white.2",
+        "displayName": "ABS Shelf Edge White 2 mm",
+        "group": "shelf",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.shelf.abs.white.2",
+        "sourceCatalogId": "mat.edge.shelf.abs.white.2",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "shelf-3"
+      ],
+      "notes": [
+        "edgeId=front",
+        "reason=Shelf front edge is visible at the opening."
+      ]
+    },
+    {
+      "id": "door-front-left-edge-left",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Left left Edge Band",
+      "description": "Door Front Left left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.558,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-left).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.558
+      },
+      "materialSlotId": "door-front-z",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-left"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-left-edge-right",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Left right Edge Band",
+      "description": "Door Front Left right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.558,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-left).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.558
+      },
+      "materialSlotId": "door-front-z",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-left"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-left-edge-top",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Left top Edge Band",
+      "description": "Door Front Left top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.397,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-left).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.397
+      },
+      "materialSlotId": "door-front-z",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-left"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-left-edge-bottom",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Left bottom Edge Band",
+      "description": "Door Front Left bottom edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.397,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-left).edgeTargets.bottom",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.397
+      },
+      "materialSlotId": "door-front-z",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-left"
+      ],
+      "notes": [
+        "edgeId=bottom",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-right-edge-left",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Right left Edge Band",
+      "description": "Door Front Right left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.558,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-right).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.558
+      },
+      "materialSlotId": "door-front-x",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-right"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-right-edge-right",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Right right Edge Band",
+      "description": "Door Front Right right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.558,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-right).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.558
+      },
+      "materialSlotId": "door-front-x",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-right"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-right-edge-top",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Right top Edge Band",
+      "description": "Door Front Right top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.397,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-right).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.397
+      },
+      "materialSlotId": "door-front-x",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-right"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "door-front-right-edge-bottom",
+      "itemType": "edge_band",
+      "category": "front",
+      "name": "Door Front Right bottom Edge Band",
+      "description": "Door Front Right bottom edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.397,
+      "formulas": {
+        "edgeLengthMm": "partMap(door-front-right).edgeTargets.bottom",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.397
+      },
+      "materialSlotId": "door-front-x",
+      "materialGroup": "front",
+      "material": {
+        "role": "front",
+        "key": "mat.edge.front.abs.white.1",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Front Edge Bands",
+        "family": "front",
+        "name": "ABS Front White 1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Supermat Match",
+        "defaultThicknessMm": 1,
+        "availableThicknessesMm": [
+          1,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.front.abs.white.1",
+        "displayName": "ABS Front Edge White 1 mm",
+        "group": "front",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.front.abs.white.1",
+        "sourceCatalogId": "mat.edge.front.abs.white.1",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "door-front-right"
+      ],
+      "notes": [
+        "edgeId=bottom",
+        "reason=Door perimeter edge remains visible."
+      ]
+    },
+    {
+      "id": "plinth-front-edge-left",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front left Edge Band",
+      "description": "Plinth Front left edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.1,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.left",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=left",
+        "reason=Plinth side return may stay visible at run termination."
+      ]
+    },
+    {
+      "id": "plinth-front-edge-right",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front right Edge Band",
+      "description": "Plinth Front right edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.1,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.right",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.1
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=right",
+        "reason=Plinth side return may stay visible at run termination."
+      ]
+    },
+    {
+      "id": "plinth-front-edge-top",
+      "itemType": "edge_band",
+      "category": "plinth",
+      "name": "Plinth Front top Edge Band",
+      "description": "Plinth Front top edge band",
+      "pricingBasis": "linear_length",
+      "pricingUnit": "lm",
+      "quantity": 1,
+      "pricingQuantity": 0.764,
+      "formulas": {
+        "edgeLengthMm": "partMap(plinth-front).edgeTargets.top",
+        "quantity": "1",
+        "pricingQuantity": "(edgeLengthMm * quantity) / 1000"
+      },
+      "metrics": {
+        "edgeLengthLm": 0.764
+      },
+      "materialSlotId": "plinth",
+      "materialGroup": "body",
+      "material": {
+        "role": "body",
+        "key": "mat.edge.body.abs.white.0_8",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "entityType": "material",
+        "materialType": "edge",
+        "category": "Body Edge Bands",
+        "family": "body",
+        "name": "ABS Body White 0.8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "abs",
+        "decor": "White",
+        "color": "White",
+        "finish": "Satin",
+        "defaultThicknessMm": 0.8,
+        "availableThicknessesMm": [
+          0.5,
+          0.8,
+          2
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.62,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      },
+      "catalogRef": {
+        "entityType": "material",
+        "catalogId": "mat.edge.body.abs.white.0_8",
+        "displayName": "ABS Body Edge White 0.8 mm",
+        "group": "body",
+        "pricingBasis": "linear_length",
+        "pricingUnit": "lm"
+      },
+      "pricingLookup": {
+        "catalogType": "edge_band",
+        "key": "mat.edge.body.abs.white.0_8",
+        "sourceCatalogId": "mat.edge.body.abs.white.0_8",
+        "sourceEntityType": "material",
+        "resolution": "catalog_id"
+      },
+      "sourcePartIds": [
+        "plinth-front"
+      ],
+      "notes": [
+        "edgeId=top",
+        "reason=Top plinth edge is visible on the front elevation."
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 18,
+    "edgeLengthLm": 9.728
+  },
+  "notes": [
+    "carcass-side-left: skipped back(concealed), top(concealed), bottom(concealed) based on explicit edgeTargets metadata.",
+    "carcass-side-right: skipped back(concealed), top(concealed), bottom(concealed) based on explicit edgeTargets metadata.",
+    "carcass-bottom: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "carcass-top: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "shelf-1: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "shelf-2: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "shelf-3: skipped left(concealed), right(concealed), back(concealed) based on explicit edgeTargets metadata.",
+    "plinth-front: skipped bottom(non_candidate) based on explicit edgeTargets metadata."
+  ]
+} as const;
+
+export function generateEdgeBom() {
+  return edgeBomSnapshot;
+}
+
+export function summarizeEdgeBom() {
+  return edgeBomSnapshot.summary;
+}

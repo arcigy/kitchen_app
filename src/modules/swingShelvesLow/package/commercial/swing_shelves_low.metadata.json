@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "module-commercial-summary.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "quantity": 1,
+  "pricingEnabled": true,
+  "finalPriceEur": 204.93,
+  "priceSource": "calculated",
+  "bomItems": 33
+}

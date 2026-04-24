@@ -1,0 +1,1 @@
+{type:"swing_shelves_low",label:"Shelf Doors",defaultParams:()=>swingShelvesLowDefaultsV2(),build:n=>swingShelvesLowBuildV2(n),createControls:(n,e,t)=>swingShelvesLowControlsV2(n,e,t),capabilities:{hasWorktop:!0,supportsKitchenContextDimensions:!0,supportsKitchenContextMaterials:!0}}

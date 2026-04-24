@@ -1,0 +1,1064 @@
+{
+  "schemaVersion": "module-materials.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "paramsMaterials": {
+    "bodyKey": "mat.board.body.dtd.white.18",
+    "bodyColor": "#f3f3ef",
+    "frontKey": "mat.board.front.mdf.white_supermat.19",
+    "frontColor": "#d7d9dd"
+  },
+  "roleAssignments": {
+    "body": {
+      "bodyKey": "mat.board.body.dtd.white.18",
+      "bodyColor": "#f3f3ef"
+    },
+    "front": {
+      "frontKey": "mat.board.front.mdf.white_supermat.19",
+      "frontColor": "#d7d9dd"
+    },
+    "drawer": null
+  },
+  "livePartMaterials": [
+    {
+      "partName": "leftSide",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "depth",
+        "plinthHeight",
+        "boardThickness",
+        "worktopThicknessMm"
+      ],
+      "materials": [
+        {
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "rightSide",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "depth",
+        "plinthHeight",
+        "boardThickness",
+        "worktopThicknessMm"
+      ],
+      "materials": [
+        {
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "bottom",
+      "paramKeys": [
+        "width",
+        "depth",
+        "boardThickness",
+        "plinthHeight"
+      ],
+      "materials": [
+        {
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "top",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "depth",
+        "boardThickness",
+        "worktopThicknessMm"
+      ],
+      "materials": [
+        {
+          "name": "DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "back",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "depth",
+        "boardThickness",
+        "backThickness",
+        "backGrooveDepthMm",
+        "backGrooveWidthMm",
+        "backGrooveClearanceMm",
+        "plinthHeight"
+      ],
+      "materials": [
+        {
+          "name": "HDF Grey 6 mm",
+          "colorHex": "#c8ccd1",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "plinth",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "shelf-1-x",
+      "paramKeys": [
+        "shelfCount",
+        "shelfThickness",
+        "shelfAutoFit",
+        "shelfGaps",
+        "heightCarcass",
+        "depth"
+      ],
+      "materials": [
+        {
+          "name": "Shelf DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "shelf-2-x",
+      "paramKeys": [
+        "shelfCount",
+        "shelfThickness",
+        "shelfAutoFit",
+        "shelfGaps",
+        "heightCarcass",
+        "depth"
+      ],
+      "materials": [
+        {
+          "name": "Shelf DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "shelf-3-x",
+      "paramKeys": [
+        "shelfCount",
+        "shelfThickness",
+        "shelfAutoFit",
+        "shelfGaps",
+        "heightCarcass",
+        "depth"
+      ],
+      "materials": [
+        {
+          "name": "Shelf DTD White 18 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "doorDouble",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "MDF White Supermat 19 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_handle",
+      "paramKeys": [
+        "handleComponentId",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "materials": [
+        {
+          "name": "Bar Handle 160 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_1",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "Clip-On Hinge Softclose",
+          "colorHex": "#aeb3bb",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_1_cup",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_1_arm",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_2",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "Clip-On Hinge Softclose",
+          "colorHex": "#aeb3bb",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_2_cup",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_z_hinge_2_arm",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x",
+      "paramKeys": [
+        "width",
+        "heightCarcass",
+        "frontThicknessMm",
+        "sideGap",
+        "topGap",
+        "bottomGap",
+        "frontGap",
+        "doorDouble",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "MDF White Supermat 19 mm",
+          "colorHex": "#f3f3ef",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_handle",
+      "paramKeys": [
+        "handleComponentId",
+        "handlePositionMm",
+        "handleLengthMm",
+        "handleSizeMm",
+        "handleProjectionMm"
+      ],
+      "materials": [
+        {
+          "name": "Bar Handle 160 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_1",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "Clip-On Hinge Softclose",
+          "colorHex": "#aeb3bb",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_1_cup",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_1_arm",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_2",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": "Clip-On Hinge Softclose",
+          "colorHex": "#aeb3bb",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_2_cup",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "door_front_x_hinge_2_arm",
+      "paramKeys": [
+        "hingeComponentId",
+        "hingeCountPerDoor",
+        "hingeTopOffsetMm",
+        "hingeBottomOffsetMm",
+        "doorOpen"
+      ],
+      "materials": [
+        {
+          "name": null,
+          "colorHex": "#3a3f4b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_FL",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_FL_clip",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness",
+        "clipComponentId",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Plinth Clip Standard",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_FR",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_FR_clip",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "boardThickness",
+        "clipComponentId",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Plinth Clip Standard",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_BL",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_BR",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "partName": "leg_BC",
+      "paramKeys": [
+        "width",
+        "plinthHeight",
+        "plinthSetbackMm",
+        "depth",
+        "legComponentId"
+      ],
+      "materials": [
+        {
+          "name": "Adjustable Leg 100 mm Black",
+          "colorHex": "#1e232b",
+          "transparent": false,
+          "opacity": 1
+        }
+      ]
+    }
+  ],
+  "slotAssignments": [
+    {
+      "slotId": "back-panel",
+      "partId": "back-panel",
+      "label": "Back Panel",
+      "description": "Shared legacy assignment for back panels.",
+      "boardFamily": "back",
+      "thicknessParameterKey": "backThickness",
+      "assignedMaterial": {
+        "role": "back",
+        "key": "mat.board.back.hdf.grey.6",
+        "catalogId": "mat.board.back.hdf.grey.6",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Back Panels",
+        "family": "back",
+        "name": "HDF Grey 6",
+        "displayName": "HDF Grey 6 mm",
+        "colorHex": "#c8ccd1",
+        "baseMaterial": "hdf",
+        "decor": "Grey",
+        "color": "Grey",
+        "finish": "Painted Smooth",
+        "defaultThicknessMm": 6,
+        "availableThicknessesMm": [
+          6,
+          8
+        ],
+        "preview": {
+          "colorHex": "#c8ccd1",
+          "roughness": 0.72,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "bottom-panel",
+      "partId": "bottom-panel",
+      "label": "Bottom Panel",
+      "description": "Shared legacy assignment for bottom panels.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "door-front-x",
+      "partId": "door-front-x",
+      "label": "Door Front X",
+      "description": "Material assignment for the X-direction door front.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.19",
+        "catalogId": "mat.board.front.mdf.white_supermat.19",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 19",
+        "displayName": "MDF White Supermat 19 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 19,
+        "availableThicknessesMm": [
+          18,
+          19,
+          22
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "door-front-z",
+      "partId": "door-front-z",
+      "label": "Door Front Z",
+      "description": "Material assignment for the Z-direction door front.",
+      "boardFamily": "front",
+      "thicknessParameterKey": "frontThicknessMm",
+      "assignedMaterial": {
+        "role": "front",
+        "key": "mat.board.front.mdf.white_supermat.19",
+        "catalogId": "mat.board.front.mdf.white_supermat.19",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Front Boards",
+        "family": "front",
+        "name": "MDF White Supermat 19",
+        "displayName": "MDF White Supermat 19 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "mdf",
+        "decor": "White Supermat",
+        "color": "White",
+        "finish": "Supermat Lacquer",
+        "defaultThicknessMm": 19,
+        "availableThicknessesMm": [
+          18,
+          19,
+          22
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.9,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "left-side",
+      "partId": "left-side",
+      "label": "Left Side Panel",
+      "description": "Material assignment for the left side panel.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "plinth",
+      "partId": "plinth",
+      "label": "Plinth",
+      "description": "Shared legacy assignment for plinth panels.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "right-side",
+      "partId": "right-side",
+      "label": "Right Side Panel",
+      "description": "Material assignment for the right side panel.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "shelf",
+      "partId": "shelf",
+      "label": "Shelves",
+      "description": "Shared material assignment for internal shelves.",
+      "boardFamily": "shelf",
+      "thicknessParameterKey": "shelfThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.shelf.dtd.white.18",
+        "catalogId": "mat.board.shelf.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Shelf Boards",
+        "family": "shelf",
+        "name": "Shelf DTD White 18",
+        "displayName": "Shelf DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          18,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    },
+    {
+      "slotId": "top-panel",
+      "partId": "top-panel",
+      "label": "Top Panel",
+      "description": "Shared legacy assignment for top panels.",
+      "boardFamily": "body",
+      "thicknessParameterKey": "boardThickness",
+      "assignedMaterial": {
+        "role": "body",
+        "key": "mat.board.body.dtd.white.18",
+        "catalogId": "mat.board.body.dtd.white.18",
+        "entityType": "material",
+        "materialType": "board",
+        "category": "Body Boards",
+        "family": "body",
+        "name": "DTD White 18",
+        "displayName": "DTD White 18 mm",
+        "colorHex": "#f3f3ef",
+        "baseMaterial": "dtd",
+        "decor": "White",
+        "color": "White",
+        "finish": "Melamine",
+        "defaultThicknessMm": 18,
+        "availableThicknessesMm": [
+          16,
+          18,
+          20,
+          25
+        ],
+        "preview": {
+          "colorHex": "#f3f3ef",
+          "roughness": 0.78,
+          "metalness": 0.02
+        },
+        "assignmentSource": "catalog"
+      }
+    }
+  ],
+  "componentAssignments": [
+    {
+      "assignmentKey": "door-handles",
+      "label": "Bar Handle 160 mm Black",
+      "sourceRule": "Resolved from handleComponentId / handleType selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.handle.bar.160.black",
+        "componentType": "handle",
+        "geometryId": "geo.handle.bar.160",
+        "name": "Bar Handle 160 Black",
+        "displayName": "Bar Handle 160 mm Black",
+        "brand": "Forma",
+        "series": "Barline",
+        "variant": "160 mm",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": 160,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "adjustable-legs",
+      "label": "Adjustable Leg 100 mm Black",
+      "sourceRule": "Resolved from legComponentId / plinthHeight selection.",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.leg.adjustable.100.black",
+        "componentType": "leg",
+        "geometryId": "geo.leg.adjustable.100",
+        "name": "Adjustable Leg 100 Black",
+        "displayName": "Adjustable Leg 100 mm Black",
+        "brand": "BaseTech",
+        "series": "Level",
+        "variant": "100 mm adjustable",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": 100,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    },
+    {
+      "assignmentKey": "door-hinges",
+      "label": "Clip-On Hinge Softclose",
+      "sourceRule": "Resolved from hingeComponentId swing_shelves_low selection (Hinge Component / Standard Hinge).",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.hinge.clip_on.softclose",
+        "componentType": "hinge",
+        "geometryId": "geo.hinge.clip_on.softclose",
+        "name": "Clip-On Hinge Softclose",
+        "displayName": "Clip-On Hinge Softclose",
+        "brand": "HingeWorks",
+        "series": "Clip",
+        "variant": "110 degree softclose",
+        "color": "Nickel",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#aeb3bb",
+          "roughness": 0.25,
+          "metalness": 0.88
+        }
+      }
+    },
+    {
+      "assignmentKey": "plinth-clips",
+      "label": "Plinth Clip Standard",
+      "sourceRule": "Resolved from clipComponentId swing_shelves_low selection (Clip Component / Plinth Clip).",
+      "component": {
+        "entityType": "component",
+        "catalogId": "cmp.clip.plinth.standard",
+        "componentType": "plinth_clip",
+        "geometryId": "geo.plinth_clip.standard",
+        "name": "Plinth Clip Standard",
+        "displayName": "Plinth Clip Standard",
+        "brand": "BaseTech",
+        "series": "ClipFix",
+        "variant": "Standard clip",
+        "color": "Black",
+        "pricingBasis": "piece",
+        "pricingUnit": "pcs",
+        "defaultQuantity": 1,
+        "nominalLengthMm": null,
+        "nominalHeightMm": null,
+        "preview": {
+          "colorHex": "#1e232b",
+          "roughness": 0.45,
+          "metalness": 0.55
+        }
+      }
+    }
+  ],
+  "notes": [
+    "Snapshot of the current material state at export time.",
+    "Includes exact board slot assignments and current component selections used by the commercial BOM exporter.",
+    "Includes live mesh material captures from the preview runtime."
+  ]
+}

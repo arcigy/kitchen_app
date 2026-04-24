@@ -1,0 +1,1325 @@
+{
+  "schemaVersion": "module-live-state.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "exportedAt": "2026-04-24T16:38:04.892Z",
+  "params": {
+    "type": "swing_shelves_low",
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "base",
+    "requiresWorktop": true,
+    "worktopThicknessMm": 38,
+    "width": 800,
+    "height": 700,
+    "heightCarcass": 662,
+    "depth": 560,
+    "boardThickness": 18,
+    "shelfThickness": 18,
+    "backThickness": 6,
+    "backGrooveDepthMm": 8,
+    "backGrooveWidthMm": 8,
+    "backGrooveOffsetMm": 12,
+    "backGrooveClearanceMm": 1,
+    "frontThicknessMm": 19,
+    "frontGap": 2,
+    "sideGap": 2,
+    "topGap": 2,
+    "bottomGap": 2,
+    "shelfCount": 4,
+    "shelfAutoFit": true,
+    "shelfGaps": [
+      123,
+      123,
+      123
+    ],
+    "doorDouble": true,
+    "doorOpen": false,
+    "hingeCountPerDoor": 2,
+    "hingeTopOffsetMm": 110,
+    "hingeBottomOffsetMm": 110,
+    "handlePositionMm": 60,
+    "clipComponentId": "cmp.clip.plinth.standard",
+    "legComponentId": "cmp.leg.adjustable.100.black",
+    "plinthHeight": 100,
+    "plinthSetbackMm": 60,
+    "materials": {
+      "bodyKey": "mat.board.body.dtd.white.18",
+      "bodyColor": "#f3f3ef",
+      "frontKey": "mat.board.front.mdf.white_supermat.19",
+      "frontColor": "#d7d9dd"
+    },
+    "handleComponentId": "cmp.handle.bar.160.black",
+    "handleType": "bar",
+    "handleLengthMm": 160,
+    "handleSizeMm": 12,
+    "handleProjectionMm": 14,
+    "hingeComponentId": "cmp.hinge.clip_on.softclose"
+  },
+  "systemParameters": {
+    "typeId": "swing_shelves_low__type",
+    "type": "swing_shelves_low",
+    "displayName": "Shelf Doors",
+    "family": "base",
+    "code": null,
+    "variant": "double_door",
+    "version": "1.0.0",
+    "widthMm": 800,
+    "heightMm": 700,
+    "depthMm": 560,
+    "assemblyContext": "kitchen",
+    "kitchenModuleRole": "base",
+    "requiresWorktop": true,
+    "positionXmm": 0,
+    "positionYmm": 0,
+    "positionZmm": 0,
+    "rotationZDeg": 0,
+    "customPriceOverride": null,
+    "pricingEnabled": true,
+    "priceSource": "calculated",
+    "costOverride": null,
+    "quantity": 1,
+    "isActive": true,
+    "isVisible": true,
+    "isLocked": false,
+    "isValid": true,
+    "validationErrors": [],
+    "notes": null,
+    "tags": [
+      "base",
+      "swing_shelves_low"
+    ],
+    "createdAt": "2026-04-24T16:38:04.892Z",
+    "updatedAt": "2026-04-24T16:38:04.892Z",
+    "exportToIfc": true,
+    "ifcClass": "IfcFurniture",
+    "ifcPredefinedType": null,
+    "ifcName": "Shelf Doors",
+    "ifcDescription": "Shelf Doors (swing_shelves_low)",
+    "ifcObjectType": "base",
+    "ifcTag": "swing_shelves_low__type",
+    "classificationCode": null,
+    "classificationSystem": null
+  },
+  "capabilities": {
+    "hasWorktop": true,
+    "supportsKitchenContextDimensions": true,
+    "supportsKitchenContextMaterials": true
+  },
+  "commercial": null,
+  "assets": null,
+  "liveRuntime": {
+    "moduleType": "swing_shelves_low",
+    "params": {
+      "type": "swing_shelves_low",
+      "width": 800,
+      "height": 700,
+      "heightCarcass": 662,
+      "worktopThicknessMm": 38,
+      "depth": 560,
+      "boardThickness": 18,
+      "shelfThickness": 18,
+      "backThickness": 6,
+      "backGrooveDepthMm": 8,
+      "backGrooveWidthMm": 8,
+      "backGrooveOffsetMm": 12,
+      "backGrooveClearanceMm": 1,
+      "plinthHeight": 100,
+      "plinthSetbackMm": 60,
+      "frontGap": 2,
+      "sideGap": 2,
+      "topGap": 2,
+      "bottomGap": 2,
+      "frontThicknessMm": 19,
+      "shelfCount": 4,
+      "shelfAutoFit": true,
+      "shelfGaps": [
+        123,
+        123,
+        123
+      ],
+      "doorDouble": true,
+      "doorOpen": false,
+      "hingeCountPerDoor": 2,
+      "hingeComponentId": "cmp.hinge.clip_on.softclose",
+      "hingeTopOffsetMm": 110,
+      "hingeBottomOffsetMm": 110,
+      "clipComponentId": "cmp.clip.plinth.standard",
+      "handleComponentId": "cmp.handle.bar.160.black",
+      "handleType": "bar",
+      "handlePositionMm": 60,
+      "handleLengthMm": 160,
+      "handleSizeMm": 12,
+      "handleProjectionMm": 14,
+      "assemblyContext": "kitchen",
+      "kitchenModuleRole": "base",
+      "legComponentId": "cmp.leg.adjustable.100.black",
+      "requiresWorktop": true,
+      "materials": {
+        "bodyMaterialId": 2,
+        "frontMaterialId": 3,
+        "drawerMaterialId": 5,
+        "bodyKey": "2",
+        "frontKey": "3",
+        "drawerKey": "5",
+        "bodyColor": "#f3f3ef",
+        "frontColor": "#d7d9dd",
+        "drawerColor": "#d7d9dd",
+        "backInsideColor": "#d7d9dd",
+        "bodyPresetId": "DTD1",
+        "frontPresetId": "DTD2",
+        "drawerPresetId": "DTD16",
+        "defaultTintColor": "#ffffff",
+        "defaultTintStrength": 0,
+        "partOverrides": {},
+        "bodyName": "DTD Grey",
+        "frontName": "MDF Front",
+        "drawerName": "Drawer Box Board"
+      }
+    },
+    "selectedPartName": null,
+    "importedModuleType": null,
+    "importedPackageKey": null,
+    "parts": [
+      {
+        "name": "leftSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "depth",
+          "plinthHeight",
+          "boardThickness",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": -391,
+          "y": 381,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 562,
+          "z": 560
+        },
+        "centerMm": {
+          "x": -391,
+          "y": 381,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "rightSide",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "depth",
+          "plinthHeight",
+          "boardThickness",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": 391,
+          "y": 381,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 562,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 391,
+          "y": 381,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "bottom",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "depth",
+          "boardThickness",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 109,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "top",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "depth",
+          "boardThickness",
+          "worktopThicknessMm"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 653,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 560
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 653,
+          "z": 0
+        },
+        "materials": [
+          {
+            "name": "DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "back",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "depth",
+          "boardThickness",
+          "backThickness",
+          "backGrooveDepthMm",
+          "backGrooveWidthMm",
+          "backGrooveClearanceMm",
+          "plinthHeight"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 388.5,
+          "z": -259
+        },
+        "sizeMm": {
+          "x": 779,
+          "y": 541,
+          "z": 6
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 388.5,
+          "z": -259
+        },
+        "materials": [
+          {
+            "name": "HDF Grey 6 mm",
+            "colorHex": "#c8ccd1",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "plinth",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 50,
+          "z": 211
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 100,
+          "z": 18
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 50,
+          "z": 211
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf-1-x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfThickness",
+          "shelfAutoFit",
+          "shelfGaps",
+          "heightCarcass",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 245,
+          "z": 8.5
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 525
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 245,
+          "z": 8.5
+        },
+        "materials": [
+          {
+            "name": "Shelf DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf-2-x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfThickness",
+          "shelfAutoFit",
+          "shelfGaps",
+          "heightCarcass",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 381,
+          "z": 8.5
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 525
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 381,
+          "z": 8.5
+        },
+        "materials": [
+          {
+            "name": "Shelf DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "shelf-3-x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "shelfCount",
+          "shelfThickness",
+          "shelfAutoFit",
+          "shelfGaps",
+          "heightCarcass",
+          "depth"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 517,
+          "z": 8.5
+        },
+        "sizeMm": {
+          "x": 764,
+          "y": 18,
+          "z": 525
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 517,
+          "z": 8.5
+        },
+        "materials": [
+          {
+            "name": "Shelf DTD White 18 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "frontThicknessMm",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "frontGap",
+          "doorDouble",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 198.5,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 397,
+          "y": 558,
+          "z": 19
+        },
+        "centerMm": {
+          "x": -199.5,
+          "y": 381,
+          "z": 289.5
+        },
+        "materials": [
+          {
+            "name": "MDF White Supermat 19 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_handle",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": 277,
+          "y": 219,
+          "z": 17.5
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": -121,
+          "y": 600,
+          "z": 307
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": 169,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 550,
+          "z": 277.25
+        },
+        "materials": [
+          {
+            "name": "Clip-On Hinge Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_1_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": 169,
+          "z": -3.775
+        },
+        "sizeMm": {
+          "x": 34.468,
+          "y": 35,
+          "z": 10.45
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 550,
+          "z": 285.725
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_1_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": 169,
+          "z": -28.5
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 12,
+          "z": 30
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 550,
+          "z": 261
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": -169,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 212,
+          "z": 277.25
+        },
+        "materials": [
+          {
+            "name": "Clip-On Hinge Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_2_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": -169,
+          "z": -3.775
+        },
+        "sizeMm": {
+          "x": 34.468,
+          "y": 35,
+          "z": 10.45
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 212,
+          "z": 285.725
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_z_hinge_2_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": 37,
+          "y": -169,
+          "z": -28.5
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 12,
+          "z": 30
+        },
+        "centerMm": {
+          "x": -361,
+          "y": 212,
+          "z": 261
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "heightCarcass",
+          "frontThicknessMm",
+          "sideGap",
+          "topGap",
+          "bottomGap",
+          "frontGap",
+          "doorDouble",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -198.5,
+          "y": 0,
+          "z": 0
+        },
+        "sizeMm": {
+          "x": 397,
+          "y": 558,
+          "z": 19
+        },
+        "centerMm": {
+          "x": 199.5,
+          "y": 381,
+          "z": 289.5
+        },
+        "materials": [
+          {
+            "name": "MDF White Supermat 19 mm",
+            "colorHex": "#f3f3ef",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_handle",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "handleComponentId",
+          "handlePositionMm",
+          "handleLengthMm",
+          "handleSizeMm",
+          "handleProjectionMm"
+        ],
+        "positionMm": {
+          "x": -277,
+          "y": 219,
+          "z": 17.5
+        },
+        "sizeMm": {
+          "x": 160,
+          "y": 12,
+          "z": 14
+        },
+        "centerMm": {
+          "x": 121,
+          "y": 600,
+          "z": 307
+        },
+        "materials": [
+          {
+            "name": "Bar Handle 160 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_1",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": 169,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 550,
+          "z": 277.25
+        },
+        "materials": [
+          {
+            "name": "Clip-On Hinge Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_1_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": 169,
+          "z": -3.775
+        },
+        "sizeMm": {
+          "x": 34.468,
+          "y": 35,
+          "z": 10.45
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 550,
+          "z": 285.725
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_1_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": 169,
+          "z": -28.5
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 12,
+          "z": 30
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 550,
+          "z": 261
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_2",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": -169,
+          "z": -12.25
+        },
+        "sizeMm": {
+          "x": 62,
+          "y": 34,
+          "z": 2.5
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 212,
+          "z": 277.25
+        },
+        "materials": [
+          {
+            "name": "Clip-On Hinge Softclose",
+            "colorHex": "#aeb3bb",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_2_cup",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": -169,
+          "z": -3.775
+        },
+        "sizeMm": {
+          "x": 34.468,
+          "y": 35,
+          "z": 10.45
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 212,
+          "z": 285.725
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "door_front_x_hinge_2_arm",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "hingeComponentId",
+          "hingeCountPerDoor",
+          "hingeTopOffsetMm",
+          "hingeBottomOffsetMm",
+          "doorOpen"
+        ],
+        "positionMm": {
+          "x": -37,
+          "y": -169,
+          "z": -28.5
+        },
+        "sizeMm": {
+          "x": 18,
+          "y": 12,
+          "z": 30
+        },
+        "centerMm": {
+          "x": 361,
+          "y": 212,
+          "z": 261
+        },
+        "materials": [
+          {
+            "name": null,
+            "colorHex": "#3a3f4b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -350,
+          "y": 50,
+          "z": 186
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -350,
+          "y": 50,
+          "z": 186
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FL_clip",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness",
+          "clipComponentId",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -350,
+          "y": 40,
+          "z": 186
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 49.463
+        },
+        "centerMm": {
+          "x": -350,
+          "y": 40,
+          "z": 190.268
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 350,
+          "y": 50,
+          "z": 186
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 350,
+          "y": 50,
+          "z": 186
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_FR_clip",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "boardThickness",
+          "clipComponentId",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 350,
+          "y": 40,
+          "z": 186
+        },
+        "sizeMm": {
+          "x": 47.917,
+          "y": 16,
+          "z": 49.463
+        },
+        "centerMm": {
+          "x": 350,
+          "y": 40,
+          "z": 190.268
+        },
+        "materials": [
+          {
+            "name": "Plinth Clip Standard",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BL",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": -350,
+          "y": 50,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": -350,
+          "y": 50,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BR",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 350,
+          "y": 50,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 350,
+          "y": 50,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      },
+      {
+        "name": "leg_BC",
+        "selectable": true,
+        "visible": true,
+        "paramKeys": [
+          "width",
+          "plinthHeight",
+          "plinthSetbackMm",
+          "depth",
+          "legComponentId"
+        ],
+        "positionMm": {
+          "x": 0,
+          "y": 50,
+          "z": -220
+        },
+        "sizeMm": {
+          "x": 39.392,
+          "y": 100,
+          "z": 40
+        },
+        "centerMm": {
+          "x": 0,
+          "y": 50,
+          "z": -220
+        },
+        "materials": [
+          {
+            "name": "Adjustable Leg 100 mm Black",
+            "colorHex": "#1e232b",
+            "transparent": false,
+            "opacity": 1
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "manifest": {
+    "docs": [
+      {
+        "path": "docs/swing_shelves_low.README.md",
+        "mediaType": "text/markdown",
+        "description": "Module package overview.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/swing_shelves_low.system-parameters.md",
+        "mediaType": "text/markdown",
+        "description": "Module system parameter reference.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/swing_shelves_low.geometry.md",
+        "mediaType": "text/markdown",
+        "description": "Module geometry explanation.",
+        "provenance": "declared"
+      },
+      {
+        "path": "docs/swing_shelves_low.bom.md",
+        "mediaType": "text/markdown",
+        "description": "Module BOM explanation.",
+        "provenance": "declared"
+      }
+    ]
+  }
+}

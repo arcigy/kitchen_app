@@ -1,0 +1,22 @@
+{
+  "manifest": {
+    "pricingConfig": {
+      "path": "commercial/swing_shelves_low.pricing.json",
+      "mediaType": "application/json",
+      "description": "Pricing snapshot and configuration.",
+      "provenance": "generated"
+    },
+    "bomConfig": {
+      "path": "commercial/swing_shelves_low.bom.json",
+      "mediaType": "application/json",
+      "description": "BOM snapshot.",
+      "provenance": "generated"
+    },
+    "commercialMetadata": {
+      "path": "commercial/swing_shelves_low.metadata.json",
+      "mediaType": "application/json",
+      "description": "Commercial summary snapshot.",
+      "provenance": "generated"
+    }
+  }
+}

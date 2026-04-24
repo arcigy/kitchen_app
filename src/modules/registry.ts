@@ -15,6 +15,10 @@ import type { FridgeTallParams } from "./fridgeTall/types";
 import { buildFridgeTall } from "./fridgeTall/geometry";
 import { createFridgeTallControls } from "./fridgeTall/controls";
 import { calculateBOM as calculateFridgeTallBOM } from "./fridgeTall/calculation";
+import type { SwingShelvesLowParams } from "./swingShelvesLow/types";
+import { buildSwingShelvesLow } from "./swingShelvesLow/geometry";
+import { createSwingShelvesLowControls } from "./swingShelvesLow/controls";
+import { calculateBOM as calculateSwingShelvesLowBOM } from "./swingShelvesLow/calculation";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -98,6 +102,22 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     createControls: (container, params, args) => createFridgeTallControls(container, params as FridgeTallParams, args),
     calculateBOM: (params, ctx) => calculateFridgeTallBOM(params as FridgeTallParams, ctx),
     capabilities: {
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  },
+  {
+    type: "swing_shelves_low",
+    folder: "swingShelvesLow",
+    label: "Shelf Doors",
+    packageName: "module-builder-swing_shelves_low",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("swing_shelves_low"),
+    build: (params) => buildSwingShelvesLow(params as SwingShelvesLowParams),
+    createControls: (container, params, args) => createSwingShelvesLowControls(container, params as SwingShelvesLowParams, args),
+    calculateBOM: (params, ctx) => calculateSwingShelvesLowBOM(params as SwingShelvesLowParams, ctx),
+    capabilities: {
+          "hasWorktop": true,
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
     }

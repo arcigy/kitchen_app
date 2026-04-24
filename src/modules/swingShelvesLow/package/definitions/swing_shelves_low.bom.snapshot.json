@@ -1,0 +1,652 @@
+{
+  "schemaVersion": "module-bom.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "items": [
+    {
+      "id": "left-side",
+      "category": "board",
+      "description": "Left Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 562,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "left-side"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "right-side",
+      "category": "board",
+      "description": "Right Side Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 562,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "right-side"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "bottom-panel",
+      "category": "board",
+      "description": "Bottom Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "bottom-panel"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "top-panel",
+      "category": "board",
+      "description": "Top Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 560,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "top-panel"
+      ],
+      "notes": [
+        "material DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "back-panel",
+      "category": "board",
+      "description": "Back Panel",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 779,
+        "height": 541,
+        "depth": 6,
+        "thickness": 6
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "back-panel"
+      ],
+      "notes": [
+        "material HDF Grey 6 mm color #c8ccd1"
+      ]
+    },
+    {
+      "id": "plinth",
+      "category": "board",
+      "description": "plinth",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 100,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "plinth"
+      ],
+      "notes": [
+        "material unnamed color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-1-x",
+      "category": "board",
+      "description": "shelf-1-x",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 525,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-1-x"
+      ],
+      "notes": [
+        "material Shelf DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-2-x",
+      "category": "board",
+      "description": "shelf-2-x",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 525,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-2-x"
+      ],
+      "notes": [
+        "material Shelf DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "shelf-3-x",
+      "category": "board",
+      "description": "shelf-3-x",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 764,
+        "height": 525,
+        "depth": 18,
+        "thickness": 18
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "shelf-3-x"
+      ],
+      "notes": [
+        "material Shelf DTD White 18 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "door-front-z",
+      "category": "front",
+      "description": "door_front_z",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 558,
+        "height": 397,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door-front-z"
+      ],
+      "notes": [
+        "material MDF White Supermat 19 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "door_front_z_handle",
+      "category": "front",
+      "description": "door_front_z_handle",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 160,
+        "height": 14,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_handle"
+      ],
+      "notes": [
+        "material Bar Handle 160 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_1",
+      "category": "front",
+      "description": "door_front_z_hinge_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 62,
+        "height": 34,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_1"
+      ],
+      "notes": [
+        "material Clip-On Hinge Softclose color #aeb3bb"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_1_cup",
+      "category": "front",
+      "description": "door_front_z_hinge_1_cup",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 35,
+        "height": 34,
+        "depth": 10,
+        "thickness": 10
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_1_cup"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_1_arm",
+      "category": "front",
+      "description": "door_front_z_hinge_1_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 18,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_1_arm"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_2",
+      "category": "front",
+      "description": "door_front_z_hinge_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 62,
+        "height": 34,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_2"
+      ],
+      "notes": [
+        "material Clip-On Hinge Softclose color #aeb3bb"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_2_cup",
+      "category": "front",
+      "description": "door_front_z_hinge_2_cup",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 35,
+        "height": 34,
+        "depth": 10,
+        "thickness": 10
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_2_cup"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_z_hinge_2_arm",
+      "category": "front",
+      "description": "door_front_z_hinge_2_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 18,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_z_hinge_2_arm"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door-front-x",
+      "category": "front",
+      "description": "door_front_x",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 558,
+        "height": 397,
+        "depth": 19,
+        "thickness": 19
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door-front-x"
+      ],
+      "notes": [
+        "material MDF White Supermat 19 mm color #f3f3ef"
+      ]
+    },
+    {
+      "id": "door_front_x_handle",
+      "category": "front",
+      "description": "door_front_x_handle",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 160,
+        "height": 14,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_handle"
+      ],
+      "notes": [
+        "material Bar Handle 160 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_1",
+      "category": "front",
+      "description": "door_front_x_hinge_1",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 62,
+        "height": 34,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_1"
+      ],
+      "notes": [
+        "material Clip-On Hinge Softclose color #aeb3bb"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_1_cup",
+      "category": "front",
+      "description": "door_front_x_hinge_1_cup",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 35,
+        "height": 34,
+        "depth": 10,
+        "thickness": 10
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_1_cup"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_1_arm",
+      "category": "front",
+      "description": "door_front_x_hinge_1_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 18,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_1_arm"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_2",
+      "category": "front",
+      "description": "door_front_x_hinge_2",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 62,
+        "height": 34,
+        "depth": 3,
+        "thickness": 3
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_2"
+      ],
+      "notes": [
+        "material Clip-On Hinge Softclose color #aeb3bb"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_2_cup",
+      "category": "front",
+      "description": "door_front_x_hinge_2_cup",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 35,
+        "height": 34,
+        "depth": 10,
+        "thickness": 10
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_2_cup"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "door_front_x_hinge_2_arm",
+      "category": "front",
+      "description": "door_front_x_hinge_2_arm",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 30,
+        "height": 18,
+        "depth": 12,
+        "thickness": 12
+      },
+      "materialRole": "front",
+      "sourcePartIds": [
+        "door_front_x_hinge_2_arm"
+      ],
+      "notes": [
+        "material unnamed color #3a3f4b"
+      ]
+    },
+    {
+      "id": "leg_FL",
+      "category": "board",
+      "description": "leg_FL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FL"
+      ],
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_FL_clip",
+      "category": "board",
+      "description": "leg_FL_clip",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 49,
+        "height": 48,
+        "depth": 16,
+        "thickness": 16
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FL_clip"
+      ],
+      "notes": [
+        "material Plinth Clip Standard color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_FR",
+      "category": "board",
+      "description": "leg_FR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FR"
+      ],
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_FR_clip",
+      "category": "board",
+      "description": "leg_FR_clip",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 49,
+        "height": 48,
+        "depth": 16,
+        "thickness": 16
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_FR_clip"
+      ],
+      "notes": [
+        "material Plinth Clip Standard color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_BL",
+      "category": "board",
+      "description": "leg_BL",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_BL"
+      ],
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_BR",
+      "category": "board",
+      "description": "leg_BR",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_BR"
+      ],
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    },
+    {
+      "id": "leg_BC",
+      "category": "board",
+      "description": "leg_BC",
+      "unit": "pcs",
+      "quantity": 1,
+      "sizeMm": {
+        "width": 100,
+        "height": 40,
+        "depth": 39,
+        "thickness": 39
+      },
+      "materialRole": "body",
+      "sourcePartIds": [
+        "leg_BC"
+      ],
+      "notes": [
+        "material Adjustable Leg 100 mm Black color #1e232b"
+      ]
+    }
+  ],
+  "summary": {
+    "totalItems": 32,
+    "boardItems": 32,
+    "hardwareItems": 0
+  }
+}

@@ -14,6 +14,11 @@ import {
   type FridgeTallParams
 } from "../modules/fridgeTall/types";
 import fridgeTallMaterialsSnapshot from "../modules/fridgeTall/package/definitions/fridge_tall.materials.snapshot.json";
+import {
+  normalizeSwingShelvesLowParams,
+  type SwingShelvesLowParams
+} from "../modules/swingShelvesLow/types";
+import swingShelvesLowMaterialsSnapshot from "../modules/swingShelvesLow/package/definitions/swing_shelves_low.materials.snapshot.json";
 import type { PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
 import type { KitchenContext } from "./kitchenContext";
 
@@ -43,6 +48,7 @@ const kitchenMaterialFieldByFamily: KitchenMaterialField = {
 const cornerShelfLowerSnapshot = cornerShelfLowerMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const drawerLowSnapshot = drawerLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const fridgeTallSnapshot = fridgeTallMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
+const swingShelvesLowSnapshot = swingShelvesLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 
 function matchesKitchenBoardFamily(material: MaterialDefinition, family: KitchenBoardFamily) {
   if (family === "shelf") return material.boardFamily === "body";
@@ -311,6 +317,9 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   const materials = ensureRecord(record.materials);
   record.materials = materials;
   record.worktopThicknessMm = 0;
+  record.depth = ctx.moduleDepthMm;
+  record.plinthHeight = ctx.plinthHeightMm;
+  record.plinthSetbackMm = ctx.plinthDepthMm;
 
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
@@ -334,6 +343,43 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   applyKitchenCommercialSelections(record, ctx, fridgeTallSnapshot);
 
   Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
+}
+
+function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+  const record = params as Record<string, unknown>;
+  const materials = ensureRecord(record.materials);
+  record.materials = materials;
+
+  record.height = ctx.heightMm;
+  record.heightCarcass = ctx.moduleHeightMm;
+  record.depth = ctx.moduleDepthMm;
+  record.plinthHeight = ctx.plinthHeightMm;
+  record.plinthSetbackMm = ctx.plinthDepthMm;
+  record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+
+  const corpus = getKitchenMaterial(ctx, "body");
+  if (corpus) {
+    record.boardThickness = corpus.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "body", corpus);
+    applyLegacyMaterialAliases(record, "shelf", corpus);
+  }
+
+  const fronts = getKitchenMaterial(ctx, "front");
+  if (fronts) {
+    record.frontThicknessMm = fronts.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "front", fronts);
+  }
+
+  const back = getKitchenMaterial(ctx, "back");
+  if (back) {
+    record.backThickness = back.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "back", back);
+  }
+
+  applyKitchenHandleSelection(record, ctx);
+  applyKitchenCommercialSelections(record, ctx, swingShelvesLowSnapshot);
+
+  Object.assign(record, normalizeSwingShelvesLowParams(record as SwingShelvesLowParams));
 }
 
 export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily): KitchenMaterialSelectOption[] {
@@ -360,6 +406,9 @@ export function applyKitchenContextToModuleParams(params: ModuleParams, ctx: Kit
   }
   if (params.type === "fridge_tall") {
     applyFridgeTallKitchenMaterials(params, ctx);
+  }
+  if (params.type === "swing_shelves_low") {
+    applySwingShelvesLowKitchenMaterials(params, ctx);
   }
   return params;
 }

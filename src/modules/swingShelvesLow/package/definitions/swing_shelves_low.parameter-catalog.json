@@ -1,0 +1,371 @@
+{
+  "schemaVersion": "module-parameter-catalog.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "groups": [
+    {
+      "key": "general",
+      "label": "General",
+      "description": "Primary module identity and behavior parameters."
+    },
+    {
+      "key": "dimensions",
+      "label": "Dimensions",
+      "description": "Overall sizing, spacing, thicknesses and clearances."
+    },
+    {
+      "key": "materials",
+      "label": "Materials",
+      "description": "Material and finish parameters."
+    },
+    {
+      "key": "fronts",
+      "label": "Fronts & Doors",
+      "description": "Front, handle and opening-related parameters."
+    },
+    {
+      "key": "placement",
+      "label": "Placement",
+      "description": "Scene placement and mounting parameters."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "assemblyContext",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "kitchen",
+      "description": "Exported parameter assembly context."
+    },
+    {
+      "key": "backGrooveClearanceMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 1,
+      "description": "Exported parameter back groove clearance mm."
+    },
+    {
+      "key": "backGrooveDepthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter back groove depth mm."
+    },
+    {
+      "key": "backGrooveOffsetMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 12,
+      "description": "Exported parameter back groove offset mm."
+    },
+    {
+      "key": "backGrooveWidthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 8,
+      "description": "Exported parameter back groove width mm."
+    },
+    {
+      "key": "backThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 6,
+      "description": "Exported parameter back thickness."
+    },
+    {
+      "key": "boardThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter board thickness."
+    },
+    {
+      "key": "bottomGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter bottom gap."
+    },
+    {
+      "key": "clipComponentId",
+      "group": "placement",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.clip.plinth.standard",
+      "description": "Exported parameter clip component id."
+    },
+    {
+      "key": "depth",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 560,
+      "description": "Exported parameter depth."
+    },
+    {
+      "key": "doorDouble",
+      "group": "fronts",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter door double."
+    },
+    {
+      "key": "doorOpen",
+      "group": "fronts",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": false,
+      "description": "Exported parameter door open."
+    },
+    {
+      "key": "frontGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter front gap."
+    },
+    {
+      "key": "frontThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 19,
+      "description": "Exported parameter front thickness mm."
+    },
+    {
+      "key": "handleComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.handle.bar.160.black",
+      "description": "Exported parameter handle component id."
+    },
+    {
+      "key": "handleLengthMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 160,
+      "description": "Exported parameter handle length mm."
+    },
+    {
+      "key": "handlePositionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter handle position mm."
+    },
+    {
+      "key": "handleProjectionMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 14,
+      "description": "Exported parameter handle projection mm."
+    },
+    {
+      "key": "handleSizeMm",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 12,
+      "description": "Exported parameter handle size mm."
+    },
+    {
+      "key": "handleType",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "bar",
+      "description": "Exported parameter handle type."
+    },
+    {
+      "key": "height",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 700,
+      "description": "Exported parameter height."
+    },
+    {
+      "key": "heightCarcass",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 662,
+      "description": "Exported parameter height carcass."
+    },
+    {
+      "key": "hingeBottomOffsetMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 110,
+      "description": "Exported parameter hinge bottom offset mm."
+    },
+    {
+      "key": "hingeComponentId",
+      "group": "fronts",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.hinge.clip_on.softclose",
+      "description": "Exported parameter hinge component id."
+    },
+    {
+      "key": "hingeCountPerDoor",
+      "group": "fronts",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter hinge count per door."
+    },
+    {
+      "key": "hingeTopOffsetMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 110,
+      "description": "Exported parameter hinge top offset mm."
+    },
+    {
+      "key": "kitchenModuleRole",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "base",
+      "description": "Exported parameter kitchen module role."
+    },
+    {
+      "key": "legComponentId",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "cmp.leg.adjustable.100.black",
+      "description": "Exported parameter leg component id."
+    },
+    {
+      "key": "materials",
+      "group": "materials",
+      "type": "object",
+      "required": true,
+      "defaultValue": {
+        "bodyKey": "mat.board.body.dtd.white.18",
+        "bodyColor": "#f3f3ef",
+        "frontKey": "mat.board.front.mdf.white_supermat.19",
+        "frontColor": "#d7d9dd"
+      },
+      "description": "Exported parameter materials."
+    },
+    {
+      "key": "plinthHeight",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 100,
+      "description": "Exported parameter plinth height."
+    },
+    {
+      "key": "plinthSetbackMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 60,
+      "description": "Exported parameter plinth setback mm."
+    },
+    {
+      "key": "requiresWorktop",
+      "group": "placement",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter requires worktop."
+    },
+    {
+      "key": "shelfAutoFit",
+      "group": "general",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": true,
+      "description": "Exported parameter shelf auto fit."
+    },
+    {
+      "key": "shelfCount",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 4,
+      "description": "Exported parameter shelf count."
+    },
+    {
+      "key": "shelfGaps",
+      "group": "dimensions",
+      "type": "number[]",
+      "required": true,
+      "defaultValue": [
+        123,
+        123,
+        123
+      ],
+      "description": "Exported parameter shelf gaps."
+    },
+    {
+      "key": "shelfThickness",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18,
+      "description": "Exported parameter shelf thickness."
+    },
+    {
+      "key": "sideGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter side gap."
+    },
+    {
+      "key": "topGap",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2,
+      "description": "Exported parameter top gap."
+    },
+    {
+      "key": "type",
+      "group": "general",
+      "type": "string",
+      "required": true,
+      "defaultValue": "swing_shelves_low",
+      "description": "Exported parameter type."
+    },
+    {
+      "key": "width",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 800,
+      "description": "Exported parameter width."
+    },
+    {
+      "key": "worktopThicknessMm",
+      "group": "dimensions",
+      "type": "number",
+      "required": true,
+      "defaultValue": 38,
+      "description": "Exported parameter worktop thickness mm."
+    }
+  ]
+}

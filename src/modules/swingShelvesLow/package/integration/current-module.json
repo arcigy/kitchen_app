@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "builder-module-export.v1",
+  "moduleType": "swing_shelves_low",
+  "displayName": "Shelf Doors",
+  "packageName": "module-builder-swing_shelves_low",
+  "packageVersion": "1.0.0",
+  "geometryFile": "definitions/swing_shelves_low.geometry.json",
+  "partMapFile": "definitions/swing_shelves_low.part-map.json",
+  "boardBomFile": "definitions/swing_shelves_low.board-bom.json",
+  "edgeBomFile": "definitions/swing_shelves_low.edge-bom.json",
+  "hardwareBomFile": "definitions/swing_shelves_low.hardware-bom.json",
+  "bomFile": "definitions/swing_shelves_low.bom.snapshot.json"
+}

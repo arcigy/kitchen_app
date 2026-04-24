@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "module-package.v1",
+  "packageName": "module-builder-swing_shelves_low",
+  "packageVersion": "1.0.0",
+  "displayName": "Shelf Doors Package",
+  "description": "Portable single-module package exported from module-builder-dev for swing_shelves_low.",
+  "engineCompatibility": {
+    "app": "module_builder_dev",
+    "moduleContract": "1.x"
+  },
+  "modules": [
+    {
+      "moduleType": "swing_shelves_low",
+      "displayName": "Shelf Doors"
+    }
+  ]
+}

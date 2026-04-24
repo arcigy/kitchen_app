@@ -11,6 +11,8 @@ import { calculateBOM as calculateDrawerLowBOM } from "../src/modules/drawerLow/
 import { makeDefaultDrawerLowParams } from "../src/modules/drawerLow/types";
 import { calculateBOM as calculateFridgeTallBOM } from "../src/modules/fridgeTall/calculation";
 import { makeDefaultFridgeTallParams } from "../src/modules/fridgeTall/types";
+import { calculateBOM as calculateSwingShelvesLowBOM } from "../src/modules/swingShelvesLow/calculation";
+import { makeDefaultSwingShelvesLowParams } from "../src/modules/swingShelvesLow/types";
 import {
   buildRuntimeQuoteBom,
   calculateCommercialPricingFromQuoteBom,
@@ -161,6 +163,57 @@ function runFridgeTallScenario() {
   );
   assert.equal(
     syncedResult.quoteBom.items.find((item) => item.id === "door-front-upper")?.material?.catalogId,
+    ctx.frontsMaterialId
+  );
+  assert.equal(
+    syncedResult.pricing.items.find((item) => item.id === "door-handles")?.component?.catalogId,
+    ctx.handleComponentId
+  );
+}
+
+function runSwingShelvesLowScenario() {
+  const params = makeDefaultSwingShelvesLowParams();
+  const result = calculateSwingShelvesLowBOM(params, ctx);
+
+  assert.equal(result.quoteBom.moduleType, "swing_shelves_low");
+  assert.equal(result.pricing.pricingStatus, "ok");
+  assert.equal(result.pricing.validationErrors.length, 0);
+  assert.equal(result.quoteBom.moduleInstance.widthMm, 800);
+  assert.equal(result.quoteBom.moduleInstance.depthMm, 560);
+
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "door-hinges")?.component?.catalogId,
+    "cmp.hinge.clip_on.softclose"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "door-handles")?.component?.catalogId,
+    "cmp.handle.bar.160.black"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "adjustable-legs")?.component?.catalogId,
+    "cmp.leg.adjustable.100.black"
+  );
+  assert.equal(
+    result.pricing.items.find((item) => item.id === "plinth-clips")?.component?.catalogId,
+    "cmp.clip.plinth.standard"
+  );
+
+  const synced = structuredClone(params);
+  applyKitchenContextToModuleParams(synced, ctx);
+  assert.equal(synced.height, ctx.heightMm);
+  assert.equal(synced.heightCarcass, ctx.moduleHeightMm);
+  assert.equal(synced.depth, ctx.moduleDepthMm);
+  assert.equal(synced.plinthHeight, ctx.plinthHeightMm);
+  assert.equal(synced.plinthSetbackMm, ctx.plinthDepthMm);
+
+  const syncedResult = calculateSwingShelvesLowBOM(synced, ctx);
+  assert.equal(syncedResult.pricing.pricingStatus, "ok");
+  assert.equal(
+    syncedResult.quoteBom.items.find((item) => item.id === "carcass-side-left")?.material?.catalogId,
+    ctx.corpusMaterialId
+  );
+  assert.equal(
+    syncedResult.quoteBom.items.find((item) => item.id === "door-front-left")?.material?.catalogId,
     ctx.frontsMaterialId
   );
   assert.equal(
@@ -348,13 +401,14 @@ async function main() {
   runDrawerLowScenario();
   runCornerShelfLowerScenario();
   runFridgeTallScenario();
+  runSwingShelvesLowScenario();
   runGenericBomScenario();
   runInvalidBomScenario();
   console.log(
     JSON.stringify(
       {
         ok: true,
-        checks: ["drawer_low", "corner_shelf_lower", "fridge_tall", "generic_bom", "invalid_bom"]
+        checks: ["drawer_low", "corner_shelf_lower", "fridge_tall", "swing_shelves_low", "generic_bom", "invalid_bom"]
       },
       null,
       2
