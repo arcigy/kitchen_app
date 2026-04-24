@@ -6880,6 +6880,11 @@ export function startApp(initialArgs: AppArgs) {
     return roomContainsBoxXZ(instanceLayoutWorldBox(inst));
   }
 
+  function instanceFitsLayoutBounds(inst: LayoutInstance) {
+    if (inst.kitchenGroupId) return true;
+    return instanceFitsRoom(inst);
+  }
+
   function roomContainsBoxXZ(box: THREE.Box3, eps = 0.0005) {
     return (
       box.min.x >= -roomBounds.halfW - eps &&
@@ -8046,7 +8051,7 @@ export function startApp(initialArgs: AppArgs) {
         ? propagateCornerResizeToPinnedNeighbors(inst, previousParams)
         : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
-    const inRoom = opts?.skipLayoutValidation ? true : instanceFitsRoom(inst);
+    const inRoom = opts?.skipLayoutValidation ? true : instanceFitsLayoutBounds(inst);
     const overlapsModules = opts?.skipLayoutValidation ? false : anyOverlap(inst, null);
     const overlapsWalls = opts?.skipLayoutValidation ? false : moduleOverlapsWalls(inst);
     const overlapsWorktops = opts?.skipLayoutValidation ? false : moduleOverlapsKitchenWorktops(inst);
@@ -8056,7 +8061,7 @@ export function startApp(initialArgs: AppArgs) {
       propagated.movedIds.some((id) => {
         const other = findInstance(id);
         return !!other &&
-          (!instanceFitsRoom(other) ||
+          (!instanceFitsLayoutBounds(other) ||
             anyOverlap(other, null) ||
             moduleOverlapsWalls(other) ||
             moduleOverlapsKitchenWorktops(other));

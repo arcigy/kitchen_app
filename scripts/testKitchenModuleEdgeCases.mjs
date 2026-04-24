@@ -590,6 +590,68 @@ async function runBackAnchorLockCases(page) {
   return failures;
 }
 
+async function runKitchenMaterialResyncCases(page) {
+  const failures = [];
+
+  const created = await createScenario(page, {
+    path: [
+      { x: 0, z: 0 },
+      { x: 3200, z: 0 },
+      { x: 3200, z: 2200 },
+      { x: 0, z: 2200 }
+    ],
+    addModule: false
+  });
+  const groupId = created.group.id;
+
+  await addKitchenModule(page, groupId, { type: "fridge_tall", segmentIndex: 0, offsetAlongMm: 350 });
+  await addKitchenModule(page, groupId, { type: "corner_shelf_lower", cornerIndex: 1 });
+  await addKitchenModule(page, groupId, { type: "corner_shelf_lower", cornerIndex: 2 });
+  await addKitchenModule(page, groupId, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1450 });
+  await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 2, offsetAlongMm: 1100 });
+
+  await evalApi(
+    page,
+    ({ groupId }) => {
+      const api = window.__kitchenDebug;
+      if (!api) throw new Error("Missing __kitchenDebug");
+      return api.patchKitchenContext(groupId, { frontsMaterialId: "mat.board.front.acrylic.cashmere.19" });
+    },
+    { groupId }
+  );
+
+  const afterMaterial = await snapshot(page, groupId);
+  for (const inst of afterMaterial.instances) {
+    let patch = null;
+    let sourceKey = null;
+    if (inst.params.type === "fridge_tall") {
+      patch = { width: Number(inst.params.width ?? 600) + 1 };
+      sourceKey = "width";
+    } else if (inst.params.type === "corner_shelf_lower") {
+      patch = { lengthX: Number(inst.params.lengthX ?? 1000) + 1 };
+      sourceKey = "lengthX";
+    } else if (inst.params.type === "swing_shelves_low") {
+      patch = { width: Number(inst.params.width ?? 800) + 1 };
+      sourceKey = "width";
+    } else if (inst.params.type === "drawer_low") {
+      patch = { width: Number(inst.params.width ?? 800) + 1 };
+      sourceKey = "width";
+    }
+
+    if (!patch || !sourceKey) continue;
+    const result = await patchModule(page, inst.id, patch, { sourceKey, preserveBackAnchor: true });
+    if (!result.ok) {
+      failures.push({
+        case: `material_resync_${inst.params.type}_${sourceKey}`,
+        ok: result.ok,
+        debug: result.debug ?? null
+      });
+    }
+  }
+
+  return failures;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -648,6 +710,7 @@ async function main() {
 
     const clusterFailures = await runClusterCases(page);
     const backAnchorFailures = await runBackAnchorLockCases(page);
+    const materialResyncFailures = await runKitchenMaterialResyncCases(page);
 
     const failures = [
       ...drawerFailures,
@@ -656,7 +719,8 @@ async function main() {
       ...fridgeFailures,
       ...adjacencyFailures,
       ...clusterFailures,
-      ...backAnchorFailures
+      ...backAnchorFailures,
+      ...materialResyncFailures
     ];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
@@ -688,6 +752,12 @@ async function main() {
               "swing_width_keeps_back_anchor",
               "corner_lengthX_keeps_corner_anchor",
               "corner_lengthZ_keeps_corner_anchor"
+            ],
+            materialResyncCases: [
+              "material_resync_fridge_tall_width",
+              "material_resync_corner_shelf_lower_lengthX",
+              "material_resync_swing_shelves_low_width",
+              "material_resync_drawer_low_width"
             ]
           }
         },
