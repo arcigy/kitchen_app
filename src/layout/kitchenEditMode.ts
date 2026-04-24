@@ -8,6 +8,7 @@ import {
   getKitchenWorktopThicknessOptions,
   resolveKitchenWorktopThickness
 } from "./kitchenMaterialSync";
+import { getDrawerLowHandleComponentOptions } from "../data/pricing/handleComponentPresets";
 
 type TopbarApi = {
   clear: () => void;
@@ -466,6 +467,16 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       ctx.worktopBackOffsetMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, worktopBackOffsetMm: value }), { refreshProps })
     );
+    addNumberRow(
+      "Upper module position (mm)",
+      ctx.upperStartHeightMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, upperStartHeightMm: value }), { refreshProps })
+    );
+    addNumberRow(
+      "Upper module height (mm)",
+      ctx.upperHeightMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, upperHeightMm: value }), { refreshProps })
+    );
 
     const makeMaterialSelect = (
       family: "front" | "body" | "back" | "drawer_bottom" | "worktop",
@@ -477,6 +488,15 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       select.innerHTML = options.map((material) => `<option value="${material.id}">${material.label}</option>`).join("");
       const selectedOption = options.find((material) => material.id === value);
       select.value = selectedOption?.id ?? options[0]?.id ?? "";
+      select.addEventListener("change", () => onChange(select.value));
+      return select;
+    };
+
+    const makeHandleSelect = (value: string, onChange: (id: string) => void) => {
+      const select = document.createElement("select");
+      const options = getDrawerLowHandleComponentOptions();
+      select.innerHTML = options.map((handle) => `<option value="${handle.componentId}">${handle.displayName}</option>`).join("");
+      select.value = options.find((handle) => handle.componentId === value)?.componentId ?? options[0]?.componentId ?? "";
       select.addEventListener("change", () => onChange(select.value));
       return select;
     };
@@ -519,6 +539,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           }))
       )
     );
+    args.props.row(
+      section,
+      "Handle type",
+      makeHandleSelect(ctx.handleComponentId, (id) => commitCtx((base) => ({ ...base, handleComponentId: id })))
+    );
 
     const worktopThicknessSelect = document.createElement("select");
     const worktopThicknessOptions = getKitchenWorktopThicknessOptions(ctx.worktopMaterialId);
@@ -536,6 +561,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       }));
     });
     args.props.row(section, "Worktop thickness", worktopThicknessSelect);
+    addNumberRow(
+      "Plinth height (mm)",
+      ctx.plinthHeightMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, plinthHeightMm: value }), { refreshProps })
+    );
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";

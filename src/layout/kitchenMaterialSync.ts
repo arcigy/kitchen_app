@@ -1,5 +1,6 @@
 import { getMaterialDefinitionById, materialDefinitions } from "../data/pricing/materialDefinitions";
 import type { MaterialDefinition } from "../data/pricing/types";
+import { applyDrawerLowHandleComponentToParams } from "../data/pricing/handleComponentPresets";
 import type { ModuleParams } from "../model/cabinetTypes";
 import {
   normalizeCornerShelfLowerParams,
@@ -11,6 +12,7 @@ import type { PortableMaterialsSnapshot } from "../modules/runtime/portableComme
 import type { KitchenContext } from "./kitchenContext";
 
 type KitchenBoardFamily = "front" | "body" | "back" | "drawer_bottom" | "worktop" | "shelf";
+type KitchenModuleRole = "base" | "upper" | "tall";
 
 type KitchenMaterialField = {
   [K in KitchenBoardFamily]: keyof Pick<
@@ -112,6 +114,18 @@ function ensureRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function getKitchenModuleRole(params: Record<string, unknown>): KitchenModuleRole {
+  const rawRole = typeof params.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "base";
+  if (rawRole === "upper" || rawRole === "wall") return "upper";
+  if (rawRole === "tall") return "tall";
+  return "base";
+}
+
+function applyKitchenHandleSelection(params: Record<string, unknown>, ctx: KitchenContext) {
+  const nextParams = applyDrawerLowHandleComponentToParams(params, ctx.handleComponentId);
+  Object.assign(params, nextParams);
+}
+
 function applyLegacyMaterialAliases(
   params: Record<string, unknown>,
   family: KitchenBoardFamily,
@@ -196,10 +210,17 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
+  const role = getKitchenModuleRole(record);
 
-  record.height = ctx.heightMm;
-  record.heightCarcass = ctx.moduleHeightMm;
-  record.depth = ctx.moduleDepthMm;
+  if (role === "base") {
+    record.height = ctx.heightMm;
+    record.heightCarcass = ctx.moduleHeightMm;
+    record.depth = ctx.moduleDepthMm;
+  } else if (role === "upper") {
+    record.height = ctx.upperHeightMm;
+    record.heightCarcass = ctx.upperHeightMm;
+    record.depth = ctx.upperDepthMm;
+  }
 
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
@@ -230,6 +251,8 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
     record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
   }
 
+  applyKitchenHandleSelection(record, ctx);
+
   applyKitchenCommercialSelections(record, ctx, drawerLowSnapshot);
 }
 
@@ -237,12 +260,19 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
+  const role = getKitchenModuleRole(record);
 
-  record.height = ctx.heightMm;
-  record.heightCarcass = ctx.moduleHeightMm;
-  record.depth = ctx.moduleDepthMm;
-  record.plinthHeight = ctx.plinthHeightMm;
-  record.plinthSetbackMm = ctx.plinthDepthMm;
+  if (role === "base") {
+    record.height = ctx.heightMm;
+    record.heightCarcass = ctx.moduleHeightMm;
+    record.depth = ctx.moduleDepthMm;
+    record.plinthHeight = ctx.plinthHeightMm;
+    record.plinthSetbackMm = ctx.plinthDepthMm;
+  } else if (role === "upper") {
+    record.height = ctx.upperHeightMm;
+    record.heightCarcass = ctx.upperHeightMm;
+    record.depth = ctx.upperDepthMm;
+  }
 
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
@@ -266,6 +296,8 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   if ("worktopThicknessMm" in record) {
     record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
   }
+
+  applyKitchenHandleSelection(record, ctx);
 
   applyKitchenCommercialSelections(record, ctx, cornerShelfLowerSnapshot);
 

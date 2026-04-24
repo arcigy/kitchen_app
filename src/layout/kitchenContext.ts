@@ -1,3 +1,5 @@
+import { getDefaultDrawerLowHandleComponentId } from "../data/pricing/handleComponentPresets"
+
 export interface KitchenContext {
   // Identifikácia
   name: string
@@ -35,6 +37,7 @@ export interface KitchenContext {
   backMaterialId: string
   drawerBottomMaterialId: string
   worktopMaterialId: string
+  handleComponentId: string
 
   // Správanie layoutu
   fillerStrategy: 'auto' | 'warn' | 'ignore'
@@ -48,6 +51,8 @@ export function makeDefaultKitchenContext(): KitchenContext {
   const worktopBackOffsetMm = 20
   const worktopThicknessMm = 38
   const heightMm = 820
+
+  const handleComponentId = getDefaultDrawerLowHandleComponentId()
 
   return {
     name: 'Kuchyňa 1',
@@ -79,6 +84,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
     backMaterialId: 'mat.board.back.hdf.grey.6',
     drawerBottomMaterialId: 'mat.board.drawer_bottom.hdf.white.8',
     worktopMaterialId: 'mat.board.worktop.laminate_oak.38',
+    handleComponentId,
 
     fillerStrategy: 'warn',
     gapWarningMm: 50,
@@ -91,6 +97,10 @@ export function makeDefaultKitchenContext(): KitchenContext {
 export function resolveContext(ctx: KitchenContext): KitchenContext {
   return {
     ...ctx,
+    handleComponentId:
+      typeof ctx.handleComponentId === 'string' && ctx.handleComponentId.trim().length > 0
+        ? ctx.handleComponentId
+        : getDefaultDrawerLowHandleComponentId(),
     moduleDepthMm: ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
     moduleHeightMm: ctx.heightMm - ctx.worktopThicknessMm,
   }
@@ -148,6 +158,8 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push('drawerBottomMaterialId je prázdny')
   if (!ctx.worktopMaterialId.trim())
     warnings.push('worktopMaterialId je prázdny')
+  if (!ctx.handleComponentId.trim())
+    warnings.push('handleComponentId je prázdny')
   if (ctx.fillerStrategy !== 'auto' && ctx.fillerStrategy !== 'warn' && ctx.fillerStrategy !== 'ignore')
     warnings.push(`fillerStrategy je neplatný: ${ctx.fillerStrategy}`)
   if (ctx.gapWarningMm < 0)
