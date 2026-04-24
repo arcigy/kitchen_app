@@ -595,18 +595,28 @@ function applyCornerPlinthAdjustments(group: THREE.Group, params: CornerShelfLow
   const plinthSetbackMm = Math.max(0, Math.round(getNumber(params.plinthSetbackMm, basePlinthSetbackMm)));
   const sideEndXBounds = getObjectBoundsMm(group.getObjectByName("side_end_x"));
   const sideEndZBounds = getObjectBoundsMm(group.getObjectByName("side_end_z"));
-  const kickX = group.getObjectByName("kick_x");
-  const kickZ = group.getObjectByName("kick_z");
+  const kickX = group.getObjectByName("kick_x") as THREE.Mesh | null;
+  const kickZ = group.getObjectByName("kick_z") as THREE.Mesh | null;
   const kickXDims = getMeshDimensionsMm(kickX);
   const kickZDims = getMeshDimensionsMm(kickZ);
+  const sharedCornerXMm = sideEndZBounds ? sideEndZBounds.maxX - plinthSetbackMm : null;
+  const sharedCornerZMm = sideEndXBounds ? sideEndXBounds.maxZ - plinthSetbackMm : null;
 
   if (sideEndXBounds && kickX && kickXDims?.depth) {
-    const targetFrontZMm = sideEndXBounds.maxZ - plinthSetbackMm;
+    const targetFrontZMm = sharedCornerZMm ?? sideEndXBounds.maxZ - plinthSetbackMm;
+    const targetMinXMm = sharedCornerXMm ?? sideEndXBounds.minX;
+    const targetWidthMm = Math.max(1, sideEndXBounds.maxX - targetMinXMm);
+    resizeMeshAxis(kickX, "x", targetWidthMm);
+    setObjectCenterX(kickX, targetMinXMm + targetWidthMm * 0.5);
     setObjectCenterZ(kickX, targetFrontZMm - kickXDims.depth * 0.5);
   }
 
   if (sideEndZBounds && kickZ && kickZDims?.width) {
-    const targetFrontXMm = sideEndZBounds.maxX - plinthSetbackMm;
+    const targetFrontXMm = sharedCornerXMm ?? sideEndZBounds.maxX - plinthSetbackMm;
+    const targetMinZMm = sharedCornerZMm ?? sideEndZBounds.minZ;
+    const targetDepthMm = Math.max(1, sideEndZBounds.maxZ - targetMinZMm);
+    resizeMeshAxis(kickZ, "z", targetDepthMm);
+    setObjectCenterZ(kickZ, targetMinZMm + targetDepthMm * 0.5);
     setObjectCenterX(kickZ, targetFrontXMm - kickZDims.width * 0.5);
   }
 }
