@@ -233,6 +233,7 @@ function addDoorHandle(args: {
   const handleLengthMm = Math.max(40, Math.round(getNumber(args.params.handleLengthMm, 160)));
   const handleSizeMm = Math.max(8, Math.round(getNumber(args.params.handleSizeMm, 12)));
   const handleProjectionMm = Math.max(6, Math.round(getNumber(args.params.handleProjectionMm, 14)));
+  const handleEmbedMm = 1;
   const paramKeys = ["handleComponentId", "handleType", "handlePositionMm", "handleLengthMm", "handleSizeMm", "handleProjectionMm"];
 
   if (handleType === "none") return;
@@ -243,7 +244,7 @@ function addDoorHandle(args: {
       diameterMm: handleSizeMm,
       lengthMm: handleProjectionMm,
       axis: "z",
-      positionMm: { x: args.xMm, y: args.yMm, z: args.zMm + handleProjectionMm * 0.5 },
+      positionMm: { x: args.xMm, y: args.yMm, z: args.zMm + handleProjectionMm * 0.5 - handleEmbedMm },
       preview: args.preview,
       paramKeys
     });
@@ -254,7 +255,7 @@ function addDoorHandle(args: {
     group: args.group,
     name: args.name,
     sizeMm: { width: handleLengthMm, height: handleSizeMm, depth: handleProjectionMm },
-    positionMm: { x: args.xMm, y: args.yMm, z: args.zMm + handleProjectionMm * 0.5 },
+    positionMm: { x: args.xMm, y: args.yMm, z: args.zMm + handleProjectionMm * 0.5 - handleEmbedMm },
     preview: args.preview,
     paramKeys
   });
@@ -464,6 +465,8 @@ export function buildSwingShelvesLowParametric(
   }
 
   const legDiameterMm = 40;
+  const legTopClearanceMm = 2;
+  const legHeightMm = Math.max(1, plinthHeightMm - legTopClearanceMm);
   const frontLegZMm = carcassCenterZMm + carcassDepthMm * 0.5 - plinthSetbackMm - plinthThicknessMm - legDiameterMm * 0.5 - 10;
   const backLegZMm = carcassCenterZMm - carcassDepthMm * 0.5 + 60;
   const legOuterXMm = widthMm * 0.5 - 50;
@@ -480,9 +483,9 @@ export function buildSwingShelvesLowParametric(
       group,
       name,
       diameterMm: legDiameterMm,
-      lengthMm: Math.max(1, plinthHeightMm),
+      lengthMm: legHeightMm,
       axis: "y",
-      positionMm: { x: xMm, y: plinthHeightMm * 0.5, z: zMm },
+      positionMm: { x: xMm, y: legHeightMm * 0.5, z: zMm },
       preview: legPreview,
       paramKeys: ["width", "plinthHeight", "plinthSetbackMm", "depth", "legComponentId"]
     });
