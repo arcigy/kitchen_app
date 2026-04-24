@@ -1,6 +1,7 @@
 import "./style.css";
 import { startApp } from "./app";
 import { initDomI18n } from "./i18n";
+import { initializeInstallableApp } from "./pwa/installController";
 
 const viewer = document.getElementById("viewer");
 const ribbon = document.getElementById("ribbon");
@@ -11,6 +12,7 @@ if (!viewer || !ribbon || !properties) {
 }
 
 initDomI18n(document.body);
+initializeInstallableApp();
 
 startApp({
   viewerEl: viewer,

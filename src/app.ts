@@ -147,6 +147,7 @@ import {
 } from "./layout/placementManager";
 import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
 import { createViewNavigation } from "./app/viewNavigation";
+import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -5016,6 +5017,7 @@ export function startApp(initialArgs: AppArgs) {
   const I_CANCEL = icon("M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z");
   const I_MOVE = icon("M11 2h2v4h3l-4 4-4-4h3V2zm0 16H8l4-4 4 4h-3v4h-2v-4zM2 11h4V8l4 4-4 4v-3H2v-2zm16 0h4v2h-4v3l-4-4 4-4v3z");
   const I_ROTATE = icon("M12 5V2L7.8 6.2 12 10V7c2.8 0 5 2.2 5 5 0 1.3-.5 2.5-1.3 3.4l1.4 1.4A7 7 0 0 0 12 5zm-5.1 2.2A7 7 0 0 0 12 19v3l4.2-4.2L12 14v3a5 5 0 0 1-3.7-8.4L6.9 7.2z");
+  const I_INSTALL = icon("M12 3v8.2l2.6-2.6 1.4 1.4-5 5-5-5 1.4-1.4 2.6 2.6V3h2zm-7 14h14v4H5v-4z");
 
   const tb = createTopbar(args.ribbonEl);
   tb.setChrome({
@@ -6540,6 +6542,27 @@ export function startApp(initialArgs: AppArgs) {
     tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
     tb.toolButton(project, { title: "Pricing Catalog", iconSvg: I_BOM, label: "Catalog", onClick: openPricingCatalog });
     tb.toolButton(project, { title: "BOM", iconSvg: I_BOM, label: "BOM", onClick: openBomPanel });
+    const installBtn = tb.toolButton(project, {
+      title: "Install App",
+      label: "Install",
+      iconSvg: I_INSTALL,
+      onClick: () => {
+        const state = getInstallState();
+        if (state.available) {
+          void promptAppInstall();
+          return;
+        }
+        window.alert("Chrome: Save and share > Install page as app.");
+      }
+    });
+    const syncInstallButton = () => {
+      const state = getInstallState();
+      installBtn.style.display = state.supported && !state.installed ? "" : "none";
+      installBtn.style.opacity = state.available ? "1" : "0.72";
+      installBtn.title = state.available ? "Install App" : "Install App (Chrome menu)";
+    };
+    syncInstallButton();
+    subscribeInstallState(syncInstallButton);
     const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
     tb.toolButton(project, { title: "Reset View", label: "View", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
 
