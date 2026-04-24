@@ -8,11 +8,20 @@ const kitchenCornerAnchorName = "__kitchen_corner_anchor";
 const kitchenCornerXAnchorName = "__kitchen_corner_x_anchor";
 const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
 const baseLiveRuntime = liveStateSnapshot.liveRuntime;
+const baseLiveParts = Array.isArray(baseLiveRuntime?.parts) ? baseLiveRuntime.parts : [];
+const baseLivePartByName = new Map(baseLiveParts.map((part) => [part.name, part]));
 const baseLengthXMm = typeof baseLiveRuntime?.params?.lengthX === "number" ? baseLiveRuntime.params.lengthX : 1000;
 const baseLengthZMm = typeof baseLiveRuntime?.params?.lengthZ === "number" ? baseLiveRuntime.params.lengthZ : 1000;
 const baseDepthMm = typeof baseLiveRuntime?.params?.depth === "number" ? baseLiveRuntime.params.depth : 560;
 const baseFrontThicknessMm =
   typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 19;
+const baseBoardThicknessMm =
+  typeof baseLiveRuntime?.params?.boardThickness === "number" ? baseLiveRuntime.params.boardThickness : 18;
+const baseHeightMm = typeof baseLiveRuntime?.params?.height === "number" ? baseLiveRuntime.params.height : 720;
+const baseWorktopThicknessMm =
+  typeof baseLiveRuntime?.params?.worktopThicknessMm === "number" ? baseLiveRuntime.params.worktopThicknessMm : 38;
+const basePlinthHeightMm =
+  typeof baseLiveRuntime?.params?.plinthHeight === "number" ? baseLiveRuntime.params.plinthHeight : 100;
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -32,6 +41,96 @@ function resizeMeshAxis(mesh: THREE.Mesh, axis: "x" | "z", nextSizeMm: number) {
   if (Math.abs(nextSizeMm - currentSizeMm) < 1e-6) return;
   mesh.scale[axis] *= nextSizeMm / currentSizeMm;
   dims[dimKey] = nextSizeMm;
+}
+
+function getMeshDimensionsMm(obj: THREE.Object3D | null) {
+  if (!obj) return null;
+  const dims = obj.userData?.dimensionsMm as { width?: number; height?: number; depth?: number } | undefined;
+  if (!dims) return null;
+  return dims;
+}
+
+function resizeMeshHeight(mesh: THREE.Mesh, nextHeightMm: number) {
+  const dims = getMeshDimensionsMm(mesh);
+  const currentHeightMm = dims?.height;
+  if (typeof currentHeightMm !== "number" || !Number.isFinite(currentHeightMm) || currentHeightMm <= 0) return;
+  if (Math.abs(nextHeightMm - currentHeightMm) < 1e-6) return;
+  mesh.scale.y *= nextHeightMm / currentHeightMm;
+  dims.height = nextHeightMm;
+}
+
+function setObjectCenterY(obj: THREE.Object3D | null, centerYMm: number) {
+  if (!obj) return;
+  obj.position.y = centerYMm / 1000;
+}
+
+function getBasePart(name: string) {
+  return baseLivePartByName.get(name) ?? null;
+}
+
+function getShelfGapValues(params: CornerShelfLowerParams) {
+  const raw = Array.isArray(params.shelfGaps)
+    ? params.shelfGaps.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
+    : [];
+  if (raw.length > 0) return raw;
+  const fallbackRaw = Array.isArray(baseLiveRuntime?.params?.shelfGaps)
+    ? baseLiveRuntime.params.shelfGaps.filter(
+        (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+      )
+    : [];
+  return fallbackRaw.length > 0 ? fallbackRaw : [123, 123, 123, 123];
+}
+
+function getDoorAttachmentOffsetMm(partName: string, doorName: string) {
+  const part = getBasePart(partName);
+  const door = getBasePart(doorName);
+  const partCenterY = part?.centerMm?.y;
+  const doorCenterY = door?.centerMm?.y;
+  const doorHeightMm = door?.sizeMm?.y;
+  if (
+    typeof partCenterY !== "number" ||
+    !Number.isFinite(partCenterY) ||
+    typeof doorCenterY !== "number" ||
+    !Number.isFinite(doorCenterY) ||
+    typeof doorHeightMm !== "number" ||
+    !Number.isFinite(doorHeightMm)
+  ) {
+    return null;
+  }
+
+  const doorTopMm = doorCenterY + doorHeightMm * 0.5;
+  const doorBottomMm = doorCenterY - doorHeightMm * 0.5;
+  if (partCenterY >= doorCenterY) {
+    return {
+      anchor: "top" as const,
+      offsetMm: doorTopMm - partCenterY
+    };
+  }
+  return {
+    anchor: "bottom" as const,
+    offsetMm: partCenterY - doorBottomMm
+  };
+}
+
+function applyDoorAttachmentHeightAdjustments(
+  group: THREE.Group,
+  doorName: string,
+  attachmentNames: string[],
+  doorCenterYMm: number,
+  doorHeightMm: number
+) {
+  const doorTopMm = doorCenterYMm + doorHeightMm * 0.5;
+  const doorBottomMm = doorCenterYMm - doorHeightMm * 0.5;
+
+  for (const attachmentName of attachmentNames) {
+    const obj = group.getObjectByName(attachmentName);
+    if (!obj) continue;
+    const offset = getDoorAttachmentOffsetMm(attachmentName, doorName);
+    if (!offset) continue;
+    const nextCenterYMm =
+      offset.anchor === "top" ? doorTopMm - offset.offsetMm : doorBottomMm + offset.offsetMm;
+    setObjectCenterY(obj, nextCenterYMm);
+  }
 }
 
 function getObjectBoundsMm(obj: THREE.Object3D | null) {
@@ -250,6 +349,113 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
   }
 }
 
+function applyCornerHeightAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
+  const totalHeightMm = Math.max(50, Math.round(getNumber(params.height, baseHeightMm)));
+  const worktopThicknessMm = Math.max(0, Math.round(getNumber(params.worktopThicknessMm, baseWorktopThicknessMm)));
+  const boardThicknessMm = Math.max(1, Math.round(getNumber(params.boardThickness, baseBoardThicknessMm)));
+  const plinthHeightMm = Math.max(0, Math.round(getNumber(params.plinthHeight, basePlinthHeightMm)));
+  const heightCarcassMm = Math.max(50, Math.round(getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm)));
+  const topGapMm = Math.max(0, Math.round(getNumber(params.topGap, 2)));
+  const bottomGapMm = Math.max(0, Math.round(getNumber(params.bottomGap, 2)));
+  const sidePanelHeightMm = Math.max(1, heightCarcassMm - plinthHeightMm);
+  const clearInternalHeightMm = Math.max(1, heightCarcassMm - plinthHeightMm - 2 * boardThicknessMm);
+  const bottomCenterYMm = plinthHeightMm + boardThicknessMm * 0.5;
+  const topCenterYMm = totalHeightMm - worktopThicknessMm - boardThicknessMm * 0.5;
+  const plinthCenterYMm = plinthHeightMm * 0.5;
+  const internalBottomYMm = plinthHeightMm + boardThicknessMm;
+  const internalTopYMm = totalHeightMm - worktopThicknessMm - boardThicknessMm;
+  const doorHeightMm = Math.max(1, heightCarcassMm - plinthHeightMm - topGapMm - bottomGapMm);
+  const doorCenterYMm = plinthHeightMm + bottomGapMm + doorHeightMm * 0.5;
+  const shelfGaps = getShelfGapValues(params);
+
+  const resizeHeight = (name: string, nextHeightMm: number) => {
+    const mesh = group.getObjectByName(name);
+    if (!(mesh instanceof THREE.Mesh)) return;
+    resizeMeshHeight(mesh, nextHeightMm);
+  };
+  const setCenterY = (name: string, centerYMm: number) => {
+    setObjectCenterY(group.getObjectByName(name), centerYMm);
+  };
+
+  for (const name of ["side_end_x", "side_end_z"]) {
+    resizeHeight(name, sidePanelHeightMm);
+    setCenterY(name, plinthHeightMm + sidePanelHeightMm * 0.5);
+  }
+
+  for (const name of ["bottom_x", "bottom_z", "top_x_front", "top_x_back", "top_z"]) {
+    resizeHeight(name, boardThicknessMm);
+  }
+  setCenterY("bottom_x", bottomCenterYMm);
+  setCenterY("bottom_z", bottomCenterYMm);
+  setCenterY("top_x_front", topCenterYMm);
+  setCenterY("top_x_back", topCenterYMm);
+  setCenterY("top_z", topCenterYMm);
+
+  resizeHeight("back_corner_panel", clearInternalHeightMm);
+  setCenterY("back_corner_panel", (internalBottomYMm + internalTopYMm) * 0.5);
+
+  for (const name of ["kick_x", "kick_z", "leg_inner_rear", "leg_outer_x_rear", "leg_outer_x_front", "leg_inner_x_front", "leg_outer_z_rear", "leg_outer_z_front", "leg_inner_z_front"]) {
+    resizeHeight(name, plinthHeightMm);
+    setCenterY(name, plinthCenterYMm);
+  }
+
+  resizeHeight("door_front_z", doorHeightMm);
+  resizeHeight("door_front_x", doorHeightMm);
+  setCenterY("door_front_z", doorCenterYMm);
+  setCenterY("door_front_x", doorCenterYMm);
+
+  const shelfIndices = [...new Set(
+    group.children
+      .map((child) => child.name.match(/^shelf_(\d+)_(x|z)$/i)?.[1])
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && value > 0)
+  )].sort((left, right) => left - right);
+
+  let cursorYMm = internalBottomYMm;
+  for (const shelfIndex of shelfIndices) {
+    const gapMm = Math.max(1, Math.round(shelfGaps[shelfIndex - 1] ?? shelfGaps[shelfGaps.length - 1] ?? 1));
+    cursorYMm += gapMm;
+    const centerYMm = cursorYMm + boardThicknessMm * 0.5;
+    resizeHeight(`shelf_${shelfIndex}_x`, boardThicknessMm);
+    resizeHeight(`shelf_${shelfIndex}_z`, boardThicknessMm);
+    setCenterY(`shelf_${shelfIndex}_x`, centerYMm);
+    setCenterY(`shelf_${shelfIndex}_z`, centerYMm);
+    cursorYMm += boardThicknessMm;
+  }
+
+  applyDoorAttachmentHeightAdjustments(
+    group,
+    "door_front_z",
+    [
+      "doorHandle_front_z",
+      "hinge_front_z_1_door_plate",
+      "hinge_front_z_1_door_cup",
+      "hinge_front_z_1_arm",
+      "hinge_front_z_2_door_plate",
+      "hinge_front_z_2_door_cup",
+      "hinge_front_z_2_arm"
+    ],
+    doorCenterYMm,
+    doorHeightMm
+  );
+  applyDoorAttachmentHeightAdjustments(
+    group,
+    "door_front_x",
+    [
+      "doorHandle_front_x",
+      "hinge_front_x_1_door_plate",
+      "hinge_front_x_1_door_cup",
+      "hinge_front_x_1_arm",
+      "hinge_front_x_2_door_plate",
+      "hinge_front_x_2_door_cup",
+      "hinge_front_x_2_arm"
+    ],
+    doorCenterYMm,
+    doorHeightMm
+  );
+}
+
 function alignCornerFrontSupports(group: THREE.Group) {
   const legClearanceBehindKickMm = 10;
   const xKickBounds = getObjectBoundsMm(group.getObjectByName("kick_x"));
@@ -319,6 +525,7 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Gro
 
   applyCornerDepthAdjustments(group, params);
   applyCornerLengthAdjustments(group, params);
+  applyCornerHeightAdjustments(group, params);
   alignCornerFrontSupports(group);
 
   group.updateMatrixWorld(true);

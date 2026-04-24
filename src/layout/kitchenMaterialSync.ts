@@ -1,6 +1,10 @@
 import { getMaterialDefinitionById, materialDefinitions } from "../data/pricing/materialDefinitions";
 import type { MaterialDefinition } from "../data/pricing/types";
 import type { ModuleParams } from "../model/cabinetTypes";
+import {
+  normalizeCornerShelfLowerParams,
+  type CornerShelfLowerParams
+} from "../modules/cornerShelfLower/types";
 import cornerShelfLowerMaterialsSnapshot from "../modules/cornerShelfLower/package/definitions/corner_shelf_lower.materials.snapshot.json";
 import drawerLowMaterialsSnapshot from "../modules/drawerLow/package/definitions/drawer_low.materials.snapshot.json";
 import { updateCommercialSelections, type PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
@@ -181,6 +185,8 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   record.height = ctx.heightMm;
   record.heightCarcass = ctx.moduleHeightMm;
   record.depth = ctx.moduleDepthMm;
+  record.plinthHeight = ctx.plinthHeightMm;
+  record.plinthSetbackMm = ctx.plinthDepthMm;
 
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
@@ -231,6 +237,11 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
       boardThicknesses
     };
   });
+
+  Object.assign(
+    record,
+    normalizeCornerShelfLowerParams(record as CornerShelfLowerParams)
+  );
 }
 
 export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily): KitchenMaterialSelectOption[] {
