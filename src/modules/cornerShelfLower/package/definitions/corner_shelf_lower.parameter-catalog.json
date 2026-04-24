@@ -49,38 +49,6 @@
       "description": "Exported parameter assembly context."
     },
     {
-      "key": "backGrooveClearanceMm",
-      "group": "dimensions",
-      "type": "number",
-      "required": true,
-      "defaultValue": 1,
-      "description": "Exported parameter back groove clearance mm."
-    },
-    {
-      "key": "backGrooveDepthMm",
-      "group": "dimensions",
-      "type": "number",
-      "required": true,
-      "defaultValue": 8,
-      "description": "Exported parameter back groove depth mm."
-    },
-    {
-      "key": "backGrooveOffsetMm",
-      "group": "dimensions",
-      "type": "number",
-      "required": true,
-      "defaultValue": 12,
-      "description": "Exported parameter back groove offset mm."
-    },
-    {
-      "key": "backGrooveWidthMm",
-      "group": "dimensions",
-      "type": "number",
-      "required": true,
-      "defaultValue": 8,
-      "description": "Exported parameter back groove width mm."
-    },
-    {
       "key": "backThickness",
       "group": "dimensions",
       "type": "number",
@@ -121,14 +89,6 @@
       "description": "Exported parameter depth."
     },
     {
-      "key": "doorDouble",
-      "group": "fronts",
-      "type": "boolean",
-      "required": true,
-      "defaultValue": true,
-      "description": "Exported parameter door double."
-    },
-    {
       "key": "doorOpen",
       "group": "fronts",
       "type": "boolean",
@@ -153,44 +113,12 @@
       "description": "Exported parameter handle component id."
     },
     {
-      "key": "handleLengthMm",
-      "group": "dimensions",
-      "type": "number",
-      "required": true,
-      "defaultValue": 160,
-      "description": "Exported parameter handle length mm."
-    },
-    {
       "key": "handlePositionMm",
       "group": "fronts",
       "type": "number",
       "required": true,
       "defaultValue": 60,
       "description": "Exported parameter handle position mm."
-    },
-    {
-      "key": "handleProjectionMm",
-      "group": "fronts",
-      "type": "number",
-      "required": true,
-      "defaultValue": 14,
-      "description": "Exported parameter handle projection mm."
-    },
-    {
-      "key": "handleSizeMm",
-      "group": "fronts",
-      "type": "number",
-      "required": true,
-      "defaultValue": 12,
-      "description": "Exported parameter handle size mm."
-    },
-    {
-      "key": "handleType",
-      "group": "fronts",
-      "type": "string",
-      "required": true,
-      "defaultValue": "bar",
-      "description": "Exported parameter handle type."
     },
     {
       "key": "height",
@@ -255,22 +183,6 @@
       "required": true,
       "defaultValue": "cmp.leg.adjustable.100.black",
       "description": "Exported parameter leg component id."
-    },
-    {
-      "key": "legDiameterMm",
-      "group": "general",
-      "type": "number",
-      "required": true,
-      "defaultValue": 40,
-      "description": "Exported parameter leg diameter mm."
-    },
-    {
-      "key": "legInsetMm",
-      "group": "general",
-      "type": "number",
-      "required": true,
-      "defaultValue": 30,
-      "description": "Exported parameter leg inset mm."
     },
     {
       "key": "lengthX",

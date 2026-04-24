@@ -4,7 +4,9 @@ import {
   type PortableMaterialsSnapshot
 } from "./portableCommercial";
 import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
+import { getComponentGeometryDefinitionForComponentId } from "../../data/pricing/componentGeometryDefinitions";
 import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
+import type { ComponentGeometryDefinition } from "../../data/pricing/types";
 
 export type PortableGeometryPart = {
   id: string;
@@ -540,15 +542,87 @@ function resolveLivePartOverride(
 
   const component = resolvePortableComponentAssignment(partName, params, snapshot);
   if (component) {
+    const geometry = getComponentGeometryDefinitionForComponentId(component.catalogId);
     return {
       colorHex: component.preview.colorHex,
       roughness: component.preview.roughness,
       metalness: component.preview.metalness,
-      thicknessMm: null as number | null
+      thicknessMm: null as number | null,
+      componentGeometry: geometry
     };
   }
 
   return null;
+}
+
+function applyComponentGeometrySize(
+  part: PortableLivePart,
+  sizeMm: { x: number; y: number; z: number },
+  componentGeometry: ComponentGeometryDefinition | null | undefined
+) {
+  if (!componentGeometry) return sizeMm;
+  const next = { ...sizeMm };
+  const dims = componentGeometry.dimensionsMm;
+
+  if (componentGeometry.componentType === "handle") {
+    if (componentGeometry.archetype === "handle_knob") {
+      const diameterMm = Math.max(1, dims.diameterMm ?? dims.widthMm ?? sizeMm.y);
+      const projectionMm = Math.max(1, dims.projectionMm ?? dims.depthMm ?? sizeMm.z);
+      if (/front_z/i.test(part.name)) {
+        next.x = diameterMm;
+        next.y = diameterMm;
+        next.z = projectionMm;
+      } else {
+        next.x = projectionMm;
+        next.y = diameterMm;
+        next.z = diameterMm;
+      }
+      return next;
+    }
+
+    const lengthMm = Math.max(1, dims.lengthMm ?? sizeMm.x ?? sizeMm.z);
+    const heightMm = Math.max(1, dims.heightMm ?? dims.thicknessMm ?? sizeMm.y);
+    const projectionMm = Math.max(1, dims.projectionMm ?? dims.depthMm ?? sizeMm.z);
+    if (/front_z/i.test(part.name)) {
+      next.x = lengthMm;
+      next.y = heightMm;
+      next.z = projectionMm;
+    } else {
+      next.x = projectionMm;
+      next.y = heightMm;
+      next.z = lengthMm;
+    }
+    return next;
+  }
+
+  if (componentGeometry.componentType === "leg") {
+    next.x = Math.max(1, dims.widthMm ?? dims.diameterMm ?? sizeMm.x);
+    next.y = Math.max(1, dims.heightMm ?? sizeMm.y);
+    next.z = Math.max(1, dims.depthMm ?? dims.diameterMm ?? sizeMm.z);
+    return next;
+  }
+
+  if (componentGeometry.componentType === "hinge") {
+    if (/front_z/i.test(part.name)) {
+      next.x = Math.max(1, dims.widthMm ?? sizeMm.x);
+      next.y = Math.max(1, dims.heightMm ?? sizeMm.y);
+      next.z = Math.max(1, dims.depthMm ?? sizeMm.z);
+    } else {
+      next.x = Math.max(1, dims.depthMm ?? sizeMm.x);
+      next.y = Math.max(1, dims.heightMm ?? sizeMm.y);
+      next.z = Math.max(1, dims.widthMm ?? sizeMm.z);
+    }
+    return next;
+  }
+
+  if (componentGeometry.componentType === "plinth_clip") {
+    next.x = Math.max(1, dims.widthMm ?? sizeMm.x);
+    next.y = Math.max(1, dims.heightMm ?? sizeMm.y);
+    next.z = Math.max(1, dims.depthMm ?? sizeMm.z);
+    return next;
+  }
+
+  return next;
 }
 
 function getPrimaryAxis(size: PortableLiveVector): "x" | "y" | "z" {
@@ -627,7 +701,29 @@ function createScrewGeometry(part: PortableLivePart, sizeMm: PortableLiveVector)
   });
 }
 
-function createLivePartGeometry(part: PortableLivePart, sizeMm: PortableLiveVector): LivePartGeometry {
+function createLivePartGeometry(
+  part: PortableLivePart,
+  sizeMm: PortableLiveVector,
+  componentGeometry?: ComponentGeometryDefinition | null
+): LivePartGeometry {
+  if (componentGeometry?.componentType === "handle") {
+    if (componentGeometry.archetype === "handle_knob") {
+      const axis = /front_z/i.test(part.name) ? "z" : "x";
+      const radiusMm = Math.max(sizeMm.x, sizeMm.y, sizeMm.z) / 2;
+      const heightMm = axis === "z" ? sizeMm.z : sizeMm.x;
+      return createCylinderGeometry(axis, radiusMm, heightMm, {
+        radialSegments: 24
+      });
+    }
+    if (componentGeometry.archetype === "handle_bar") {
+      const axis = /front_z/i.test(part.name) ? "x" : "z";
+      const radiusMm = Math.max(sizeMm.y, Math.min(sizeMm.x, sizeMm.z)) / 2;
+      const heightMm = axis === "x" ? sizeMm.x : sizeMm.z;
+      return createCylinderGeometry(axis, radiusMm, heightMm, {
+        radialSegments: 18
+      });
+    }
+  }
   if (/^leg_/i.test(part.name)) {
     return createLegGeometry(sizeMm);
   }
@@ -704,11 +800,13 @@ function buildMeshFromLivePart(
     z: Math.max(1, z.sizeMm)
   };
   const override = resolveLivePartOverride(part.name, currentParams, materialsSnapshot);
+  const componentGeometry = override?.componentGeometry ?? null;
   if (override?.thicknessMm) {
     const minAxis = (["x", "y", "z"] as const).sort((left, right) => sizeMm[left] - sizeMm[right])[0];
     sizeMm[minAxis] = Math.max(1, override.thicknessMm);
   }
-  const { geometry, axis, rotationX, rotationY, rotationZ } = createLivePartGeometry(part, sizeMm);
+  const geometrySize = applyComponentGeometrySize(part, sizeMm, componentGeometry);
+  const { geometry, axis, rotationX, rotationY, rotationZ } = createLivePartGeometry(part, geometrySize, componentGeometry);
   const mesh = new THREE.Mesh(
     geometry,
     override
@@ -729,9 +827,9 @@ function buildMeshFromLivePart(
   mesh.userData.selectable = part.selectable !== false;
   mesh.userData.paramKeys = [...(part.paramKeys ?? [])];
   mesh.userData.dimensionsMm = {
-    width: x.sizeMm,
-    height: y.sizeMm,
-    depth: z.sizeMm
+    width: geometrySize.x,
+    height: geometrySize.y,
+    depth: geometrySize.z
   };
   return mesh;
 }

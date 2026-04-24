@@ -84,6 +84,13 @@ export type PortableFieldOption = {
   label: string;
 };
 
+export type PortableFieldState = {
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+};
+
 type PortableFieldControl = {
   key: string;
   wrapper: HTMLElement;
@@ -451,6 +458,17 @@ function groupLabelForBoardFamily(family: string | undefined) {
   }
 }
 
+function matchesBoardFamily(
+  requestedFamily: string | undefined,
+  family: ReturnType<typeof getBoardMaterialFamilyOptions>[number]
+) {
+  const variantFamilies = new Set(family.variants.map((variant) => variant.boardFamily));
+  if (requestedFamily === "shelf") {
+    return variantFamilies.has("shelf") || variantFamilies.has("body");
+  }
+  return requestedFamily ? variantFamilies.has(requestedFamily as typeof family.variants[number]["boardFamily"]) : true;
+}
+
 export function createPortableModuleControls<T extends Record<string, unknown>>(args: {
   container: HTMLElement;
   params: T;
@@ -458,11 +476,12 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   controlArgs: PortableModuleControlsArgs;
   paramChangeHook?: (params: T, key: string) => void;
   fieldOptions?: Record<string, PortableFieldOption[]>;
+  fieldState?: Partial<Record<string, (params: T) => PortableFieldState>>;
   materialsSnapshot?: PortableMaterialsSnapshot;
   systemCatalog?: PortableSystemParameterCatalog;
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
-  const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, materialsSnapshot, systemCatalog, systemValues } = args;
+  const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, fieldState, materialsSnapshot, systemCatalog, systemValues } = args;
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
   void controlArgs.getWorktopThicknessMm;
   void controlArgs.commitBoundary;
@@ -486,6 +505,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
     syncFromParams();
     return true;
   };
+  const getFieldState = (key: string) => fieldState?.[key]?.(params) ?? {};
 
   const editableRoot = document.createElement("div");
   editableRoot.className = "portable-controls";
@@ -586,6 +606,13 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           readFromParams: () => {
             const value = params[parameter.key];
             input.value = typeof value === "number" ? String(value) : "";
+            const state = getFieldState(parameter.key);
+            input.disabled = state.disabled === true;
+            input.step = String(state.step ?? 1);
+            if (typeof state.min === "number" && Number.isFinite(state.min)) input.min = String(state.min);
+            else input.removeAttribute("min");
+            if (typeof state.max === "number" && Number.isFinite(state.max)) input.max = String(state.max);
+            else input.removeAttribute("max");
           }
         });
         continue;
@@ -690,14 +717,36 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         continue;
       }
 
-      const input = document.createElement("textarea");
+      const isNumberArray = parameter.type === "number[]";
+      const input = isNumberArray ? document.createElement("input") : document.createElement("textarea");
       input.id = `portable_${parameter.key}`;
-      input.rows = 2;
+      if (input instanceof HTMLInputElement) {
+        input.type = "text";
+        input.placeholder = "napr. 120, 180, 160";
+      } else {
+        input.rows = 2;
+      }
       wrapper.appendChild(input);
       title.htmlFor = input.id;
 
       const apply = () => {
-        const parsed = parseJsonValue(input.value);
+        let parsed: PortableJsonValue | undefined;
+        if (isNumberArray && input instanceof HTMLInputElement) {
+          const raw = input.value.trim();
+          if (raw.length === 0) {
+            parsed = [];
+          } else {
+            const normalized = raw.startsWith("[") ? raw : `[${raw}]`;
+            const jsonParsed = parseJsonValue(normalized);
+            parsed =
+              Array.isArray(jsonParsed) &&
+              jsonParsed.every((value) => typeof value === "number" && Number.isFinite(value))
+                ? jsonParsed
+                : undefined;
+          }
+        } else {
+          parsed = parseJsonValue(input.value);
+        }
         if (parsed === undefined) {
           wrapper.classList.add("error");
           return;
@@ -720,7 +769,14 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         key: parameter.key,
         wrapper,
         readFromParams: () => {
-          input.value = JSON.stringify(params[parameter.key] ?? parameter.defaultValue, null, 2);
+          const current = params[parameter.key] ?? parameter.defaultValue;
+          if (isNumberArray && input instanceof HTMLInputElement) {
+            const values = Array.isArray(current) ? current : [];
+            input.value = values.join(", ");
+          } else {
+            input.value = JSON.stringify(current, null, 2);
+          }
+          input.disabled = getFieldState(parameter.key).disabled === true;
           wrapper.classList.remove("error");
         }
       });
@@ -749,12 +805,16 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       materialSelect: HTMLSelectElement,
       thicknessSelect: HTMLSelectElement,
       slotId: string,
-      fallbackCatalogId: string
+      fallbackCatalogId: string,
+      allowedFamilies: ReturnType<typeof getBoardMaterialFamilyOptions>
     ) => {
       const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
       const selectedCatalogId = slotMaterialCatalogIds[slotId] ?? fallbackCatalogId;
       const selectedBaseId = normalizeBaseMaterialId(selectedCatalogId);
-      const family = familyByBaseId.get(selectedBaseId) ?? materialFamilies.find((entry) => entry.variants.some((variant) => variant.id === selectedCatalogId));
+      const family =
+        familyByBaseId.get(selectedBaseId) ??
+        allowedFamilies.find((entry) => entry.variants.some((variant) => variant.id === selectedCatalogId)) ??
+        materialFamilies.find((entry) => entry.variants.some((variant) => variant.id === selectedCatalogId));
       if (!family) return;
 
       materialSelect.value = family.baseId;
@@ -773,7 +833,12 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       }
     };
 
-    const createBoardSelectors = (slotIds: string[], fallbackCatalogId: string, thicknessParameterKey?: string | null) => {
+    const createBoardSelectors = (
+      slotIds: string[],
+      fallbackCatalogId: string,
+      thicknessParameterKey?: string | null,
+      boardFamily?: string
+    ) => {
       const row = document.createElement("div");
       row.style.display = "grid";
       row.style.gridTemplateColumns = "minmax(0, 1.25fr) minmax(0, 0.75fr)";
@@ -781,7 +846,8 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
       const materialSelect = document.createElement("select");
       const thicknessSelect = document.createElement("select");
-      for (const family of materialFamilies) {
+      const allowedFamilies = materialFamilies.filter((family) => matchesBoardFamily(boardFamily, family));
+      for (const family of allowedFamilies.length > 0 ? allowedFamilies : materialFamilies) {
         const option = document.createElement("option");
         option.value = family.baseId;
         option.textContent = t(family.displayName);
@@ -838,10 +904,10 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       controls.push({
         key: `slot:${slotIds.join(",")}`,
         wrapper: row,
-        readFromParams: () => syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId)
+        readFromParams: () => syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId, allowedFamilies)
       });
 
-      syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId);
+      syncSlotControlState(materialSelect, thicknessSelect, slotIds[0]!, fallbackCatalogId, allowedFamilies);
       return row;
     };
 
@@ -860,7 +926,8 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         createBoardSelectors(
           slots.map((slot) => slot.slotId),
           slots[0]!.assignedMaterial.catalogId,
-          slots[0]!.thicknessParameterKey ?? null
+          slots[0]!.thicknessParameterKey ?? null,
+          familyKey
         )
       );
 
@@ -870,7 +937,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         slotMeta.style.fontSize = "12px";
         slotMeta.textContent = slot.label;
         groupWrapper.appendChild(slotMeta);
-        groupWrapper.appendChild(createBoardSelectors([slot.slotId], slot.assignedMaterial.catalogId, slot.thicknessParameterKey ?? null));
+        groupWrapper.appendChild(
+          createBoardSelectors([slot.slotId], slot.assignedMaterial.catalogId, slot.thicknessParameterKey ?? null, slot.boardFamily)
+        );
       }
 
       sectionBody.appendChild(groupWrapper);

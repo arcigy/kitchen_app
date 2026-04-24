@@ -11581,7 +11581,7 @@ export function startApp(initialArgs: AppArgs) {
     return getDebugKitchenSnapshot(groupId);
   };
 
-  const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number }) => {
+  const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number; cornerIndex?: number }) => {
     const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
     const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
     if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
@@ -11594,7 +11594,12 @@ export function startApp(initialArgs: AppArgs) {
     if (nextParams.type === "corner_shelf_lower") {
       const guidePath = getKitchenWorktopBackGuidePath(worktop.params, group.ctx.worktopBackOffsetMm);
       let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
-      for (let cornerIndex = 1; cornerIndex < guidePath.length - 1; cornerIndex += 1) {
+      const requestedCornerIndex = typeof opts?.cornerIndex === "number" ? Math.round(opts.cornerIndex) : null;
+      const candidateCornerIndexes =
+        requestedCornerIndex != null
+          ? [requestedCornerIndex]
+          : Array.from({ length: Math.max(0, guidePath.length - 2) }, (_, index) => index + 1);
+      for (const cornerIndex of candidateCornerIndexes) {
         info = getKitchenCornerPlacementInfo(worktop, cornerIndex, group.ctx.worktopBackOffsetMm, inst);
         if (info?.valid) break;
       }
@@ -11631,6 +11636,7 @@ export function startApp(initialArgs: AppArgs) {
     moduleType?: ModuleParams["type"];
     segmentIndex?: number;
     offsetAlongMm?: number;
+    cornerIndex?: number;
   }) => {
     debugResetKitchenScenario();
     ensureLayoutMode();
@@ -11667,7 +11673,8 @@ export function startApp(initialArgs: AppArgs) {
       debugAddKitchenModule(groupId, {
         type: opts?.moduleType ?? "drawer_low",
         segmentIndex: opts?.segmentIndex ?? 0,
-        offsetAlongMm: opts?.offsetAlongMm ?? 700
+        offsetAlongMm: opts?.offsetAlongMm ?? 700,
+        cornerIndex: opts?.cornerIndex
       });
     }
 

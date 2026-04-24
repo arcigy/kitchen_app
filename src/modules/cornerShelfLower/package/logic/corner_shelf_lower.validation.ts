@@ -1,11 +1,10 @@
 export const moduleType = "corner_shelf_lower";
 export const displayName = "Corner";
-export const defaultDrawerCount = 1;
 export const validationRules = [
   {
     "code": "width_positive",
-    "condition": "params.width > 0 || params.lengthX > 0",
-    "message": "corner_shelf_lower width must be positive."
+    "condition": "params.lengthX > 0",
+    "message": "corner_shelf_lower lengthX must be positive."
   },
   {
     "code": "height_positive",
@@ -14,31 +13,38 @@ export const validationRules = [
   },
   {
     "code": "depth_positive",
-    "condition": "params.depth > 0 || params.lengthZ > 0",
-    "message": "corner_shelf_lower depth must be positive."
+    "condition": "params.depth > 0 && params.lengthZ > 0",
+    "message": "corner_shelf_lower depth and lengthZ must be positive."
   },
   {
-    "code": "drawer_fronts_match_count",
-    "condition": "drawerFrontHeights.length === 0 || drawerFrontHeights.length === drawerCount",
-    "message": "drawerFrontHeights should be empty or match drawerCount."
+    "code": "plinth_not_exceed_carcass",
+    "condition": "params.plinthHeight <= (params.heightCarcass - 2 * params.boardThickness)",
+    "message": "plinthHeight must fit inside the carcass height."
+  },
+  {
+    "code": "door_height_positive",
+    "condition": "(params.heightCarcass - params.plinthHeight - params.topGap - params.bottomGap) > 0",
+    "message": "Corner door height must stay positive."
   }
 ] as const;
 
 export function validateParams(input: Record<string, unknown>) {
   const errors: string[] = [];
-  const width = typeof input.width === 'number' ? input.width : typeof input.lengthX === 'number' ? input.lengthX : 0;
+  const width = typeof input.lengthX === 'number' ? input.lengthX : 0;
   const height = typeof input.height === 'number' ? input.height : 0;
-  const depth = typeof input.depth === 'number' ? input.depth : typeof input.lengthZ === 'number' ? input.lengthZ : 0;
-  const drawerCount = typeof input.drawerCount === 'number' ? Math.max(1, Math.round(input.drawerCount)) : defaultDrawerCount;
-  const drawerFrontHeights = Array.isArray(input.drawerFrontHeights)
-    ? input.drawerFrontHeights.filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry))
-    : [];
+  const depth = typeof input.depth === 'number' ? input.depth : 0;
+  const lengthZ = typeof input.lengthZ === 'number' ? input.lengthZ : 0;
+  const heightCarcass = typeof input.heightCarcass === 'number' ? input.heightCarcass : 0;
+  const boardThickness = typeof input.boardThickness === 'number' ? input.boardThickness : 0;
+  const plinthHeight = typeof input.plinthHeight === 'number' ? input.plinthHeight : 0;
+  const topGap = typeof input.topGap === 'number' ? input.topGap : 0;
+  const bottomGap = typeof input.bottomGap === 'number' ? input.bottomGap : 0;
   if (width <= 0) errors.push('Width must be positive.');
   if (height <= 0) errors.push('Height must be positive.');
   if (depth <= 0) errors.push('Depth must be positive.');
-  if (drawerFrontHeights.length > 0 && drawerFrontHeights.length !== drawerCount) {
-    errors.push('drawerFrontHeights must match drawerCount.');
-  }
+  if (lengthZ <= 0) errors.push('Length Z must be positive.');
+  if (plinthHeight > Math.max(0, heightCarcass - 2 * boardThickness)) errors.push('Plinth height is too large.');
+  if (heightCarcass - plinthHeight - topGap - bottomGap <= 0) errors.push('Door opening height must stay positive.');
   return {
     valid: errors.length === 0,
     errors

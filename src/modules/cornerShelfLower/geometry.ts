@@ -15,6 +15,8 @@ const baseLengthZMm = typeof baseLiveRuntime?.params?.lengthZ === "number" ? bas
 const baseDepthMm = typeof baseLiveRuntime?.params?.depth === "number" ? baseLiveRuntime.params.depth : 560;
 const baseFrontThicknessMm =
   typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 19;
+const baseBackThicknessMm =
+  typeof baseLiveRuntime?.params?.backThickness === "number" ? baseLiveRuntime.params.backThickness : 6;
 const baseBoardThicknessMm =
   typeof baseLiveRuntime?.params?.boardThickness === "number" ? baseLiveRuntime.params.boardThickness : 18;
 const baseHeightMm = typeof baseLiveRuntime?.params?.height === "number" ? baseLiveRuntime.params.height : 720;
@@ -68,6 +70,18 @@ function getBasePart(name: string) {
   return baseLivePartByName.get(name) ?? null;
 }
 
+const baseSideGapMm = typeof baseLiveRuntime?.params?.sideGap === "number" ? baseLiveRuntime.params.sideGap : 2;
+const baseHandleOffsetAlongDoorXMm =
+  ((getBasePart("doorHandle_front_z")?.centerMm?.x ?? 0) - (getBasePart("door_front_z")?.centerMm?.x ?? 0)) || 40;
+const baseHandleOffsetAlongDoorZMm =
+  ((getBasePart("doorHandle_front_x")?.centerMm?.z ?? 0) - (getBasePart("door_front_x")?.centerMm?.z ?? 0)) || 40;
+const baseHingeInsetXMm =
+  ((getBasePart("door_front_z")?.sizeMm?.x ?? 418) * 0.5) -
+    ((getBasePart("hinge_front_z_1_door_plate")?.centerMm?.x ?? 0) - (getBasePart("door_front_z")?.centerMm?.x ?? 0)) || 37;
+const baseHingeInsetZMm =
+  ((getBasePart("door_front_x")?.sizeMm?.z ?? 418) * 0.5) -
+    ((getBasePart("hinge_front_x_1_door_plate")?.centerMm?.z ?? 0) - (getBasePart("door_front_x")?.centerMm?.z ?? 0)) || 37;
+
 function getShelfGapValues(params: CornerShelfLowerParams) {
   const raw = Array.isArray(params.shelfGaps)
     ? params.shelfGaps.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
@@ -79,6 +93,96 @@ function getShelfGapValues(params: CornerShelfLowerParams) {
       )
     : [];
   return fallbackRaw.length > 0 ? fallbackRaw : [123, 123, 123, 123];
+}
+
+function getObjectCenterMm(obj: THREE.Object3D | null) {
+  if (!obj) return null;
+  return {
+    x: obj.position.x * 1000,
+    y: obj.position.y * 1000,
+    z: obj.position.z * 1000
+  };
+}
+
+function setObjectCenterX(obj: THREE.Object3D | null, centerXMm: number) {
+  if (!obj) return;
+  obj.position.x = centerXMm / 1000;
+}
+
+function setObjectCenterZ(obj: THREE.Object3D | null, centerZMm: number) {
+  if (!obj) return;
+  obj.position.z = centerZMm / 1000;
+}
+
+function getUniqueIndices(group: THREE.Group, pattern: RegExp) {
+  return [...new Set(
+    group.children
+      .map((child) => child.name.match(pattern)?.[1])
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && value > 0)
+  )].sort((left, right) => left - right);
+}
+
+function cloneNamedMesh(group: THREE.Group, templateName: string, nextName: string) {
+  const template = group.getObjectByName(templateName);
+  if (!(template instanceof THREE.Mesh)) return null;
+  const clone = template.clone();
+  clone.name = nextName;
+  clone.material = Array.isArray(template.material)
+    ? template.material.map((material) => material.clone())
+    : template.material.clone();
+  clone.userData = structuredClone(template.userData ?? {});
+  group.add(clone);
+  return clone;
+}
+
+function syncCornerShelfMeshes(group: THREE.Group, params: CornerShelfLowerParams) {
+  const desiredShelfPairCount = Math.max(0, Math.round(getNumber(params.shelfCount, 4)) - 1);
+  const existing = getUniqueIndices(group, /^shelf_(\d+)_(x|z)$/i);
+  const templateXName = existing[0] ? `shelf_${existing[0]}_x` : "shelf_1_x";
+  const templateZName = existing[0] ? `shelf_${existing[0]}_z` : "shelf_1_z";
+
+  for (let index = 1; index <= desiredShelfPairCount; index += 1) {
+    if (!group.getObjectByName(`shelf_${index}_x`)) cloneNamedMesh(group, templateXName, `shelf_${index}_x`);
+    if (!group.getObjectByName(`shelf_${index}_z`)) cloneNamedMesh(group, templateZName, `shelf_${index}_z`);
+  }
+
+  for (const index of existing) {
+    if (index <= desiredShelfPairCount) continue;
+    for (const axis of ["x", "z"] as const) {
+      const obj = group.getObjectByName(`shelf_${index}_${axis}`);
+      if (!obj) continue;
+      group.remove(obj);
+    }
+  }
+}
+
+function syncCornerHingeMeshes(group: THREE.Group, params: CornerShelfLowerParams) {
+  const desiredCount = Math.max(1, Math.round(getNumber(params.hingeCountPerDoor, 2)));
+  const suffixes = ["door_plate", "door_cup", "arm"] as const;
+
+  for (const axis of ["x", "z"] as const) {
+    const existing = getUniqueIndices(group, new RegExp(`^hinge_front_${axis}_(\\d+)_(door_plate|door_cup|arm)$`, "i"));
+    const templateIndex = existing[0] ?? 1;
+
+    for (let index = 1; index <= desiredCount; index += 1) {
+      for (const suffix of suffixes) {
+        const name = `hinge_front_${axis}_${index}_${suffix}`;
+        if (group.getObjectByName(name)) continue;
+        cloneNamedMesh(group, `hinge_front_${axis}_${templateIndex}_${suffix}`, name);
+      }
+    }
+
+    for (const index of existing) {
+      if (index <= desiredCount) continue;
+      for (const suffix of suffixes) {
+        const obj = group.getObjectByName(`hinge_front_${axis}_${index}_${suffix}`);
+        if (!obj) continue;
+        group.remove(obj);
+      }
+    }
+  }
 }
 
 function getDoorAttachmentOffsetMm(partName: string, doorName: string) {
@@ -162,13 +266,7 @@ function applyCornerDepthAdjustments(group: THREE.Group, params: CornerShelfLowe
   const resizeAlongX = ["side_end_z"];
   const shiftDoorAlongZ = [
     "door_front_z",
-    "doorHandle_front_z",
-    "hinge_front_z_1_door_plate",
-    "hinge_front_z_1_door_cup",
-    "hinge_front_z_1_arm",
-    "hinge_front_z_2_door_plate",
-    "hinge_front_z_2_door_cup",
-    "hinge_front_z_2_arm"
+    "doorHandle_front_z"
   ];
   const shiftCarcassAlongZ = [
     "top_x_front",
@@ -184,13 +282,7 @@ function applyCornerDepthAdjustments(group: THREE.Group, params: CornerShelfLowe
   ];
   const shiftDoorAlongX = [
     "door_front_x",
-    "doorHandle_front_x",
-    "hinge_front_x_1_door_plate",
-    "hinge_front_x_1_door_cup",
-    "hinge_front_x_1_arm",
-    "hinge_front_x_2_door_plate",
-    "hinge_front_x_2_door_cup",
-    "hinge_front_x_2_arm"
+    "doorHandle_front_x"
   ];
   const shiftCarcassAlongX = [
     "leg_outer_z_front",
@@ -244,7 +336,15 @@ function applyCornerDepthAdjustments(group: THREE.Group, params: CornerShelfLowe
       shiftMeshAxis(mesh, "z", doorShiftDeltaMm);
       continue;
     }
+    if (/^hinge_front_z_\d+_/i.test(name)) {
+      shiftMeshAxis(mesh, "z", doorShiftDeltaMm);
+      continue;
+    }
     if (shiftDoorAlongX.includes(name)) {
+      shiftMeshAxis(mesh, "x", doorShiftDeltaMm);
+      continue;
+    }
+    if (/^hinge_front_x_\d+_/i.test(name)) {
       shiftMeshAxis(mesh, "x", doorShiftDeltaMm);
       continue;
     }
@@ -271,24 +371,12 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
   const shiftAlongZ = ["side_end_z", "leg_outer_z_rear", "leg_outer_z_front"];
   const shiftAlongDoorX = [
     "doorHandle_front_z",
-    "hinge_front_z_1_door_plate",
-    "hinge_front_z_1_door_cup",
-    "hinge_front_z_1_arm",
-    "hinge_front_z_2_door_plate",
-    "hinge_front_z_2_door_cup",
-    "hinge_front_z_2_arm",
     "kickClip_x_outer_collar",
     "kickClip_x_outer_pad",
     "kickClip_x_outer_arm"
   ];
   const shiftAlongDoorZ = [
     "doorHandle_front_x",
-    "hinge_front_x_1_door_plate",
-    "hinge_front_x_1_door_cup",
-    "hinge_front_x_1_arm",
-    "hinge_front_x_2_door_plate",
-    "hinge_front_x_2_door_cup",
-    "hinge_front_x_2_arm",
     "kickClip_z_outer_collar",
     "kickClip_z_outer_pad",
     "kickClip_z_outer_arm"
@@ -343,8 +431,38 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
       shiftMeshAxis(mesh, "x", deltaLengthXMm);
       continue;
     }
+    if (Math.abs(deltaLengthXMm) > 1e-6 && /^hinge_front_z_\d+_/i.test(name)) {
+      shiftMeshAxis(mesh, "x", deltaLengthXMm);
+      continue;
+    }
     if (Math.abs(deltaLengthZMm) > 1e-6 && shiftAlongDoorZ.includes(name)) {
       shiftMeshAxis(mesh, "z", deltaLengthZMm);
+      continue;
+    }
+    if (Math.abs(deltaLengthZMm) > 1e-6 && /^hinge_front_x_\d+_/i.test(name)) {
+      shiftMeshAxis(mesh, "z", deltaLengthZMm);
+    }
+  }
+}
+
+function applyCornerBackAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
+  const backThicknessMm = Math.max(1, Math.round(getNumber(params.backThickness, baseBackThicknessMm)));
+  const backX = group.getObjectByName("back_x") as THREE.Mesh | null;
+  const backZ = group.getObjectByName("back_z") as THREE.Mesh | null;
+  const backXCenter = getObjectCenterMm(backX);
+  const backZCenter = getObjectCenterMm(backZ);
+
+  if (backX instanceof THREE.Mesh) {
+    resizeMeshAxis(backX, "z", backThicknessMm);
+    if (backXCenter) {
+      setObjectCenterZ(backX, backXCenter.z - (backThicknessMm - baseBackThicknessMm) * 0.5);
+    }
+  }
+
+  if (backZ instanceof THREE.Mesh) {
+    resizeMeshAxis(backZ, "x", backThicknessMm);
+    if (backZCenter) {
+      setObjectCenterX(backZ, backZCenter.x - (backThicknessMm - baseBackThicknessMm) * 0.5);
     }
   }
 }
@@ -456,6 +574,161 @@ function applyCornerHeightAdjustments(group: THREE.Group, params: CornerShelfLow
   );
 }
 
+function getHingeCenterOffsetsMm(doorCenterYMm: number, doorHeightMm: number, count: number, topOffsetMm: number, bottomOffsetMm: number) {
+  if (count <= 1) return [doorCenterYMm];
+  const topCenterYMm = doorCenterYMm + doorHeightMm * 0.5 - topOffsetMm;
+  const bottomCenterYMm = doorCenterYMm - doorHeightMm * 0.5 + bottomOffsetMm;
+  if (count === 2) return [bottomCenterYMm, topCenterYMm];
+
+  return Array.from({ length: count }, (_, index) => {
+    const t = count === 1 ? 0.5 : index / (count - 1);
+    return bottomCenterYMm + (topCenterYMm - bottomCenterYMm) * t;
+  });
+}
+
+function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
+  const sideGapMm = Math.max(0, Math.round(getNumber(params.sideGap, baseSideGapMm)));
+  const deltaSideGapMm = sideGapMm - baseSideGapMm;
+  const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, baseFrontThicknessMm)));
+  const handleLengthMm = Math.max(12, Math.round(getNumber(params.handleLengthMm, 160)));
+  const handleSizeMm = Math.max(8, Math.round(getNumber(params.handleSizeMm, 12)));
+  const handleProjectionMm = Math.max(4, Math.round(getNumber(params.handleProjectionMm, 14)));
+  const handlePositionMm = Math.max(0, Math.round(getNumber(params.handlePositionMm, 60)));
+  const hingeCount = Math.max(1, Math.round(getNumber(params.hingeCountPerDoor, 2)));
+  const hingeTopOffsetMm = Math.max(0, Math.round(getNumber(params.hingeTopOffsetMm, 110)));
+  const hingeBottomOffsetMm = Math.max(0, Math.round(getNumber(params.hingeBottomOffsetMm, 110)));
+
+  const doorFrontZ = group.getObjectByName("door_front_z") as THREE.Mesh | null;
+  const doorFrontX = group.getObjectByName("door_front_x") as THREE.Mesh | null;
+  const doorFrontZDims = getMeshDimensionsMm(doorFrontZ);
+  const doorFrontXDims = getMeshDimensionsMm(doorFrontX);
+
+  if (doorFrontZ instanceof THREE.Mesh && doorFrontZDims) {
+    resizeMeshAxis(doorFrontZ, "x", Math.max(40, doorFrontZDims.width - 2 * deltaSideGapMm));
+    resizeMeshAxis(doorFrontZ, "z", frontThicknessMm);
+  }
+  if (doorFrontX instanceof THREE.Mesh && doorFrontXDims) {
+    resizeMeshAxis(doorFrontX, "z", Math.max(40, doorFrontXDims.depth - 2 * deltaSideGapMm));
+    resizeMeshAxis(doorFrontX, "x", frontThicknessMm);
+  }
+
+  const doorFrontZCenter = getObjectCenterMm(doorFrontZ);
+  const doorFrontXCenter = getObjectCenterMm(doorFrontX);
+  const doorFrontZWidthMm = getMeshDimensionsMm(doorFrontZ)?.width ?? getBasePart("door_front_z")?.sizeMm?.x ?? 418;
+  const doorFrontXDepthMm = getMeshDimensionsMm(doorFrontX)?.depth ?? getBasePart("door_front_x")?.sizeMm?.z ?? 418;
+  const doorFrontZHeightMm = getMeshDimensionsMm(doorFrontZ)?.height ?? getBasePart("door_front_z")?.sizeMm?.y ?? 578;
+  const doorFrontXHeightMm = getMeshDimensionsMm(doorFrontX)?.height ?? getBasePart("door_front_x")?.sizeMm?.y ?? 578;
+
+  if (doorFrontZCenter) {
+    const doorTopMm = doorFrontZCenter.y + doorFrontZHeightMm * 0.5;
+    const handle = group.getObjectByName("doorHandle_front_z") as THREE.Mesh | null;
+    if (handle instanceof THREE.Mesh) {
+      resizeMeshAxis(handle, "x", handleLengthMm);
+      resizeMeshHeight(handle, handleSizeMm);
+      resizeMeshAxis(handle, "z", handleProjectionMm);
+      setObjectCenterX(handle, doorFrontZCenter.x + baseHandleOffsetAlongDoorXMm);
+      setObjectCenterY(handle, doorTopMm - handlePositionMm);
+      setObjectCenterZ(handle, doorFrontZCenter.z + frontThicknessMm * 0.5 + handleProjectionMm * 0.5);
+    }
+
+    const hingeCenters = getHingeCenterOffsetsMm(doorFrontZCenter.y, doorFrontZHeightMm, hingeCount, hingeTopOffsetMm, hingeBottomOffsetMm);
+    for (let index = 0; index < hingeCenters.length; index += 1) {
+      for (const suffix of ["door_plate", "door_cup", "arm"] as const) {
+        const hinge = group.getObjectByName(`hinge_front_z_${index + 1}_${suffix}`);
+        if (!hinge) continue;
+        setObjectCenterY(hinge, hingeCenters[index]!);
+        setObjectCenterX(hinge, doorFrontZCenter.x + doorFrontZWidthMm * 0.5 - baseHingeInsetXMm);
+      }
+    }
+  }
+
+  if (doorFrontXCenter) {
+    const doorTopMm = doorFrontXCenter.y + doorFrontXHeightMm * 0.5;
+    const handle = group.getObjectByName("doorHandle_front_x") as THREE.Mesh | null;
+    if (handle instanceof THREE.Mesh) {
+      resizeMeshAxis(handle, "z", handleLengthMm);
+      resizeMeshHeight(handle, handleSizeMm);
+      resizeMeshAxis(handle, "x", handleProjectionMm);
+      setObjectCenterZ(handle, doorFrontXCenter.z + baseHandleOffsetAlongDoorZMm);
+      setObjectCenterY(handle, doorTopMm - handlePositionMm);
+      setObjectCenterX(handle, doorFrontXCenter.x + frontThicknessMm * 0.5 + handleProjectionMm * 0.5);
+    }
+
+    const hingeCenters = getHingeCenterOffsetsMm(doorFrontXCenter.y, doorFrontXHeightMm, hingeCount, hingeTopOffsetMm, hingeBottomOffsetMm);
+    for (let index = 0; index < hingeCenters.length; index += 1) {
+      for (const suffix of ["door_plate", "door_cup", "arm"] as const) {
+        const hinge = group.getObjectByName(`hinge_front_x_${index + 1}_${suffix}`);
+        if (!hinge) continue;
+        setObjectCenterY(hinge, hingeCenters[index]!);
+        setObjectCenterZ(hinge, doorFrontXCenter.z + doorFrontXDepthMm * 0.5 - baseHingeInsetZMm);
+      }
+    }
+  }
+}
+
+function attachObjectsToPivot(group: THREE.Group, pivotName: string, pivotPositionMm: { x: number; z: number }, objectNames: string[]) {
+  const pivot = new THREE.Group();
+  pivot.name = pivotName;
+  pivot.position.set(pivotPositionMm.x / 1000, 0, pivotPositionMm.z / 1000);
+  group.add(pivot);
+  group.updateMatrixWorld(true);
+
+  for (const objectName of objectNames) {
+    const obj = group.getObjectByName(objectName);
+    if (!obj || obj.parent === pivot) continue;
+    pivot.attach(obj);
+  }
+
+  return pivot;
+}
+
+function applyCornerDoorOpenState(group: THREE.Group, params: CornerShelfLowerParams) {
+  if (params.doorOpen !== true) return;
+
+  group.updateMatrixWorld(true);
+  const hingeCount = Math.max(1, Math.round(getNumber(params.hingeCountPerDoor, 2)));
+  const zDoor = group.getObjectByName("door_front_z");
+  const xDoor = group.getObjectByName("door_front_x");
+  const zBounds = getObjectBoundsMm(zDoor);
+  const xBounds = getObjectBoundsMm(xDoor);
+
+  if (zBounds) {
+    const zPivot = attachObjectsToPivot(
+      group,
+      "__corner_door_pivot_z",
+      { x: zBounds.maxX, z: (zBounds.minZ + zBounds.maxZ) * 0.5 },
+      [
+        "door_front_z",
+        "doorHandle_front_z",
+        ...Array.from({ length: hingeCount }, (_, index) => [
+          `hinge_front_z_${index + 1}_door_plate`,
+          `hinge_front_z_${index + 1}_door_cup`,
+          `hinge_front_z_${index + 1}_arm`
+        ]).flat()
+      ]
+    );
+    zPivot.rotation.y = -Math.PI / 2;
+  }
+
+  if (xBounds) {
+    const xPivot = attachObjectsToPivot(
+      group,
+      "__corner_door_pivot_x",
+      { x: (xBounds.minX + xBounds.maxX) * 0.5, z: xBounds.maxZ },
+      [
+        "door_front_x",
+        "doorHandle_front_x",
+        ...Array.from({ length: hingeCount }, (_, index) => [
+          `hinge_front_x_${index + 1}_door_plate`,
+          `hinge_front_x_${index + 1}_door_cup`,
+          `hinge_front_x_${index + 1}_arm`
+        ]).flat()
+      ]
+    );
+    xPivot.rotation.y = Math.PI / 2;
+  }
+}
+
 function alignCornerFrontSupports(group: THREE.Group) {
   const legClearanceBehindKickMm = 10;
   const xKickBounds = getObjectBoundsMm(group.getObjectByName("kick_x"));
@@ -523,10 +796,15 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Gro
     materialsSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[2]
   );
 
+  syncCornerShelfMeshes(group, params);
+  syncCornerHingeMeshes(group, params);
   applyCornerDepthAdjustments(group, params);
   applyCornerLengthAdjustments(group, params);
+  applyCornerBackAdjustments(group, params);
   applyCornerHeightAdjustments(group, params);
+  applyCornerFrontAdjustments(group, params);
   alignCornerFrontSupports(group);
+  applyCornerDoorOpenState(group, params);
 
   group.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(group);
