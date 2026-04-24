@@ -349,6 +349,8 @@ function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: Kitchen
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
+  record.kitchenModuleRole = "base";
+  record.requiresWorktop = true;
 
   record.height = ctx.heightMm;
   record.heightCarcass = ctx.moduleHeightMm;
@@ -360,6 +362,7 @@ function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: Kitchen
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
+    record.shelfThickness = corpus.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "body", corpus);
     applyLegacyMaterialAliases(record, "shelf", corpus);
   }
