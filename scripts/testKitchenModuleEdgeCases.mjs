@@ -194,16 +194,28 @@ async function runAdjacencyCases(page) {
     const result = await patchModule(page, drawer.id, { width: Number(drawer.params.width ?? 600) + 120 }, { sourceKey: "width", preserveBackAnchor: true });
     const afterAdj = await detectAdjacency(page, drawer.id);
     const afterDrawer = result.instance;
+    const snapAfter = await snapshot(page, groupId);
+    const afterCorner = snapAfter.instances.find((item) => item.id === corner.id);
     const drawerMoved = Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
-    if (!result.ok || Number(afterDrawer.params.width) <= Number(drawer.params.width) || !drawerMoved || afterAdj.length === 0) {
+    const cornerMoved =
+      Math.abs(afterCorner.positionM.x - corner.positionM.x) > 0.0005 || Math.abs(afterCorner.positionM.z - corner.positionM.z) > 0.0005;
+    const seamStable =
+      afterAdj.length > 0 &&
+      beforeAdj.length > 0 &&
+      Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1;
+    if (!result.ok || Number(afterDrawer.params.width) <= Number(drawer.params.width) || !drawerMoved || cornerMoved || !seamStable) {
       failures.push({
-        case: "drawer_width_growth_next_to_corner",
+        case: "drawer_width_growth_next_to_corner_grows_away",
         ok: result.ok,
         beforeWidth: drawer.params.width,
         afterWidth: afterDrawer.params.width,
         beforeAdj,
         afterAdj,
-        drawerMoved
+        drawerMoved,
+        cornerMoved,
+        seamStable,
+        beforeCornerPos: corner.positionM,
+        afterCornerPos: afterCorner?.positionM
       });
     }
   }
@@ -227,15 +239,24 @@ async function runAdjacencyCases(page) {
     const after = await snapshot(page, groupId);
     const afterLeft = after.instances.find((item) => item.id === left.id);
     const afterRight = after.instances.find((item) => item.id === right.id);
+    const leftMoved = Math.abs(afterLeft.positionM.x - left.positionM.x) > 0.0005 || Math.abs(afterLeft.positionM.z - left.positionM.z) > 0.0005;
     const rightMoved = Math.abs(afterRight.positionM.x - right.positionM.x) > 0.0005 || Math.abs(afterRight.positionM.z - right.positionM.z) > 0.0005;
-    if (!result.ok || !rightMoved || Number(afterLeft.params.width) <= Number(left.params.width) || beforeAdj.length === 0) {
+    const afterAdj = await detectAdjacency(page, left.id);
+    const seamStable =
+      afterAdj.length > 0 &&
+      beforeAdj.length > 0 &&
+      Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1;
+    if (!result.ok || rightMoved || !leftMoved || Number(afterLeft.params.width) <= Number(left.params.width) || beforeAdj.length === 0 || !seamStable) {
       failures.push({
-        case: "drawer_width_growth_pushes_adjacent_drawer",
+        case: "drawer_width_growth_keeps_adjacent_drawer_fixed",
         ok: result.ok,
         beforeAdj,
+        afterAdj,
         beforeWidth: left.params.width,
         afterWidth: afterLeft.params.width,
+        leftMoved,
         rightMoved,
+        seamStable,
         beforeRightPos: right.positionM,
         afterRightPos: afterRight.positionM
       });
@@ -292,8 +313,8 @@ async function main() {
             drawerCases: drawerCases.map((item) => item.key),
             cornerCases: cornerCases.map((item) => item.key),
             adjacencyCases: [
-              "drawer_width_growth_next_to_corner",
-              "drawer_width_growth_pushes_adjacent_drawer"
+              "drawer_width_growth_next_to_corner_grows_away",
+              "drawer_width_growth_keeps_adjacent_drawer_fixed"
             ]
           }
         },

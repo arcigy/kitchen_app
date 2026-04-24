@@ -8380,8 +8380,8 @@ export function startApp(initialArgs: AppArgs) {
       if (primaryHasCorner && secondaryInfos.length === 0) return primary;
       if (secondaryHasCorner && primaryInfos.length === 0) return secondary;
       if (primaryHasCorner !== secondaryHasCorner) return primaryHasCorner ? primary : secondary;
-      if (primaryInfos.length > 0 && secondaryInfos.length === 0) return secondary;
-      if (secondaryInfos.length > 0 && primaryInfos.length === 0) return primary;
+      if (primaryInfos.length > 0 && secondaryInfos.length === 0) return primary;
+      if (secondaryInfos.length > 0 && primaryInfos.length === 0) return secondary;
       return null;
     };
 
