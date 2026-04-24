@@ -85,6 +85,13 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function ensureRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
 function evaluateFormula(
   expression: string | undefined,
   context: Record<string, unknown>,
@@ -106,7 +113,7 @@ function resolveSnapshotDimensions(params: Record<string, unknown>, snapshot: Po
   return {
     widthMm: getNumber(params.width, getNumber(params.lengthX, snapshot.dimensions.widthMm)),
     heightMm: getNumber(params.height, snapshot.dimensions.heightMm),
-    depthMm: getNumber(params.depth, getNumber(params.lengthZ, snapshot.dimensions.depthMm)),
+    depthMm: getNumber(params.lengthZ, getNumber(params.depth, snapshot.dimensions.depthMm)),
     worktopThicknessMm: getNumber(params.worktopThicknessMm, snapshot.dimensions.worktopThicknessMm),
     plinthHeightMm: getNumber(params.plinthHeight, snapshot.dimensions.plinthHeightMm)
   };
@@ -116,7 +123,7 @@ function resolveLiveDimensions(params: Record<string, unknown>, baseParams: Reco
   return {
     widthMm: getNumber(params.width, getNumber(params.lengthX, getNumber(baseParams.width, getNumber(baseParams.lengthX, 800)))),
     heightMm: getNumber(params.height, getNumber(baseParams.height, 720)),
-    depthMm: getNumber(params.depth, getNumber(params.lengthZ, getNumber(baseParams.depth, getNumber(baseParams.lengthZ, 560)))),
+    depthMm: getNumber(params.lengthZ, getNumber(params.depth, getNumber(baseParams.lengthZ, getNumber(baseParams.depth, 560)))),
     worktopThicknessMm: getNumber(params.worktopThicknessMm, getNumber(baseParams.worktopThicknessMm, 38)),
     plinthHeightMm: getNumber(params.plinthHeight, getNumber(baseParams.plinthHeight, 100)),
     plinthSetbackMm: getNumber(params.plinthSetbackMm, getNumber(baseParams.plinthSetbackMm, 0))
@@ -372,7 +379,23 @@ function makeRuntimeMaterial(part: PortableLivePart) {
   });
 }
 
-function resolveDrawerLowBoardSlot(partName: string) {
+function canonicalizePortableBoardPartName(partName: string) {
+  if (partName === "side_end_x") return "left-side";
+  if (partName === "side_end_z") return "right-side";
+  if (partName === "back_x") return "back-panel-x";
+  if (partName === "back_z") return "back-panel-z";
+  if (partName === "back_corner_panel") return "back-corner-panel";
+  if (partName === "bottom_x") return "bottom-panel-x";
+  if (partName === "bottom_z") return "bottom-panel-z";
+  if (partName === "top_x_front") return "top-panel-x-front";
+  if (partName === "top_x_back") return "top-panel-x-back";
+  if (partName === "top_z") return "top-panel-z";
+  if (partName === "kick_x") return "plinth-x";
+  if (partName === "kick_z") return "plinth-z";
+  if (partName === "door_front_x") return "door-front-x";
+  if (partName === "door_front_z") return "door-front-z";
+  const cornerShelfMatch = partName.match(/^shelf_(\d+)_(x|z)$/i);
+  if (cornerShelfMatch) return `shelf-${cornerShelfMatch[1]}-${cornerShelfMatch[2]!.toLowerCase()}`;
   if (partName === "leftSide") return "left-side";
   if (partName === "rightSide") return "right-side";
   if (partName === "bottom") return "bottom-panel";
@@ -390,13 +413,69 @@ function resolveDrawerLowBoardSlot(partName: string) {
   return null;
 }
 
-function resolveDrawerLowComponentAssignment(partName: string, params: Record<string, unknown>, snapshot: PortableMaterialsSnapshot | null | undefined) {
+function resolvePortableBoardSlot(partName: string, snapshot: PortableMaterialsSnapshot | null | undefined) {
+  const slotAssignments = snapshot?.slotAssignments ?? [];
+  const exact = slotAssignments.find((slot) => slot.slotId === partName || slot.partId === partName);
+  if (exact) return exact.slotId;
+
+  const canonical = canonicalizePortableBoardPartName(partName);
+  if (!canonical) return null;
+  return slotAssignments.find((slot) => slot.slotId === canonical || slot.partId === canonical)?.slotId ?? canonical;
+}
+
+function getLegacyMaterialIdForFamily(
+  family: string | undefined,
+  params: Record<string, unknown>
+) {
+  const materials = ensureRecord(params.materials);
+  const readString = (...values: unknown[]) =>
+    values.find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? null;
+
+  if (family === "front") {
+    return readString(params.frontMaterialId, materials?.frontMaterialId, materials?.frontKey);
+  }
+  if (family === "back") {
+    return readString(params.backMaterialId, materials?.backMaterialId, materials?.backKey);
+  }
+  if (family === "drawer_bottom" || family === "drawer_box" || family === "drawer") {
+    return readString(params.drawerMaterialId, materials?.drawerMaterialId, materials?.drawerKey);
+  }
+  if (family === "shelf") {
+    return readString(params.shelfMaterialId, materials?.shelfMaterialId, materials?.bodyMaterialId, materials?.bodyKey);
+  }
+  return readString(params.bodyMaterialId, materials?.bodyMaterialId, materials?.bodyKey);
+}
+
+function getLegacyMaterialColorForFamily(
+  family: string | undefined,
+  params: Record<string, unknown>
+) {
+  const materials = ensureRecord(params.materials);
+  const readString = (...values: unknown[]) =>
+    values.find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? null;
+
+  if (family === "front") {
+    return readString(params.frontColor, materials?.frontColor);
+  }
+  if (family === "back") {
+    return readString(params.backColor, materials?.backColor);
+  }
+  if (family === "drawer_bottom" || family === "drawer_box" || family === "drawer") {
+    return readString(params.drawerColor, materials?.drawerColor);
+  }
+  if (family === "shelf") {
+    return readString(params.shelfColor, materials?.shelfColor, params.bodyColor, materials?.bodyColor);
+  }
+  return readString(params.bodyColor, materials?.bodyColor);
+}
+
+function resolvePortableComponentAssignment(partName: string, params: Record<string, unknown>, snapshot: PortableMaterialsSnapshot | null | undefined) {
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const findAssigned = (assignmentKey: string) => componentAssignments.find((entry) => entry.assignmentKey === assignmentKey)?.component ?? null;
 
-  if (/^handle_/i.test(partName)) {
+  if (/^handle_/i.test(partName) || /^doorHandle_/i.test(partName)) {
     const explicit = typeof params.handleComponentId === "string" ? getComponentDefinitionById(params.handleComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("drawer-handles");
+    return explicit ? { ...explicit, catalogId: explicit.id } : (findAssigned("door-handles") ?? findAssigned("drawer-handles"));
   }
   if (/^leg_/i.test(partName)) {
     const explicit = typeof params.legComponentId === "string" ? getComponentDefinitionById(params.legComponentId) : null;
@@ -406,8 +485,13 @@ function resolveDrawerLowComponentAssignment(partName: string, params: Record<st
     const explicit = typeof params.runnerComponentId === "string" ? getComponentDefinitionById(params.runnerComponentId) : null;
     return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("drawer-runners");
   }
+  if (/^hinge_/i.test(partName)) {
+    const explicit = typeof params.hingeComponentId === "string" ? getComponentDefinitionById(params.hingeComponentId) : null;
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("door-hinges");
+  }
   if (/^kickClip_/i.test(partName) || /^plinth-clip/i.test(partName)) {
-    return findAssigned("plinth-clips");
+    const explicit = typeof params.clipComponentId === "string" ? getComponentDefinitionById(params.clipComponentId) : null;
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("plinth-clips");
   }
   return null;
 }
@@ -417,22 +501,44 @@ function resolveLivePartOverride(
   params: Record<string, unknown>,
   snapshot: PortableMaterialsSnapshot | null | undefined
 ) {
-  const boardSlot = resolveDrawerLowBoardSlot(partName);
+  const boardSlot = resolvePortableBoardSlot(partName, snapshot);
   if (boardSlot) {
     const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params);
+    const slotAssignment = (snapshot?.slotAssignments ?? []).find((slot) => slot.slotId === boardSlot || slot.partId === boardSlot) ?? null;
     const selectedCatalogId = slotMaterialCatalogIds[boardSlot];
-    const selectedMaterial = selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null;
+    const legacyCatalogId = getLegacyMaterialIdForFamily(slotAssignment?.boardFamily, params);
+    const selectedMaterial =
+      (selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null) ??
+      (legacyCatalogId ? getMaterialDefinitionById(legacyCatalogId) : null);
     if (selectedMaterial) {
       return {
         colorHex: selectedMaterial.preview.colorHex,
         roughness: selectedMaterial.preview.roughness,
         metalness: selectedMaterial.preview.metalness,
-        thicknessMm: slotThicknesses[boardSlot] ?? selectedMaterial.defaultThicknessMm
+        thicknessMm:
+          slotThicknesses[boardSlot] ??
+          (slotAssignment?.thicknessParameterKey && typeof params[slotAssignment.thicknessParameterKey] === "number"
+            ? (params[slotAssignment.thicknessParameterKey] as number)
+            : selectedMaterial.defaultThicknessMm)
+      };
+    }
+
+    const legacyColor = getLegacyMaterialColorForFamily(slotAssignment?.boardFamily, params);
+    if (legacyColor) {
+      return {
+        colorHex: legacyColor,
+        roughness: 0.72,
+        metalness: 0.04,
+        thicknessMm:
+          slotThicknesses[boardSlot] ??
+          (slotAssignment?.thicknessParameterKey && typeof params[slotAssignment.thicknessParameterKey] === "number"
+            ? (params[slotAssignment.thicknessParameterKey] as number)
+            : null)
       };
     }
   }
 
-  const component = resolveDrawerLowComponentAssignment(partName, params, snapshot);
+  const component = resolvePortableComponentAssignment(partName, params, snapshot);
   if (component) {
     return {
       colorHex: component.preview.colorHex,

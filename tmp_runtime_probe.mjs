@@ -1,0 +1,11 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+const errors = [];
+page.on('pageerror', e => errors.push('PAGEERROR:' + e.message));
+page.on('console', msg => { if (msg.type() === 'error') errors.push('CONSOLE:' + msg.text()); });
+await page.goto('http://127.0.0.1:5180', { waitUntil: 'networkidle' }).catch(e => errors.push('GOTO:' + e.message));
+const body = await page.locator('body').innerText().catch(() => '');
+const topbar = await page.locator('text=Architecture').isVisible().catch(() => false);
+console.log(JSON.stringify({ errors, topbar, body: body.slice(0,300) }, null, 2));
+await browser.close();

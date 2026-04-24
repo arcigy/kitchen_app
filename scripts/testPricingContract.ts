@@ -4,6 +4,9 @@ import type { KitchenContext } from "../src/layout/kitchenContext";
 import { makeDefaultKitchenContext } from "../src/layout/kitchenContext";
 import { getComponentDefinitionById } from "../src/data/pricing/componentDefinitions";
 import { getMaterialDefinitionById } from "../src/data/pricing/materialDefinitions";
+import { applyKitchenContextToModuleParams } from "../src/layout/kitchenMaterialSync";
+import { calculateBOM as calculateCornerShelfLowerBOM } from "../src/modules/cornerShelfLower/calculation";
+import { makeDefaultCornerShelfLowerParams } from "../src/modules/cornerShelfLower/types";
 import { calculateBOM as calculateDrawerLowBOM } from "../src/modules/drawerLow/calculation";
 import { makeDefaultDrawerLowParams } from "../src/modules/drawerLow/types";
 import {
@@ -54,6 +57,67 @@ function runDrawerLowScenario() {
 
   assert.notEqual(changedResult.pricing.finalPrice, result.pricing.finalPrice);
   assert.ok((changedResult.quoteBom.aggregates?.boardsByMaterial?.length ?? 0) > 0);
+}
+
+function runCornerShelfLowerScenario() {
+  const params = makeDefaultCornerShelfLowerParams();
+  const result = calculateCornerShelfLowerBOM(params, ctx);
+
+  assert.equal(result.quoteBom.moduleType, "corner_shelf_lower");
+  assert.equal(result.pricing.pricingStatus, "ok");
+  assert.equal(result.pricing.validationErrors.length, 0);
+  assert.equal(result.quoteBom.moduleInstance.widthMm, 1000);
+  assert.equal(result.quoteBom.moduleInstance.depthMm, 1000);
+
+  const hingeItem = result.pricing.items.find((item) => item.id === "door-hinges");
+  const handleItem = result.pricing.items.find((item) => item.id === "door-handles");
+  const legsItem = result.pricing.items.find((item) => item.id === "adjustable-legs");
+  const clipsItem = result.pricing.items.find((item) => item.id === "plinth-clips");
+
+  assert.equal(hingeItem?.component?.catalogId, "cmp.hinge.corner.45.softclose");
+  assert.equal(handleItem?.component?.catalogId, "cmp.handle.bar.160.inox");
+  assert.equal(legsItem?.component?.catalogId, "cmp.leg.adjustable.100.black");
+  assert.equal(clipsItem?.component?.catalogId, "cmp.clip.plinth.standard");
+
+  const synced = structuredClone(params);
+  applyKitchenContextToModuleParams(synced, ctx);
+  assert.equal(synced.height, ctx.heightMm);
+  assert.equal(synced.heightCarcass, ctx.moduleHeightMm);
+  assert.equal(synced.depth, ctx.moduleDepthMm);
+
+  const changed = structuredClone(synced) as Record<string, unknown>;
+  changed.commercialSelections = {
+    boardMaterials: {
+      "left-side": "mat.board.body.dtd.grey.18",
+      "door-front-x": "mat.board.front.mdf.cashmere_supermat.19"
+    },
+    boardThicknesses: {
+      "left-side": 18,
+      "door-front-x": 19
+    }
+  };
+  changed.hingeComponentId = "cmp.hinge.wide_angle.155.softclose";
+  changed.clipComponentId = "cmp.clip.plinth.heavy";
+
+  const changedResult = calculateCornerShelfLowerBOM(changed as typeof params, ctx);
+  assert.equal(changedResult.pricing.pricingStatus, "ok");
+  assert.equal(changedResult.quoteBom.moduleInstance.depthMm, params.lengthZ);
+  assert.equal(
+    changedResult.quoteBom.items.find((item) => item.id === "left-side")?.material?.catalogId,
+    "mat.board.body.dtd.grey.18"
+  );
+  assert.equal(
+    changedResult.quoteBom.items.find((item) => item.id === "door-front-x")?.material?.catalogId,
+    "mat.board.front.mdf.cashmere_supermat.19"
+  );
+  assert.equal(
+    changedResult.pricing.items.find((item) => item.id === "door-hinges")?.component?.catalogId,
+    "cmp.hinge.wide_angle.155.softclose"
+  );
+  assert.equal(
+    changedResult.pricing.items.find((item) => item.id === "plinth-clips")?.component?.catalogId,
+    "cmp.clip.plinth.heavy"
+  );
 }
 
 function runGenericBomScenario() {
@@ -233,13 +297,14 @@ function runInvalidBomScenario() {
 
 async function main() {
   runDrawerLowScenario();
+  runCornerShelfLowerScenario();
   runGenericBomScenario();
   runInvalidBomScenario();
   console.log(
     JSON.stringify(
       {
         ok: true,
-        checks: ["drawer_low", "generic_bom", "invalid_bom"]
+        checks: ["drawer_low", "corner_shelf_lower", "generic_bom", "invalid_bom"]
       },
       null,
       2

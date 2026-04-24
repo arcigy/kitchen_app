@@ -498,6 +498,8 @@ function resolveComponentForItem(
   const current = item.component;
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const normalizedItemId = item.id.toLowerCase();
+  const findAssigned = (...assignmentKeys: string[]) =>
+    componentAssignments.find((entry) => assignmentKeys.includes(entry.assignmentKey))?.component ?? null;
 
   const explicitComponentId =
     normalizedItemId.includes("runner")
@@ -512,6 +514,14 @@ function resolveComponentForItem(
           ? typeof params.legComponentId === "string"
             ? params.legComponentId
             : null
+          : normalizedItemId.includes("hinge")
+            ? typeof params.hingeComponentId === "string"
+              ? params.hingeComponentId
+              : null
+            : normalizedItemId.includes("plinth-clips")
+              ? typeof params.clipComponentId === "string"
+                ? params.clipComponentId
+                : null
           : null;
 
   if (explicitComponentId) {
@@ -522,28 +532,27 @@ function resolveComponentForItem(
   }
 
   if (normalizedItemId.includes("plinth-clips")) {
-    const component = componentAssignments.find((entry) => entry.assignmentKey === "plinth-clips")?.component;
-    return component ?? current ?? null;
+    return findAssigned("plinth-clips") ?? current ?? null;
   }
 
   if (normalizedItemId.includes("carcass-fastener")) {
-    const component = componentAssignments.find((entry) => entry.assignmentKey === "carcass-fasteners")?.component;
-    return component ?? current ?? null;
+    return findAssigned("carcass-fasteners") ?? current ?? null;
   }
 
   if (normalizedItemId.includes("runner")) {
-    const component = componentAssignments.find((entry) => entry.assignmentKey === "drawer-runners")?.component;
-    return component ?? current ?? null;
+    return findAssigned("drawer-runners") ?? current ?? null;
   }
 
   if (normalizedItemId.includes("handle")) {
-    const component = componentAssignments.find((entry) => entry.assignmentKey === "drawer-handles")?.component;
-    return component ?? current ?? null;
+    return findAssigned("door-handles", "drawer-handles") ?? current ?? null;
   }
 
   if (normalizedItemId.includes("adjustable-legs")) {
-    const component = componentAssignments.find((entry) => entry.assignmentKey === "adjustable-legs")?.component;
-    return component ?? current ?? null;
+    return findAssigned("adjustable-legs") ?? current ?? null;
+  }
+
+  if (normalizedItemId.includes("hinge")) {
+    return findAssigned("door-hinges") ?? current ?? null;
   }
 
   return current ?? null;
@@ -875,9 +884,9 @@ export function buildRuntimeQuoteBom(args: {
 
   nextBom.moduleInstance = {
     ...nextBom.moduleInstance,
-    widthMm: asFiniteNumber(params.width) ?? nextBom.moduleInstance.widthMm,
+    widthMm: asFiniteNumber(params.width) ?? asFiniteNumber(params.lengthX) ?? nextBom.moduleInstance.widthMm,
     heightMm: asFiniteNumber(params.height) ?? nextBom.moduleInstance.heightMm,
-    depthMm: asFiniteNumber(params.depth) ?? nextBom.moduleInstance.depthMm
+    depthMm: asFiniteNumber(params.lengthZ) ?? asFiniteNumber(params.depth) ?? nextBom.moduleInstance.depthMm
   };
 
   nextBom.generatedAt = new Date().toISOString();

@@ -876,8 +876,9 @@ function generatePortableControlsSource(args: {
   paramsTypeName: string;
   controlsExportName: string;
   hasSystemParameters: boolean;
+  normalizerName: string;
 }) {
-  const { moduleType, paramsTypeName, controlsExportName, hasSystemParameters } = args;
+  const { moduleType, paramsTypeName, controlsExportName, hasSystemParameters, normalizerName } = args;
   const systemImports = hasSystemParameters
     ? `
 import systemParameterCatalog from "./package/definitions/system-parameters.schema.json";
@@ -890,7 +891,7 @@ import systemParameterValues from "./package/definitions/${moduleType}.system-pa
     : "";
   return `import parameterCatalog from "./package/definitions/${moduleType}.parameter-catalog.json";
 import materialsSnapshot from "./package/definitions/${moduleType}.materials.snapshot.json";${systemImports}
-import type { ${paramsTypeName} } from "./types";
+import { ${normalizerName}, type ${paramsTypeName} } from "./types";
 import {
   createPortableModuleControls,
   type PortableModuleControlsApi,
@@ -907,10 +908,44 @@ export function ${controlsExportName}(
     params: params as Record<string, unknown>,
     catalog: parameterCatalog as Parameters<typeof createPortableModuleControls>[0]["catalog"],
     controlArgs: args,
+    paramChangeHook: (currentParams) => {
+      Object.assign(currentParams, ${normalizerName}(currentParams as ${paramsTypeName}));
+    },
     materialsSnapshot: materialsSnapshot as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"]${systemArgs}
   });
 }
 `;
+}
+
+function inferPortableCapabilities(args: {
+  moduleEntry: ModulePackageModuleManifest;
+  moduleParameterSnapshot: Record<string, unknown> | null;
+  systemParameterValues: Record<string, string | number | boolean | string[] | null> | null;
+}) {
+  const explicit = args.moduleEntry.capabilities ?? {};
+  if (Object.keys(explicit).length > 0) {
+    return explicit;
+  }
+
+  const assemblyContext =
+    args.systemParameterValues?.assemblyContext ??
+    (typeof args.moduleParameterSnapshot?.assemblyContext === "string" ? args.moduleParameterSnapshot.assemblyContext : null);
+  const requiresWorktop =
+    typeof args.systemParameterValues?.requiresWorktop === "boolean"
+      ? args.systemParameterValues.requiresWorktop
+      : typeof args.moduleParameterSnapshot?.requiresWorktop === "boolean"
+        ? args.moduleParameterSnapshot.requiresWorktop
+        : Object.prototype.hasOwnProperty.call(args.moduleParameterSnapshot ?? {}, "worktopThicknessMm");
+
+  const inferred: Record<string, boolean> = {};
+  if (assemblyContext === "kitchen") {
+    inferred.supportsKitchenContextDimensions = true;
+    inferred.supportsKitchenContextMaterials = true;
+  }
+  if (requiresWorktop) {
+    inferred.hasWorktop = true;
+  }
+  return inferred;
 }
 
 function generatePortableCalculationSource(args: {
@@ -1073,12 +1108,6 @@ function installPortablePackage(files: ZipFiles) {
       existsSync(moduleImportPath) && existsSync(moduleDest)
         ? (JSON.parse(readFileSync(moduleImportPath, "utf8")) as Record<string, unknown>)
         : null;
-    const replaceExistingPortableModule = existingImportRecord?.importFormat === "portable_modpkg";
-
-    if (replaceExistingPortableModule && !dryRun) {
-      rmSync(moduleDest, { recursive: true, force: true });
-    }
-
     const packageDest = path.join(moduleDest, "package");
     unpackPortablePackage(files, packageRootDir, packageDest);
 
@@ -1113,7 +1142,8 @@ function installPortablePackage(files: ZipFiles) {
           moduleType,
           paramsTypeName,
           controlsExportName,
-          hasSystemParameters
+          hasSystemParameters,
+          normalizerName
         })
       },
       {
@@ -1131,20 +1161,22 @@ function installPortablePackage(files: ZipFiles) {
 
     for (const file of generatedCoreFiles) {
       const targetPath = path.join(moduleDest, file.fileName);
-      if (existsSync(targetPath) && !replaceExistingPortableModule) {
+      if (existsSync(targetPath)) {
         preservedCoreFiles.push(file.fileName);
         continue;
       }
-      if (existsSync(targetPath)) {
-        overwrittenCoreFiles.push(file.fileName);
-      } else {
-        createdCoreFiles.push(file.fileName);
-      }
+      createdCoreFiles.push(file.fileName);
       writeFileIfNotDryRun(targetPath, file.contents);
     }
 
+    const moduleParameterSnapshot = inspection.moduleParameterSnapshots[moduleType] ?? null;
     const systemParameterValues =
       inspection.payload.systemParameters.modules.find((entry) => entry.moduleType === moduleType)?.values ?? null;
+    const capabilities = inferPortableCapabilities({
+      moduleEntry,
+      moduleParameterSnapshot,
+      systemParameterValues
+    });
 
     const importRecord: IntegrationMeta & Record<string, unknown> = {
       schemaVersion: "local-module-integration.v1",
@@ -1159,14 +1191,14 @@ function installPortablePackage(files: ZipFiles) {
       validatorName,
       bomExportName: "calculateBOM",
       label: moduleEntry.displayName,
-      capabilities: moduleEntry.capabilities ?? {},
+      capabilities,
       importedAt: new Date().toISOString(),
       importedFrom: path.basename(packagePath),
       importFormat: "portable_modpkg",
       packageRootDir,
       packageKey: inspection.packageKey,
       packageIssues: inspection.issues,
-      moduleParameterSnapshot: inspection.moduleParameterSnapshots[moduleType] ?? null,
+      moduleParameterSnapshot,
       systemParameterSchemaVersion: inspection.payload.systemParameters.schemaVersion,
       systemParameterValues,
       preservedCoreFiles,
