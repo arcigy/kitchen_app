@@ -27,6 +27,7 @@ export interface PlacementHelpers {
   instanceWorldBox: (inst: LayoutInstance) => any;
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (moving: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (moving: LayoutInstance) => boolean;
   autoOrientModuleToRoomWallIfSnapped: (inst: LayoutInstance) => void;
   resolveModuleAdjacencySnap?: (
     moving: LayoutInstance,
@@ -137,7 +138,9 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   const shouldCheckWallOverlap = constrainedPlacement?.enforceWallOverlap ?? true;
   const inRoom = enforceRoomBounds ? helpers.roomContainsBoxXZ(helpers.instanceWorldBox(g)) : true;
   const overlaps =
-    helpers.anyOverlap(g, null) || (shouldCheckWallOverlap ? helpers.moduleOverlapsWalls(g) : false);
+    helpers.anyOverlap(g, null) ||
+    helpers.moduleOverlapsKitchenWorktops(g) ||
+    (shouldCheckWallOverlap ? helpers.moduleOverlapsWalls(g) : false);
   const ok = inRoom && !overlaps && (constrainedPlacement?.valid ?? true);
   S.placement.ghostValid = ok;
 

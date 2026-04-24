@@ -146,6 +146,10 @@ import {
   type PlacementHelpers
 } from "./layout/placementManager";
 import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
+import {
+  staysOutsideKitchenWorktopFootprint,
+  usesKitchenWorktopBinding
+} from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 
@@ -667,7 +671,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!inst) continue;
       const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
       const overlaps = anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || moduleOverlapsWalls(inst)) {
+      if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
         ok = false;
         break;
       }
@@ -675,7 +679,12 @@ export function startApp(initialArgs: AppArgs) {
 
     if (ok) {
       for (const inst of instances) {
-        if (!roomContainsBoxXZ(instanceWorldBox(inst)) || anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
+        if (
+          !roomContainsBoxXZ(instanceWorldBox(inst)) ||
+          anyOverlap(inst, null) ||
+          moduleOverlapsWalls(inst) ||
+          moduleOverlapsKitchenWorktops(inst)
+        ) {
           ok = false;
           break;
         }
@@ -796,7 +805,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!inst) continue;
       const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
       const overlaps = anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || moduleOverlapsWalls(inst)) {
+      if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
         ok = false;
         break;
       }
@@ -2485,6 +2494,14 @@ export function startApp(initialArgs: AppArgs) {
   const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) =>
     (("params" in instOrParams ? instOrParams.params.type : instOrParams.type) ?? null) === "corner_shelf_lower";
 
+  const moduleUsesKitchenWorktopBinding = (instOrParams: LayoutInstance | ModuleParams) =>
+    usesKitchenWorktopBinding(("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>);
+
+  const moduleStaysOutsideKitchenWorktop = (instOrParams: LayoutInstance | ModuleParams) =>
+    staysOutsideKitchenWorktopFootprint(
+      ("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>
+    );
+
   const getModuleLocalKitchenCornerAnchor = (inst: LayoutInstance) => {
     inst.root.updateMatrixWorld(true);
     const anchor = inst.module.getObjectByName(kitchenCornerAnchorName);
@@ -2639,6 +2656,7 @@ export function startApp(initialArgs: AppArgs) {
     groupId: string,
     backOffsetMm: number
   ): KitchenPlacementBinding | null => {
+    if (!moduleUsesKitchenWorktopBinding(inst)) return null;
     const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
     if (groupWorktops.length === 0) return null;
 
@@ -2806,6 +2824,90 @@ export function startApp(initialArgs: AppArgs) {
     updateLayoutPanel();
   };
 
+  const getTallKitchenPlacementConstraint = (
+    ghost: LayoutInstance,
+    cursorWorld: THREE.Vector3,
+    activeWorktops: KitchenWorktopInstance[],
+    backOffsetMm: number
+  ) => {
+    if (!moduleStaysOutsideKitchenWorktop(ghost)) return null;
+
+    const localBackCenter = getModuleLocalBackCenter(ghost);
+    const halfModuleWidthM = Math.max(0.001, (ghost.localBox.max.x - ghost.localBox.min.x) * 0.5);
+    let cursorOnWorktop = false;
+    let closestGuideDistanceSq = Number.POSITIVE_INFINITY;
+    let best:
+      | {
+          position: THREE.Vector3;
+          rotationY: number;
+          distanceSq: number;
+        }
+      | null = null;
+
+    for (const worktop of activeWorktops) {
+      const polygon = getKitchenWorktopPolygon(worktop.params);
+      if (polygon.length >= 3 && pointInPlanPolygon({ x: cursorWorld.x, z: cursorWorld.z }, polygon.map((point) => ({ x: point.x, z: point.z })))) {
+        cursorOnWorktop = true;
+      }
+
+      const firstInfo = getKitchenGuideSegmentInfo(worktop, 0, backOffsetMm);
+      const lastGuidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+      const lastInfo = lastGuidePath.length >= 2 ? getKitchenGuideSegmentInfo(worktop, lastGuidePath.length - 2, backOffsetMm) : null;
+      const edgeCandidates = [
+        firstInfo
+          ? {
+              edgePoint: firstInfo.start.clone().addScaledVector(firstInfo.dir, -halfModuleWidthM),
+              rotationY: firstInfo.rotationY
+            }
+          : null,
+        lastInfo
+          ? {
+              edgePoint: lastInfo.start.clone().addScaledVector(lastInfo.dir, lastInfo.length + halfModuleWidthM),
+              rotationY: lastInfo.rotationY
+            }
+          : null
+      ].filter((candidate): candidate is { edgePoint: THREE.Vector3; rotationY: number } => candidate != null);
+
+      if (firstInfo) {
+        const projected = clampNumber(cursorWorld.clone().sub(firstInfo.start).dot(firstInfo.dir), 0, firstInfo.length);
+        const closestOnGuide = firstInfo.start.clone().addScaledVector(firstInfo.dir, projected);
+        closestGuideDistanceSq = Math.min(closestGuideDistanceSq, closestOnGuide.distanceToSquared(cursorWorld));
+      }
+      if (lastInfo) {
+        const projected = clampNumber(cursorWorld.clone().sub(lastInfo.start).dot(lastInfo.dir), 0, lastInfo.length);
+        const closestOnGuide = lastInfo.start.clone().addScaledVector(lastInfo.dir, projected);
+        closestGuideDistanceSq = Math.min(closestGuideDistanceSq, closestOnGuide.distanceToSquared(cursorWorld));
+      }
+
+      for (const candidate of edgeCandidates) {
+        const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, candidate.rotationY, 0));
+        const position = candidate.edgePoint.clone().sub(rotatedBackCenter);
+        position.y = 0;
+        const distanceSq = candidate.edgePoint.distanceToSquared(cursorWorld);
+        if (!best || distanceSq < best.distanceSq) {
+          best = {
+            position,
+            rotationY: candidate.rotationY,
+            distanceSq
+          };
+        }
+      }
+    }
+
+    if (!best) return null;
+    if (!cursorOnWorktop && Math.sqrt(closestGuideDistanceSq) > 0.45) return null;
+
+    return {
+      kitchenPlacement: null,
+      position: best.position,
+      rotationY: best.rotationY,
+      valid: true,
+      enforceRoomBounds: true,
+      enforceWallOverlap: true,
+      statusText: "Placement: Tall modul sa prisnapne vedľa pracovnej dosky."
+    };
+  };
+
   const getKitchenPlacementConstraint = (ghost: LayoutInstance, cursorWorld: THREE.Vector3) => {
     if (!S.kitchenEditMode || !S.activeKitchenGroupId) return null;
 
@@ -2813,6 +2915,10 @@ export function startApp(initialArgs: AppArgs) {
     if (activeWorktops.length === 0) return null;
     const activeGroup = S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId) ?? null;
     const backOffsetMm = activeGroup?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+
+    if (!moduleUsesKitchenWorktopBinding(ghost)) {
+      return getTallKitchenPlacementConstraint(ghost, cursorWorld, activeWorktops, backOffsetMm);
+    }
 
     if (isCornerKitchenModule(ghost)) {
       let best:
@@ -3783,7 +3889,7 @@ export function startApp(initialArgs: AppArgs) {
                   }).position
                 : desiredPlaced;
             inst.root.position.copy(snapped);
-            if (anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
+            if (anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
               inst.root.position.copy(prev);
               inst.root.rotation.y = prevRotationY;
               inst.kitchenPlacement = prevKitchenPlacement;
@@ -3820,7 +3926,11 @@ export function startApp(initialArgs: AppArgs) {
         }
 
         const modulesInvalid = instances.some(
-          (i) => !roomContainsBoxXZ(instanceWorldBox(i)) || anyOverlap(i, null) || moduleOverlapsWalls(i)
+          (i) =>
+            !roomContainsBoxXZ(instanceWorldBox(i)) ||
+            anyOverlap(i, null) ||
+            moduleOverlapsWalls(i) ||
+            moduleOverlapsKitchenWorktops(i)
         );
 
         // Never allow illegal module states (also blocks walls moving into existing modules).
@@ -5987,7 +6097,7 @@ export function startApp(initialArgs: AppArgs) {
       const prevRot = inst.root.rotation.y;
       inst.root.rotation.y = next;
       const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
-      const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst);
+      const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
       if (!inRoom || overlaps) {
         inst.root.rotation.y = prevRot;
         rot.value = String(Math.round((prevRot * 180) / Math.PI));
@@ -6311,6 +6421,7 @@ export function startApp(initialArgs: AppArgs) {
     instanceWorldBox,
     anyOverlap,
     moduleOverlapsWalls,
+    moduleOverlapsKitchenWorktops,
     autoOrientModuleToRoomWallIfSnapped,
     resolveModuleAdjacencySnap,
     setPlacementAdjacencyPreview,
@@ -7774,12 +7885,18 @@ export function startApp(initialArgs: AppArgs) {
       : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
     const inRoom = opts?.skipLayoutValidation ? true : roomContainsBoxXZ(instanceWorldBox(inst));
-    const overlaps = opts?.skipLayoutValidation ? false : anyOverlap(inst, null) || moduleOverlapsWalls(inst);
+    const overlaps = opts?.skipLayoutValidation
+      ? false
+      : anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
     const movedNeighborInvalid =
       !opts?.skipLayoutValidation &&
       propagated.movedIds.some((id) => {
         const other = findInstance(id);
-        return !!other && (!roomContainsBoxXZ(instanceWorldBox(other)) || anyOverlap(other, null) || moduleOverlapsWalls(other));
+        return !!other &&
+          (!roomContainsBoxXZ(instanceWorldBox(other)) ||
+            anyOverlap(other, null) ||
+            moduleOverlapsWalls(other) ||
+            moduleOverlapsKitchenWorktops(other));
       });
     if (!inRoom || overlaps || movedNeighborInvalid) {
       // Revert (layout must never allow overlaps)
@@ -7948,7 +8065,7 @@ export function startApp(initialArgs: AppArgs) {
           const clamped = applyWallConstraints(inst, desired);
           inst.root.position.copy(clamped);
           if (!roomContainsBoxXZ(instanceWorldBox(inst))) continue;
-          if (!anyOverlap(inst, null) && !moduleOverlapsWalls(inst)) return;
+          if (!anyOverlap(inst, null) && !moduleOverlapsWalls(inst) && !moduleOverlapsKitchenWorktops(inst)) return;
         }
       }
     }
@@ -8029,6 +8146,33 @@ export function startApp(initialArgs: AppArgs) {
     const ring: Array<[number, number]> = pts.map((p) => [p.x, p.z]);
     if (ring.length > 0) ring.push(ring[0]);
     return ring;
+  }
+
+  function worktopWorldRing(worktop: KitchenWorktopInstance) {
+    const polygon = getKitchenWorktopPolygon(worktop.params);
+    const ring: Array<[number, number]> = polygon.map((point) => [point.x, point.z]);
+    if (ring.length > 0) ring.push(ring[0]);
+    return ring;
+  }
+
+  function moduleOverlapsKitchenWorktops(inst: LayoutInstance) {
+    if (!moduleStaysOutsideKitchenWorktop(inst)) return false;
+    if (!inst.kitchenGroupId) return false;
+    const relatedWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === inst.kitchenGroupId);
+    if (relatedWorktops.length === 0) return false;
+
+    const moduleMp = [[[moduleWorldRing(inst)]]];
+    for (const worktop of relatedWorktops) {
+      const ring = worktopWorldRing(worktop);
+      if (ring.length < 4) continue;
+      try {
+        const inter = (polygonClipping as any).intersection([[[ring]]], moduleMp);
+        if (multiPolyArea(inter) > 1e-6) return true;
+      } catch {
+        // ignore broken clipping input and keep fallback-free behavior
+      }
+    }
+    return false;
   }
 
   function moduleOverlapsWalls(inst: LayoutInstance) {
@@ -8438,7 +8582,7 @@ export function startApp(initialArgs: AppArgs) {
     inst.root.position.copy(applyWallConstraints(inst, inst.root.position.clone()));
     const inRoom = roomContainsBoxXZ(instanceWorldBox(inst));
     const overlaps = ignoreIds ? anyOverlapIgnoring(inst, ignoreIds) : anyOverlap(inst, null);
-    if (!inRoom || overlaps || moduleOverlapsWalls(inst)) {
+    if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
       inst.root.rotation.y = prevRot;
       inst.root.position.copy(prevPos);
       inst.root.updateMatrixWorld(true);
@@ -10576,7 +10720,7 @@ export function startApp(initialArgs: AppArgs) {
       inst.root.position.copy(finalPos);
       autoOrientModuleToRoomWallIfSnapped(inst);
       const pushed = nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
-      if (anyOverlap(inst, null) || moduleOverlapsWalls(inst)) {
+      if (anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
         inst.root.position.copy(dragState.lastValid);
         for (const item of pushed) {
           const neighbor = findInstance(item.id);
@@ -11178,7 +11322,11 @@ export function startApp(initialArgs: AppArgs) {
     const prevPos = inst.root.position.clone();
     inst.root.position.x += dxMm / 1000;
     inst.root.position.z += dzMm / 1000;
-    const valid = roomContainsBoxXZ(instanceWorldBox(inst)) && !anyOverlap(inst, null) && !moduleOverlapsWalls(inst);
+    const valid =
+      roomContainsBoxXZ(instanceWorldBox(inst)) &&
+      !anyOverlap(inst, null) &&
+      !moduleOverlapsWalls(inst) &&
+      !moduleOverlapsKitchenWorktops(inst);
     if (!valid) {
       inst.root.position.copy(prevPos);
       return false;

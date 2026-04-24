@@ -6,6 +6,7 @@ import {
   normalizeCornerShelfLowerParams,
   type CornerShelfLowerParams
 } from "../modules/cornerShelfLower/types";
+import { getKitchenModuleRole } from "./kitchenModuleRules";
 import cornerShelfLowerMaterialsSnapshot from "../modules/cornerShelfLower/package/definitions/corner_shelf_lower.materials.snapshot.json";
 import drawerLowMaterialsSnapshot from "../modules/drawerLow/package/definitions/drawer_low.materials.snapshot.json";
 import {
@@ -17,7 +18,6 @@ import type { PortableMaterialsSnapshot } from "../modules/runtime/portableComme
 import type { KitchenContext } from "./kitchenContext";
 
 type KitchenBoardFamily = "front" | "body" | "back" | "drawer_bottom" | "worktop" | "shelf";
-type KitchenModuleRole = "base" | "upper" | "tall";
 
 type KitchenMaterialField = {
   [K in KitchenBoardFamily]: keyof Pick<
@@ -118,13 +118,6 @@ function ensureRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
-}
-
-function getKitchenModuleRole(params: Record<string, unknown>): KitchenModuleRole {
-  const rawRole = typeof params.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "base";
-  if (rawRole === "upper" || rawRole === "wall") return "upper";
-  if (rawRole === "tall") return "tall";
-  return "base";
 }
 
 function applyKitchenHandleSelection(params: Record<string, unknown>, ctx: KitchenContext) {
@@ -317,10 +310,6 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
-
-  record.depth = ctx.moduleDepthMm;
-  record.plinthHeight = ctx.plinthHeightMm;
-  record.plinthSetbackMm = ctx.plinthDepthMm;
   record.worktopThicknessMm = 0;
 
   const corpus = getKitchenMaterial(ctx, "body");
