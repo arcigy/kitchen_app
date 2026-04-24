@@ -4,15 +4,25 @@ import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type 
 import { getModuleDescriptor } from "../../modules/registry";
 import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
 import type { KitchenContext } from "../kitchenContext";
-import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm } from "../worktopGeometry";
+import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
 import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
+
+export type WorktopFormulaView = {
+  shapeKey: "I" | "L" | "U" | "custom";
+  shapeLabel: string;
+  depthMm: number;
+  thicknessMm: number;
+  segmentLengthsMm: number[];
+  areaM2: number;
+};
 
 export type ProjectPricingView = {
   instanceId: string;
   kind: "module" | "worktop";
   label: string;
   result: BOMResult;
+  worktopFormula?: WorktopFormulaView;
 };
 
 function round(value: number, digits = 2) {
@@ -22,6 +32,36 @@ function round(value: number, digits = 2) {
 
 function moduleLabel(instance: LayoutInstance) {
   return getModuleDescriptor(instance.params.type)?.label ?? instance.params.type;
+}
+
+function buildWorktopFormulaView(worktop: KitchenWorktopInstance): WorktopFormulaView {
+  const path = sanitizeKitchenWorktopPath(worktop.params.path);
+  const segmentLengthsMm: number[] = [];
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const current = path[index]!;
+    const next = path[index + 1]!;
+    segmentLengthsMm.push(Math.round(Math.hypot(next.x - current.x, next.z - current.z)));
+  }
+
+  const shapeKey =
+    segmentLengthsMm.length === 1 ? "I" : segmentLengthsMm.length === 2 ? "L" : segmentLengthsMm.length === 3 ? "U" : "custom";
+  const shapeLabel =
+    shapeKey === "I"
+      ? "I pracovná doska"
+      : shapeKey === "L"
+        ? "L pracovná doska"
+        : shapeKey === "U"
+          ? "U pracovná doska"
+          : `Tvarovaná pracovná doska (${segmentLengthsMm.length} úseky)`;
+
+  return {
+    shapeKey,
+    shapeLabel,
+    depthMm: Math.round(worktop.params.depthMm),
+    thicknessMm: Math.round(worktop.params.thicknessMm),
+    segmentLengthsMm,
+    areaM2: round(getKitchenWorktopAreaM2(worktop.params), 4)
+  };
 }
 
 function toPortableMaterialRef(materialId: string): PortableMaterialRef | null {
@@ -40,7 +80,8 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number): 
   const areaM2 = getKitchenWorktopAreaM2(worktop.params);
   const bounds = getKitchenWorktopBoundsMm(worktop.params);
   const material = toPortableMaterialRef(worktop.params.materialId);
-  const description = areaM2 > 0 ? "Tvarovaná pracovná doska" : "Pracovná doska";
+  const formulaView = buildWorktopFormulaView(worktop);
+  const description = areaM2 > 0 ? formulaView.shapeLabel : "Pracovná doska";
 
   return {
     schemaVersion: "module-quote-bom.v1",
@@ -99,7 +140,10 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number): 
         sourcePartIds: [worktop.id],
         notes: [
           `Plocha: ${round(areaM2, 4)} m2`,
-          `Cena: ${round(areaM2, 4)} m2 x ${round(getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} EUR/m2`
+          `Cena: ${round(areaM2, 4)} m2 x ${round(getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} EUR/m2`,
+          `Tvar: ${formulaView.shapeKey}`,
+          ...formulaView.segmentLengthsMm.map((lengthMm, segmentIndex) => `Úsek ${segmentIndex + 1}: ${lengthMm} mm`),
+          `Hĺbka: ${formulaView.depthMm} mm`
         ],
         pricingGroup: "boards",
         pricingQuantityBase: round(areaM2, 4)
@@ -146,7 +190,8 @@ export function buildProjectPricingViews(
     instanceId: worktop.id,
     kind: "worktop" as const,
     label: `Pracovná doska #${index + 1}`,
-    result: createWorktopBOM(worktop, index + 1)
+    result: createWorktopBOM(worktop, index + 1),
+    worktopFormula: buildWorktopFormulaView(worktop)
   }));
 
   return [...moduleViews, ...worktopViews];

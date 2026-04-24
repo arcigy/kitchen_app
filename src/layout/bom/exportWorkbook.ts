@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
 import type { PortableCommercialPricingItem, PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
-import type { ProjectPricingView } from "./projectPricing";
+import type { ProjectPricingView, WorktopFormulaView } from "./projectPricing";
 
 type CellValue = string | number | boolean | Date | XLSX.CellObject;
 type StyleKey = keyof typeof STYLE_IDS;
@@ -285,7 +285,10 @@ function buildBoardRows(entry: ProjectPricingView) {
     for (let index = 0; index < count; index += 1) {
       const ordinal = count > 1 ? ` ${index + 1}` : "";
       const partKey = partIds[Math.min(index, partIds.length - 1)] ?? `${item.id}:${index + 1}`;
-      const boardLabel = `${translateBoardDescription(item.description)}${ordinal}`;
+      const boardLabel =
+        entry.kind === "worktop" && entry.worktopFormula
+          ? `${entry.worktopFormula.shapeLabel}${ordinal}`
+          : `${translateBoardDescription(item.description)}${ordinal}`;
       rows.push({
         boardLabel,
         dimensionsLabel: formatDimensions(item),
@@ -364,7 +367,7 @@ function buildPriceSourceSheet(sheetName: string, sources: PriceSourceRow[]): Bu
     { value: "Jedn. cena", style: "sourceHeader" }
   ]);
   builder.autoFilter = `A${headerRow}:F${headerRow + Math.max(sources.length, 1)}`;
-  builder.freeze = { ySplit: 2, topLeftCell: "A3" };
+  builder.freeze = { ySplit: headerRow, topLeftCell: `A${headerRow + 1}` };
 
   const refs = new Map<string, PriceSourceRefs>();
   for (const source of sources) {
@@ -393,6 +396,52 @@ function buildPriceSourceSheet(sheetName: string, sources: PriceSourceRow[]): Bu
     freeze: builder.freeze,
     refs
   };
+}
+
+function buildWorktopAreaFormula(depthCell: string, segmentCells: string[]) {
+  if (segmentCells.length === 0) return "0";
+  const depthExpr = `(${depthCell}/1000)`;
+  const segmentTerms = segmentCells.map((segmentCell) => `(${segmentCell}/1000)*${depthExpr}`);
+  const overlapTerms = Array.from({ length: Math.max(0, segmentCells.length - 1) }, () => `${depthExpr}*${depthExpr}`);
+  return [...segmentTerms, ...overlapTerms.map((term) => `-${term}`)].join("+").replace(/\+\-/g, "-");
+}
+
+function buildWorktopFormulaSection(builder: SheetBuilder, formulaView: WorktopFormulaView) {
+  const titleRow = builder.addRow([{ value: "Výpočet plochy pracovnej dosky", style: "sectionTitle" }]);
+  builder.merge(titleRow, 0, titleRow, 5);
+
+  builder.addRow([
+    { value: "Tvar", style: "metaLabel" },
+    { value: formulaView.shapeLabel, style: "metaValue" },
+    "",
+    { value: "Hrúbka (mm)", style: "metaLabel" },
+    { value: formulaView.thicknessMm, style: "decimal" }
+  ]);
+  const depthRow = builder.addRow([
+    { value: "Hĺbka (mm)", style: "metaLabel" },
+    { value: formulaView.depthMm, style: "decimal" }
+  ]);
+
+  const segmentCells: string[] = [];
+  for (let index = 0; index < formulaView.segmentLengthsMm.length; index += 1) {
+    const row = builder.addRow([
+      { value: `Úsek ${index + 1} (mm)`, style: "metaLabel" },
+      { value: formulaView.segmentLengthsMm[index]!, style: "decimal" }
+    ]);
+    segmentCells.push(`B${row}`);
+  }
+
+  const areaFormula = buildWorktopAreaFormula(`B${depthRow}`, segmentCells);
+  builder.addRow([
+    { value: "Vzorec m2", style: "metaLabel" },
+    { value: `=${areaFormula}`, style: "text" }
+  ]);
+  const areaRow = builder.addRow([
+    { value: "Plocha (m2)", style: "metaLabel" },
+    { value: formulaNumber(areaFormula), style: "decimal" }
+  ]);
+  builder.addBlankRow();
+  return `B${areaRow}`;
 }
 
 function buildModuleSheet(args: {
@@ -433,16 +482,19 @@ function buildModuleSheet(args: {
     { value: "Cena", style: "header" }
   ]);
   const boardDataStart = boardsHeaderRow + 1;
-  for (const row of boardRows) {
+  let worktopAreaRow: number | null = null;
+  for (let rowIndex = 0; rowIndex < boardRows.length; rowIndex += 1) {
+    const row = boardRows[rowIndex]!;
     const refs = priceRefs.get(row.materialSourceKey);
-    builder.addRow([
+    const nextRow = builder.addRow([
       { value: row.boardLabel, style: "text" },
       { value: row.dimensionsLabel, style: "text" },
       { value: refs ? formulaText(refs.label) : "-", style: "text" },
-      { value: row.areaM2, style: "decimal" },
+      { value: entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0 ? 0 : row.areaM2, style: "decimal" },
       { value: refs ? formulaNumber(refs.unitPrice) : 0, style: "currency" },
       { value: formulaNumber(`D${builder.rows.length + 1}*E${builder.rows.length + 1}`), style: "currency" }
     ]);
+    if (entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0) worktopAreaRow = nextRow;
   }
   const boardSubtotalRow = builder.addRow([
     { value: "Spolu dosky", style: "subtotalLabel" },
@@ -453,6 +505,13 @@ function buildModuleSheet(args: {
     { value: formulaNumber(boardRows.length ? `SUM(F${boardDataStart}:F${builder.rows.length})` : "0"), style: "subtotalCurrency" }
   ]);
   builder.addBlankRow();
+
+  if (entry.worktopFormula) {
+    const worktopAreaCell = buildWorktopFormulaSection(builder, entry.worktopFormula);
+    if (worktopAreaRow !== null) {
+      builder.rows[worktopAreaRow - 1]![3] = formulaNumber(worktopAreaCell);
+    }
+  }
 
   const edgesTitleRow = builder.addRow([{ value: "Olepovanie", style: "sectionTitle" }]);
   builder.merge(edgesTitleRow, 0, edgesTitleRow, 5);
@@ -545,7 +604,7 @@ function buildModuleSheet(args: {
     { value: formulaNumber(`B${summaryMaterialsRow}+B${summaryLaborRow}`), style: "totalCurrency" }
   ]);
 
-  builder.freeze = { ySplit: 6, topLeftCell: "A7" };
+  builder.freeze = { ySplit: boardsHeaderRow, topLeftCell: `A${boardsHeaderRow + 1}` };
 
   return {
     name: args.sheetName,
@@ -618,7 +677,7 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
     { value: formulaNumber(moduleSheets.length ? `SUM(H${headerRow + 1}:H${builder.rows.length})` : "0"), style: "totalCurrency" }
   ]);
   builder.setRowHeight(totalRow, 20);
-  builder.freeze = { ySplit: 4, topLeftCell: "A5" };
+  builder.freeze = { ySplit: headerRow, topLeftCell: `A${headerRow + 1}` };
 
   return {
     name: "Prehľad",
