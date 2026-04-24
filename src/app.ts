@@ -4733,7 +4733,7 @@ export function startApp(initialArgs: AppArgs) {
     const widthMm = Math.max(1, Math.round(nextMm));
     const previousParams = structuredClone(inst.params);
     if (!setEditableModuleWidthMm(inst, widthMm)) return;
-    const accepted = rebuildInstance(inst, { previousParams });
+    const accepted = rebuildInstance(inst, { previousParams, preserveBackAnchor: true });
     if (!accepted) return;
     mountProps();
     commitHistory(S);
@@ -6131,7 +6131,10 @@ export function startApp(initialArgs: AppArgs) {
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
     const onChange = (previousParams?: Record<string, unknown>) => {
-      const accepted = rebuildInstance(inst, { previousParams: previousParams as ModuleParams | undefined });
+      const accepted = rebuildInstance(inst, {
+        previousParams: previousParams as ModuleParams | undefined,
+        preserveBackAnchor: true
+      });
       if (!accepted) return false;
       commitHistory(S);
       pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
