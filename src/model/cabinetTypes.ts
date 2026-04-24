@@ -1,5 +1,6 @@
 export * from "../modules/cornerShelfLower/types";
 export * from "../modules/drawerLow/types";
+export * from "../modules/flapShelvesLow/types";
 export * from "../modules/fridgeTall/types";
 export * from "../modules/swingShelvesLow/types";
 
@@ -17,6 +18,13 @@ import {
   normalizeDrawerLowParams as normalizeDrawerLowImportedParams
 } from "../modules/drawerLow/types";
 
+import type { FlapShelvesLowParams } from "../modules/flapShelvesLow/types";
+import {
+  makeDefaultFlapShelvesLowParams,
+  validateFlapShelvesLow,
+  normalizeFlapShelvesLowParams as normalizeFlapShelvesLowImportedParams
+} from "../modules/flapShelvesLow/types";
+
 import type { FridgeTallParams } from "../modules/fridgeTall/types";
 import {
   makeDefaultFridgeTallParams,
@@ -31,10 +39,10 @@ import {
   normalizeSwingShelvesLowParams as normalizeSwingShelvesLowImportedParams
 } from "../modules/swingShelvesLow/types";
 
-export const MODULE_TYPES = ["corner_shelf_lower", "drawer_low", "fridge_tall", "swing_shelves_low"] as const;
+export const MODULE_TYPES = ["corner_shelf_lower", "drawer_low", "flap_shelves_low", "fridge_tall", "swing_shelves_low"] as const;
 export type ModuleType = (typeof MODULE_TYPES)[number];
 
-export type ModuleParams = CornerShelfLowerParams | DrawerLowParams | FridgeTallParams | SwingShelvesLowParams;
+export type ModuleParams = CornerShelfLowerParams | DrawerLowParams | FlapShelvesLowParams | FridgeTallParams | SwingShelvesLowParams;
 
 export function makeDefaultModuleParams(type: ModuleType): ModuleParams {
   switch (type) {
@@ -42,6 +50,8 @@ export function makeDefaultModuleParams(type: ModuleType): ModuleParams {
       return makeDefaultCornerShelfLowerParams();
     case "drawer_low":
       return makeDefaultDrawerLowParams();
+    case "flap_shelves_low":
+      return makeDefaultFlapShelvesLowParams();
     case "fridge_tall":
       return makeDefaultFridgeTallParams();
     case "swing_shelves_low":
@@ -59,6 +69,8 @@ export function normalizeModuleParamsForSource(params: ModuleParams, sourceKey?:
       return normalizeCornerShelfLowerImportedParams(params as CornerShelfLowerParams, { sourceKey }) as ModuleParams;
     case "drawer_low":
       return normalizeDrawerLowImportedParams(params as DrawerLowParams, { sourceKey }) as ModuleParams;
+    case "flap_shelves_low":
+      return normalizeFlapShelvesLowImportedParams(params as FlapShelvesLowParams) as ModuleParams;
     case "fridge_tall":
       return normalizeFridgeTallImportedParams(params as FridgeTallParams) as ModuleParams;
     case "swing_shelves_low":
@@ -73,6 +85,8 @@ export function validateModule(params: ModuleParams): string[] {
       return validateCornerShelfLower(params as CornerShelfLowerParams);
     case "drawer_low":
       return validateDrawerLow(params as DrawerLowParams);
+    case "flap_shelves_low":
+      return validateFlapShelvesLow(params as FlapShelvesLowParams);
     case "fridge_tall":
       return validateFridgeTall(params as FridgeTallParams);
     case "swing_shelves_low":

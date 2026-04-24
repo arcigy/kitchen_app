@@ -238,6 +238,7 @@ export function startApp(initialArgs: AppArgs) {
   placementAdjacencyPreview.visible = false;
   placementAdjacencyPreview.renderOrder = 62;
   moduleAdjacencyGroup.add(placementAdjacencyPreview);
+  let lastRebuildDebug: Record<string, unknown> | null = null;
 
   const wallPlanGroup = new THREE.Group();
   wallPlanGroup.name = "wallPlanGroup";
@@ -6827,10 +6828,6 @@ export function startApp(initialArgs: AppArgs) {
     return new THREE.Box3().setFromObject(inst.module);
   }
 
-  function instanceWorldBox(inst: LayoutInstance) {
-    return instanceVisualWorldBox(inst);
-  }
-
   function instanceLayoutWorldBox(inst: LayoutInstance) {
     const visualBox = instanceVisualWorldBox(inst);
     const polygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
@@ -6840,6 +6837,17 @@ export function startApp(initialArgs: AppArgs) {
     return new THREE.Box3(
       new THREE.Vector3(Math.min(...xs), visualBox.min.y, Math.min(...zs)),
       new THREE.Vector3(Math.max(...xs), visualBox.max.y, Math.max(...zs))
+    );
+  }
+
+  function instanceWorldBox(inst: LayoutInstance) {
+    return instanceLayoutWorldBox(inst);
+  }
+
+  function footprintExtentsMatchXZ(a: THREE.Box3, b: THREE.Box3, eps = 1e-6) {
+    return (
+      Math.abs((a.max.x - a.min.x) - (b.max.x - b.min.x)) <= eps &&
+      Math.abs((a.max.z - a.min.z) - (b.max.z - b.min.z)) <= eps
     );
   }
 
@@ -7948,32 +7956,25 @@ export function startApp(initialArgs: AppArgs) {
     inst: LayoutInstance,
     opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
   ) {
+    lastRebuildDebug = null;
     const normalizedParams = normalizeModuleParamsForSource(structuredClone(inst.params), opts?.sourceKey);
     const errors = validateModule(normalizedParams);
     renderErrors(args.errorsEl, errors);
-    if (errors.length > 0) return false;
+    if (errors.length > 0) {
+      lastRebuildDebug = { ok: false, stage: "validate", errors: structuredClone(errors) };
+      return false;
+    }
 
     const previousParams = structuredClone(opts?.previousParams ?? inst.params);
-    inst.params = normalizedParams;
-
-    const next = buildModule(inst.params);
-    next.name = `moduleGeom_${inst.id}`;
-    tagModuleGeometry(next, inst.id);
-
-    const prevModule = inst.module;
-    const prevBox = inst.localBox.clone();
+    inst.params = previousParams;
     const prevWorldBox = instanceWorldBox(inst);
     const prevAdjacencyInfos = collectAdjacentModuleInfos(inst, prevWorldBox);
-    const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos);
+    const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? inferTallResizeAnchorSide(inst);
     const prevPos = inst.root.position.clone();
-    const footprintStable =
-      (previousParams as Record<string, unknown>).width === (inst.params as Record<string, unknown>).width &&
-      (previousParams as Record<string, unknown>).height === (inst.params as Record<string, unknown>).height &&
-      ((previousParams as Record<string, unknown>).depth === (inst.params as Record<string, unknown>).depth ||
-        (previousParams as Record<string, unknown>).lengthZ === (inst.params as Record<string, unknown>).lengthZ);
-    const keepRootPositionStable = moduleStaysOutsideKitchenWorktop(inst) && footprintStable;
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = (isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst)).clone();
+    const prevModule = inst.module;
+    const prevBox = inst.localBox.clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
     const prevWorldBoxesById = new Map<string, THREE.Box3>();
     for (const other of instances) {
@@ -7982,6 +7983,12 @@ export function startApp(initialArgs: AppArgs) {
       prevWorldBoxesById.set(other.id, instanceWorldBox(other).clone());
     }
     prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
+
+    inst.params = normalizedParams;
+
+    const next = buildModule(inst.params);
+    next.name = `moduleGeom_${inst.id}`;
+    tagModuleGeometry(next, inst.id);
 
     inst.root.remove(prevModule);
     inst.module = next;
@@ -7994,6 +8001,7 @@ export function startApp(initialArgs: AppArgs) {
       inst.localBox = new THREE.Box3().setFromObject(inst.module);
     }
     ensurePickAndOutline(inst);
+    const keepRootPositionStable = footprintExtentsMatchXZ(prevWorldBox, instanceWorldBox(inst));
     if (!opts?.skipLayoutValidation && !keepRootPositionStable) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
     if (keepRootPositionStable) {
       inst.root.position.copy(prevPos);
@@ -8025,6 +8033,29 @@ export function startApp(initialArgs: AppArgs) {
             moduleOverlapsWalls(other) ||
             moduleOverlapsKitchenWorktops(other));
       });
+    lastRebuildDebug = {
+      ok: inRoom && !overlaps && !movedNeighborInvalid,
+      stage: inRoom && !overlaps && !movedNeighborInvalid ? "success" : "layoutValidation",
+      keepRootPositionStable,
+      resizeAnchorSide,
+      prevWorldBox: {
+        min: { x: prevWorldBox.min.x, y: prevWorldBox.min.y, z: prevWorldBox.min.z },
+        max: { x: prevWorldBox.max.x, y: prevWorldBox.max.y, z: prevWorldBox.max.z }
+      },
+      nextWorldBox: (() => {
+        const nextWorldBox = instanceWorldBox(inst);
+        return {
+          min: { x: nextWorldBox.min.x, y: nextWorldBox.min.y, z: nextWorldBox.min.z },
+          max: { x: nextWorldBox.max.x, y: nextWorldBox.max.y, z: nextWorldBox.max.z }
+        };
+      })(),
+      inRoom,
+      overlapsModules,
+      overlapsWalls,
+      overlapsWorktops,
+      movedNeighborInvalid,
+      propagatedMovedIds: [...propagated.movedIds]
+    };
     if (!inRoom || overlaps || movedNeighborInvalid) {
       // Revert (layout must never allow overlaps)
       inst.params = previousParams;
@@ -8507,6 +8538,60 @@ export function startApp(initialArgs: AppArgs) {
     };
 
     return choosePreferredCornerSide("left", "right") ?? choosePreferredCornerSide("back", "front");
+  }
+
+  function worldDirectionToBoxSide(dir: THREE.Vector3) {
+    if (Math.abs(dir.x) >= Math.abs(dir.z)) return dir.x >= 0 ? "right" : "left";
+    return dir.z >= 0 ? "front" : "back";
+  }
+
+  function inferTallResizeAnchorSide(inst: LayoutInstance) {
+    if (!inst.kitchenGroupId || !moduleStaysOutsideKitchenWorktop(inst)) return null;
+    const relatedWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === inst.kitchenGroupId);
+    if (relatedWorktops.length === 0) return null;
+
+    const widthMm = Number((inst.params as Record<string, unknown>).width);
+    const halfModuleWidthM =
+      Number.isFinite(widthMm) && widthMm > 0 ? widthMm / 2000 : Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
+    const backCenterWorld = getModuleLocalBackCenter(inst).clone().applyMatrix4(inst.root.matrixWorld);
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+
+    let best:
+      | {
+          distanceSq: number;
+          anchorSide: "left" | "right" | "front" | "back";
+        }
+      | null = null;
+
+    for (const worktop of relatedWorktops) {
+      const firstInfo = getKitchenGuideSegmentInfo(worktop, 0, backOffsetMm);
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+      const lastInfo = guidePath.length >= 2 ? getKitchenGuideSegmentInfo(worktop, guidePath.length - 2, backOffsetMm) : null;
+      const candidates = [
+        firstInfo
+          ? {
+              point: firstInfo.start.clone().addScaledVector(firstInfo.dir, -halfModuleWidthM),
+              anchorSide: worldDirectionToBoxSide(firstInfo.dir)
+            }
+          : null,
+        lastInfo
+          ? {
+              point: lastInfo.start.clone().addScaledVector(lastInfo.dir, lastInfo.length + halfModuleWidthM),
+              anchorSide: worldDirectionToBoxSide(lastInfo.dir.clone().multiplyScalar(-1))
+            }
+          : null
+      ].filter((candidate): candidate is { point: THREE.Vector3; anchorSide: "left" | "right" | "front" | "back" } => candidate != null);
+
+      for (const candidate of candidates) {
+        const distanceSq = candidate.point.distanceToSquared(backCenterWorld);
+        if (!best || distanceSq < best.distanceSq) {
+          best = { distanceSq, anchorSide: candidate.anchorSide };
+        }
+      }
+    }
+
+    return best?.anchorSide ?? null;
   }
 
   function preserveAnchoredResizeSide(
@@ -11947,6 +12032,20 @@ export function startApp(initialArgs: AppArgs) {
       const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
       if (!info) throw new Error("Debug guide segment not available.");
 
+      if (!moduleUsesKitchenWorktopBinding(inst)) {
+        const desiredAlongM = clampNumber((opts?.offsetAlongMm ?? 700) / 1000, 0, info.length);
+        const cursorWorld = info.start
+          .clone()
+          .addScaledVector(info.dir, desiredAlongM)
+          .addScaledVector(info.frontNormal, Math.max(0.05, worktop.params.depthMm / 2000));
+        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], group.ctx.worktopBackOffsetMm);
+        if (!tallConstraint) throw new Error("Debug tall placement not available.");
+        inst.kitchenPlacement = tallConstraint.kitchenPlacement ?? null;
+        inst.root.position.copy(tallConstraint.position);
+        inst.root.rotation.y = tallConstraint.rotationY;
+        inst.root.position.y = 0;
+        inst.root.updateMatrixWorld(true);
+      } else {
       const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
       inst.kitchenPlacement = {
         kind: "segment",
@@ -11955,6 +12054,7 @@ export function startApp(initialArgs: AppArgs) {
         offsetAlongM: desiredAlongM
       };
       applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      }
     }
 
     layoutRoot.add(inst.root);
@@ -12144,13 +12244,14 @@ export function startApp(initialArgs: AppArgs) {
         } as ModuleParams,
         options?.sourceKey
       );
-      const ok = rebuildInstance(inst, {
+    const ok = rebuildInstance(inst, {
         preserveBackAnchor: options?.preserveBackAnchor ?? true,
         previousParams,
         sourceKey: options?.sourceKey
       });
     return {
       ok,
+      debug: lastRebuildDebug ? structuredClone(lastRebuildDebug) : null,
       snapshot: getDebugKitchenSnapshot(inst.kitchenGroupId),
       instance: getDebugModuleSnapshot(inst)
     };

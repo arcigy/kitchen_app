@@ -141,6 +141,28 @@ const cornerCases = [
   { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: false }
 ];
 
+const swingCases = [
+  { key: "width", next: (inst) => nextNumber(inst.params.width, 120), expectGeometry: true },
+  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 80), expectGeometry: true },
+  { key: "height", next: (inst) => nextNumber(inst.params.height, 80), expectGeometry: true },
+  { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
+  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: true },
+  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 40, 0), expectGeometry: true }
+];
+
+const fridgeCases = [
+  { key: "width", next: (inst) => nextNumber(inst.params.width, 120), expectGeometry: true },
+  { key: "height", next: (inst) => nextNumber(inst.params.height, 120), expectGeometry: true },
+  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 60), expectGeometry: true },
+  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "fridgeWidthMm", next: (inst) => nextNumber(inst.params.fridgeWidthMm, 20), expectGeometry: true },
+  { key: "fridgeHeightMm", next: (inst) => Math.max(100, Math.round(Number(inst.params.fridgeHeightMm ?? 1730) - 40)), expectGeometry: true },
+  { key: "freezerDoorHeightMm", next: (inst) => nextNumber(inst.params.freezerDoorHeightMm, 40), expectGeometry: true },
+  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 40, 0), expectGeometry: true },
+  { key: "doorOpen", next: (inst) => !inst.params.doorOpen, expectGeometry: true }
+];
+
 async function runMatrix(page, name, scenarioOpts, moduleType, cases) {
   const failures = [];
   for (const testCase of cases) {
@@ -300,9 +322,136 @@ async function runAdjacencyCases(page) {
   return failures;
 }
 
+async function runClusterCases(page) {
+  const failures = [];
+  const created = await createScenario(page, {
+    path: [{ x: 0, z: 0 }, { x: 4200, z: 0 }],
+    addModule: true,
+    moduleType: "drawer_low",
+    offsetAlongMm: 700
+  });
+  const groupId = created.group.id;
+  await addKitchenModule(page, groupId, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1550 });
+  await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 2550 });
+
+  const before = await snapshot(page, groupId);
+  const ordered = before.instances.slice().sort((a, b) => a.positionM.x - b.positionM.x);
+  const leftDrawer = ordered.find((item) => item.params.type === "drawer_low");
+  const swing = ordered.find((item) => item.params.type === "swing_shelves_low");
+  const rightDrawer = ordered.slice().reverse().find((item) => item.params.type === "drawer_low");
+  expect(leftDrawer && swing && rightDrawer, "cluster scenario missing modules", before);
+
+  {
+    const result = await patchModule(
+      page,
+      swing.id,
+      { heightCarcass: Number(swing.params.heightCarcass ?? 662) + 80 },
+      { sourceKey: "heightCarcass", preserveBackAnchor: true }
+    );
+    const after = await snapshot(page, groupId);
+    const nextSwing = after.instances.find((item) => item.id === swing.id);
+    const nextLeft = after.instances.find((item) => item.id === leftDrawer.id);
+    const nextRight = after.instances.find((item) => item.id === rightDrawer.id);
+    const swingMoved =
+      Math.abs(nextSwing.positionM.x - swing.positionM.x) > 0.0005 || Math.abs(nextSwing.positionM.z - swing.positionM.z) > 0.0005;
+    const neighborMoved =
+      Math.abs(nextLeft.positionM.x - leftDrawer.positionM.x) > 0.0005 ||
+      Math.abs(nextLeft.positionM.z - leftDrawer.positionM.z) > 0.0005 ||
+      Math.abs(nextRight.positionM.x - rightDrawer.positionM.x) > 0.0005 ||
+      Math.abs(nextRight.positionM.z - rightDrawer.positionM.z) > 0.0005;
+    if (!result.ok || Number(nextSwing.params.heightCarcass) <= Number(swing.params.heightCarcass) || swingMoved || neighborMoved) {
+      failures.push({
+        case: "cluster_swing_heightCarcass_commits_without_shift",
+        ok: result.ok,
+        beforeHeightCarcass: swing.params.heightCarcass,
+        afterHeightCarcass: nextSwing.params.heightCarcass,
+        swingMoved,
+        neighborMoved,
+        beforeSwingPos: swing.positionM,
+        afterSwingPos: nextSwing.positionM
+      });
+    }
+  }
+
+  {
+    const snapMid = await snapshot(page, groupId);
+    const currentLeft = snapMid.instances.find((item) => item.id === leftDrawer.id);
+    const currentSwing = snapMid.instances.find((item) => item.id === swing.id);
+    const currentRight = snapMid.instances.find((item) => item.id === rightDrawer.id);
+    const result = await patchModule(
+      page,
+      currentLeft.id,
+      { frontThicknessMm: Number(currentLeft.params.frontThicknessMm ?? 19) + 2 },
+      { sourceKey: "frontThicknessMm", preserveBackAnchor: true }
+    );
+    const after = await snapshot(page, groupId);
+    const nextLeft = after.instances.find((item) => item.id === leftDrawer.id);
+    const nextSwing = after.instances.find((item) => item.id === swing.id);
+    const nextRight = after.instances.find((item) => item.id === rightDrawer.id);
+    const leftMoved =
+      Math.abs(nextLeft.positionM.x - currentLeft.positionM.x) > 0.0005 || Math.abs(nextLeft.positionM.z - currentLeft.positionM.z) > 0.0005;
+    const othersMoved =
+      Math.abs(nextSwing.positionM.x - currentSwing.positionM.x) > 0.0005 ||
+      Math.abs(nextSwing.positionM.z - currentSwing.positionM.z) > 0.0005 ||
+      Math.abs(nextRight.positionM.x - currentRight.positionM.x) > 0.0005 ||
+      Math.abs(nextRight.positionM.z - currentRight.positionM.z) > 0.0005;
+    if (!result.ok || Number(nextLeft.params.frontThicknessMm) <= Number(currentLeft.params.frontThicknessMm) || leftMoved || othersMoved) {
+      failures.push({
+        case: "cluster_drawer_frontThickness_commits_without_shift",
+        ok: result.ok,
+        beforeFrontThickness: currentLeft.params.frontThicknessMm,
+        afterFrontThickness: nextLeft.params.frontThicknessMm,
+        leftMoved,
+        othersMoved,
+        beforeLeftPos: currentLeft.positionM,
+        afterLeftPos: nextLeft.positionM
+      });
+    }
+  }
+
+  {
+    const snapMid = await snapshot(page, groupId);
+    const currentLeft = snapMid.instances.find((item) => item.id === leftDrawer.id);
+    const currentSwing = snapMid.instances.find((item) => item.id === swing.id);
+    const currentRight = snapMid.instances.find((item) => item.id === rightDrawer.id);
+    const result = await patchModule(
+      page,
+      currentRight.id,
+      { width: Number(currentRight.params.width ?? 800) + 120 },
+      { sourceKey: "width", preserveBackAnchor: true }
+    );
+    const after = await snapshot(page, groupId);
+    const nextLeft = after.instances.find((item) => item.id === leftDrawer.id);
+    const nextSwing = after.instances.find((item) => item.id === swing.id);
+    const nextRight = after.instances.find((item) => item.id === rightDrawer.id);
+    const othersMoved =
+      Math.abs(nextLeft.positionM.x - currentLeft.positionM.x) > 0.0005 ||
+      Math.abs(nextLeft.positionM.z - currentLeft.positionM.z) > 0.0005 ||
+      Math.abs(nextSwing.positionM.x - currentSwing.positionM.x) > 0.0005 ||
+      Math.abs(nextSwing.positionM.z - currentSwing.positionM.z) > 0.0005;
+    if (!result.ok || Number(nextRight.params.width) <= Number(currentRight.params.width) || othersMoved) {
+      failures.push({
+        case: "cluster_edge_drawer_width_grows_without_shifting_neighbors",
+        ok: result.ok,
+        beforeWidth: currentRight.params.width,
+        afterWidth: nextRight.params.width,
+        othersMoved,
+        beforeRightPos: currentRight.positionM,
+        afterRightPos: nextRight.positionM
+      });
+    }
+  }
+
+  return failures;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  const context = await browser.newContext({
+    viewport: { width: 1600, height: 1000 },
+    serviceWorkers: "block"
+  });
+  const page = await context.newPage();
 
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
@@ -332,8 +481,29 @@ async function main() {
     );
 
     const adjacencyFailures = await runAdjacencyCases(page);
+    const swingFailures = await runMatrix(
+      page,
+      "swing",
+      {
+        path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }]
+      },
+      "swing_shelves_low",
+      swingCases
+    );
 
-    const failures = [...drawerFailures, ...cornerFailures, ...adjacencyFailures];
+    const fridgeFailures = await runMatrix(
+      page,
+      "fridge",
+      {
+        path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }]
+      },
+      "fridge_tall",
+      fridgeCases
+    );
+
+    const clusterFailures = await runClusterCases(page);
+
+    const failures = [...drawerFailures, ...cornerFailures, ...swingFailures, ...fridgeFailures, ...adjacencyFailures, ...clusterFailures];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
     }
@@ -346,10 +516,17 @@ async function main() {
           coverage: {
             drawerCases: drawerCases.map((item) => item.key),
             cornerCases: cornerCases.map((item) => item.key),
+            swingCases: swingCases.map((item) => item.key),
+            fridgeCases: fridgeCases.map((item) => item.key),
             adjacencyCases: [
               "drawer_width_growth_next_to_corner_grows_away",
               "corner_lengthX_growth_pushes_attached_drawer",
               "drawer_width_growth_keeps_adjacent_drawer_fixed"
+            ],
+            clusterCases: [
+              "cluster_swing_heightCarcass_commits_without_shift",
+              "cluster_drawer_frontThickness_commits_without_shift",
+              "cluster_edge_drawer_width_grows_without_shifting_neighbors"
             ]
           }
         },
@@ -358,6 +535,7 @@ async function main() {
       )
     );
   } finally {
+    await context.close();
     await browser.close();
   }
 }
