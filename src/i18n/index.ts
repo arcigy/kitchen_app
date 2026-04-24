@@ -53,6 +53,28 @@ const EXACT_SK_TEXT: Record<string, string> = {
   Mirrored: "Zrkadlovo",
   "Cut line": "Rezná línia",
   Model: "Model",
+  Name: "N\u00e1zov",
+  "Thickness (mm)": "Hr\u00fabka (mm)",
+  Justification: "Zarovnanie",
+  Center: "Stred",
+  Exterior: "Exteri\u00e9r",
+  "Finish face: exterior": "Poh\u013eadov\u00e1 strana: exteri\u00e9r",
+  "Flip exterior": "Prehodi\u0165 exteri\u00e9r",
+  "Back edge": "Zadn\u00e1 hrana",
+  "Top Height": "Horn\u00e1 v\u00fd\u0161ka",
+  "Height (mm)": "V\u00fd\u0161ka (mm)",
+  "Worktop depth (mm)": "H\u013abka pracovnej dosky (mm)",
+  "Worktop front offset (mm)": "Predn\u00e9 odsadenie pracovnej dosky (mm)",
+  "Worktop back offset (mm)": "Zadn\u00e9 odsadenie pracovnej dosky (mm)",
+  Fronts: "\u010cel\u00e1",
+  Corpus: "Korpus",
+  Back: "Chrb\u00e1t",
+  "Drawer bottoms": "Dn\u00e1 z\u00e1suviek",
+  "Worktop thickness": "Hr\u00fabka pracovnej dosky",
+  North: "Sever",
+  East: "V\u00fdchod",
+  South: "Juh",
+  West: "Z\u00e1pad",
   Ortho: "Orto",
   Lighting: "Osvetlenie",
   "Render mode": "Režim renderu",
@@ -188,7 +210,6 @@ const EXACT_SK_TEXT: Record<string, string> = {
   Enabled: "Zapnuté",
   Disabled: "Vypnuté",
   "Cabinet Panels": "Korpusové diely",
-  Fronts: "Čelá",
   "Back Panels": "Zadné diely",
   "Drawer Box Panels": "Diely boxu zásuvky",
   "Drawer Box Bottoms": "Dná zásuviek",
@@ -484,6 +505,71 @@ function translatePhraseKey(value: string): string {
   return PARAM_LABELS_SK[camel] ?? value;
 }
 
+function translateSlotToken(token: string): string {
+  const exact: Record<string, string> = {
+    "back-panel": "zadn\u00fd panel",
+    "bottom-panel": "spodn\u00fd panel",
+    "left-side": "\u013eav\u00e1 bo\u010dnica",
+    "right-side": "prav\u00e1 bo\u010dnica",
+    plinth: "sokel",
+    "top-panel": "horn\u00fd panel",
+    "drawer-front-1": "\u010delo z\u00e1suvky 1",
+    "drawer-front-2": "\u010delo z\u00e1suvky 2",
+    "drawer-front-3": "\u010delo z\u00e1suvky 3",
+    "top-panel-z": "horn\u00fd panel Z",
+    "top-panel-x-front": "horn\u00e1 predn\u00e1 prie\u010dka X",
+    "top-panel-x-back": "horn\u00e1 zadn\u00e1 prie\u010dka X",
+    "door-front-x": "\u010delo dvierok X",
+    "door-front-z": "\u010delo dvierok Z"
+  };
+  if (exact[token]) return exact[token];
+
+  const shelf = token.match(/^shelf-(\d+)-([xz])$/i);
+  if (shelf) return `polica ${shelf[1]} ${shelf[2]!.toUpperCase()}`;
+
+  const plinth = token.match(/^plinth-([xz])$/i);
+  if (plinth) return `sokel ${plinth[1]!.toUpperCase()}`;
+
+  return token;
+}
+
+function translatePartLabel(label: string): string {
+  const exact: Record<string, string> = {
+    "Left Side Panel": "\u013dav\u00e1 bo\u010dnica",
+    "Right Side Panel": "Prav\u00e1 bo\u010dnica",
+    "Door Front X": "\u010celo dvierok X",
+    "Door Front Z": "\u010celo dvierok Z",
+    "Top Rear Rail X": "Horn\u00e1 zadn\u00e1 prie\u010dka X",
+    "Top Front Rail X": "Horn\u00e1 predn\u00e1 prie\u010dka X",
+    "Top Panel Z": "Horn\u00fd panel Z",
+    "Back Panel X": "Zadn\u00fd panel X",
+    "Back Panel Z": "Zadn\u00fd panel Z",
+    "Bottom Panel X": "Spodn\u00fd panel X",
+    "Bottom Panel Z": "Spodn\u00fd panel Z"
+  };
+  if (exact[label]) return exact[label];
+
+  const slot = label.match(/^Slot (.+)$/);
+  if (slot) return `Slot ${translateSlotToken(slot[1] ?? "")}`;
+
+  const drawerBottom = label.match(/^Drawer Box (\d+) Bottom Panel$/);
+  if (drawerBottom) return `Box z\u00e1suvky ${drawerBottom[1]} - dno`;
+
+  const drawerFrontBack = label.match(/^Drawer Box (\d+) Front\/Back Panels$/);
+  if (drawerFrontBack) return `Box z\u00e1suvky ${drawerFrontBack[1]} - predn\u00fd\/zadn\u00fd diel`;
+
+  const drawerSides = label.match(/^Drawer Box (\d+) Side Panels$/);
+  if (drawerSides) return `Box z\u00e1suvky ${drawerSides[1]} - bo\u010dn\u00e9 diely`;
+
+  const shelf = label.match(/^Shelf (\d+) ([XZ])$/);
+  if (shelf) return `Polica ${shelf[1]} ${shelf[2]}`;
+
+  const plinth = label.match(/^Plinth ([XZ])$/);
+  if (plinth) return `Sokel ${plinth[1]}`;
+
+  return label;
+}
+
 function fallbackFormatKeyLabel(key: string): string {
   return key
     .replace(/_/g, " ")
@@ -498,6 +584,9 @@ export function translateText(text: string): string {
 
   const exact = EXACT_SK_TEXT[text] ?? SYSTEM_DESCRIPTION_SK[text];
   if (exact) return exact;
+
+  const translatedPartLabel = translatePartLabel(text);
+  if (translatedPartLabel !== text) return translatedPartLabel;
 
   const prefixMap: Array<[RegExp, string]> = [
     [/^View:\s*/, "Pohľad: "],
