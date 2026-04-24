@@ -7,7 +7,7 @@ import {
 } from "../modules/cornerShelfLower/types";
 import cornerShelfLowerMaterialsSnapshot from "../modules/cornerShelfLower/package/definitions/corner_shelf_lower.materials.snapshot.json";
 import drawerLowMaterialsSnapshot from "../modules/drawerLow/package/definitions/drawer_low.materials.snapshot.json";
-import { updateCommercialSelections, type PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
+import type { PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
 import type { KitchenContext } from "./kitchenContext";
 
 type KitchenBoardFamily = "front" | "body" | "back" | "drawer_bottom" | "worktop" | "shelf";
@@ -112,6 +112,86 @@ function ensureRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function applyLegacyMaterialAliases(
+  params: Record<string, unknown>,
+  family: KitchenBoardFamily,
+  material: MaterialDefinition
+) {
+  const materials = ensureRecord(params.materials);
+  params.materials = materials;
+  const colorHex = material.preview.colorHex;
+
+  if (family === "front") {
+    params.frontMaterialId = material.id;
+    params.frontColor = colorHex;
+    materials.frontKey = material.id;
+    materials.frontMaterialId = material.id;
+    materials.frontName = material.displayName;
+    materials.frontColor = colorHex;
+    return;
+  }
+
+  if (family === "back") {
+    params.backMaterialId = material.id;
+    params.backColor = colorHex;
+    materials.backKey = material.id;
+    materials.backMaterialId = material.id;
+    materials.backName = material.displayName;
+    materials.backColor = colorHex;
+    return;
+  }
+
+  if (family === "drawer_bottom" || family === "drawer") {
+    params.drawerMaterialId = material.id;
+    params.drawerColor = colorHex;
+    materials.drawerKey = material.id;
+    materials.drawerMaterialId = material.id;
+    materials.drawerName = material.displayName;
+    materials.drawerColor = colorHex;
+    return;
+  }
+
+  if (family === "shelf") {
+    params.shelfMaterialId = material.id;
+    params.shelfColor = colorHex;
+    materials.shelfMaterialId = material.id;
+    materials.shelfName = material.displayName;
+    materials.shelfColor = colorHex;
+    return;
+  }
+
+  params.bodyMaterialId = material.id;
+  params.bodyColor = colorHex;
+  materials.bodyKey = material.id;
+  materials.bodyMaterialId = material.id;
+  materials.bodyName = material.displayName;
+  materials.bodyColor = colorHex;
+  materials.backInsideColor = colorHex;
+}
+
+function applyKitchenCommercialSelections(
+  params: Record<string, unknown>,
+  ctx: KitchenContext,
+  snapshot: PortableMaterialsSnapshot
+) {
+  const boardMaterials: Record<string, string> = {};
+  const boardThicknesses: Record<string, number> = {};
+
+  for (const slot of snapshot.slotAssignments ?? []) {
+    const family = (slot.boardFamily ?? slot.assignedMaterial.family ?? null) as KitchenBoardFamily | null;
+    if (!family || family === "worktop") continue;
+    const selected = getKitchenMaterial(ctx, family);
+    if (!selected) continue;
+    boardMaterials[slot.slotId] = selected.id;
+    boardThicknesses[slot.slotId] = selected.defaultThicknessMm;
+  }
+
+  params.commercialSelections = {
+    boardMaterials,
+    boardThicknesses
+  };
+}
+
 function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
@@ -124,57 +204,33 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
-    materials.bodyKey = corpus.id;
-    materials.bodyMaterialId = corpus.id;
-    materials.bodyName = corpus.displayName;
-    materials.bodyColor = corpus.preview.colorHex;
+    applyLegacyMaterialAliases(record, "body", corpus);
+    applyLegacyMaterialAliases(record, "shelf", corpus);
   }
 
   const fronts = getKitchenMaterial(ctx, "front");
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
-    materials.frontKey = fronts.id;
-    materials.frontMaterialId = fronts.id;
-    materials.frontName = fronts.displayName;
-    materials.frontColor = fronts.preview.colorHex;
+    applyLegacyMaterialAliases(record, "front", fronts);
   }
 
   const back = getKitchenMaterial(ctx, "back");
   if (back) {
     record.backThickness = back.defaultThicknessMm;
-    materials.backKey = back.id;
-    materials.backMaterialId = back.id;
-    materials.backName = back.displayName;
-    materials.backColor = back.preview.colorHex;
+    applyLegacyMaterialAliases(record, "back", back);
   }
 
   const drawerBottom = getKitchenMaterial(ctx, "drawer_bottom");
   if (drawerBottom) {
     record.drawerBottomThickness = drawerBottom.defaultThicknessMm;
+    applyLegacyMaterialAliases(record, "drawer_bottom", drawerBottom);
   }
 
   if ("worktopThicknessMm" in record) {
     record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
   }
 
-  updateCommercialSelections(record, (current) => {
-    const boardMaterials = { ...current.boardMaterials };
-    const boardThicknesses = { ...current.boardThicknesses };
-
-    for (const slot of drawerLowSnapshot.slotAssignments ?? []) {
-      const family = (slot.boardFamily ?? slot.assignedMaterial.family ?? null) as KitchenBoardFamily | null;
-      if (!family || family === "worktop") continue;
-      const selected = getKitchenMaterial(ctx, family);
-      if (!selected) continue;
-      boardMaterials[slot.slotId] = selected.id;
-      boardThicknesses[slot.slotId] = selected.defaultThicknessMm;
-    }
-
-    return {
-      boardMaterials,
-      boardThicknesses
-    };
-  });
+  applyKitchenCommercialSelections(record, ctx, drawerLowSnapshot);
 }
 
 function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
@@ -191,52 +247,27 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   const corpus = getKitchenMaterial(ctx, "body");
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
-    materials.bodyKey = corpus.id;
-    materials.bodyMaterialId = corpus.id;
-    materials.bodyName = corpus.displayName;
-    materials.bodyColor = corpus.preview.colorHex;
+    applyLegacyMaterialAliases(record, "body", corpus);
+    applyLegacyMaterialAliases(record, "shelf", corpus);
   }
 
   const fronts = getKitchenMaterial(ctx, "front");
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
-    materials.frontKey = fronts.id;
-    materials.frontMaterialId = fronts.id;
-    materials.frontName = fronts.displayName;
-    materials.frontColor = fronts.preview.colorHex;
+    applyLegacyMaterialAliases(record, "front", fronts);
   }
 
   const back = getKitchenMaterial(ctx, "back");
   if (back) {
     record.backThickness = back.defaultThicknessMm;
-    materials.backKey = back.id;
-    materials.backMaterialId = back.id;
-    materials.backName = back.displayName;
-    materials.backColor = back.preview.colorHex;
+    applyLegacyMaterialAliases(record, "back", back);
   }
 
   if ("worktopThicknessMm" in record) {
     record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
   }
 
-  updateCommercialSelections(record, (current) => {
-    const boardMaterials = { ...current.boardMaterials };
-    const boardThicknesses = { ...current.boardThicknesses };
-
-    for (const slot of cornerShelfLowerSnapshot.slotAssignments ?? []) {
-      const family = (slot.boardFamily ?? slot.assignedMaterial.family ?? null) as KitchenBoardFamily | null;
-      if (!family || family === "worktop") continue;
-      const selected = getKitchenMaterial(ctx, family);
-      if (!selected) continue;
-      boardMaterials[slot.slotId] = selected.id;
-      boardThicknesses[slot.slotId] = selected.defaultThicknessMm;
-    }
-
-    return {
-      boardMaterials,
-      boardThicknesses
-    };
-  });
+  applyKitchenCommercialSelections(record, ctx, cornerShelfLowerSnapshot);
 
   Object.assign(
     record,
