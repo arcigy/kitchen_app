@@ -73,7 +73,7 @@ export type PortableModuleControlsApi = {
 };
 
 export type PortableModuleControlsArgs = {
-  onChange: (previousParams?: Record<string, unknown>) => void | boolean;
+  onChange: (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
   getWorktopThicknessMm: () => number;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
@@ -493,10 +493,10 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   const syncFromParams = () => {
     for (const control of controls) control.readFromParams();
   };
-  const applyParamMutation = (mutate: () => void) => {
+  const applyParamMutation = (sourceKey: string, mutate: () => void) => {
     const previous = cloneValue(params);
     mutate();
-    const accepted = controlArgs.onChange(previous as Record<string, unknown>);
+    const accepted = controlArgs.onChange(previous as Record<string, unknown>, sourceKey);
     if (accepted === false) {
       replaceRecordValues(params, previous);
       syncFromParams();
@@ -562,7 +562,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         wrapper.appendChild(input);
 
         const apply = () => {
-          applyParamMutation(() => {
+          applyParamMutation(parameter.key, () => {
             setTopLevelValue(params, parameter.key, input.checked);
             if (parameter.key === "requiresWorktop") {
               syncPortableSystemValues(systemValues, params);
@@ -593,13 +593,20 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const apply = () => {
           const next = Number(input.value);
           if (!Number.isFinite(next)) return;
-          applyParamMutation(() => {
+          applyParamMutation(parameter.key, () => {
             setTopLevelValue(params, parameter.key, next);
             paramChangeHook?.(params, parameter.key);
           });
         };
 
         input.addEventListener(explicitCommitMode ? "change" : "input", apply);
+        if (explicitCommitMode) {
+          input.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            apply();
+          });
+        }
         controls.push({
           key: parameter.key,
           wrapper,
@@ -636,7 +643,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           wrapper.appendChild(select);
 
           const apply = () => {
-            applyParamMutation(() => {
+            applyParamMutation(parameter.key, () => {
               if (parameter.key === "handleComponentId") {
                 Object.assign(params, applyDrawerLowHandleComponentToParams(params, select.value));
               } else if (parameter.key === "legComponentId") {
@@ -693,7 +700,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         wrapper.appendChild(input);
 
         const apply = () => {
-          applyParamMutation(() => {
+          applyParamMutation(parameter.key, () => {
             setTopLevelValue(params, parameter.key, input.value);
             paramChangeHook?.(params, parameter.key);
           });
@@ -752,7 +759,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
           return;
         }
         wrapper.classList.remove("error");
-        applyParamMutation(() => {
+        applyParamMutation(parameter.key, () => {
           setTopLevelValue(params, parameter.key, cloneValue(parsed));
           paramChangeHook?.(params, parameter.key);
         });
@@ -857,7 +864,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       const applyMaterialChange = () => {
         const targetFamily = familyByBaseId.get(materialSelect.value);
         if (!targetFamily) return;
-        applyParamMutation(() => {
+        applyParamMutation(thicknessParameterKey ?? "materials", () => {
           const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
           for (const slotId of slotIds) {
             const currentThickness = slotThicknesses[slotId] ?? targetFamily.variants[0]?.defaultThicknessMm ?? 18;
@@ -882,7 +889,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         if (!targetFamily || !Number.isFinite(nextThickness)) return;
         const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, nextThickness) ?? targetFamily.variants[0];
         if (!nextVariant) return;
-        applyParamMutation(() => {
+        applyParamMutation(thicknessParameterKey ?? "materials", () => {
           for (const slotId of slotIds) {
             updateCommercialSelections(params, (current) => {
               current.boardMaterials[slotId] = nextVariant.id;

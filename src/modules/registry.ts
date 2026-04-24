@@ -24,7 +24,7 @@ export type ModuleControlsApi = {
 };
 
 export type ModuleControlsArgs = {
-  onChange: () => void | boolean;
+  onChange: (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
   getWorktopThicknessMm: () => number;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;

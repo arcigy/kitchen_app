@@ -40,19 +40,19 @@ export function makeDefaultModuleParams(type: ModuleType): ModuleParams {
 }
 
 export function normalizeModuleParams(params: ModuleParams): ModuleParams {
+  return normalizeModuleParamsForSource(params);
+}
+
+export function normalizeModuleParamsForSource(params: ModuleParams, sourceKey?: string): ModuleParams {
   switch (params.type) {
     case "corner_shelf_lower":
-      return normalizeCornerShelfLowerImportedParams(params as CornerShelfLowerParams) as ModuleParams;
+      return normalizeCornerShelfLowerImportedParams(params as CornerShelfLowerParams, { sourceKey }) as ModuleParams;
     case "drawer_low":
-      return normalizeDrawerLowImportedParams(params as DrawerLowParams) as ModuleParams;
+      return normalizeDrawerLowImportedParams(params as DrawerLowParams, { sourceKey }) as ModuleParams;
     case "fridge_tall":
       return normalizeFridgeTallImportedParams(params as FridgeTallParams) as ModuleParams;
   }
   return params;
-}
-
-export function normalizeModuleParamsForSource(params: ModuleParams, _sourceKey?: string): ModuleParams {
-  return normalizeModuleParams(params);
 }
 
 export function validateModule(params: ModuleParams): string[] {

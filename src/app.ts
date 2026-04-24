@@ -4733,7 +4733,11 @@ export function startApp(initialArgs: AppArgs) {
     const widthMm = Math.max(1, Math.round(nextMm));
     const previousParams = structuredClone(inst.params);
     if (!setEditableModuleWidthMm(inst, widthMm)) return;
-    const accepted = rebuildInstance(inst, { previousParams, preserveBackAnchor: true });
+    const accepted = rebuildInstance(inst, {
+      previousParams,
+      preserveBackAnchor: true,
+      sourceKey: typeof (inst.params as any).widthMm === "number" ? "widthMm" : "width"
+    });
     if (!accepted) return;
     mountProps();
     commitHistory(S);
@@ -6130,10 +6134,11 @@ export function startApp(initialArgs: AppArgs) {
     s.appendChild(editorHost);
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
-    const onChange = (previousParams?: Record<string, unknown>) => {
+    const onChange = (previousParams?: Record<string, unknown>, sourceKey?: string) => {
       const accepted = rebuildInstance(inst, {
         previousParams: previousParams as ModuleParams | undefined,
-        preserveBackAnchor: true
+        preserveBackAnchor: true,
+        sourceKey
       });
       if (!accepted) return false;
       commitHistory(S);
@@ -7825,19 +7830,20 @@ export function startApp(initialArgs: AppArgs) {
 
     getModuleDescriptorOrThrow(inst.params.type).createControls(instanceEditorHost, inst.params, {
       ...worktopArgs,
-      onChange: (previousParams?: Record<string, unknown>) =>
+      onChange: (previousParams?: Record<string, unknown>, sourceKey?: string) =>
         rebuildInstance(inst, {
           preserveBackAnchor: true,
-          previousParams: previousParams as ModuleParams | undefined
+          previousParams: previousParams as ModuleParams | undefined,
+          sourceKey
         })
     });
   }
 
   function rebuildInstance(
     inst: LayoutInstance,
-    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams }
+    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
   ) {
-    const normalizedParams = normalizeModuleParams(structuredClone(inst.params));
+    const normalizedParams = normalizeModuleParamsForSource(structuredClone(inst.params), opts?.sourceKey);
     const errors = validateModule(normalizedParams);
     renderErrors(args.errorsEl, errors);
     if (errors.length > 0) return false;
@@ -7893,14 +7899,6 @@ export function startApp(initialArgs: AppArgs) {
       const clamped = applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
-    if (inst.kitchenGroupId && prevKitchenPlacement) {
-      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      if (applyKitchenPlacementBinding(inst, prevKitchenPlacement, backOffsetMm)) {
-        inst.kitchenPlacement = structuredClone(prevKitchenPlacement);
-      }
-    }
-
     const propagated = opts?.skipLayoutValidation
       ? { ok: true, movedIds: [] as string[] }
       : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
@@ -11992,17 +11990,18 @@ export function startApp(initialArgs: AppArgs) {
     const inst = findInstance(instanceId);
     if (!inst) throw new Error(`Instance ${instanceId} not found.`);
     const previousParams = structuredClone(inst.params);
-    inst.params = normalizeModuleParamsForSource(
-      {
-        ...structuredClone(inst.params),
-        ...structuredClone(patch)
-      } as ModuleParams,
-      options?.sourceKey
-    );
-    const ok = rebuildInstance(inst, {
-      preserveBackAnchor: options?.preserveBackAnchor ?? true,
-      previousParams
-    });
+      inst.params = normalizeModuleParamsForSource(
+        {
+          ...structuredClone(inst.params),
+          ...structuredClone(patch)
+        } as ModuleParams,
+        options?.sourceKey
+      );
+      const ok = rebuildInstance(inst, {
+        preserveBackAnchor: options?.preserveBackAnchor ?? true,
+        previousParams,
+        sourceKey: options?.sourceKey
+      });
     return {
       ok,
       snapshot: getDebugKitchenSnapshot(inst.kitchenGroupId),
