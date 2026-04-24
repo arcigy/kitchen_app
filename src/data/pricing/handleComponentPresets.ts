@@ -21,6 +21,18 @@ export type DrawerLowHandleComponentOption = {
   component: ComponentDefinition;
 };
 
+export type CornerHingeComponentOption = {
+  componentId: string;
+  displayName: string;
+  component: ComponentDefinition;
+};
+
+export type CornerClipComponentOption = {
+  componentId: string;
+  displayName: string;
+  component: ComponentDefinition;
+};
+
 export type DrawerLowHandlePreset = {
   componentId: string;
   displayName: string;
@@ -45,11 +57,25 @@ export type DrawerLowRunnerPreset = {
   nominalLengthMm: number;
 };
 
+export type CornerHingePreset = {
+  componentId: string;
+  displayName: string;
+  exactType: string;
+};
+
+export type CornerClipPreset = {
+  componentId: string;
+  displayName: string;
+  exactType: string;
+};
+
 const DEFAULT_BAR_HANDLE_COMPONENT_ID = "cmp.handle.bar.160.black";
 const DEFAULT_PROFILE_HANDLE_COMPONENT_ID = "cmp.handle.profile.aluminium";
 const DEFAULT_KNOB_HANDLE_COMPONENT_ID = "cmp.handle.knob.round.black";
 const DEFAULT_LEG_COMPONENT_ID = "cmp.leg.adjustable.100.black";
 const DEFAULT_RUNNER_COMPONENT_ID = "cmp.runner.pair.400.standard";
+const DEFAULT_CORNER_HINGE_COMPONENT_ID = "cmp.hinge.corner.45.softclose";
+const DEFAULT_CORNER_CLIP_COMPONENT_ID = "cmp.clip.plinth.standard";
 
 function resolveHandleGeometryKind(componentId: string): Exclude<DrawerLowHandleGeometryKind, "none"> {
   if (componentId.includes(".knob.")) return "knob";
@@ -102,6 +128,24 @@ export const drawerLowRunnerComponentOptions: DrawerLowRunnerComponentOption[] =
   }))
   .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
+export const cornerHingeComponentOptions: CornerHingeComponentOption[] = componentDefinitions
+  .filter((component): component is ComponentDefinition => component.componentType === "hinge" && component.isActive)
+  .map((component) => ({
+    componentId: component.id,
+    displayName: component.displayName,
+    component
+  }))
+  .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+export const cornerClipComponentOptions: CornerClipComponentOption[] = componentDefinitions
+  .filter((component): component is ComponentDefinition => component.componentType === "plinth_clip" && component.isActive)
+  .map((component) => ({
+    componentId: component.id,
+    displayName: component.displayName,
+    component
+  }))
+  .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
 export function getDrawerLowHandleComponentOptions(): DrawerLowHandleComponentOption[] {
   return drawerLowHandleComponentOptions.map((option) => ({
     ...option,
@@ -118,6 +162,20 @@ export function getDrawerLowLegComponentOptions(): DrawerLowLegComponentOption[]
 
 export function getDrawerLowRunnerComponentOptions(): DrawerLowRunnerComponentOption[] {
   return drawerLowRunnerComponentOptions.map((option) => ({
+    ...option,
+    component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
+  }));
+}
+
+export function getCornerHingeComponentOptions(): CornerHingeComponentOption[] {
+  return cornerHingeComponentOptions.map((option) => ({
+    ...option,
+    component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
+  }));
+}
+
+export function getCornerClipComponentOptions(): CornerClipComponentOption[] {
+  return cornerClipComponentOptions.map((option) => ({
     ...option,
     component: { ...option.component, tags: [...option.component.tags], preview: { ...option.component.preview } }
   }));
@@ -193,6 +251,34 @@ export function getDrawerLowRunnerPresetById(componentId: string | null | undefi
       ? "Runner Component / Premium Softclose Pair"
       : "Runner Component / Standard Pair",
     nominalLengthMm: typeof component.nominalLengthMm === "number" ? component.nominalLengthMm : 400
+  };
+}
+
+export function getCornerHingePresetById(componentId: string | null | undefined): CornerHingePreset | null {
+  if (!componentId) return null;
+  const component = getComponentDefinitionById(componentId);
+  if (!component || component.componentType !== "hinge") return null;
+
+  return {
+    componentId: component.id,
+    displayName: component.displayName,
+    exactType: component.id.includes(".corner.")
+      ? "Hinge Component / Corner Hinge"
+      : "Hinge Component / Door Hinge"
+  };
+}
+
+export function getCornerClipPresetById(componentId: string | null | undefined): CornerClipPreset | null {
+  if (!componentId) return null;
+  const component = getComponentDefinitionById(componentId);
+  if (!component || component.componentType !== "plinth_clip") return null;
+
+  return {
+    componentId: component.id,
+    displayName: component.displayName,
+    exactType: component.id.includes(".heavy")
+      ? "Clip Component / Heavy Plinth Clip"
+      : "Clip Component / Plinth Clip"
   };
 }
 
@@ -295,6 +381,36 @@ export function applyDrawerLowRunnerComponentToParams(
   return nextParams;
 }
 
+export function applyCornerHingeComponentToParams(
+  params: Record<string, unknown>,
+  componentId: string | null | undefined
+): Record<string, unknown> {
+  const nextParams: Record<string, unknown> = { ...params };
+  const preset = getCornerHingePresetById(componentId ?? null);
+  if (!preset) {
+    delete nextParams.hingeComponentId;
+    return nextParams;
+  }
+
+  nextParams.hingeComponentId = preset.componentId;
+  return nextParams;
+}
+
+export function applyCornerClipComponentToParams(
+  params: Record<string, unknown>,
+  componentId: string | null | undefined
+): Record<string, unknown> {
+  const nextParams: Record<string, unknown> = { ...params };
+  const preset = getCornerClipPresetById(componentId ?? null);
+  if (!preset) {
+    delete nextParams.clipComponentId;
+    return nextParams;
+  }
+
+  nextParams.clipComponentId = preset.componentId;
+  return nextParams;
+}
+
 export function getDefaultDrawerLowHandleComponentId(): string {
   return DEFAULT_BAR_HANDLE_COMPONENT_ID;
 }
@@ -305,4 +421,12 @@ export function getDefaultDrawerLowLegComponentId(): string {
 
 export function getDefaultDrawerLowRunnerComponentId(): string {
   return DEFAULT_RUNNER_COMPONENT_ID;
+}
+
+export function getDefaultCornerHingeComponentId(): string {
+  return DEFAULT_CORNER_HINGE_COMPONENT_ID;
+}
+
+export function getDefaultCornerClipComponentId(): string {
+  return DEFAULT_CORNER_CLIP_COMPONENT_ID;
 }
