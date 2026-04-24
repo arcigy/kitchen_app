@@ -604,7 +604,8 @@ function applyCornerPlinthAdjustments(group: THREE.Group, params: CornerShelfLow
 
   if (sideEndXBounds && kickX && kickXDims?.depth) {
     const targetFrontZMm = sharedCornerZMm ?? sideEndXBounds.maxZ - plinthSetbackMm;
-    const targetMinXMm = sharedCornerXMm ?? sideEndXBounds.minX;
+    const overlapIntoCornerMm = kickZDims?.width ?? 0;
+    const targetMinXMm = (sharedCornerXMm ?? sideEndXBounds.minX) - overlapIntoCornerMm;
     const targetWidthMm = Math.max(1, sideEndXBounds.maxX - targetMinXMm);
     resizeMeshAxis(kickX, "x", targetWidthMm);
     setObjectCenterX(kickX, targetMinXMm + targetWidthMm * 0.5);
