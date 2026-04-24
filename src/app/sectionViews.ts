@@ -166,9 +166,10 @@ function buildOrthoConfig(
   const horizontalPad = Math.max(0.15, (maxU - minU) * 0.06);
   const verticalPad = Math.max(0.15, (maxV - minV) * 0.06);
   const farPad = Math.max(0.3, maxW * 0.08);
-  const position = origin.clone().addScaledVector(forward, 0.001);
+  const cameraOffset = Math.max(0.6, maxW * 0.12);
+  const position = origin.clone().addScaledVector(forward, -cameraOffset);
   const target = origin.clone().addScaledVector(forward, 1);
-  const clipOrigin = origin.clone().addScaledVector(forward, -0.003);
+  const clipOrigin = origin.clone().addScaledVector(forward, 0.003);
 
   return {
     position,
@@ -179,7 +180,7 @@ function buildOrthoConfig(
     top: maxV + verticalPad,
     bottom: minV - verticalPad,
     near: 0.001,
-    far: Math.max(1, maxW + farPad),
+    far: Math.max(1, maxW + farPad + cameraOffset),
     clipPlane: new THREE.Plane().setFromNormalAndCoplanarPoint(forward.clone().normalize(), clipOrigin)
   };
 }

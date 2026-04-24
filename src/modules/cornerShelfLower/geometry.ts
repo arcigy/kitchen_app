@@ -24,6 +24,8 @@ const baseWorktopThicknessMm =
   typeof baseLiveRuntime?.params?.worktopThicknessMm === "number" ? baseLiveRuntime.params.worktopThicknessMm : 38;
 const basePlinthHeightMm =
   typeof baseLiveRuntime?.params?.plinthHeight === "number" ? baseLiveRuntime.params.plinthHeight : 100;
+const basePlinthSetbackMm =
+  typeof baseLiveRuntime?.params?.plinthSetbackMm === "number" ? baseLiveRuntime.params.plinthSetbackMm : 60;
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -589,6 +591,26 @@ function applyCornerHeightAdjustments(group: THREE.Group, params: CornerShelfLow
   );
 }
 
+function applyCornerPlinthAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
+  const plinthSetbackMm = Math.max(0, Math.round(getNumber(params.plinthSetbackMm, basePlinthSetbackMm)));
+  const sideEndXBounds = getObjectBoundsMm(group.getObjectByName("side_end_x"));
+  const sideEndZBounds = getObjectBoundsMm(group.getObjectByName("side_end_z"));
+  const kickX = group.getObjectByName("kick_x");
+  const kickZ = group.getObjectByName("kick_z");
+  const kickXDims = getMeshDimensionsMm(kickX);
+  const kickZDims = getMeshDimensionsMm(kickZ);
+
+  if (sideEndXBounds && kickX && kickXDims?.depth) {
+    const targetFrontZMm = sideEndXBounds.maxZ - plinthSetbackMm;
+    setObjectCenterZ(kickX, targetFrontZMm - kickXDims.depth * 0.5);
+  }
+
+  if (sideEndZBounds && kickZ && kickZDims?.width) {
+    const targetFrontXMm = sideEndZBounds.maxX - plinthSetbackMm;
+    setObjectCenterX(kickZ, targetFrontXMm - kickZDims.width * 0.5);
+  }
+}
+
 function getHingeCenterOffsetsMm(doorCenterYMm: number, doorHeightMm: number, count: number, topOffsetMm: number, bottomOffsetMm: number) {
   if (count <= 1) return [doorCenterYMm];
   const topCenterYMm = doorCenterYMm + doorHeightMm * 0.5 - topOffsetMm;
@@ -827,6 +849,7 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Gro
   applyCornerLengthAdjustments(group, params);
   applyCornerBackAdjustments(group, params);
   applyCornerHeightAdjustments(group, params);
+  applyCornerPlinthAdjustments(group, params);
   applyCornerFrontAdjustments(group, params);
   alignCornerFrontSupports(group);
   applyCornerDoorOpenState(group, params);
