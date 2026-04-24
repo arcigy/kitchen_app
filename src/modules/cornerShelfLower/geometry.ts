@@ -656,7 +656,7 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         setObjectCenterX(hinge, doorFrontZCenter.x + doorFrontZWidthMm * 0.5 - baseHingeInsetXMm);
         setObjectCenterZ(
           hinge,
-          doorFrontZCenter.z - frontThicknessMm * 0.5 + getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z")
+          doorFrontZCenter.z + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z")
         );
       }
     }
@@ -684,7 +684,7 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         setObjectCenterZ(hinge, doorFrontXCenter.z + doorFrontXDepthMm * 0.5 - baseHingeInsetZMm);
         setObjectCenterX(
           hinge,
-          doorFrontXCenter.x - frontThicknessMm * 0.5 + getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x")
+          doorFrontXCenter.x + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x")
         );
       }
     }
