@@ -264,7 +264,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const finishBtn = args.tb.toolButton(exitGroup, {
       title: "Dokončiť kuchyňu",
       iconSvg: args.icons.done,
-      label: "Finish",
+      label: "Dokončiť",
       variant: "success",
       onClick: () => exitFinish()
     });
@@ -273,7 +273,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const cancelBtn = args.tb.toolButton(exitGroup, {
       title: "Zrušiť",
       iconSvg: args.icons.cancel,
-      label: "Discard",
+      label: "Zrušiť",
       variant: "danger",
       onClick: () => exitDiscard()
     });

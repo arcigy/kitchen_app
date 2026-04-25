@@ -5598,8 +5598,8 @@ export function startApp(initialArgs: AppArgs) {
     });
     tb.addSpacer({ row });
     const finish = tb.addGroup("Boundary", { row });
-    tb.toolButton(finish, { title: "Dokončiť podlahu", iconSvg: I_DONE, label: "Finish", variant: "success", onClick: () => finishFloorBoundaryEdit() });
-    tb.toolButton(finish, { title: "Zrušiť", iconSvg: I_CANCEL, label: "Discard", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "Dokončiť podlahu", iconSvg: I_DONE, label: "Dokončiť", variant: "success", onClick: () => finishFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "Zrušiť", iconSvg: I_CANCEL, label: "Zrušiť", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
   };
 
   const ensureFloorOverlay = () => {

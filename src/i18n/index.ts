@@ -100,6 +100,7 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Click a module…": "Klikni na modul…",
   "Commercial BOM & Costs": "Obchodný kusovník a náklady",
   "Copy Pricing JSON": "Kopírovať JSON cien",
+  "Create Sheet": "Vytvoriť hárok",
   Copied: "Skopírované",
   Totals: "Súčty",
   Boards: "Dosky",
@@ -160,12 +161,23 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Save As…": "Uložiť ako…",
   Settings: "Nastavenia",
   Language: "Jazyk",
+  Install: "Inštalovať",
   "Export Layout JSON…": "Exportovať layout JSON…",
   "Export Scene JSON…": "Exportovať scene JSON…",
   "Export PNG Snapshot…": "Exportovať PNG náhľad…",
   "Copy JSON to Clipboard": "Kopírovať JSON do schránky",
   Drawer: "Zásuvková skrinka",
   Corner: "Rohová skrinka",
+  Fridge: "Chladnička",
+  Shelves: "Police",
+  Nested: "Vnorený modul",
+  Flap: "Výklop",
+  "Flap Top": "Horný výklop",
+  Swing: "Otváravý modul",
+  "Shelf Doors": "Policová skrinka s dvierkami",
+  "Oven Base": "Spodná skrinka pre rúru",
+  "Micro Tall": "Vysoká skrinka pre mikrovlnku",
+  "Top Doors": "Horné dvierka",
   General: "Všeobecné",
   Dimensions: "Rozmery",
   "Fronts & Doors": "Čelá a dvierka",
@@ -213,7 +225,6 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Back Panels": "Zadné diely",
   "Drawer Box Panels": "Diely boxu zásuvky",
   "Drawer Box Bottoms": "Dná zásuviek",
-  Shelves: "Police",
   "Board Parts": "Doskové diely",
   calculated: "vypočítaná",
   override: "prepis",
@@ -235,7 +246,37 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Blender export failed.": "Export z Blenderu zlyhal.",
   "Backend did not return previewUrl.": "Backend nevrátil previewUrl.",
   "Done. Copied JSON.": "Hotovo. JSON bol skopírovaný.",
-  "Done. Copy failed.": "Hotovo. Kopírovanie zlyhalo."
+  "Done. Copy failed.": "Hotovo. Kopírovanie zlyhalo.",
+  "Linked measures": "Prepojené miery",
+  "Wall start": "Začiatok steny",
+  "Wall end": "Koniec steny",
+  "Move wall": "Posunúť stenu",
+  Draw: "Kresliť",
+  Discard: "Zrušiť",
+  Line: "Čiara",
+  Rectangle: "Obdĺžnik",
+  Circle: "Kruh",
+  "Pick Lines": "Vybrať čiary",
+  "Floor boundary": "Obrys podlahy",
+  Boundary: "Obrys",
+  "Ortho ON": "Orto ZAP",
+  "Ortho OFF": "Orto VYP",
+  Centerline: "Osová čiara",
+  End: "Koniec",
+  Face: "Strana",
+  "Place module": "Vložiť modul",
+  "Rotate -90°": "Otočiť -90°",
+  "Rotate +90°": "Otočiť +90°",
+  "Cancel (Esc)": "Zrušiť (Esc)",
+  "Place (Click plan)": "Umiestniť (klikni do plánu)",
+  "Move cursor in 2D plan. Click to place. Esc to cancel.":
+    "Pohni kurzorom v 2D pláne. Kliknutím umiestniš. Esc zruší.",
+  "Placement: canceled.": "Umiestnenie: zrušené.",
+  "Placement: invalid (overlap/constraint). Move cursor.":
+    "Umiestnenie: neplatné (kolízia/obmedzenie). Posuň kurzor.",
+  "Placement: placed.": "Umiestnenie: vložené.",
+  "Placement: move cursor, click to place. Esc cancels.":
+    "Umiestnenie: pohni kurzorom, klikni pre vloženie. Esc zruší."
 };
 
 const PARAM_LABELS_SK: Record<string, string> = {
@@ -376,14 +417,14 @@ const SYSTEM_DESCRIPTION_SK: Record<string, string> = {
 };
 
 function normalizeLanguage(value: string | null | undefined): AppLanguage {
-  return value === "sk" ? "sk" : "en";
+  return value === "en" ? "en" : "sk";
 }
 
 export function getCurrentLanguage(): AppLanguage {
   try {
     return normalizeLanguage(window.localStorage.getItem(STORAGE_KEY));
   } catch {
-    return "en";
+    return "sk";
   }
 }
 

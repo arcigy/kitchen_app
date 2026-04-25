@@ -71,7 +71,7 @@ export function mountPricingCatalogPanel(container: HTMLElement) {
   title.style.margin = "0";
   title.style.font = "700 18px system-ui, sans-serif";
   const desc = document.createElement("div");
-  desc.textContent = "Centrálny katalog materiálov, komponentov a jednotkových cien pre commercial BOM lookup.";
+  desc.textContent = "Centrálny katalóg materiálov, komponentov a jednotkových cien pre obchodný kusovník.";
   desc.style.color = "#9aa5ba";
   desc.style.fontSize = "12px";
   intro.append(title, desc);

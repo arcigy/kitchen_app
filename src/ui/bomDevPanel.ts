@@ -177,7 +177,7 @@ function aggregateComponents(entries: ProjectPricingView[]): CatalogAggregateRow
           unitPrice: item.unitPrice,
           quantity: 0,
           cost: 0,
-          unit: "pcs",
+          unit: "ks",
           group: component.componentType
         };
       existing.quantity += item.pricingQuantity;

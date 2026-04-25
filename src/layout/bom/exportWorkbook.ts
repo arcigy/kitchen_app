@@ -154,7 +154,7 @@ function quantityCount(value: number | undefined) {
 }
 
 function sanitizeSheetName(name: string, used: Set<string>) {
-  const base = name.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "Sheet";
+  const base = name.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "Hárk";
   let candidate = base;
   let index = 2;
   while (used.has(candidate)) {
@@ -231,7 +231,7 @@ function resolvePriceSource(item: PortableCommercialPricingItem): PriceSourceRow
       catalogId,
       label: item.component?.displayName ?? item.description ?? item.name,
       group: item.component?.componentType ?? item.pricingGroup ?? "hardware",
-      unit: item.pricingUnit ?? "pcs",
+      unit: item.pricingUnit ?? "ks",
       unitPrice: money(item.unitPrice ?? 0)
     };
   }
@@ -819,7 +819,7 @@ function downloadWorkbook(blobName: string, bytes: Uint8Array) {
 export function exportProjectPricingWorkbook(entries: ProjectPricingView[]) {
   const usedNames = new Set<string>();
   const overviewName = sanitizeSheetName("Prehľad", usedNames);
-  const priceSheetName = sanitizeSheetName("Cennik", usedNames);
+  const priceSheetName = sanitizeSheetName("Cenník", usedNames);
   const priceSources = buildPriceSourceRows(entries);
   const priceSheet = buildPriceSourceSheet(priceSheetName, priceSources);
 
