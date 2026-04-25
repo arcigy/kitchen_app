@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
 import type { PortableCommercialPricingItem, PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
 import type { ProjectPricingView, WorktopFormulaView } from "./projectPricing";
+import type { ProjectQuoteSummary } from "./projectQuote";
 
 type CellValue = string | number | boolean | Date | XLSX.CellObject;
 type StyleKey = keyof typeof STYLE_IDS;
@@ -10,7 +11,9 @@ type BoardRow = {
   boardLabel: string;
   dimensionsLabel: string;
   materialSourceKey: string;
-  areaM2: number;
+  netAreaM2: number;
+  wasteMultiplier: number;
+  pricedAreaM2: number;
 };
 
 type EdgeRow = {
@@ -154,7 +157,7 @@ function quantityCount(value: number | undefined) {
 }
 
 function sanitizeSheetName(name: string, used: Set<string>) {
-  const base = name.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "Hárk";
+  const base = name.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "Sheet";
   let candidate = base;
   let index = 2;
   while (used.has(candidate)) {
@@ -184,20 +187,20 @@ function formulaText(formula: string): XLSX.CellObject {
 
 function translateBoardDescription(description: string) {
   const value = description.toLowerCase();
-  if (value.includes("side panel")) return "Bočnica";
-  if (value.includes("bottom panel")) return "Spodná doska";
-  if (value.includes("top panel")) return "Horná doska";
-  if (value.includes("back panel")) return "Zadná doska";
+  if (value.includes("side panel")) return "Bocnica";
+  if (value.includes("bottom panel")) return "Spodna doska";
+  if (value.includes("top panel")) return "Horna doska";
+  if (value.includes("back panel")) return "Zadna doska";
   if (value.includes("shelf")) return "Polica";
   if (value.includes("door front")) return "Dvierka";
-  if (value.includes("front panel")) return "Predné čelo";
-  if (value.includes("drawer bottom")) return "Dno zásuvky";
-  if (value.includes("drawer") && value.includes("side")) return "Bok zásuvky";
-  if (value.includes("drawer") && (value.includes("front") || value.includes("back"))) return "Predok/zadok zásuvky";
+  if (value.includes("front panel")) return "Predne celo";
+  if (value.includes("drawer bottom")) return "Dno zasuvky";
+  if (value.includes("drawer") && value.includes("side")) return "Bok zasuvky";
+  if (value.includes("drawer") && (value.includes("front") || value.includes("back"))) return "Predok/zadok zasuvky";
   if (value.includes("plinth")) return "Sokel";
-  if (value.includes("stretcher")) return "Výstuha";
-  if (value.includes("corner")) return "Rohová doska";
-  if (value.includes("worktop")) return "Pracovná doska";
+  if (value.includes("stretcher")) return "Vystuha";
+  if (value.includes("corner")) return "Rohova doska";
+  if (value.includes("worktop")) return "Pracovna doska";
   if (value.includes("panel")) return "Doska";
   return description;
 }
@@ -206,14 +209,14 @@ function translateEdgeNotes(notes: string[] | undefined) {
   const text = (notes ?? []).join(", ").toLowerCase();
   if (!text) return "Hrana";
   return text
-    .replaceAll("front visible vertical edge", "predná zvislá hrana")
-    .replaceAll("front visible edge", "predná hrana")
-    .replaceAll("rear visible edge", "zadná hrana")
-    .replaceAll("left visible edge", "ľavá hrana")
-    .replaceAll("right visible edge", "pravá hrana")
-    .replaceAll("full visible perimeter", "celý viditeľný obvod")
-    .replaceAll("visible perimeter", "viditeľný obvod")
-    .replaceAll("visible edge", "viditeľná hrana");
+    .replaceAll("front visible vertical edge", "predna zvisla hrana")
+    .replaceAll("front visible edge", "predna hrana")
+    .replaceAll("rear visible edge", "zadna hrana")
+    .replaceAll("left visible edge", "lava hrana")
+    .replaceAll("right visible edge", "prava hrana")
+    .replaceAll("full visible perimeter", "cely viditelny obvod")
+    .replaceAll("visible perimeter", "viditelny obvod")
+    .replaceAll("visible edge", "viditelna hrana");
 }
 
 function formatDimensions(item: PortableQuoteBomItem) {
@@ -239,7 +242,7 @@ function resolvePriceSource(item: PortableCommercialPricingItem): PriceSourceRow
   const catalogId = item.material?.catalogId ?? item.id;
   return {
     key: `${item.itemType}:${catalogId}`,
-    category: item.itemType === "edge_band" ? "Olepovanie" : "Doskový materiál",
+    category: item.itemType === "edge_band" ? "Olepovanie" : "Doskovy material",
     catalogId,
     label: item.material?.displayName ?? item.description ?? item.name,
     group: item.material?.family ?? item.materialGroup ?? item.pricingGroup ?? "material",
@@ -277,8 +280,11 @@ function buildBoardRows(entry: ProjectPricingView) {
   for (const item of entry.result.pricing.items) {
     if (item.itemType !== "board") continue;
     const count = quantityCount(item.quantity);
-    const totalArea = item.metrics?.areaM2 ?? item.pricingQuantityBase ?? item.pricingQuantity ?? 0;
-    const perBoardArea = count > 0 ? totalArea / count : totalArea;
+    const totalNetArea = item.metrics?.areaM2 ?? item.pricingQuantityBase ?? item.pricingQuantity ?? 0;
+    const totalPricedArea = item.pricingQuantity ?? totalNetArea;
+    const wasteMultiplier = item.metrics?.wasteMultiplier ?? (totalNetArea > 0 ? totalPricedArea / totalNetArea : 1);
+    const perBoardNetArea = count > 0 ? totalNetArea / count : totalNetArea;
+    const perBoardPricedArea = count > 0 ? totalPricedArea / count : totalPricedArea;
     const partIds = item.sourcePartIds?.length ? item.sourcePartIds : [item.id];
     const source = resolvePriceSource(item);
 
@@ -293,7 +299,9 @@ function buildBoardRows(entry: ProjectPricingView) {
         boardLabel,
         dimensionsLabel: formatDimensions(item),
         materialSourceKey: source.key,
-        areaM2: round(perBoardArea, 4)
+        netAreaM2: round(perBoardNetArea, 4),
+        wasteMultiplier: round(wasteMultiplier, 4),
+        pricedAreaM2: round(perBoardPricedArea, 4)
       });
       partKeyToBoardLabel.set(partKey, boardLabel);
     }
@@ -354,14 +362,14 @@ function buildPriceSourceSheet(sheetName: string, sources: PriceSourceRow[]): Bu
   const builder = new SheetBuilder();
   builder.cols = [{ wch: 18 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 10 }, { wch: 14 }];
 
-  const titleRow = builder.addRow([{ value: "Zdroj cien a názvov", style: "title" }]);
+  const titleRow = builder.addRow([{ value: "Zdroj cien a nazvov", style: "title" }]);
   builder.merge(titleRow, 0, titleRow, 5);
   builder.setRowHeight(titleRow, 24);
 
   const headerRow = builder.addRow([
-    { value: "Kategória", style: "sourceHeader" },
+    { value: "Kategoria", style: "sourceHeader" },
     { value: "Catalog ID", style: "sourceHeader" },
-    { value: "Názov", style: "sourceHeader" },
+    { value: "Nazov", style: "sourceHeader" },
     { value: "Skupina", style: "sourceHeader" },
     { value: "Jednotka", style: "sourceHeader" },
     { value: "Jedn. cena", style: "sourceHeader" }
@@ -407,25 +415,25 @@ function buildWorktopAreaFormula(depthCell: string, segmentCells: string[]) {
 }
 
 function buildWorktopFormulaSection(builder: SheetBuilder, formulaView: WorktopFormulaView) {
-  const titleRow = builder.addRow([{ value: "Výpočet plochy pracovnej dosky", style: "sectionTitle" }]);
-  builder.merge(titleRow, 0, titleRow, 5);
+  const titleRow = builder.addRow([{ value: "Vypocet plochy pracovnej dosky", style: "sectionTitle" }]);
+  builder.merge(titleRow, 0, titleRow, 7);
 
   builder.addRow([
     { value: "Tvar", style: "metaLabel" },
     { value: formulaView.shapeLabel, style: "metaValue" },
     "",
-    { value: "Hrúbka (mm)", style: "metaLabel" },
+    { value: "Hrubka (mm)", style: "metaLabel" },
     { value: formulaView.thicknessMm, style: "decimal" }
   ]);
   const depthRow = builder.addRow([
-    { value: "Hĺbka (mm)", style: "metaLabel" },
+    { value: "Hlbka (mm)", style: "metaLabel" },
     { value: formulaView.depthMm, style: "decimal" }
   ]);
 
   const segmentCells: string[] = [];
   for (let index = 0; index < formulaView.segmentLengthsMm.length; index += 1) {
     const row = builder.addRow([
-      { value: `Úsek ${index + 1} (mm)`, style: "metaLabel" },
+      { value: `Usek ${index + 1} (mm)`, style: "metaLabel" },
       { value: formulaView.segmentLengthsMm[index]!, style: "decimal" }
     ]);
     segmentCells.push(`B${row}`);
@@ -451,20 +459,28 @@ function buildModuleSheet(args: {
 }): BuiltSheet & { refs: ModuleSheetRefs } {
   const { entry, priceRefs } = args;
   const builder = new SheetBuilder();
-  builder.cols = [{ wch: 28 }, { wch: 24 }, { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+  builder.cols = [{ wch: 26 }, { wch: 22 }, { wch: 24 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
 
   const titleRow = builder.addRow([{ value: entry.label, style: "title" }]);
-  builder.merge(titleRow, 0, titleRow, 5);
+  builder.merge(titleRow, 0, titleRow, 7);
   builder.setRowHeight(titleRow, 24);
 
-  const typeLabel = entry.kind === "worktop" ? "Pracovná doska" : entry.result.displayName;
+  const typeLabel = entry.kind === "worktop" ? "Pracovna doska" : entry.result.displayName;
   builder.addRow([
     { value: "Typ", style: "metaLabel" },
     { value: typeLabel, style: "metaValue" },
     "",
-    { value: "Práca", style: "metaLabel" },
-    { value: entry.result.pricing.laborCostFixed, style: "currency" }
+    { value: "Praca", style: "metaLabel" },
+    { value: entry.result.pricing.laborCostFixed, style: "currency" },
+    "",
+    { value: "Vzorec ceny", style: "metaLabel" },
+    { value: "fakturovane mnozstvo x jednotkova cena", style: "metaValue" }
   ]);
+  const noteRow = builder.addRow([
+    { value: "Zhoda", style: "metaLabel" },
+    { value: "Sheet pocita dosky z pricedAreaM2, teda rovnako ako app BOM runtime.", style: "metaValue" }
+  ]);
+  builder.merge(noteRow, 1, noteRow, 7);
   builder.addBlankRow();
 
   const { rows: boardRows, partKeyToBoardLabel } = buildBoardRows(entry);
@@ -472,12 +488,14 @@ function buildModuleSheet(args: {
   const componentRows = buildComponentRows(entry);
 
   const boardsTitleRow = builder.addRow([{ value: "Dosky", style: "sectionTitle" }]);
-  builder.merge(boardsTitleRow, 0, boardsTitleRow, 5);
+  builder.merge(boardsTitleRow, 0, boardsTitleRow, 7);
   const boardsHeaderRow = builder.addRow([
-    { value: "Položka", style: "header" },
+    { value: "Polozka", style: "header" },
     { value: "Rozmer (mm)", style: "header" },
-    { value: "Materiál", style: "header" },
-    { value: "Plocha (m2)", style: "header" },
+    { value: "Material", style: "header" },
+    { value: "Net m2", style: "header" },
+    { value: "Odpad", style: "header" },
+    { value: "Fakt. m2", style: "header" },
     { value: "Cena / m2", style: "header" },
     { value: "Cena", style: "header" }
   ]);
@@ -490,9 +508,11 @@ function buildModuleSheet(args: {
       { value: row.boardLabel, style: "text" },
       { value: row.dimensionsLabel, style: "text" },
       { value: refs ? formulaText(refs.label) : "-", style: "text" },
-      { value: entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0 ? 0 : row.areaM2, style: "decimal" },
+      { value: entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0 ? 0 : row.netAreaM2, style: "decimal" },
+      { value: row.wasteMultiplier, style: "decimal" },
+      { value: entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0 ? 0 : row.pricedAreaM2, style: "decimal" },
       { value: refs ? formulaNumber(refs.unitPrice) : 0, style: "currency" },
-      { value: formulaNumber(`D${builder.rows.length + 1}*E${builder.rows.length + 1}`), style: "currency" }
+      { value: formulaNumber(`F${builder.rows.length + 1}*G${builder.rows.length + 1}`), style: "currency" }
     ]);
     if (entry.kind === "worktop" && entry.worktopFormula && rowIndex === 0) worktopAreaRow = nextRow;
   }
@@ -501,8 +521,10 @@ function buildModuleSheet(args: {
     "",
     "",
     { value: formulaNumber(boardRows.length ? `SUM(D${boardDataStart}:D${builder.rows.length})` : "0"), style: "subtotalDecimal" },
+    { value: formulaNumber(boardRows.length ? `AVERAGE(E${boardDataStart}:E${builder.rows.length})` : "0"), style: "subtotalDecimal" },
+    { value: formulaNumber(boardRows.length ? `SUM(F${boardDataStart}:F${builder.rows.length})` : "0"), style: "subtotalDecimal" },
     "",
-    { value: formulaNumber(boardRows.length ? `SUM(F${boardDataStart}:F${builder.rows.length})` : "0"), style: "subtotalCurrency" }
+    { value: formulaNumber(boardRows.length ? `SUM(H${boardDataStart}:H${builder.rows.length})` : "0"), style: "subtotalCurrency" }
   ]);
   builder.addBlankRow();
 
@@ -510,16 +532,17 @@ function buildModuleSheet(args: {
     const worktopAreaCell = buildWorktopFormulaSection(builder, entry.worktopFormula);
     if (worktopAreaRow !== null) {
       builder.rows[worktopAreaRow - 1]![3] = formulaNumber(worktopAreaCell);
+      builder.rows[worktopAreaRow - 1]![5] = formulaNumber(worktopAreaCell);
     }
   }
 
   const edgesTitleRow = builder.addRow([{ value: "Olepovanie", style: "sectionTitle" }]);
-  builder.merge(edgesTitleRow, 0, edgesTitleRow, 5);
+  builder.merge(edgesTitleRow, 0, edgesTitleRow, 7);
   const edgesHeaderRow = builder.addRow([
     { value: "Doska", style: "header" },
     { value: "Hrana", style: "header" },
-    { value: "Materiál", style: "header" },
-    { value: "Dĺžka (m)", style: "header" },
+    { value: "Material", style: "header" },
+    { value: "Dlzka (m)", style: "header" },
     { value: "Cena / m", style: "header" },
     { value: "Cena", style: "header" }
   ]);
@@ -546,12 +569,12 @@ function buildModuleSheet(args: {
   builder.addBlankRow();
 
   const componentsTitleRow = builder.addRow([{ value: "Komponenty", style: "sectionTitle" }]);
-  builder.merge(componentsTitleRow, 0, componentsTitleRow, 5);
+  builder.merge(componentsTitleRow, 0, componentsTitleRow, 7);
   const componentsHeaderRow = builder.addRow([
     { value: "Komponent", style: "header" },
     { value: "Catalog ID", style: "header" },
     { value: "Typ", style: "header" },
-    { value: "Počet", style: "header" },
+    { value: "Pocet", style: "header" },
     { value: "Cena / ks", style: "header" },
     { value: "Cena", style: "header" }
   ]);
@@ -577,11 +600,11 @@ function buildModuleSheet(args: {
   ]);
   builder.addBlankRow();
 
-  const summaryTitleRow = builder.addRow([{ value: "Finančný súhrn", style: "sectionTitle" }]);
+  const summaryTitleRow = builder.addRow([{ value: "Financny suhrn modulu", style: "sectionTitle" }]);
   builder.merge(summaryTitleRow, 0, summaryTitleRow, 1);
   const summaryBoardsRow = builder.addRow([
     { value: "Dosky", style: "summaryLabel" },
-    { value: formulaNumber(`F${boardSubtotalRow}`), style: "summaryCurrency" }
+    { value: formulaNumber(`H${boardSubtotalRow}`), style: "summaryCurrency" }
   ]);
   const summaryEdgesRow = builder.addRow([
     { value: "Olepovanie", style: "summaryLabel" },
@@ -592,15 +615,15 @@ function buildModuleSheet(args: {
     { value: formulaNumber(`F${componentSubtotalRow}`), style: "summaryCurrency" }
   ]);
   const summaryMaterialsRow = builder.addRow([
-    { value: "Materiál spolu", style: "summaryLabel" },
+    { value: "Material spolu", style: "summaryLabel" },
     { value: formulaNumber(`SUM(B${summaryBoardsRow}:B${summaryComponentsRow})`), style: "summaryCurrency" }
   ]);
   const summaryLaborRow = builder.addRow([
-    { value: "Práca", style: "summaryLabel" },
+    { value: "Praca", style: "summaryLabel" },
     { value: formulaNumber("E2"), style: "summaryCurrency" }
   ]);
   const summaryTotalRow = builder.addRow([
-    { value: "Celkom", style: "totalLabel" },
+    { value: "Celkom modul", style: "totalLabel" },
     { value: formulaNumber(`B${summaryMaterialsRow}+B${summaryLaborRow}`), style: "totalCurrency" }
   ]);
 
@@ -626,17 +649,66 @@ function buildModuleSheet(args: {
   };
 }
 
-function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleSheetRefs }>): BuiltSheet {
+function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleSheetRefs }>, summary: ProjectQuoteSummary): BuiltSheet {
   const builder = new SheetBuilder();
   builder.cols = [{ wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
 
-  const titleRow = builder.addRow([{ value: "Kusovník a náklady projektu", style: "title" }]);
+  const titleRow = builder.addRow([{ value: "Kusovnik a cenova ponuka projektu", style: "title" }]);
   builder.merge(titleRow, 0, titleRow, 7);
   builder.setRowHeight(titleRow, 24);
 
   builder.addRow([
-    { value: "Vygenerované", style: "metaLabel" },
+    { value: "Vygenerovane", style: "metaLabel" },
     { value: new Date(), style: "dateValue" }
+  ]);
+  const noteRow = builder.addRow([
+    { value: "Logika", style: "metaLabel" },
+    { value: "Dosky su ocenene z pricedAreaM2, preto sa app BOM a Create Sheet zhoduju.", style: "metaValue" }
+  ]);
+  builder.merge(noteRow, 1, noteRow, 7);
+  builder.addBlankRow();
+
+  const summaryTitleRow = builder.addRow([{ value: "Projektovy vysledok", style: "sectionTitle" }]);
+  builder.merge(summaryTitleRow, 0, summaryTitleRow, 3);
+  const materialsRow = builder.addRow([
+    { value: "Material spolu", style: "summaryLabel" },
+    { value: summary.materialCost, style: "summaryCurrency" }
+  ]);
+  const moduleLaborRow = builder.addRow([
+    { value: "Modulova praca", style: "summaryLabel" },
+    { value: summary.moduleLaborCost, style: "summaryCurrency" }
+  ]);
+  const extraLaborRow = builder.addRow([
+    { value: "Dodatocna praca projektu", style: "summaryLabel" },
+    { value: summary.additionalLaborCost, style: "summaryCurrency" }
+  ]);
+  const totalLaborRow = builder.addRow([
+    { value: "Praca spolu", style: "summaryLabel" },
+    { value: formulaNumber(`B${moduleLaborRow}+B${extraLaborRow}`), style: "summaryCurrency" }
+  ]);
+  const subtotalRow = builder.addRow([
+    { value: "Medzisucet pred marzou", style: "summaryLabel" },
+    { value: formulaNumber(`B${materialsRow}+B${totalLaborRow}`), style: "summaryCurrency" }
+  ]);
+  const marginPercentRow = builder.addRow([
+    { value: "Marza %", style: "summaryLabel" },
+    { value: summary.marginPercent, style: "decimal" }
+  ]);
+  const marginAmountRow = builder.addRow([
+    { value: "Marza", style: "summaryLabel" },
+    { value: formulaNumber(`B${subtotalRow}*(B${marginPercentRow}/100)`), style: "summaryCurrency" }
+  ]);
+  const finalOfferRow = builder.addRow([
+    { value: "Vysledok Create Sheet / ponuka", style: "totalLabel" },
+    { value: formulaNumber(`B${subtotalRow}+B${marginAmountRow}`), style: "totalCurrency" }
+  ]);
+  const appResultRow = builder.addRow([
+    { value: "Vysledok app BOM", style: "summaryLabel" },
+    { value: summary.finalPrice, style: "summaryCurrency" }
+  ]);
+  const deltaRow = builder.addRow([
+    { value: "Rozdiel app vs sheet", style: "summaryLabel" },
+    { value: formulaNumber(`ABS(B${finalOfferRow}-B${appResultRow})`), style: "summaryCurrency" }
   ]);
   builder.addBlankRow();
 
@@ -646,9 +718,9 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
     { value: "Dosky", style: "header" },
     { value: "Olepovanie", style: "header" },
     { value: "Komponenty", style: "header" },
-    { value: "Materiál spolu", style: "header" },
-    { value: "Práca", style: "header" },
-    { value: "Celkom", style: "header" }
+    { value: "Material spolu", style: "header" },
+    { value: "Praca", style: "header" },
+    { value: "Celkom modul", style: "header" }
   ]);
   builder.autoFilter = `A${headerRow}:H${headerRow + Math.max(moduleSheets.length, 1)}`;
 
@@ -667,7 +739,7 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
   }
 
   const totalRow = builder.addRow([
-    { value: "SPOLU", style: "totalLabel" },
+    { value: "SPOLU MODULY", style: "totalLabel" },
     "",
     { value: formulaNumber(moduleSheets.length ? `SUM(C${headerRow + 1}:C${builder.rows.length})` : "0"), style: "totalCurrency" },
     { value: formulaNumber(moduleSheets.length ? `SUM(D${headerRow + 1}:D${builder.rows.length})` : "0"), style: "totalCurrency" },
@@ -680,7 +752,7 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
   builder.freeze = { ySplit: headerRow, topLeftCell: `A${headerRow + 1}` };
 
   return {
-    name: "Prehľad",
+    name: "Prehlad",
     worksheet: builder.build(),
     styles: Object.fromEntries(builder.styles),
     freeze: builder.freeze
@@ -816,10 +888,10 @@ function downloadWorkbook(blobName: string, bytes: Uint8Array) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function exportProjectPricingWorkbook(entries: ProjectPricingView[]) {
+export function exportProjectPricingWorkbook(entries: ProjectPricingView[], summary: ProjectQuoteSummary) {
   const usedNames = new Set<string>();
-  const overviewName = sanitizeSheetName("Prehľad", usedNames);
-  const priceSheetName = sanitizeSheetName("Cenník", usedNames);
+  const overviewName = sanitizeSheetName("Prehlad", usedNames);
+  const priceSheetName = sanitizeSheetName("Cennik", usedNames);
   const priceSources = buildPriceSourceRows(entries);
   const priceSheet = buildPriceSourceSheet(priceSheetName, priceSources);
 
@@ -832,7 +904,7 @@ export function exportProjectPricingWorkbook(entries: ProjectPricingView[]) {
     });
   });
 
-  const overviewSheet = buildOverviewSheet(moduleSheets);
+  const overviewSheet = buildOverviewSheet(moduleSheets, summary);
   overviewSheet.name = overviewName;
 
   const workbook = XLSX.utils.book_new();

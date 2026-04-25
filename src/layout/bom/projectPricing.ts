@@ -7,6 +7,7 @@ import type { KitchenContext } from "../kitchenContext";
 import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
 import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
+import { buildProjectQuoteSummary, type ProjectQuoteSettings } from "./projectQuote";
 
 export type WorktopFormulaView = {
   shapeKey: "I" | "L" | "U" | "custom";
@@ -197,10 +198,12 @@ export function buildProjectPricingViews(
   return [...moduleViews, ...worktopViews];
 }
 
-export function buildProjectPricingPayload(entries: ProjectPricingView[]) {
+export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: Partial<ProjectQuoteSettings> | null) {
+  const summary = buildProjectQuoteSummary(entries, settings);
   return {
-    schemaVersion: "project-commercial-pricing.v2",
+    schemaVersion: "project-commercial-pricing.v3",
     generatedAt: new Date().toISOString(),
+    settings: summary.settings,
     entries: entries.map((entry) => ({
       instanceId: entry.instanceId,
       kind: entry.kind,
@@ -208,12 +211,18 @@ export function buildProjectPricingPayload(entries: ProjectPricingView[]) {
       quoteBom: entry.result.quoteBom,
       pricing: entry.result.pricing
     })),
+    summary,
     totals: {
-      boardsCost: round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.boards.cost, 0)),
-      edgesCost: round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.edge_bands.cost, 0)),
-      hardwareCost: round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.hardware.cost, 0)),
-      laborCost: round(entries.reduce((sum, entry) => sum + entry.result.pricing.laborCostFixed, 0)),
-      finalCost: round(entries.reduce((sum, entry) => sum + entry.result.pricing.finalPrice, 0))
+      boardsCost: summary.boardsCost,
+      edgesCost: summary.edgesCost,
+      hardwareCost: summary.hardwareCost,
+      moduleLaborCost: summary.moduleLaborCost,
+      additionalLaborCost: summary.additionalLaborCost,
+      laborCost: summary.laborCostTotal,
+      marginPercent: summary.marginPercent,
+      marginAmount: summary.marginAmount,
+      subtotalBeforeMargin: summary.subtotalBeforeMargin,
+      finalCost: summary.finalPrice
     }
   };
 }
