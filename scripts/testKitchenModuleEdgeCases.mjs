@@ -71,6 +71,14 @@ function worldBoxCenterXzDeltaMm(before, after) {
   return Math.round(Math.max(Math.abs(afterCenterX - beforeCenterX), Math.abs(afterCenterZ - beforeCenterZ)) * 1000);
 }
 
+function getFlapHandleOffsetFromBottomMm(inst) {
+  const handle = (inst.parts ?? []).find((item) => item.name === "handle");
+  const front = (inst.parts ?? []).find((item) => item.name === "door-front");
+  if (!handle?.positionM || !front?.dimensionsMm?.height) return null;
+  const frontHeightM = Number(front.dimensionsMm.height) / 1000;
+  return Math.round((handle.positionM.y + frontHeightM) * 1000);
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -729,6 +737,16 @@ async function runUpperFlapContextCases(page) {
   if (!Number.isFinite(flap.worldBoxM?.min?.x) || !Number.isFinite(flap.worldBoxM?.max?.y) || (flap.parts?.length ?? 0) === 0) {
     failures.push({ case: "upper_flap_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
   }
+  const handleCenterFromBottomMm = getFlapHandleOffsetFromBottomMm(flap);
+  if (handleCenterFromBottomMm == null || Math.abs(handleCenterFromBottomMm - Number(flap.params.handlePositionMm ?? 60)) > 15) {
+    failures.push({
+      case: "upper_flap_handle_position_from_bottom",
+      ok: false,
+      expected: Number(flap.params.handlePositionMm ?? 60),
+      actual: handleCenterFromBottomMm,
+      flap
+    });
+  }
 
   const result = await patchModule(page, flap.id, { width: Number(flap.params.width ?? 900) + 1 }, { sourceKey: "width", preserveBackAnchor: true });
   if (!result.ok) {
@@ -1084,6 +1102,7 @@ async function main() {
               "upper_flap_height",
               "upper_flap_front_material",
               "upper_flap_3d_geometry",
+              "upper_flap_handle_position_from_bottom",
               "upper_flap_ui_inserted",
               "upper_flap_ui_keeps_binding",
               "upper_flap_ui_initial_position_y",

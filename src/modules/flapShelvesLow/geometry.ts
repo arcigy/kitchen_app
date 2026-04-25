@@ -120,6 +120,7 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
   const frontTopY = bottomGapMm + frontHeightMm;
   const frontPlaneZ = depthMm / 2 + frontGapMm + frontThicknessMm / 2;
   const handleOffsetFromBottomMm = clamp(getNumber(params.handlePositionMm, doorSystem === "double_hinged" ? 100 : 60), 0, frontHeightMm);
+  const handleYFromTopMm = -frontHeightMm + handleOffsetFromBottomMm;
   const handleOffsetFromSplitMm = Math.max(0, getNumber(params.doorHandleOffsetFromSplitMm, getNumber(params.handleHorizontalPositionMm, 0)));
   const addHandle = (parent: THREE.Group, name: string, opts: { x: number; y: number; vertical?: boolean; maxLengthMm: number }) => {
     if (handleType === "none") return;
@@ -158,7 +159,7 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
       const handleInsetMm = clamp(handleSizeMm / 2 + 12 + handleOffsetFromSplitMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, leafWidthMm - handleSizeMm / 2));
       addHandle(pivot, `${name}-handle`, {
         x: side < 0 ? leafWidthMm - handleInsetMm : -leafWidthMm + handleInsetMm,
-        y: -clamp(handleOffsetFromBottomMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, frontHeightMm - handleSizeMm / 2)),
+        y: clamp(handleYFromTopMm, -frontHeightMm + handleSizeMm / 2, -handleSizeMm / 2),
         vertical: true,
         maxLengthMm: frontHeightMm
       });
@@ -193,7 +194,7 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
     const handleX = clamp(getNumber(params.handleHorizontalPositionMm, 0), -frontWidthMm / 2 + handleLengthMm / 2, frontWidthMm / 2 - handleLengthMm / 2);
     addHandle(pivot, "handle", {
       x: handleX,
-      y: -clamp(handleOffsetFromBottomMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, frontHeightMm - handleSizeMm / 2)),
+      y: clamp(handleYFromTopMm, -frontHeightMm + handleSizeMm / 2, -handleSizeMm / 2),
       maxLengthMm: frontWidthMm
     });
     addBox(
