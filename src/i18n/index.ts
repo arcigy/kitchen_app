@@ -280,6 +280,8 @@ const EXACT_SK_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT_OVERRIDES: Record<string, string> = {
+  "Lift-up flap": "Horn\u00fd v\u00fdklop",
+  "Double hinged": "Dvojkr\u00eddlov\u00e9 dvierka",
   "Draw worktop": "Kresliť pracovnú dosku",
   "Edit kitchen": "Upraviť kuchyňu",
   "Finish kitchen": "Dokončiť kuchyňu",
@@ -386,6 +388,7 @@ const PARAM_LABELS_SK: Record<string, string> = {
 };
 
 const PARAM_LABELS_SK_OVERRIDES: Record<string, string> = {
+  upperDepthMm: "H\u013abka horn\u00fdch modulov (mm)",
   __fridgeHandleSplitScaleVersion: "Verzia delenia úchytky chladničky",
   backMaterialId: "Materiál chrbta",
   corpusMaterialId: "Materiál korpusu",

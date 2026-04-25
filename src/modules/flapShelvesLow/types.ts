@@ -55,6 +55,13 @@ function sanitizeShelfGaps(params: FlapShelvesLowParams, shelfCount: number) {
   return next;
 }
 
+function getHandleComponentForType(handleType: unknown) {
+  if (handleType === "none") return null;
+  if (handleType === "knob") return "cmp.handle.knob.round.black";
+  if (handleType === "gola") return "cmp.handle.profile.aluminium";
+  return "cmp.handle.bar.160.black";
+}
+
 export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
   return normalizeFlapShelvesLowParams(
     makePortableDefaultParams(MODULE_DEFAULTS, "flap_shelves_low") as FlapShelvesLowParams
@@ -141,9 +148,11 @@ export function normalizeFlapShelvesLowParams(
     normalized,
     applyDrawerLowHandleComponentToParams(
       normalized as unknown as Record<string, unknown>,
-      typeof normalized.handleComponentId === "string" && normalized.handleComponentId.trim().length > 0
-        ? normalized.handleComponentId
-        : null
+      options.sourceKey === "handleType"
+        ? getHandleComponentForType(normalized.handleType)
+        : typeof normalized.handleComponentId === "string" && normalized.handleComponentId.trim().length > 0
+          ? normalized.handleComponentId
+          : null
     )
   );
   Object.assign(

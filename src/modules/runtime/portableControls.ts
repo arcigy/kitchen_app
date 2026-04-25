@@ -427,6 +427,21 @@ function deriveScalarOptions(parameterKey: string): PortableFieldOption[] | null
       label: translateEnumLabel(value)
     }));
   }
+  if (parameterKey === "doorSystem") {
+    return [
+      { value: "flap_up", label: "Lift-up flap" },
+      { value: "double_hinged", label: "Double hinged" }
+    ].map((option) => ({
+      value: option.value,
+      label: translateEnumLabel(option.label)
+    }));
+  }
+  if (parameterKey === "handleType") {
+    return ["bar", "knob", "gola", "none"].map((value) => ({
+      value,
+      label: translateEnumLabel(value)
+    }));
+  }
   return null;
 }
 

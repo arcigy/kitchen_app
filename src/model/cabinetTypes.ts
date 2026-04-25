@@ -70,7 +70,7 @@ export function normalizeModuleParamsForSource(params: ModuleParams, sourceKey?:
     case "drawer_low":
       return normalizeDrawerLowImportedParams(params as DrawerLowParams, { sourceKey }) as ModuleParams;
     case "flap_shelves_low":
-      return normalizeFlapShelvesLowImportedParams(params as FlapShelvesLowParams) as ModuleParams;
+      return normalizeFlapShelvesLowImportedParams(params as FlapShelvesLowParams, { sourceKey }) as ModuleParams;
     case "fridge_tall":
       return normalizeFridgeTallImportedParams(params as FridgeTallParams) as ModuleParams;
     case "swing_shelves_low":

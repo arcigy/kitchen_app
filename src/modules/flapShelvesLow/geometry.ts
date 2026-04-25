@@ -90,6 +90,8 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
   const sideGapMm = Math.max(0, getNumber(params.sideGap, 2));
   const topGapMm = Math.max(0, getNumber(params.topGap, 2));
   const bottomGapMm = Math.max(0, getNumber(params.bottomGap, 2));
+  const doorSystem = params.doorSystem === "double_hinged" ? "double_hinged" : "flap_up";
+  const doorOpen = params.doorOpen === true || params.flapOpen === true;
   const materials = getMaterials(params);
 
   const bodyMaterial = makeMaterial(materials.body);
@@ -109,16 +111,109 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
     addBox(group, `shelf-${index + 1}`, { x: innerWidthMm, y: shelfThicknessMm, z: innerDepthMm }, { x: 0, y: centerY, z: backThicknessMm / 2 }, bodyMaterial, { width: innerWidthMm, height: innerDepthMm, depth: shelfThicknessMm });
   });
 
-  const frontWidthMm = Math.max(1, widthMm - sideGapMm * 2);
-  const frontHeightMm = Math.max(1, heightMm - topGapMm - bottomGapMm);
-  addBox(group, "door-front", { x: frontWidthMm, y: frontHeightMm, z: frontThicknessMm }, { x: 0, y: bottomGapMm + frontHeightMm / 2, z: depthMm / 2 + frontGapMm + frontThicknessMm / 2 }, frontMaterial, { width: frontWidthMm, height: frontHeightMm, depth: frontThicknessMm });
-
   const handleLengthMm = clamp(getNumber(params.handleLengthMm, 160), 40, Math.max(40, widthMm - 80));
   const handleSizeMm = clamp(getNumber(params.handleSizeMm, 12), 4, 40);
   const handleProjectionMm = clamp(getNumber(params.handleProjectionMm, 14), 4, 60);
-  const handleY = clamp(getNumber(params.handlePositionMm, 60), 0, heightMm);
-  const handleX = clamp(getNumber(params.handleHorizontalPositionMm, 0), -widthMm / 2 + handleLengthMm / 2, widthMm / 2 - handleLengthMm / 2);
-  addBox(group, "handle", { x: handleLengthMm, y: handleSizeMm, z: handleProjectionMm }, { x: handleX, y: handleY, z: depthMm / 2 + frontGapMm + frontThicknessMm + handleProjectionMm / 2 }, hardwareMaterial, { width: handleLengthMm, height: handleSizeMm, depth: handleProjectionMm });
+  const handleType = getString(params.handleType, "bar");
+  const frontWidthMm = Math.max(1, widthMm - sideGapMm * 2);
+  const frontHeightMm = Math.max(1, heightMm - topGapMm - bottomGapMm);
+  const frontTopY = bottomGapMm + frontHeightMm;
+  const frontPlaneZ = depthMm / 2 + frontGapMm + frontThicknessMm / 2;
+  const handleOffsetFromBottomMm = clamp(getNumber(params.handlePositionMm, doorSystem === "double_hinged" ? 100 : 60), 0, frontHeightMm);
+  const handleOffsetFromSplitMm = Math.max(0, getNumber(params.doorHandleOffsetFromSplitMm, getNumber(params.handleHorizontalPositionMm, 0)));
+  const addHandle = (parent: THREE.Group, name: string, opts: { x: number; y: number; vertical?: boolean; maxLengthMm: number }) => {
+    if (handleType === "none") return;
+    const length = Math.min(handleLengthMm, Math.max(40, opts.maxLengthMm * 0.72));
+    const size = handleType === "knob" ? Math.max(handleSizeMm, 24) : handleSizeMm;
+    const handleSize = opts.vertical
+      ? { x: size, y: length, z: handleProjectionMm }
+      : { x: length, y: size, z: handleProjectionMm };
+    addBox(
+      parent,
+      name,
+      handleSize,
+      { x: opts.x, y: opts.y, z: frontThicknessMm / 2 + handleProjectionMm / 2 + 1 },
+      hardwareMaterial,
+      { width: handleSize.x, height: handleSize.y, depth: handleSize.z }
+    );
+  };
+
+  if (doorSystem === "double_hinged") {
+    const centerGapMm = Math.max(2, Math.min(sideGapMm, frontWidthMm * 0.05));
+    const leafWidthMm = Math.max(1, (frontWidthMm - centerGapMm) / 2);
+    const openAngle = doorOpen ? Math.PI / 2 : 0;
+    const addDoorLeaf = (name: string, side: -1 | 1) => {
+      const pivot = new THREE.Group();
+      pivot.name = `${name}-pivot`;
+      pivot.position.set((side * frontWidthMm * MM_TO_M) / 2, frontTopY * MM_TO_M, frontPlaneZ * MM_TO_M);
+      pivot.rotation.y = side < 0 ? -openAngle : openAngle;
+      addBox(
+        pivot,
+        name,
+        { x: leafWidthMm, y: frontHeightMm, z: frontThicknessMm },
+        { x: (-side * leafWidthMm) / 2, y: -frontHeightMm / 2, z: 0 },
+        frontMaterial,
+        { width: leafWidthMm, height: frontHeightMm, depth: frontThicknessMm }
+      );
+      const handleInsetMm = clamp(handleSizeMm / 2 + 12 + handleOffsetFromSplitMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, leafWidthMm - handleSizeMm / 2));
+      addHandle(pivot, `${name}-handle`, {
+        x: side < 0 ? leafWidthMm - handleInsetMm : -leafWidthMm + handleInsetMm,
+        y: -clamp(handleOffsetFromBottomMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, frontHeightMm - handleSizeMm / 2)),
+        vertical: true,
+        maxLengthMm: frontHeightMm
+      });
+      const hingeX = side < 0 ? 10 : -10;
+      for (const hingeY of [-frontHeightMm + 70, -70]) {
+        addBox(
+          pivot,
+          `${name}-hinge-${hingeY}`,
+          { x: 18, y: 34, z: 12 },
+          { x: hingeX, y: clamp(hingeY, -frontHeightMm + 40, -40), z: -frontThicknessMm / 2 - 8 },
+          hardwareMaterial,
+          { width: 18, height: 34, depth: 12 }
+        );
+      }
+      group.add(pivot);
+    };
+    addDoorLeaf("door-left", -1);
+    addDoorLeaf("door-right", 1);
+  } else {
+    const pivot = new THREE.Group();
+    pivot.name = "flap-pivot";
+    pivot.position.set(0, frontTopY * MM_TO_M, frontPlaneZ * MM_TO_M);
+    pivot.rotation.x = doorOpen ? -Math.PI / 2 : 0;
+    addBox(
+      pivot,
+      "door-front",
+      { x: frontWidthMm, y: frontHeightMm, z: frontThicknessMm },
+      { x: 0, y: -frontHeightMm / 2, z: 0 },
+      frontMaterial,
+      { width: frontWidthMm, height: frontHeightMm, depth: frontThicknessMm }
+    );
+    const handleX = clamp(getNumber(params.handleHorizontalPositionMm, 0), -frontWidthMm / 2 + handleLengthMm / 2, frontWidthMm / 2 - handleLengthMm / 2);
+    addHandle(pivot, "handle", {
+      x: handleX,
+      y: -clamp(handleOffsetFromBottomMm, handleSizeMm / 2, Math.max(handleSizeMm / 2, frontHeightMm - handleSizeMm / 2)),
+      maxLengthMm: frontWidthMm
+    });
+    addBox(
+      pivot,
+      "lift-hardware-left",
+      { x: 28, y: 10, z: 18 },
+      { x: -frontWidthMm / 2 + 60, y: -8, z: -frontThicknessMm / 2 - 10 },
+      hardwareMaterial,
+      { width: 28, height: 10, depth: 18 }
+    );
+    addBox(
+      pivot,
+      "lift-hardware-right",
+      { x: 28, y: 10, z: 18 },
+      { x: frontWidthMm / 2 - 60, y: -8, z: -frontThicknessMm / 2 - 10 },
+      hardwareMaterial,
+      { width: 28, height: 10, depth: 18 }
+    );
+    group.add(pivot);
+  }
 
   return group;
 }

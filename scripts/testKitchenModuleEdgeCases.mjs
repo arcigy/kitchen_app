@@ -859,6 +859,32 @@ async function runUpperFlapUiPlacementCases(page) {
   if (!movedFlap || movedFlap.params.height !== 650) {
     failures.push({ case: "upper_flap_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
   }
+  if (movedFlap) {
+    await evalApi(
+      page,
+      ({ groupId }) => {
+        const api = window.__kitchenDebug;
+        if (!api) throw new Error("Missing __kitchenDebug");
+        return api.patchKitchenContext(groupId, { upperDepthMm: 410 });
+      },
+      { groupId }
+    );
+    const depthSnap = await snapshot(page, groupId);
+    const depthFlap = depthSnap.instances.find((inst) => inst.id === placedFlap.id);
+    if (!depthFlap || depthFlap.params.depth !== 410) {
+      failures.push({ case: "upper_flap_ui_group_depth_updates", ok: false, expected: 410, actual: depthFlap?.params.depth ?? null, depthFlap });
+    }
+    if (depthFlap && backLockedDeltaMm(movedFlap, depthFlap) > 1) {
+      failures.push({
+        case: "upper_flap_ui_group_depth_keeps_back_anchor",
+        ok: false,
+        expectedMaxDeltaMm: 1,
+        actualDeltaMm: backLockedDeltaMm(movedFlap, depthFlap),
+        before: movedFlap,
+        after: depthFlap
+      });
+    }
+  }
   const savedSnap = await layoutSnapshot(page);
   const savedFlap = savedSnap.instances.find((inst) => inst.id === placedFlap.id);
   if (!savedFlap || savedFlap.positionMm.y !== 1700) {
@@ -869,6 +895,70 @@ async function runUpperFlapUiPlacementCases(page) {
       actual: savedFlap?.positionMm?.y ?? null,
       savedFlap
     });
+  }
+
+  return failures;
+}
+
+async function runUpperFlapModuleParameterCases(page) {
+  const failures = [];
+  const cases = [
+    { key: "width", patch: (inst) => ({ width: Number(inst.params.width ?? 900) + 120 }) },
+    { key: "height", patch: (inst) => ({ height: Number(inst.params.height ?? 720) - 80 }) },
+    { key: "depth", patch: (inst) => ({ depth: Number(inst.params.depth ?? 320) + 80 }) },
+    { key: "frontGap", patch: (inst) => ({ frontGap: Number(inst.params.frontGap ?? 2) + 8 }) },
+    { key: "sideGap", patch: (inst) => ({ sideGap: Number(inst.params.sideGap ?? 2) + 4 }) },
+    { key: "topGap", patch: (inst) => ({ topGap: Number(inst.params.topGap ?? 2) + 4 }) },
+    { key: "bottomGap", patch: (inst) => ({ bottomGap: Number(inst.params.bottomGap ?? 2) + 4 }) },
+    { key: "shelfCount", patch: (inst) => ({ shelfCount: Number(inst.params.shelfCount ?? 3) + 1 }) },
+    { key: "shelfAutoFit", patch: () => ({ shelfAutoFit: true }) },
+    { key: "shelfGaps", patch: () => ({ shelfGaps: [160, 320] }) },
+    { key: "doorSystem", patch: () => ({ doorSystem: "double_hinged" }) },
+    { key: "doorOpen", patch: () => ({ doorOpen: true }) },
+    { key: "flapOpen", patch: () => ({ flapOpen: true }) },
+    { key: "handleComponentId", patch: () => ({ handleComponentId: "cmp.handle.knob.round.black" }), expect: (inst) => inst.params.handleType === "knob" },
+    { key: "handleType", patch: () => ({ handleType: "none" }), expect: (inst) => inst.params.handleType === "none" && !inst.params.handleComponentId },
+    { key: "handlePositionMm", patch: (inst) => ({ handlePositionMm: Number(inst.params.handlePositionMm ?? 60) + 40 }) },
+    { key: "handleHorizontalPositionMm", patch: () => ({ handleHorizontalPositionMm: 120 }) },
+    { key: "doorHandleOffsetFromSplitMm", patch: () => ({ doorHandleOffsetFromSplitMm: 60 }) },
+    { key: "liftUpComponentId", patch: () => ({ liftUpComponentId: "cmp.lift_up.standard.600" }) },
+    { key: "hangingBracketComponentId", patch: () => ({ hangingBracketComponentId: "cmp.hanging_bracket.wall.heavy" }) },
+    { key: "shelfSupportComponentId", patch: () => ({ shelfSupportComponentId: "cmp.shelf_support.glass.nickel" }) },
+    { key: "wallMounted", patch: () => ({ wallMounted: true }) }
+  ];
+
+  for (const testCase of cases) {
+    const created = await createScenario(page, {
+      path: [
+        { x: 0, z: 0 },
+        { x: 2600, z: 0 }
+      ],
+      addModule: false
+    });
+    const groupId = created.group.id;
+    await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
+    const beforeSnap = await snapshot(page, groupId);
+    const beforeFlap = beforeSnap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+    if (!beforeFlap) {
+      failures.push({ case: `upper_flap_param_${testCase.key}`, ok: false, reason: "Missing flap before patch" });
+      continue;
+    }
+    const patch = testCase.patch(beforeFlap);
+    const result = await patchModule(page, beforeFlap.id, patch, { sourceKey: testCase.key, preserveBackAnchor: true });
+    const afterFlap = result.instance;
+    const changed = Object.entries(patch).every(([key, value]) => deepEqual(afterFlap.params[key], value) || testCase.expect?.(afterFlap));
+    const anchorDeltaMm = backLockedDeltaMm(beforeFlap, afterFlap);
+    if (!result.ok || !changed || anchorDeltaMm > 1 || !afterFlap.kitchenPlacement) {
+      failures.push({
+        case: `upper_flap_param_${testCase.key}`,
+        ok: result.ok,
+        patch,
+        afterValue: Object.fromEntries(Object.keys(patch).map((key) => [key, afterFlap.params[key]])),
+        changed,
+        anchorDeltaMm,
+        kitchenPlacement: afterFlap.kitchenPlacement
+      });
+    }
   }
 
   return failures;
@@ -935,6 +1025,7 @@ async function main() {
     const materialResyncFailures = await runKitchenMaterialResyncCases(page);
     const upperFlapFailures = await runUpperFlapContextCases(page);
     const upperFlapUiFailures = await runUpperFlapUiPlacementCases(page);
+    const upperFlapModuleParamFailures = await runUpperFlapModuleParameterCases(page);
 
     const failures = [
       ...drawerFailures,
@@ -946,7 +1037,8 @@ async function main() {
       ...backAnchorFailures,
       ...materialResyncFailures,
       ...upperFlapFailures,
-      ...upperFlapUiFailures
+      ...upperFlapUiFailures,
+      ...upperFlapModuleParamFailures
     ];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
@@ -1004,7 +1096,10 @@ async function main() {
               "upper_flap_ui_group_position_keeps_xz",
               "upper_flap_ui_group_footprint_keeps_3d_alignment",
               "upper_flap_ui_snapshot_saves_y",
-              "upper_flap_ui_group_height_updates"
+              "upper_flap_ui_group_height_updates",
+              "upper_flap_ui_group_depth_updates",
+              "upper_flap_ui_group_depth_keeps_back_anchor",
+              "upper_flap_module_parameters_keep_back_anchor"
             ]
           }
         },

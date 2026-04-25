@@ -511,6 +511,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       (value, refreshProps) => commitCtx((base) => ({ ...base, upperStartHeightMm: value }), { refreshProps })
     );
     addNumberRow(
+      translateParamLabel("upperDepthMm"),
+      ctx.upperDepthMm,
+      (value, refreshProps) => commitCtx((base) => ({ ...base, upperDepthMm: value }), { refreshProps })
+    );
+    addNumberRow(
       translateParamLabel("upperHeightMm"),
       ctx.upperHeightMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, upperHeightMm: value }), { refreshProps })
