@@ -41,6 +41,7 @@ export interface PlacementHelpers {
   } | null;
   setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
   finalizePlacedInstance?: (inst: LayoutInstance) => void;
+  syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
   resolvePlacementConstraint?: (
     ghost: LayoutInstance,
     cursorWorld: any
@@ -170,6 +171,7 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
 
   inst.module.visible = true;
   inst.outline.visible = false;
+  helpers.syncPlacedInstancePresentation?.(inst);
 
   helpers.layoutRoot.add(inst.root);
   S.instances.push(inst);

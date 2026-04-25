@@ -709,6 +709,89 @@ async function runUpperFlapContextCases(page) {
   return failures;
 }
 
+async function runUpperFlapUiPlacementCases(page) {
+  const failures = [];
+  const created = await createScenario(page, {
+    path: [
+      { x: 0, z: 0 },
+      { x: 2600, z: 0 }
+    ],
+    addModule: false
+  });
+  const groupId = created.group.id;
+
+  await page.getByRole("button", { name: "Upraviť kuchyňu" }).click();
+  await page.getByRole("button", { name: "Pôdorys" }).click();
+  await page.getByRole("button", { name: "flap_shelves_low" }).click();
+  const target = await evalApi(page, () => {
+    const api = window.__kitchenDebug;
+    if (!api) throw new Error("Missing __kitchenDebug");
+    return api.projectPlanPoint({ x: 1300, z: 250 });
+  });
+  await page.mouse.move(target.x, target.y);
+  await page.waitForTimeout(120);
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(300);
+
+  const placedSnap = await snapshot(page, groupId);
+  const placedFlap = placedSnap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+  if (!placedFlap) {
+    failures.push({ case: "upper_flap_ui_inserted", ok: false, reason: "Missing flap_shelves_low after UI placement" });
+    return failures;
+  }
+  if (!placedFlap.kitchenPlacement) {
+    failures.push({ case: "upper_flap_ui_keeps_binding", ok: false, reason: "UI placement lost kitchenPlacement", placedFlap });
+  }
+  if (Math.round(placedFlap.positionM.y * 1000) !== 1400) {
+    failures.push({ case: "upper_flap_ui_initial_position_y", ok: false, expected: 1400, actual: Math.round(placedFlap.positionM.y * 1000), placedFlap });
+  }
+  if (placedFlap.moduleVisible !== false || placedFlap.outlineVisible !== true || placedFlap.pickVisible !== true) {
+    failures.push({
+      case: "upper_flap_ui_floorplan_visibility",
+      ok: false,
+      expected: { moduleVisible: false, outlineVisible: true, pickVisible: true },
+      actual: {
+        moduleVisible: placedFlap.moduleVisible,
+        outlineVisible: placedFlap.outlineVisible,
+        pickVisible: placedFlap.pickVisible
+      }
+    });
+  }
+  if (
+    !Array.isArray(placedFlap.planPolygonM) ||
+    placedFlap.planPolygonM.length < 4 ||
+    placedFlap.planPolygonM.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.z))
+  ) {
+    failures.push({ case: "upper_flap_ui_plan_footprint", ok: false, reason: "Invalid plan footprint", placedFlap });
+  }
+
+  await evalApi(
+    page,
+    ({ groupId }) => {
+      const api = window.__kitchenDebug;
+      if (!api) throw new Error("Missing __kitchenDebug");
+      return api.patchKitchenContext(groupId, { upperStartHeightMm: 1700, upperHeightMm: 650 });
+    },
+    { groupId }
+  );
+  const movedSnap = await snapshot(page, groupId);
+  const movedFlap = movedSnap.instances.find((inst) => inst.id === placedFlap.id);
+  if (!movedFlap || Math.round(movedFlap.positionM.y * 1000) !== 1700) {
+    failures.push({
+      case: "upper_flap_ui_group_position_updates",
+      ok: false,
+      expected: 1700,
+      actual: movedFlap ? Math.round(movedFlap.positionM.y * 1000) : null,
+      movedFlap
+    });
+  }
+  if (!movedFlap || movedFlap.params.height !== 650) {
+    failures.push({ case: "upper_flap_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
+  }
+
+  return failures;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -769,6 +852,7 @@ async function main() {
     const backAnchorFailures = await runBackAnchorLockCases(page);
     const materialResyncFailures = await runKitchenMaterialResyncCases(page);
     const upperFlapFailures = await runUpperFlapContextCases(page);
+    const upperFlapUiFailures = await runUpperFlapUiPlacementCases(page);
 
     const failures = [
       ...drawerFailures,
@@ -779,7 +863,8 @@ async function main() {
       ...clusterFailures,
       ...backAnchorFailures,
       ...materialResyncFailures,
-      ...upperFlapFailures
+      ...upperFlapFailures,
+      ...upperFlapUiFailures
     ];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
@@ -824,7 +909,14 @@ async function main() {
               "upper_flap_position_y",
               "upper_flap_height",
               "upper_flap_front_material",
-              "upper_flap_3d_geometry"
+              "upper_flap_3d_geometry",
+              "upper_flap_ui_inserted",
+              "upper_flap_ui_keeps_binding",
+              "upper_flap_ui_initial_position_y",
+              "upper_flap_ui_floorplan_visibility",
+              "upper_flap_ui_plan_footprint",
+              "upper_flap_ui_group_position_updates",
+              "upper_flap_ui_group_height_updates"
             ]
           }
         },

@@ -2773,7 +2773,7 @@ export function startApp(initialArgs: AppArgs) {
 
     if (isCornerKitchenModule(inst)) {
       const localCorner = getModuleLocalKitchenCornerAnchor(inst);
-      const worldCorner = localCorner.clone().applyMatrix4(inst.root.matrixWorld);
+      const worldCorner = localCorner.clone().applyMatrix4(inst.root.matrixWorld).setY(0);
       let best:
         | {
             binding: KitchenPlacementBinding;
@@ -2810,7 +2810,7 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     const localBackCenter = getModuleLocalBackCenter(inst);
-    const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
+    const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld).setY(0);
     let best:
       | {
           binding: KitchenPlacementBinding;
@@ -6557,6 +6557,7 @@ export function startApp(initialArgs: AppArgs) {
     resolveModuleAdjacencySnap,
     setPlacementAdjacencyPreview,
     finalizePlacedInstance,
+    syncPlacedInstancePresentation,
     resolvePlacementConstraint: getKitchenPlacementConstraint
   };
 
@@ -11789,7 +11790,21 @@ export function startApp(initialArgs: AppArgs) {
     if (!inst.kitchenGroupId) return;
     const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
     const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-    inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+    const binding = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm) ?? inst.kitchenPlacement;
+    if (!binding) return;
+    inst.kitchenPlacement = binding;
+    applyKitchenPlacementBinding(inst, binding, backOffsetMm);
+  }
+
+  function syncPlacedInstancePresentation(inst: LayoutInstance) {
+    const isFloorplanView = viewMode === "2d" && activeViewerTab === "floorplan";
+    const isDetailOrthoView = viewMode === "2d" && activeViewerTab !== "floorplan";
+    ensurePickAndOutline(inst, isFloorplanView);
+    inst.module.visible = viewMode !== "2d" || isDetailOrthoView;
+    inst.outline.visible = viewMode === "2d" ? isFloorplanView || isDetailOrthoView : true;
+    const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
+    outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
+    outlineMaterial.depthTest = viewMode !== "2d";
   }
 
   const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
@@ -11909,6 +11924,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const getDebugModuleSnapshot = (inst: LayoutInstance) => {
     const box = instanceVisualWorldBox(inst);
+    const planPolygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
     const structuralMeshes: THREE.Object3D[] = [];
     const partSnapshots: Array<{
       name: string;
@@ -11965,6 +11981,9 @@ export function startApp(initialArgs: AppArgs) {
       id: inst.id,
       kitchenGroupId: inst.kitchenGroupId,
       kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null,
+      moduleVisible: inst.module.visible,
+      outlineVisible: inst.outline.visible,
+      pickVisible: inst.pick.visible,
       params: structuredClone(inst.params),
       positionM: {
         x: inst.root.position.x,
@@ -11992,6 +12011,7 @@ export function startApp(initialArgs: AppArgs) {
       worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
       worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },
       frontVectorM: { x: worldFrontDir.x, y: worldFrontDir.y, z: worldFrontDir.z },
+      planPolygonM: planPolygon.map((point) => ({ x: point.x, y: point.y, z: point.z })),
       parts: partSnapshots,
       realizedDepthMm: Math.round(worldFrontCenter.clone().sub(worldBackCenter).dot(worldFrontDir) * 1000),
       structuralDepthMm: Math.round(
