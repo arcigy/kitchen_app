@@ -96,6 +96,19 @@ function getInternalShelfPartCount(inst) {
   return (inst.parts ?? []).filter((item) => /^shelf-\d+$/.test(item.name)).length;
 }
 
+function getInternalShelfCentersMm(inst) {
+  return (inst.parts ?? [])
+    .filter((item) => /^shelf-\d+$/.test(item.name) && item.positionM)
+    .map((item) => Math.round(item.positionM.y * 1000))
+    .sort((left, right) => left - right);
+}
+
+function shelfCentersAreEven(centersMm, toleranceMm = 2) {
+  if (centersMm.length < 3) return true;
+  const gaps = centersMm.slice(1).map((value, index) => value - centersMm[index]);
+  return Math.max(...gaps) - Math.min(...gaps) <= toleranceMm;
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -764,6 +777,16 @@ async function runUpperFlapContextCases(page) {
       flap
     });
   }
+  const shelfCentersMm = getInternalShelfCentersMm(flap);
+  if (flap.params.shelfAutoFit !== true || !shelfCentersAreEven(shelfCentersMm)) {
+    failures.push({
+      case: "upper_flap_initial_shelves_auto_fit",
+      ok: false,
+      expected: { shelfAutoFit: true, evenCenters: true },
+      actual: { shelfAutoFit: flap.params.shelfAutoFit, shelfCentersMm },
+      flap
+    });
+  }
   const handleCenterFromBottomMm = getFlapHandleOffsetFromBottomMm(flap);
   if (handleCenterFromBottomMm == null || Math.abs(handleCenterFromBottomMm - Number(flap.params.handlePositionMm ?? 60)) > 15) {
     failures.push({
@@ -1152,6 +1175,7 @@ async function main() {
               "upper_flap_front_material",
               "upper_flap_3d_geometry",
               "upper_flap_shelf_count_geometry",
+              "upper_flap_initial_shelves_auto_fit",
               "upper_flap_handle_position_from_bottom",
               "upper_flap_double_door_handles_inside_front",
               "upper_flap_ui_inserted",

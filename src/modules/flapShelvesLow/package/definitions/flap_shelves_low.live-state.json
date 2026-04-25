@@ -24,10 +24,11 @@
     "bottomGap": 2,
     "shelfCount": 3,
     "shelfThickness": 18,
-    "shelfAutoFit": false,
+    "shelfAutoFit": true,
     "shelfGaps": [
-      210,
-      430
+      176,
+      342,
+      509
     ],
     "doorSystem": "flap_up",
     "doorOpen": false,

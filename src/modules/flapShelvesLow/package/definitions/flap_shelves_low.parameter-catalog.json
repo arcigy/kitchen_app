@@ -258,7 +258,7 @@
       "group": "general",
       "type": "boolean",
       "required": true,
-      "defaultValue": false,
+      "defaultValue": true,
       "description": "Exported parameter shelf auto fit."
     },
     {
@@ -275,8 +275,9 @@
       "type": "number[]",
       "required": true,
       "defaultValue": [
-        210,
-        430
+        176,
+        342,
+        509
       ],
       "description": "Exported parameter shelf gaps."
     },
