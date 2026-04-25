@@ -61,15 +61,15 @@ function addBox(
 
 function getShelfCenters(params: FlapShelvesLowParams, heightMm: number, boardThicknessMm: number, shelfThicknessMm: number) {
   const shelfCount = Math.max(1, Math.round(getNumber(params.shelfCount, 3)));
-  const shelfBoardCount = Math.max(0, shelfCount - 1);
+  const shelfBoardCount = Math.max(0, shelfCount);
   const bottomY = boardThicknessMm + shelfThicknessMm / 2;
   const topY = Math.max(bottomY, heightMm - boardThicknessMm - shelfThicknessMm / 2);
-  const manualGaps = Array.isArray(params.shelfGaps)
+  const manualGaps = params.shelfAutoFit !== true && Array.isArray(params.shelfGaps)
     ? params.shelfGaps.filter((entry): entry is number => typeof entry === "number" && Number.isFinite(entry) && entry >= 0)
     : [];
 
   return Array.from({ length: shelfBoardCount }, (_, index) => {
-    const autoY = bottomY + ((topY - bottomY) * (index + 1)) / shelfCount;
+    const autoY = bottomY + ((topY - bottomY) * (index + 1)) / (shelfBoardCount + 1);
     const manualY = manualGaps[index] != null ? boardThicknessMm + manualGaps[index]! : autoY;
     return clamp(manualY, bottomY, topY);
   });

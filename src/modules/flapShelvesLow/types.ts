@@ -38,6 +38,17 @@ function roundCount(value: unknown, fallback: number, min = 0) {
   return Math.max(min, Math.round(getNumber(value, fallback)));
 }
 
+function getEvenShelfGaps(params: FlapShelvesLowParams, shelfCount: number) {
+  const height = getNumber(params.height, getNumber(MODULE_DEFAULTS.height, 720));
+  const boardThickness = getNumber(params.boardThickness, getNumber(MODULE_DEFAULTS.boardThickness, 18));
+  const shelfThickness = getNumber(params.shelfThickness, getNumber(MODULE_DEFAULTS.shelfThickness, 18));
+  const bottomY = boardThickness + shelfThickness / 2;
+  const topY = Math.max(bottomY, height - boardThickness - shelfThickness / 2);
+  return Array.from({ length: Math.max(0, shelfCount) }, (_, index) =>
+    Math.max(0, Math.round(bottomY + ((topY - bottomY) * (index + 1)) / (shelfCount + 1) - boardThickness))
+  );
+}
+
 function sanitizeShelfGaps(params: FlapShelvesLowParams, shelfCount: number) {
   const fallbackGaps = Array.isArray(MODULE_DEFAULTS.shelfGaps)
     ? MODULE_DEFAULTS.shelfGaps.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0)
@@ -45,12 +56,13 @@ function sanitizeShelfGaps(params: FlapShelvesLowParams, shelfCount: number) {
   const resolved = Array.isArray(params.shelfGaps)
     ? params.shelfGaps.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0)
     : [];
-  const targetCount = Math.max(0, shelfCount - 1);
+  const targetCount = Math.max(0, shelfCount);
   if (targetCount === 0) return [];
+  const evenGaps = getEvenShelfGaps(params, targetCount);
   const seed = resolved.length > 0 ? resolved : fallbackGaps;
   const next = seed.slice(0, targetCount).map((value) => Math.max(0, Math.round(value)));
   while (next.length < targetCount) {
-    next.push(next[next.length - 1] ?? fallbackGaps[next.length] ?? 220);
+    next.push(evenGaps[next.length] ?? fallbackGaps[next.length] ?? 220);
   }
   return next;
 }
@@ -124,6 +136,9 @@ export function normalizeFlapShelvesLowParams(
   normalized.bottomGap = clamp(Math.round(getNumber(normalized.bottomGap, getNumber(MODULE_DEFAULTS.bottomGap, 2))), 0, 50);
 
   normalized.shelfCount = clamp(roundCount(normalized.shelfCount, getNumber(MODULE_DEFAULTS.shelfCount, 3), 1), 1, 12);
+  if (options.sourceKey === "shelfCount") {
+    normalized.shelfAutoFit = true;
+  }
   if (options.sourceKey === "shelfGaps") {
     normalized.shelfAutoFit = false;
   }
@@ -209,8 +224,8 @@ export function validateFlapShelvesLow(params: FlapShelvesLowParams): string[] {
   if (params.doorSystem === "double_hinged" && width < 400) {
     errors.push("Double hinged flap module needs more width.");
   }
-  if (params.shelfAutoFit !== true && shelfCount > 1 && sanitizeShelfGaps(params, shelfCount).length !== shelfCount - 1) {
-    errors.push("Manual shelf layout must provide shelf gaps for every opening.");
+  if (params.shelfAutoFit !== true && sanitizeShelfGaps(params, shelfCount).length !== shelfCount) {
+    errors.push("Manual shelf layout must provide shelf gaps for every shelf.");
   }
   if (height <= boardThickness * 2) {
     errors.push("Height is too small for the current board thickness.");

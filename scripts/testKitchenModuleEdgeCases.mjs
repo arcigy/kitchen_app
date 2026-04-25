@@ -92,6 +92,10 @@ function getLowestDoubleDoorHandleClearanceMm(inst) {
   return Math.min(...clearances.filter(Number.isFinite));
 }
 
+function getInternalShelfPartCount(inst) {
+  return (inst.parts ?? []).filter((item) => /^shelf-\d+$/.test(item.name)).length;
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -750,6 +754,16 @@ async function runUpperFlapContextCases(page) {
   if (!Number.isFinite(flap.worldBoxM?.min?.x) || !Number.isFinite(flap.worldBoxM?.max?.y) || (flap.parts?.length ?? 0) === 0) {
     failures.push({ case: "upper_flap_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
   }
+  const shelfPartCount = getInternalShelfPartCount(flap);
+  if (shelfPartCount !== Number(flap.params.shelfCount ?? 0)) {
+    failures.push({
+      case: "upper_flap_shelf_count_geometry",
+      ok: false,
+      expected: Number(flap.params.shelfCount ?? 0),
+      actual: shelfPartCount,
+      flap
+    });
+  }
   const handleCenterFromBottomMm = getFlapHandleOffsetFromBottomMm(flap);
   if (handleCenterFromBottomMm == null || Math.abs(handleCenterFromBottomMm - Number(flap.params.handlePositionMm ?? 60)) > 15) {
     failures.push({
@@ -954,7 +968,15 @@ async function runUpperFlapModuleParameterCases(page) {
     { key: "bottomGap", patch: (inst) => ({ bottomGap: Number(inst.params.bottomGap ?? 2) + 4 }) },
     { key: "shelfCount", patch: (inst) => ({ shelfCount: Number(inst.params.shelfCount ?? 3) + 1 }) },
     { key: "shelfAutoFit", patch: () => ({ shelfAutoFit: true }) },
-    { key: "shelfGaps", patch: () => ({ shelfGaps: [160, 320] }) },
+    {
+      key: "shelfGaps",
+      patch: () => ({ shelfGaps: [160, 320] }),
+      expect: (inst) =>
+        Array.isArray(inst.params.shelfGaps) &&
+        inst.params.shelfGaps[0] === 160 &&
+        inst.params.shelfGaps[1] === 320 &&
+        inst.params.shelfGaps.length === Number(inst.params.shelfCount ?? 0)
+    },
     { key: "doorSystem", patch: () => ({ doorSystem: "double_hinged" }) },
     { key: "doorOpen", patch: () => ({ doorOpen: true }) },
     { key: "flapOpen", patch: () => ({ flapOpen: true }) },
@@ -990,7 +1012,9 @@ async function runUpperFlapModuleParameterCases(page) {
     const afterFlap = result.instance;
     const changed = Object.entries(patch).every(([key, value]) => deepEqual(afterFlap.params[key], value) || testCase.expect?.(afterFlap));
     const anchorDeltaMm = backLockedDeltaMm(beforeFlap, afterFlap);
-    if (!result.ok || !changed || anchorDeltaMm > 1 || !afterFlap.kitchenPlacement) {
+    const shelfPartCount = getInternalShelfPartCount(afterFlap);
+    const shelfCountMismatch = testCase.key === "shelfCount" && shelfPartCount !== Number(afterFlap.params.shelfCount ?? 0);
+    if (!result.ok || !changed || anchorDeltaMm > 1 || !afterFlap.kitchenPlacement || shelfCountMismatch) {
       failures.push({
         case: `upper_flap_param_${testCase.key}`,
         ok: result.ok,
@@ -998,6 +1022,7 @@ async function runUpperFlapModuleParameterCases(page) {
         afterValue: Object.fromEntries(Object.keys(patch).map((key) => [key, afterFlap.params[key]])),
         changed,
         anchorDeltaMm,
+        shelfPartCount,
         kitchenPlacement: afterFlap.kitchenPlacement
       });
     }
@@ -1126,6 +1151,7 @@ async function main() {
               "upper_flap_height",
               "upper_flap_front_material",
               "upper_flap_3d_geometry",
+              "upper_flap_shelf_count_geometry",
               "upper_flap_handle_position_from_bottom",
               "upper_flap_double_door_handles_inside_front",
               "upper_flap_ui_inserted",
