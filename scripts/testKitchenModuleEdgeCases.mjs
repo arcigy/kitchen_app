@@ -79,6 +79,19 @@ function getFlapHandleOffsetFromBottomMm(inst) {
   return Math.round((handle.positionM.y + frontHeightM) * 1000);
 }
 
+function getLowestDoubleDoorHandleClearanceMm(inst) {
+  const front = (inst.parts ?? []).find((item) => item.name === "door-left" || item.name === "door-right");
+  const handles = (inst.parts ?? []).filter((item) => item.name === "door-left-handle" || item.name === "door-right-handle");
+  if (!front?.dimensionsMm?.height || handles.length === 0) return null;
+  const frontHeightM = Number(front.dimensionsMm.height) / 1000;
+  const clearances = handles.map((handle) => {
+    if (!handle?.positionM || !handle?.dimensionsMm?.height) return Number.NaN;
+    const handleHeightM = Number(handle.dimensionsMm.height) / 1000;
+    return Math.round((handle.positionM.y - handleHeightM / 2 + frontHeightM) * 1000);
+  });
+  return Math.min(...clearances.filter(Number.isFinite));
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -747,8 +760,19 @@ async function runUpperFlapContextCases(page) {
       flap
     });
   }
+  const doubleDoorResult = await patchModule(page, flap.id, { doorSystem: "double_hinged", handlePositionMm: 60 }, { sourceKey: "doorSystem", preserveBackAnchor: true });
+  const doubleDoorClearanceMm = getLowestDoubleDoorHandleClearanceMm(doubleDoorResult.instance);
+  if (!doubleDoorResult.ok || doubleDoorClearanceMm == null || doubleDoorClearanceMm < 20) {
+    failures.push({
+      case: "upper_flap_double_door_handles_inside_front",
+      ok: false,
+      expectedMinClearanceMm: 20,
+      actualClearanceMm: doubleDoorClearanceMm,
+      flap: doubleDoorResult.instance
+    });
+  }
 
-  const result = await patchModule(page, flap.id, { width: Number(flap.params.width ?? 900) + 1 }, { sourceKey: "width", preserveBackAnchor: true });
+  const result = await patchModule(page, doubleDoorResult.instance.id, { width: Number(doubleDoorResult.instance.params.width ?? 900) + 1 }, { sourceKey: "width", preserveBackAnchor: true });
   if (!result.ok) {
     failures.push({
       case: "material_resync_flap_shelves_low_width",
@@ -1103,6 +1127,7 @@ async function main() {
               "upper_flap_front_material",
               "upper_flap_3d_geometry",
               "upper_flap_handle_position_from_bottom",
+              "upper_flap_double_door_handles_inside_front",
               "upper_flap_ui_inserted",
               "upper_flap_ui_keeps_binding",
               "upper_flap_ui_initial_position_y",
