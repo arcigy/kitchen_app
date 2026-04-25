@@ -9041,7 +9041,11 @@ export function startApp(initialArgs: AppArgs) {
       modules: instances.map((i) => ({
         id: i.id,
         type: i.params.type,
-        positionMm: { x: Math.round(i.root.position.x * 1000), z: Math.round(i.root.position.z * 1000) },
+        positionMm: {
+          x: Math.round(i.root.position.x * 1000),
+          y: Math.round(i.root.position.y * 1000),
+          z: Math.round(i.root.position.z * 1000)
+        },
         params: i.params
       }))
     };

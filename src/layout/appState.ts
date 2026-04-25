@@ -41,7 +41,7 @@ export type LayoutSnapshot = {
     params: ModuleParams;
     kitchenGroupId: string | null;
     kitchenPlacement?: KitchenPlacementBinding | null;
-    positionMm: { x: number; z: number };
+    positionMm: { x: number; y?: number; z: number };
     rotationYDeg: number;
   }>;
   pinnedWallIds: string[];

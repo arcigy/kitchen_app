@@ -9,6 +9,7 @@ import type {
   KitchenPlacementBinding,
   SectionParams
 } from "./appState";
+import { getKitchenModuleRole } from "./kitchenModuleRules";
 
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
@@ -42,7 +43,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const mods = (s.instances ?? [])
     .map(
       (m) =>
-        `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.kind ?? "segment"}:${m.kitchenPlacement?.segmentIndex ?? -1}:${m.kitchenPlacement?.cornerIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
+        `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.kind ?? "segment"}:${m.kitchenPlacement?.segmentIndex ?? -1}:${m.kitchenPlacement?.cornerIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.y ?? 0},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
     )
     .join("|");
   const floors = (s.floors ?? [])
@@ -66,6 +67,15 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
 export const updateUndoRedoUi = (S: AppState) => {
   if (S.undoBtnEl) S.undoBtnEl.disabled = S.history.past.length === 0;
   if (S.redoBtnEl) S.redoBtnEl.disabled = S.history.future.length === 0;
+};
+
+const getRestoredInstanceY = (S: AppState, m: LayoutSnapshot["instances"][number]) => {
+  if (typeof m.positionMm.y === "number") return m.positionMm.y / 1000;
+  if (getKitchenModuleRole(m.params as Record<string, unknown>) === "upper" && m.kitchenGroupId) {
+    const group = S.kitchenGroups.find((g) => g.id === m.kitchenGroupId);
+    return (group?.ctx.upperStartHeightMm ?? S.kitchenCtx.upperStartHeightMm) / 1000;
+  }
+  return 0;
 };
 
 export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap: LayoutSnapshot) => {
@@ -116,7 +126,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
       const inst = helpers.createInstance(JSON.parse(JSON.stringify(m.params)) as ModuleParams, { id: m.id });
       inst.kitchenGroupId = m.kitchenGroupId ?? null;
       inst.kitchenPlacement = m.kitchenPlacement ? (JSON.parse(JSON.stringify(m.kitchenPlacement)) as KitchenPlacementBinding) : null;
-      inst.root.position.set(m.positionMm.x / 1000, 0, m.positionMm.z / 1000);
+      inst.root.position.set(m.positionMm.x / 1000, getRestoredInstanceY(S, m), m.positionMm.z / 1000);
       inst.root.rotation.y = ((m.rotationYDeg ?? 0) * Math.PI) / 180;
       helpers.layoutRoot.add(inst.root);
       S.instances.push(inst);
@@ -192,7 +202,11 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       params: JSON.parse(JSON.stringify(i.params)) as ModuleParams,
       kitchenGroupId: i.kitchenGroupId ?? null,
       kitchenPlacement: i.kitchenPlacement ? (JSON.parse(JSON.stringify(i.kitchenPlacement)) as KitchenPlacementBinding) : null,
-      positionMm: { x: Math.round(i.root.position.x * 1000), z: Math.round(i.root.position.z * 1000) },
+      positionMm: {
+        x: Math.round(i.root.position.x * 1000),
+        y: Math.round(i.root.position.y * 1000),
+        z: Math.round(i.root.position.z * 1000)
+      },
       rotationYDeg: (i.root.rotation.y * 180) / Math.PI
     })),
     pinnedWallIds: Array.from(S.pinnedWallIds),

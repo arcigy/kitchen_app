@@ -47,6 +47,19 @@ function backLockedDeltaMm(before, after) {
   return Math.round(Math.abs(afterValue - beforeValue) * 1000);
 }
 
+function planFootprintCenterDeltaMm(inst) {
+  const points = inst.planPolygonM ?? [];
+  const xs = points.map((point) => point.x).filter(Number.isFinite);
+  const zs = points.map((point) => point.z).filter(Number.isFinite);
+  const box = inst.structuralWorldBoxM ?? inst.worldBoxM;
+  if (!xs.length || !zs.length || !box) return Number.POSITIVE_INFINITY;
+  const planCenterX = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const planCenterZ = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const boxCenterX = (box.min.x + box.max.x) / 2;
+  const boxCenterZ = (box.min.z + box.max.z) / 2;
+  return Math.round(Math.max(Math.abs(planCenterX - boxCenterX), Math.abs(planCenterZ - boxCenterZ)) * 1000);
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -85,6 +98,14 @@ async function snapshot(page, groupId) {
     },
     groupId
   );
+}
+
+async function layoutSnapshot(page) {
+  return await evalApi(page, () => {
+    const api = window.__kitchenDebug;
+    if (!api) throw new Error("Missing __kitchenDebug");
+    return api.layoutSnapshot();
+  });
 }
 
 async function patchModule(page, instanceId, patch, options) {
@@ -745,6 +766,9 @@ async function runUpperFlapUiPlacementCases(page) {
   if (Math.round(placedFlap.positionM.y * 1000) !== 1400) {
     failures.push({ case: "upper_flap_ui_initial_position_y", ok: false, expected: 1400, actual: Math.round(placedFlap.positionM.y * 1000), placedFlap });
   }
+  if (Math.round(placedFlap.worldBoxM.min.y * 1000) !== 1400) {
+    failures.push({ case: "upper_flap_ui_initial_world_bottom_y", ok: false, expected: 1400, actual: Math.round(placedFlap.worldBoxM.min.y * 1000), placedFlap });
+  }
   if (placedFlap.moduleVisible !== false || placedFlap.outlineVisible !== true || placedFlap.pickVisible !== true) {
     failures.push({
       case: "upper_flap_ui_floorplan_visibility",
@@ -763,6 +787,10 @@ async function runUpperFlapUiPlacementCases(page) {
     placedFlap.planPolygonM.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.z))
   ) {
     failures.push({ case: "upper_flap_ui_plan_footprint", ok: false, reason: "Invalid plan footprint", placedFlap });
+  }
+  const footprintDeltaMm = planFootprintCenterDeltaMm(placedFlap);
+  if (footprintDeltaMm > 30) {
+    failures.push({ case: "upper_flap_ui_plan_footprint_matches_3d", ok: false, expectedMaxDeltaMm: 30, actualDeltaMm: footprintDeltaMm, placedFlap });
   }
 
   await evalApi(
@@ -785,8 +813,28 @@ async function runUpperFlapUiPlacementCases(page) {
       movedFlap
     });
   }
+  if (!movedFlap || Math.round(movedFlap.worldBoxM.min.y * 1000) !== 1700) {
+    failures.push({
+      case: "upper_flap_ui_group_world_bottom_updates",
+      ok: false,
+      expected: 1700,
+      actual: movedFlap ? Math.round(movedFlap.worldBoxM.min.y * 1000) : null,
+      movedFlap
+    });
+  }
   if (!movedFlap || movedFlap.params.height !== 650) {
     failures.push({ case: "upper_flap_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
+  }
+  const savedSnap = await layoutSnapshot(page);
+  const savedFlap = savedSnap.instances.find((inst) => inst.id === placedFlap.id);
+  if (!savedFlap || savedFlap.positionMm.y !== 1700) {
+    failures.push({
+      case: "upper_flap_ui_snapshot_saves_y",
+      ok: false,
+      expected: 1700,
+      actual: savedFlap?.positionMm?.y ?? null,
+      savedFlap
+    });
   }
 
   return failures;
@@ -913,9 +961,13 @@ async function main() {
               "upper_flap_ui_inserted",
               "upper_flap_ui_keeps_binding",
               "upper_flap_ui_initial_position_y",
+              "upper_flap_ui_initial_world_bottom_y",
               "upper_flap_ui_floorplan_visibility",
               "upper_flap_ui_plan_footprint",
+              "upper_flap_ui_plan_footprint_matches_3d",
               "upper_flap_ui_group_position_updates",
+              "upper_flap_ui_group_world_bottom_updates",
+              "upper_flap_ui_snapshot_saves_y",
               "upper_flap_ui_group_height_updates"
             ]
           }
