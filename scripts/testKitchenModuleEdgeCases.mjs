@@ -609,13 +609,12 @@ async function runKitchenMaterialResyncCases(page) {
   await addKitchenModule(page, groupId, { type: "corner_shelf_lower", cornerIndex: 2 });
   await addKitchenModule(page, groupId, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1450 });
   await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 2, offsetAlongMm: 1100 });
-
   await evalApi(
     page,
     ({ groupId }) => {
       const api = window.__kitchenDebug;
       if (!api) throw new Error("Missing __kitchenDebug");
-      return api.patchKitchenContext(groupId, { frontsMaterialId: "mat.board.front.acrylic.cashmere.19" });
+      return api.patchKitchenContext(groupId, { frontsMaterialId: "mat.board.front.mdf.cashmere_supermat.19" });
     },
     { groupId }
   );
@@ -649,6 +648,64 @@ async function runKitchenMaterialResyncCases(page) {
     }
   }
 
+  return failures;
+}
+
+async function runUpperFlapContextCases(page) {
+  const failures = [];
+  const created = await createScenario(page, {
+    path: [
+      { x: 0, z: 0 },
+      { x: 2600, z: 0 }
+    ],
+    addModule: false
+  });
+  const groupId = created.group.id;
+  await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
+  await evalApi(
+    page,
+    ({ groupId }) => {
+      const api = window.__kitchenDebug;
+      if (!api) throw new Error("Missing __kitchenDebug");
+      return api.patchKitchenContext(groupId, {
+        frontsMaterialId: "mat.board.front.mdf.cashmere_supermat.19",
+        upperStartHeightMm: 1600,
+        upperHeightMm: 640
+      });
+    },
+    { groupId }
+  );
+
+  const snap = await snapshot(page, groupId);
+  const flap = snap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+  if (!flap) {
+    failures.push({ case: "upper_flap_inserted", ok: false, reason: "Missing flap_shelves_low after addKitchenModule" });
+    return failures;
+  }
+  if (!flap.kitchenPlacement) {
+    failures.push({ case: "upper_flap_kitchen_placement", ok: false, reason: "Missing kitchenPlacement", flap });
+  }
+  if (Math.round(flap.positionM.y * 1000) !== 1600) {
+    failures.push({ case: "upper_flap_position_y", ok: false, expected: 1600, actual: Math.round(flap.positionM.y * 1000), flap });
+  }
+  if (flap.params.height !== 640) {
+    failures.push({ case: "upper_flap_height", ok: false, expected: 640, actual: flap.params.height, flap });
+  }
+  if (flap.params.frontMaterialId !== "mat.board.front.mdf.cashmere_supermat.19" && flap.params.materials?.frontKey !== "mat.board.front.mdf.cashmere_supermat.19") {
+    failures.push({ case: "upper_flap_front_material", ok: false, expected: "mat.board.front.mdf.cashmere_supermat.19", flap });
+  }
+  if (!Number.isFinite(flap.worldBoxM?.min?.x) || !Number.isFinite(flap.worldBoxM?.max?.y) || (flap.parts?.length ?? 0) === 0) {
+    failures.push({ case: "upper_flap_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
+  }
+
+  const result = await patchModule(page, flap.id, { width: Number(flap.params.width ?? 900) + 1 }, { sourceKey: "width", preserveBackAnchor: true });
+  if (!result.ok) {
+    failures.push({
+      case: "material_resync_flap_shelves_low_width",
+      ok: result.ok,
+      debug: result.debug ?? null
+    });
+  }
   return failures;
 }
 
@@ -711,6 +768,7 @@ async function main() {
     const clusterFailures = await runClusterCases(page);
     const backAnchorFailures = await runBackAnchorLockCases(page);
     const materialResyncFailures = await runKitchenMaterialResyncCases(page);
+    const upperFlapFailures = await runUpperFlapContextCases(page);
 
     const failures = [
       ...drawerFailures,
@@ -720,7 +778,8 @@ async function main() {
       ...adjacencyFailures,
       ...clusterFailures,
       ...backAnchorFailures,
-      ...materialResyncFailures
+      ...materialResyncFailures,
+      ...upperFlapFailures
     ];
     if (failures.length > 0) {
       throw new Error(JSON.stringify({ ok: false, baseUrl, failures }, null, 2));
@@ -758,6 +817,14 @@ async function main() {
               "material_resync_corner_shelf_lower_lengthX",
               "material_resync_swing_shelves_low_width",
               "material_resync_drawer_low_width"
+            ],
+            upperFlapCases: [
+              "material_resync_flap_shelves_low_width",
+              "upper_flap_kitchen_placement",
+              "upper_flap_position_y",
+              "upper_flap_height",
+              "upper_flap_front_material",
+              "upper_flap_3d_geometry"
             ]
           }
         },

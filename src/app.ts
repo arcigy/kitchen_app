@@ -6819,6 +6819,7 @@ export function startApp(initialArgs: AppArgs) {
     props,
     icons: { cabinet: I_CABINET, worktop: I_FLOOR, done: I_DONE, cancel: I_CANCEL },
     ensureLayoutMode,
+    ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
     setToolSelect,
     cancelPlacementIfActive: () => {
       if (placement.active) cancelPlacement(S, placementHelpers);

@@ -55,6 +55,7 @@ type CreateKitchenEditModeArgs = {
   };
 
   ensureLayoutMode: () => void;
+  ensureFloorplanViewerTab: () => void;
   setToolSelect: () => void;
   cancelPlacementIfActive: () => void;
   addInstance: (type: ModuleParams["type"]) => void;
@@ -220,6 +221,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         label,
         onClick: () => {
           args.ensureLayoutMode();
+          args.ensureFloorplanViewerTab();
           args.handleWorktopEscape();
           args.setToolSelect();
           args.addInstance(type);
