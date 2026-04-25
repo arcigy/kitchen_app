@@ -43,15 +43,10 @@ function writeStoredSettings(settings: ProjectQuoteSettings) {
 
 function table(headers: string[], rows: string[][]) {
   const wrap = document.createElement("div");
-  wrap.style.overflow = "auto";
-  wrap.style.border = "1px solid #2a3140";
-  wrap.style.borderRadius = "10px";
-  wrap.style.background = "#0d1117";
+  wrap.className = "bom-dev__table-wrap";
 
   const element = document.createElement("table");
-  element.style.width = "100%";
-  element.style.borderCollapse = "collapse";
-  element.style.fontSize = "12px";
+  element.className = "bom-dev__table";
   wrap.appendChild(element);
 
   const thead = document.createElement("thead");
@@ -59,13 +54,6 @@ function table(headers: string[], rows: string[][]) {
   for (const header of headers) {
     const th = document.createElement("th");
     th.textContent = header;
-    th.style.textAlign = "left";
-    th.style.padding = "10px 12px";
-    th.style.borderBottom = "1px solid #2a3140";
-    th.style.color = "#9aa5ba";
-    th.style.position = "sticky";
-    th.style.top = "0";
-    th.style.background = "#0d1117";
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
@@ -77,8 +65,7 @@ function table(headers: string[], rows: string[][]) {
     const cell = document.createElement("td");
     cell.colSpan = headers.length;
     cell.textContent = "Ziadne data.";
-    cell.style.padding = "12px";
-    cell.style.color = "#9aa5ba";
+    cell.className = "bom-dev__empty-cell";
     row.appendChild(cell);
     tbody.appendChild(row);
   } else {
@@ -87,9 +74,6 @@ function table(headers: string[], rows: string[][]) {
       for (const value of values) {
         const cell = document.createElement("td");
         cell.textContent = value;
-        cell.style.padding = "10px 12px";
-        cell.style.borderBottom = "1px solid #171c25";
-        cell.style.verticalAlign = "top";
         row.appendChild(cell);
       }
       tbody.appendChild(row);
@@ -101,25 +85,20 @@ function table(headers: string[], rows: string[][]) {
 
 function section(title: string, description?: string) {
   const wrap = document.createElement("section");
-  wrap.style.display = "grid";
-  wrap.style.gap = "10px";
+  wrap.className = "bom-dev__section";
 
   const heading = document.createElement("div");
-  heading.style.display = "grid";
-  heading.style.gap = "4px";
+  heading.className = "bom-dev__section-heading";
 
   const titleEl = document.createElement("h3");
   titleEl.textContent = title;
-  titleEl.style.margin = "0";
-  titleEl.style.font = "700 15px system-ui, sans-serif";
-  titleEl.style.color = "#eef2ff";
+  titleEl.className = "bom-dev__section-title";
   heading.appendChild(titleEl);
 
   if (description) {
     const desc = document.createElement("div");
     desc.textContent = description;
-    desc.style.color = "#9aa5ba";
-    desc.style.fontSize = "12px";
+    desc.className = "bom-dev__section-description";
     heading.appendChild(desc);
   }
 
@@ -151,31 +130,22 @@ function itemThicknessLabel(item: BOMResult["pricing"]["items"][number]) {
 
 function buildNumberInput(label: string, value: number, onChange: (value: number) => void, suffix?: string) {
   const wrap = document.createElement("label");
-  wrap.style.display = "grid";
-  wrap.style.gap = "6px";
+  wrap.className = "bom-dev__field";
 
   const title = document.createElement("span");
   title.textContent = label;
-  title.style.color = "#9aa5ba";
-  title.style.fontSize = "12px";
+  title.className = "bom-dev__field-label";
   wrap.appendChild(title);
 
   const row = document.createElement("div");
-  row.style.display = "flex";
-  row.style.alignItems = "center";
-  row.style.gap = "8px";
+  row.className = "bom-dev__field-row";
   wrap.appendChild(row);
 
   const input = document.createElement("input");
   input.type = "number";
   input.step = "0.01";
   input.value = String(value);
-  input.style.background = "#0e1118";
-  input.style.color = "#eef2ff";
-  input.style.border = "1px solid #303746";
-  input.style.borderRadius = "8px";
-  input.style.padding = "10px 12px";
-  input.style.width = "100%";
+  input.className = "bom-dev__input";
   input.addEventListener("input", () => {
     onChange(Number(input.value));
   });
@@ -184,12 +154,35 @@ function buildNumberInput(label: string, value: number, onChange: (value: number
   if (suffix) {
     const suffixEl = document.createElement("span");
     suffixEl.textContent = suffix;
-    suffixEl.style.color = "#9aa5ba";
-    suffixEl.style.fontSize = "12px";
+    suffixEl.className = "bom-dev__field-suffix";
     row.appendChild(suffixEl);
   }
 
   return wrap;
+}
+
+function createButton(label: string, variant: "secondary" | "primary" = "secondary") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.className = `bom-dev__button bom-dev__button--${variant}`;
+  return button;
+}
+
+function createMetricCard(label: string, value: string, tone: "default" | "accent" = "default") {
+  const card = document.createElement("div");
+  card.className = `bom-dev__metric bom-dev__metric--${tone}`;
+
+  const labelEl = document.createElement("div");
+  labelEl.className = "bom-dev__metric-label";
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement("div");
+  valueEl.className = "bom-dev__metric-value";
+  valueEl.textContent = value;
+
+  card.append(labelEl, valueEl);
+  return card;
 }
 
 export function mountBomDevPanel(
@@ -201,10 +194,7 @@ export function mountBomDevPanel(
   const entries = buildProjectPricingViews(instances, worktops, ctx);
   let settings = readStoredSettings();
 
-  container.style.display = "grid";
-  container.style.gap = "18px";
-  container.style.color = "#eef2ff";
-  container.style.font = "13px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  container.className = "bom-dev";
 
   const render = () => {
     container.innerHTML = "";
@@ -212,7 +202,7 @@ export function mountBomDevPanel(
     if (instances.length === 0 && worktops.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "Nie su umiestnene ziadne moduly.";
-      empty.style.color = "#9aa5ba";
+      empty.className = "bom-dev__empty";
       container.appendChild(empty);
       return;
     }
@@ -227,50 +217,29 @@ export function mountBomDevPanel(
     const payload = buildProjectPricingPayload(entries, settings);
 
     const toolbar = document.createElement("div");
-    toolbar.style.display = "flex";
-    toolbar.style.justifyContent = "space-between";
-    toolbar.style.alignItems = "center";
-    toolbar.style.gap = "12px";
+    toolbar.className = "bom-dev__hero";
 
     const intro = document.createElement("div");
-    intro.style.display = "grid";
-    intro.style.gap = "4px";
+    intro.className = "bom-dev__hero-copy";
     const title = document.createElement("h2");
     title.textContent = "BOM + Cenova ponuka";
-    title.style.margin = "0";
-    title.style.font = "700 18px system-ui, sans-serif";
+    title.className = "bom-dev__hero-title";
     const desc = document.createElement("div");
     desc.textContent = "App, Create Sheet aj marketingove PDF idu z tej istej cenovej logiky.";
-    desc.style.color = "#9aa5ba";
-    desc.style.fontSize = "12px";
+    desc.className = "bom-dev__hero-description";
     intro.append(title, desc);
     toolbar.appendChild(intro);
 
     const actions = document.createElement("div");
-    actions.style.display = "flex";
-    actions.style.gap = "10px";
+    actions.className = "bom-dev__actions";
 
-    const exportBtn = document.createElement("button");
-    exportBtn.type = "button";
-    exportBtn.textContent = "Create Sheet";
-    exportBtn.style.background = "#0e1118";
-    exportBtn.style.color = "#eef2ff";
-    exportBtn.style.border = "1px solid #303746";
-    exportBtn.style.borderRadius = "8px";
-    exportBtn.style.padding = "9px 12px";
+    const exportBtn = createButton("Create Sheet");
     exportBtn.addEventListener("click", () => {
       exportProjectPricingWorkbook(entries, summary);
     });
     actions.appendChild(exportBtn);
 
-    const pdfBtn = document.createElement("button");
-    pdfBtn.type = "button";
-    pdfBtn.textContent = "Marketing PDF";
-    pdfBtn.style.background = "#0e1118";
-    pdfBtn.style.color = "#eef2ff";
-    pdfBtn.style.border = "1px solid #303746";
-    pdfBtn.style.borderRadius = "8px";
-    pdfBtn.style.padding = "9px 12px";
+    const pdfBtn = createButton("Marketing PDF", "primary");
     pdfBtn.addEventListener("click", async () => {
       pdfBtn.disabled = true;
       const previous = pdfBtn.textContent;
@@ -284,14 +253,7 @@ export function mountBomDevPanel(
     });
     actions.appendChild(pdfBtn);
 
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.textContent = "Copy Pricing JSON";
-    copyBtn.style.background = "#0e1118";
-    copyBtn.style.color = "#eef2ff";
-    copyBtn.style.border = "1px solid #303746";
-    copyBtn.style.borderRadius = "8px";
-    copyBtn.style.padding = "9px 12px";
+    const copyBtn = createButton("Copy Pricing JSON");
     copyBtn.addEventListener("click", async () => {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       copyBtn.textContent = "Copied";
@@ -309,9 +271,7 @@ export function mountBomDevPanel(
       "Tieto dve hodnoty sa pouziju rovnako v appke, v Create Sheet aj v marketingovom PDF."
     );
     const settingsGrid = document.createElement("div");
-    settingsGrid.style.display = "grid";
-    settingsGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
-    settingsGrid.style.gap = "12px";
+    settingsGrid.className = "bom-dev__settings-grid";
     settingsGrid.appendChild(
       buildNumberInput("Dodatocna praca projektu", settings.additionalLaborCost, (value) => {
         settings = sanitizeProjectQuoteSettings({ ...settings, additionalLaborCost: value });
@@ -332,33 +292,16 @@ export function mountBomDevPanel(
       "Toto je vysledok, ktory musi vyjst rovnako v appke aj v Create Sheet exporte."
     );
     const totalGrid = document.createElement("div");
-    totalGrid.style.display = "grid";
-    totalGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
-    totalGrid.style.gap = "10px";
+    totalGrid.className = "bom-dev__metrics";
     const cards = [
-      ["Material", formatCurrency(summary.materialCost)],
-      ["Praca moduly", formatCurrency(summary.moduleLaborCost)],
-      ["Praca projekt", formatCurrency(summary.additionalLaborCost)],
-      ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`],
-      ["Vysledok Create Sheet", formatCurrency(summary.finalPrice)]
+      ["Material", formatCurrency(summary.materialCost), "default" as const],
+      ["Praca moduly", formatCurrency(summary.moduleLaborCost), "default" as const],
+      ["Praca projekt", formatCurrency(summary.additionalLaborCost), "default" as const],
+      ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`, "default" as const],
+      ["Vysledok Create Sheet", formatCurrency(summary.finalPrice), "accent" as const]
     ];
-    for (const [label, value] of cards) {
-      const card = document.createElement("div");
-      card.style.padding = "14px";
-      card.style.border = "1px solid #2a3140";
-      card.style.borderRadius = "12px";
-      card.style.background = "#0d1117";
-      card.style.display = "grid";
-      card.style.gap = "4px";
-      const labelEl = document.createElement("div");
-      labelEl.textContent = label;
-      labelEl.style.color = "#9aa5ba";
-      labelEl.style.fontSize = "12px";
-      const valueEl = document.createElement("div");
-      valueEl.textContent = value;
-      valueEl.style.font = "700 20px system-ui, sans-serif";
-      card.append(labelEl, valueEl);
-      totalGrid.appendChild(card);
+    for (const [label, value, tone] of cards) {
+      totalGrid.appendChild(createMetricCard(label, value, tone));
     }
     results.appendChild(totalGrid);
     results.appendChild(
