@@ -227,6 +227,8 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
     record.height = ctx.heightMm;
     record.heightCarcass = ctx.moduleHeightMm;
     record.depth = ctx.moduleDepthMm;
+    record.plinthHeight = ctx.plinthHeightMm;
+    record.plinthSetbackMm = ctx.plinthDepthMm;
   } else if (role === "upper") {
     record.height = ctx.upperHeightMm;
     record.heightCarcass = ctx.upperHeightMm;
