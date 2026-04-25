@@ -147,8 +147,8 @@ import {
 } from "./layout/placementManager";
 import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
 import {
-  staysOutsideKitchenWorktopFootprint,
-  usesKitchenWorktopBinding
+  getKitchenModuleRole,
+  staysOutsideKitchenWorktopFootprint
 } from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
@@ -2495,13 +2495,19 @@ export function startApp(initialArgs: AppArgs) {
   const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) =>
     (("params" in instOrParams ? instOrParams.params.type : instOrParams.type) ?? null) === "corner_shelf_lower";
 
-  const moduleUsesKitchenWorktopBinding = (instOrParams: LayoutInstance | ModuleParams) =>
-    usesKitchenWorktopBinding(("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>);
-
   const moduleStaysOutsideKitchenWorktop = (instOrParams: LayoutInstance | ModuleParams) =>
     staysOutsideKitchenWorktopFootprint(
       ("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>
     );
+
+  const getKitchenModulePlacementY = (instOrParams: LayoutInstance | ModuleParams, groupId?: string | null) => {
+    const params = ("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>;
+    if (getKitchenModuleRole(params) !== "upper") return 0;
+    const effectiveGroupId = groupId ?? ("kitchenGroupId" in instOrParams ? instOrParams.kitchenGroupId : null);
+    const group = effectiveGroupId ? S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null : null;
+    const ctx = group?.ctx ?? S.kitchenCtx;
+    return ctx.upperStartHeightMm / 1000;
+  };
 
   const getModuleLocalKitchenCornerAnchor = (inst: LayoutInstance) => {
     inst.root.updateMatrixWorld(true);
@@ -2551,7 +2557,7 @@ export function startApp(initialArgs: AppArgs) {
       delta.y = 0;
       if (delta.lengthSq() <= 1e-12) return;
       inst.root.position.add(delta);
-      inst.root.position.y = 0;
+      inst.root.position.y = getKitchenModulePlacementY(inst);
       inst.root.updateMatrixWorld(true);
       return;
     }
@@ -2560,7 +2566,7 @@ export function startApp(initialArgs: AppArgs) {
     const deltaDepth = previousWorldAnchor.clone().sub(nextWorldAnchor).dot(frontDir);
     if (Math.abs(deltaDepth) <= 1e-9) return;
     inst.root.position.addScaledVector(frontDir, deltaDepth);
-    inst.root.position.y = 0;
+    inst.root.position.y = getKitchenModulePlacementY(inst);
     inst.root.updateMatrixWorld(true);
   };
 
@@ -2655,7 +2661,7 @@ export function startApp(initialArgs: AppArgs) {
       if (rotatedX.dot(xDir) < 0.999 || rotatedZ.dot(zDir) < 0.999) return null;
       const rotatedCorner = localCorner.clone().applyEuler(new THREE.Euler(0, rotationY, 0));
       const position = corner.clone().sub(rotatedCorner);
-      position.y = 0;
+      position.y = getKitchenModulePlacementY(inst, worktop.kitchenGroupId);
       return {
         binding: {
           kind: "corner" as const,
@@ -2761,7 +2767,7 @@ export function startApp(initialArgs: AppArgs) {
     groupId: string,
     backOffsetMm: number
   ): KitchenPlacementBinding | null => {
-    if (!moduleUsesKitchenWorktopBinding(inst)) return null;
+    if (moduleStaysOutsideKitchenWorktop(inst)) return null;
     const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
     if (groupWorktops.length === 0) return null;
 
@@ -2870,7 +2876,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!info) return false;
       inst.root.rotation.y = info.rotationY;
       inst.root.position.copy(info.position);
-      inst.root.position.y = 0;
+      inst.root.position.y = getKitchenModulePlacementY(inst, worktop.kitchenGroupId);
       inst.root.updateMatrixWorld(true);
       inst.kitchenPlacement = { ...info.binding };
       return true;
@@ -2892,7 +2898,7 @@ export function startApp(initialArgs: AppArgs) {
 
     inst.root.rotation.y = info.rotationY;
     inst.root.position.copy(backCenter.clone().sub(rotatedBackCenter));
-    inst.root.position.y = 0;
+    inst.root.position.y = getKitchenModulePlacementY(inst, worktop.kitchenGroupId);
     inst.root.updateMatrixWorld(true);
     inst.kitchenPlacement = {
       worktopId: binding.worktopId,
@@ -3027,7 +3033,7 @@ export function startApp(initialArgs: AppArgs) {
     const activeGroup = S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId) ?? null;
     const backOffsetMm = activeGroup?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
 
-    if (!moduleUsesKitchenWorktopBinding(ghost)) {
+    if (moduleStaysOutsideKitchenWorktop(ghost)) {
       return getTallKitchenPlacementConstraint(ghost, cursorWorld, activeWorktops, backOffsetMm);
     }
 
@@ -3137,6 +3143,7 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     if (!best) return null;
+    best.position.y = getKitchenModulePlacementY(ghost, S.activeKitchenGroupId);
     return {
       kitchenPlacement: best.binding,
       position: best.position,
@@ -3981,7 +3988,11 @@ export function startApp(initialArgs: AppArgs) {
             const prev = inst.root.position.clone();
             const prevRotationY = inst.root.rotation.y;
             const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
-            const desired = new THREE.Vector3(inst.root.position.x + dxMm / 1000, 0, inst.root.position.z + dzMm / 1000);
+            const desired = new THREE.Vector3(
+              inst.root.position.x + dxMm / 1000,
+              inst.root.position.y,
+              inst.root.position.z + dzMm / 1000
+            );
             const desiredInRoom = applyWallConstraints(inst, desired);
             let desiredPlaced = desiredInRoom.clone();
             if (instIds.length === 1 && inst.kitchenGroupId) {
@@ -8252,7 +8263,7 @@ export function startApp(initialArgs: AppArgs) {
     for (let r = 0; r < maxR; r++) {
       for (let dx = -r; dx <= r; dx++) {
         for (let dz = -r; dz <= r; dz++) {
-          const desired = new THREE.Vector3(origin.x + dx * step, 0, origin.z + dz * step);
+          const desired = new THREE.Vector3(origin.x + dx * step, origin.y, origin.z + dz * step);
           const clamped = applyWallConstraints(inst, desired);
           inst.root.position.copy(clamped);
           if (!instanceFitsRoom(inst)) continue;
@@ -8274,6 +8285,10 @@ export function startApp(initialArgs: AppArgs) {
     return ax0 < bx1 - eps && ax1 > bx0 + eps && az0 < bz1 - eps && az1 > bz0 + eps;
   }
 
+  function aabbOverlapY(a: THREE.Box3, b: THREE.Box3, eps = 0.0005) {
+    return a.min.y < b.max.y - eps && a.max.y > b.min.y + eps;
+  }
+
   function anyOverlap(moving: LayoutInstance, ignoreId: string | null) {
     const a = instanceLayoutWorldBox(moving);
     const movingRing = moduleWorldRing(moving);
@@ -8283,6 +8298,7 @@ export function startApp(initialArgs: AppArgs) {
       if (ignoreId && other.id === ignoreId) continue;
       const b = instanceLayoutWorldBox(other);
       if (!aabbOverlapXZ(a, b)) continue;
+      if (!aabbOverlapY(a, b)) continue;
       const otherRing = moduleWorldRing(other);
       if (!movingMp || otherRing.length < 4) return true;
       try {
@@ -8304,6 +8320,7 @@ export function startApp(initialArgs: AppArgs) {
       if (ignoreIds.has(other.id)) continue;
       const b = instanceLayoutWorldBox(other);
       if (!aabbOverlapXZ(a, b)) continue;
+      if (!aabbOverlapY(a, b)) continue;
       const otherRing = moduleWorldRing(other);
       if (!movingMp || otherRing.length < 4) return true;
       try {
@@ -10995,7 +11012,7 @@ export function startApp(initialArgs: AppArgs) {
       const hitPoint = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
 
-      const desired = new THREE.Vector3(hitPoint.x - dragState.offset.x, 0, hitPoint.z - dragState.offset.z);
+      const desired = new THREE.Vector3(hitPoint.x - dragState.offset.x, inst.root.position.y, hitPoint.z - dragState.offset.z);
       const desiredInRoom = applyWallConstraints(inst, desired);
       const snapped = snapPosition(inst, desiredInRoom);
       const finalPos = applyWallConstraints(inst, snapped);
@@ -12071,7 +12088,7 @@ export function startApp(initialArgs: AppArgs) {
       const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
       if (!info) throw new Error("Debug guide segment not available.");
 
-      if (!moduleUsesKitchenWorktopBinding(inst)) {
+      if (moduleStaysOutsideKitchenWorktop(inst)) {
         const desiredAlongM = clampNumber((opts?.offsetAlongMm ?? 700) / 1000, 0, info.length);
         const cursorWorld = info.start
           .clone()
@@ -12082,7 +12099,7 @@ export function startApp(initialArgs: AppArgs) {
         inst.kitchenPlacement = tallConstraint.kitchenPlacement ?? null;
         inst.root.position.copy(tallConstraint.position);
         inst.root.rotation.y = tallConstraint.rotationY;
-        inst.root.position.y = 0;
+        inst.root.position.y = getKitchenModulePlacementY(inst, groupId);
         inst.root.updateMatrixWorld(true);
       } else {
       const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
