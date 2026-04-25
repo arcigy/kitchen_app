@@ -60,6 +60,17 @@ function planFootprintCenterDeltaMm(inst) {
   return Math.round(Math.max(Math.abs(planCenterX - boxCenterX), Math.abs(planCenterZ - boxCenterZ)) * 1000);
 }
 
+function worldBoxCenterXzDeltaMm(before, after) {
+  const beforeBox = before.structuralWorldBoxM ?? before.worldBoxM;
+  const afterBox = after.structuralWorldBoxM ?? after.worldBoxM;
+  if (!beforeBox || !afterBox) return Number.POSITIVE_INFINITY;
+  const beforeCenterX = (beforeBox.min.x + beforeBox.max.x) / 2;
+  const beforeCenterZ = (beforeBox.min.z + beforeBox.max.z) / 2;
+  const afterCenterX = (afterBox.min.x + afterBox.max.x) / 2;
+  const afterCenterZ = (afterBox.min.z + afterBox.max.z) / 2;
+  return Math.round(Math.max(Math.abs(afterCenterX - beforeCenterX), Math.abs(afterCenterZ - beforeCenterZ)) * 1000);
+}
+
 async function evalApi(page, fn, arg) {
   return await page.evaluate(fn, arg);
 }
@@ -148,11 +159,11 @@ const drawerCases = [
   { key: "depth", next: (inst) => nextNumber(inst.params.depth, 80), expectGeometry: true },
   { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: true },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: true },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
+  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false },
+  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
   { key: "drawerCount", next: (inst) => nextNumber(inst.params.drawerCount, 1), expectGeometry: true },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: true },
+  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: false },
   { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: true }
 ];
 
@@ -162,7 +173,7 @@ const cornerCases = [
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
   { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
   { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
   { key: "lengthX", next: (inst) => nextNumber(inst.params.lengthX, 120), expectGeometry: true },
   { key: "lengthZ", next: (inst) => nextNumber(inst.params.lengthZ, 120), expectGeometry: true },
   { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: false },
@@ -178,7 +189,7 @@ const swingCases = [
   { key: "depth", next: (inst) => nextNumber(inst.params.depth, 80), expectGeometry: true },
   { key: "height", next: (inst) => nextNumber(inst.params.height, 80), expectGeometry: true },
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
   { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: true },
   { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 40, 0), expectGeometry: true }
 ];
@@ -822,6 +833,29 @@ async function runUpperFlapUiPlacementCases(page) {
       movedFlap
     });
   }
+  if (movedFlap) {
+    const boxCenterDeltaMm = worldBoxCenterXzDeltaMm(placedFlap, movedFlap);
+    if (boxCenterDeltaMm > 1) {
+      failures.push({
+        case: "upper_flap_ui_group_position_keeps_xz",
+        ok: false,
+        expectedMaxDeltaMm: 1,
+        actualDeltaMm: boxCenterDeltaMm,
+        before: placedFlap,
+        after: movedFlap
+      });
+    }
+    const movedFootprintDeltaMm = planFootprintCenterDeltaMm(movedFlap);
+    if (movedFootprintDeltaMm > 30) {
+      failures.push({
+        case: "upper_flap_ui_group_footprint_keeps_3d_alignment",
+        ok: false,
+        expectedMaxDeltaMm: 30,
+        actualDeltaMm: movedFootprintDeltaMm,
+        movedFlap
+      });
+    }
+  }
   if (!movedFlap || movedFlap.params.height !== 650) {
     failures.push({ case: "upper_flap_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
   }
@@ -967,6 +1001,8 @@ async function main() {
               "upper_flap_ui_plan_footprint_matches_3d",
               "upper_flap_ui_group_position_updates",
               "upper_flap_ui_group_world_bottom_updates",
+              "upper_flap_ui_group_position_keeps_xz",
+              "upper_flap_ui_group_footprint_keeps_3d_alignment",
               "upper_flap_ui_snapshot_saves_y",
               "upper_flap_ui_group_height_updates"
             ]

@@ -6861,6 +6861,25 @@ export function startApp(initialArgs: AppArgs) {
     return instances.find((x) => x.id === id) ?? null;
   }
 
+  function moduleRootLocalBox(root: THREE.Object3D, module: THREE.Object3D) {
+    root.updateMatrixWorld(true);
+    module.updateMatrixWorld(true);
+    const rootInverse = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const box = new THREE.Box3();
+    const childBox = new THREE.Box3();
+    const relativeMatrix = new THREE.Matrix4();
+    module.traverse((obj) => {
+      const geometry = (obj as THREE.Mesh | THREE.LineSegments).geometry as THREE.BufferGeometry | undefined;
+      if (!geometry) return;
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      if (!geometry.boundingBox) return;
+      relativeMatrix.multiplyMatrices(rootInverse, obj.matrixWorld);
+      childBox.copy(geometry.boundingBox).applyMatrix4(relativeMatrix);
+      box.union(childBox);
+    });
+    return box;
+  }
+
   function instanceVisualWorldBox(inst: LayoutInstance) {
     inst.root.updateMatrixWorld(true);
     return new THREE.Box3().setFromObject(inst.module);
@@ -7509,7 +7528,7 @@ export function startApp(initialArgs: AppArgs) {
     tagModuleGeometry(module, id);
     root.add(module);
 
-    const localBox = new THREE.Box3().setFromObject(module);
+    const localBox = moduleRootLocalBox(root, module);
 
     const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.1), pickMat);
@@ -8037,12 +8056,12 @@ export function startApp(initialArgs: AppArgs) {
     inst.root.remove(prevModule);
     inst.module = next;
     inst.root.add(inst.module);
-    inst.localBox = new THREE.Box3().setFromObject(inst.module);
+    inst.localBox = moduleRootLocalBox(inst.root, inst.module);
     if (opts?.preserveBackAnchor) {
       const nextLocalAnchor = getModuleLocalKitchenAnchor(inst);
       const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
       inst.module.position.add(delta);
-      inst.localBox = new THREE.Box3().setFromObject(inst.module);
+      inst.localBox = moduleRootLocalBox(inst.root, inst.module);
     }
     ensurePickAndOutline(inst);
     const keepRootPositionStable = footprintExtentsMatchXZ(prevWorldBox, instanceWorldBox(inst));
