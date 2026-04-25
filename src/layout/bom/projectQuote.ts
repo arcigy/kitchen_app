@@ -41,7 +41,7 @@ export type ProjectQuoteSummary = {
 
 export const DEFAULT_PROJECT_QUOTE_SETTINGS: ProjectQuoteSettings = {
   additionalLaborCost: 0,
-  marginPercent: 0
+  marginPercent: 20
 };
 
 function round(value: number, digits = 2) {
