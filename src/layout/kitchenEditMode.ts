@@ -9,6 +9,7 @@ import {
   resolveKitchenWorktopThickness
 } from "./kitchenMaterialSync";
 import { getDrawerLowHandleComponentOptions } from "../data/pricing/handleComponentPresets";
+import { t, translateParamLabel } from "../i18n";
 
 type TopbarApi = {
   clear: () => void;
@@ -191,7 +192,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     args.tb.clear();
     args.buildClassicTopbar();
 
-    const row = args.tb.addRow({ title: "Kitchen settings", className: "topbar-kitchen-ribbon" });
+    const row = args.tb.addRow({ title: t("Kitchen settings"), className: "topbar-kitchen-ribbon" });
     const modulesByVisualRole = {
       low: [] as ReturnType<typeof getModuleDescriptors>,
       top: [] as ReturnType<typeof getModuleDescriptors>,
@@ -234,9 +235,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       }
     };
 
-    addModuleGroup("Low", modulesByVisualRole.low);
-    addModuleGroup("Top", modulesByVisualRole.top);
-    addModuleGroup("Tall", modulesByVisualRole.tall);
+    addModuleGroup(t("Low"), modulesByVisualRole.low);
+    addModuleGroup(t("Top"), modulesByVisualRole.top);
+    addModuleGroup(t("Tall"), modulesByVisualRole.tall);
 
     if (
       modulesByVisualRole.low.length > 0 ||
@@ -246,11 +247,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       args.tb.addSpacer({ row });
     }
 
-    const worktopsGroup = args.tb.addGroup("Worktops", { row });
+    const worktopsGroup = args.tb.addGroup(t("Worktops"), { row });
     args.tb.toolButton(worktopsGroup, {
-      title: "Kresliť pracovnú dosku",
+      title: t("Draw worktop"),
       iconSvg: args.icons.worktop,
-      label: "Draw",
+      label: t("Draw"),
       onClick: () => {
         args.ensureLayoutMode();
         args.cancelPlacementIfActive();
@@ -260,20 +261,20 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     args.tb.addSpacer({ row });
 
-    const exitGroup = args.tb.addGroup("Group", { row });
+    const exitGroup = args.tb.addGroup(t("Group"), { row });
     const finishBtn = args.tb.toolButton(exitGroup, {
-      title: "Dokončiť kuchyňu",
+      title: t("Finish kitchen"),
       iconSvg: args.icons.done,
-      label: "Dokončiť",
+      label: t("Finish"),
       variant: "success",
       onClick: () => exitFinish()
     });
     void finishBtn;
 
     const cancelBtn = args.tb.toolButton(exitGroup, {
-      title: "Zrušiť",
+      title: t("Discard"),
       iconSvg: args.icons.cancel,
-      label: "Zrušiť",
+      label: t("Discard"),
       variant: "danger",
       onClick: () => exitDiscard()
     });
@@ -441,13 +442,13 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const currentName = isEditingActive ? activeName : group?.name ?? "";
     if (!ctx) return false;
 
-    args.props.setTitle("Kitchen");
+    args.props.setTitle(t("Kitchen"));
     const section = args.props.section();
 
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = currentName;
-    args.props.row(section, "Name", nameInput);
+    args.props.row(section, t("Name"), nameInput);
     const commitName = () => {
       const nextName = nameInput.value.trim() || "Kuchyňa";
       nameInput.value = nextName;
@@ -490,25 +491,25 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       });
     };
 
-    addNumberRow("Height (mm)", ctx.heightMm, (value, refreshProps) => commitCtx((base) => ({ ...base, heightMm: value }), { refreshProps }));
-    addNumberRow("Worktop depth (mm)", ctx.worktopDepthMm, (value, refreshProps) => commitCtx((base) => ({ ...base, worktopDepthMm: value }), { refreshProps }));
+    addNumberRow(translateParamLabel("heightMm"), ctx.heightMm, (value, refreshProps) => commitCtx((base) => ({ ...base, heightMm: value }), { refreshProps }));
+    addNumberRow(translateParamLabel("worktopDepthMm"), ctx.worktopDepthMm, (value, refreshProps) => commitCtx((base) => ({ ...base, worktopDepthMm: value }), { refreshProps }));
     addNumberRow(
-      "Worktop front offset (mm)",
+      translateParamLabel("worktopFrontOffsetMm"),
       ctx.worktopFrontOffsetMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, worktopFrontOffsetMm: value }), { refreshProps })
     );
     addNumberRow(
-      "Worktop back offset (mm)",
+      translateParamLabel("worktopBackOffsetMm"),
       ctx.worktopBackOffsetMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, worktopBackOffsetMm: value }), { refreshProps })
     );
     addNumberRow(
-      "Upper module position (mm)",
+      translateParamLabel("upperStartHeightMm"),
       ctx.upperStartHeightMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, upperStartHeightMm: value }), { refreshProps })
     );
     addNumberRow(
-      "Upper module height (mm)",
+      translateParamLabel("upperHeightMm"),
       ctx.upperHeightMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, upperHeightMm: value }), { refreshProps })
     );
@@ -538,22 +539,22 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     args.props.row(
       section,
-      "Fronts",
+      translateParamLabel("frontsMaterialId"),
       makeMaterialSelect("front", ctx.frontsMaterialId, (id) => commitCtx((base) => ({ ...base, frontsMaterialId: id })))
     );
     args.props.row(
       section,
-      "Corpus",
+      translateParamLabel("corpusMaterialId"),
       makeMaterialSelect("body", ctx.corpusMaterialId, (id) => commitCtx((base) => ({ ...base, corpusMaterialId: id })))
     );
     args.props.row(
       section,
-      "Back",
+      translateParamLabel("backMaterialId"),
       makeMaterialSelect("back", ctx.backMaterialId, (id) => commitCtx((base) => ({ ...base, backMaterialId: id })))
     );
     args.props.row(
       section,
-      "Drawer bottoms",
+      translateParamLabel("drawerBottomMaterialId"),
       makeMaterialSelect(
         "drawer_bottom",
         ctx.drawerBottomMaterialId,
@@ -562,7 +563,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     );
     args.props.row(
       section,
-      "Worktop",
+      translateParamLabel("worktopMaterialId"),
       makeMaterialSelect(
         "worktop",
         ctx.worktopMaterialId,
@@ -576,7 +577,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     );
     args.props.row(
       section,
-      "Handle type",
+      translateParamLabel("handleComponentId"),
       makeHandleSelect(ctx.handleComponentId, (id) => commitCtx((base) => ({ ...base, handleComponentId: id })))
     );
 
@@ -595,16 +596,16 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         worktopThicknessMm: resolveKitchenWorktopThickness(base.worktopMaterialId, next)
       }));
     });
-    args.props.row(section, "Worktop thickness", worktopThicknessSelect);
+    args.props.row(section, translateParamLabel("worktopThicknessMm"), worktopThicknessSelect);
     addNumberRow(
-      "Plinth height (mm)",
+      translateParamLabel("plinthHeightMm"),
       ctx.plinthHeightMm,
       (value, refreshProps) => commitCtx((base) => ({ ...base, plinthHeightMm: value }), { refreshProps })
     );
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";
-    editBtn.textContent = "Upraviť kuchyňu";
+    editBtn.textContent = t("Edit kitchen");
     editBtn.disabled = isEditingActive;
     editBtn.style.marginTop = "10px";
     editBtn.addEventListener("click", () => {

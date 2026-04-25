@@ -279,6 +279,20 @@ const EXACT_SK_TEXT: Record<string, string> = {
     "Umiestnenie: pohni kurzorom, klikni pre vloženie. Esc zruší."
 };
 
+const EXACT_SK_TEXT_OVERRIDES: Record<string, string> = {
+  "Draw worktop": "Kresliť pracovnú dosku",
+  "Edit kitchen": "Upraviť kuchyňu",
+  "Finish kitchen": "Dokončiť kuchyňu",
+  "Kitchen settings": "Nastavenie kuchyne",
+  "Upper module height (mm)": "Výška horných modulov (mm)",
+  "Upper module position (mm)": "Začiatok horných modulov (mm)",
+  Finish: "Dokončiť",
+  Low: "Spodné",
+  Tall: "Vysoké",
+  Top: "Horné",
+  Worktop: "Pracovná doska"
+};
+
 const PARAM_LABELS_SK: Record<string, string> = {
   assemblyContext: "Kontext zostavy",
   autoFit: "Automatické prispôsobenie",
@@ -369,6 +383,39 @@ const PARAM_LABELS_SK: Record<string, string> = {
   costOverride: "Prepis nákladov",
   customPriceOverride: "Prepis predajnej ceny",
   depthMm: "Hĺbka (mm)"
+};
+
+const PARAM_LABELS_SK_OVERRIDES: Record<string, string> = {
+  __fridgeHandleSplitScaleVersion: "Verzia delenia úchytky chladničky",
+  backMaterialId: "Materiál chrbta",
+  corpusMaterialId: "Materiál korpusu",
+  doorHandleOffsetFromSplitMm: "Odsadenie úchytky od delenia dverí (mm)",
+  doorSystem: "Systém dvierok",
+  drawerBottomMaterialId: "Materiál dna zásuvky",
+  flapOpen: "Otvorený výklop",
+  freezerDoorHeightMm: "Výška dverí mrazničky (mm)",
+  fridgeBottomClearanceMm: "Spodná vôľa chladničky (mm)",
+  fridgeDepthMm: "Hĺbka chladničky (mm)",
+  fridgeDoorGapMm: "Medzera dverí chladničky (mm)",
+  fridgeHeightMm: "Výška chladničky (mm)",
+  fridgeSideClearanceMm: "Bočná vôľa chladničky (mm)",
+  fridgeTopClearanceMm: "Horná vôľa chladničky (mm)",
+  fridgeWidthMm: "Šírka chladničky (mm)",
+  frontsMaterialId: "Materiál čiel",
+  handleComponentId: "Úchytka",
+  handleHorizontalPositionMm: "Vodorovná pozícia úchytky (mm)",
+  hangingBracketComponentId: "Závesná konzola",
+  liftUpComponentId: "Výklopný mechanizmus",
+  plinthHeightMm: "Výška sokla (mm)",
+  shelfSupportComponentId: "Podpera police",
+  shelfThickness: "Hrúbka police",
+  upperHeightMm: "Výška horných modulov (mm)",
+  upperStartHeightMm: "Začiatok horných modulov (mm)",
+  wallMounted: "Zavesené na stene",
+  worktopBackOffsetMm: "Zadné odsadenie pracovnej dosky (mm)",
+  worktopDepthMm: "Hĺbka pracovnej dosky (mm)",
+  worktopFrontOffsetMm: "Predné odsadenie pracovnej dosky (mm)",
+  worktopMaterialId: "Materiál pracovnej dosky"
 };
 
 const SYSTEM_DESCRIPTION_SK: Record<string, string> = {
@@ -521,12 +568,12 @@ export function t(text: string): string {
 
 export function translateParamLabel(key: string): string {
   if (getCurrentLanguage() !== "sk") return fallbackFormatKeyLabel(key);
-  return PARAM_LABELS_SK[key] ?? fallbackFormatKeyLabel(key);
+  return PARAM_LABELS_SK_OVERRIDES[key] ?? PARAM_LABELS_SK[key] ?? fallbackFormatKeyLabel(key);
 }
 
 export function translateParamDescription(description: string): string {
   if (getCurrentLanguage() !== "sk") return description;
-  const exact = EXACT_SK_TEXT[description] ?? SYSTEM_DESCRIPTION_SK[description];
+  const exact = EXACT_SK_TEXT_OVERRIDES[description] ?? EXACT_SK_TEXT[description] ?? SYSTEM_DESCRIPTION_SK[description];
   if (exact) return exact;
   const exportedMatch = description.match(/^Exported parameter (.+)\.$/);
   if (exportedMatch) {
@@ -537,13 +584,13 @@ export function translateParamDescription(description: string): string {
 
 export function translateEnumLabel(value: string): string {
   if (getCurrentLanguage() !== "sk") return value;
-  return EXACT_SK_TEXT[value] ?? value;
+  return EXACT_SK_TEXT_OVERRIDES[value] ?? EXACT_SK_TEXT[value] ?? value;
 }
 
 function translatePhraseKey(value: string): string {
   const normalized = value.trim().replace(/\s+mm$/i, "Mm");
   const camel = normalized.replace(/\s+([a-z])/gi, (_, chr: string) => chr.toUpperCase());
-  return PARAM_LABELS_SK[camel] ?? value;
+  return PARAM_LABELS_SK_OVERRIDES[camel] ?? PARAM_LABELS_SK[camel] ?? value;
 }
 
 function translateSlotToken(token: string): string {
@@ -623,7 +670,7 @@ function fallbackFormatKeyLabel(key: string): string {
 export function translateText(text: string): string {
   if (getCurrentLanguage() !== "sk" || !text) return text;
 
-  const exact = EXACT_SK_TEXT[text] ?? SYSTEM_DESCRIPTION_SK[text];
+  const exact = EXACT_SK_TEXT_OVERRIDES[text] ?? EXACT_SK_TEXT[text] ?? SYSTEM_DESCRIPTION_SK[text];
   if (exact) return exact;
 
   const translatedPartLabel = translatePartLabel(text);
