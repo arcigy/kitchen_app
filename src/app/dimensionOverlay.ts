@@ -228,17 +228,18 @@ export class DimensionOverlay {
   private drawReadableText(text: string, point: DimensionPoint, rawAngle: number) {
     let angle = rawAngle;
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+    const screen = this.worldToScreen(point);
 
     const ctx = this.ctx;
     ctx.save();
-    ctx.translate(point.x, point.y);
-    ctx.rotate(angle);
-    ctx.scale(1, -1);
-    ctx.font = `${14 / this.cameraZoom}px serif`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.translate(screen.x, screen.y);
+    ctx.rotate(-angle);
+    ctx.font = "14px serif";
     ctx.fillStyle = "#333333";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(text, 0, -3 / this.cameraZoom);
+    ctx.fillText(text, 0, -3);
     ctx.restore();
   }
 }
