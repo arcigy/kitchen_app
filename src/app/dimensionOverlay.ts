@@ -16,6 +16,13 @@ type DimensionLineData = {
   pointRadius?: number;
 };
 
+const DIMENSION_FONT_WORLD = 0.09;
+const DIMENSION_LINE_WIDTH_WORLD = 0.0015;
+const DIMENSION_ARROW_WORLD = 0.035;
+const DIMENSION_OFFSET_WORLD = 0.05;
+const DIMENSION_POINT_RADIUS_WORLD = 0.015;
+const DIMENSION_TEXT_NUDGE_WORLD = 0.015;
+
 export class DimensionOverlay {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
@@ -123,15 +130,14 @@ export class DimensionOverlay {
 
     const dir = { x: dx / length, y: dy / length };
     const offset = this.offsetVector(offsetDir);
-    const s = 50 / this.cameraZoom;
-    const offsetStart = { x: startPoint.x + offset.x * s, y: startPoint.y + offset.y * s };
-    const offsetEnd = { x: endPoint.x + offset.x * s, y: endPoint.y + offset.y * s };
+    const offsetStart = { x: startPoint.x + offset.x * DIMENSION_OFFSET_WORLD, y: startPoint.y + offset.y * DIMENSION_OFFSET_WORLD };
+    const offsetEnd = { x: endPoint.x + offset.x * DIMENSION_OFFSET_WORLD, y: endPoint.y + offset.y * DIMENSION_OFFSET_WORLD };
 
     const ctx = this.ctx;
     ctx.save();
     ctx.strokeStyle = "#333333";
     ctx.fillStyle = "#333333";
-    ctx.lineWidth = 0.6 / this.cameraZoom;
+    ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -145,13 +151,7 @@ export class DimensionOverlay {
       x: (offsetStart.x + offsetEnd.x) / 2,
       y: (offsetStart.y + offsetEnd.y) / 2
     };
-    const startScreen = this.worldToScreen(offsetStart);
-    const endScreen = this.worldToScreen(offsetEnd);
-    const screenLength = Math.hypot(endScreen.x - startScreen.x, endScreen.y - startScreen.y);
-    const text = String(Math.round(length * this.unitScale));
-    if (screenLength >= Math.max(42, text.length * 8 + 10)) {
-      this.drawReadableText(text, midpoint, Math.atan2(dy, dx));
-    }
+    this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, Math.atan2(dy, dx));
     ctx.restore();
   }
 
@@ -177,7 +177,7 @@ export class DimensionOverlay {
     ctx.save();
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = 0.6 / this.cameraZoom;
+    ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     this.strokeSegment(lineData.start, lineData.end);
@@ -202,7 +202,6 @@ export class DimensionOverlay {
   }
 
   private drawArrowTip(tip: DimensionPoint, inwardDir: DimensionPoint) {
-    const size = 5 / this.cameraZoom;
     const angle = 0.55;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -217,14 +216,14 @@ export class DimensionOverlay {
 
     const ctx = this.ctx;
     ctx.beginPath();
-    ctx.moveTo(tip.x + wingA.x * size, tip.y + wingA.y * size);
+    ctx.moveTo(tip.x + wingA.x * DIMENSION_ARROW_WORLD, tip.y + wingA.y * DIMENSION_ARROW_WORLD);
     ctx.lineTo(tip.x, tip.y);
-    ctx.lineTo(tip.x + wingB.x * size, tip.y + wingB.y * size);
+    ctx.lineTo(tip.x + wingB.x * DIMENSION_ARROW_WORLD, tip.y + wingB.y * DIMENSION_ARROW_WORLD);
     ctx.stroke();
   }
 
   private drawPoint(point: DimensionPoint, pointRadius: number) {
-    const radius = pointRadius / this.cameraZoom;
+    const radius = pointRadius * DIMENSION_POINT_RADIUS_WORLD;
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
@@ -234,18 +233,17 @@ export class DimensionOverlay {
   private drawReadableText(text: string, point: DimensionPoint, rawAngle: number) {
     let angle = rawAngle;
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
-    const screen = this.worldToScreen(point);
 
     const ctx = this.ctx;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.translate(screen.x, screen.y);
-    ctx.rotate(-angle);
-    ctx.font = "14px serif";
+    ctx.translate(point.x, point.y);
+    ctx.rotate(angle);
+    ctx.scale(1, -1);
+    ctx.font = `${DIMENSION_FONT_WORLD}px serif`;
     ctx.fillStyle = "#333333";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(text, 0, -3);
+    ctx.fillText(text, 0, -DIMENSION_TEXT_NUDGE_WORLD);
     ctx.restore();
   }
 }
