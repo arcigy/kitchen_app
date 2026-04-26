@@ -42,6 +42,7 @@ import {
   type MeasureSelectionTarget
 } from "./app/measureEditing";
 import { createSnapOverlay } from "./app/snapOverlay";
+import { DimensionOverlay } from "./app/dimensionOverlay";
 import {
   areAlignLinesParallel,
   buildModuleAlignCandidates,
@@ -196,6 +197,8 @@ export function startApp(initialArgs: AppArgs) {
   const cam = () => getCamera();
   const ctl = () => getControls();
   renderer.localClippingEnabled = true;
+  const dimensionOverlay = new DimensionOverlay(renderer, cam());
+  dimensionOverlay.unitScale = 1000;
 
   setDaylightIntensity(9);
 
@@ -347,6 +350,54 @@ export function startApp(initialArgs: AppArgs) {
 
   const kitchenWorktops: KitchenWorktopInstance[] = [];
   let worktopCounter = 1;
+
+  const renderDimensionOverlay = () => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    dimensionOverlay.setSize(rect.width, rect.height);
+    dimensionOverlay.clearDimensions();
+
+    const activeCam = cam();
+    const isFloorplan = mode === "layout" && viewMode === "2d" && activeViewerTab === "floorplan";
+    dimensionOverlay.setVisible(isFloorplan);
+    if (!isFloorplan || !(activeCam instanceof THREE.OrthographicCamera)) return;
+
+    const scaleX = (rect.width / Math.max(1e-9, Math.abs(activeCam.right - activeCam.left))) * activeCam.zoom;
+    const scaleY = (rect.height / Math.max(1e-9, Math.abs(activeCam.top - activeCam.bottom))) * activeCam.zoom;
+    const scale = Math.max(1e-6, Math.min(scaleX, scaleY));
+    const target = ctl().target;
+    dimensionOverlay.syncCamera(scale, -target.x, -target.z);
+
+    const ids =
+      selectedInstanceIds.size > 0
+        ? Array.from(selectedInstanceIds)
+        : selectedKind === "module" && selectedInstanceId
+          ? [selectedInstanceId]
+          : [];
+    if (ids.length === 0) {
+      dimensionOverlay.updateLines();
+      return;
+    }
+
+    const box = new THREE.Box3();
+    for (const id of ids) {
+      const inst = instances.find((item) => item.id === id);
+      if (inst) box.expandByObject(inst.root);
+    }
+    if (box.isEmpty()) {
+      dimensionOverlay.updateLines();
+      return;
+    }
+
+    const width = Math.abs(box.max.x - box.min.x);
+    const depth = Math.abs(box.max.z - box.min.z);
+    if (width > 1e-6) {
+      dimensionOverlay.addDimension({ x: box.min.x, y: -box.max.z }, { x: box.max.x, y: -box.max.z }, "bottom");
+    }
+    if (depth > 1e-6) {
+      dimensionOverlay.addDimension({ x: box.max.x, y: -box.max.z }, { x: box.max.x, y: -box.min.z }, "right");
+    }
+    dimensionOverlay.updateLines();
+  };
 
   const history = {
     past: [] as LayoutSnapshot[],
@@ -9435,6 +9486,7 @@ export function startApp(initialArgs: AppArgs) {
     const w = args.viewerEl.clientWidth;
     const h = args.viewerEl.clientHeight;
     setSize(w, h);
+    dimensionOverlay.setSize(w, h);
     ssgi?.setSize(w, h);
     photo?.setSize(w, h);
   });
@@ -12638,6 +12690,7 @@ export function startApp(initialArgs: AppArgs) {
       }
       renderer.render(scene, activeCam);
     }
+    renderDimensionOverlay();
     requestAnimationFrame(tick);
   };
   tick();
