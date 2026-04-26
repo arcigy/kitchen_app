@@ -6,7 +6,7 @@ import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
 
 export type AppMode = "build" | "layout";
-export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section";
+export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "section" | null;
 export type WallId = "back" | "left" | "right";

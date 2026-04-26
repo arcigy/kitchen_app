@@ -3,11 +3,22 @@ import * as THREE from "three";
 export type DimensionPoint = { x: number; y: number };
 export type DimensionOffsetDirection = "bottom" | "top" | "left" | "right";
 
-type DimensionDescriptor = {
+type OffsetDimensionDescriptor = {
+  kind: "offset";
   start: DimensionPoint;
   end: DimensionPoint;
   offsetDirection: DimensionOffsetDirection;
 };
+
+type PlacedDimensionDescriptor = {
+  kind: "placed";
+  start: DimensionPoint;
+  end: DimensionPoint;
+  extensionStart: DimensionPoint;
+  extensionEnd: DimensionPoint;
+};
+
+type DimensionDescriptor = OffsetDimensionDescriptor | PlacedDimensionDescriptor;
 
 type DimensionLineData = {
   start: DimensionPoint;
@@ -77,9 +88,25 @@ export class DimensionOverlay {
 
   addDimension(startWorld: DimensionPoint, endWorld: DimensionPoint, offsetDirection: DimensionOffsetDirection) {
     this.dimensions.push({
+      kind: "offset",
       start: { x: startWorld.x, y: startWorld.y },
       end: { x: endWorld.x, y: endWorld.y },
       offsetDirection
+    });
+  }
+
+  addPlacedDimension(
+    startWorld: DimensionPoint,
+    endWorld: DimensionPoint,
+    extensionStartWorld = startWorld,
+    extensionEndWorld = endWorld
+  ) {
+    this.dimensions.push({
+      kind: "placed",
+      start: { x: startWorld.x, y: startWorld.y },
+      end: { x: endWorld.x, y: endWorld.y },
+      extensionStart: { x: extensionStartWorld.x, y: extensionStartWorld.y },
+      extensionEnd: { x: extensionEndWorld.x, y: extensionEndWorld.y }
     });
   }
 
@@ -116,7 +143,11 @@ export class DimensionOverlay {
     );
 
     for (const dimension of this.dimensions) {
-      this.drawSize(dimension.start, dimension.end, dimension.offsetDirection);
+      if (dimension.kind === "placed") {
+        this.drawPlacedSize(dimension.start, dimension.end, dimension.extensionStart, dimension.extensionEnd);
+      } else {
+        this.drawSize(dimension.start, dimension.end, dimension.offsetDirection);
+      }
     }
 
     ctx.restore();
@@ -150,6 +181,35 @@ export class DimensionOverlay {
     const midpoint = {
       x: (offsetStart.x + offsetEnd.x) / 2,
       y: (offsetStart.y + offsetEnd.y) / 2
+    };
+    this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, Math.atan2(dy, dx));
+    ctx.restore();
+  }
+
+  drawPlacedSize(startPoint: DimensionPoint, endPoint: DimensionPoint, extensionStart: DimensionPoint, extensionEnd: DimensionPoint) {
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1e-9) return;
+
+    const dir = { x: dx / length, y: dy / length };
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = "#333333";
+    ctx.fillStyle = "#333333";
+    ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    this.strokeSegment(extensionStart, startPoint);
+    this.strokeSegment(extensionEnd, endPoint);
+    this.strokeSegment(startPoint, endPoint);
+    this.drawArrowTip(startPoint, dir);
+    this.drawArrowTip(endPoint, { x: -dir.x, y: -dir.y });
+
+    const midpoint = {
+      x: (startPoint.x + endPoint.x) / 2,
+      y: (startPoint.y + endPoint.y) / 2
     };
     this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, Math.atan2(dy, dx));
     ctx.restore();

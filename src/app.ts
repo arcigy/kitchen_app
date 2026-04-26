@@ -209,7 +209,7 @@ export function startApp(initialArgs: AppArgs) {
   let activeViewerTab = "3d";
   let activeDetailClipPlanes: THREE.Plane[] = [];
 
-  type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section";
+  type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewPanOffset!: THREE.Vector3;
@@ -351,6 +351,23 @@ export function startApp(initialArgs: AppArgs) {
   const kitchenWorktops: KitchenWorktopInstance[] = [];
   let worktopCounter = 1;
 
+  type TechnicalDimensionPoint = { x: number; y: number };
+  type TechnicalDimensionRecord = {
+    id: string;
+    start: TechnicalDimensionPoint;
+    end: TechnicalDimensionPoint;
+    extensionStart: TechnicalDimensionPoint;
+    extensionEnd: TechnicalDimensionPoint;
+  };
+
+  const technicalDimensions: TechnicalDimensionRecord[] = [];
+  let technicalDimensionCounter = 1;
+  const dimensionState = {
+    picked: [] as AlignPickedLine[],
+    hover: null as AlignPickedLine | null,
+    preview: [] as TechnicalDimensionRecord[]
+  };
+
   const renderDimensionOverlay = () => {
     const rect = renderer.domElement.getBoundingClientRect();
     dimensionOverlay.setSize(rect.width, rect.height);
@@ -367,34 +384,11 @@ export function startApp(initialArgs: AppArgs) {
     const target = ctl().target;
     dimensionOverlay.syncCamera(scale, -target.x, -target.z);
 
-    const ids =
-      selectedInstanceIds.size > 0
-        ? Array.from(selectedInstanceIds)
-        : selectedKind === "module" && selectedInstanceId
-          ? [selectedInstanceId]
-          : [];
-    if (ids.length === 0) {
-      dimensionOverlay.updateLines();
-      return;
+    for (const dim of technicalDimensions) {
+      dimensionOverlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
     }
-
-    const box = new THREE.Box3();
-    for (const id of ids) {
-      const inst = instances.find((item) => item.id === id);
-      if (inst) box.expandByObject(inst.root);
-    }
-    if (box.isEmpty()) {
-      dimensionOverlay.updateLines();
-      return;
-    }
-
-    const width = Math.abs(box.max.x - box.min.x);
-    const depth = Math.abs(box.max.z - box.min.z);
-    if (width > 1e-6) {
-      dimensionOverlay.addDimension({ x: box.min.x, y: -box.max.z }, { x: box.max.x, y: -box.max.z }, "bottom");
-    }
-    if (depth > 1e-6) {
-      dimensionOverlay.addDimension({ x: box.max.x, y: -box.max.z }, { x: box.max.x, y: -box.min.z }, "right");
+    for (const dim of dimensionState.preview) {
+      dimensionOverlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
     }
     dimensionOverlay.updateLines();
   };
@@ -979,6 +973,75 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     return pickBestAlignLine(mousePx, rect, cam(), candidates, 12);
+  };
+
+  const linePointToDimensionPoint = (p: THREE.Vector3): TechnicalDimensionPoint => ({ x: p.x, y: -p.z });
+
+  const dimensionLineKey = (line: AlignPickedLine) => {
+    const owner = line.wallId ?? line.instanceId ?? line.worktopId ?? "";
+    const seg = line.segmentIndex ?? "";
+    return [
+      line.targetKind,
+      owner,
+      seg,
+      line.lineRole,
+      line.segA.x.toFixed(4),
+      line.segA.z.toFixed(4),
+      line.segB.x.toFixed(4),
+      line.segB.z.toFixed(4)
+    ].join(":");
+  };
+
+  const isDimensionLinePicked = (line: AlignPickedLine) => dimensionState.picked.some((picked) => dimensionLineKey(picked) === dimensionLineKey(line));
+
+  const pointOnPickedLineAt = (line: AlignPickedLine, dir: THREE.Vector3, along: number) => {
+    const base = line.p.dot(dir);
+    return line.p.clone().addScaledVector(dir, along - base);
+  };
+
+  const buildDimensionsFromPickedLines = (lines: AlignPickedLine[], placement: THREE.Vector3, idPrefix: string) => {
+    if (lines.length < 2) return [] as TechnicalDimensionRecord[];
+    const dir = lines[0]!.dir.clone().setY(0);
+    if (dir.lengthSq() < 1e-10) return [] as TechnicalDimensionRecord[];
+    dir.normalize();
+    const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    const placementAlong = placement.dot(dir);
+
+    const anchors = lines
+      .map((line) => {
+        const signed = line.p.clone().sub(lines[0]!.p).dot(normal);
+        const aAlong = line.segA.dot(dir);
+        const bAlong = line.segB.dot(dir);
+        const edgeAlong = clamp(placementAlong, Math.min(aAlong, bAlong), Math.max(aAlong, bAlong));
+        return {
+          signed,
+          anchor: pointOnPickedLineAt(line, dir, placementAlong),
+          extension: pointOnPickedLineAt(line, dir, edgeAlong)
+        };
+      })
+      .sort((a, b) => a.signed - b.signed);
+
+    const dims: TechnicalDimensionRecord[] = [];
+    for (let i = 0; i < anchors.length - 1; i += 1) {
+      const a = anchors[i]!;
+      const b = anchors[i + 1]!;
+      if (a.anchor.distanceToSquared(b.anchor) < 1e-10) continue;
+      dims.push({
+        id: `${idPrefix}-${i}`,
+        start: linePointToDimensionPoint(a.anchor),
+        end: linePointToDimensionPoint(b.anchor),
+        extensionStart: linePointToDimensionPoint(a.extension),
+        extensionEnd: linePointToDimensionPoint(b.extension)
+      });
+    }
+    return dims;
+  };
+
+  const resetDimensionDraft = () => {
+    dimensionState.picked = [];
+    dimensionState.hover = null;
+    dimensionState.preview = [];
+    clearToolHud();
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -3582,6 +3645,18 @@ export function startApp(initialArgs: AppArgs) {
       return true;
     }
 
+    if (layoutTool === "dimension") {
+      if (dimensionState.picked.length > 0) {
+        resetDimensionDraft();
+        setUnderlayStatus("Kóta: výber zrušený. Vyber prvú čiaru.");
+      } else {
+        setToolSelect();
+        setUnderlayStatus("Kóta: stopped.");
+      }
+      ev.preventDefault();
+      return true;
+    }
+
     if (layoutTool === "section") {
       if (sectionDraw.a) {
         sectionDraw.a = null;
@@ -3649,6 +3724,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "select";
     deactivateMeasureTool();
+    resetDimensionDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3666,6 +3742,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "wall";
     deactivateMeasureTool();
+    resetDimensionDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3687,6 +3764,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "align";
     deactivateMeasureTool();
+    resetDimensionDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3705,6 +3783,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "trim";
     deactivateMeasureTool();
+    resetDimensionDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3726,6 +3805,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "section";
     deactivateMeasureTool();
+    resetDimensionDraft();
     clearWallDrawState();
     cancelKitchenWorktopDraw({ silent: true });
     cancelSectionDraw({ silent: true });
@@ -3767,6 +3847,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "measure";
     measureState.enabled = true;
+    resetDimensionDraft();
     measureState.firstPoint = null;
     measureState.firstBinding = null;
     measureState.hoverPoint = null;
@@ -3790,6 +3871,32 @@ export function startApp(initialArgs: AppArgs) {
     args.measureBtn.textContent = "Measure: On";
     args.measureReadoutEl.textContent = "Measure: klikni prvý bod.";
     setUnderlayStatus("Measure: klikni prvý roh alebo hranu.");
+    mountProps();
+  };
+
+  const setToolDimension = () => {
+    if (layoutTool === "dimension") {
+      setToolSelect();
+      return;
+    }
+    ensureLayoutMode();
+    if (placement.active) cancelPlacement(S, placementHelpers);
+    layoutTool = "dimension";
+    deactivateMeasureTool();
+    resetDimensionDraft();
+    clearWallDrawState();
+    cancelSectionDraw({ silent: true });
+    cancelKitchenWorktopDraw({ silent: true });
+    ensureFloorplanViewerTab();
+    selectedKind = null;
+    selectedWallId = null;
+    selectedFloorId = null;
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    syncSelectionState();
+    updateSelectionHighlights();
+    setUnderlayStatus("Kóta: vyber prvú čiaru, potom ďalšie rovnobežné čiary. Klik do voľného miesta vloží kótu.");
     mountProps();
   };
 
@@ -6787,6 +6894,12 @@ export function startApp(initialArgs: AppArgs) {
     tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
     tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: I_SECTION, onClick: () => setToolSection() });
     tb.toolButton(tools, {
+      title: "Dimension",
+      label: "Kóta",
+      iconSvg: I_DIM,
+      onClick: () => setToolDimension()
+    });
+    tb.toolButton(tools, {
       title: "Measure",
       label: "Measure",
       iconSvg: I_DIM,
@@ -9780,6 +9893,62 @@ export function startApp(initialArgs: AppArgs) {
         }
       }
 
+      if (layoutTool === "dimension") {
+        if (viewMode !== "2d") return;
+        if (ev.button !== 0) return;
+
+        const hitPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+
+        const rect2 = renderer.domElement.getBoundingClientRect();
+        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
+        const picked = pickAlignLineAt(hitPoint, mouse, rect2);
+
+        if (picked) {
+          if (dimensionState.picked.length > 0 && !areAlignLinesParallel(dimensionState.picked[0]!, picked)) {
+            setUnderlayStatus("Kóta: ďalšia čiara musí byť rovnobežná s prvou.");
+            ev.preventDefault();
+            ev.stopPropagation();
+            return;
+          }
+          if (isDimensionLinePicked(picked)) {
+            setUnderlayStatus("Kóta: táto čiara už je vybraná.");
+            ev.preventDefault();
+            ev.stopPropagation();
+            return;
+          }
+          dimensionState.picked.push(picked);
+          dimensionState.preview = [];
+          setUnderlayStatus(
+            dimensionState.picked.length === 1
+              ? "Kóta: vyber ďalšiu rovnobežnú čiaru."
+              : `Kóta: vybrané ${dimensionState.picked.length} čiary. Pridaj ďalšiu alebo klikni do voľného miesta.`
+          );
+          mountProps();
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+
+        if (dimensionState.picked.length < 2) {
+          setUnderlayStatus("Kóta: najprv vyber aspoň dve rovnobežné čiary.");
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+
+        const dims = buildDimensionsFromPickedLines(dimensionState.picked, hitPoint, "dimension");
+        for (const dim of dims) {
+          technicalDimensions.push({ ...dim, id: `dimension-${technicalDimensionCounter++}` });
+        }
+        resetDimensionDraft();
+        setUnderlayStatus(dims.length > 0 ? `Kóta: vložené ${dims.length}. Vyber ďalšiu prvú čiaru.` : "Kóta: nepodarilo sa vložiť.");
+        mountProps();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
+
       if (layoutTool === "align") {
         if (viewMode !== "2d") return;
         if (ev.button !== 0) return;
@@ -10748,6 +10917,40 @@ export function startApp(initialArgs: AppArgs) {
       if (underlayOffZEl) underlayOffZEl.value = String(underlayState.offsetMm.z);
       if (selectedUnderlayBox) (selectedUnderlayBox as any).update?.();
       return;
+    }
+
+    if (mode === "layout" && viewMode === "2d" && layoutTool === "dimension") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      pointerNdc.set(x, y);
+      raycaster.setFromCamera(pointerNdc, cam());
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+        dimensionState.hover = null;
+        dimensionState.preview = [];
+        clearToolHud();
+      } else {
+        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+        const picked = pickAlignLineAt(hitPoint, mouse, rect);
+        const canPick = !picked || dimensionState.picked.length === 0 || areAlignLinesParallel(dimensionState.picked[0]!, picked);
+        const thick = hudLineThicknessM(rect);
+        dimensionState.hover = canPick ? picked : null;
+        if (dimensionState.hover) updateHudLine(hudHoverLine, dimensionState.hover.segA, dimensionState.hover.segB, thick);
+        else hudHoverLine.visible = false;
+
+        if (dimensionState.picked[0]) updateHudLine(hudPickLine1, dimensionState.picked[0].segA, dimensionState.picked[0].segB, thick);
+        else hudPickLine1.visible = false;
+
+        const lastPicked = dimensionState.picked.length > 1 ? dimensionState.picked[dimensionState.picked.length - 1] : null;
+        if (lastPicked) updateHudLine(hudPickLine2, lastPicked.segA, lastPicked.segB, thick);
+        else hudPickLine2.visible = false;
+
+        dimensionState.preview =
+          !picked && dimensionState.picked.length >= 2
+            ? buildDimensionsFromPickedLines(dimensionState.picked, hitPoint, "preview")
+            : [];
+      }
     }
 
     if (mode === "layout" && viewMode === "2d" && (layoutTool === "align" || layoutTool === "trim")) {
