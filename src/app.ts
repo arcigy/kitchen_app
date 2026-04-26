@@ -11547,62 +11547,7 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const updateModuleEditHud = () => {
-    if (mode !== "layout" || viewMode !== "2d" || activeViewerTab !== "floorplan" || layoutTool !== "select") {
-      hideModuleEditHud();
-      return;
-    }
-    if (measureState.enabled || dragState.active || wallEditHud.drag) {
-      hideModuleEditHud();
-      return;
-    }
-    if (selectedKind !== "module" || !selectedInstanceId) {
-      hideModuleEditHud();
-      return;
-    }
-    const inst = findInstance(selectedInstanceId) ?? null;
-    const widthMm = inst ? getEditableModuleWidthMm(inst) : null;
-    if (!inst || widthMm == null) {
-      hideModuleEditHud();
-      return;
-    }
-
-    const rect = renderer.domElement.getBoundingClientRect();
-    const localMin = inst.localBox.min;
-    const localMax = inst.localBox.max;
-    const midZ = (localMin.z + localMax.z) * 0.5;
-    const baseA = new THREE.Vector3(localMin.x, 0, midZ);
-    const baseB = new THREE.Vector3(localMax.x, 0, midZ);
-    const widthDir = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, inst.root.rotation.y, 0)).normalize();
-    const normal = new THREE.Vector3(-widthDir.z, 0, widthDir.x).normalize();
-    const offset = normal.multiplyScalar(0.08);
-    const a = baseA.clone().applyMatrix4(inst.root.matrixWorld).add(offset);
-    const b = baseB.clone().applyMatrix4(inst.root.matrixWorld).add(offset);
-    const aBase = baseA.clone().applyMatrix4(inst.root.matrixWorld);
-    const bBase = baseB.clone().applyMatrix4(inst.root.matrixWorld);
-    const sa = worldToScreen(a, cam(), rect);
-    const sb = worldToScreen(b, cam(), rect);
-    const saBase = worldToScreen(aBase, cam(), rect);
-    const sbBase = worldToScreen(bBase, cam(), rect);
-    const sm = { x: (sa.x + sb.x) * 0.5, y: (sa.y + sb.y) * 0.5 };
-
-    const setLine = (el: HTMLDivElement, p0: { x: number; y: number }, p1: { x: number; y: number }) => {
-      const dx = p1.x - p0.x;
-      const dy = p1.y - p0.y;
-      const len = Math.max(0.001, Math.hypot(dx, dy));
-      el.style.left = `${p0.x}px`;
-      el.style.top = `${p0.y}px`;
-      el.style.width = `${len}px`;
-      el.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-      el.style.display = "block";
-    };
-
-    setLine(moduleEditHud.widthLine, sa, sb);
-    setLine(moduleEditHud.widthExtA, saBase, sa);
-    setLine(moduleEditHud.widthExtB, sbBase, sb);
-    moduleEditHud.label.textContent = `${widthMm} mm`;
-    moduleEditHud.label.style.left = `${sm.x}px`;
-    moduleEditHud.label.style.top = `${sm.y}px`;
-    moduleEditHud.label.style.display = moduleEditHud.input.style.display === "block" ? "none" : "block";
+    hideModuleEditHud();
   };
 
   const refreshAssociativeMeasures = () => {

@@ -145,7 +145,13 @@ export class DimensionOverlay {
       x: (offsetStart.x + offsetEnd.x) / 2,
       y: (offsetStart.y + offsetEnd.y) / 2
     };
-    this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, Math.atan2(dy, dx));
+    const startScreen = this.worldToScreen(offsetStart);
+    const endScreen = this.worldToScreen(offsetEnd);
+    const screenLength = Math.hypot(endScreen.x - startScreen.x, endScreen.y - startScreen.y);
+    const text = String(Math.round(length * this.unitScale));
+    if (screenLength >= Math.max(42, text.length * 8 + 10)) {
+      this.drawReadableText(text, midpoint, Math.atan2(dy, dx));
+    }
     ctx.restore();
   }
 
