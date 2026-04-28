@@ -58,12 +58,10 @@ import {
   type ModuleAdjacencyLink
 } from "./app/moduleAdjacency";
 import {
-  buildSectionMarkerGeometry,
   cloneSectionParams,
   buildPlaneSliceStripGeometry,
   computeElevationViewConfig,
   computeSectionViewConfig,
-  createSectionPickGeometry,
   getSectionBasis
 } from "./app/sectionViews";
 import {
@@ -111,12 +109,6 @@ import type { SsgiPipeline } from "./rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
-import {
-  cloneFloorParams as cloneFloorParamsBase,
-  floorMaterialColor,
-  makeFloorGeometry,
-  makeFloorOutlineGeometry
-} from "./app/floorGeometry";
 import {
   cloneFloorSegments,
   floorBoundaryToSegments,
@@ -217,6 +209,9 @@ import { createMeasureValueCommitter } from "./app/measureValueCommitter";
 import { createBuildSelectionController } from "./app/buildSelectionController";
 import { createPropertiesRouter } from "./app/propertiesRouter";
 import { createFloorBoundaryController } from "./app/floorBoundaryController";
+import { createFloorController } from "./app/floorController";
+import { createSectionController } from "./app/sectionController";
+import { createSectionDrawController } from "./app/sectionDrawController";
 import { topbarIcons } from "./app/topbarIcons";
 import { createToolModeController } from "./app/toolModeController";
 import { createSelectionController } from "./app/selectionController";
@@ -622,186 +617,42 @@ export function startApp(initialArgs: AppArgs) {
 
 
 
-  const cloneFloorParams = (params: FloorParams): FloorParams => cloneFloorParamsBase(params, floorDefault.materialId);
+  const floorController = createFloorController({
+    S,
+    layoutRoot,
+    floors,
+    floorDefault,
+    getFloorCounter: () => floorCounter,
+    setFloorCounter: (next) => { floorCounter = next; },
+    getSelectedFloorId: () => selectedFloorId,
+    setSelectedFloorId: (next) => { selectedFloorId = next; }
+  });
+  const cloneFloorParams = floorController.cloneFloorParams;
+  const rebuildFloor = floorController.rebuildFloor;
+  const createFloor = floorController.createFloor;
+  const deleteFloor = floorController.deleteFloor;
+  const restoreFloorsFromSnapshot = floorController.restoreFloorsFromSnapshot;
 
-  function rebuildFloor(floor: FloorInstance) {
-    floor.params.heightMm = Math.round(floor.params.heightMm);
-    floor.params.thicknessMm = Math.max(1, Math.round(floor.params.thicknessMm));
-    floor.params.materialId = floor.params.materialId ?? floorDefault.materialId;
-    floor.mesh.geometry.dispose();
-    floor.mesh.geometry = makeFloorGeometry(floor.params);
-    const mat = floor.mesh.material as THREE.MeshBasicMaterial;
-    mat.color.setHex(floorMaterialColor(floor.params.materialId));
-    mat.transparent = false;
-    mat.opacity = 1;
-    mat.depthWrite = true;
-    floor.mesh.position.y = floor.params.heightMm / 1000;
-    floor.outline.geometry.dispose();
-    floor.outline.geometry = makeFloorOutlineGeometry(floor.params);
-    floor.outline.position.set(0, 0, 0);
-  }
-
-  function createFloor(params: FloorParams, opts?: { id?: string; skipHistory?: boolean }) {
-    const id = opts?.id ?? `f${floorCounter++}`;
-    if (opts?.id) {
-      const m = /^f(\d+)$/.exec(id);
-      const n = m ? Number(m[1]) : NaN;
-      if (Number.isFinite(n) && n >= floorCounter) floorCounter = n + 1;
-    }
-    S.floorCounter = floorCounter;
-
-    const root = new THREE.Group();
-    root.name = `floor_${id}`;
-    const mesh = new THREE.Mesh(
-      makeFloorGeometry(params),
-      new THREE.MeshBasicMaterial({ color: floorMaterialColor(params.materialId ?? floorDefault.materialId) })
-    );
-    mesh.name = `floorMesh_${id}`;
-    mesh.userData.kind = "floor";
-    mesh.userData.floorId = id;
-    mesh.renderOrder = 4;
-    mesh.position.y = params.heightMm / 1000;
-    root.add(mesh);
-
-    const outline = new THREE.Line(
-      makeFloorOutlineGeometry(params),
-      new THREE.LineBasicMaterial({ color: 0x5c8cff, transparent: true, opacity: 0.9, depthTest: true, depthWrite: false })
-    );
-    outline.name = `floorOutline_${id}`;
-    outline.userData.kind = "floor";
-    outline.userData.floorId = id;
-    outline.renderOrder = 55;
-    outline.visible = true;
-    root.add(outline);
-
-    const floor: FloorInstance = { id, params: cloneFloorParams(params), root, mesh, outline };
-    layoutRoot.add(root);
-    floors.push(floor);
-    rebuildFloor(floor);
-    if (!opts?.skipHistory) commitHistory(S);
-    return floor;
-  }
-
-  function deleteFloor(id: string, opts?: { skipHistory?: boolean }) {
-    const idx = floors.findIndex((floor) => floor.id === id);
-    if (idx < 0) return;
-    const floor = floors[idx];
-    layoutRoot.remove(floor.root);
-    disposeObject3D(floor.root);
-    floors.splice(idx, 1);
-    if (selectedFloorId === id) selectedFloorId = null;
-    if (!opts?.skipHistory) commitHistory(S);
-  }
-
-  function restoreFloorsFromSnapshot(nextFloors: Array<{ id: string; params: FloorParams }>, nextCounter?: number) {
-    for (const floor of floors.splice(0, floors.length)) {
-      layoutRoot.remove(floor.root);
-      disposeObject3D(floor.root);
-    }
-    floorCounter = nextCounter ?? 1;
-    S.floorCounter = floorCounter;
-    for (const floor of nextFloors) {
-      createFloor(cloneFloorParams(floor.params), { id: floor.id, skipHistory: true });
-    }
-  }
-
-  const updateSectionVisual = (section: SectionInstance) => {
-    const nextParams = cloneSectionParams(section.params);
-    section.params = nextParams;
-
-    section.line.geometry.dispose();
-    section.arrows.geometry.dispose();
-    section.pick.geometry.dispose();
-
-    const geom = buildSectionMarkerGeometry(nextParams);
-    section.line.geometry = geom.line;
-    section.arrows.geometry = geom.arrows;
-    section.pick.geometry = createSectionPickGeometry(nextParams);
-
-    const selected = selectedKind === "section" && selectedSectionId === section.id;
-    (section.line.material as THREE.LineBasicMaterial).color.setHex(selected ? 0x2ac46d : 0x253245);
-    (section.arrows.material as THREE.LineBasicMaterial).color.setHex(selected ? 0x2ac46d : 0x253245);
-    const visible = mode === "layout" && viewMode === "2d" && activeViewerTab === "floorplan";
-    section.root.visible = visible;
-  };
-
-  const getNextSectionName = () => `Section ${Math.max(1, sections.length + 1)}`;
-
-  const createSectionInstance = (params: SectionParams, opts?: { id?: string; skipHistory?: boolean }) => {
-    const id = opts?.id ?? `s${sectionCounter++}`;
-    if (opts?.id) {
-      const match = /^s(\d+)$/.exec(id);
-      if (match) sectionCounter = Math.max(sectionCounter, Number(match[1]) + 1);
-    }
-    S.sectionCounter = sectionCounter;
-
-    const root = new THREE.Group();
-    root.name = `section_${id}`;
-
-    const line = new THREE.LineSegments(
-      new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0x253245, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
-    );
-    line.name = `sectionLine_${id}`;
-    line.renderOrder = 62;
-    line.userData.kind = "section";
-    line.userData.sectionId = id;
-    line.frustumCulled = false;
-    root.add(line);
-
-    const arrows = new THREE.LineSegments(
-      new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0x253245, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
-    );
-    arrows.name = `sectionArrows_${id}`;
-    arrows.renderOrder = 63;
-    arrows.userData.kind = "section";
-    arrows.userData.sectionId = id;
-    arrows.frustumCulled = false;
-    root.add(arrows);
-
-    const pick = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.001, 0.001),
-      new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0 })
-    );
-    pick.name = `sectionPick_${id}`;
-    pick.userData.kind = "section";
-    pick.userData.sectionId = id;
-    root.add(pick);
-
-    const section: SectionInstance = { id, params: cloneSectionParams(params), root, line, arrows, pick };
-    layoutRoot.add(root);
-    sections.push(section);
-    updateSectionVisual(section);
-    refreshViewerTabs();
-    if (!opts?.skipHistory) commitHistory(S);
-    return section;
-  };
-
-  const deleteSectionInstance = (id: string, opts?: { skipHistory?: boolean }) => {
-    const index = sections.findIndex((section) => section.id === id);
-    if (index < 0) return;
-    const section = sections[index]!;
-    layoutRoot.remove(section.root);
-    disposeObject3D(section.root);
-    sections.splice(index, 1);
-    if (selectedSectionId === id) selectedSectionId = null;
-    if (activeViewerTab === `section:${id}`) activeViewerTab = "floorplan";
-    updateAllSectionVisuals();
-    if (!opts?.skipHistory) commitHistory(S);
-  };
-
-  const restoreSectionsFromSnapshot = (nextSections: Array<{ id: string; params: SectionParams }>, nextCounter?: number) => {
-    for (const section of sections.splice(0, sections.length)) {
-      layoutRoot.remove(section.root);
-      disposeObject3D(section.root);
-    }
-    sectionCounter = nextCounter ?? 1;
-    S.sectionCounter = sectionCounter;
-    for (const section of nextSections) {
-      createSectionInstance(cloneSectionParams(section.params), { id: section.id, skipHistory: true });
-    }
-  };
+  const sectionController = createSectionController({
+    S,
+    layoutRoot,
+    sections,
+    getSectionCounter: () => sectionCounter,
+    setSectionCounter: (next) => { sectionCounter = next; },
+    getSelectedKind: () => selectedKind,
+    getSelectedSectionId: () => selectedSectionId,
+    setSelectedSectionId: (next) => { selectedSectionId = next; },
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    setActiveViewerTab: (next) => { activeViewerTab = next; },
+    refreshViewerTabs: () => refreshViewerTabs()
+  });
+  const updateSectionVisual = sectionController.updateSectionVisual;
+  const getNextSectionName = sectionController.getNextSectionName;
+  const createSectionInstance = sectionController.createSectionInstance;
+  const deleteSectionInstance = sectionController.deleteSectionInstance;
+  const restoreSectionsFromSnapshot = sectionController.restoreSectionsFromSnapshot;
 
   const applyAlignBetweenPickedLines = (ref: AlignPickedLine, picked: AlignPickedLine) => {
     if (!areAlignLinesParallel(ref, picked)) {
@@ -1027,82 +878,10 @@ export function startApp(initialArgs: AppArgs) {
     );
   };
 
-  const updateSectionDrawPreview = () => {
-    if (!sectionDraw.a || !sectionDraw.hoverPoint) {
-      if (sectionDraw.previewRoot) sectionDraw.previewRoot.visible = false;
-      return;
-    }
-    if (!sectionDraw.previewRoot) {
-      sectionDraw.previewRoot = new THREE.Group();
-      sectionDraw.previewRoot.name = "sectionDrawPreview";
-      sectionDraw.previewLine = new THREE.LineSegments(
-        new THREE.BufferGeometry(),
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
-      );
-      sectionDraw.previewLine.renderOrder = 66;
-      sectionDraw.previewArrows = new THREE.LineSegments(
-        new THREE.BufferGeometry(),
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
-      );
-      sectionDraw.previewArrows.renderOrder = 67;
-      sectionDraw.previewRoot.add(sectionDraw.previewLine, sectionDraw.previewArrows);
-      layoutRoot.add(sectionDraw.previewRoot);
-    }
-    const params: SectionParams = {
-      name: "",
-      aMm: { x: sectionDraw.a.x, z: sectionDraw.a.z },
-      bMm: { x: sectionDraw.hoverPoint.x, z: sectionDraw.hoverPoint.z },
-      mirrored: sectionDraw.mirrored
-    };
-    const geom = buildSectionMarkerGeometry(params);
-    sectionDraw.previewLine!.geometry.dispose();
-    sectionDraw.previewLine!.geometry = geom.line;
-    sectionDraw.previewArrows!.geometry.dispose();
-    sectionDraw.previewArrows!.geometry = geom.arrows;
-    const color = sectionDraw.axisLocked ? 0x2ac46d : 0x3ddc97;
-    (sectionDraw.previewLine!.material as THREE.LineBasicMaterial).color.setHex(color);
-    (sectionDraw.previewArrows!.material as THREE.LineBasicMaterial).color.setHex(color);
-    sectionDraw.previewRoot.visible = true;
-  };
-
-  const cancelSectionDraw = (opts?: { silent?: boolean }) => {
-    sectionDraw.active = false;
-    sectionDraw.mirrored = false;
-    sectionDraw.axisLocked = false;
-    sectionDraw.a = null;
-    sectionDraw.hoverPoint = null;
-    sectionDrawSnap = null;
-    if (sectionDraw.previewRoot) {
-      layoutRoot.remove(sectionDraw.previewRoot);
-      disposeObject3D(sectionDraw.previewRoot);
-      sectionDraw.previewRoot = null;
-      sectionDraw.previewLine = null;
-      sectionDraw.previewArrows = null;
-    }
-    hideHoverCursor();
-    drawSnapOverlay.hide();
-    if (!opts?.silent) {
-      setUnderlayStatus("");
-      mountProps();
-    }
-  };
-
-  const commitSectionDraw = (bMm: FloorBoundaryPoint) => {
-    if (!sectionDraw.a) return false;
-    if (Math.hypot(bMm.x - sectionDraw.a.x, bMm.z - sectionDraw.a.z) < 5) return false;
-    const section = createSectionInstance({
-      name: getNextSectionName(),
-      aMm: { x: sectionDraw.a.x, z: sectionDraw.a.z },
-      bMm,
-      mirrored: sectionDraw.mirrored
-    });
-    cancelSectionDraw({ silent: true });
-    setSelectedSection(section.id);
-    activateViewerTab(`section:${section.id}`);
-    setUnderlayStatus(`Section ${section.params.name} created.`);
-    mountProps();
-    return true;
-  };
+  let sectionDrawController!: ReturnType<typeof createSectionDrawController>;
+  const updateSectionDrawPreview = () => sectionDrawController.updateSectionDrawPreview();
+  const cancelSectionDraw = (opts?: { silent?: boolean }) => sectionDrawController.cancelSectionDraw(opts);
+  const commitSectionDraw = (bMm: FloorBoundaryPoint) => sectionDrawController.commitSectionDraw(bMm);
 
   const handleKitchenWorktopEscape = () => {
     if (!kitchenWorktopDraw.active) return false;
@@ -2892,6 +2671,20 @@ export function startApp(initialArgs: AppArgs) {
     syncViewerTabs(activeViewerTab);
   };
 
+  sectionDrawController = createSectionDrawController({
+    layoutRoot,
+    sectionDraw,
+    drawSnapOverlay,
+    setSectionDrawSnap: (next) => { sectionDrawSnap = next; },
+    hideHoverCursor,
+    setUnderlayStatus,
+    mountProps,
+    createSectionInstance,
+    getNextSectionName,
+    setSelectedSection,
+    activateViewerTab
+  });
+
   const updateDetailViewCamera = () => {
     if (!isCustomOrthoView()) return;
     const bounds = getNavigationSceneBounds();
@@ -2909,10 +2702,7 @@ export function startApp(initialArgs: AppArgs) {
     updateDetailSliceOverlay();
   };
 
-  const updateAllSectionVisuals = () => {
-    for (const section of sections) updateSectionVisual(section);
-    refreshViewerTabs();
-  };
+  const updateAllSectionVisuals = sectionController.updateAllSectionVisuals;
   refreshViewerTabs();
 
   function resolveKitchenWorktopDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
