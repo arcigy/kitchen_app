@@ -45,6 +45,7 @@ import {
 import { createSnapOverlay } from "./app/snapOverlay";
 import { DimensionOverlay } from "./app/dimensionOverlay";
 import { createTechnicalDimensionManager } from "./app/technicalDimensions";
+import { distPointToSegment2, distPxPointToSeg } from "./app/screenGeometry";
 import {
   areAlignLinesParallel,
   buildModuleAlignCandidates,
@@ -916,19 +917,6 @@ export function startApp(initialArgs: AppArgs) {
     lastUntilMs: 0
   };
 
-  const distPxPointToSeg = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
-    const abx = bx - ax;
-    const aby = by - ay;
-    const apx = px - ax;
-    const apy = py - ay;
-    const denom = abx * abx + aby * aby;
-    if (denom < 1e-9) return Math.hypot(apx, apy);
-    const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / denom));
-    const cx = ax + abx * t;
-    const cy = ay + aby * t;
-    return Math.hypot(px - cx, py - cy);
-  };
-
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     const candidates: AlignPickedLine[] = [];
 
@@ -1156,26 +1144,6 @@ export function startApp(initialArgs: AppArgs) {
     // Rebuild after edits so joins update.
     for (const w of walls) rebuildWall(w);
     rebuildWallPlanMesh();
-  }
-
-  function dist2(a: { x: number; y: number }, b: { x: number; y: number }) {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return dx * dx + dy * dy;
-  }
-
-  function distPointToSegment2(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) {
-    const abx = b.x - a.x;
-    const aby = b.y - a.y;
-    const apx = p.x - a.x;
-    const apy = p.y - a.y;
-    const denom = abx * abx + aby * aby;
-    const t = denom > 1e-9 ? Math.max(0, Math.min(1, (apx * abx + apy * aby) / denom)) : 0;
-    const cx = a.x + abx * t;
-    const cy = a.y + aby * t;
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    return { d2: dx * dx + dy * dy, t };
   }
 
   function pickWallLine2D(raw: THREE.Vector3, rect: DOMRect, camera: THREE.Camera, maxPx = 14): PickedLine2D | null {
