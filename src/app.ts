@@ -122,6 +122,19 @@ import {
   makeFloorOutlineGeometry
 } from "./app/floorGeometry";
 import {
+  cloneFloorSegments,
+  floorBoundaryToSegments,
+  floorOrthoPoint as computeFloorOrthoPoint,
+  floorPointDistMm,
+  floorPointEq,
+  floorPointToWorld,
+  floorSegmentsToBoundary,
+  makeFloorCirclePoints,
+  moveFloorEditSegment as moveFloorEditSegmentBase,
+  moveFloorEditVertex as moveFloorEditVertexBase,
+  worldToFloorPoint
+} from "./app/floorBoundaryEdit";
+import {
   cloneKitchenWorktopParams,
   kitchenWorktopOutlineColor,
   makeKitchenWorktopBackGuideGeometry,
@@ -5367,24 +5380,12 @@ export function startApp(initialArgs: AppArgs) {
 
   syncDrawOrthoUi();
 
-  const floorPointDistMm = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => Math.hypot(a.x - b.x, a.z - b.z);
-  const floorPointEq = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, tolMm = 3) => floorPointDistMm(a, b) <= tolMm;
-  const worldToFloorPoint = (point: THREE.Vector3): FloorBoundaryPoint => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) });
-  const floorPointToWorld = (point: FloorBoundaryPoint, y = 0.055) => new THREE.Vector3(point.x / 1000, y, point.z / 1000);
-  const cloneFloorSegments = (segments: FloorBoundarySegment[]) => segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } }));
-
   const floorOrthoPoint = (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => {
-    if (!drawOrthoEnabled) return raw;
-    const dx = raw.x - start.x;
-    const dz = raw.z - start.z;
-    return Math.abs(dx) >= Math.abs(dz) ? { x: raw.x, z: start.z } : { x: start.x, z: raw.z };
+    return computeFloorOrthoPoint(start, raw, drawOrthoEnabled);
   };
 
   const moveFloorEditVertex = (startSegments: FloorBoundarySegment[], startPoint: FloorBoundaryPoint, nextPoint: FloorBoundaryPoint) => {
-    floorEdit.segments = startSegments.map((segment) => ({
-      a: floorPointEq(segment.a, startPoint) ? { ...nextPoint } : { ...segment.a },
-      b: floorPointEq(segment.b, startPoint) ? { ...nextPoint } : { ...segment.b }
-    }));
+    floorEdit.segments = moveFloorEditVertexBase(startSegments, startPoint, nextPoint);
   };
 
   const moveFloorEditSegment = (
@@ -5393,16 +5394,7 @@ export function startApp(initialArgs: AppArgs) {
     startWorld: FloorBoundaryPoint,
     nextWorld: FloorBoundaryPoint
   ) => {
-    const segment = startSegments[segmentIndex];
-    if (!segment) return;
-    const dx = nextWorld.x - startWorld.x;
-    const dz = nextWorld.z - startWorld.z;
-    const nextA = { x: segment.a.x + dx, z: segment.a.z + dz };
-    const nextB = { x: segment.b.x + dx, z: segment.b.z + dz };
-    floorEdit.segments = startSegments.map((item) => ({
-      a: floorPointEq(item.a, segment.a) ? { ...nextA } : floorPointEq(item.a, segment.b) ? { ...nextB } : { ...item.a },
-      b: floorPointEq(item.b, segment.a) ? { ...nextA } : floorPointEq(item.b, segment.b) ? { ...nextB } : { ...item.b }
-    }));
+    floorEdit.segments = moveFloorEditSegmentBase(startSegments, segmentIndex, startWorld, nextWorld);
   };
 
   const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) => {
@@ -5427,46 +5419,6 @@ export function startApp(initialArgs: AppArgs) {
     }
     if (bestSegment) return { kind: "segment" as const, segmentIndex: bestSegment.segmentIndex };
     return null;
-  };
-
-  const floorBoundaryToSegments = (boundary: FloorBoundaryPoint[]) => {
-    const segments: FloorBoundarySegment[] = [];
-    for (let i = 0; i < boundary.length; i++) {
-      const a = boundary[i];
-      const b = boundary[(i + 1) % boundary.length];
-      segments.push({ a: { ...a }, b: { ...b } });
-    }
-    return segments;
-  };
-
-  const floorSegmentsToBoundary = (segments: FloorBoundarySegment[]) => {
-    if (segments.length < 3) return null as FloorBoundaryPoint[] | null;
-    const remaining = segments.map((segment) => ({ a: { ...segment.a }, b: { ...segment.b } }));
-    const first = remaining.shift()!;
-    const boundary: FloorBoundaryPoint[] = [{ ...first.a }, { ...first.b }];
-
-    let closed = false;
-    while (remaining.length > 0) {
-      const current = boundary[boundary.length - 1];
-      const index = remaining.findIndex((segment) => floorPointEq(segment.a, current) || floorPointEq(segment.b, current));
-      if (index < 0) break;
-      const [next] = remaining.splice(index, 1);
-      boundary.push(floorPointEq(next.a, current) ? { ...next.b } : { ...next.a });
-      if (boundary.length >= 4 && floorPointEq(boundary[boundary.length - 1], boundary[0])) {
-        boundary.pop();
-        closed = true;
-        break;
-      }
-    }
-
-    if (!closed && floorPointEq(boundary[boundary.length - 1], boundary[0])) {
-      boundary.pop();
-      closed = true;
-    }
-    if (boundary.length < 3) return null;
-    if (!closed) return null;
-    if (remaining.length > 0) return null;
-    return boundary;
   };
 
   const clearFloorBoundaryGroup = () => {
@@ -5527,16 +5479,6 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     floorBoundaryGroup.visible = floorEdit.active;
-  };
-
-  const makeFloorCirclePoints = (center: FloorBoundaryPoint, edge: FloorBoundaryPoint) => {
-    const radius = Math.max(1, floorPointDistMm(center, edge));
-    const points: FloorBoundaryPoint[] = [];
-    for (let i = 0; i < 48; i++) {
-      const a = (i / 48) * Math.PI * 2;
-      points.push({ x: Math.round(center.x + Math.cos(a) * radius), z: Math.round(center.z + Math.sin(a) * radius) });
-    }
-    return points;
   };
 
   const setFloorBoundaryTool = (tool: FloorBoundaryTool) => {
