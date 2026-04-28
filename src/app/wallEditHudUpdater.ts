@@ -1,7 +1,29 @@
 import * as THREE from "three";
-import type { WallInstance } from "./localTypes";
+import type { LayoutTool } from "../layout/appState";
+import type { SelectedKind, WallInstance } from "./localTypes";
+import type { MeasureState, WallEditHud } from "./measureTools";
 
-export function createWallEditHudUpdater(ctx: any) {
+type ScreenPoint = { x: number; y: number };
+
+type WallEditHudUpdaterContext = {
+  cam: () => THREE.Camera;
+  clamp: (value: number, min: number, max: number) => number;
+  fromMmPoint: (point: { x: number; z: number }) => THREE.Vector3;
+  hideWallEditHud: () => void;
+  layoutTool: LayoutTool;
+  measureState: Pick<MeasureState, "enabled">;
+  mmDist: (a: { x: number; z: number }, b: { x: number; z: number }) => number;
+  mode: "build" | "layout";
+  renderer: THREE.WebGLRenderer;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  viewMode: "2d" | "3d";
+  wallEditHud: WallEditHud;
+  walls: WallInstance[];
+  worldToScreen: (point: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) => ScreenPoint;
+};
+
+export function createWallEditHudUpdater(ctx: WallEditHudUpdaterContext) {
   const updateWallEditHud = () => {
     if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") {
       ctx.hideWallEditHud();
@@ -19,7 +41,7 @@ export function createWallEditHudUpdater(ctx: any) {
       ctx.hideWallEditHud();
       return;
     }
-    const w = ctx.walls.find((x: WallInstance) => x.id === ctx.selectedWallId) ?? null;
+    const w = ctx.walls.find((x) => x.id === ctx.selectedWallId) ?? null;
     if (!w) {
       ctx.hideWallEditHud();
       return;
