@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import type { AppState } from "../layout/appState";
 import type { FloorBoundaryPoint, KitchenWorktopInstance, KitchenWorktopParams } from "./localTypes";
+import type { PlanSnapResult } from "./planSnap";
 import { disposeObject3D } from "../core/dispose";
 import { commitHistory } from "../layout/historyManager";
 import { sanitizeKitchenWorktopPath } from "../layout/worktopGeometry";
@@ -13,19 +15,55 @@ import {
   makeKitchenWorktopPreviewGeometry
 } from "./kitchenWorktopVisuals";
 
-export type WorktopControllerContext = Record<string, any>;
+type KitchenWorktopDrawState = {
+  active: boolean;
+  justification: KitchenWorktopParams["justification"];
+  mirrored: boolean;
+  points: FloorBoundaryPoint[];
+  hoverPoint: FloorBoundaryPoint | null;
+  typedMm: string;
+  previewUpdatePending: boolean;
+  previewSignature: string;
+  previewMaterialId: string;
+  previewRoot: THREE.Group | null;
+  previewMesh: THREE.Mesh | null;
+  previewOutline: THREE.Line | null;
+  previewBackLine: THREE.Line | null;
+};
+
+export type WorktopControllerContext = {
+  kitchenWorktops: KitchenWorktopInstance[];
+  layoutRoot: THREE.Group;
+  S: AppState;
+  kitchenWorktopDraw: KitchenWorktopDrawState;
+  wallTypedHud: HTMLElement;
+  getKitchenWorktopBackGuidePath: (params: KitchenWorktopParams, backOffsetMm?: number) => THREE.Vector3[];
+  hideHoverCursor: () => void;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  setUnderlayStatus: (text: string) => void;
+  mountProps: () => void;
+  getViewMode: () => "2d" | "3d";
+  getActiveViewerTab: () => string;
+  nextWorktopId: () => string;
+  ensureWorktopCounter: (next: number) => void;
+  syncWorktopCounter: () => void;
+  setWorktopCounter: (next: number) => void;
+  setWorktopDrawSnap: (snap: PlanSnapResult | null) => void;
+  getSelectedKind: () => string | null;
+  getSelectedWallId: () => string | null;
+};
 
 export function createWorktopController(ctx: WorktopControllerContext) {
-  const kitchenWorktops = ctx.kitchenWorktops as KitchenWorktopInstance[];
-  const layoutRoot = ctx.layoutRoot as THREE.Group;
+  const kitchenWorktops = ctx.kitchenWorktops;
+  const layoutRoot = ctx.layoutRoot;
   const S = ctx.S;
   const kitchenWorktopDraw = ctx.kitchenWorktopDraw;
-  const wallTypedHud = ctx.wallTypedHud as HTMLElement;
-  const getKitchenWorktopBackGuidePath = ctx.getKitchenWorktopBackGuidePath as (params: KitchenWorktopParams, backOffsetMm?: number) => THREE.Vector3[];
-  const hideHoverCursor = ctx.hideHoverCursor as () => void;
-  const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor as (wallId: string | null) => void;
-  const setUnderlayStatus = ctx.setUnderlayStatus as (text: string) => void;
-  const mountProps = ctx.mountProps as () => void;
+  const wallTypedHud = ctx.wallTypedHud;
+  const getKitchenWorktopBackGuidePath = ctx.getKitchenWorktopBackGuidePath;
+  const hideHoverCursor = ctx.hideHoverCursor;
+  const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor;
+  const setUnderlayStatus = ctx.setUnderlayStatus;
+  const mountProps = ctx.mountProps;
 
   const makeCurrentKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) =>
     makeKitchenWorktopBackGuideGeometry(params, getKitchenWorktopBackGuidePath(params));
