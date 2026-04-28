@@ -193,7 +193,7 @@ import { createExportActions } from "./app/exportActions";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { renderAppFrame } from "./app/frameRenderer";
-import { createModulePlacementHelpers } from "./app/modulePlacementHelpers";
+import { createModulePlacementHelpers, type AdjacentModuleInfo, type ModulePlacementSnapOptions } from "./app/modulePlacementHelpers";
 import {
   ensurePickAndOutline as ensurePickAndOutlineBase,
   footprintExtentsMatchXZ,
@@ -2316,9 +2316,9 @@ export function startApp(initialArgs: AppArgs) {
   function moduleWorldRing(inst: LayoutInstance) { return modulePlacementHelpers.moduleWorldRing(inst); }
   function moduleOverlapsKitchenWorktops(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsKitchenWorktops(inst); }
   function moduleOverlapsWalls(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsWalls(inst); }
-  function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: Record<string, unknown>) { return modulePlacementHelpers.snapPositionDetailed(moving, desired, opts); }
+  function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: ModulePlacementSnapOptions) { return modulePlacementHelpers.snapPositionDetailed(moving, desired, opts); }
   function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) { return modulePlacementHelpers.collectAdjacentModuleInfos(inst, referenceBox); }
-  function chooseResizeAnchorSide(inst: LayoutInstance, infos: any[]) { return modulePlacementHelpers.chooseResizeAnchorSide(inst, infos); }
+  function chooseResizeAnchorSide(inst: LayoutInstance, infos: AdjacentModuleInfo[]) { return modulePlacementHelpers.chooseResizeAnchorSide(inst, infos); }
   function inferTallResizeAnchorSide(inst: LayoutInstance) { return modulePlacementHelpers.inferTallResizeAnchorSide(inst); }
   function preserveAnchoredResizeSide(inst: LayoutInstance, prevWorldBox: THREE.Box3, anchorSide: "left" | "right" | "front" | "back" | null) { return modulePlacementHelpers.preserveAnchoredResizeSide(inst, prevWorldBox, anchorSide); }
   function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) { return modulePlacementHelpers.nudgePinnedModuleChain(inst, delta); }

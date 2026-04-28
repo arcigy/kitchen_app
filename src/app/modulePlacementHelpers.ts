@@ -1,12 +1,66 @@
 import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import { getModulePlanPolygon } from "./planSnap";
-import { buildModuleSnapCandidates, detectModuleAdjacencyInfo, type ModuleAdjacencyLink } from "./moduleAdjacency";
+import { buildModuleSnapCandidates, detectModuleAdjacencyInfo, type ModuleAdjacencyInfo, type ModuleAdjacencyLink } from "./moduleAdjacency";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
-import type { KitchenWorktopInstance, LayoutInstance } from "./localTypes";
+import type { KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { AppState } from "../layout/appState";
 
-export type ModulePlacementHelpersContext = Record<string, any>;
+type PolygonPoint = [number, number];
+type PolygonRing = PolygonPoint[];
+type Polygon = PolygonRing[];
+type MultiPolygon = Polygon[];
+type ResizeAnchorSide = "left" | "right" | "front" | "back";
+
+type PolygonClipper = {
+  intersection: (...polygons: MultiPolygon[]) => MultiPolygon;
+};
+
+const polygonClipper = polygonClipping as PolygonClipper;
+
+export type ModulePlacementSnapOptions = {
+  stickyNeighborId?: string | null;
+  ignoreIds?: Set<string>;
+  snapDistanceM?: number;
+  enforceWallConstraints?: boolean;
+  enforceWallOverlap?: boolean;
+};
+
+export type AdjacentModuleInfo = ModuleAdjacencyInfo & { other: LayoutInstance };
+
+export type ModulePlacementHelpersContext = {
+  instances: LayoutInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
+  walls: WallInstance[];
+  S: Pick<AppState, "kitchenCtx" | "kitchenGroups">;
+  roomBounds: { halfW: number; halfD: number };
+  wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
+  moduleAdjacencyGroup: THREE.Group;
+  placementAdjacencyPreview: THREE.Line;
+  instanceLayoutWorldBox: (inst: LayoutInstance) => THREE.Box3;
+  instanceWorldBox: (inst: LayoutInstance) => THREE.Box3;
+  instanceFitsRoom: (inst: LayoutInstance) => boolean;
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  moduleStaysOutsideKitchenWorktop: (inst: LayoutInstance | ModuleParams) => boolean;
+  isCornerKitchenModule: (instOrParams: LayoutInstance | ModuleParams) => boolean;
+  applyKitchenPlacementBinding: (inst: LayoutInstance, binding: NonNullable<LayoutInstance["kitchenPlacement"]>, backOffsetMm: number) => boolean;
+  getKitchenCornerArmBindingInfo: (
+    inst: LayoutInstance,
+    backOffsetMm: number
+  ) => { worktopId: string; xSegmentIndex: number | null; zSegmentIndex: number | null } | null;
+  getKitchenGuideSegmentInfo: (
+    worktop: KitchenWorktopInstance,
+    segmentIndex: number,
+    backOffsetMm: number
+  ) => { start: THREE.Vector3; dir: THREE.Vector3; length: number } | null;
+  getKitchenWorktopBackGuidePath: (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
+  findInstance: (id: string) => LayoutInstance | null;
+  getWallUnionPolys: () => MultiPolygon | null;
+  getWallSolvedJoinPolys: () => Array<Array<{ x: number; z: number }>>;
+  getViewMode: () => "2d" | "3d";
+  getActiveViewerTab: () => string;
+};
 
 export function createModulePlacementHelpers(ctx: ModulePlacementHelpersContext) {
   const {
@@ -77,7 +131,7 @@ function anyOverlap(moving: LayoutInstance, ignoreId: string | null) {
     const otherRing = moduleWorldRing(other);
     if (!movingMp || otherRing.length < 4) return true;
     try {
-      const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
+      const inter = polygonClipper.intersection(movingMp, [[otherRing]]);
       if (multiPolyArea(inter) > 1e-6) return true;
     } catch {
       return true;
@@ -99,7 +153,7 @@ function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) {
     const otherRing = moduleWorldRing(other);
     if (!movingMp || otherRing.length < 4) return true;
     try {
-      const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
+      const inter = polygonClipper.intersection(movingMp, [[otherRing]]);
       if (multiPolyArea(inter) > 1e-6) return true;
     } catch {
       return true;
@@ -118,12 +172,12 @@ function polyArea(ring: Array<[number, number]>) {
   return a / 2;
 }
 
-function multiPolyArea(mp: any) {
+function multiPolyArea(mp: MultiPolygon | null | undefined) {
   if (!mp || !Array.isArray(mp)) return 0;
   let sum = 0;
-  for (const poly of mp as any[]) {
+  for (const poly of mp) {
     if (!poly || poly.length === 0) continue;
-    const rings = poly as any[];
+    const rings = poly;
     const outer = rings[0] as Array<[number, number]>;
     if (!outer || outer.length < 4) continue;
     let a = Math.abs(polyArea(outer));
@@ -162,7 +216,7 @@ function moduleOverlapsKitchenWorktops(inst: LayoutInstance) {
     const ring = worktopWorldRing(worktop);
     if (ring.length < 4) continue;
     try {
-      const inter = (polygonClipping as any).intersection([[ring]], moduleMp);
+      const inter = polygonClipper.intersection([[ring]], moduleMp);
       if (multiPolyArea(inter) > 1e-6) return true;
     } catch {
       // ignore broken clipping input and keep fallback-free behavior
@@ -179,7 +233,7 @@ function moduleOverlapsWalls(inst: LayoutInstance) {
   const wallMp = ctx.getWallUnionPolys();
   if (wallMp) {
     try {
-      const inter = (polygonClipping as any).intersection(wallMp, moduleMp);
+      const inter = polygonClipper.intersection(wallMp, moduleMp);
       const area = multiPolyArea(inter);
       return area > 1e-6; // ~1mm^2 in m^2
     } catch {
@@ -193,12 +247,12 @@ function moduleOverlapsWalls(inst: LayoutInstance) {
     if (r.length > 0) r.push(r[0]);
     return r;
   };
-  const polys: any[] = [];
+  const polys: MultiPolygon[] = [];
   for (const poly of wallSolvedOutlines.values()) if (poly.length >= 3) polys.push([[toRing(poly)]]);
   for (const poly of ctx.getWallSolvedJoinPolys()) if (poly.length >= 3) polys.push([[toRing(poly)]]);
   for (const wmp of polys) {
     try {
-      const inter = (polygonClipping as any).intersection(wmp, moduleMp);
+      const inter = polygonClipper.intersection(wmp, moduleMp);
       const area = multiPolyArea(inter);
       if (area > 1e-6) return true;
     } catch {
@@ -208,17 +262,7 @@ function moduleOverlapsWalls(inst: LayoutInstance) {
   return false;
 }
 
-function snapPositionDetailed(
-  moving: LayoutInstance,
-  desired: THREE.Vector3,
-  opts?: {
-    stickyNeighborId?: string | null;
-    ignoreIds?: Set<string>;
-    snapDistanceM?: number;
-    enforceWallConstraints?: boolean;
-    enforceWallOverlap?: boolean;
-  }
-) {
+function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: ModulePlacementSnapOptions) {
   if (isCornerKitchenModule(moving)) {
     return { position: desired.clone(), link: null };
   }
@@ -267,7 +311,7 @@ function snapPositionDetailed(
   return { position: best, link: bestLink };
 }
 
-function collectPinnedPushChain(startId: string, side: "left" | "right" | "front" | "back") {
+function collectPinnedPushChain(startId: string, side: ResizeAnchorSide) {
   const queue = [startId];
   const visited = new Set<string>([startId]);
   const result: string[] = [];
@@ -294,7 +338,7 @@ function collectPinnedPushChain(startId: string, side: "left" | "right" | "front
 
 function collectPinnedPushChainFromBoxes(
   startId: string,
-  side: "left" | "right" | "front" | "back",
+  side: ResizeAnchorSide,
   boxesById: Map<string, THREE.Box3>,
   kitchenGroupId: string | null
 ) {
@@ -324,7 +368,7 @@ function collectPinnedPushChainFromBoxes(
 }
 
 function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) {
-  const infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }> = [];
+  const infos: AdjacentModuleInfo[] = [];
   for (const other of instances) {
     if (other.id === inst.id) continue;
     if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
@@ -335,10 +379,10 @@ function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanc
   return infos;
 }
 
-function chooseResizeAnchorSide(_inst: LayoutInstance, infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }>) {
+function chooseResizeAnchorSide(_inst: LayoutInstance, infos: AdjacentModuleInfo[]) {
   if (infos.length === 0) return null;
 
-  const bySide = new Map<"left" | "right" | "front" | "back", Array<(typeof infos)[number]>>();
+  const bySide = new Map<ResizeAnchorSide, Array<(typeof infos)[number]>>();
   for (const info of infos) {
     const list = bySide.get(info.side) ?? [];
     list.push(info);
@@ -346,8 +390,8 @@ function chooseResizeAnchorSide(_inst: LayoutInstance, infos: Array<ReturnType<t
   }
 
   const choosePreferredCornerSide = (
-    primary: "left" | "right" | "front" | "back",
-    secondary: "left" | "right" | "front" | "back"
+    primary: ResizeAnchorSide,
+    secondary: ResizeAnchorSide
   ) => {
     const primaryInfos = bySide.get(primary) ?? [];
     const secondaryInfos = bySide.get(secondary) ?? [];
@@ -379,13 +423,13 @@ function inferTallResizeAnchorSide(inst: LayoutInstance) {
   const halfModuleWidthM =
     Number.isFinite(widthMm) && widthMm > 0 ? widthMm / 2000 : Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
   const backCenterWorld = getModuleLocalBackCenter(inst).clone().applyMatrix4(inst.root.matrixWorld);
-    const group = S.kitchenGroups.find((item: any) => item.id === inst.kitchenGroupId) ?? null;
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
   const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
 
   let best:
     | {
         distanceSq: number;
-        anchorSide: "left" | "right" | "front" | "back";
+        anchorSide: ResizeAnchorSide;
       }
     | null = null;
 
@@ -406,7 +450,7 @@ function inferTallResizeAnchorSide(inst: LayoutInstance) {
             anchorSide: worldDirectionToBoxSide(lastInfo.dir.clone().multiplyScalar(-1))
           }
         : null
-    ].filter((candidate): candidate is { point: THREE.Vector3; anchorSide: "left" | "right" | "front" | "back" } => candidate != null);
+    ].filter((candidate): candidate is { point: THREE.Vector3; anchorSide: ResizeAnchorSide } => candidate != null);
 
     for (const candidate of candidates) {
       const distanceSq = candidate.point.distanceToSquared(backCenterWorld);
@@ -422,7 +466,7 @@ function inferTallResizeAnchorSide(inst: LayoutInstance) {
 function preserveAnchoredResizeSide(
   inst: LayoutInstance,
   prevWorldBox: THREE.Box3,
-  anchorSide: "left" | "right" | "front" | "back" | null
+  anchorSide: ResizeAnchorSide | null
 ) {
   if (!anchorSide) return;
   const nextWorldBox = instanceWorldBox(inst);
@@ -470,7 +514,7 @@ function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
 
 function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) {
   if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
-    const group = S.kitchenGroups.find((item: any) => item.id === inst.kitchenGroupId) ?? null;
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
   if (!group) return { ok: true, movedIds: [] as string[] };
   void previousParams;
 
@@ -502,7 +546,7 @@ function propagateModuleResizeToPinnedNeighbors(
   if (!inst.kitchenGroupId) return { ok: true, movedIds: [] as string[] };
 
   const nextWorldBox = instanceWorldBox(inst);
-  const moves: Array<{ side: "left" | "right" | "front" | "back"; delta: THREE.Vector3 }> = [];
+  const moves: Array<{ side: ResizeAnchorSide; delta: THREE.Vector3 }> = [];
   const rightDelta = nextWorldBox.max.x - prevWorldBox.max.x;
   const leftDelta = nextWorldBox.min.x - prevWorldBox.min.x;
   const frontDelta = nextWorldBox.max.z - prevWorldBox.max.z;

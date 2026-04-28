@@ -3,6 +3,7 @@ import type { AppState } from "../layout/appState";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { AdjacentModuleInfo } from "./modulePlacementHelpers";
 
 type ResizeAnchorSide = "left" | "right" | "front" | "back";
 
@@ -28,8 +29,8 @@ type InstanceRebuilderContext = {
   applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
   args: { errorsEl: HTMLElement };
   buildModule: (params: ModuleParams) => THREE.Group;
-  chooseResizeAnchorSide: (inst: LayoutInstance, infos: unknown[]) => ResizeAnchorSide | null;
-  collectAdjacentModuleInfos: (inst: LayoutInstance, referenceBox: THREE.Box3) => unknown[];
+  chooseResizeAnchorSide: (inst: LayoutInstance, infos: AdjacentModuleInfo[]) => ResizeAnchorSide | null;
+  collectAdjacentModuleInfos: (inst: LayoutInstance, referenceBox: THREE.Box3) => AdjacentModuleInfo[];
   disposeObject3D: (obj: THREE.Object3D) => void;
   ensurePickAndOutline: (inst: LayoutInstance) => void;
   findInstance: (id: string) => LayoutInstance | null;
