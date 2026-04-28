@@ -138,6 +138,11 @@ import {
   worldToFloorPoint
 } from "./app/floorBoundaryEdit";
 import {
+  clearFloorBoundaryGroup as clearFloorBoundaryGroupBase,
+  pickFloorEditElement as pickFloorEditElementBase,
+  renderFloorBoundaryEdit as renderFloorBoundaryEditBase
+} from "./app/floorBoundaryVisuals";
+import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
   mmDist,
@@ -196,6 +201,7 @@ import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
+import { installKitchenDebugApi } from "./app/kitchenDebugApi";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1718,7 +1724,7 @@ export function startApp(initialArgs: AppArgs) {
     rebuildWall(inst);
     rebuildWallPlanMesh();
 
-    // Disallow walls intersecting any module (prevents moduleâ†”wall overlap states).
+    // Disallow walls intersecting any module (prevents moduleĂ˘â€ â€ťwall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
       layoutRoot.remove(root);
@@ -2858,7 +2864,7 @@ export function startApp(initialArgs: AppArgs) {
       valid: true,
       enforceRoomBounds: true,
       enforceWallOverlap: true,
-      statusText: "Placement: Tall modul sa prisnapne vedľa pracovnej dosky."
+      statusText: "Placement: Tall modul sa prisnapne vedÄľa pracovnej dosky."
     };
   };
 
@@ -2911,7 +2917,7 @@ export function startApp(initialArgs: AppArgs) {
           valid: false,
           enforceRoomBounds: false,
           enforceWallOverlap: false,
-          statusText: "Placement: Corner sa dá vložiť len do rohu pracovnej dosky."
+          statusText: "Placement: Corner sa dĂˇ vloĹľiĹĄ len do rohu pracovnej dosky."
         };
       }
 
@@ -2923,8 +2929,8 @@ export function startApp(initialArgs: AppArgs) {
         enforceRoomBounds: false,
         enforceWallOverlap: false,
         statusText: best.valid
-          ? "Placement: Corner sa viaže len na roh back línie pracovnej dosky."
-          : "Placement: Corner sa zmestí len do rohu s dostatočne dlhými ramenami."
+          ? "Placement: Corner sa viaĹľe len na roh back lĂ­nie pracovnej dosky."
+          : "Placement: Corner sa zmestĂ­ len do rohu s dostatoÄŤne dlhĂ˝mi ramenami."
       };
     }
 
@@ -2989,8 +2995,8 @@ export function startApp(initialArgs: AppArgs) {
       enforceRoomBounds: false,
       enforceWallOverlap: false,
       statusText: best.valid
-        ? "Placement: modul sa hýbe po back línii pod pracovnou doskou."
-        : "Placement: modul je príliš široký pre zvolený úsek pracovnej dosky."
+        ? "Placement: modul sa hĂ˝be po back lĂ­nii pod pracovnou doskou."
+        : "Placement: modul je prĂ­liĹˇ ĹˇirokĂ˝ pre zvolenĂ˝ Ăşsek pracovnej dosky."
     };
   };
 
@@ -3011,7 +3017,7 @@ export function startApp(initialArgs: AppArgs) {
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    setUnderlayStatus("Pracovná doska: klikaj body tvaru. Píš mm + Enter pre dĺžku segmentu. Esc = potvrdiť hotový tvar.");
+    setUnderlayStatus("PracovnĂˇ doska: klikaj body tvaru. PĂ­Ĺˇ mm + Enter pre dÄşĹľku segmentu. Esc = potvrdiĹĄ hotovĂ˝ tvar.");
     mountProps();
   };
 
@@ -3024,7 +3030,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.hoverPoint = point;
       kitchenWorktopDraw.typedMm = "";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("Pracovná doska: druhý klik = ďalší bod. Píš mm + Enter.");
+      setUnderlayStatus("PracovnĂˇ doska: druhĂ˝ klik = ÄŹalĹˇĂ­ bod. PĂ­Ĺˇ mm + Enter.");
       return true;
     }
 
@@ -3034,7 +3040,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("Pracovná doska: pokračuj ďalším bodom alebo Esc = potvrdiť.");
+      setUnderlayStatus("PracovnĂˇ doska: pokraÄŤuj ÄŹalĹˇĂ­m bodom alebo Esc = potvrdiĹĄ.");
       return true;
     }
 
@@ -3044,7 +3050,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       updateKitchenWorktopPreview();
-      setUnderlayStatus("Pracovná doska: pokračuj ďalším rohom alebo Esc = potvrdiť tvar.");
+      setUnderlayStatus("PracovnĂˇ doska: pokraÄŤuj ÄŹalĹˇĂ­m rohom alebo Esc = potvrdiĹĄ tvar.");
       return true;
     }
 
@@ -3053,7 +3059,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.typedMm = "";
     wallTypedHud.style.display = "none";
     scheduleKitchenWorktopPreviewUpdate();
-    setUnderlayStatus("Pracovná doska: ďalší klik = ďalší roh, Esc = potvrdiť hotový tvar.");
+    setUnderlayStatus("PracovnĂˇ doska: ÄŹalĹˇĂ­ klik = ÄŹalĹˇĂ­ roh, Esc = potvrdiĹĄ hotovĂ˝ tvar.");
     return true;
   };
 
@@ -3080,7 +3086,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
     scheduleKitchenWorktopPreviewUpdate();
     setUnderlayStatus(
-      `Pracovná doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
+      `PracovnĂˇ doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
     );
   };
 
@@ -3165,7 +3171,7 @@ export function startApp(initialArgs: AppArgs) {
     if (!kitchenWorktopDraw.active) return false;
     if (kitchenWorktopDraw.points.length < 2) {
       cancelKitchenWorktopDraw({ silent: true });
-      setUnderlayStatus("Pracovná doska: zrušené.");
+      setUnderlayStatus("PracovnĂˇ doska: zruĹˇenĂ©.");
       mountProps();
       return true;
     }
@@ -3184,7 +3190,7 @@ export function startApp(initialArgs: AppArgs) {
     const existingId = getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${worktopCounter}`;
     replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
     cancelKitchenWorktopDraw({ silent: true });
-    setUnderlayStatus(params.path.length >= 3 ? "Rohová pracovná doska vytvorená." : "Pracovná doska vytvorená.");
+    setUnderlayStatus(params.path.length >= 3 ? "RohovĂˇ pracovnĂˇ doska vytvorenĂˇ." : "PracovnĂˇ doska vytvorenĂˇ.");
     mountProps();
     return true;
   };
@@ -3309,7 +3315,7 @@ export function startApp(initialArgs: AppArgs) {
     resetMeasureSnapCycle();
     hideHoverCursor();
     setFirstPointMarker(null);
-    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvý bod." : "";
+    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvĂ˝ bod." : "";
     setUnderlayStatus("Measurements cleared.");
     ev.preventDefault();
     ev.stopPropagation();
@@ -3371,10 +3377,10 @@ export function startApp(initialArgs: AppArgs) {
     if (layoutTool === "dimension") {
       if (dimensionState.picked.length > 0) {
         technicalDimensions.resetDraft();
-        setUnderlayStatus("Kóta: výber zrušený. Vyber prvú čiaru.");
+        setUnderlayStatus("KĂłta: vĂ˝ber zruĹˇenĂ˝. Vyber prvĂş ÄŤiaru.");
       } else {
         setToolSelect();
-        setUnderlayStatus("Kóta: stopped.");
+        setUnderlayStatus("KĂłta: stopped.");
       }
       ev.preventDefault();
       return true;
@@ -3387,7 +3393,7 @@ export function startApp(initialArgs: AppArgs) {
         updateSectionDrawPreview();
         hideHoverCursor();
         drawSnapOverlay.hide();
-        setUnderlayStatus("Section: canceled current line. Klikni prvý bod.");
+        setUnderlayStatus("Section: canceled current line. Klikni prvĂ˝ bod.");
         mountProps();
       } else {
         setToolSelect();
@@ -3557,7 +3563,7 @@ export function startApp(initialArgs: AppArgs) {
     syncSelectionState();
     updateAllSectionVisuals();
     updateSelectionHighlights();
-    setUnderlayStatus("Section: klikni prvý bod, potom druhý bod. Space = zrkadliť smer.");
+    setUnderlayStatus("Section: klikni prvĂ˝ bod, potom druhĂ˝ bod. Space = zrkadliĹĄ smer.");
     mountProps();
   };
 
@@ -3592,8 +3598,8 @@ export function startApp(initialArgs: AppArgs) {
     syncSelectionState();
     updateSelectionHighlights();
     args.measureBtn.textContent = "Measure: On";
-    args.measureReadoutEl.textContent = "Measure: klikni prvý bod.";
-    setUnderlayStatus("Measure: klikni prvý roh alebo hranu.");
+    args.measureReadoutEl.textContent = "Measure: klikni prvĂ˝ bod.";
+    setUnderlayStatus("Measure: klikni prvĂ˝ roh alebo hranu.");
     mountProps();
   };
 
@@ -3619,7 +3625,7 @@ export function startApp(initialArgs: AppArgs) {
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    setUnderlayStatus("Kóta: vyber prvú čiaru, potom ďalšie rovnobežné čiary. Klik do voľného miesta vloží kótu.");
+    setUnderlayStatus("KĂłta: vyber prvĂş ÄŤiaru, potom ÄŹalĹˇie rovnobeĹľnĂ© ÄŤiary. Klik do voÄľnĂ©ho miesta vloĹľĂ­ kĂłtu.");
     mountProps();
   };
 
@@ -3669,7 +3675,7 @@ export function startApp(initialArgs: AppArgs) {
         wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
         wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
         wallTypedHud.style.display = "block";
-        setUnderlayStatus(`Pracovná doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridať bod, Backspace = edit, Esc = potvrdiť)`);
+        setUnderlayStatus(`PracovnĂˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĹĄ bod, Backspace = edit, Esc = potvrdiĹĄ)`);
         ev.preventDefault();
         return;
       }
@@ -3680,10 +3686,10 @@ export function startApp(initialArgs: AppArgs) {
           wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
           wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
           wallTypedHud.style.display = "block";
-          setUnderlayStatus(`Pracovná doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridať bod, Backspace = edit, Esc = potvrdiť)`);
+          setUnderlayStatus(`PracovnĂˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĹĄ bod, Backspace = edit, Esc = potvrdiĹĄ)`);
         } else {
           wallTypedHud.style.display = "none";
-          setUnderlayStatus("Pracovná doska: klikaj body alebo píš mm + Enter. Esc = potvrdiť.");
+          setUnderlayStatus("PracovnĂˇ doska: klikaj body alebo pĂ­Ĺˇ mm + Enter. Esc = potvrdiĹĄ.");
         }
         ev.preventDefault();
         return;
@@ -3752,13 +3758,13 @@ export function startApp(initialArgs: AppArgs) {
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
             transformState.typed = `${transformState.typed}${ev.key}`.slice(0, 6);
-            setUnderlayStatus(`Rotácia: ${transformState.typed}° (Enter)`);
+            setUnderlayStatus(`RotĂˇcia: ${transformState.typed}Â° (Enter)`);
             ev.preventDefault();
             return;
           }
           if (ev.key === "Backspace") {
             transformState.typed = transformState.typed.slice(0, -1);
-            setUnderlayStatus(transformState.typed.length ? `Rotácia: ${transformState.typed}° (Enter)` : "Rotácia: pohni myšou pre smer, alebo zadaj stupne + Enter.");
+            setUnderlayStatus(transformState.typed.length ? `RotĂˇcia: ${transformState.typed}Â° (Enter)` : "RotĂˇcia: pohni myĹˇou pre smer, alebo zadaj stupne + Enter.");
             ev.preventDefault();
             return;
           }
@@ -3768,7 +3774,7 @@ export function startApp(initialArgs: AppArgs) {
               const sign = transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               applyRotateAngle(ang);
-              setUnderlayStatus(`Rotácia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}° (klikni pre dokončenie)`);
+              setUnderlayStatus(`RotĂˇcia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Â° (klikni pre dokonÄŤenie)`);
             }
             transformState.typed = "";
             ev.preventDefault();
@@ -4073,7 +4079,7 @@ export function startApp(initialArgs: AppArgs) {
             setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             wallTypedHud.style.display = "none";
-            setUnderlayStatus("Stena: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -4128,7 +4134,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-            setUnderlayStatus("Stena: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
             selectedKind = "wall";
             selectedWallId = w.id;
             mountProps();
@@ -4987,7 +4993,7 @@ export function startApp(initialArgs: AppArgs) {
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = mode === "layout" ? "Vyber objekt alebo nástroj." : "Properties sú dostupné iba v layout mode.";
+    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂˇstroj." : "Properties sĂş dostupnĂ© iba v layout mode.";
     s.appendChild(p);
   };
 
@@ -5101,89 +5107,12 @@ export function startApp(initialArgs: AppArgs) {
     floorEdit.segments = moveFloorEditSegmentBase(startSegments, segmentIndex, startWorld, nextWorld);
   };
 
-  const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) => {
-    let bestVertex: { ref: FloorEditVertexRef; px: number } | null = null;
-    for (let i = 0; i < floorEdit.segments.length; i++) {
-      for (const endpoint of ["a", "b"] as const) {
-        const p = floorEdit.segments[i][endpoint];
-        const s = worldToScreen(floorPointToWorld(p), cam(), rect);
-        const px = Math.hypot(mousePx.x - s.x, mousePx.y - s.y);
-        if (px <= 12 && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: i, endpoint }, px };
-      }
-    }
-    if (bestVertex) return { kind: "vertex" as const, ref: bestVertex.ref };
+  const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) =>
+    pickFloorEditElementBase({ floorEdit, mousePx, rect, camera: cam() });
 
-    let bestSegment: { segmentIndex: number; px: number } | null = null;
-    for (let i = 0; i < floorEdit.segments.length; i++) {
-      const segment = floorEdit.segments[i];
-      const a = worldToScreen(floorPointToWorld(segment.a), cam(), rect);
-      const b = worldToScreen(floorPointToWorld(segment.b), cam(), rect);
-      const px = distPxPointToSeg(mousePx.x, mousePx.y, a.x, a.y, b.x, b.y);
-      if (px <= 10 && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: i, px };
-    }
-    if (bestSegment) return { kind: "segment" as const, segmentIndex: bestSegment.segmentIndex };
-    return null;
-  };
+  const clearFloorBoundaryGroup = () => clearFloorBoundaryGroupBase(floorBoundaryGroup);
 
-  const clearFloorBoundaryGroup = () => {
-    for (const child of [...floorBoundaryGroup.children]) {
-      floorBoundaryGroup.remove(child);
-      const anyChild = child as any;
-      anyChild.geometry?.dispose?.();
-      if (Array.isArray(anyChild.material)) for (const mat of anyChild.material) mat?.dispose?.();
-      else anyChild.material?.dispose?.();
-    }
-  };
-
-  const addFloorBoundaryLineMesh = (a: FloorBoundaryPoint, b: FloorBoundaryPoint, color = 0x00e5ff, opacity = 0.95) => {
-    const geom = new THREE.BufferGeometry().setFromPoints([floorPointToWorld(a), floorPointToWorld(b)]);
-    const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
-    line.renderOrder = 90;
-    floorBoundaryGroup.add(line);
-  };
-
-  const addFloorBoundaryPointMesh = (p: FloorBoundaryPoint, selected: boolean) => {
-    const geom = new THREE.CircleGeometry(selected ? 0.055 : 0.04, 16);
-    geom.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(
-      geom,
-      new THREE.MeshBasicMaterial({ color: selected ? 0xffd166 : 0xffffff, transparent: true, opacity: 0.95, depthWrite: false })
-    );
-    mesh.position.copy(floorPointToWorld(p, 0.058));
-    mesh.renderOrder = 95;
-    floorBoundaryGroup.add(mesh);
-  };
-
-  const renderFloorBoundaryEdit = () => {
-    clearFloorBoundaryGroup();
-    for (let i = 0; i < floorEdit.segments.length; i++) {
-      const segment = floorEdit.segments[i];
-      addFloorBoundaryLineMesh(segment.a, segment.b, floorEdit.selectedSegmentIndex === i ? 0xffd166 : 0x00e5ff);
-      addFloorBoundaryPointMesh(segment.a, floorEdit.selectedVertex?.segmentIndex === i && floorEdit.selectedVertex.endpoint === "a");
-      addFloorBoundaryPointMesh(segment.b, floorEdit.selectedVertex?.segmentIndex === i && floorEdit.selectedVertex.endpoint === "b");
-    }
-
-    if (floorEdit.first && floorEdit.hover) {
-      if (floorEdit.tool === "rectangle") {
-        const a = floorEdit.first;
-        const b = floorEdit.hover;
-        const p1 = { x: a.x, z: a.z };
-        const p2 = { x: b.x, z: a.z };
-        const p3 = { x: b.x, z: b.z };
-        const p4 = { x: a.x, z: b.z };
-        for (const [start, end] of [[p1, p2], [p2, p3], [p3, p4], [p4, p1]] as Array<[FloorBoundaryPoint, FloorBoundaryPoint]>) {
-          addFloorBoundaryLineMesh(start, end, 0xffd166, 0.75);
-        }
-      } else if (floorEdit.tool === "circle") {
-        const points = makeFloorCirclePoints(floorEdit.first, floorEdit.hover);
-        for (let i = 0; i < points.length; i++) addFloorBoundaryLineMesh(points[i], points[(i + 1) % points.length], 0xffd166, 0.75);
-      } else {
-        addFloorBoundaryLineMesh(floorEdit.first, floorEdit.hover, 0xffd166, 0.75);
-      }
-    }
-
-    floorBoundaryGroup.visible = floorEdit.active;
-  };
+  const renderFloorBoundaryEdit = () => renderFloorBoundaryEditBase({ group: floorBoundaryGroup, floorEdit });
 
   const setFloorBoundaryTool = (tool: FloorBoundaryTool) => {
     floorEdit.tool = tool;
@@ -5193,12 +5122,12 @@ export function startApp(initialArgs: AppArgs) {
     renderFloorBoundaryEdit();
     setUnderlayStatus(
       tool === "pickLines"
-        ? "Floor boundary: Pick Lines — klikni hranu steny."
+        ? "Floor boundary: Pick Lines â€” klikni hranu steny."
         : tool === "rectangle"
-          ? "Floor boundary: Rectangle — klikni prvý a druhý roh."
+          ? "Floor boundary: Rectangle â€” klikni prvĂ˝ a druhĂ˝ roh."
           : tool === "circle"
-            ? "Floor boundary: Circle — klikni stred a polomer."
-            : "Floor boundary: Line — klikaj body boundary line."
+            ? "Floor boundary: Circle â€” klikni stred a polomer."
+            : "Floor boundary: Line â€” klikaj body boundary line."
     );
     mountProps();
   };
@@ -5224,8 +5153,8 @@ export function startApp(initialArgs: AppArgs) {
     });
     tb.addSpacer({ row });
     const finish = tb.addGroup("Boundary", { row });
-    tb.toolButton(finish, { title: "Dokončiť podlahu", iconSvg: I_DONE, label: "Dokončiť", variant: "success", onClick: () => finishFloorBoundaryEdit() });
-    tb.toolButton(finish, { title: "Zrušiť", iconSvg: I_CANCEL, label: "Zrušiť", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "DokonÄŤiĹĄ podlahu", iconSvg: I_DONE, label: "DokonÄŤiĹĄ", variant: "success", onClick: () => finishFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "ZruĹˇiĹĄ", iconSvg: I_CANCEL, label: "ZruĹˇiĹĄ", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
   };
 
   const ensureFloorOverlay = () => {
@@ -5279,7 +5208,7 @@ export function startApp(initialArgs: AppArgs) {
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
     renderFloorBoundaryEdit();
-    setUnderlayStatus("Floor boundary: Line — kresli boundary line alebo použi Pick Lines.");
+    setUnderlayStatus("Floor boundary: Line â€” kresli boundary line alebo pouĹľi Pick Lines.");
     mountProps();
   };
 
@@ -5307,8 +5236,8 @@ export function startApp(initialArgs: AppArgs) {
     if (!floorEdit.active || !floorEdit.params) return;
     const boundary = floorSegmentsToBoundary(floorEdit.segments);
     if (!boundary || boundary.length < 3) {
-      floorEdit.error = "Boundary line nie je uzavretá. Uzavri loop alebo doplň chýbajúce čiary.";
-      setUnderlayStatus("Floor boundary: boundary musí mať aspoň 3 čiary.");
+      floorEdit.error = "Boundary line nie je uzavretĂˇ. Uzavri loop alebo doplĹ chĂ˝bajĂşce ÄŤiary.";
+      setUnderlayStatus("Floor boundary: boundary musĂ­ maĹĄ aspoĹ 3 ÄŤiary.");
       mountProps();
       return;
     }
@@ -5326,7 +5255,7 @@ export function startApp(initialArgs: AppArgs) {
     exitFloorBoundaryEditCommon();
     setSelectedFloor(floor.id);
     commitHistory(S);
-    setUnderlayStatus("Floor boundary: uložené.");
+    setUnderlayStatus("Floor boundary: uloĹľenĂ©.");
   };
 
   const discardFloorBoundaryEdit = () => {
@@ -5337,7 +5266,7 @@ export function startApp(initialArgs: AppArgs) {
       rebuildFloor(existing);
     }
     exitFloorBoundaryEditCommon();
-    setUnderlayStatus("Floor boundary: zrušené.");
+    setUnderlayStatus("Floor boundary: zruĹˇenĂ©.");
   };
 
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => {
@@ -5556,7 +5485,7 @@ export function startApp(initialArgs: AppArgs) {
     tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: I_SECTION, onClick: () => setToolSection() });
     tb.toolButton(tools, {
       title: "Dimension",
-      label: "Kóta",
+      label: "KĂłta",
       iconSvg: I_DIM,
       onClick: () => setToolDimension()
     });
@@ -8199,11 +8128,11 @@ export function startApp(initialArgs: AppArgs) {
           const a = picked?.a ?? alignPicked?.segA ?? null;
           const b = picked?.b ?? alignPicked?.segB ?? null;
           if (!a || !b) {
-            setUnderlayStatus("Floor boundary: nebola nájdená hrana.");
+            setUnderlayStatus("Floor boundary: nebola nĂˇjdenĂˇ hrana.");
             return;
           }
           addFloorEditSegment(worldToFloorPoint(a), worldToFloorPoint(b));
-          setUnderlayStatus("Floor boundary: hrana pridaná.");
+          setUnderlayStatus("Floor boundary: hrana pridanĂˇ.");
           return;
         }
 
@@ -8263,7 +8192,7 @@ export function startApp(initialArgs: AppArgs) {
         const hitPoint = hit.point.clone();
         if (!underlayCal.first) {
           underlayCal.first = hitPoint.clone();
-          setUnderlayStatus(underlayCal.mode === "reference" ? "Referenčná škála: klikni druhý bod..." : "Kalibrácia: klikni druhý bod...");
+          setUnderlayStatus(underlayCal.mode === "reference" ? "ReferenÄŤnĂˇ ĹˇkĂˇla: klikni druhĂ˝ bod..." : "KalibrĂˇcia: klikni druhĂ˝ bod...");
           return;
         }
 
@@ -8280,7 +8209,7 @@ export function startApp(initialArgs: AppArgs) {
         let desiredMm = Math.max(1, underlayCal.knownMm);
         if (underlayCal.mode === "reference") {
           const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("Reálna vzdialenosť (mm)", String(measuredMm));
+          const s = window.prompt("ReĂˇlna vzdialenosĹĄ (mm)", String(measuredMm));
           const n = s === null ? null : Number(s.trim().replace(",", "."));
           if (!n || !Number.isFinite(n) || n <= 0) {
             setUnderlayStatus("Reference scale canceled.");
@@ -8297,9 +8226,9 @@ export function startApp(initialArgs: AppArgs) {
           underlayState.scale *= factor;
           updateUnderlayTransform();
           if (underlayScaleEl) underlayScaleEl.value = String(underlayState.scale);
-          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `Kalibrácia OK: ${Math.round(desiredMm)} mm`);
+          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂˇcia OK: ${Math.round(desiredMm)} mm`);
         } else {
-          setUnderlayStatus("Kalibrácia zlyhala (nulová vzdialenosť).");
+          setUnderlayStatus("KalibrĂˇcia zlyhala (nulovĂˇ vzdialenosĹĄ).");
         }
 
         underlayCal.active = false;
@@ -8375,13 +8304,13 @@ export function startApp(initialArgs: AppArgs) {
 
         if (picked) {
           if (dimensionState.picked.length > 0 && !areAlignLinesParallel(dimensionState.picked[0]!, picked)) {
-            setUnderlayStatus("Kóta: ďalšia čiara musí byť rovnobežná s prvou.");
+            setUnderlayStatus("KĂłta: ÄŹalĹˇia ÄŤiara musĂ­ byĹĄ rovnobeĹľnĂˇ s prvou.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
           }
           if (technicalDimensions.isLinePicked(picked)) {
-            setUnderlayStatus("Kóta: táto čiara už je vybraná.");
+            setUnderlayStatus("KĂłta: tĂˇto ÄŤiara uĹľ je vybranĂˇ.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
@@ -8390,8 +8319,8 @@ export function startApp(initialArgs: AppArgs) {
           dimensionState.preview = [];
           setUnderlayStatus(
             dimensionState.picked.length === 1
-              ? "Kóta: vyber ďalšiu rovnobežnú čiaru."
-              : `Kóta: vybrané ${dimensionState.picked.length} čiary. Pridaj ďalšiu alebo klikni do voľného miesta.`
+              ? "KĂłta: vyber ÄŹalĹˇiu rovnobeĹľnĂş ÄŤiaru."
+              : `KĂłta: vybranĂ© ${dimensionState.picked.length} ÄŤiary. Pridaj ÄŹalĹˇiu alebo klikni do voÄľnĂ©ho miesta.`
           );
           mountProps();
           ev.preventDefault();
@@ -8400,7 +8329,7 @@ export function startApp(initialArgs: AppArgs) {
         }
 
         if (dimensionState.picked.length < 2) {
-          setUnderlayStatus("Kóta: najprv vyber aspoň dve rovnobežné čiary.");
+          setUnderlayStatus("KĂłta: najprv vyber aspoĹ dve rovnobeĹľnĂ© ÄŤiary.");
           ev.preventDefault();
           ev.stopPropagation();
           return;
@@ -8409,7 +8338,7 @@ export function startApp(initialArgs: AppArgs) {
         const dims = technicalDimensions.buildFromPickedLines(dimensionState.picked, hitPoint, "dimension");
         technicalDimensions.commitDimensions(dims);
         technicalDimensions.resetDraft();
-        setUnderlayStatus(dims.length > 0 ? `Kóta: vložené ${dims.length}. Vyber ďalšiu prvú čiaru.` : "Kóta: nepodarilo sa vložiť.");
+        setUnderlayStatus(dims.length > 0 ? `KĂłta: vloĹľenĂ© ${dims.length}. Vyber ÄŹalĹˇiu prvĂş ÄŤiaru.` : "KĂłta: nepodarilo sa vloĹľiĹĄ.");
         mountProps();
         ev.preventDefault();
         ev.stopPropagation();
@@ -8676,9 +8605,9 @@ export function startApp(initialArgs: AppArgs) {
           setFirstPointMarker(measureState.firstPoint);
           args.measureReadoutEl.textContent =
             normalMode
-              ? `Normála (${kind}): ${formatMm(point)} — klikni druhý bod smernice.`
-              : `Prvý bod (${kind}): ${formatMm(point)} — klikni druhý bod.`;
-          setUnderlayStatus(normalMode ? "Measure: klikni druhý bod smernice pre normálu." : "Measure: klikni druhý bod.");
+              ? `NormĂˇla (${kind}): ${formatMm(point)} â€” klikni druhĂ˝ bod smernice.`
+              : `PrvĂ˝ bod (${kind}): ${formatMm(point)} â€” klikni druhĂ˝ bod.`;
+          setUnderlayStatus(normalMode ? "Measure: klikni druhĂ˝ bod smernice pre normĂˇlu." : "Measure: klikni druhĂ˝ bod.");
           mountProps();
           return;
         }
@@ -8728,7 +8657,7 @@ export function startApp(initialArgs: AppArgs) {
           sectionDraw.a = point;
           sectionDraw.hoverPoint = point;
           updateSectionDrawPreview();
-          setUnderlayStatus("Section: klikni druhý bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliť smer.");
+          setUnderlayStatus("Section: klikni druhĂ˝ bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliĹĄ smer.");
           mountProps();
           return;
         }
@@ -8786,7 +8715,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Stena: druhý bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         return;
       }
 
@@ -8831,7 +8760,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Stena: ďalší bod... (píš mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         selectedKind = "wall";
         selectedWallId = w.id;
@@ -9088,7 +9017,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!measureState.firstPoint) {
         measureState.firstPoint = snapped.point;
         measureState.firstBinding = toFreePlanBinding(snapped.point);
-        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} â€” pick second pointâ€¦`;
+        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} Ă˘â‚¬â€ť pick second pointĂ˘â‚¬Â¦`;
         return;
       }
 
@@ -9308,7 +9237,7 @@ export function startApp(initialArgs: AppArgs) {
       if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
         const delta = p.clone().sub(transformState.base);
         applyMoveDelta(delta);
-        setUnderlayStatus(`Posun: Δ ${Math.round(delta.x * 1000)}×${Math.round(delta.z * 1000)} mm (klikni pre dokončenie)`);
+        setUnderlayStatus(`Posun: Î” ${Math.round(delta.x * 1000)}Ă—${Math.round(delta.z * 1000)} mm (klikni pre dokonÄŤenie)`);
         return;
       }
 
@@ -9322,7 +9251,7 @@ export function startApp(initialArgs: AppArgs) {
         while (d < -Math.PI) d += Math.PI * 2;
         transformState.lastAngleSign = d < 0 ? -1 : 1;
         applyRotateAngle(d);
-        setUnderlayStatus(`Rotácia: ${Math.round((d * 180) / Math.PI)}° (klikni pre dokončenie)`);
+        setUnderlayStatus(`RotĂˇcia: ${Math.round((d * 180) / Math.PI)}Â° (klikni pre dokonÄŤenie)`);
         return;
       }
     }
@@ -9788,7 +9717,7 @@ export function startApp(initialArgs: AppArgs) {
       measureState.hoverSnap = "none";
       hideHoverCursor();
       args.measureReadoutEl.textContent = measureState.firstPoint
-        ? "Pick second pointâ€¦ (no surface)"
+        ? "Pick second pointĂ˘â‚¬Â¦ (no surface)"
         : "Click 2 points to measure (planar X/Z).";
       clearPreview();
       return;
@@ -9806,9 +9735,9 @@ export function startApp(initialArgs: AppArgs) {
       let b = snapped.point;
       if (measureState.axisLock) b = axisLockXZ(a, b);
       updatePreview(a, b, rect);
-      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) â€” ${Math.round(planarDistanceMm(a, b))} mm`;
+      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) Ă˘â‚¬â€ť ${Math.round(planarDistanceMm(a, b))} mm`;
     } else {
-      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} â€” click first point`;
+      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} Ă˘â‚¬â€ť click first point`;
       clearPreview();
     }
   });
@@ -10591,627 +10520,79 @@ export function startApp(initialArgs: AppArgs) {
     }
   };
 
-  const getDebugModuleSnapshot = (inst: LayoutInstance) => {
-    const box = instanceVisualWorldBox(inst);
-    const planPolygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
-    const structuralMeshes: THREE.Object3D[] = [];
-    const partSnapshots: Array<{
-      name: string;
-      positionM: { x: number; y: number; z: number };
-      scale: { x: number; y: number; z: number };
-      dimensionsMm: Record<string, unknown> | null;
-      colorHex: string | null;
-    }> = [];
-    inst.module.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      const name = child.name || "";
-      if (
-        name.startsWith("handle_") ||
-        name.startsWith("gola_") ||
-        name.startsWith("plinth-clip") ||
-        name.includes("_screw_")
-      ) {
-        return;
-      }
-      structuralMeshes.push(child);
-      const material = Array.isArray(child.material) ? child.material[0] : child.material;
-      const colorHex =
-        material && "color" in material && (material as { color?: THREE.Color }).color
-          ? `#${(material as { color: THREE.Color }).color.getHexString()}`
-          : null;
-      partSnapshots.push({
-        name,
-        positionM: {
-          x: child.position.x,
-          y: child.position.y,
-          z: child.position.z
-        },
-        scale: {
-          x: child.scale.x,
-          y: child.scale.y,
-          z: child.scale.z
-        },
-        dimensionsMm:
-          child.userData?.dimensionsMm && typeof child.userData.dimensionsMm === "object"
-            ? structuredClone(child.userData.dimensionsMm as Record<string, unknown>)
-            : null,
-        colorHex
-      });
-    });
-    const structuralBox = new THREE.Box3();
-    for (const mesh of structuralMeshes) structuralBox.expandByObject(mesh);
-    const localBackCenter = getModuleLocalBackCenter(inst);
-    const worldKitchenAnchor = getModuleWorldKitchenAnchor(inst);
-    const localFrontCenter = new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.max.z);
-    const worldBackCenter = localBackCenter.clone().applyMatrix4(inst.root.matrixWorld);
-    const worldFrontCenter = localFrontCenter.clone().applyMatrix4(inst.root.matrixWorld);
-    const worldFrontDir = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, inst.root.rotation.y, 0)).normalize();
-    return {
-      id: inst.id,
-      kitchenGroupId: inst.kitchenGroupId,
-      kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null,
-      moduleVisible: inst.module.visible,
-      outlineVisible: inst.outline.visible,
-      pickVisible: inst.pick.visible,
-      params: structuredClone(inst.params),
-      positionM: {
-        x: inst.root.position.x,
-        y: inst.root.position.y,
-        z: inst.root.position.z
-      },
-      rotationYRad: inst.root.rotation.y,
-      localBoxM: {
-        min: { x: inst.localBox.min.x, y: inst.localBox.min.y, z: inst.localBox.min.z },
-        max: { x: inst.localBox.max.x, y: inst.localBox.max.y, z: inst.localBox.max.z }
-      },
-      worldBoxM: {
-        min: { x: box.min.x, y: box.min.y, z: box.min.z },
-        max: { x: box.max.x, y: box.max.y, z: box.max.z }
-      },
-      structuralWorldBoxM: {
-        min: { x: structuralBox.min.x, y: structuralBox.min.y, z: structuralBox.min.z },
-        max: { x: structuralBox.max.x, y: structuralBox.max.y, z: structuralBox.max.z }
-      },
-      worldKitchenAnchorM: {
-        x: worldKitchenAnchor.x,
-        y: worldKitchenAnchor.y,
-        z: worldKitchenAnchor.z
-      },
-      worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
-      worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },
-      frontVectorM: { x: worldFrontDir.x, y: worldFrontDir.y, z: worldFrontDir.z },
-      planPolygonM: planPolygon.map((point) => ({ x: point.x, y: point.y, z: point.z })),
-      parts: partSnapshots,
-      realizedDepthMm: Math.round(worldFrontCenter.clone().sub(worldBackCenter).dot(worldFrontDir) * 1000),
-      structuralDepthMm: Math.round(
-        Math.abs(
-          new THREE.Vector3(
-            structuralBox.max.x - structuralBox.min.x,
-            structuralBox.max.y - structuralBox.min.y,
-            structuralBox.max.z - structuralBox.min.z
-          ).dot(new THREE.Vector3(Math.abs(worldFrontDir.x), Math.abs(worldFrontDir.y), Math.abs(worldFrontDir.z)))
-        ) * 1000
-      )
-    };
-  };
-
-  const getDebugKitchenSnapshot = (groupId: string | null) => {
-    const group = groupId ? S.kitchenGroups.find((item) => item.id === groupId) ?? null : null;
-    const groupWorktops = groupId ? kitchenWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
-    const groupInstances = groupId ? instances.filter((item) => item.kitchenGroupId === groupId) : [];
-    return {
-      selectedKitchenGroupId,
-      activeKitchenGroupId: S.activeKitchenGroupId,
-      kitchenCtx: structuredClone(S.kitchenCtx),
-      group: group
-        ? {
-            id: group.id,
-            name: group.name,
-            ctx: structuredClone(group.ctx),
-            instanceIds: [...group.instanceIds]
-          }
-        : null,
-      worktops: groupWorktops.map((worktop) => ({
-        id: worktop.id,
-        params: structuredClone(worktop.params),
-        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm).map(
-          (point) => ({ x: point.x, y: point.y, z: point.z })
-        )
-      })),
-      instances: groupInstances.map((inst) => getDebugModuleSnapshot(inst))
-    };
-  };
-
-  const debugResetKitchenScenario = () => {
-    if (S.kitchenEditMode) kitchenMode?.exitDiscard();
-    cancelKitchenWorktopDraw({ silent: true });
-    if (placement.active) cancelPlacement(S, placementHelpers);
-
-    for (let index = kitchenWorktops.length - 1; index >= 0; index -= 1) {
-      removeKitchenWorktop(kitchenWorktops[index]!.id, { skipHistory: true });
-    }
-    for (let index = instances.length - 1; index >= 0; index -= 1) {
-      deleteInstance(instances[index]!.id);
-    }
-
-    S.kitchenGroups.splice(0, S.kitchenGroups.length);
-    S.kitchenCtx = resolveContext(makeDefaultKitchenContext());
-    setSelectedKitchenGroup(null);
-    setSelectedModule(null);
-    mountProps();
-    updateLayoutPanel();
-    return getDebugKitchenSnapshot(null);
-  };
-
-  const debugSelectKitchenGroup = (groupId: string | null) => {
-    setSelectedKitchenGroup(groupId);
-    mountProps();
-    return getDebugKitchenSnapshot(groupId);
-  };
-
-  const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number; cornerIndex?: number }) => {
-    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
-    const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
-    if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
-
-    const nextParams = structuredClone(getModuleDescriptorOrThrow(opts?.type ?? "drawer_low").defaultParams()) as ModuleParams;
-    applyKitchenContextToModuleParams(nextParams, group.ctx);
-    const inst = createInstance(nextParams);
-    inst.kitchenGroupId = groupId;
-
-    if (nextParams.type === "corner_shelf_lower") {
-      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, group.ctx.worktopBackOffsetMm);
-      let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
-      const requestedCornerIndex = typeof opts?.cornerIndex === "number" ? Math.round(opts.cornerIndex) : null;
-      const candidateCornerIndexes =
-        requestedCornerIndex != null
-          ? [requestedCornerIndex]
-          : Array.from({ length: Math.max(0, guidePath.length - 2) }, (_, index) => index + 1);
-      for (const cornerIndex of candidateCornerIndexes) {
-        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, group.ctx.worktopBackOffsetMm, inst);
-        if (info?.valid) break;
-      }
-      if (!info) throw new Error("Debug kitchen corner not available.");
-      inst.kitchenPlacement = { ...info.binding };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
-    } else {
-      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
-      if (!info) throw new Error("Debug guide segment not available.");
-
-      if (moduleStaysOutsideKitchenWorktop(inst)) {
-        const desiredAlongM = clampNumber((opts?.offsetAlongMm ?? 700) / 1000, 0, info.length);
-        const cursorWorld = info.start
-          .clone()
-          .addScaledVector(info.dir, desiredAlongM)
-          .addScaledVector(info.frontNormal, Math.max(0.05, worktop.params.depthMm / 2000));
-        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], group.ctx.worktopBackOffsetMm);
-        if (!tallConstraint) throw new Error("Debug tall placement not available.");
-        inst.kitchenPlacement = tallConstraint.kitchenPlacement ?? null;
-        inst.root.position.copy(tallConstraint.position);
-        inst.root.rotation.y = tallConstraint.rotationY;
-        inst.root.position.y = getKitchenModulePlacementY(inst, groupId);
-        inst.root.updateMatrixWorld(true);
-      } else {
-      const desiredAlongM = (opts?.offsetAlongMm ?? 700) / 1000;
-      inst.kitchenPlacement = {
-        kind: "segment",
-        worktopId: worktop.id,
-        segmentIndex: opts?.segmentIndex ?? 0,
-        offsetAlongM: desiredAlongM
-      };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
-      }
-    }
-
-    layoutRoot.add(inst.root);
-    instances.push(inst);
-    group.instanceIds = instances.filter((item) => item.kitchenGroupId === groupId).map((item) => item.id);
-    updateLayoutPanel();
-    return getDebugKitchenSnapshot(groupId);
-  };
-
-  const debugCreateKitchenScenario = (opts?: {
-    ctxPatch?: Partial<ReturnType<typeof resolveContext>>;
-    path?: FloorBoundaryPoint[];
-    justification?: KitchenWorktopJustification;
-    mirrored?: boolean;
-    addModule?: boolean;
-    moduleType?: ModuleParams["type"];
-    segmentIndex?: number;
-    offsetAlongMm?: number;
-    cornerIndex?: number;
-  }) => {
-    debugResetKitchenScenario();
-    ensureLayoutMode();
-
-    const nextCtx = resolveContext({
-      ...makeDefaultKitchenContext(),
-      ...(opts?.ctxPatch ?? {})
-    });
-    const groupId = `dbg_kg_${Date.now()}`;
-    S.kitchenCtx = structuredClone(nextCtx);
-    S.kitchenGroups.push({
-      id: groupId,
-      name: "Debug Kitchen",
-      ctx: structuredClone(nextCtx),
-      instanceIds: []
-    });
-
-    createKitchenWorktop(
-      {
-        path: structuredClone(opts?.path ?? [{ x: 0, z: 0 }, { x: 2400, z: 0 }]),
-        justification: opts?.justification ?? "back",
-        mirrored: !!opts?.mirrored,
-        depthMm: nextCtx.worktopDepthMm,
-        thicknessMm: nextCtx.worktopThicknessMm,
-        heightMm: nextCtx.heightMm,
-        overhangSideMm: nextCtx.worktopOverhangSideMm,
-        materialId: nextCtx.worktopMaterialId
-      },
-      groupId,
-      { skipHistory: true, id: "dbg_wt1" }
-    );
-
-    if (opts?.addModule !== false) {
-      debugAddKitchenModule(groupId, {
-        type: opts?.moduleType ?? "drawer_low",
-        segmentIndex: opts?.segmentIndex ?? 0,
-        offsetAlongMm: opts?.offsetAlongMm ?? 700,
-        cornerIndex: opts?.cornerIndex
-      });
-    }
-
-    debugSelectKitchenGroup(groupId);
-    return getDebugKitchenSnapshot(groupId);
-  };
-
-  const debugPatchKitchenContext = (groupId: string, patch: Partial<ReturnType<typeof resolveContext>>) => {
-    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
-    if (!group) throw new Error(`Kitchen group ${groupId} not found.`);
-    const prevCtx = resolveContext(structuredClone(group.ctx));
-    const nextCtx = resolveContext({ ...group.ctx, ...patch });
-    group.ctx = structuredClone(nextCtx);
-    if (S.activeKitchenGroupId === groupId || selectedKitchenGroupId === groupId) {
-      S.kitchenCtx = structuredClone(nextCtx);
-    }
-    rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
-    mountProps();
-    return getDebugKitchenSnapshot(groupId);
-  };
-
-  const debugEnterMeasureTool = () => {
-    setToolMeasure();
-    return {
-      layoutTool,
-      enabled: measureState.enabled
-    };
-  };
-
-  const debugCreateWall = (params: { aMm: { x: number; z: number }; bMm: { x: number; z: number }; thicknessMm?: number }) => {
-    const wall = addWall(
-      new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000),
-      new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000),
-      params.thicknessMm ?? wallDefault.thicknessMm
-    );
-    return wall ? { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } } : null;
-  };
-
-  const debugMoveWall = (wallId: string, shiftMm: { x: number; z: number }) => {
-    const wall = walls.find((item) => item.id === wallId) ?? null;
-    if (!wall) throw new Error(`Wall ${wallId} not found.`);
-    const oldA = { ...wall.params.aMm };
-    const oldB = { ...wall.params.bMm };
-    wall.params.aMm = { x: wall.params.aMm.x + shiftMm.x, z: wall.params.aMm.z + shiftMm.z };
-    wall.params.bMm = { x: wall.params.bMm.x + shiftMm.x, z: wall.params.bMm.z + shiftMm.z };
-    for (const otherWall of walls) {
-      if (otherWall.id === wall.id) continue;
-      const wa = wallEndpointWhich(otherWall, oldA, wallJoinTolMm);
-      if (wa) setWallEndpointMm(otherWall, wa, wall.params.aMm);
-      const wb = wallEndpointWhich(otherWall, oldB, wallJoinTolMm);
-      if (wb) setWallEndpointMm(otherWall, wb, wall.params.bMm);
-    }
-    rebuildWall(wall);
-    autoJoinAtMmPoint(wall.params.aMm);
-    autoJoinAtMmPoint(wall.params.bMm);
-    rebuildWallPlanMesh();
-    return { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } };
-  };
-
-  const debugCreateMeasure = (params: {
-    aMm: { x: number; z: number };
-    bMm: { x: number; z: number };
-    normal?: boolean;
-  }) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const aRaw = new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000);
-    const bRaw = new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000);
-    const snappedA = snapPoint2D(aRaw, rect, cam(), 24);
-    const snappedB = snapPoint2D(bRaw, rect, cam(), 24, {
-      perpendicularFrom: params.normal ? null : snappedA.point
-    });
-    const a = snappedA.kind === "none" ? aRaw : snappedA.point;
-    const b = snappedB.kind === "none" ? bRaw : snappedB.point;
-    const aBinding = bindingFromPlanSnap(snappedA, a);
-    const bBinding = bindingFromPlanSnap(snappedB, b);
-
-    if (params.normal) {
-      const baseDir = b.clone().sub(a).setY(0);
-      if (baseDir.lengthSq() < 1e-10) throw new Error("Normal guide requires 2 distinct points.");
-      baseDir.normalize();
-      const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
-      const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
-      return addMeasurement(
-        a.clone().addScaledVector(normalDir, -spanM / 2),
-        a.clone().addScaledVector(normalDir, spanM / 2),
-        aBinding,
-        bBinding,
-        { kind: "normalGuide" }
-      );
-    }
-
-    return addMeasurement(a, b, aBinding, bBinding, {
-      kind: "distance",
-      distanceMm: planarDistanceMm(a, b)
-    });
-  };
-
-  const debugCreateFloor = (params: FloorParams) => {
-    const floor = createFloor(cloneFloorParams(params), { skipHistory: true });
-    return { id: floor.id, boundary: structuredClone(floor.params.boundary) };
-  };
-
-  const debugSelectFloor = (floorId: string) => {
-    setSelectedFloor(floorId);
-    return { selectedKind, selectedFloorId };
-  };
-
-  const debugSelectWall = (wallId: string) => {
-    setSelectedWall(wallId);
-    return { selectedKind, selectedWallId };
-  };
-
-  const debugSelectModule = (instanceId: string) => {
-    setSelectedModule(instanceId);
-    return { selectedKind, selectedInstanceId };
-  };
-
-  const debugPatchModuleParams = (
-    instanceId: string,
-    patch: Record<string, unknown>,
-    options?: { sourceKey?: string; preserveBackAnchor?: boolean }
-  ) => {
-    const inst = findInstance(instanceId);
-    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
-    const previousParams = structuredClone(inst.params);
-      inst.params = normalizeModuleParamsForSource(
-        {
-          ...structuredClone(inst.params),
-          ...structuredClone(patch)
-        } as ModuleParams,
-        options?.sourceKey
-      );
-    const ok = rebuildInstance(inst, {
-        preserveBackAnchor: options?.preserveBackAnchor ?? true,
-        previousParams,
-        sourceKey: options?.sourceKey
-      });
-    return {
-      ok,
-      debug: lastRebuildDebug ? structuredClone(lastRebuildDebug) : null,
-      snapshot: getDebugKitchenSnapshot(inst.kitchenGroupId),
-      instance: getDebugModuleSnapshot(inst)
-    };
-  };
-
-  const debugDetectModuleAdjacency = (instanceId: string) => {
-    const inst = findInstance(instanceId);
-    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
-    const box = instanceWorldBox(inst);
-    return instances
-      .filter((other) => other.id !== inst.id && (!inst.kitchenGroupId || other.kitchenGroupId === inst.kitchenGroupId))
-      .map((other) => {
-        const info = detectModuleAdjacencyInfo(box, instanceWorldBox(other), other.id);
-        if (!info) return null;
-        return {
-          otherId: other.id,
-          otherType: other.params.type,
-          side: info.side,
-          axis: info.axis,
-          gapMm: Math.round(info.gap * 1000),
-          seamMm: Math.round(info.seam * 1000)
-        };
-      })
-      .filter((value): value is NonNullable<typeof value> => !!value);
-  };
-
-  const debugCommitSelectedMeasureValue = (measureId: string, valueMm: number) => {
-    const target = getCurrentMeasureSelectionTarget();
-    const measure = measureState.measures.find((item) => item.id === measureId) ?? null;
-    const bindings = target && measure ? getSelectionMeasureBindings(measure, target) : null;
-    const before = captureLayoutSnapshot(S);
-    commitSelectedMeasureValueMm(measureId, String(valueMm));
-    const after = captureLayoutSnapshot(S);
-    return {
-      selectedKind,
-      selectedKitchenGroupId,
-      target:
-        target?.kind === "kitchenGroup"
-          ? { kind: target.kind, groupId: target.groupId, worktopIds: Array.from(target.worktopIds), instanceIds: Array.from(target.instanceIds) }
-          : target,
-      bindings,
-      before,
-      after
-    };
-  };
-
-  const debugCommitWallMeasureValue = (wallId: string, measureId: string, valueMm: number) => {
-    setSelectedWall(wallId);
-    commitWallMeasureValueMm(measureId, String(valueMm));
-    return getDebugKitchenSnapshot(null);
-  };
-
-  const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
-    return { x: screen.x, y: screen.y };
-  };
-
-  const debugPickAlignLine = (pointMm: { x: number; z: number }) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const world = new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000);
-    const screen = worldToScreen(world, cam(), rect);
-    const picked = pickAlignLineAt(world, { x: screen.x, y: screen.y }, rect);
-    if (!picked) return null;
-    return {
-      label: picked.label,
-      targetKind: picked.targetKind,
-      lineRole: picked.lineRole,
-      wallId: picked.wallId ?? null,
-      instanceId: picked.instanceId ?? null,
-      worktopId: picked.worktopId ?? null,
-      segmentIndex: picked.segmentIndex ?? null
-    };
-  };
-
-  const debugAlignLines = (refMm: { x: number; z: number }, targetMm: { x: number; z: number }) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const refWorld = new THREE.Vector3(refMm.x / 1000, 0, refMm.z / 1000);
-    const targetWorld = new THREE.Vector3(targetMm.x / 1000, 0, targetMm.z / 1000);
-    const refScreen = worldToScreen(refWorld, cam(), rect);
-    const targetScreen = worldToScreen(targetWorld, cam(), rect);
-    const ref = pickAlignLineAt(refWorld, { x: refScreen.x, y: refScreen.y }, rect);
-    const picked = pickAlignLineAt(targetWorld, { x: targetScreen.x, y: targetScreen.y }, rect);
-    if (!ref || !picked) {
-      return {
-        ok: false,
-        ref: ref ? { label: ref.label, targetKind: ref.targetKind, lineRole: ref.lineRole } : null,
-        picked: picked ? { label: picked.label, targetKind: picked.targetKind, lineRole: picked.lineRole } : null
-      };
-    }
-    const result = applyAlignBetweenPickedLines(ref, picked);
-    if (result.ok) {
-      updateSelectionHighlights();
-      commitHistory(S);
-      mountProps();
-    }
-    return {
-      ok: result.ok,
-      reason: result.reason,
-      ref: { label: ref.label, targetKind: ref.targetKind, lineRole: ref.lineRole },
-      picked: {
-        label: picked.label,
-        targetKind: picked.targetKind,
-        lineRole: picked.lineRole,
-        wallId: picked.wallId ?? null,
-        instanceId: picked.instanceId ?? null,
-        worktopId: picked.worktopId ?? null,
-        segmentIndex: picked.segmentIndex ?? null
-      }
-    };
-  };
-
-  const debugPlanSnap = (
-    pointMm: { x: number; z: number },
-    options?: { perpendicularFromMm?: { x: number; z: number } | null }
-  ) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), 24, {
-      perpendicularFrom: options?.perpendicularFromMm
-        ? new THREE.Vector3(options.perpendicularFromMm.x / 1000, 0, options.perpendicularFromMm.z / 1000)
-        : null
-    });
-    return {
-      kind: snapped.kind,
-      owner: snapped.owner ?? null,
-      pointMm: {
-        x: Math.round(snapped.point.x * 1000),
-        z: Math.round(snapped.point.z * 1000)
-      }
-    };
-  };
-
-  const debugMeasureState = () => ({
-    layoutTool,
-    enabled: measureState.enabled,
-    firstPointMm: measureState.firstPoint
-      ? { x: Math.round(measureState.firstPoint.x * 1000), z: Math.round(measureState.firstPoint.z * 1000) }
-      : null,
-    measures: measureState.measures.map((item) => ({
-      id: item.id,
-      kind: item.kind,
-      aBinding: item.aBinding,
-      bBinding: item.bBinding,
-      aMm: { x: Math.round(item.a.x * 1000), z: Math.round(item.a.z * 1000) },
-      bMm: { x: Math.round(item.b.x * 1000), z: Math.round(item.b.z * 1000) }
-    }))
+  installKitchenDebugApi({
+    S,
+    kitchenWorktops,
+    instances,
+    placement,
+    placementHelpers,
+    layoutRoot,
+    measureState,
+    wallDefault,
+    walls,
+    renderer,
+    wallJoinTolMm,
+    wallPlanGroup,
+    detailSliceGroup,
+    instanceVisualWorldBox,
+    getModuleLocalBackCenter,
+    getModuleWorldKitchenAnchor,
+    getKitchenWorktopBackGuidePath,
+    cancelKitchenWorktopDraw,
+    removeKitchenWorktop,
+    deleteInstance,
+    setSelectedKitchenGroup,
+    setSelectedModule,
+    mountProps,
+    updateLayoutPanel,
+    getModuleDescriptorOrThrow,
+    createInstance,
+    getKitchenCornerPlacementInfo,
+    applyKitchenPlacementBinding,
+    getKitchenGuideSegmentInfo,
+    moduleStaysOutsideKitchenWorktop,
+    clampNumber,
+    getTallKitchenPlacementConstraint,
+    getKitchenModulePlacementY,
+    ensureLayoutMode,
+    createKitchenWorktop,
+    rebuildKitchenGroupLayout,
+    setToolMeasure,
+    addWall,
+    setWallEndpointMm,
+    rebuildWall,
+    autoJoinAtMmPoint,
+    rebuildWallPlanMesh,
+    snapPoint2D,
+    cam,
+    bindingFromPlanSnap,
+    addMeasurement,
+    createFloor,
+    cloneFloorParams,
+    setSelectedFloor,
+    setSelectedWall,
+    findInstance,
+    rebuildInstance,
+    instanceWorldBox,
+    getCurrentMeasureSelectionTarget,
+    commitSelectedMeasureValueMm,
+    commitWallMeasureValueMm,
+    pickAlignLineAt,
+    applyAlignBetweenPickedLines,
+    updateSelectionHighlights,
+    getSceneDebugState,
+    ctl,
+    getKitchenMode: () => kitchenMode,
+    getSelectedKitchenGroupId: () => selectedKitchenGroupId,
+    getSelectedInstanceId: () => selectedInstanceId,
+    getSelectedFloorId: () => selectedFloorId,
+    getSelectedWallId: () => selectedWallId,
+    getSelectedKind: () => selectedKind,
+    getActiveViewerTab: () => activeViewerTab,
+    getLayoutTool: () => layoutTool,
+    getViewMode: () => viewMode,
+    getLastRebuildDebug: () => lastRebuildDebug
   });
-
-  const debugViewState = () => {
-    const activeCam = cam();
-    const sceneDebug = getSceneDebugState();
-    return {
-      viewMode,
-      activeViewerTab,
-      layoutTool,
-      wallCount: walls.length,
-      wallPlanVisible: wallPlanGroup.visible,
-      wallPlanChildren: wallPlanGroup.children.length,
-      clippingPlanes: renderer.clippingPlanes.length,
-      detailSliceVisible: detailSliceGroup.visible,
-      detailSliceChildren: detailSliceGroup.children.length,
-      camera: {
-        type: activeCam.type,
-        position: { x: activeCam.position.x, y: activeCam.position.y, z: activeCam.position.z },
-        target: { x: ctl().target.x, y: ctl().target.y, z: ctl().target.z },
-        zoom: activeCam instanceof THREE.OrthographicCamera ? activeCam.zoom : null,
-        left: activeCam instanceof THREE.OrthographicCamera ? activeCam.left : null,
-        right: activeCam instanceof THREE.OrthographicCamera ? activeCam.right : null,
-        top: activeCam instanceof THREE.OrthographicCamera ? activeCam.top : null,
-        bottom: activeCam instanceof THREE.OrthographicCamera ? activeCam.bottom : null
-      },
-      scene: {
-        planOverlayVisible: sceneDebug.planOverlayVisible,
-        planAmbientVisible: sceneDebug.planAmbientVisible
-      },
-      walls: walls.map((wall) => ({
-        id: wall.id,
-        meshVisible: wall.mesh.visible,
-        outlineVisible: wall.outline.visible,
-        aMm: { ...wall.params.aMm },
-        bMm: { ...wall.params.bMm }
-      }))
-    };
-  };
-
-  const debugLayoutSnapshot = () => captureLayoutSnapshot(S);
-
-  (window as any).__kitchenDebug = {
-    reset: debugResetKitchenScenario,
-    selectKitchenGroup: debugSelectKitchenGroup,
-    createKitchenScenario: debugCreateKitchenScenario,
-    addKitchenModule: debugAddKitchenModule,
-    patchKitchenContext: debugPatchKitchenContext,
-    createWall: debugCreateWall,
-    createFloor: debugCreateFloor,
-    moveWall: debugMoveWall,
-    createMeasure: debugCreateMeasure,
-    selectWall: debugSelectWall,
-    selectFloor: debugSelectFloor,
-    selectModule: debugSelectModule,
-    patchModuleParams: debugPatchModuleParams,
-    detectModuleAdjacency: debugDetectModuleAdjacency,
-    commitWallMeasureValue: debugCommitWallMeasureValue,
-    commitSelectedMeasureValue: debugCommitSelectedMeasureValue,
-    snapshot: getDebugKitchenSnapshot,
-    enterMeasureTool: debugEnterMeasureTool,
-    projectPlanPoint: debugProjectPlanPoint,
-    pickAlignLine: debugPickAlignLine,
-    alignLines: debugAlignLines,
-    planSnap: debugPlanSnap,
-    measureState: debugMeasureState,
-    viewState: debugViewState,
-    layoutSnapshot: debugLayoutSnapshot
-  };
 
   const tick = () => {
     const dt = Math.min(0.05, navClock.getDelta());
@@ -11310,5 +10691,4 @@ export function startApp(initialArgs: AppArgs) {
     requestAnimationFrame(tick);
   };
   tick();
-
 }
