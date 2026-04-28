@@ -1,6 +1,71 @@
-import * as THREE from "three";
+import type { AppState } from "../layout/appState";
+import type { HistoryHelpers } from "../layout/historyManager";
+import type { AppArgs } from "./bootstrap";
+import type { createTopbar } from "../ui/createTopbar";
+import type { AppInstallState } from "../pwa/installController";
 
-export function createClassicTopbarController(ctx: any) {
+type KitchenModeActions = {
+  enterNew: () => void;
+};
+
+type ClassicTopbarControllerContext = {
+  I_ALIGN: string;
+  I_BOM: string;
+  I_CABINET: string;
+  I_COPY: string;
+  I_DIM: string;
+  I_DUP: string;
+  I_EXPORT: string;
+  I_FLOOR: string;
+  I_GRID2D: string;
+  I_INSTALL: string;
+  I_MOVE: string;
+  I_REDO: string;
+  I_RESET: string;
+  I_ROTATE: string;
+  I_SECTION: string;
+  I_SELECT: string;
+  I_TRASH: string;
+  I_TRIM: string;
+  I_UNDERLAY: string;
+  I_UNDO: string;
+  I_VIEW: string;
+  I_WALL: string;
+  S: AppState;
+  args: AppArgs & {
+    copyBtn: HTMLButtonElement;
+    exportBtn: HTMLButtonElement;
+    resetBtn: HTMLButtonElement;
+    viewerEl: HTMLElement;
+  };
+  deleteSelected: () => void;
+  duplicateSelected: () => void;
+  enterFloorBoundaryEdit: () => void;
+  getInstallState: () => AppInstallState;
+  helpers: HistoryHelpers;
+  kitchenMode: KitchenModeActions | null;
+  layoutTool: string;
+  openBomPanel: (args: Pick<AppState, "instances" | "kitchenWorktops" | "kitchenCtx">) => void;
+  openPricingCatalog: () => void;
+  openUnderlayPanel: () => void;
+  promptAppInstall: () => Promise<boolean>;
+  redo: (S: AppState, helpers: HistoryHelpers) => void;
+  setToolAlign: () => void;
+  setToolDimension: () => void;
+  setToolMeasure: () => void;
+  setToolSection: () => void;
+  setToolSelect: () => void;
+  setToolTrim: () => void;
+  setToolWall: () => void;
+  startTransformFromSelection: (kind: "move" | "rotate") => void;
+  subscribeInstallState: (listener: (state: AppInstallState) => void) => () => void;
+  tb: ReturnType<typeof createTopbar>;
+  toggle2dView: () => void;
+  undo: (S: AppState, helpers: HistoryHelpers) => void;
+  updateUndoRedoUi: (S: AppState) => void;
+};
+
+export function createClassicTopbarController(ctx: ClassicTopbarControllerContext) {
   const buildClassicTopbar = () => {
     const row = ctx.tb.addRow({ className: "topbar-classic-ribbon" });
 

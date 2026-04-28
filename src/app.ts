@@ -2454,7 +2454,7 @@ export function startApp(initialArgs: AppArgs) {
     enterFloorBoundaryEdit,
     getInstallState,
     helpers,
-    kitchenMode,
+    get kitchenMode() { return kitchenMode; },
     layoutTool,
     openBomPanel,
     openPricingCatalog,

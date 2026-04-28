@@ -1,8 +1,92 @@
 import * as THREE from "three";
+import type { AppMode, AppState, LayoutTool } from "../layout/appState";
+import type { PlacementHelpers } from "../layout/placementManager";
+import type {
+  FloorInstance,
+  KitchenWorktopInstance,
+  KitchenWorktopParams,
+  LayoutInstance,
+  SelectedKind,
+  WallInstance,
+  WindowInstance
+} from "./localTypes";
+import type { AppArgs } from "./bootstrap";
+import type { MeasureState } from "./measureTools";
+import type { SnapOverlayController } from "./snapOverlay";
 
-type AppMode = "build" | "layout";
+type ViewerTabKey = "3d" | "floorplan" | string;
 
-export function createViewModeController(ctx: any) {
+type ViewModeControllerContext = {
+  S: AppState;
+  activeDetailClipPlanes: THREE.Plane[];
+  activeViewerTab: ViewerTabKey;
+  args: AppArgs & {
+    measureBtn: HTMLButtonElement;
+    measureReadoutEl: HTMLElement;
+    propertiesEl: HTMLElement;
+  };
+  buildUi: HTMLElement;
+  cabinetGroup: THREE.Group | null;
+  cancelPlacement: (S: AppState, helpers: PlacementHelpers) => void;
+  clearAllMeasurements: () => void;
+  clearOverlapHighlight: () => void;
+  clearWallDrawState: () => void;
+  drawOrthoToggleEl: HTMLButtonElement | null;
+  drawSnapOverlay: SnapOverlayController;
+  ensurePickAndOutline: (inst: LayoutInstance, planMode: boolean) => void;
+  floors: FloorInstance[];
+  handleKitchenWorktopEscape: () => boolean;
+  hideHoverCursor: () => void;
+  instanceEditorHost: HTMLElement;
+  instances: LayoutInstance[];
+  kitchenWorktopDraw: { active: boolean };
+  kitchenWorktops: KitchenWorktopInstance[];
+  layoutRoot: THREE.Group;
+  layoutTool: LayoutTool;
+  layoutUi: HTMLElement;
+  makeKitchenWorktopOutlineGeometry: (params: KitchenWorktopParams, planMode: boolean) => THREE.BufferGeometry;
+  measureState: MeasureState;
+  mode: AppMode;
+  mountControls: () => void;
+  mountProps: () => void;
+  partsBuildHost: HTMLElement;
+  partsLayoutHost: HTMLElement;
+  placement: { active: boolean };
+  placementHelpers: PlacementHelpers;
+  rebuild: () => void;
+  rebuildWallPlanMesh: () => void;
+  selectMesh: (mesh: THREE.Mesh | null) => void;
+  selectedFloorId: string | null;
+  selectedInstanceId: string | null;
+  selectedKind: SelectedKind;
+  selectedSectionId: string | null;
+  selectedWallId: string | null;
+  setInstanceSelected: (id: string | null) => void;
+  setPlanPresentation: (enabled: boolean) => void;
+  setSelectedFloor: (id: string | null) => void;
+  setSelectedModule: (id: string | null) => void;
+  setSelectedSection: (id: string | null) => void;
+  setSelectedWall: (id: string | null) => void;
+  setSelectedWindow: () => void;
+  setViewMode: (mode: "2d" | "3d") => void;
+  showNoProps: () => void;
+  syncDetailClippingAndMaterials: () => void;
+  syncViewerTabs: (activeKey: string) => void;
+  updateAllSectionVisuals: () => void;
+  updateDetailSliceOverlay: () => void;
+  updateLayoutPanel: () => void;
+  updateSelectionHighlights: () => void;
+  view2d: HTMLInputElement;
+  viewMode: "2d" | "3d";
+  viewNavigation: { syncControls: () => void };
+  wallPlanGroup: THREE.Group;
+  wallSnapMarkers: THREE.Object3D;
+  walls: WallInstance[];
+  windowEditorHost: HTMLElement;
+  windowInst: WindowInstance | null;
+};
+
+export function createViewModeController(ctx: ViewModeControllerContext) {
   function setView2d(enabled: boolean) {
     if (!enabled && ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active) {
       ctx.handleKitchenWorktopEscape();
