@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import {
   axisLockXZ,
@@ -43,6 +43,7 @@ import {
 } from "./app/measureEditing";
 import { createSnapOverlay } from "./app/snapOverlay";
 import { DimensionOverlay } from "./app/dimensionOverlay";
+import { createTechnicalDimensionManager } from "./app/technicalDimensions";
 import {
   areAlignLinesParallel,
   buildModuleAlignCandidates,
@@ -364,47 +365,17 @@ export function startApp(initialArgs: AppArgs) {
   const kitchenWorktops: KitchenWorktopInstance[] = [];
   let worktopCounter = 1;
 
-  type TechnicalDimensionPoint = { x: number; y: number };
-  type TechnicalDimensionRecord = {
-    id: string;
-    start: TechnicalDimensionPoint;
-    end: TechnicalDimensionPoint;
-    extensionStart: TechnicalDimensionPoint;
-    extensionEnd: TechnicalDimensionPoint;
-  };
-
-  const technicalDimensions: TechnicalDimensionRecord[] = [];
-  let technicalDimensionCounter = 1;
-  const dimensionState = {
-    picked: [] as AlignPickedLine[],
-    hover: null as AlignPickedLine | null,
-    preview: [] as TechnicalDimensionRecord[]
-  };
-
-  const renderDimensionOverlay = () => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    dimensionOverlay.setSize(rect.width, rect.height);
-    dimensionOverlay.clearDimensions();
-
-    const activeCam = cam();
-    const isFloorplan = mode === "layout" && viewMode === "2d" && activeViewerTab === "floorplan";
-    dimensionOverlay.setVisible(isFloorplan);
-    if (!isFloorplan || !(activeCam instanceof THREE.OrthographicCamera)) return;
-
-    const scaleX = (rect.width / Math.max(1e-9, Math.abs(activeCam.right - activeCam.left))) * activeCam.zoom;
-    const scaleY = (rect.height / Math.max(1e-9, Math.abs(activeCam.top - activeCam.bottom))) * activeCam.zoom;
-    const scale = Math.max(1e-6, Math.min(scaleX, scaleY));
-    const target = ctl().target;
-    dimensionOverlay.syncCamera(scale, -target.x, -target.z);
-
-    for (const dim of technicalDimensions) {
-      dimensionOverlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
-    }
-    for (const dim of dimensionState.preview) {
-      dimensionOverlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
-    }
-    dimensionOverlay.updateLines();
-  };
+  const technicalDimensions = createTechnicalDimensionManager({
+    overlay: dimensionOverlay,
+    renderer,
+    getCamera: cam,
+    getControls: ctl,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    clearToolHud
+  });
+  const dimensionState = technicalDimensions.state;
 
   const history = {
     past: [] as LayoutSnapshot[],
@@ -986,75 +957,6 @@ export function startApp(initialArgs: AppArgs) {
     }
 
     return pickBestAlignLine(mousePx, rect, cam(), candidates, 12);
-  };
-
-  const linePointToDimensionPoint = (p: THREE.Vector3): TechnicalDimensionPoint => ({ x: p.x, y: -p.z });
-
-  const dimensionLineKey = (line: AlignPickedLine) => {
-    const owner = line.wallId ?? line.instanceId ?? line.worktopId ?? "";
-    const seg = line.segmentIndex ?? "";
-    return [
-      line.targetKind,
-      owner,
-      seg,
-      line.lineRole,
-      line.segA.x.toFixed(4),
-      line.segA.z.toFixed(4),
-      line.segB.x.toFixed(4),
-      line.segB.z.toFixed(4)
-    ].join(":");
-  };
-
-  const isDimensionLinePicked = (line: AlignPickedLine) => dimensionState.picked.some((picked) => dimensionLineKey(picked) === dimensionLineKey(line));
-
-  const pointOnPickedLineAt = (line: AlignPickedLine, dir: THREE.Vector3, along: number) => {
-    const base = line.p.dot(dir);
-    return line.p.clone().addScaledVector(dir, along - base);
-  };
-
-  const buildDimensionsFromPickedLines = (lines: AlignPickedLine[], placement: THREE.Vector3, idPrefix: string) => {
-    if (lines.length < 2) return [] as TechnicalDimensionRecord[];
-    const dir = lines[0]!.dir.clone().setY(0);
-    if (dir.lengthSq() < 1e-10) return [] as TechnicalDimensionRecord[];
-    dir.normalize();
-    const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
-    const placementAlong = placement.dot(dir);
-
-    const anchors = lines
-      .map((line) => {
-        const signed = line.p.clone().sub(lines[0]!.p).dot(normal);
-        const aAlong = line.segA.dot(dir);
-        const bAlong = line.segB.dot(dir);
-        const edgeAlong = clamp(placementAlong, Math.min(aAlong, bAlong), Math.max(aAlong, bAlong));
-        return {
-          signed,
-          anchor: pointOnPickedLineAt(line, dir, placementAlong),
-          extension: pointOnPickedLineAt(line, dir, edgeAlong)
-        };
-      })
-      .sort((a, b) => a.signed - b.signed);
-
-    const dims: TechnicalDimensionRecord[] = [];
-    for (let i = 0; i < anchors.length - 1; i += 1) {
-      const a = anchors[i]!;
-      const b = anchors[i + 1]!;
-      if (a.anchor.distanceToSquared(b.anchor) < 1e-10) continue;
-      dims.push({
-        id: `${idPrefix}-${i}`,
-        start: linePointToDimensionPoint(a.anchor),
-        end: linePointToDimensionPoint(b.anchor),
-        extensionStart: linePointToDimensionPoint(a.extension),
-        extensionEnd: linePointToDimensionPoint(b.extension)
-      });
-    }
-    return dims;
-  };
-
-  const resetDimensionDraft = () => {
-    dimensionState.picked = [];
-    dimensionState.hover = null;
-    dimensionState.preview = [];
-    clearToolHud();
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -3667,7 +3569,7 @@ export function startApp(initialArgs: AppArgs) {
 
     if (layoutTool === "dimension") {
       if (dimensionState.picked.length > 0) {
-        resetDimensionDraft();
+        technicalDimensions.resetDraft();
         setUnderlayStatus("Kóta: výber zrušený. Vyber prvú čiaru.");
       } else {
         setToolSelect();
@@ -3744,7 +3646,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "select";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3762,7 +3664,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "wall";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3784,7 +3686,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "align";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3803,7 +3705,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "trim";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -3825,7 +3727,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "section";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelKitchenWorktopDraw({ silent: true });
     cancelSectionDraw({ silent: true });
@@ -3867,7 +3769,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "measure";
     measureState.enabled = true;
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     measureState.firstPoint = null;
     measureState.firstBinding = null;
     measureState.hoverPoint = null;
@@ -3903,7 +3805,7 @@ export function startApp(initialArgs: AppArgs) {
     if (placement.active) cancelPlacement(S, placementHelpers);
     layoutTool = "dimension";
     deactivateMeasureTool();
-    resetDimensionDraft();
+    technicalDimensions.resetDraft();
     clearWallDrawState();
     cancelSectionDraw({ silent: true });
     cancelKitchenWorktopDraw({ silent: true });
@@ -9931,7 +9833,7 @@ export function startApp(initialArgs: AppArgs) {
             ev.stopPropagation();
             return;
           }
-          if (isDimensionLinePicked(picked)) {
+          if (technicalDimensions.isLinePicked(picked)) {
             setUnderlayStatus("Kóta: táto čiara už je vybraná.");
             ev.preventDefault();
             ev.stopPropagation();
@@ -9957,11 +9859,9 @@ export function startApp(initialArgs: AppArgs) {
           return;
         }
 
-        const dims = buildDimensionsFromPickedLines(dimensionState.picked, hitPoint, "dimension");
-        for (const dim of dims) {
-          technicalDimensions.push({ ...dim, id: `dimension-${technicalDimensionCounter++}` });
-        }
-        resetDimensionDraft();
+        const dims = technicalDimensions.buildFromPickedLines(dimensionState.picked, hitPoint, "dimension");
+        technicalDimensions.commitDimensions(dims);
+        technicalDimensions.resetDraft();
         setUnderlayStatus(dims.length > 0 ? `Kóta: vložené ${dims.length}. Vyber ďalšiu prvú čiaru.` : "Kóta: nepodarilo sa vložiť.");
         mountProps();
         ev.preventDefault();
@@ -10969,7 +10869,7 @@ export function startApp(initialArgs: AppArgs) {
 
         dimensionState.preview =
           !picked && dimensionState.picked.length >= 2
-            ? buildDimensionsFromPickedLines(dimensionState.picked, hitPoint, "preview")
+            ? technicalDimensions.buildFromPickedLines(dimensionState.picked, hitPoint, "preview")
             : [];
       }
     }
@@ -12859,7 +12759,7 @@ export function startApp(initialArgs: AppArgs) {
       }
       renderer.render(scene, activeCam);
     }
-    renderDimensionOverlay();
+    technicalDimensions.render();
     requestAnimationFrame(tick);
   };
   tick();
