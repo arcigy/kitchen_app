@@ -212,7 +212,7 @@ export function ensurePickAndOutline(
 export function tagModuleGeometry(module: THREE.Object3D, instanceId: string) {
   module.userData.kind = "module";
   module.userData.instanceId = instanceId;
-  module.traverse((obj: any) => {
+  module.traverse((obj) => {
     obj.userData.kind = "module";
     obj.userData.instanceId = instanceId;
   });
@@ -221,10 +221,9 @@ export function tagModuleGeometry(module: THREE.Object3D, instanceId: string) {
 export function getInstanceGeometryMeshes(inst: LayoutInstance, viewMode: "2d" | "3d") {
   if (viewMode === "2d") return [inst.pick];
   const meshes: THREE.Mesh[] = [];
-  inst.module.traverse((obj: any) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.visible) return;
-    meshes.push(mesh);
+  inst.module.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
+    meshes.push(obj);
   });
   return meshes;
 }

@@ -23,6 +23,12 @@ type ExportActionsArgs = {
   onLanguageChange: () => void;
 };
 
+type BlenderExportResponse = {
+  ok: boolean;
+  error?: string;
+  previewUrl?: string;
+};
+
 const buildTimestampedFileName = (prefix: string, extension: string) =>
   `${prefix}-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.${extension}`;
 
@@ -32,6 +38,21 @@ const copyTextToClipboard = async (text: string) => {
     return true;
   } catch {
     return false;
+  }
+};
+
+const parseBlenderExportResponse = (text: string): BlenderExportResponse | null => {
+  try {
+    const value = JSON.parse(text) as unknown;
+    if (!value || typeof value !== "object") return null;
+    const record = value as Record<string, unknown>;
+    return {
+      ok: record.ok === true,
+      error: typeof record.error === "string" ? record.error : undefined,
+      previewUrl: typeof record.previewUrl === "string" ? record.previewUrl : undefined
+    };
+  } catch {
+    return null;
   }
 };
 
@@ -155,19 +176,14 @@ export function createExportActions(args: ExportActionsArgs) {
       window.clearTimeout(t);
 
       const text = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // ignore
-      }
+      const data = parseBlenderExportResponse(text);
 
       if (!res.ok || !data?.ok) {
-        throw new Error((data && typeof data.error === "string" && data.error) || text || `HTTP ${res.status}`);
+        throw new Error(data?.error || text || `HTTP ${res.status}`);
       }
 
       const copyOk = await copyTextToClipboard(json);
-      const previewUrl = typeof data.previewUrl === "string" ? data.previewUrl : null;
+      const previewUrl = data.previewUrl ?? null;
       if (!previewUrl) throw new Error("Backend did not return previewUrl.");
 
       if (previewLinkEl) previewLinkEl.href = previewUrl;

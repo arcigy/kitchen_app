@@ -194,10 +194,12 @@ export function createSelectionHighlights(args: {
   const updateSelectionHighlights = () => {
     for (const ch of [...selectionHighlights.children]) {
       selectionHighlights.remove(ch);
-      const mesh = ch as any;
-      mesh.geometry?.dispose?.();
-      if (Array.isArray(mesh.material)) for (const material of mesh.material) material?.dispose?.();
-      else mesh.material?.dispose?.();
+      if ("geometry" in ch && ch.geometry instanceof THREE.BufferGeometry) ch.geometry.dispose();
+      if ("material" in ch) {
+        const material = ch.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(material)) for (const mat of material) mat.dispose();
+        else material?.dispose();
+      }
     }
 
     if (args.getMode() !== "layout") {

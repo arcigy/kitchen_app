@@ -27,10 +27,12 @@ export type FloorBoundaryEditVisualState = {
 export function clearFloorBoundaryGroup(group: THREE.Group) {
   for (const child of [...group.children]) {
     group.remove(child);
-    const anyChild = child as any;
-    anyChild.geometry?.dispose?.();
-    if (Array.isArray(anyChild.material)) for (const mat of anyChild.material) mat?.dispose?.();
-    else anyChild.material?.dispose?.();
+    if ("geometry" in child && child.geometry instanceof THREE.BufferGeometry) child.geometry.dispose();
+    if ("material" in child) {
+      const material = child.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(material)) for (const mat of material) mat.dispose();
+      else material?.dispose();
+    }
   }
 }
 
