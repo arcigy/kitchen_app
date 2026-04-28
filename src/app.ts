@@ -135,6 +135,17 @@ import {
   worldToFloorPoint
 } from "./app/floorBoundaryEdit";
 import {
+  fromMmPoint,
+  joinExtensionM as computeJoinExtensionM,
+  mmDist,
+  pointOnWallAxisMm,
+  snapAxisXZ,
+  toMmPoint,
+  wallDirOutFromNode as wallDirOutFromNodeBase,
+  wallEndpointWhich,
+  wallExteriorSign
+} from "./app/wallGeometryHelpers";
+import {
   cloneKitchenWorktopParams,
   kitchenWorktopOutlineColor,
   makeKitchenWorktopBackGuideGeometry,
@@ -1075,100 +1086,18 @@ export function startApp(initialArgs: AppArgs) {
     }
   };
 
-  function snapAxisXZ(a: THREE.Vector3, b: THREE.Vector3, enabled: boolean) {
-    if (!enabled) return b;
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    if (Math.abs(dx) >= Math.abs(dz)) return new THREE.Vector3(b.x, b.y, a.z);
-    return new THREE.Vector3(a.x, b.y, b.z);
-  }
-
-  function toMmPoint(v: THREE.Vector3) {
-    return { x: Math.round(v.x * 1000), z: Math.round(v.z * 1000) };
-  }
-
-  function fromMmPoint(p: { x: number; z: number }) {
-    return new THREE.Vector3(p.x / 1000, 0, p.z / 1000);
-  }
-
-  function mmDist(a: { x: number; z: number }, b: { x: number; z: number }) {
-    return Math.hypot(a.x - b.x, a.z - b.z);
-  }
-
-  function wallEndpointWhich(w: WallInstance, p: { x: number; z: number }, tolMm: number): "a" | "b" | null {
-    if (mmDist(w.params.aMm, p) <= tolMm) return "a";
-    if (mmDist(w.params.bMm, p) <= tolMm) return "b";
-    return null;
-  }
-
   function setWallEndpointMm(w: WallInstance, which: "a" | "b", p: { x: number; z: number }) {
     if (which === "a") w.params.aMm = { x: p.x, z: p.z };
     else w.params.bMm = { x: p.x, z: p.z };
     rebuildWall(w);
   }
 
-  function pointOnWallAxisMm(w: WallInstance, p: { x: number; z: number }) {
-    const ax = w.params.aMm.x;
-    const az = w.params.aMm.z;
-    const bx = w.params.bMm.x;
-    const bz = w.params.bMm.z;
-    const abx = bx - ax;
-    const abz = bz - az;
-    const apx = p.x - ax;
-    const apz = p.z - az;
-    const denom = abx * abx + abz * abz;
-    if (denom < 1e-6) return { t: 0, closest: { x: ax, z: az }, distMm: Infinity };
-    const t = (apx * abx + apz * abz) / denom;
-    const tt = Math.max(0, Math.min(1, t));
-    const cx = ax + abx * tt;
-    const cz = az + abz * tt;
-    const distMm = Math.hypot(p.x - cx, p.z - cz);
-    return { t: tt, closest: { x: Math.round(cx), z: Math.round(cz) }, distMm };
-  }
-
   function wallDirOutFromNode(w: WallInstance, node: { x: number; z: number }) {
-    const a = w.params.aMm;
-    const b = w.params.bMm;
-    const isA = mmDist(a, node) <= wallJoinTolMm;
-    const isB = mmDist(b, node) <= wallJoinTolMm;
-    if (isA && !isB) return new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
-    if (isB && !isA) return new THREE.Vector3(a.x - b.x, 0, a.z - b.z);
-    // fallback: assume node is closer to A
-    return new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
-  }
-
-  function wallExteriorSign(w: WallInstance) {
-    return (w.params.exteriorSign ?? 1) as 1 | -1;
+    return wallDirOutFromNodeBase(w, node, wallJoinTolMm);
   }
 
   function joinExtensionM(w: WallInstance, node: { x: number; z: number }) {
-    // Find best neighbor at node and compute a miter-like extension so faces overlap cleanly.
-    const neighbors = walls.filter((x) => x.id !== w.id && (mmDist(x.params.aMm, node) <= wallJoinTolMm || mmDist(x.params.bMm, node) <= wallJoinTolMm));
-    if (neighbors.length === 0) return 0;
-
-    const v0 = wallDirOutFromNode(w, node);
-    if (v0.lengthSq() < 1e-6) return 0;
-    v0.normalize();
-
-    let bestTheta = Infinity;
-    for (const n of neighbors) {
-      const v1 = wallDirOutFromNode(n, node);
-      if (v1.lengthSq() < 1e-6) continue;
-      v1.normalize();
-      const dot = Math.max(-1, Math.min(1, v0.dot(v1)));
-      const theta = Math.acos(dot); // 0..pi
-      // ignore nearly straight continuation
-      if (theta < 0.2 || Math.abs(Math.PI - theta) < 0.2) continue;
-      if (theta < bestTheta) bestTheta = theta;
-    }
-
-    if (!isFinite(bestTheta) || bestTheta === Infinity) return 0;
-
-    const thickM = Math.max(0.01, w.params.thicknessMm / 1000);
-    const tanHalf = Math.tan(bestTheta / 2);
-    if (tanHalf < 1e-4) return 0;
-    const ext = (thickM / 2) / tanHalf;
-    return Math.min(1.2, Math.max(0, ext));
+    return computeJoinExtensionM(w, node, walls, wallJoinTolMm);
   }
 
   function removeWall(w: WallInstance) {
