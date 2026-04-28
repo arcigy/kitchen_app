@@ -15,7 +15,6 @@ import {
   readGrainAlong,
   renderErrors,
   snapPointXZ,
-  toggleSelectedPbr,
   worldToScreen
 } from "./app/sharedUtils";
 import { applyMeasureAxisAssist, createMeasureTools } from "./app/measureTools";
@@ -215,6 +214,15 @@ import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
 import { installKeyboardInputHandlers } from "./app/keyboardInputHandlers";
+import { createTransformController } from "./app/transformController";
+import { createViewModeController } from "./app/viewModeController";
+import { createInstanceRebuilder } from "./app/instanceRebuilder";
+import { createMeasureValueCommitter } from "./app/measureValueCommitter";
+import { createBuildSelectionController } from "./app/buildSelectionController";
+import { createModuleAdjacencySnapResolver } from "./app/moduleAdjacencySnapResolver";
+import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
+import { createWindowControlsController } from "./app/windowControlsController";
+import { createClassicTopbarController } from "./app/classicTopbarController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -554,369 +562,15 @@ export function startApp(initialArgs: AppArgs) {
     lastValidAngle: 0
   };
 
-  const clearTransform = (opts?: { restore?: boolean; status?: string | null }) => {
-    if (opts?.restore) {
-      for (const w of walls) {
-        const p = transformState.startWalls.get(w.id);
-        if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
-        rebuildWall(w);
-      }
-      rebuildWallPlanMesh();
-      for (const inst of instances) {
-        const s = transformState.startInstances.get(inst.id);
-        if (s) {
-          inst.root.position.copy(s.pos);
-          inst.root.rotation.y = s.rotY;
-        }
-      }
-      for (const section of sections) {
-        const s = transformState.startSections.get(section.id);
-        if (!s) continue;
-        section.params = cloneSectionParams(s);
-        updateSectionVisual(section);
-      }
-      updateLayoutPanel();
-      updateSelectionHighlights();
-      mountProps();
-    }
-
-    transformState.kind = null;
-    transformState.step = null;
-    transformState.base = null;
-    transformState.pivot = null;
-    transformState.typed = "";
-    transformState.lastAngleSign = 1;
-    transformState.selectedWallIds = [];
-    transformState.selectedInstanceIds = [];
-    transformState.selectedSectionIds = [];
-    transformState.startWalls.clear();
-    transformState.startInstances.clear();
-    transformState.startInstanceAdjacency.clear();
-    transformState.startSections.clear();
-    transformState.startPointerAngle = 0;
-    transformState.lastValidDelta.set(0, 0, 0);
-    transformState.lastValidAngle = 0;
-    if (opts?.status) setUnderlayStatus(opts.status);
-  };
-
-  const startTransformFromSelection = (kind: "move" | "rotate") => {
-    if (mode !== "layout" || viewMode !== "2d" || layoutTool !== "select") return false;
-    if (measureState.enabled) return false;
-    if (dragState.active || windowDragState.active || wallEditHud.drag || marquee.active) return false;
-    if (underlayCal.active) return false;
-
-    const wallIds = selectedWallIds.size > 0 ? Array.from(selectedWallIds) : selectedKind === "wall" && selectedWallId ? [selectedWallId] : [];
-    const instIds =
-      selectedInstanceIds.size > 0
-        ? Array.from(selectedInstanceIds)
-        : selectedKind === "module" && selectedInstanceId
-          ? [selectedInstanceId]
-          : [];
-    const sectionIds = selectedKind === "section" && selectedSectionId ? [selectedSectionId] : [];
-    if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
-    if (wallIds.length + instIds.length + sectionIds.length === 0) return false;
-
-    clearTransform();
-    transformState.kind = kind;
-    transformState.step = kind === "move" ? "pickBase" : "pickPivot";
-    transformState.selectedWallIds = wallIds;
-    transformState.selectedInstanceIds = instIds;
-    transformState.selectedSectionIds = sectionIds;
-
-    // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
-    for (const w of walls) transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
-    for (const inst of instances) transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
-    for (const inst of instances) {
-      if (!instIds.includes(inst.id)) continue;
-      const box = instanceWorldBox(inst);
-      let neighborId: string | null = null;
-      for (const other of instances) {
-        if (other.id === inst.id) continue;
-        if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
-        const link = detectModuleAdjacency(box, instanceWorldBox(other), other.id);
-        if (link) {
-          neighborId = other.id;
-          break;
-        }
-      }
-      transformState.startInstanceAdjacency.set(inst.id, neighborId);
-    }
-    for (const section of sections) transformState.startSections.set(section.id, cloneSectionParams(section.params));
-
-    setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
-    mountProps();
-    return true;
-  };
-
-  const restoreTransformStartState = () => {
-    for (const w of walls) {
-      const p = transformState.startWalls.get(w.id);
-      if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
-      rebuildWall(w);
-    }
-    rebuildWallPlanMesh();
-    for (const inst of instances) {
-      const s = transformState.startInstances.get(inst.id);
-      if (s) {
-        inst.root.position.copy(s.pos);
-        inst.root.rotation.y = s.rotY;
-      }
-    }
-    for (const section of sections) {
-      const s = transformState.startSections.get(section.id);
-      if (!s) continue;
-      section.params = cloneSectionParams(s);
-      updateSectionVisual(section);
-    }
-  };
-
-  const translateWallsByAnchors = (dxMm: number, dzMm: number) => {
-    const anchors: Array<{ x: number; z: number }> = [];
-    for (const id of transformState.selectedWallIds) {
-      const p = transformState.startWalls.get(id);
-      if (!p) continue;
-      anchors.push({ x: p.aMm.x, z: p.aMm.z }, { x: p.bMm.x, z: p.bMm.z });
-    }
-    if (anchors.length === 0) return;
-
-    const matchAnchor = (p: { x: number; z: number }) => anchors.some((a) => mmDist(a, p) <= wallJoinTolMm);
-    const touched = new Set<string>();
-    for (const w of walls) {
-      if (pinnedWallIds.has(w.id)) continue;
-      let changed = false;
-      if (matchAnchor(w.params.aMm)) {
-        w.params.aMm = { x: w.params.aMm.x + dxMm, z: w.params.aMm.z + dzMm };
-        changed = true;
-      }
-      if (matchAnchor(w.params.bMm)) {
-        w.params.bMm = { x: w.params.bMm.x + dxMm, z: w.params.bMm.z + dzMm };
-        changed = true;
-      }
-      if (changed) touched.add(w.id);
-    }
-    for (const id of touched) {
-      const w = walls.find((x) => x.id === id) ?? null;
-      if (w) rebuildWall(w);
-    }
-    if (touched.size > 0) rebuildWallPlanMesh();
-  };
-
-  const applyMoveDelta = (delta: THREE.Vector3) => {
-    restoreTransformStartState();
-
-    const dxMm = Math.round(delta.x * 1000);
-    const dzMm = Math.round(delta.z * 1000);
-
-    if (dxMm !== 0 || dzMm !== 0) {
-      translateWallsByAnchors(dxMm, dzMm);
-    }
-
-    for (const id of transformState.selectedSectionIds) {
-      const section = sections.find((item) => item.id === id) ?? null;
-      const start = transformState.startSections.get(id);
-      if (!section || !start) continue;
-      section.params.aMm = { x: start.aMm.x + dxMm, z: start.aMm.z + dzMm };
-      section.params.bMm = { x: start.bMm.x + dxMm, z: start.bMm.z + dzMm };
-      updateSectionVisual(section);
-    }
-
-    const ignore = new Set<string>(transformState.selectedInstanceIds);
-
-    // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
-    let ok = true;
-    for (const id of transformState.selectedInstanceIds) {
-      const inst = findInstance(id);
-      const st = transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const desired = st.pos.clone().add(delta);
-      const desiredInRoom = applyWallConstraints(inst, desired);
-      const snapped =
-        transformState.selectedInstanceIds.length === 1
-          ? snapPositionDetailed(inst, desiredInRoom, {
-              ignoreIds: ignore,
-              stickyNeighborId: transformState.startInstanceAdjacency.get(id) ?? null
-            }).position
-          : desiredInRoom;
-      inst.root.position.copy(snapped);
-      autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-      if (transformState.selectedInstanceIds.length === 1) {
-        const actualDelta = inst.root.position.clone().sub(st.pos);
-        nudgePinnedModuleChain(inst, actualDelta);
-      }
-    }
-    for (const id of transformState.selectedInstanceIds) {
-      const inst = findInstance(id);
-      if (!inst) continue;
-      const inRoom = instanceFitsRoom(inst);
-      const overlaps = anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
-        ok = false;
-        break;
-      }
-    }
-
-    if (ok) {
-      for (const inst of instances) {
-        if (
-          !instanceFitsRoom(inst) ||
-          anyOverlap(inst, null) ||
-          moduleOverlapsWalls(inst) ||
-          moduleOverlapsKitchenWorktops(inst)
-        ) {
-          ok = false;
-          break;
-        }
-      }
-    }
-
-    if (ok) {
-      for (const id of transformState.selectedInstanceIds) {
-        const inst = findInstance(id);
-        if (!inst?.kitchenGroupId) continue;
-        const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-        const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-        inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-      }
-      transformState.lastValidDelta.copy(delta);
-      updateLayoutPanel();
-    } else {
-      restoreTransformStartState();
-      const d = transformState.lastValidDelta;
-      const dxMm2 = Math.round(d.x * 1000);
-      const dzMm2 = Math.round(d.z * 1000);
-      if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
-      for (const id of transformState.selectedInstanceIds) {
-        const inst = findInstance(id);
-        const st = transformState.startInstances.get(id);
-        if (!inst || !st) continue;
-        const desired = st.pos.clone().add(d);
-        const desiredInRoom = applyWallConstraints(inst, desired);
-        const snapped =
-          transformState.selectedInstanceIds.length === 1
-            ? snapPositionDetailed(inst, desiredInRoom, {
-                ignoreIds: ignore,
-                stickyNeighborId: transformState.startInstanceAdjacency.get(id) ?? null
-              }).position
-            : desiredInRoom;
-        inst.root.position.copy(snapped);
-        autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-        if (transformState.selectedInstanceIds.length === 1) {
-          const actualDelta = inst.root.position.clone().sub(st.pos);
-          nudgePinnedModuleChain(inst, actualDelta);
-        }
-      }
-      updateLayoutPanel();
-    }
-  };
-
-  const rotatePointAround = (p: THREE.Vector3, pivot: THREE.Vector3, ang: number) => {
-    const dx = p.x - pivot.x;
-    const dz = p.z - pivot.z;
-    const c = Math.cos(ang);
-    const s = Math.sin(ang);
-    return new THREE.Vector3(pivot.x + dx * c - dz * s, 0, pivot.z + dx * s + dz * c);
-  };
-
-  const rotateWallsByAnchors = (pivot: THREE.Vector3, ang: number) => {
-    const anchors: Array<{ old: { x: number; z: number }; next: { x: number; z: number } }> = [];
-    for (const id of transformState.selectedWallIds) {
-      const p = transformState.startWalls.get(id);
-      if (!p) continue;
-      const a = fromMmPoint(p.aMm);
-      const b = fromMmPoint(p.bMm);
-      const na = rotatePointAround(a, pivot, ang);
-      const nb = rotatePointAround(b, pivot, ang);
-      anchors.push(
-        { old: { x: p.aMm.x, z: p.aMm.z }, next: toMmPoint(na) },
-        { old: { x: p.bMm.x, z: p.bMm.z }, next: toMmPoint(nb) }
-      );
-    }
-    if (anchors.length === 0) return;
-
-    const mapEnd = (p: { x: number; z: number }) => {
-      for (const a of anchors) if (mmDist(a.old, p) <= wallJoinTolMm) return a.next;
-      return null;
-    };
-
-    const touched = new Set<string>();
-    for (const w of walls) {
-      if (pinnedWallIds.has(w.id)) continue;
-      const na = mapEnd(w.params.aMm);
-      const nb = mapEnd(w.params.bMm);
-      if (na) {
-        w.params.aMm = { x: na.x, z: na.z };
-        touched.add(w.id);
-      }
-      if (nb) {
-        w.params.bMm = { x: nb.x, z: nb.z };
-        touched.add(w.id);
-      }
-    }
-    for (const id of touched) {
-      const w = walls.find((x) => x.id === id) ?? null;
-      if (w) rebuildWall(w);
-    }
-    if (touched.size > 0) rebuildWallPlanMesh();
-  };
-
-  const applyRotateAngle = (ang: number) => {
-    const pivot = transformState.pivot;
-    if (!pivot) return;
-    restoreTransformStartState();
-
-    rotateWallsByAnchors(pivot, ang);
-
-    const ignore = new Set<string>(transformState.selectedInstanceIds);
-    let ok = true;
-
-    for (const id of transformState.selectedInstanceIds) {
-      const inst = findInstance(id);
-      const st = transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const nextPos = rotatePointAround(st.pos, pivot, ang);
-      inst.root.rotation.y = st.rotY + ang;
-      inst.root.position.copy(applyWallConstraints(inst, nextPos));
-    }
-
-    for (const id of transformState.selectedInstanceIds) {
-      const inst = findInstance(id);
-      if (!inst) continue;
-      const inRoom = instanceFitsRoom(inst);
-      const overlaps = anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
-        ok = false;
-        break;
-      }
-    }
-
-    // Also block rotating walls into any existing module.
-    if (ok) {
-      for (const inst of instances) {
-        if (moduleOverlapsWalls(inst)) {
-          ok = false;
-          break;
-        }
-      }
-    }
-
-    if (ok) {
-      transformState.lastValidAngle = ang;
-      updateLayoutPanel();
-    } else {
-      // Keep last valid
-      restoreTransformStartState();
-      rotateWallsByAnchors(pivot, transformState.lastValidAngle);
-      for (const id of transformState.selectedInstanceIds) {
-        const inst = findInstance(id);
-        const st = transformState.startInstances.get(id);
-        if (!inst || !st) continue;
-        const nextPos = rotatePointAround(st.pos, pivot, transformState.lastValidAngle);
-        inst.root.rotation.y = st.rotY + transformState.lastValidAngle;
-        inst.root.position.copy(applyWallConstraints(inst, nextPos));
-      }
-      updateLayoutPanel();
-    }
-  };
+  let createTransformControllerResult!: ReturnType<typeof createTransformController>;
+  const clearTransform = (...args: Parameters<ReturnType<typeof createTransformController>["clearTransform"]>) => createTransformControllerResult.clearTransform(...args);
+  const startTransformFromSelection = (...args: Parameters<ReturnType<typeof createTransformController>["startTransformFromSelection"]>) => createTransformControllerResult.startTransformFromSelection(...args);
+  const restoreTransformStartState = (...args: Parameters<ReturnType<typeof createTransformController>["restoreTransformStartState"]>) => createTransformControllerResult.restoreTransformStartState(...args);
+  const translateWallsByAnchors = (...args: Parameters<ReturnType<typeof createTransformController>["translateWallsByAnchors"]>) => createTransformControllerResult.translateWallsByAnchors(...args);
+  const applyMoveDelta = (...args: Parameters<ReturnType<typeof createTransformController>["applyMoveDelta"]>) => createTransformControllerResult.applyMoveDelta(...args);
+  const rotatePointAround = (...args: Parameters<ReturnType<typeof createTransformController>["rotatePointAround"]>) => createTransformControllerResult.rotatePointAround(...args);
+  const rotateWallsByAnchors = (...args: Parameters<ReturnType<typeof createTransformController>["rotateWallsByAnchors"]>) => createTransformControllerResult.rotateWallsByAnchors(...args);
+  const applyRotateAngle = (...args: Parameters<ReturnType<typeof createTransformController>["applyRotateAngle"]>) => createTransformControllerResult.applyRotateAngle(...args);
 
   const alignState = {
     ref: null as AlignPickedLine | null,
@@ -2582,9 +2236,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   const ensureLayoutMode = () => {
-    if (mode !== "layout") {
-      setMode("layout");
-    }
+    if (mode !== "layout") setMode("layout");
   };
 
 
@@ -2664,6 +2316,10 @@ export function startApp(initialArgs: AppArgs) {
     p.textContent = mode === "layout" ? "Vyber objekt alebo nĂ„â€šĂ‹â€ˇstroj." : "Properties sĂ„â€šÄąĹş dostupnĂ„â€šĂ‚Â© iba v layout mode.";
     s.appendChild(p);
   };
+
+
+
+
 
   const mountActiveViewProps = () => {
     props.setTitle("View");
@@ -3187,80 +2843,60 @@ export function startApp(initialArgs: AppArgs) {
     activateViewerTab("3d");
   });
 
-  const buildClassicTopbar = () => {
-    const row = tb.addRow({ className: "topbar-classic-ribbon" });
+  let createClassicTopbarControllerResult!: ReturnType<typeof createClassicTopbarController>;
+  const buildClassicTopbar = (...args: Parameters<ReturnType<typeof createClassicTopbarController>["buildClassicTopbar"]>) => createClassicTopbarControllerResult.buildClassicTopbar(...args);
+  createClassicTopbarControllerResult = createClassicTopbarController({
+    I_ALIGN,
+    I_BOM,
+    I_CABINET,
+    I_COPY,
+    I_DIM,
+    I_DUP,
+    I_EXPORT,
+    I_FLOOR,
+    I_GRID2D,
+    I_INSTALL,
+    I_MOVE,
+    I_REDO,
+    I_RESET,
+    I_ROTATE,
+    I_SECTION,
+    I_SELECT,
+    I_TRASH,
+    I_TRIM,
+    I_UNDERLAY,
+    I_UNDO,
+    I_VIEW,
+    I_WALL,
+    S,
+    args,
+    deleteSelected,
+    duplicateSelected,
+    enterFloorBoundaryEdit,
+    getInstallState,
+    helpers,
+    kitchenMode,
+    layoutTool,
+    openBomPanel,
+    openPricingCatalog,
+    openUnderlayPanel,
+    promptAppInstall,
+    redo,
+    setToolAlign,
+    setToolDimension,
+    setToolMeasure,
+    setToolSection,
+    setToolSelect,
+    setToolTrim,
+    setToolWall,
+    startTransformFromSelection,
+    subscribeInstallState,
+    tb,
+    toggle2dView,
+    undo,
+    updateUndoRedoUi
+  });
 
-    const tools = tb.addGroup("Layout", { row });
-    tb.toolButton(tools, { title: "Select", label: "Select", iconSvg: I_SELECT, onClick: () => setToolSelect() });
-    tb.toolButton(tools, { title: "Wall", label: "Wall", iconSvg: I_WALL, onClick: () => setToolWall() });
-    tb.toolButton(tools, { title: "Align", label: "Align", iconSvg: I_ALIGN, onClick: () => setToolAlign() });
-    tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: I_TRIM, onClick: () => setToolTrim() });
-    tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: I_SECTION, onClick: () => setToolSection() });
-    tb.toolButton(tools, {
-      title: "Dimension",
-      label: "KĂ„â€šÄąâ€šta",
-      iconSvg: I_DIM,
-      onClick: () => setToolDimension()
-    });
-    tb.toolButton(tools, {
-      title: "Measure",
-      label: "Measure",
-      iconSvg: I_DIM,
-      onClick: () => {
-        if (layoutTool === "measure") setToolSelect();
-        else setToolMeasure();
-      }
-    });
-    tb.toolButton(tools, { title: "Floor", label: "Floor", iconSvg: I_FLOOR, onClick: () => enterFloorBoundaryEdit() });
-    tb.toolButton(tools, { title: "Underlay", label: "Underlay", iconSvg: I_UNDERLAY, onClick: openUnderlayPanel });
-    tb.toolButton(tools, { title: "Kitchen", label: "Kitchen", iconSvg: I_CABINET, onClick: () => kitchenMode?.enterNew() });
-
-    const edit = tb.addGroup("Edit", { row });
-    S.undoBtnEl = tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: I_UNDO, onClick: () => undo(S, helpers) });
-    S.redoBtnEl = tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: I_REDO, onClick: () => redo(S, helpers) });
-    tb.toolButton(edit, { title: "Move", label: "Move", iconSvg: I_MOVE, onClick: () => startTransformFromSelection("move") });
-    tb.toolButton(edit, { title: "Rotate", label: "Rotate", iconSvg: I_ROTATE, onClick: () => startTransformFromSelection("rotate") });
-    tb.toolButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: I_DUP, onClick: duplicateSelected });
-    tb.toolButton(edit, { title: "Delete", label: "Delete", iconSvg: I_TRASH, onClick: deleteSelected });
-
-    const project = tb.addGroup("Project", { row });
-    tb.toolButton(project, { title: "2D View", label: "2D View", iconSvg: I_GRID2D, onClick: toggle2dView });
-    tb.toolButton(project, { title: "Reset Defaults", label: "Reset", iconSvg: I_RESET, onClick: () => args.resetBtn.click() });
-    tb.toolButton(project, { title: "Export JSON", label: "Export", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
-    tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
-    tb.toolButton(project, { title: "Pricing Catalog", iconSvg: I_BOM, label: "Catalog", onClick: openPricingCatalog });
-    tb.toolButton(project, {
-      title: "BOM",
-      iconSvg: I_BOM,
-      label: "BOM",
-      onClick: () => openBomPanel({ instances: S.instances, kitchenWorktops: S.kitchenWorktops, kitchenCtx: S.kitchenCtx })
-    });
-    const installBtn = tb.toolButton(project, {
-      title: "Install App",
-      label: "Install",
-      iconSvg: I_INSTALL,
-      onClick: () => {
-        const state = getInstallState();
-        if (state.available) {
-          void promptAppInstall();
-          return;
-        }
-        window.alert("Chrome: Save and share > Install page as app.");
-      }
-    });
-    const syncInstallButton = () => {
-      const state = getInstallState();
-      installBtn.style.display = state.supported && !state.installed ? "" : "none";
-      installBtn.style.opacity = state.available ? "1" : "0.72";
-      installBtn.title = state.available ? "Install App" : "Install App (Chrome menu)";
-    };
-    syncInstallButton();
-    subscribeInstallState(syncInstallButton);
-    const resetViewBtn = args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
-    tb.toolButton(project, { title: "Reset View", label: "View", iconSvg: I_VIEW, onClick: () => resetViewBtn?.click() });
-
-    updateUndoRedoUi(S);
-  };
 
   kitchenMode = createKitchenEditMode({
     S,
@@ -3975,6 +3611,10 @@ export function startApp(initialArgs: AppArgs) {
     mountProps();
   }
 
+
+
+
+
   function setSelectedWall(id: string | null) {
     if (layoutTool !== "wall") layoutTool = "select";
     if (id && pinnedWallIds.has(id)) id = null;
@@ -4109,141 +3749,22 @@ export function startApp(initialArgs: AppArgs) {
     return { ...p, widthMm, heightMm, sillHeightMm, centerMm };
   }
 
-  function updateWindowTransform(inst: WindowInstance) {
-    inst.params = clampWindowParams(inst.params);
-    const def = wallDefs[inst.params.wall];
+  let createWindowControlsControllerResult!: ReturnType<typeof createWindowControlsController>;
+  const updateWindowTransform = (...args: Parameters<ReturnType<typeof createWindowControlsController>["updateWindowTransform"]>) => createWindowControlsControllerResult.updateWindowTransform(...args);
+  const mountWindowControls = (...args: Parameters<ReturnType<typeof createWindowControlsController>["mountWindowControls"]>) => createWindowControlsControllerResult.mountWindowControls(...args);
+  createWindowControlsControllerResult = createWindowControlsController({
+    clampWindowParams,
+    createWindow,
+    mode,
+    scene,
+    setSelectedWindow,
+    setWindowCutout,
+    setWindowOpening,
+    wallDefs,
+    windowEditorHost,
+    windowInst
+  });
 
-    const widthM = inst.params.widthMm / 1000;
-    const heightM = inst.params.heightMm / 1000;
-    const centerAxisM = inst.params.centerMm / 1000;
-
-    const y = inst.params.sillHeightMm / 1000 + heightM / 2;
-    const pos = def.fixedPos.clone();
-    pos.y = y;
-    if (def.axis === "x") pos.x = centerAxisM;
-    else pos.z = centerAxisM;
-
-    inst.root.position.copy(pos);
-
-    if (inst.params.wall === "back") inst.root.rotation.set(0, 0, 0);
-    if (inst.params.wall === "left") inst.root.rotation.set(0, Math.PI / 2, 0);
-    if (inst.params.wall === "right") inst.root.rotation.set(0, -Math.PI / 2, 0);
-
-    inst.pick.geometry.dispose();
-    inst.pick.geometry = new THREE.BoxGeometry(Math.max(0.05, widthM), Math.max(0.05, heightM), 0.03);
-    inst.pick.position.set(0, 0, 0);
-
-    const pts = [
-      new THREE.Vector3(-widthM / 2, -heightM / 2, 0.006),
-      new THREE.Vector3(widthM / 2, -heightM / 2, 0.006),
-      new THREE.Vector3(widthM / 2, heightM / 2, 0.006),
-      new THREE.Vector3(-widthM / 2, heightM / 2, 0.006),
-      new THREE.Vector3(-widthM / 2, -heightM / 2, 0.006)
-    ];
-    const g = new THREE.BufferGeometry().setFromPoints(pts);
-    inst.outline.geometry.dispose();
-    inst.outline.geometry = g;
-
-    const centerWorld = inst.root.getWorldPosition(new THREE.Vector3());
-    setWindowOpening({
-      center: centerWorld,
-      inwardNormal: def.inwardNormal,
-      width: widthM,
-      height: heightM
-    });
-
-    setWindowCutout({
-      wall: inst.params.wall,
-      centerAxisM: centerAxisM,
-      sillM: inst.params.sillHeightMm / 1000,
-      widthM,
-      heightM
-    });
-  }
-
-  function addOrSelectWindow() {
-    if (mode !== "layout") return;
-    if (!windowInst) {
-      windowInst = createWindow("back");
-      scene.add(windowInst.root);
-    }
-    setSelectedWindow();
-  }
-
-  function mountWindowControls() {
-    windowEditorHost.innerHTML = "";
-    if (!windowInst) return;
-
-    const title = document.createElement("div");
-    title.textContent = "Window";
-    title.style.margin = "8px 0";
-    title.style.fontWeight = "600";
-    windowEditorHost.appendChild(title);
-
-    const row = (label: string, el: HTMLElement) => {
-      const wrap = document.createElement("div");
-      wrap.style.display = "grid";
-      wrap.style.gridTemplateColumns = "140px 1fr";
-      wrap.style.gap = "8px";
-      wrap.style.alignItems = "center";
-      const l = document.createElement("div");
-      l.textContent = label;
-      wrap.appendChild(l);
-      wrap.appendChild(el);
-      windowEditorHost.appendChild(wrap);
-    };
-
-    const wallSel = document.createElement("select");
-    wallSel.innerHTML = `<option value="back">back</option><option value="left">left</option><option value="right">right</option>`;
-    wallSel.value = windowInst.params.wall;
-    wallSel.addEventListener("change", () => {
-      if (!windowInst) return;
-      windowInst.params.wall = wallSel.value as WallId;
-      updateWindowTransform(windowInst);
-      mountWindowControls();
-    });
-    row("Wall", wallSel);
-
-    const mkNum = (v: number) => {
-      const i = document.createElement("input");
-      i.type = "number";
-      i.value = String(v);
-      i.step = "1";
-      return i;
-    };
-
-    const width = mkNum(windowInst.params.widthMm);
-    width.addEventListener("input", () => {
-      if (!windowInst) return;
-      windowInst.params.widthMm = Number(width.value);
-      updateWindowTransform(windowInst);
-    });
-    row("Width (mm)", width);
-
-    const height = mkNum(windowInst.params.heightMm);
-    height.addEventListener("input", () => {
-      if (!windowInst) return;
-      windowInst.params.heightMm = Number(height.value);
-      updateWindowTransform(windowInst);
-    });
-    row("Height (mm)", height);
-
-    const sill = mkNum(windowInst.params.sillHeightMm);
-    sill.addEventListener("input", () => {
-      if (!windowInst) return;
-      windowInst.params.sillHeightMm = Number(sill.value);
-      updateWindowTransform(windowInst);
-    });
-    row("Sill (mm)", sill);
-
-    const center = mkNum(windowInst.params.centerMm);
-    center.addEventListener("input", () => {
-      if (!windowInst) return;
-      windowInst.params.centerMm = Number(center.value);
-      updateWindowTransform(windowInst);
-    });
-    row(windowInst.params.wall === "back" ? "Center X (mm)" : "Center Z (mm)", center);
-  }
 
   function clearWindowLightIfMissing() {
     if (!windowInst) setWindowOpening(null);
@@ -4266,155 +3787,9 @@ export function startApp(initialArgs: AppArgs) {
     });
   }
 
-  function rebuildInstance(
-    inst: LayoutInstance,
-    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
-  ) {
-    lastRebuildDebug = null;
-    const normalizedParams = normalizeModuleParamsForSource(structuredClone(inst.params), opts?.sourceKey);
-    const errors = validateModule(normalizedParams);
-    renderErrors(args.errorsEl, errors);
-    if (errors.length > 0) {
-      lastRebuildDebug = { ok: false, stage: "validate", errors: structuredClone(errors) };
-      return false;
-    }
-
-    const previousParams = structuredClone(opts?.previousParams ?? inst.params);
-    inst.params = previousParams;
-    const prevWorldBox = instanceWorldBox(inst);
-    const prevAdjacencyInfos = collectAdjacentModuleInfos(inst, prevWorldBox);
-    const resizeAnchorSide = chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? inferTallResizeAnchorSide(inst);
-    const prevPos = inst.root.position.clone();
-    const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
-    const prevLocalAnchor = getModuleLocalKitchenAnchor(inst).clone();
-    const prevWorldAnchor = prevLocalAnchor.clone().applyMatrix4(inst.root.matrixWorld);
-    const prevModule = inst.module;
-    const prevBox = inst.localBox.clone();
-    const prevNeighborPositions = new Map<string, THREE.Vector3>();
-    const prevWorldBoxesById = new Map<string, THREE.Box3>();
-    for (const other of instances) {
-      if (other.id === inst.id) continue;
-      prevNeighborPositions.set(other.id, other.root.position.clone());
-      prevWorldBoxesById.set(other.id, instanceWorldBox(other).clone());
-    }
-    prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
-
-    inst.params = normalizedParams;
-
-    const next = buildModule(inst.params);
-    next.name = `moduleGeom_${inst.id}`;
-    tagModuleGeometry(next, inst.id);
-
-    inst.root.remove(prevModule);
-    inst.module = next;
-    inst.root.add(inst.module);
-    inst.localBox = moduleRootLocalBox(inst.root, inst.module);
-    if (opts?.preserveBackAnchor) {
-      const nextLocalAnchor = getModuleLocalKitchenAnchor(inst);
-      const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
-      inst.module.position.add(delta);
-      inst.localBox = moduleRootLocalBox(inst.root, inst.module);
-    }
-    ensurePickAndOutline(inst);
-    const keepRootPositionStable = footprintExtentsMatchXZ(prevWorldBox, instanceWorldBox(inst));
-    if (!opts?.skipLayoutValidation && !keepRootPositionStable) preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
-    if (opts?.preserveBackAnchor) {
-      preserveWorldKitchenAnchor(inst, prevWorldAnchor);
-    } else if (keepRootPositionStable) {
-      inst.root.position.copy(prevPos);
-      inst.root.updateMatrixWorld(true);
-    }
-
-    if (!opts?.skipLayoutValidation && !opts?.preserveBackAnchor) {
-      const clamped = applyWallConstraints(inst, inst.root.position.clone());
-      inst.root.position.copy(clamped);
-    }
-    const propagated = opts?.skipLayoutValidation
-      ? { ok: true, movedIds: [] as string[] }
-      : isCornerKitchenModule(inst)
-        ? propagateCornerResizeToPinnedNeighbors(inst, previousParams)
-        : propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
-
-    const inRoom = opts?.skipLayoutValidation ? true : instanceFitsLayoutBounds(inst);
-    const overlapsModules = opts?.skipLayoutValidation ? false : anyOverlap(inst, null);
-    const overlapsWalls = opts?.skipLayoutValidation ? false : moduleOverlapsWalls(inst);
-    const overlapsWorktops = opts?.skipLayoutValidation ? false : moduleOverlapsKitchenWorktops(inst);
-    const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
-    const movedNeighborInvalid =
-      !opts?.skipLayoutValidation &&
-      propagated.movedIds.some((id) => {
-        const other = findInstance(id);
-        return !!other &&
-          (!instanceFitsLayoutBounds(other) ||
-            anyOverlap(other, null) ||
-            moduleOverlapsWalls(other) ||
-            moduleOverlapsKitchenWorktops(other));
-      });
-    lastRebuildDebug = {
-      ok: inRoom && !overlaps && !movedNeighborInvalid,
-      stage: inRoom && !overlaps && !movedNeighborInvalid ? "success" : "layoutValidation",
-      keepRootPositionStable,
-      resizeAnchorSide,
-      prevWorldBox: {
-        min: { x: prevWorldBox.min.x, y: prevWorldBox.min.y, z: prevWorldBox.min.z },
-        max: { x: prevWorldBox.max.x, y: prevWorldBox.max.y, z: prevWorldBox.max.z }
-      },
-      nextWorldBox: (() => {
-        const nextWorldBox = instanceWorldBox(inst);
-        return {
-          min: { x: nextWorldBox.min.x, y: nextWorldBox.min.y, z: nextWorldBox.min.z },
-          max: { x: nextWorldBox.max.x, y: nextWorldBox.max.y, z: nextWorldBox.max.z }
-        };
-      })(),
-      inRoom,
-      overlapsModules,
-      overlapsWalls,
-      overlapsWorktops,
-      movedNeighborInvalid,
-      propagatedMovedIds: [...propagated.movedIds]
-    };
-    if (!inRoom || overlaps || movedNeighborInvalid) {
-      // Revert (layout must never allow overlaps)
-      inst.params = previousParams;
-      inst.root.remove(inst.module);
-      disposeObject3D(inst.module);
-      inst.module = prevModule;
-      tagModuleGeometry(inst.module, inst.id);
-      inst.localBox = prevBox;
-      inst.root.position.copy(prevPos);
-      inst.kitchenPlacement = prevKitchenPlacement ? structuredClone(prevKitchenPlacement) : null;
-      inst.root.add(inst.module);
-      for (const other of instances) {
-        if (other.id === inst.id) continue;
-        const prev = prevNeighborPositions.get(other.id);
-        if (prev) other.root.position.copy(prev);
-      }
-      ensurePickAndOutline(inst);
-      renderErrors(args.errorsEl, [
-        !inRoom
-          ? "Module doesn't fit inside the room bounds in layout mode."
-          : overlaps || movedNeighborInvalid
-            ? "Module overlaps wall/another module in layout mode."
-            : "Module invalid in layout mode."
-      ]);
-      return false;
-    }
-
-    disposeObject3D(prevModule);
-    if (inst.kitchenGroupId) {
-      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-    }
-    for (const neighborId of propagated.movedIds) {
-      const neighbor = findInstance(neighborId);
-      if (!neighbor?.kitchenGroupId) continue;
-      const group = S.kitchenGroups.find((item) => item.id === neighbor.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      neighbor.kitchenPlacement = inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
-    }
-    updateLayoutPanel();
-    return true;
+  let createInstanceRebuilderResult!: ReturnType<typeof createInstanceRebuilder>;
+  function rebuildInstance(...args: Parameters<ReturnType<typeof createInstanceRebuilder>["rebuildInstance"]>) {
+    return createInstanceRebuilderResult.rebuildInstance(...args);
   }
 
   function beginModuleSelection(selectableId: string, ev: PointerEvent) {
@@ -4542,245 +3917,29 @@ export function startApp(initialArgs: AppArgs) {
     getActiveViewerTab: () => activeViewerTab
   });
 
-  function setView2d(enabled: boolean) {
-    if (!enabled && S.kitchenEditMode && kitchenWorktopDraw.active) {
-      handleKitchenWorktopEscape();
-    }
-    viewMode = enabled ? "2d" : "3d";
-    S.viewMode = viewMode;
-    setViewMode(viewMode);
-    if (!enabled) activeViewerTab = "3d";
-    if (enabled && activeViewerTab === "3d") activeViewerTab = "floorplan";
-    syncViewerTabs(activeViewerTab);
-    const isFloorplanView = enabled && activeViewerTab === "floorplan";
-    const isDetailOrthoView = enabled && activeViewerTab !== "floorplan";
-    setPlanPresentation(isFloorplanView);
-    viewNavigation.syncControls();
-    if (!isDetailOrthoView) {
-      activeDetailClipPlanes = [];
-    }
-
-    for (const inst of instances) {
-      ensurePickAndOutline(inst, isFloorplanView);
-      inst.module.visible = !enabled || isDetailOrthoView;
-      const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
-      outlineMaterial.depthTest = !enabled;
-      inst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
-    }
-
-    if (windowInst) {
-      const outlineMaterial = windowInst.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = isFloorplanView ? 0.98 : 0.75;
-      outlineMaterial.depthTest = !enabled;
-      windowInst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
-    }
-
-    for (const floor of floors) {
-      floor.mesh.visible = !enabled || isFloorplanView;
-      (floor.outline.material as THREE.LineBasicMaterial).depthTest = !enabled;
-      floor.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
-    }
-
-    for (const worktop of kitchenWorktops) {
-      worktop.outline.geometry.dispose();
-      worktop.outline.geometry = makeKitchenWorktopOutlineGeometry(worktop.params, isFloorplanView);
-      worktop.outline.position.set(0, worktop.params.heightMm / 1000 + (isFloorplanView ? 0.0015 : 0), 0);
-      worktop.mesh.visible = !enabled || isFloorplanView || isDetailOrthoView;
-      worktop.outline.visible = isFloorplanView || isDetailOrthoView;
-      const outlineMaterial = worktop.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = isFloorplanView ? 0.98 : 0.94;
-    }
-
-    wallSnapMarkers.visible = isFloorplanView && !!selectedWallId;
-    if (!isFloorplanView) {
-      drawSnapOverlay.hide();
-      hideHoverCursor();
-    }
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    updateDetailSliceOverlay();
-
-    wallPlanGroup.visible = isFloorplanView;
-    rebuildWallPlanMesh();
-    for (const w of walls) {
-      w.mesh.visible = !enabled || isFloorplanView || isDetailOrthoView;
-      w.outline.visible = !enabled || isDetailOrthoView;
-      const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = isFloorplanView ? 0 : 0.94;
-      outlineMaterial.depthTest = !(isFloorplanView || isDetailOrthoView);
-    }
-    syncDetailClippingAndMaterials();
-  }
-
-  function setMode(next: AppMode) {
-    if (next !== "layout") return;
-    mode = next;
-    S.mode = mode;
-
-    const isLayout = mode === "layout";
-    if (!isLayout && placement.active) cancelPlacement(S, placementHelpers);
-    buildUi.style.display = isLayout ? "none" : "";
-    layoutUi.style.display = isLayout ? "" : "none";
-    partsBuildHost.style.display = isLayout ? "none" : "";
-    partsLayoutHost.style.display = isLayout ? "" : "none";
-
-    args.propertiesEl.hidden = !isLayout;
-    if (drawOrthoToggleEl) drawOrthoToggleEl.style.display = isLayout ? "" : "none";
-    if (!isLayout) {
-      layoutTool = "select";
-      clearWallDrawState();
-    }
-
-    if (!isLayout) {
-      measureState.enabled = false;
-      args.measureBtn.textContent = "Measure: Off";
-      clearAllMeasurements();
-      hideHoverCursor();
-      args.measureReadoutEl.textContent = "";
-    }
-
-    layoutRoot.visible = isLayout;
-
-    if (cabinetGroup) cabinetGroup.visible = !isLayout;
-    clearOverlapHighlight();
-    selectMesh(null);
-
-    if (isLayout) {
-      setView2d(view2d.checked);
-      updateLayoutPanel();
-      if (selectedKind === "window") setSelectedWindow();
-      else if (selectedKind === "section") setSelectedSection(selectedSectionId);
-      else if (selectedKind === "wall") setSelectedWall(selectedWallId);
-      else if (selectedKind === "floor") setSelectedFloor(selectedFloorId);
-      else setSelectedModule(selectedInstanceId);
-
-      // Hide selection editors in right panel (use properties panel on the left).
-      windowEditorHost.style.display = "none";
-      instanceEditorHost.style.display = "none";
-      mountProps();
-    } else {
-      setView2d(false);
-      selectedKind = null;
-      selectedWallId = null;
-      windowEditorHost.style.display = "none";
-      instanceEditorHost.style.display = "";
-      setInstanceSelected(null);
-      mountControls();
-      rebuild();
-      showNoProps();
-    }
-  }
+  let createViewModeControllerResult!: ReturnType<typeof createViewModeController>;
+  const setView2d = (...args: Parameters<ReturnType<typeof createViewModeController>["setView2d"]>) => createViewModeControllerResult.setView2d(...args);
+  const setMode = (...args: Parameters<ReturnType<typeof createViewModeController>["setMode"]>) => createViewModeControllerResult.setMode(...args);
 
   const buildLayoutExportPayload = () => createLayoutExportPayload({ windowInst, floors, sections, instances });
 
-  const selectMesh = (mesh: THREE.Mesh | null) => {
-    selectedMesh = mesh;
-
-    if (selectedBox) {
-      scene.remove(selectedBox);
-      selectedBox.geometry.dispose();
-      (selectedBox.material as THREE.Material).dispose();
-      selectedBox = null;
-    }
-
-    if (grainArrow) {
-      scene.remove(grainArrow);
-      (grainArrow.line.material as THREE.Material).dispose();
-      (grainArrow.cone.material as THREE.Material).dispose();
-      grainArrow = null;
-    }
-
-    if (!mesh) {
-      activeBuildControls?.clearHighlights?.();
-      partPanel.setSelected(null);
-      return;
-    }
-
-    partPanel.setSelected(mesh.name);
-    activeBuildControls?.highlightParamKeys?.(((mesh as any).userData?.paramKeys as string[] | undefined) ?? []);
-
-    selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
-    selectedBox.name = "selectionBox";
-    scene.add(selectedBox);
-
-    const grain = computeGrainArrow(mesh);
-    if (grain) {
-      grainArrow = new THREE.ArrowHelper(grain.dir, grain.origin, grain.length, 0x3ddc97, grain.length * 0.22, grain.length * 0.12);
-      grainArrow.name = "grainArrow";
-      grainArrow.visible = false;
-    }
-  };
-
-  window.addEventListener("keydown", (ev) => {
-    if (S.kitchenEditMode) return;
-    if (!selectedMesh) return;
-    const k = ev.key.toLowerCase();
-    if (k === "p") toggleSelectedPbr(selectedMesh, "all");
-    if (k === "n") toggleSelectedPbr(selectedMesh, "normal");
-    if (k === "r") toggleSelectedPbr(selectedMesh, "roughness");
+  const buildSelectionController = createBuildSelectionController({
+    S,
+    scene,
+    partPanel,
+    hiddenParts,
+    get activeBuildControls() { return activeBuildControls; },
+    get cabinetGroup() { return cabinetGroup; },
+    get selectedMesh() { return selectedMesh; },
+    set selectedMesh(next: THREE.Mesh | null) { selectedMesh = next; },
+    get selectedBox() { return selectedBox; },
+    set selectedBox(next: THREE.BoxHelper | null) { selectedBox = next; },
+    get grainArrow() { return grainArrow; },
+    set grainArrow(next: THREE.ArrowHelper | null) { grainArrow = next; },
+    get overlapBoxes() { return overlapBoxes; },
+    set overlapBoxes(next: typeof overlapBoxes) { overlapBoxes = next; }
   });
-
-  const selectByName = (name: string) => {
-    const mesh = cabinetGroup ? findSelectableMeshByName(cabinetGroup, name) : null;
-    if (!mesh || !mesh.visible) {
-      selectMesh(null);
-      return;
-    }
-    selectMesh(mesh);
-  };
-
-  const setVisibleByName = (name: string, visible: boolean) => {
-    if (visible) hiddenParts.delete(name);
-    else hiddenParts.add(name);
-
-    const mesh = cabinetGroup ? findSelectableMeshByName(cabinetGroup, name) : null;
-    if (mesh) mesh.visible = visible;
-
-    partPanel.updateVisibility(name, visible);
-
-    if (selectedMesh?.name === name && !visible) selectMesh(null);
-  };
-
-  const clearOverlapHighlight = () => {
-    for (const o of overlapBoxes) {
-      scene.remove(o.helper);
-      o.helper.geometry.dispose();
-      (o.helper.material as THREE.Material).dispose();
-    }
-    overlapBoxes = [];
-  };
-
-  const showForHighlight = (name: string) => {
-    if (hiddenParts.has(name)) {
-      hiddenParts.delete(name);
-      const mesh = cabinetGroup ? findSelectableMeshByName(cabinetGroup, name) : null;
-      if (mesh) mesh.visible = true;
-      partPanel.updateVisibility(name, true);
-    }
-  };
-
-  const highlightOverlap = (a: string, b: string) => {
-    if (!cabinetGroup) return;
-
-    showForHighlight(a);
-    showForHighlight(b);
-
-    const ma = findSelectableMeshByName(cabinetGroup, a);
-    const mb = findSelectableMeshByName(cabinetGroup, b);
-    if (!ma || !mb) return;
-
-    clearOverlapHighlight();
-
-    const ha = new THREE.BoxHelper(ma, 0xff6b6b);
-    const hb = new THREE.BoxHelper(mb, 0xffd166);
-    scene.add(ha);
-    scene.add(hb);
-    overlapBoxes = [
-      { mesh: ma, helper: ha },
-      { mesh: mb, helper: hb }
-    ];
-  };
+  const { clearOverlapHighlight, highlightOverlap, selectByName, selectMesh, setVisibleByName } = buildSelectionController;
 
   const mountControls = () => {
     editorHost.innerHTML = "";
@@ -4807,6 +3966,8 @@ export function startApp(initialArgs: AppArgs) {
     rebuild();
     args.exportOutEl.value = "";
   };
+
+
 
   const rebuild = () => {
     if (!hasImportedModules) {
@@ -4946,6 +4107,89 @@ export function startApp(initialArgs: AppArgs) {
       enterFloorBoundaryEdit(floorId);
       return;
     }
+  });
+
+  createTransformControllerResult = createTransformController({
+    S,
+    anyOverlap,
+    anyOverlapIgnoring,
+    applyWallConstraints,
+    autoOrientModuleToRoomWallIfSnapped,
+    cloneSectionParams,
+    detectModuleAdjacency,
+    dragState,
+    findInstance,
+    fromMmPoint,
+    inferKitchenPlacementBinding,
+    instanceFitsRoom,
+    instanceWorldBox,
+    instances,
+    layoutTool,
+    marquee,
+    measureState,
+    mmDist,
+    mode,
+    moduleOverlapsKitchenWorktops,
+    moduleOverlapsWalls,
+    mountProps,
+    nudgePinnedModuleChain,
+    pinnedWallIds,
+    rebuildWall,
+    rebuildWallPlanMesh,
+    sections,
+    selectedInstanceId,
+    selectedInstanceIds,
+    selectedKind,
+    selectedSectionId,
+    selectedWallId,
+    selectedWallIds,
+    setUnderlayStatus,
+    snapPositionDetailed,
+    toMmPoint,
+    transformState,
+    underlayCal,
+    updateLayoutPanel,
+    updateSectionVisual,
+    updateSelectionHighlights,
+    viewMode,
+    wallEditHud,
+    wallJoinTolMm,
+    walls,
+    windowDragState
+  });
+
+  createInstanceRebuilderResult = createInstanceRebuilder({
+    S,
+    anyOverlap,
+    applyWallConstraints,
+    args,
+    buildModule,
+    chooseResizeAnchorSide,
+    collectAdjacentModuleInfos,
+    disposeObject3D,
+    ensurePickAndOutline,
+    findInstance,
+    footprintExtentsMatchXZ,
+    getModuleLocalKitchenAnchor,
+    inferKitchenPlacementBinding,
+    inferTallResizeAnchorSide,
+    instanceFitsLayoutBounds,
+    instanceWorldBox,
+    instances,
+    isCornerKitchenModule,
+    get lastRebuildDebug() { return lastRebuildDebug; }, set lastRebuildDebug(next) { lastRebuildDebug = next; },
+    moduleOverlapsKitchenWorktops,
+    moduleOverlapsWalls,
+    moduleRootLocalBox,
+    normalizeModuleParamsForSource,
+    preserveAnchoredResizeSide,
+    preserveWorldKitchenAnchor,
+    propagateCornerResizeToPinnedNeighbors,
+    propagateModuleResizeToPinnedNeighbors,
+    renderErrors,
+    tagModuleGeometry,
+    updateLayoutPanel,
+    validateModule
   });
 
   installKeyboardInputHandlers({
@@ -5205,194 +4449,98 @@ export function startApp(initialArgs: AppArgs) {
     worldToScreen
   });
 
+  createViewModeControllerResult = createViewModeController({
+    S,
+    args,
+    buildUi,
+    cancelPlacement,
+    clearAllMeasurements,
+    clearOverlapHighlight,
+    clearWallDrawState,
+    drawOrthoToggleEl,
+    drawSnapOverlay,
+    ensurePickAndOutline,
+    floors,
+    handleKitchenWorktopEscape,
+    hideHoverCursor,
+    instanceEditorHost,
+    instances,
+    kitchenWorktopDraw,
+    kitchenWorktops,
+    layoutRoot,
+    layoutUi,
+    makeKitchenWorktopOutlineGeometry,
+    measureState,
+    mountControls,
+    mountProps,
+    partsBuildHost,
+    partsLayoutHost,
+    placement,
+    placementHelpers,
+    rebuild,
+    rebuildWallPlanMesh,
+    selectMesh,
+    setInstanceSelected,
+    setPlanPresentation,
+    setSelectedFloor,
+    setSelectedModule,
+    setSelectedSection,
+    setSelectedWall,
+    setSelectedWindow,
+    setViewMode,
+    showNoProps,
+    syncDetailClippingAndMaterials,
+    syncViewerTabs,
+    updateAllSectionVisuals,
+    updateDetailSliceOverlay,
+    updateLayoutPanel,
+    updateSelectionHighlights,
+    view2d,
+    viewNavigation,
+    wallPlanGroup,
+    wallSnapMarkers,
+    walls,
+    windowEditorHost,
+    get activeDetailClipPlanes() { return activeDetailClipPlanes; }, set activeDetailClipPlanes(next) { activeDetailClipPlanes = next; },
+    get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
+    get cabinetGroup() { return cabinetGroup; },
+    get layoutTool() { return layoutTool; }, set layoutTool(next) { layoutTool = next; },
+    get mode() { return mode; }, set mode(next) { mode = next; },
+    get selectedFloorId() { return selectedFloorId; },
+    get selectedInstanceId() { return selectedInstanceId; },
+    get selectedKind() { return selectedKind; }, set selectedKind(next) { selectedKind = next; },
+    get selectedSectionId() { return selectedSectionId; },
+    get selectedWallId() { return selectedWallId; }, set selectedWallId(next) { selectedWallId = next; },
+    get viewMode() { return viewMode; }, set viewMode(next) { viewMode = next; },
+    get windowInst() { return windowInst; }
+  });
+
   setMode("layout");
   history.current = captureLayoutSnapshot(S);
   history.past = [];
   history.future = [];
   updateUndoRedoUi(S);
 
-  const updateWallEditHud = () => {
-    if (mode !== "layout" || viewMode !== "2d" || layoutTool !== "select") {
-      hideWallEditHud();
-      return;
-    }
-    if (measureState.enabled) {
-      hideWallEditHud();
-      return;
-    }
-    if (wallEditHud.drag) {
-      // keep HUD visible during drag
-    }
+  let createWallEditHudUpdaterResult!: ReturnType<typeof createWallEditHudUpdater>;
+  function updateWallEditHud(...args: Parameters<ReturnType<typeof createWallEditHudUpdater>["updateWallEditHud"]>) { return createWallEditHudUpdaterResult.updateWallEditHud(...args); }
 
-    if (selectedKind !== "wall" || !selectedWallId) {
-      hideWallEditHud();
-      return;
-    }
-    const w = walls.find((x) => x.id === selectedWallId) ?? null;
-    if (!w) {
-      hideWallEditHud();
-      return;
-    }
-
-    const a = fromMmPoint(w.params.aMm);
-    const b = fromMmPoint(w.params.bMm);
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    const rect = renderer.domElement.getBoundingClientRect();
-    const sa = worldToScreen(a, cam(), rect);
-    const sb = worldToScreen(b, cam(), rect);
-    const sm = worldToScreen(mid, cam(), rect);
-
-    const setLine = (el: HTMLDivElement, p0: { x: number; y: number }, p1: { x: number; y: number }) => {
-      const dx = p1.x - p0.x;
-      const dy = p1.y - p0.y;
-      const len = Math.max(0.001, Math.hypot(dx, dy));
-      el.style.left = `${p0.x}px`;
-      el.style.top = `${p0.y}px`;
-      el.style.width = `${len}px`;
-      el.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-      el.style.display = "block";
-    };
-
-    wallEditHud.handleA.style.left = `${sa.x}px`;
-    wallEditHud.handleA.style.top = `${sa.y}px`;
-    wallEditHud.handleA.style.display = "block";
-
-    wallEditHud.handleB.style.left = `${sb.x}px`;
-    wallEditHud.handleB.style.top = `${sb.y}px`;
-    wallEditHud.handleB.style.display = "block";
-
-    wallEditHud.handleMid.style.left = `${sm.x}px`;
-    wallEditHud.handleMid.style.top = `${sm.y}px`;
-    wallEditHud.handleMid.style.display = "block";
-
-    const lenMm = Math.round(mmDist(w.params.aMm, w.params.bMm));
-    wallEditHud.label.textContent = `${lenMm} mm`;
-
-    // offset dimension line + label a bit perpendicular to wall direction in screen space
-    const dir = b.clone().sub(a);
-    const n = new THREE.Vector2(-dir.z, dir.x);
-    if (n.lengthSq() > 1e-8) n.normalize();
-
-    const off = { x: n.x * 18, y: n.y * 18 };
-    const da = { x: sa.x + off.x, y: sa.y + off.y };
-    const db = { x: sb.x + off.x, y: sb.y + off.y };
-    const dm = { x: sm.x + off.x, y: sm.y + off.y };
-
-    setLine(wallEditHud.lenLine, da, db);
-    setLine(wallEditHud.lenExtA, sa, da);
-    setLine(wallEditHud.lenExtB, sb, db);
-
-    wallEditHud.label.style.left = `${dm.x}px`;
-    wallEditHud.label.style.top = `${dm.y}px`;
-    if (wallEditHud.input.style.display !== "block") {
-      wallEditHud.label.style.display = "block";
-    } else {
-      wallEditHud.label.style.display = "none";
-    }
-
-    // Auto-dimension to nearest parallel wall (face-to-face)
-    wallEditHud.offsetRefWallId = null;
-    wallEditHud.offsetLine.style.display = "none";
-    wallEditHud.offsetTickA.style.display = "none";
-    wallEditHud.offsetTickB.style.display = "none";
-    wallEditHud.offsetLabel.style.display = "none";
-
-    const selDir = b.clone().sub(a);
-    if (selDir.lengthSq() > 1e-8) {
-      selDir.normalize();
-      const selN = new THREE.Vector3(-selDir.z, 0, selDir.x).normalize();
-      const tA = a.dot(selDir);
-      const tB = b.dot(selDir);
-      const minSel = Math.min(tA, tB);
-      const maxSel = Math.max(tA, tB);
-
-      let best: { w: WallInstance; dist: number; signed: number; overlapMin: number; overlapMax: number } | null = null;
-      for (const other of walls) {
-        if (other.id === w.id) continue;
-        const oa = fromMmPoint(other.params.aMm);
-        const ob = fromMmPoint(other.params.bMm);
-        const od = ob.clone().sub(oa);
-        if (od.lengthSq() < 1e-8) continue;
-        od.normalize();
-        const parallel = Math.abs(od.dot(selDir)) > 0.985;
-        if (!parallel) continue;
-
-        const toA = oa.dot(selDir);
-        const toB = ob.dot(selDir);
-        const minO = Math.min(toA, toB);
-        const maxO = Math.max(toA, toB);
-        const overlapMin = Math.max(minSel, minO);
-        const overlapMax = Math.min(maxSel, maxO);
-        if (overlapMax - overlapMin < 0.08) continue;
-
-        const oMid = oa.clone().add(ob).multiplyScalar(0.5);
-        const signed = oMid.clone().sub(mid).dot(selN);
-        const dist = Math.abs(signed);
-        if (!best || dist < best.dist) best = { w: other, dist, signed, overlapMin, overlapMax };
-      }
-
-      if (best) {
-        const ref = best.w;
-        wallEditHud.offsetRefWallId = ref.id;
-
-        const sign = best.signed >= 0 ? 1 : -1;
-        const refA = fromMmPoint(ref.params.aMm);
-        const refB = fromMmPoint(ref.params.bMm);
-        const tRefA = refA.dot(selDir);
-        const tRefB = refB.dot(selDir);
-        const overlapT = (best.overlapMin + best.overlapMax) / 2;
-
-        const selDen = tB - tA;
-        const refDen = tRefB - tRefA;
-        const uSel = Math.abs(selDen) < 1e-8 ? 0.5 : clamp((overlapT - tA) / selDen, 0, 1);
-        const uRef = Math.abs(refDen) < 1e-8 ? 0.5 : clamp((overlapT - tRefA) / refDen, 0, 1);
-
-        const pSel = a.clone().lerp(b, uSel);
-        const pRef = refA.clone().lerp(refB, uRef);
-
-        const tSel = w.params.thicknessMm / 1000;
-        const tRef = ref.params.thicknessMm / 1000;
-        const faceOffsetM = (tSel + tRef) / 2;
-        const faceDistM = Math.max(0, best.dist - faceOffsetM);
-        const faceDistMm = Math.round(faceDistM * 1000);
-
-        const p0 = pSel.clone().addScaledVector(selN, (tSel / 2) * sign);
-        const p1 = pRef.clone().addScaledVector(selN, (-tRef / 2) * sign);
-
-        const s0 = worldToScreen(p0, cam(), rect);
-        const s1 = worldToScreen(p1, cam(), rect);
-        setLine(wallEditHud.offsetLine, s0, s1);
-
-        const ddx = s1.x - s0.x;
-        const ddy = s1.y - s0.y;
-        const dlen = Math.max(0.001, Math.hypot(ddx, ddy));
-        const ux = ddx / dlen;
-        const uy = ddy / dlen;
-        const vx = -uy;
-        const vy = ux;
-        const tick = 6;
-        setLine(
-          wallEditHud.offsetTickA,
-          { x: s0.x - vx * tick, y: s0.y - vy * tick },
-          { x: s0.x + vx * tick, y: s0.y + vy * tick }
-        );
-        setLine(
-          wallEditHud.offsetTickB,
-          { x: s1.x - vx * tick, y: s1.y - vy * tick },
-          { x: s1.x + vx * tick, y: s1.y + vy * tick }
-        );
-
-        wallEditHud.offsetLabel.textContent = `${faceDistMm} mm`;
-        wallEditHud.offsetLabel.style.left = `${(s0.x + s1.x) / 2 + vx * 16}px`;
-        wallEditHud.offsetLabel.style.top = `${(s0.y + s1.y) / 2 + vy * 16}px`;
-        if (wallEditHud.offsetInput.style.display !== "block") {
-          wallEditHud.offsetLabel.style.display = "block";
-        } else {
-          wallEditHud.offsetLabel.style.display = "none";
-        }
-      }
-    }
-  };
+  createWallEditHudUpdaterResult = createWallEditHudUpdater({
+    cam,
+    clamp,
+    fromMmPoint,
+    hideWallEditHud,
+    layoutTool,
+    measureState,
+    mmDist,
+    mode,
+    renderer,
+    selectedKind,
+    selectedWallId,
+    viewMode,
+    wallEditHud,
+    walls,
+    worldToScreen
+  });
 
   const updateModuleEditHud = () => {
     hideModuleEditHud();
@@ -5548,89 +4696,20 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
-  function resolveModuleAdjacencySnap(
-    moving: LayoutInstance,
-    desired: THREE.Vector3,
-    opts?: { stickyNeighborId?: string | null; preferredKitchenPlacement?: KitchenPlacementBinding | null }
-  ) {
-    if (isCornerKitchenModule(moving)) return null;
-    const prevGroupId = moving.kitchenGroupId;
-    if (!moving.kitchenGroupId && S.kitchenEditMode && S.activeKitchenGroupId) moving.kitchenGroupId = S.activeKitchenGroupId;
-    const effectiveGroupId = moving.kitchenGroupId ?? (S.kitchenEditMode ? S.activeKitchenGroupId : null);
-    const result = snapPositionDetailed(moving, desired, {
-      stickyNeighborId: opts?.stickyNeighborId ?? null,
-      snapDistanceM: effectiveGroupId ? 2.4 : undefined,
-      enforceWallConstraints: !effectiveGroupId,
-      enforceWallOverlap: !effectiveGroupId
-    });
-    moving.kitchenGroupId = prevGroupId;
-    let kitchenPlacement: KitchenPlacementBinding | null = null;
-    let snappedPosition = result.position.clone();
-    let snappedRotationY = moving.root.rotation.y;
-    if (effectiveGroupId) {
-      const group = S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      const prevPos = moving.root.position.clone();
-      const prevRot = moving.root.rotation.y;
-      const prevKitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
-      const projectedBinding = opts?.preferredKitchenPlacement ?? null;
-      if (projectedBinding) {
-        moving.kitchenPlacement = structuredClone(projectedBinding);
-        if (applyKitchenPlacementBinding(moving, projectedBinding, backOffsetMm)) {
-          const desiredBackCenter = getModuleLocalBackCenter(moving).clone().applyMatrix4(
-            new THREE.Matrix4().makeRotationY(moving.root.rotation.y).setPosition(result.position)
-          );
-          const worktop = kitchenWorktops.find((item) => item.id === projectedBinding.worktopId) ?? null;
-          const segmentInfo =
-            worktop && (projectedBinding.kind ?? "segment") !== "corner"
-              ? getKitchenGuideSegmentInfo(worktop, projectedBinding.segmentIndex, backOffsetMm)
-              : null;
-          if (segmentInfo) {
-            const halfModuleWidthM = Math.max(0.001, (moving.localBox.max.x - moving.localBox.min.x) * 0.5);
-            const projected = desiredBackCenter.clone().sub(segmentInfo.start).dot(segmentInfo.dir);
-            const usableLength = segmentInfo.length - halfModuleWidthM * 2;
-            const clampedAlong =
-              usableLength >= 0
-                ? clampNumber(projected, halfModuleWidthM, segmentInfo.length - halfModuleWidthM)
-                : segmentInfo.length * 0.5;
-            kitchenPlacement = {
-              worktopId: projectedBinding.worktopId,
-              segmentIndex: projectedBinding.segmentIndex,
-              offsetAlongM: clampedAlong
-            };
-            if (applyKitchenPlacementBinding(moving, kitchenPlacement, backOffsetMm)) {
-              snappedPosition = moving.root.position.clone();
-              snappedRotationY = moving.root.rotation.y;
-            }
-          } else {
-            kitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
-            snappedPosition = moving.root.position.clone();
-            snappedRotationY = moving.root.rotation.y;
-          }
-        }
-      }
-      if (!kitchenPlacement) {
-        moving.root.position.copy(result.position);
-        moving.root.rotation.y = prevRot;
-        moving.root.updateMatrixWorld(true);
-        kitchenPlacement = inferKitchenPlacementBinding(moving, effectiveGroupId, backOffsetMm);
-        if (kitchenPlacement && applyKitchenPlacementBinding(moving, kitchenPlacement, backOffsetMm)) {
-          snappedPosition = moving.root.position.clone();
-          snappedRotationY = moving.root.rotation.y;
-        }
-      }
-      moving.root.position.copy(prevPos);
-      moving.root.rotation.y = prevRot;
-      moving.kitchenPlacement = prevKitchenPlacement;
-      moving.root.updateMatrixWorld(true);
-    }
-    return {
-      position: snappedPosition,
-      rotationY: snappedRotationY,
-      link: result.link,
-      kitchenPlacement
-    };
-  }
+  let createModuleAdjacencySnapResolverResult!: ReturnType<typeof createModuleAdjacencySnapResolver>;
+  function resolveModuleAdjacencySnap(...args: Parameters<ReturnType<typeof createModuleAdjacencySnapResolver>["resolveModuleAdjacencySnap"]>) { return createModuleAdjacencySnapResolverResult.resolveModuleAdjacencySnap(...args); }
+
+  createModuleAdjacencySnapResolverResult = createModuleAdjacencySnapResolver({
+    S,
+    applyKitchenPlacementBinding,
+    clampNumber,
+    getKitchenGuideSegmentInfo,
+    getModuleLocalBackCenter,
+    inferKitchenPlacementBinding,
+    isCornerKitchenModule,
+    kitchenWorktops,
+    snapPositionDetailed
+  });
 
   function finalizePlacedInstance(inst: LayoutInstance) {
     if (!inst.kitchenGroupId) return;
@@ -5653,54 +4732,8 @@ export function startApp(initialArgs: AppArgs) {
     outlineMaterial.depthTest = viewMode !== "2d";
   }
 
-  const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
-    const target = forcedTarget ?? getCurrentMeasureSelectionTarget();
-    const measure = measureState.measures.find((item) => item.id === measureId && item.kind === "distance") ?? null;
-    if (!target || !measure) return;
-
-    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
-    if (!Number.isFinite(nextMm)) return;
-    const desiredMm = Math.max(0, Math.round(nextMm));
-    const bindings = getSelectionMeasureBindings(measure, target);
-    if (!bindings) return;
-
-    const ctx = getAssociativeMeasureContext();
-    const attachedPoint = resolvePlanBinding(bindings.attachedBinding, ctx);
-    const otherPoint = resolvePlanBinding(bindings.otherBinding, ctx);
-    if (!attachedPoint || !otherPoint) return;
-
-    const delta = attachedPoint.clone().sub(otherPoint);
-    if (delta.lengthSq() < 1e-10) return;
-    const currentDistanceMm = Math.round(delta.length() * 1000);
-    if (currentDistanceMm === desiredMm) return;
-    delta.normalize().multiplyScalar((desiredMm - currentDistanceMm) / 1000);
-    const dxMm = Math.round(delta.x * 1000);
-    const dzMm = Math.round(delta.z * 1000);
-    if (dxMm === 0 && dzMm === 0) return;
-
-    let applied = false;
-    switch (target.kind) {
-      case "wall":
-        applied = translateWallByMeasure(target.wallId, dxMm, dzMm);
-        break;
-      case "module":
-        applied = translateModuleByMeasure(target.instanceId, dxMm, dzMm);
-        break;
-      case "floor":
-        applied = translateFloorByMeasure(target.floorId, dxMm, dzMm);
-        break;
-      case "kitchenGroup":
-        applied = translateKitchenGroupByMeasure(target.groupId, dxMm, dzMm);
-        break;
-    }
-
-    if (!applied) return;
-    refreshAssociativeMeasures();
-    updateMeasureLabelInteractivity();
-    updateLayoutPanel();
-    commitHistory(S);
-    mountProps();
-  };
+  let createMeasureValueCommitterResult!: ReturnType<typeof createMeasureValueCommitter>;
+  function commitSelectedMeasureValueMm(...args: Parameters<ReturnType<typeof createMeasureValueCommitter>["commitSelectedMeasureValueMm"]>) { return createMeasureValueCommitterResult.commitSelectedMeasureValueMm(...args); }
 
   const measureInlineEditor = createMeasureInlineEditor({
     viewerEl: args.viewerEl,
@@ -5720,6 +4753,24 @@ export function startApp(initialArgs: AppArgs) {
   const updateMeasureLabelInteractivity = () => {
     measureInlineEditor.updateMeasureLabelInteractivity();
   };
+
+  createMeasureValueCommitterResult = createMeasureValueCommitter({
+    S,
+    commitHistory,
+    getAssociativeMeasureContext,
+    getCurrentMeasureSelectionTarget,
+    getSelectionMeasureBindings,
+    measureState,
+    mountProps,
+    refreshAssociativeMeasures,
+    resolvePlanBinding,
+    translateFloorByMeasure,
+    translateKitchenGroupByMeasure,
+    translateModuleByMeasure,
+    translateWallByMeasure,
+    updateLayoutPanel,
+    updateMeasureLabelInteractivity
+  });
 
   const commitWallMeasureValueMm = (measureId: string, raw: string) => {
     commitSelectedMeasureValueMm(measureId, raw);

@@ -1,0 +1,55 @@
+import * as THREE from "three";
+import type { MeasureSelectionTarget } from "./measureEditing";
+
+export function createMeasureValueCommitter(ctx: any) {
+  const commitSelectedMeasureValueMm = (measureId: string, raw: string, forcedTarget?: MeasureSelectionTarget | null) => {
+    const target = forcedTarget ?? ctx.getCurrentMeasureSelectionTarget();
+    const measure = ctx.measureState.measures.find((item: any) => item.id === measureId && item.kind === "distance") ?? null;
+    if (!target || !measure) return;
+
+    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
+    if (!Number.isFinite(nextMm)) return;
+    const desiredMm = Math.max(0, Math.round(nextMm));
+    const bindings = ctx.getSelectionMeasureBindings(measure, target);
+    if (!bindings) return;
+
+    const measureCtx = ctx.getAssociativeMeasureContext();
+    const attachedPoint = ctx.resolvePlanBinding(bindings.attachedBinding, measureCtx);
+    const otherPoint = ctx.resolvePlanBinding(bindings.otherBinding, measureCtx);
+    if (!attachedPoint || !otherPoint) return;
+
+    const delta = attachedPoint.clone().sub(otherPoint);
+    if (delta.lengthSq() < 1e-10) return;
+    const currentDistanceMm = Math.round(delta.length() * 1000);
+    if (currentDistanceMm === desiredMm) return;
+    delta.normalize().multiplyScalar((desiredMm - currentDistanceMm) / 1000);
+    const dxMm = Math.round(delta.x * 1000);
+    const dzMm = Math.round(delta.z * 1000);
+    if (dxMm === 0 && dzMm === 0) return;
+
+    let applied = false;
+    switch (target.kind) {
+      case "wall":
+        applied = ctx.translateWallByMeasure(target.wallId, dxMm, dzMm);
+        break;
+      case "module":
+        applied = ctx.translateModuleByMeasure(target.instanceId, dxMm, dzMm);
+        break;
+      case "floor":
+        applied = ctx.translateFloorByMeasure(target.floorId, dxMm, dzMm);
+        break;
+      case "kitchenGroup":
+        applied = ctx.translateKitchenGroupByMeasure(target.groupId, dxMm, dzMm);
+        break;
+    }
+
+    if (!applied) return;
+    ctx.refreshAssociativeMeasures();
+    ctx.updateMeasureLabelInteractivity();
+    ctx.updateLayoutPanel();
+    ctx.commitHistory(ctx.S);
+    ctx.mountProps();
+  };
+
+  return { commitSelectedMeasureValueMm };
+}
