@@ -112,14 +112,11 @@ import { disposeObject3D } from "./core/dispose";
 import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
-import { exportSceneToJson } from "./core/exportScene";
 import { createTopbar } from "./ui/createTopbar";
-import { attachFileMenu } from "./ui/createFileMenu";
 import { mountBomDevPanel } from "./ui/bomDevPanel";
 import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
-import { downloadCanvasPng, saveTextFile, saveTextFileAs, type WritableHandle } from "./core/filePersistence";
 import { getAllMaterials } from "./data/materials";
 import { getMaterialDefinitionById } from "./data/pricing/materialDefinitions";
 import { solveWallNetwork } from "./walls2d/solver";
@@ -154,6 +151,7 @@ import {
   staysOutsideKitchenWorktopFootprint
 } from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
+import { createExportActions } from "./app/exportActions";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 
 export function startApp(initialArgs: AppArgs) {
@@ -168,7 +166,8 @@ export function startApp(initialArgs: AppArgs) {
   const hasImportedModules = availableModuleDescriptors.length > 0;
   const noModulesMessage =
     'No imported modules installed. Run `npm run import:modpkg -- "<path-to.modpkg>"` and reload the app.';
-  let layoutSaveHandle: WritableHandle | null = null;
+  let exportActions: ReturnType<typeof createExportActions> | null = null;
+  const downloadViewportPng = () => exportActions?.downloadViewportPng();
   let params: ModuleParams = hasImportedModules
     ? getModuleDescriptorOrThrow(availableModuleDescriptors[0].type).defaultParams()
     : ({ type: "__empty__" } as unknown as ModuleParams);
@@ -9306,88 +9305,6 @@ export function startApp(initialArgs: AppArgs) {
     controls.update();
   };
 
-  const buildTimestampedFileName = (prefix: string, extension: string) =>
-    `${prefix}-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.${extension}`;
-
-  const copyTextToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const buildLayoutExportJson = () => {
-    const json = JSON.stringify(buildLayoutExportPayload(), null, 2);
-    args.exportOutEl.value = json;
-    return json;
-  };
-
-  const buildSceneExportPayload = () => {
-    const hdri = getHdriSettings();
-    const opening = getWindowOpening();
-    const sunDirection = opening ? opening.inwardNormal.clone().normalize() : undefined;
-    const cameraTarget = (ctl() as any)?.target instanceof THREE.Vector3 ? ((ctl() as any).target as THREE.Vector3) : undefined;
-    const daylightIntensity = getDaylightIntensity();
-
-    return exportSceneToJson({
-      scene,
-      camera: cam(),
-      cameraTarget,
-      environment: {
-        hdriPath: hdri.id,
-        hdriStrength: 5,
-        hdriBackground: hdri.background,
-        hdriBackgroundStrength: 5,
-        hdriRotationDeg: 60
-      },
-      colorManagement: { viewTransform: "AgX", exposure: 0.5, look: "Medium High Contrast" },
-      lighting: { sunDirection, sunStrength: 5, sunAngle: 30 },
-      window: { opening, daylightIntensity },
-      includeInvisible: false
-    });
-  };
-
-  const buildSceneExportJson = () => {
-    const payload = buildSceneExportPayload();
-    const json = JSON.stringify(payload, null, 2);
-    args.exportOutEl.value = json;
-    return { payload, json };
-  };
-
-  const downloadViewportPng = () => {
-    downloadCanvasPng(renderer.domElement, buildTimestampedFileName("kitchen", "png"));
-  };
-
-  const saveLayoutFile = async () => {
-    layoutSaveHandle = await saveTextFile(
-      buildLayoutExportJson(),
-      buildTimestampedFileName("kitchen-layout", "json"),
-      layoutSaveHandle
-    );
-  };
-
-  const saveLayoutFileAs = async () => {
-    layoutSaveHandle = await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-layout", "json"));
-  };
-
-  const exportLayoutJsonFile = async () => {
-    await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-export", "json"));
-  };
-
-  const exportSceneJsonFile = async () => {
-    await saveTextFileAs(buildSceneExportJson().json, buildTimestampedFileName("kitchen-scene", "json"));
-  };
-
-  const copyCurrentExport = async () => {
-    args.copyStatusEl.textContent = "";
-    const text = args.exportOutEl.value.trim().length > 0 ? args.exportOutEl.value : buildLayoutExportJson();
-    args.exportOutEl.value = text;
-    const copied = await copyTextToClipboard(text);
-    args.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
-  };
-
   args.resetBtn.addEventListener("click", () => {
     if (!selectedInstanceId) return;
     const inst = findInstance(selectedInstanceId);
@@ -9398,99 +9315,22 @@ export function startApp(initialArgs: AppArgs) {
     rebuildInstance(inst);
   });
 
-  args.exportBtn.addEventListener("click", async () => {
-    args.copyStatusEl.textContent = "";
-    const json = buildLayoutExportJson();
-    const copied = await copyTextToClipboard(json);
-    args.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
+  exportActions = createExportActions({
+    appArgs: args,
+    fileTab: tb.getTab("file"),
+    renderer,
+    scene,
+    getCamera: cam,
+    getCameraTarget: () => {
+      const target = (ctl() as any)?.target;
+      return target instanceof THREE.Vector3 ? target : undefined;
+    },
+    getHdriSettings,
+    getWindowOpening,
+    getDaylightIntensity,
+    buildLayoutExportPayload,
+    onLanguageChange: () => window.location.reload()
   });
-
-  args.exportSceneBtn.addEventListener("click", async () => {
-    args.copyStatusEl.textContent = "";
-    const statusEl = document.getElementById("blenderStatus");
-    const spinnerEl = document.getElementById("blenderSpinner");
-    const errorEl = document.getElementById("blenderError");
-    const previewLinkEl = document.getElementById("blenderPreviewLink") as HTMLAnchorElement | null;
-    const previewImg = document.getElementById("blenderPreview") as HTMLImageElement | null;
-
-    const setUi = (state: "idle" | "running" | "done" | "error", msg: string, detail?: string) => {
-      if (statusEl) statusEl.textContent = msg;
-      if (spinnerEl) spinnerEl.classList.toggle("visible", state === "running");
-      if (errorEl) {
-        if (state === "error" && detail) {
-          errorEl.textContent = detail;
-          (errorEl as HTMLElement).style.display = "block";
-        } else {
-          (errorEl as HTMLElement).style.display = "none";
-          errorEl.textContent = "";
-        }
-      }
-      if (previewLinkEl) previewLinkEl.style.display = state === "done" ? "inline" : "none";
-    };
-
-    const { payload, json } = buildSceneExportJson();
-
-    args.exportSceneBtn.disabled = true;
-    setUi("running", "Running Blender (up to 60s)â€¦");
-    if (previewImg) previewImg.removeAttribute("src");
-
-    try {
-      const ctrl = new AbortController();
-      const t = window.setTimeout(() => ctrl.abort(), 65_000);
-      const res = await fetch("/api/blender/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sceneJson: payload }),
-        signal: ctrl.signal
-      });
-      window.clearTimeout(t);
-
-      const text = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // ignore
-      }
-
-      if (!res.ok || !data?.ok) {
-        throw new Error((data && typeof data.error === "string" && data.error) || text || `HTTP ${res.status}`);
-      }
-
-      const copyOk = await copyTextToClipboard(json);
-      const previewUrl = typeof data.previewUrl === "string" ? data.previewUrl : null;
-      if (!previewUrl) throw new Error("Backend did not return previewUrl.");
-
-      if (previewLinkEl) previewLinkEl.href = previewUrl;
-      if (previewImg) previewImg.src = previewUrl;
-
-      setUi("done", `Done. ${copyOk ? "Copied JSON." : "Copy failed."}`);
-      args.copyStatusEl.textContent = "";
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setUi("error", "Blender export failed.", msg);
-      args.copyStatusEl.textContent = "";
-    } finally {
-      args.exportSceneBtn.disabled = false;
-    }
-  });
-
-  args.copyBtn.addEventListener("click", async () => {
-    await copyCurrentExport();
-  });
-
-  const fileTab = tb.getTab("file");
-  if (fileTab) {
-    attachFileMenu(fileTab, {
-      save: saveLayoutFile,
-      saveAs: saveLayoutFileAs,
-      exportLayoutJson: exportLayoutJsonFile,
-      exportSceneJson: exportSceneJsonFile,
-      exportPng: downloadViewportPng,
-      copyJson: copyCurrentExport,
-      onLanguageChange: () => window.location.reload()
-    });
-  }
 
   const ro = new ResizeObserver(() => {
     const w = args.viewerEl.clientWidth;
