@@ -43,7 +43,7 @@ async function main() {
       });
 
       const slotField = [...host.querySelectorAll(".portable-field")].find((field) =>
-        (field.textContent || "").includes("Cabinet Panels")
+        /Cabinet Panels|Korpusové diely/i.test(field.textContent || "")
       );
       if (!slotField) {
         return { ok: false, reason: "Missing Cabinet Panels control" };

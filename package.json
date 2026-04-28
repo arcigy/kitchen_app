@@ -18,6 +18,7 @@
     "test:module-properties": "node scripts/testModulePropertiesUi.mjs",
     "test:portable-material-live": "node scripts/testPortableMaterialLive.mjs",
     "test:ui-smoke": "node scripts/testFullUiSmoke.mjs",
+    "test:ui-regression": "npm run test:ui-smoke && npm run test:kitchen-context-live && npm run test:kitchen-module-edge-cases && npm run test:pricing-ui && npm run test:module-properties && npm run test:portable-material-live",
     "worker:dev": "tsx scripts/worker.ts",
     "dev:local": "tsx scripts/devLocal.ts"
   },

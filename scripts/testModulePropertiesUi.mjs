@@ -46,11 +46,15 @@ async function main() {
       ];
       const visibleBlockedLabels = blockedLabels.filter((label) => text.toLowerCase().includes(label.toLowerCase()));
 
-      const partSection = [...host.querySelectorAll("section")].find((section) =>
-        (section.textContent || "").toLowerCase().includes("part parameters")
-      );
-      const partRows = partSection ? [...partSection.querySelectorAll("div")].filter((row) => row.querySelectorAll("select").length === 2) : [];
-      const firstRow = partRows[0];
+      const partSection = [...host.querySelectorAll("section")].find((section) => {
+        const title = section.querySelector(".portable-section__title")?.textContent?.trim().toLowerCase() ?? "";
+        return title === "part parameters" || title === "parametre dielov";
+      });
+      const partRows = partSection ? [...partSection.querySelectorAll(".portable-field")].filter((row) => row.querySelectorAll("select").length >= 2) : [];
+      const firstRow = partRows.find((row) => {
+        const materialSelect = row.querySelectorAll("select")[0];
+        return materialSelect && [...materialSelect.options].some((option) => (option.textContent || "").includes("DTD Grey"));
+      }) ?? partRows[0];
       const [firstMaterialSelect, firstThicknessSelect] = firstRow ? [...firstRow.querySelectorAll("select")] : [null, null];
 
       const getSystemSelect = (id) => host.querySelector(`#${id}`);
@@ -122,9 +126,9 @@ async function main() {
 
       return {
         ok: true,
-        hasPartParameters: text.toLowerCase().includes("part parameters"),
-        hasBackPanelsGroup: text.includes("Back Panels"),
-        hasSystemParameters: text.toLowerCase().includes("assembly context"),
+        hasPartParameters: /part parameters|parametre dielov/i.test(text),
+        hasBackPanelsGroup: /Back Panels|Zadné diely/i.test(text),
+        hasSystemParameters: /assembly context|kontext zostavy/i.test(text),
         visibleBlockedLabels,
         changeEvents: changes,
         hasEightMm,

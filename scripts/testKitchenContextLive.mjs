@@ -2,15 +2,23 @@ import { chromium } from "playwright";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
+const kitchenInputAliases = {
+  "Height (mm)": ["Height (mm)", "Výška (mm)"],
+  "Worktop depth (mm)": ["Worktop depth (mm)", "Hĺbka pracovnej dosky (mm)"],
+  "Worktop front offset (mm)": ["Worktop front offset (mm)", "Predné odsadenie pracovnej dosky (mm)"],
+  "Worktop back offset (mm)": ["Worktop back offset (mm)", "Zadné odsadenie pracovnej dosky (mm)"]
+};
+
 async function setKitchenInput(page, label, value) {
   const result = await page.evaluate(({ label, value }) => {
+    const labels = window.__kitchenInputAliases?.[label] ?? [label];
     const rows = [...document.querySelectorAll("div")];
     const row = rows.find((candidate) => {
       const text = candidate.firstElementChild?.textContent?.trim?.() ?? "";
-      if (text !== label) return false;
+      if (!labels.includes(text)) return false;
       return !!candidate.querySelector('input[type="number"]');
     });
-    if (!row) return { ok: false, reason: `Missing row ${label}` };
+    if (!row) return { ok: false, reason: `Missing row ${label}`, labels };
     const input = row.querySelector('input[type="number"]');
     if (!(input instanceof HTMLInputElement)) return { ok: false, reason: `Missing input for ${label}` };
     input.focus();
@@ -54,6 +62,9 @@ async function main() {
 
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.evaluate((aliases) => {
+      window.__kitchenInputAliases = aliases;
+    }, kitchenInputAliases);
 
     const initial = await page.evaluate(() => {
       const api = window.__kitchenDebug;
