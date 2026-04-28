@@ -121,6 +121,15 @@ import {
   makeFloorGeometry,
   makeFloorOutlineGeometry
 } from "./app/floorGeometry";
+import {
+  cloneKitchenWorktopParams,
+  kitchenWorktopOutlineColor,
+  makeKitchenWorktopBackGuideGeometry,
+  makeKitchenWorktopGeometry,
+  makeKitchenWorktopMaterial,
+  makeKitchenWorktopOutlineGeometry,
+  makeKitchenWorktopPreviewGeometry
+} from "./app/kitchenWorktopVisuals";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
 import { getAllMaterials } from "./data/materials";
@@ -2027,34 +2036,6 @@ export function startApp(initialArgs: AppArgs) {
     return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: worktop move blocked." };
   };
 
-  const cloneKitchenWorktopParams = (params: KitchenWorktopParams): KitchenWorktopParams => ({
-    path: params.path.map((point) => ({ x: point.x, z: point.z })),
-    justification: params.justification,
-    mirrored: !!params.mirrored,
-    depthMm: params.depthMm,
-    thicknessMm: params.thicknessMm,
-    heightMm: params.heightMm,
-    overhangSideMm: params.overhangSideMm,
-    materialId: params.materialId
-  });
-
-  const makeKitchenWorktopMaterial = (materialId: string, opts?: { preview?: boolean }) => {
-    const preview = getMaterialDefinitionById(materialId)?.preview;
-    return new THREE.MeshStandardMaterial({
-      color: preview?.colorHex ?? "#b08e6d",
-      roughness: preview?.roughness ?? 0.78,
-      metalness: preview?.metalness ?? 0.02,
-      side: THREE.DoubleSide,
-      transparent: !!opts?.preview,
-      opacity: opts?.preview ? 0.52 : 1
-    });
-  };
-
-  const kitchenWorktopOutlineColor = (materialId: string) => {
-    const color = new THREE.Color(getMaterialDefinitionById(materialId)?.preview.colorHex ?? "#b08e6d");
-    return color.offsetHSL(0, 0, -0.24).getHex();
-  };
-
   const getKitchenWorktopBackGuidePath = (
     params: KitchenWorktopParams,
     backOffsetMm = S.kitchenCtx.worktopBackOffsetMm
@@ -2097,55 +2078,8 @@ export function startApp(initialArgs: AppArgs) {
     return Math.abs(offsetM) < 1e-9 ? pathWorld : offsetKitchenWorktopPath(pathWorld, offsetM);
   };
 
-  const makeKitchenWorktopGeometry = (params: KitchenWorktopParams) => {
-    const polygon = getKitchenWorktopPolygon(params);
-    if (polygon.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
-    const shape = new THREE.Shape(polygon.map((point) => new THREE.Vector2(point.x, point.z)));
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      depth: Math.max(1, params.thicknessMm) / 1000,
-      bevelEnabled: false
-    });
-    geometry.rotateX(Math.PI / 2);
-    geometry.computeVertexNormals();
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    return geometry;
-  };
-
-  const makeKitchenWorktopPreviewGeometry = (params: KitchenWorktopParams) => {
-    const polygon = getKitchenWorktopPolygon(params);
-    if (polygon.length < 3) return new THREE.PlaneGeometry(0.001, 0.001);
-    const shape = new THREE.Shape(polygon.map((point) => new THREE.Vector2(point.x, point.z)));
-    const geometry = new THREE.ShapeGeometry(shape);
-    geometry.rotateX(Math.PI / 2);
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    return geometry;
-  };
-
-  const makeKitchenWorktopOutlineGeometry = (params: KitchenWorktopParams, flattenToPlan = true) => {
-    if (flattenToPlan) {
-      const polygon = getKitchenWorktopPolygon(params);
-      if (polygon.length === 0) {
-        return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-      }
-      const points = polygon.map((point) => new THREE.Vector3(point.x, 0.012, point.z));
-      points.push(points[0]!.clone());
-      return new THREE.BufferGeometry().setFromPoints(points);
-    }
-    const geometry = makeKitchenWorktopGeometry(params);
-    const edges = new THREE.EdgesGeometry(geometry, 1);
-    geometry.dispose();
-    return edges;
-  };
-
-  const makeKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) => {
-    const guide = getKitchenWorktopBackGuidePath(params);
-    if (guide.length < 2) {
-      return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-    }
-    return new THREE.BufferGeometry().setFromPoints(guide.map((point) => new THREE.Vector3(point.x, 0.018, point.z)));
-  };
+  const makeCurrentKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) =>
+    makeKitchenWorktopBackGuideGeometry(params, getKitchenWorktopBackGuidePath(params));
 
   function rebuildKitchenWorktop(inst: KitchenWorktopInstance) {
     inst.params = cloneKitchenWorktopParams(inst.params);
@@ -2353,7 +2287,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.previewOutline.geometry = makeKitchenWorktopOutlineGeometry(params);
 
       kitchenWorktopDraw.previewBackLine.geometry.dispose();
-      kitchenWorktopDraw.previewBackLine.geometry = makeKitchenWorktopBackGuideGeometry(params);
+        kitchenWorktopDraw.previewBackLine.geometry = makeCurrentKitchenWorktopBackGuideGeometry(params);
       kitchenWorktopDraw.previewSignature = signature;
     }
     if (kitchenWorktopDraw.previewMaterialId !== params.materialId) {
