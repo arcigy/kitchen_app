@@ -2,7 +2,7 @@ import type { Group, Object3D } from "three";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState, KitchenGroup, KitchenWorktopParams, LayoutInstance } from "./appState";
 import { resolveContext, type KitchenContext } from "./kitchenContext";
-import { getModuleDescriptors } from "../modules/registry";
+import { getModuleDescriptors, type ModuleDescriptor } from "../modules/registry";
 import {
   getKitchenBoardMaterialSelectOptions,
   getKitchenWorktopThicknessOptions,
@@ -195,9 +195,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     const row = args.tb.addRow({ title: t("Kitchen settings"), className: "topbar-kitchen-ribbon" });
     const modulesByVisualRole = {
-      low: [] as ReturnType<typeof getModuleDescriptors>,
-      top: [] as ReturnType<typeof getModuleDescriptors>,
-      tall: [] as ReturnType<typeof getModuleDescriptors>
+      low: [] as ModuleDescriptor[],
+      top: [] as ModuleDescriptor[],
+      tall: [] as ModuleDescriptor[]
     };
     for (const descriptor of getModuleDescriptors()) {
       const params = descriptor.defaultParams() as Record<string, unknown>;

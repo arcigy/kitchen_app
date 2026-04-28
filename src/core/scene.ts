@@ -460,7 +460,7 @@ export function createScene(container: HTMLElement) {
     // LightProbe for extremely weak diffuse environment (gated in updateLighting).
     hdriProbeRt = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
     hdriProbeRt.fromEquirectangularTexture(renderer, src);
-    const probe = LightProbeGenerator.fromCubeRenderTarget(renderer, hdriProbeRt);
+    const probe = LightProbeGenerator.fromCubeRenderTarget(renderer, hdriProbeRt) as unknown as THREE.LightProbe;
     lightProbe.sh.copy(probe.sh);
 
     updateLighting();

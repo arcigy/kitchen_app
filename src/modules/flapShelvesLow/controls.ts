@@ -22,7 +22,7 @@ export function createFlapShelvesLowControls(
     paramChangeHook: (currentParams, key) => {
       Object.assign(currentParams, normalizeFlapShelvesLowParams(currentParams as FlapShelvesLowParams, { sourceKey: key }));
     },
-    materialsSnapshot: materialsSnapshot as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
+    materialsSnapshot: materialsSnapshot as unknown as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]
   });

@@ -813,7 +813,8 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       input.addEventListener(explicitCommitMode ? "change" : "input", apply);
       if (explicitCommitMode) {
         input.addEventListener("keydown", (event) => {
-          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") apply();
+          const keyboardEvent = event as KeyboardEvent;
+          if ((keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "Enter") apply();
         });
       }
 
@@ -1040,7 +1041,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const locked = LOCKED_SYSTEM_PARAMETER_KEYS.has(definition.key);
         const value = systemValues.values[definition.key] ?? null;
         const control = createSystemFieldControl(definition, value, locked);
-        const badges = [
+        const badges: Array<{ label: string; tone: PortableBadgeTone }> = [
           { label: "System", tone: "system" as const }
         ];
         if (locked) {
@@ -1059,30 +1060,42 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
         if (!locked) {
           const apply = () => {
-            applyParamMutation(() => {
-              const nextValue = parseSystemFieldValue(definition, control);
-              params[definition.key] = cloneValue(nextValue);
+            applyParamMutation(definition.key, () => {
+              const mutableParams = params as Record<string, unknown> & {
+                kitchenModuleRole?: string | null;
+                requiresWorktop?: boolean;
+              };
+              const valueControl = control instanceof HTMLLabelElement ? control.querySelector("input") : control;
+              if (
+                !(valueControl instanceof HTMLInputElement) &&
+                !(valueControl instanceof HTMLSelectElement) &&
+                !(valueControl instanceof HTMLTextAreaElement)
+              ) {
+                return;
+              }
+              const nextValue = parseSystemFieldValue(definition, valueControl);
+              mutableParams[definition.key] = cloneValue(nextValue);
               systemValues.values[definition.key] = nextValue;
 
               if (definition.key === "assemblyContext" && nextValue !== "kitchen") {
-                params.kitchenModuleRole = null;
-                params.requiresWorktop = false;
+                mutableParams.kitchenModuleRole = null;
+                mutableParams.requiresWorktop = false;
                 systemValues.values.kitchenModuleRole = null;
                 systemValues.values.requiresWorktop = false;
               } else if (definition.key === "assemblyContext" && nextValue === "kitchen") {
                 const resolvedRole =
-                  typeof params.kitchenModuleRole === "string" && params.kitchenModuleRole.trim().length > 0
-                    ? params.kitchenModuleRole
+                  typeof mutableParams.kitchenModuleRole === "string" && mutableParams.kitchenModuleRole.trim().length > 0
+                    ? mutableParams.kitchenModuleRole
                     : "base";
-                params.kitchenModuleRole = resolvedRole;
-                params.requiresWorktop = resolvedRole === "base";
+                mutableParams.kitchenModuleRole = resolvedRole;
+                mutableParams.requiresWorktop = resolvedRole === "base";
                 systemValues.values.kitchenModuleRole = resolvedRole;
                 systemValues.values.requiresWorktop = resolvedRole === "base";
               }
 
               if (definition.key === "kitchenModuleRole") {
                 const requiresWorktop = nextValue === "base";
-                params.requiresWorktop = requiresWorktop;
+                mutableParams.requiresWorktop = requiresWorktop;
                 systemValues.values.requiresWorktop = requiresWorktop;
               }
               paramChangeHook?.(params, definition.key);
@@ -1100,14 +1113,16 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
                   : (systemValues.values[definition.key] ?? null);
               systemValues.values[definition.key] = nextValue;
               const refreshed = createSystemFieldControl(definition, nextValue, locked);
-              if (control instanceof HTMLInputElement && refreshed instanceof HTMLInputElement) {
-                if (control.type === "checkbox") control.checked = refreshed.checked;
-                else control.value = refreshed.value;
+              const valueControl = control instanceof HTMLLabelElement ? control.querySelector("input") : control;
+              const refreshedControl = refreshed instanceof HTMLLabelElement ? refreshed.querySelector("input") : refreshed;
+              if (valueControl instanceof HTMLInputElement && refreshedControl instanceof HTMLInputElement) {
+                if (valueControl.type === "checkbox") valueControl.checked = refreshedControl.checked;
+                else valueControl.value = refreshedControl.value;
               } else if (
-                (control instanceof HTMLSelectElement && refreshed instanceof HTMLSelectElement) ||
-                (control instanceof HTMLTextAreaElement && refreshed instanceof HTMLTextAreaElement)
+                (valueControl instanceof HTMLSelectElement && refreshedControl instanceof HTMLSelectElement) ||
+                (valueControl instanceof HTMLTextAreaElement && refreshedControl instanceof HTMLTextAreaElement)
               ) {
-                control.value = refreshed.value;
+                valueControl.value = refreshedControl.value;
               }
             }
           });

@@ -155,7 +155,7 @@ export type LayoutInstance = {
   module: THREE.Group;
   localBox: THREE.Box3;
   pick: THREE.Mesh;
-  outline: THREE.Line;
+  outline: THREE.LineSegments;
 };
 
 export type KitchenGroup = {

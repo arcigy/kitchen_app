@@ -6,6 +6,6 @@ import { buildDrawerLowParametric } from "./parametricGeometry";
 export function buildDrawerLow(params: DrawerLowParams): Group {
   return buildDrawerLowParametric(
     params,
-    materialsSnapshot as Parameters<typeof buildDrawerLowParametric>[1]
+    materialsSnapshot as unknown as Parameters<typeof buildDrawerLowParametric>[1]
   );
 }

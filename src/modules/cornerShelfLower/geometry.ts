@@ -47,7 +47,7 @@ function resizeMeshAxis(mesh: THREE.Mesh, axis: "x" | "z", nextSizeMm: number) {
   dims[dimKey] = nextSizeMm;
 }
 
-function getMeshDimensionsMm(obj: THREE.Object3D | null) {
+function getMeshDimensionsMm(obj: THREE.Object3D | null | undefined) {
   if (!obj) return null;
   const dims = obj.userData?.dimensionsMm as { width?: number; height?: number; depth?: number } | undefined;
   if (!dims) return null;
@@ -56,6 +56,7 @@ function getMeshDimensionsMm(obj: THREE.Object3D | null) {
 
 function resizeMeshHeight(mesh: THREE.Mesh, nextHeightMm: number) {
   const dims = getMeshDimensionsMm(mesh);
+  if (!dims) return;
   const currentHeightMm = dims?.height;
   if (typeof currentHeightMm !== "number" || !Number.isFinite(currentHeightMm) || currentHeightMm <= 0) return;
   if (Math.abs(nextHeightMm - currentHeightMm) < 1e-6) return;
@@ -63,7 +64,7 @@ function resizeMeshHeight(mesh: THREE.Mesh, nextHeightMm: number) {
   dims.height = nextHeightMm;
 }
 
-function setObjectCenterY(obj: THREE.Object3D | null, centerYMm: number) {
+function setObjectCenterY(obj: THREE.Object3D | null | undefined, centerYMm: number) {
   if (!obj) return;
   obj.position.y = centerYMm / 1000;
 }
@@ -112,7 +113,7 @@ function getShelfGapValues(params: CornerShelfLowerParams) {
   return fallbackRaw.length > 0 ? fallbackRaw : [123, 123, 123, 123];
 }
 
-function getObjectCenterMm(obj: THREE.Object3D | null) {
+function getObjectCenterMm(obj: THREE.Object3D | null | undefined) {
   if (!obj) return null;
   return {
     x: obj.position.x * 1000,
@@ -121,12 +122,12 @@ function getObjectCenterMm(obj: THREE.Object3D | null) {
   };
 }
 
-function setObjectCenterX(obj: THREE.Object3D | null, centerXMm: number) {
+function setObjectCenterX(obj: THREE.Object3D | null | undefined, centerXMm: number) {
   if (!obj) return;
   obj.position.x = centerXMm / 1000;
 }
 
-function setObjectCenterZ(obj: THREE.Object3D | null, centerZMm: number) {
+function setObjectCenterZ(obj: THREE.Object3D | null | undefined, centerZMm: number) {
   if (!obj) return;
   obj.position.z = centerZMm / 1000;
 }
@@ -254,7 +255,7 @@ function applyDoorAttachmentHeightAdjustments(
   }
 }
 
-function getObjectBoundsMm(obj: THREE.Object3D | null) {
+function getObjectBoundsMm(obj: THREE.Object3D | null | undefined) {
   if (!obj) return null;
   const box = new THREE.Box3().setFromObject(obj);
   return {
@@ -652,11 +653,11 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
   const doorFrontXDims = getMeshDimensionsMm(doorFrontX);
 
   if (doorFrontZ instanceof THREE.Mesh && doorFrontZDims) {
-    resizeMeshAxis(doorFrontZ, "x", Math.max(40, doorFrontZDims.width - 2 * deltaSideGapMm));
+    resizeMeshAxis(doorFrontZ, "x", Math.max(40, (doorFrontZDims.width ?? 40) - 2 * deltaSideGapMm));
     resizeMeshAxis(doorFrontZ, "z", frontThicknessMm);
   }
   if (doorFrontX instanceof THREE.Mesh && doorFrontXDims) {
-    resizeMeshAxis(doorFrontX, "z", Math.max(40, doorFrontXDims.depth - 2 * deltaSideGapMm));
+    resizeMeshAxis(doorFrontX, "z", Math.max(40, (doorFrontXDims.depth ?? 40) - 2 * deltaSideGapMm));
     resizeMeshAxis(doorFrontX, "x", frontThicknessMm);
   }
 
@@ -847,24 +848,7 @@ function alignCornerFrontSupports(group: THREE.Group) {
   }
 }
 
-export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Group {
-  const group = buildPortableLiveModuleGroup(
-    params as Record<string, unknown>,
-    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1],
-    materialsSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[2]
-  );
-
-  syncCornerShelfMeshes(group, params);
-  syncCornerHingeMeshes(group, params);
-  applyCornerDepthAdjustments(group, params);
-  applyCornerLengthAdjustments(group, params);
-  applyCornerBackAdjustments(group, params);
-  applyCornerHeightAdjustments(group, params);
-  applyCornerPlinthAdjustments(group, params);
-  applyCornerFrontAdjustments(group, params);
-  alignCornerFrontSupports(group);
-  applyCornerDoorOpenState(group, params);
-
+function attachKitchenCornerAnchors(group: THREE.Group) {
   group.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(group);
 
@@ -885,6 +869,26 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Gro
   zAnchor.position.set(box.min.x, 0, box.max.z);
   zAnchor.visible = false;
   group.add(zAnchor);
+}
+
+export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Group {
+  const group = buildPortableLiveModuleGroup(
+    params as Record<string, unknown>,
+    liveStateSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[1],
+    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2]
+  );
+
+  syncCornerShelfMeshes(group, params);
+  syncCornerHingeMeshes(group, params);
+  applyCornerDepthAdjustments(group, params);
+  applyCornerLengthAdjustments(group, params);
+  applyCornerBackAdjustments(group, params);
+  applyCornerHeightAdjustments(group, params);
+  applyCornerPlinthAdjustments(group, params);
+  applyCornerFrontAdjustments(group, params);
+  alignCornerFrontSupports(group);
+  attachKitchenCornerAnchors(group);
+  applyCornerDoorOpenState(group, params);
 
   return group;
 }

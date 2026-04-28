@@ -77,10 +77,10 @@ export function formatMm(v: THREE.Vector3) {
 
 export function worldToScreen(world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) {
   const p = world.clone().project(camera);
-  return {
-    x: (p.x * 0.5 + 0.5) * rect.width,
-    y: (-p.y * 0.5 + 0.5) * rect.height
-  };
+  return new THREE.Vector2(
+    (p.x * 0.5 + 0.5) * rect.width,
+    (-p.y * 0.5 + 0.5) * rect.height
+  );
 }
 
 export function getSelectableMeshes(root: THREE.Object3D): THREE.Mesh[] {

@@ -41,7 +41,7 @@ export function buildWallAlignCandidates(args: {
   exteriorB: THREE.Vector3;
   interiorA: THREE.Vector3;
   interiorB: THREE.Vector3;
-}) {
+}): AlignPickedLine[] {
   const d = args.centerB.clone().sub(args.centerA);
   if (d.lengthSq() < 1e-10) return [] as AlignPickedLine[];
   d.normalize();

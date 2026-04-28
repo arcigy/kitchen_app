@@ -58,13 +58,13 @@ function mergeValue(defaultValue: PortableJsonValue, nextValue: unknown): Portab
   return cloneValue(defaultValue);
 }
 
-export function makePortableDefaultParams<T extends PortableRecord>(defaults: T, moduleType: string): T {
+export function makePortableDefaultParams<T extends PortableRecord & { type?: string }>(defaults: T, moduleType: string): T {
   const next = cloneValue(defaults);
   next.type = moduleType;
   return next;
 }
 
-export function normalizePortableParams<T extends PortableRecord>(
+export function normalizePortableParams<T extends PortableRecord & { type?: string }>(
   defaults: T,
   input: unknown,
   moduleType: string

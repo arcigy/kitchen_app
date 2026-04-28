@@ -22,7 +22,7 @@ export function createSwingShelvesLowControls(
     paramChangeHook: (currentParams) => {
       Object.assign(currentParams, normalizeSwingShelvesLowParams(currentParams as SwingShelvesLowParams));
     },
-    materialsSnapshot: materialsSnapshot as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
+    materialsSnapshot: materialsSnapshot as unknown as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]
   });

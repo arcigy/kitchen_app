@@ -166,7 +166,7 @@ function applyLegacyMaterialAliases(
     return;
   }
 
-  if (family === "drawer_bottom" || family === "drawer") {
+  if (family === "drawer_bottom") {
     params.drawerMaterialId = material.id;
     params.drawerColor = colorHex;
     materials.drawerKey = material.id;

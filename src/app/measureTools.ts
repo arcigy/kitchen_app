@@ -687,8 +687,11 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
     } else {
       measureState.previewLine.geometry.setFromPoints([p1, p2]);
     }
-    if (measureState.previewLine.material.type !== (kind === "normalGuide" ? "LineDashedMaterial" : "LineBasicMaterial")) {
-      (measureState.previewLine.material as THREE.Material).dispose();
+    const previewMaterial = Array.isArray(measureState.previewLine.material)
+      ? measureState.previewLine.material[0]
+      : measureState.previewLine.material;
+    if (previewMaterial?.type !== (kind === "normalGuide" ? "LineDashedMaterial" : "LineBasicMaterial")) {
+      previewMaterial?.dispose();
       measureState.previewLine.material =
         kind === "normalGuide"
           ? new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.94, dashSize: 0.08, gapSize: 0.05 })

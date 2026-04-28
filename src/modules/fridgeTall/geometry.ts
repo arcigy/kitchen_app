@@ -36,6 +36,7 @@ function resizeMeshAxis(mesh: THREE.Mesh | null, axis: "x" | "z", nextSizeMm: nu
 function resizeMeshHeight(mesh: THREE.Mesh | null, nextHeightMm: number) {
   if (!(mesh instanceof THREE.Mesh)) return;
   const dims = getMeshDimensionsMm(mesh);
+  if (!dims) return;
   const currentHeightMm = dims?.height;
   if (typeof currentHeightMm !== "number" || !Number.isFinite(currentHeightMm) || currentHeightMm <= 0) return;
   if (Math.abs(nextHeightMm - currentHeightMm) < 1e-6) return;
@@ -432,8 +433,8 @@ function attachBackAnchor(group: THREE.Group, params: FridgeTallParams) {
 export function buildFridgeTall(params: FridgeTallParams): THREE.Group {
   const group = buildPortableLiveModuleGroup(
     params as Record<string, unknown>,
-    liveStateSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[1],
-    materialsSnapshot as Parameters<typeof buildPortableLiveModuleGroup>[2]
+    liveStateSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[1],
+    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2]
   );
 
   applyFridgeCarcassGeometry(group, params);

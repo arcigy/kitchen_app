@@ -829,7 +829,7 @@ function buildMeshFromLivePart(
   const override = resolveLivePartOverride(part.name, currentParams, materialsSnapshot);
   const componentGeometry = override?.componentGeometry ?? null;
   if (override?.thicknessMm) {
-    const minAxis = (["x", "y", "z"] as const).sort((left, right) => sizeMm[left] - sizeMm[right])[0];
+    const minAxis = (["x", "y", "z"] as Array<keyof typeof sizeMm>).sort((left, right) => sizeMm[left] - sizeMm[right])[0];
     sizeMm[minAxis] = Math.max(1, override.thicknessMm);
   }
   const geometrySize = applyComponentGeometrySize(part, sizeMm, componentGeometry);

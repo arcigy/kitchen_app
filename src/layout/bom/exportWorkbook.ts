@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
-import type { PortableCommercialPricingItem, PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
+import type { PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
 import type { ProjectPricingView, WorktopFormulaView } from "./projectPricing";
 import type { ProjectQuoteSummary } from "./projectQuote";
 
@@ -182,7 +182,7 @@ function formulaNumber(formula: string): XLSX.CellObject {
 }
 
 function formulaText(formula: string): XLSX.CellObject {
-  return { t: "str", f: formula };
+  return { t: "s", f: formula };
 }
 
 function translateBoardDescription(description: string) {
@@ -225,7 +225,7 @@ function formatDimensions(item: PortableQuoteBomItem) {
   return `${round(length, 1)} x ${round(width, 1)} x ${round(thickness, 1)}`;
 }
 
-function resolvePriceSource(item: PortableCommercialPricingItem): PriceSourceRow {
+function resolvePriceSource(item: PortableQuoteBomItem): PriceSourceRow {
   if (item.itemType === "hardware") {
     const catalogId = item.component?.catalogId ?? item.id;
     return {
@@ -877,7 +877,7 @@ function applyWorkbookTheme(data: ArrayBuffer, sheets: BuiltSheet[]) {
 }
 
 function downloadWorkbook(blobName: string, bytes: Uint8Array) {
-  const blob = new Blob([bytes], {
+  const blob = new Blob([new Uint8Array(bytes).buffer as ArrayBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
   const url = URL.createObjectURL(blob);

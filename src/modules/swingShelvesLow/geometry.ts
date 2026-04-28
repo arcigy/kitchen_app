@@ -6,6 +6,6 @@ import type { SwingShelvesLowParams } from "./types";
 export function buildSwingShelvesLow(params: SwingShelvesLowParams): Group {
   return buildSwingShelvesLowParametric(
     params,
-    materialsSnapshot as Parameters<typeof buildSwingShelvesLowParametric>[1]
+    materialsSnapshot as unknown as Parameters<typeof buildSwingShelvesLowParametric>[1]
   );
 }

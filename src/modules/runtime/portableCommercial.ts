@@ -756,8 +756,8 @@ export function buildRuntimeQuoteBom(args: {
         if (edgeMaterial) {
           item.material = {
             ...edgeMaterial,
-            catalogId: edgeMaterial.id ?? edgeMaterial.catalogId,
-            key: edgeMaterial.id ?? edgeMaterial.catalogId,
+            catalogId: edgeMaterial.id,
+            key: edgeMaterial.id,
             family: "edgeFamily" in edgeMaterial ? edgeMaterial.edgeFamily : (item.material?.family ?? undefined),
             assignmentSource: "catalog"
           } as PortableMaterialRef;
@@ -980,7 +980,7 @@ export function calculateCommercialPricingFromQuoteBom(args: {
   };
 
   for (const item of items) {
-    if (item.itemCost === null) continue;
+    if (item.itemCost == null) continue;
     if (item.pricingGroup === "boards") {
       groups.boards.areaM2 = roundPricingQuantity(groups.boards.areaM2 + (item.pricingQuantityBase ?? item.pricingQuantity));
       groups.boards.pricedAreaM2 = roundPricingQuantity(groups.boards.pricedAreaM2 + item.pricingQuantity);

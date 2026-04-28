@@ -154,6 +154,19 @@ import {
 import { createViewNavigation } from "./app/viewNavigation";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 
+function pointInPoly(point: { x: number; z: number }, polygon: Array<{ x: number; z: number }>) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]!;
+    const b = polygon[j]!;
+    const intersects =
+      a.z > point.z !== b.z > point.z &&
+      point.x < ((b.x - a.x) * (point.z - a.z)) / ((b.z - a.z) || Number.EPSILON) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
 
@@ -169,7 +182,7 @@ export function startApp(initialArgs: AppArgs) {
   let layoutSaveHandle: WritableHandle | null = null;
   let params: ModuleParams = hasImportedModules
     ? getModuleDescriptorOrThrow(availableModuleDescriptors[0].type).defaultParams()
-    : ({ type: "__empty__" } as ModuleParams);
+    : ({ type: "__empty__" } as unknown as ModuleParams);
   const ENABLE_SSGI = import.meta.env.VITE_ENABLE_SSGI === "true";
   const ENABLE_PHOTO = import.meta.env.VITE_ENABLE_PHOTO === "true";
 
@@ -2606,8 +2619,15 @@ export function startApp(initialArgs: AppArgs) {
     return new THREE.Vector3((inst.localBox.min.x + inst.localBox.max.x) * 0.5, 0, inst.localBox.min.z);
   };
 
-  const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) =>
-    (("params" in instOrParams ? instOrParams.params.type : instOrParams.type) ?? null) === "corner_shelf_lower";
+  const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) => {
+    const maybeParams = "params" in instOrParams ? instOrParams.params : instOrParams;
+    return (
+      maybeParams !== null &&
+      typeof maybeParams === "object" &&
+      "type" in maybeParams &&
+      maybeParams.type === "corner_shelf_lower"
+    );
+  };
 
   const moduleStaysOutsideKitchenWorktop = (instOrParams: LayoutInstance | ModuleParams) =>
     staysOutsideKitchenWorktopFootprint(
@@ -2806,7 +2826,7 @@ export function startApp(initialArgs: AppArgs) {
     if (!worktop) return null;
 
     const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
-    const cornerIndex = Math.max(1, Math.min(binding.cornerIndex, guidePath.length - 2));
+    const cornerIndex = Math.max(1, Math.min(binding.cornerIndex ?? 1, guidePath.length - 2));
     const cornerPoint = guidePath[cornerIndex];
     const prevPoint = guidePath[cornerIndex - 1];
     const nextPoint = guidePath[cornerIndex + 1];
@@ -3556,7 +3576,7 @@ export function startApp(initialArgs: AppArgs) {
     isInteractionBlocked: () =>
       dragState.active ||
       windowDragState.active ||
-      wallEditHud.drag ||
+      Boolean(wallEditHud.drag) ||
       marquee.active ||
       marquee.pending ||
       floorEdit.active ||
@@ -10011,6 +10031,7 @@ export function startApp(initialArgs: AppArgs) {
         }
 
         if (trimState.step === "pickTarget") {
+          if (!picked.wallId) return;
           trimState.targetWallId = picked.wallId;
           trimState.targetPick = picked;
           trimState.targetClick = hitPoint.clone();

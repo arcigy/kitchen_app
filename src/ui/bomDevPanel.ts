@@ -293,7 +293,7 @@ export function mountBomDevPanel(
     );
     const totalGrid = document.createElement("div");
     totalGrid.className = "bom-dev__metrics";
-    const cards = [
+    const cards: Array<[string, string, "default" | "accent"]> = [
       ["Material", formatCurrency(summary.materialCost), "default" as const],
       ["Praca moduly", formatCurrency(summary.moduleLaborCost), "default" as const],
       ["Praca projekt", formatCurrency(summary.additionalLaborCost), "default" as const],

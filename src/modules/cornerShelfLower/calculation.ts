@@ -10,7 +10,7 @@ export function calculateBOM(params: CornerShelfLowerParams, ctx: KitchenContext
     moduleType: "corner_shelf_lower",
     params: params as Record<string, unknown>,
     ctx,
-    bom: bomSnapshot as Parameters<typeof buildPortableBomResult>[0]["bom"],
-    materialsSnapshot: materialsSnapshot as Parameters<typeof buildPortableBomResult>[0]["materialsSnapshot"]
+    bom: bomSnapshot as unknown as Parameters<typeof buildPortableBomResult>[0]["bom"],
+    materialsSnapshot: materialsSnapshot as unknown as Parameters<typeof buildPortableBomResult>[0]["materialsSnapshot"]
   });
 }

@@ -92,7 +92,7 @@ export function createCornerShelfLowerControls(
       backThickness: (currentParams) => getCornerFieldState(currentParams as CornerShelfLowerParams).backThickness ?? {},
       frontThicknessMm: (currentParams) => getCornerFieldState(currentParams as CornerShelfLowerParams).frontThicknessMm ?? {}
     },
-    materialsSnapshot: materialsSnapshot as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
+    materialsSnapshot: materialsSnapshot as unknown as Parameters<typeof createPortableModuleControls>[0]["materialsSnapshot"],
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]
   });
