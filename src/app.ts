@@ -5,11 +5,9 @@ import {
   clamp,
   computeGrainArrow,
   computeOverlaps,
-  copyM16,
   findSelectableMeshByName,
   formatMm,
   getSelectableMeshes,
-  matrixChanged,
   pickSurfacePoint,
   planarDistanceMm,
   pointInPolygonXZ,
@@ -112,8 +110,8 @@ import { createPartPanel } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { disposeObject3D } from "./core/dispose";
 import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
-import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
-import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
+import type { SsgiPipeline } from "./rendering/ssgiPipeline";
+import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
 import {
@@ -199,6 +197,7 @@ import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
+import { renderAppFrame } from "./app/frameRenderer";
 import {
   ensurePickAndOutline as ensurePickAndOutlineBase,
   footprintExtentsMatchXZ,
@@ -10266,100 +10265,54 @@ export function startApp(initialArgs: AppArgs) {
     getLastRebuildDebug: () => lastRebuildDebug
   });
 
+  const frameRendererContext = {
+    viewNavigation,
+    ctl,
+    enforceWallDrawInvariant,
+    enforceKitchenWorktopDrawInvariant,
+    enforceSectionDrawInvariant,
+    findInstance,
+    refreshAssociativeMeasures,
+    updateMeasureLabels,
+    updateMeasureLabelInteractivity,
+    updateModuleAdjacencyVisuals,
+    updateWallEditHud,
+    updateModuleEditHud,
+    updateDetailViewCamera,
+    cam,
+    renderer,
+    scene,
+    viewerEl: args.viewerEl,
+    photoSamples,
+    photoStatus,
+    getLightingRevision,
+    lastCameraWorld,
+    lastCameraProj,
+    technicalDimensions,
+    enablePhoto: ENABLE_PHOTO,
+    enableSsgi: ENABLE_SSGI,
+    get selectedBox() { return selectedBox; },
+    get selectedMesh() { return selectedMesh; },
+    get selectedInstanceBox() { return selectedInstanceBox; },
+    get selectedInstanceId() { return selectedInstanceId; },
+    get grainArrow() { return grainArrow; },
+    get overlapBoxes() { return overlapBoxes; },
+    get renderMode() { return renderMode; },
+    get ssgi() { return ssgi; },
+    set ssgi(value: SsgiPipeline | null) { ssgi = value; },
+    get ssgiCameraUuid() { return ssgiCameraUuid; },
+    set ssgiCameraUuid(value: string | null) { ssgiCameraUuid = value; },
+    get photo() { return photo; },
+    set photo(value: PhotoPathTracer | null) { photo = value; },
+    get photoCameraUuid() { return photoCameraUuid; },
+    set photoCameraUuid(value: string | null) { photoCameraUuid = value; },
+    get photoLastLightingRevision() { return photoLastLightingRevision; },
+    set photoLastLightingRevision(value: number) { photoLastLightingRevision = value; }
+  };
+
   const tick = () => {
     const dt = Math.min(0.05, navClock.getDelta());
-    viewNavigation.update(dt);
-    ctl().update();
-    enforceWallDrawInvariant();
-    enforceKitchenWorktopDrawInvariant();
-    enforceSectionDrawInvariant();
-    if (selectedBox && selectedMesh) selectedBox.setFromObject(selectedMesh);
-    if (selectedInstanceBox && selectedInstanceId) {
-      const inst = findInstance(selectedInstanceId);
-      if (inst) selectedInstanceBox.setFromObject(inst.root);
-    }
-    if (grainArrow && selectedMesh) {
-      const grain = computeGrainArrow(selectedMesh);
-      if (grain) {
-        grainArrow.position.copy(grain.origin);
-        grainArrow.setDirection(grain.dir);
-        grainArrow.setLength(grain.length, grain.length * 0.22, grain.length * 0.12);
-      }
-    }
-    for (const o of overlapBoxes) o.helper.setFromObject(o.mesh);
-    refreshAssociativeMeasures();
-    updateMeasureLabels();
-    updateMeasureLabelInteractivity();
-    updateModuleAdjacencyVisuals();
-    updateWallEditHud();
-    updateModuleEditHud();
-    updateDetailViewCamera();
-
-    const activeCam = cam();
-    const isPhoto = renderMode === "photo_pathtrace" && ENABLE_PHOTO && activeCam instanceof THREE.PerspectiveCamera;
-    const isSsgi = renderMode === "realtime_ssgi" && ENABLE_SSGI && activeCam instanceof THREE.PerspectiveCamera;
-
-    if (isPhoto) {
-      ssgi?.dispose();
-      ssgi = null;
-      ssgiCameraUuid = null;
-
-      if (!photo || photoCameraUuid !== activeCam.uuid) {
-        photo?.dispose();
-        photo = createPhotoPathTracer({ renderer, scene, camera: activeCam });
-        photoCameraUuid = activeCam.uuid;
-        photoLastLightingRevision = getLightingRevision();
-        photo.setSize(args.viewerEl.clientWidth, args.viewerEl.clientHeight);
-        photo.setMaxSamples(Number(photoSamples.value));
-        copyM16(lastCameraWorld, activeCam.matrixWorld);
-        copyM16(lastCameraProj, activeCam.projectionMatrix);
-      }
-
-      const lightingRev = getLightingRevision();
-      if (lightingRev !== photoLastLightingRevision) {
-        photo.updateFromScene();
-        photoLastLightingRevision = lightingRev;
-      }
-
-      if (matrixChanged(lastCameraWorld, activeCam.matrixWorld) || matrixChanged(lastCameraProj, activeCam.projectionMatrix)) {
-        photo.updateCamera();
-        copyM16(lastCameraWorld, activeCam.matrixWorld);
-        copyM16(lastCameraProj, activeCam.projectionMatrix);
-      }
-
-      photo.setMaxSamples(Number(photoSamples.value));
-      photo.renderSample();
-      photoStatus.textContent = `Samples: ${photo.getSamples()} / ${photo.getMaxSamples()}`;
-    } else if (isSsgi) {
-      photo?.dispose();
-      photo = null;
-      photoCameraUuid = null;
-      photoLastLightingRevision = -1;
-      photoStatus.textContent = "";
-
-      if (!ssgi || ssgiCameraUuid !== activeCam.uuid) {
-        ssgi?.dispose();
-        ssgi = createSsgiPipeline({ renderer, scene, camera: activeCam });
-        ssgiCameraUuid = activeCam.uuid;
-        ssgi.setSize(args.viewerEl.clientWidth, args.viewerEl.clientHeight);
-      }
-      ssgi.render(dt);
-    } else {
-      if (ssgi) {
-        ssgi.dispose();
-        ssgi = null;
-        ssgiCameraUuid = null;
-      }
-      if (photo) {
-        photo.dispose();
-        photo = null;
-        photoCameraUuid = null;
-        photoLastLightingRevision = -1;
-        photoStatus.textContent = "";
-      }
-      renderer.render(scene, activeCam);
-    }
-    technicalDimensions.render();
+    renderAppFrame(frameRendererContext, dt);
     requestAnimationFrame(tick);
   };
   tick();
