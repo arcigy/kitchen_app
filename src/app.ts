@@ -113,8 +113,7 @@ import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/regi
 import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline";
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
-import { mountBomDevPanel } from "./ui/bomDevPanel";
-import { mountPricingCatalogPanel } from "./ui/pricingCatalogPanel";
+import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
 import { getAllMaterials } from "./data/materials";
@@ -6698,102 +6697,6 @@ export function startApp(initialArgs: AppArgs) {
     activateViewerTab("3d");
   });
 
-  const openBomPanel = () => {
-    const overlay = document.createElement("div");
-    overlay.className = "bom-modal";
-
-    const panel = document.createElement("div");
-    panel.className = "bom-modal__panel";
-    overlay.appendChild(panel);
-
-    const header = document.createElement("div");
-    header.className = "bom-modal__header";
-    panel.appendChild(header);
-
-    const title = document.createElement("h2");
-    title.textContent = "BOM";
-    title.className = "bom-modal__title";
-    header.appendChild(title);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.textContent = "Zavrieť";
-    closeBtn.className = "bom-modal__close";
-    header.appendChild(closeBtn);
-
-    const content = document.createElement("div");
-    content.className = "bom-modal__content";
-    panel.appendChild(content);
-
-    const close = () => overlay.remove();
-    closeBtn.addEventListener("click", close);
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) close();
-    });
-
-    mountBomDevPanel(content, S.instances, S.kitchenWorktops, S.kitchenCtx);
-    document.body.appendChild(overlay);
-  };
-
-  const openPricingCatalog = () => {
-    const overlay = document.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.zIndex = "1000";
-    overlay.style.background = "rgba(0,0,0,0.72)";
-    overlay.style.display = "grid";
-    overlay.style.gridTemplateRows = "1fr";
-    overlay.style.padding = "20px";
-
-    const panel = document.createElement("div");
-    panel.style.width = "calc(100vw - 40px)";
-    panel.style.height = "calc(100vh - 40px)";
-    panel.style.overflow = "auto";
-    panel.style.background = "#0b0f14";
-    panel.style.border = "1px solid #303746";
-    panel.style.borderRadius = "14px";
-    panel.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
-    panel.style.padding = "20px";
-    overlay.appendChild(panel);
-
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.justifyContent = "space-between";
-    header.style.gap = "12px";
-    header.style.marginBottom = "14px";
-    panel.appendChild(header);
-
-    const title = document.createElement("h2");
-    title.textContent = "Pricing Catalog";
-    title.style.margin = "0";
-    title.style.color = "#eef2ff";
-    title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-    header.appendChild(title);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.textContent = "Zavrieť";
-    closeBtn.style.background = "#0e1118";
-    closeBtn.style.color = "#eef2ff";
-    closeBtn.style.border = "1px solid #303746";
-    closeBtn.style.borderRadius = "6px";
-    closeBtn.style.padding = "7px 10px";
-    header.appendChild(closeBtn);
-
-    const content = document.createElement("div");
-    panel.appendChild(content);
-
-    const close = () => overlay.remove();
-    closeBtn.addEventListener("click", close);
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) close();
-    });
-
-    mountPricingCatalogPanel(content);
-    document.body.appendChild(overlay);
-  };
-
   const buildClassicTopbar = () => {
     const row = tb.addRow({ className: "topbar-classic-ribbon" });
 
@@ -6836,7 +6739,12 @@ export function startApp(initialArgs: AppArgs) {
     tb.toolButton(project, { title: "Export JSON", label: "Export", iconSvg: I_EXPORT, onClick: () => args.exportBtn.click() });
     tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: I_COPY, onClick: () => args.copyBtn.click() });
     tb.toolButton(project, { title: "Pricing Catalog", iconSvg: I_BOM, label: "Catalog", onClick: openPricingCatalog });
-    tb.toolButton(project, { title: "BOM", iconSvg: I_BOM, label: "BOM", onClick: openBomPanel });
+    tb.toolButton(project, {
+      title: "BOM",
+      iconSvg: I_BOM,
+      label: "BOM",
+      onClick: () => openBomPanel({ instances: S.instances, kitchenWorktops: S.kitchenWorktops, kitchenCtx: S.kitchenCtx })
+    });
     const installBtn = tb.toolButton(project, {
       title: "Install App",
       label: "Install",
