@@ -218,6 +218,7 @@ import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
+import { createRoomWallDefinitions } from "./app/wallDefinitions";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -909,48 +910,7 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
-  const wallEps = 0.002;
-  const wallDefs: Record<
-    WallId,
-    {
-      plane: THREE.Plane;
-      inwardNormal: THREE.Vector3;
-      axis: "x" | "z";
-      fixedPos: THREE.Vector3;
-      axisHalf: number;
-    }
-  > = {
-    back: {
-      plane: new THREE.Plane().setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(0, 0, 1),
-        new THREE.Vector3(0, 0, -roomBounds.halfD)
-      ),
-      inwardNormal: new THREE.Vector3(0, 0, 1),
-      axis: "x",
-      fixedPos: new THREE.Vector3(0, 0, -roomBounds.halfD + wallEps),
-      axisHalf: roomBounds.halfW
-    },
-    left: {
-      plane: new THREE.Plane().setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(1, 0, 0),
-        new THREE.Vector3(-roomBounds.halfW, 0, 0)
-      ),
-      inwardNormal: new THREE.Vector3(1, 0, 0),
-      axis: "z",
-      fixedPos: new THREE.Vector3(-roomBounds.halfW + wallEps, 0, 0),
-      axisHalf: roomBounds.halfD
-    },
-    right: {
-      plane: new THREE.Plane().setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(-1, 0, 0),
-        new THREE.Vector3(roomBounds.halfW, 0, 0)
-      ),
-      inwardNormal: new THREE.Vector3(-1, 0, 0),
-      axis: "z",
-      fixedPos: new THREE.Vector3(roomBounds.halfW - wallEps, 0, 0),
-      axisHalf: roomBounds.halfD
-    }
-  };
+  const wallDefs = createRoomWallDefinitions(roomBounds);
 
   const raycaster = new THREE.Raycaster();
   raycaster.params.Line = { threshold: 0.08 };
