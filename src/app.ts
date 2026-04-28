@@ -47,7 +47,7 @@ import { DimensionOverlay } from "./app/dimensionOverlay";
 import { createTechnicalDimensionManager } from "./app/technicalDimensions";
 import { distPointToSegment2, distPxPointToSeg } from "./app/screenGeometry";
 import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./app/toolPropsPanels";
-import { mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPropsPanel } from "./app/selectedPropsPanels";
+import { mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPropsPanel } from "./app/selectedPropsPanels";
 import {
   areAlignLinesParallel,
   buildModuleAlignCandidates,
@@ -5367,97 +5367,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props, sections, showNoProps, getSectionBasis, updateAllSectionVisuals, mountProps, commitHistory, S }, id);
 
-  const mountModuleProps = (id: string) => {
-    const inst = findInstance(id);
-    if (!inst) return showNoProps();
-    props.setTitle(`Module (${inst.id})`);
-    const s = props.section();
-    const type = document.createElement("div");
-    type.className = "muted";
-    type.textContent = `Type: ${inst.params.type}`;
-    s.appendChild(type);
-    const pos = document.createElement("div");
-    pos.className = "muted";
-    pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
-    s.appendChild(pos);
-
-    const rowHost = document.createElement("div");
-    rowHost.style.marginTop = "10px";
-    s.appendChild(rowHost);
-
-    const rot = document.createElement("input");
-    rot.type = "number";
-    rot.step = "1";
-    rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
-    props.row(rowHost, "Rotation (deg)", rot);
-
-    const pinned = document.createElement("input");
-    pinned.type = "checkbox";
-    pinned.checked = pinnedInstanceIds.has(inst.id);
-    props.row(rowHost, "Pinned", pinned);
-
-    const applyRot = () => {
-      const n = Number(String(rot.value).trim().replace(",", "."));
-      if (!Number.isFinite(n)) return;
-      const deg = ((n % 360) + 360) % 360;
-      const next = (deg * Math.PI) / 180;
-      const prevRot = inst.root.rotation.y;
-      inst.root.rotation.y = next;
-      const inRoom = instanceFitsRoom(inst);
-      const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
-      if (!inRoom || overlaps) {
-        inst.root.rotation.y = prevRot;
-        rot.value = String(Math.round((prevRot * 180) / Math.PI));
-        return;
-      }
-      commitHistory(S);
-      mountProps();
-    };
-
-    rot.addEventListener("change", applyRot);
-    rot.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") applyRot();
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
-        rot.select();
-      }
-    });
-
-    pinned.addEventListener("change", () => {
-      if (pinned.checked) pinnedInstanceIds.add(inst.id);
-      else pinnedInstanceIds.delete(inst.id);
-      commitHistory(S);
-      mountProps();
-    });
-
-    const editorHost = document.createElement("div");
-    editorHost.style.marginTop = "10px";
-    s.appendChild(editorHost);
-
-    const worktopArgs = { getWorktopThicknessMm: () => 0 };
-    const onChange = (previousParams?: Record<string, unknown>, sourceKey?: string) => {
-      const accepted = rebuildInstance(inst, {
-        previousParams: previousParams as ModuleParams | undefined,
-        preserveBackAnchor: true,
-        sourceKey
-      });
-      if (!accepted) return false;
-      commitHistory(S);
-      pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
-      mountProps();
-      return true;
-    };
-
-    getModuleDescriptorOrThrow(inst.params.type).createControls(editorHost, inst.params, {
-      ...worktopArgs,
-      onChange,
-      textInputCommitMode: "explicit",
-      commitBoundary: args.propertiesEl
-    });
-
-    appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
-  };
+  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, getModuleDescriptorOrThrow, args, rebuildInstance, appendLinkedMeasureInputs }, id);
 
   const mountWindowProps = () => mountWindowPropsPanel({ props });
 
