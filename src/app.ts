@@ -63,6 +63,7 @@ import {
 } from "./app/moduleAdjacency";
 import {
   buildSectionMarkerGeometry,
+  cloneSectionParams,
   buildPlaneSliceStripGeometry,
   computeElevationViewConfig,
   computeSectionViewConfig,
@@ -1894,13 +1895,6 @@ export function startApp(initialArgs: AppArgs) {
       createFloor(cloneFloorParams(floor.params), { id: floor.id, skipHistory: true });
     }
   }
-
-  const cloneSectionParams = (params: SectionParams): SectionParams => ({
-    name: params.name,
-    aMm: { x: params.aMm.x, z: params.aMm.z },
-    bMm: { x: params.bMm.x, z: params.bMm.z },
-    mirrored: !!params.mirrored
-  });
 
   const updateSectionVisual = (section: SectionInstance) => {
     const nextParams = cloneSectionParams(section.params);

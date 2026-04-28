@@ -27,6 +27,15 @@ function mmPointToWorld(point: { x: number; z: number }) {
   return new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
 }
 
+export function cloneSectionParams(params: SectionParams): SectionParams {
+  return {
+    name: params.name,
+    aMm: { x: params.aMm.x, z: params.aMm.z },
+    bMm: { x: params.bMm.x, z: params.bMm.z },
+    mirrored: !!params.mirrored
+  };
+}
+
 function boxCorners(box: THREE.Box3) {
   return [
     new THREE.Vector3(box.min.x, box.min.y, box.min.z),
