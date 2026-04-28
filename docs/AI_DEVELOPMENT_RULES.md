@@ -27,6 +27,9 @@ If a change needs more than a small wiring edit, create or update a focused file
 | Worktop drawing and worktop group updates | `src/app/worktopController.ts` |
 | Kitchen module placement | `src/app/kitchenPlacementController.ts` |
 | Pointer and keyboard events | `src/app/pointerInputHandlers.ts`, `src/app/keyboardInputHandlers.ts` |
+| Tool modes, Escape behavior, wall/measure/dimension activation | `src/app/toolModeController.ts` |
+| Layout object selection state | `src/app/selectionController.ts` |
+| Build-mode rebuild and build controls | `src/app/buildModeController.ts` |
 | Module transforms | `src/app/transformController.ts` |
 | Module rebuilds | `src/app/instanceRebuilder.ts` |
 | Build-mode part selection | `src/app/buildSelectionController.ts` |
@@ -45,6 +48,7 @@ If a change needs more than a small wiring edit, create or update a focused file
 ## Hard limits
 
 - Do not grow `src/app.ts` unless there is no smaller safe option.
+- Keep `src/app.ts` below 4300 lines. If a task would exceed that, extract a focused controller first.
 - Do not put business logic in event-handler wiring.
 - Do not mix unrelated refactors in one commit.
 - Do not move code and change behavior in the same step.
@@ -71,5 +75,6 @@ For UI-affecting changes, also load the app in the browser and check current con
 - Public function names stayed stable or wrappers were left in place.
 - The old workflow is covered by an existing test or a browser check.
 - `src/app.ts` line count did not increase.
+- If `src/app.ts` changed, the final line count is recorded in the PR/commit notes.
 - New files have one clear responsibility.
 - The final diff does not include unrelated files.
