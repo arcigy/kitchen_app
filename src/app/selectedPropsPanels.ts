@@ -169,7 +169,7 @@ export function mountFloorPropsPanel(ctx: SelectedPropsContext, floor: any) {
     edit.addEventListener("click", () => enterFloorBoundaryEdit(floor.id));
 
     appendLinkedMeasureInputs(s, { kind: "floor", floorId: floor.id });
-  
+
 }
 
 export function mountSectionToolPropsPanel(ctx: SelectedPropsContext) {
@@ -182,7 +182,7 @@ export function mountSectionToolPropsPanel(ctx: SelectedPropsContext) {
       ? `Klikni druhý bod. Ortho ${drawOrthoEnabled ? "ON" : "OFF"}, Shift = bez axis snap, Space = zrkadliť smer. Aktuálne: ${sectionDraw.mirrored ? "mirrored" : "default"}.`
       : "Klikni prvý bod section line. Po druhom bode sa section vytvorí a otvorí.";
     s.appendChild(info);
-  
+
 }
 
 export function mountSectionPropsPanel(ctx: SelectedPropsContext, id: string) {
@@ -227,7 +227,7 @@ export function mountSectionPropsPanel(ctx: SelectedPropsContext, id: string) {
     name.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") commit();
     });
-  
+
 }
 
 export function mountWindowPropsPanel(ctx: SelectedPropsContext) {
@@ -238,7 +238,7 @@ export function mountWindowPropsPanel(ctx: SelectedPropsContext) {
     p.className = "muted";
     p.textContent = "Nastavenia okna zatiaľ zostávajú vpravo (TODO: presunúť do properties).";
     s.appendChild(p);
-  
+
 }
 
 export function mountFloorBoundaryPropsPanel(ctx: SelectedPropsContext) {
@@ -293,7 +293,7 @@ export function mountFloorBoundaryPropsPanel(ctx: SelectedPropsContext) {
     mat.addEventListener("change", () => {
       params.materialId = mat.value || floorDefault.materialId;
     });
-  
+
 }
 
 export function mountUnderlayPropsPanel(ctx: SelectedPropsContext) {
@@ -466,5 +466,5 @@ export function mountUnderlayPropsPanel(ctx: SelectedPropsContext) {
       commitHistory(S);
       mountProps();
     });
-  
+
 }
