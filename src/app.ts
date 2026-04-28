@@ -214,6 +214,7 @@ import { createWallController } from "./app/wallController";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
+import { installKeyboardInputHandlers } from "./app/keyboardInputHandlers";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1939,513 +1940,7 @@ export function startApp(initialArgs: AppArgs) {
     true
   );
 
-  window.addEventListener("keydown", (ev) => {
-    if (ev.defaultPrevented) return;
-    if (isTypingTarget(ev.target) && ev.key !== "Escape") return;
-    if (S.kitchenEditMode && kitchenWorktopDraw.active && mode === "layout" && viewMode === "2d") {
-      if (ev.key === " " || ev.code === "Space") {
-        mirrorKitchenWorktopDraw();
-        ev.preventDefault();
-        return;
-      }
-      const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
-      if (isDigit) {
-        kitchenWorktopDraw.typedMm = `${kitchenWorktopDraw.typedMm}${ev.key}`.slice(0, 8);
-        wallTypedHud.textContent = `${kitchenWorktopDraw.typedMm} mm`;
-        wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
-        wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
-        wallTypedHud.style.display = "block";
-        setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
-        ev.preventDefault();
-        return;
-      }
-      if (ev.key === "Backspace") {
-        kitchenWorktopDraw.typedMm = kitchenWorktopDraw.typedMm.slice(0, Math.max(0, kitchenWorktopDraw.typedMm.length - 1));
-        if (kitchenWorktopDraw.typedMm.trim().length > 0) {
-          wallTypedHud.textContent = `${kitchenWorktopDraw.typedMm} mm`;
-          wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
-          wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
-          wallTypedHud.style.display = "block";
-          setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
-        } else {
-          wallTypedHud.style.display = "none";
-          setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: klikaj body alebo pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter. Esc = potvrdiĂ„Ä…Ă„â€ž.");
-        }
-        ev.preventDefault();
-        return;
-      }
-      if (ev.key === "Enter" && kitchenWorktopDraw.typedMm.trim().length > 0) {
-        if (commitKitchenWorktopTypedLength()) {
-          ev.preventDefault();
-          return;
-        }
-      }
-    }
-    if (mode === "layout" && layoutTool === "section" && viewMode === "2d" && activeViewerTab === "floorplan") {
-      if (ev.key === " " || ev.code === "Space") {
-        sectionDraw.mirrored = !sectionDraw.mirrored;
-        updateSectionDrawPreview();
-        setUnderlayStatus(`Section: smer ${sectionDraw.mirrored ? "mirrored" : "default"}.`);
-        ev.preventDefault();
-        return;
-      }
-    }
-    if (S.kitchenEditMode) return;
-    if (floorEdit.active) {
-      if (ev.key === "Escape") {
-        if (floorEdit.first) {
-          floorEdit.first = null;
-          floorEdit.hover = null;
-          renderFloorBoundaryEdit();
-        } else {
-          discardFloorBoundaryEdit();
-        }
-        ev.preventDefault();
-      }
-      return;
-    }
 
-    if (mode === "layout") {
-      if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
-        const k = ev.key;
-        if (k === "z" || k === "Z") {
-          if (ev.shiftKey) redo(S, helpers);
-          else undo(S, helpers);
-          ev.preventDefault();
-          return;
-        }
-        if (k === "y" || k === "Y") {
-          redo(S, helpers);
-          ev.preventDefault();
-          return;
-        }
-      }
-
-      if (placement.active && ev.key === "Escape") {
-        cancelPlacement(S, placementHelpers);
-        ev.preventDefault();
-        return;
-      }
-
-      if (transformState.kind) {
-        if (ev.key === "Escape") {
-          clearTransform({ restore: true, status: "Canceled." });
-          ev.preventDefault();
-          return;
-        }
-
-        if (transformState.kind === "rotate" && transformState.step === "rotating") {
-          const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
-          if (isDigit) {
-            transformState.typed = `${transformState.typed}${ev.key}`.slice(0, 6);
-            setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${transformState.typed}Ä‚â€šĂ‚Â° (Enter)`);
-            ev.preventDefault();
-            return;
-          }
-          if (ev.key === "Backspace") {
-            transformState.typed = transformState.typed.slice(0, -1);
-            setUnderlayStatus(transformState.typed.length ? `RotĂ„â€šĂ‹â€ˇcia: ${transformState.typed}Ä‚â€šĂ‚Â° (Enter)` : "RotĂ„â€šĂ‹â€ˇcia: pohni myĂ„Ä…Ă‹â€ˇou pre smer, alebo zadaj stupne + Enter.");
-            ev.preventDefault();
-            return;
-          }
-          if (ev.key === "Enter" && transformState.typed.trim().length > 0) {
-            const n = Number(transformState.typed.trim().replace(",", "."));
-            if (Number.isFinite(n) && n !== 0) {
-              const sign = transformState.lastAngleSign || 1;
-              const ang = (Math.abs(n) * Math.PI) / 180 * sign;
-              applyRotateAngle(ang);
-              setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Ä‚â€šĂ‚Â° (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
-            }
-            transformState.typed = "";
-            ev.preventDefault();
-            return;
-          }
-        }
-      }
-
-      const nudgeStepM = () => {
-        if (viewMode !== "2d") return 0;
-        const c = cam();
-        if (!(c instanceof THREE.OrthographicCamera)) return 0;
-        const visibleW = Math.abs(c.right - c.left) / Math.max(1e-6, c.zoom);
-        const visibleH = Math.abs(c.top - c.bottom) / Math.max(1e-6, c.zoom);
-        const visible = Math.min(visibleW, visibleH);
-        if (visible >= 20) return 1;
-        if (visible >= 12) return 0.5;
-        if (visible >= 7) return 0.25;
-        if (visible >= 4) return 0.1;
-        if (visible >= 2) return 0.05;
-        return 0.01;
-      };
-
-      const nudgeSelection = (dxM: number, dzM: number) => {
-        if (viewMode !== "2d" || layoutTool !== "select") return false;
-        if (measureState.enabled) return false;
-        if (dragState.active || windowDragState.active || wallEditHud.drag || marquee.active) return false;
-        if (underlayCal.active) return false;
-
-        const dxMm = Math.round(dxM * 1000);
-        const dzMm = Math.round(dzM * 1000);
-
-        let moved = false;
-        const prevWalls = new Map<string, WallParams>();
-        for (const w of walls) prevWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
-        const prevInstancePos = new Map<string, THREE.Vector3>();
-        for (const inst of instances) prevInstancePos.set(inst.id, inst.root.position.clone());
-
-        // Walls (single or multi)
-        const wallIds = selectedWallIds.size > 0 ? Array.from(selectedWallIds) : selectedKind === "wall" && selectedWallId ? [selectedWallId] : [];
-        if (wallIds.length > 0) {
-          const touched = new Set<string>();
-          const movedEnds = new Set<string>();
-          const moveEnd = (w: WallInstance, which: "a" | "b") => {
-            const k = `${w.id}:${which}`;
-            if (movedEnds.has(k)) return;
-            if (pinnedWallIds.has(w.id)) return;
-            if (which === "a") w.params.aMm = { x: w.params.aMm.x + dxMm, z: w.params.aMm.z + dzMm };
-            else w.params.bMm = { x: w.params.bMm.x + dxMm, z: w.params.bMm.z + dzMm };
-            movedEnds.add(k);
-            touched.add(w.id);
-          };
-
-          for (const id of wallIds) {
-            const w = walls.find((x) => x.id === id) ?? null;
-            if (!w) continue;
-            if (pinnedWallIds.has(w.id)) continue;
-
-            const oldA = { x: w.params.aMm.x, z: w.params.aMm.z };
-            const oldB = { x: w.params.bMm.x, z: w.params.bMm.z };
-
-            // Move selected wall (translate both endpoints)
-            moveEnd(w, "a");
-            moveEnd(w, "b");
-
-            // Propagate corner moves: any wall endpoint connected to oldA/oldB follows.
-            for (const other of walls) {
-              if (other.id === w.id) continue;
-              if (pinnedWallIds.has(other.id)) continue;
-              const wa = wallEndpointWhich(other, oldA, wallJoinTolMm);
-              if (wa) moveEnd(other, wa);
-              const wb = wallEndpointWhich(other, oldB, wallJoinTolMm);
-              if (wb) moveEnd(other, wb);
-            }
-          }
-
-          for (const id of touched) {
-            const w = walls.find((x) => x.id === id) ?? null;
-            if (w) rebuildWall(w);
-          }
-          if (touched.size > 0) {
-            rebuildWallPlanMesh();
-            moved = true;
-          }
-        }
-
-        // Modules (single or multi)
-        const instIds =
-          selectedInstanceIds.size > 0
-            ? Array.from(selectedInstanceIds)
-            : selectedKind === "module" && selectedInstanceId
-              ? [selectedInstanceId]
-              : [];
-        if (instIds.length > 0) {
-          for (const id of instIds) {
-            const inst = findInstance(id);
-            if (!inst) continue;
-            const prev = inst.root.position.clone();
-            const prevRotationY = inst.root.rotation.y;
-            const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
-            const desired = new THREE.Vector3(
-              inst.root.position.x + dxMm / 1000,
-              inst.root.position.y,
-              inst.root.position.z + dzMm / 1000
-            );
-            const desiredInRoom = applyWallConstraints(inst, desired);
-            let desiredPlaced = desiredInRoom.clone();
-            if (instIds.length === 1 && inst.kitchenGroupId) {
-              const kitchenConstraint = getKitchenPlacementConstraint(inst, desiredInRoom);
-              if (kitchenConstraint) {
-                desiredPlaced.copy(kitchenConstraint.position);
-                inst.root.rotation.y = kitchenConstraint.rotationY;
-                inst.kitchenPlacement = kitchenConstraint.kitchenPlacement ?? prevKitchenPlacement;
-              }
-            }
-            const snapped =
-              instIds.length === 1
-                ? snapPositionDetailed(inst, desiredPlaced, {
-                    stickyNeighborId: null,
-                    snapDistanceM: inst.kitchenGroupId ? 0.12 : undefined
-                  }).position
-                : desiredPlaced;
-            inst.root.position.copy(snapped);
-            if (anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
-              inst.root.position.copy(prev);
-              inst.root.rotation.y = prevRotationY;
-              inst.kitchenPlacement = prevKitchenPlacement;
-            } else {
-              autoOrientModuleToRoomWallIfSnapped(inst);
-              if (instIds.length === 1) {
-                const actualDelta = inst.root.position.clone().sub(prev);
-                nudgePinnedModuleChain(inst, actualDelta);
-              }
-              moved = true;
-            }
-          }
-          if (moved) {
-            for (const movedInst of instances) {
-              if (!movedInst.kitchenGroupId) continue;
-              const group = S.kitchenGroups.find((item) => item.id === movedInst.kitchenGroupId) ?? null;
-              const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-              movedInst.kitchenPlacement = inferKitchenPlacementBinding(movedInst, movedInst.kitchenGroupId, backOffsetMm);
-            }
-            updateLayoutPanel();
-          }
-        }
-
-        const sectionIds = selectedKind === "section" && selectedSectionId ? [selectedSectionId] : [];
-        if (sectionIds.length > 0) {
-          for (const id of sectionIds) {
-            const section = sections.find((item) => item.id === id) ?? null;
-            if (!section) continue;
-            section.params.aMm = { x: section.params.aMm.x + dxMm, z: section.params.aMm.z + dzMm };
-            section.params.bMm = { x: section.params.bMm.x + dxMm, z: section.params.bMm.z + dzMm };
-            updateSectionVisual(section);
-            moved = true;
-          }
-        }
-
-        const modulesInvalid = instances.some(
-          (i) =>
-            !instanceFitsRoom(i) ||
-            anyOverlap(i, null) ||
-            moduleOverlapsWalls(i) ||
-            moduleOverlapsKitchenWorktops(i)
-        );
-
-        // Never allow illegal module states (also blocks walls moving into existing modules).
-        if (modulesInvalid) {
-          for (const w of walls) {
-            const p = prevWalls.get(w.id);
-            if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
-            rebuildWall(w);
-          }
-          for (const inst of instances) {
-            const prev = prevInstancePos.get(inst.id);
-            if (!prev) continue;
-            inst.root.position.copy(prev);
-          }
-          rebuildWallPlanMesh();
-          // best-effort: if a module nudge happened, it already reverted per-module on overlap;
-          // so restoring walls is enough to eliminate illegal states.
-          updateLayoutPanel();
-          mountProps();
-          return false;
-        }
-
-        if (moved) {
-          mountProps();
-          commitHistory(S);
-        }
-        return moved;
-      };
-
-      if (ev.key.startsWith("Arrow")) {
-        const step = nudgeStepM();
-        if (step > 0) {
-          let dx = 0;
-          let dz = 0;
-          if (ev.key === "ArrowLeft") dx = -step;
-          if (ev.key === "ArrowRight") dx = step;
-          if (ev.key === "ArrowUp") dz = -step;
-          if (ev.key === "ArrowDown") dz = step;
-          if (dx !== 0 || dz !== 0) {
-            const moved = nudgeSelection(dx, dz);
-            if (moved) {
-              ev.preventDefault();
-              return;
-            }
-          }
-        }
-      }
-
-      if ((ev.key === "m" || ev.key === "M") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        if (startTransformFromSelection("move")) {
-          ev.preventDefault();
-          return;
-        }
-      }
-
-      if ((ev.key === "r" || ev.key === "R") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        if (startTransformFromSelection("rotate")) {
-          ev.preventDefault();
-          return;
-        }
-      }
-
-      if ((ev.key === "w" || ev.key === "W") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        setToolWall();
-        ev.preventDefault();
-        return;
-      }
-      if ((ev.key === "a" || ev.key === "A") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        setToolAlign();
-        ev.preventDefault();
-        return;
-      }
-      if ((ev.key === "t" || ev.key === "T") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        setToolTrim();
-        ev.preventDefault();
-        return;
-      }
-      if (ev.key === " " || ev.code === "Space") {
-        // Mirror wall side (Revit-like): works while drawing + when wall is selected.
-        if (layoutTool === "wall") {
-          wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
-          setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
-          if (wallDraw.preview && wallDraw.a) {
-            updateWallMeshWithJustification(
-              wallDraw.preview,
-              wallDraw.a,
-              wallDraw.hoverB ?? wallDraw.a,
-              wallDefault.thicknessMm,
-              wallDefault.justification,
-              wallDefault.exteriorSign
-            );
-          }
-          mountProps();
-          ev.preventDefault();
-          return;
-        }
-
-        if (selectedKind === "wall" && selectedWallId) {
-          const w = walls.find((x) => x.id === selectedWallId) ?? null;
-          if (w) {
-            w.params.exteriorSign = (w.params.exteriorSign ?? 1) === 1 ? -1 : 1;
-            for (const ww of walls) rebuildWall(ww);
-            rebuildWallPlanMesh();
-            mountProps();
-          }
-          ev.preventDefault();
-          return;
-        }
-
-        setToolSelect();
-        ev.preventDefault();
-        return;
-      }
-
-      if (ev.key === "Escape" && handleLayoutEscape(ev)) return;
-
-      // Typed length while placing wall segment (Revit-style).
-      if (layoutTool === "wall" && wallDraw.active && wallDraw.a && viewMode === "2d") {
-        const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
-        if (isDigit) {
-          wallDraw.typedMm = `${wallDraw.typedMm}${ev.key}`.slice(0, 8);
-          wallTypedHud.textContent = `${wallDraw.typedMm} mm`;
-          wallTypedHud.style.left = `${wallDraw.lastPointerPx.x}px`;
-          wallTypedHud.style.top = `${wallDraw.lastPointerPx.y}px`;
-          wallTypedHud.style.display = "block";
-          setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
-          ev.preventDefault();
-          return;
-        }
-        if (ev.key === "Backspace") {
-          wallDraw.typedMm = wallDraw.typedMm.slice(0, Math.max(0, wallDraw.typedMm.length - 1));
-          if (wallDraw.typedMm.trim().length > 0) {
-            wallTypedHud.textContent = `${wallDraw.typedMm} mm`;
-            wallTypedHud.style.left = `${wallDraw.lastPointerPx.x}px`;
-            wallTypedHud.style.top = `${wallDraw.lastPointerPx.y}px`;
-            wallTypedHud.style.display = "block";
-            setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
-          } else {
-            wallTypedHud.style.display = "none";
-            setUnderlayStatus("Stena: druhĂ„â€šĂ‹ĹĄ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
-          }
-          ev.preventDefault();
-          return;
-        }
-        if (ev.key === "Enter" && wallDraw.typedMm.trim().length > 0) {
-          const mm = Math.max(1, Math.round(Number(wallDraw.typedMm)));
-          if (Number.isFinite(mm) && wallDraw.a) {
-            const a = wallDraw.a.clone();
-            const hb = wallDraw.hoverB ? wallDraw.hoverB.clone() : a.clone().add(new THREE.Vector3(1, 0, 0));
-            const dir = hb.clone().sub(a);
-            if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
-            dir.normalize();
-            const end = a.clone().addScaledVector(dir, mm / 1000);
-
-            const bMm = { x: Math.round(end.x * 1000), z: Math.round(end.z * 1000) };
-            const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
-
-            // close loop when near chain start
-            const closeTolM = 0.03;
-            const cs = wallDraw.chainStart;
-            const closes =
-              !!cs && wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;
-            const finalEnd = closes && cs ? cs.clone() : bExact;
-
-            const w = addWall(a, finalEnd, wallDefault.thicknessMm);
-            if (!w) {
-              ev.preventDefault();
-              return;
-            }
-            autoJoinAtMmPoint(w.params.aMm);
-            autoJoinAtMmPoint(w.params.bMm);
-            wallDraw.segments += 1;
-
-            wallDraw.typedMm = "";
-            wallTypedHud.style.display = "none";
-
-            if (closes) {
-              clearWallDrawState();
-              setUnderlayStatus("Wall: chain closed.");
-              ev.preventDefault();
-              return;
-            }
-
-            wallDraw.active = true;
-            wallDraw.a = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-            wallDraw.hoverB = wallDraw.a.clone();
-        updateWallMeshWithJustification(
-          wallDraw.preview!,
-          wallDraw.a,
-          wallDraw.a,
-          wallDefault.thicknessMm,
-          wallDefault.justification,
-          wallDefault.exteriorSign
-        );
-            setUnderlayStatus("Stena: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
-            selectedKind = "wall";
-            selectedWallId = w.id;
-            mountProps();
-            ev.preventDefault();
-            return;
-          }
-        }
-      }
-
-      if (ev.key === "Delete" || ev.key === "Backspace") {
-        if (selectedInstanceIds.size > 0) {
-          const ids = Array.from(selectedInstanceIds);
-          for (const id of ids) deleteInstance(id);
-          setSelectedModule(null);
-          selectedInstanceIds.clear();
-          commitHistory(S);
-          ev.preventDefault();
-          return;
-        }
-        if (selectedWallIds.size > 0) {
-          const ids = Array.from(selectedWallIds);
-          for (const id of ids) deleteWall(id);
-          setSelectedWall(null);
-          selectedWallIds.clear();
-          ev.preventDefault();
-          return;
-        }
-      }
-    }
-
-  });
 
   args.viewerEl.addEventListener("pointerleave", () => {
     wallDrawSnap = null;
@@ -5451,6 +4946,86 @@ export function startApp(initialArgs: AppArgs) {
       enterFloorBoundaryEdit(floorId);
       return;
     }
+  });
+
+  installKeyboardInputHandlers({
+    S,
+    get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
+    addWall,
+    anyOverlap,
+    applyRotateAngle,
+    applyWallConstraints,
+    autoJoinAtMmPoint,
+    autoOrientModuleToRoomWallIfSnapped,
+    cam,
+    cancelPlacement,
+    clearTransform,
+    clearWallDrawState,
+    commitHistory,
+    commitKitchenWorktopTypedLength,
+    deleteInstance,
+    deleteWall,
+    discardFloorBoundaryEdit,
+    dragState,
+    findInstance,
+    floorEdit,
+    getKitchenPlacementConstraint,
+    handleLayoutEscape,
+    helpers,
+    inferKitchenPlacementBinding,
+    instanceFitsRoom,
+    instances,
+    isTypingTarget,
+    kitchenWorktopDraw,
+    get layoutTool() { return layoutTool; }, set layoutTool(next) { layoutTool = next; },
+    marquee,
+    measureState,
+    mirrorKitchenWorktopDraw,
+    get mode() { return mode; }, set mode(next) { mode = next; },
+    moduleOverlapsKitchenWorktops,
+    moduleOverlapsWalls,
+    mountProps,
+    nudgePinnedModuleChain,
+    pinnedWallIds,
+    placement,
+    placementHelpers,
+    rebuildWall,
+    rebuildWallPlanMesh,
+    redo,
+    renderFloorBoundaryEdit,
+    sectionDraw,
+    sections,
+    selectedInstanceId,
+    selectedInstanceIds,
+    get selectedKind() { return selectedKind; }, set selectedKind(next) { selectedKind = next; },
+    selectedSectionId,
+    get selectedWallId() { return selectedWallId; }, set selectedWallId(next) { selectedWallId = next; },
+    selectedWallIds,
+    setSelectedModule,
+    setSelectedWall,
+    setToolAlign,
+    setToolSelect,
+    setToolTrim,
+    setToolWall,
+    setUnderlayStatus,
+    snapPositionDetailed,
+    startTransformFromSelection,
+    transformState,
+    underlayCal,
+    undo,
+    updateLayoutPanel,
+    updateSectionDrawPreview,
+    updateSectionVisual,
+    updateWallMeshWithJustification,
+    get viewMode() { return viewMode; }, set viewMode(next) { viewMode = next; },
+    wallDefault,
+    wallDraw,
+    wallEditHud,
+    wallEndpointWhich,
+    wallJoinTolMm,
+    wallTypedHud,
+    walls,
+    windowDragState
   });
 
   installPointerInputHandlers({
