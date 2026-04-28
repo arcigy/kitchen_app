@@ -588,7 +588,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       valid: true,
       enforceRoomBounds: true,
       enforceWallOverlap: true,
-      statusText: "Placement: Tall modul sa prisnapne vedÄ‚â€žĂ„Äľa pracovnej dosky."
+      statusText: "Placement: Tall module snaps beside the worktop."
     };
   };
 
@@ -641,7 +641,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
           valid: false,
           enforceRoomBounds: false,
           enforceWallOverlap: false,
-          statusText: "Placement: Corner sa dĂ„â€šĂ‹â€ˇ vloĂ„Ä…Ă„ÄľiĂ„Ä…Ă„â€ž len do rohu pracovnej dosky."
+          statusText: "Placement: Corner module can be inserted only into a worktop corner."
         };
       }
 
@@ -653,8 +653,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
         enforceRoomBounds: false,
         enforceWallOverlap: false,
         statusText: best.valid
-          ? "Placement: Corner sa viaĂ„Ä…Ă„Äľe len na roh back lĂ„â€šĂ‚Â­nie pracovnej dosky."
-          : "Placement: Corner sa zmestĂ„â€šĂ‚Â­ len do rohu s dostatoÄ‚â€žÄąÂ¤ne dlhĂ„â€šĂ‹ĹĄmi ramenami."
+          ? "Placement: Corner module binds only to the worktop back-line corner."
+          : "Placement: Corner module needs a corner with long enough sides."
       };
     }
 
@@ -719,8 +719,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       enforceRoomBounds: false,
       enforceWallOverlap: false,
       statusText: best.valid
-        ? "Placement: modul sa hĂ„â€šĂ‹ĹĄbe po back lĂ„â€šĂ‚Â­nii pod pracovnou doskou."
-        : "Placement: modul je prĂ„â€šĂ‚Â­liĂ„Ä…Ă‹â€ˇ Ă„Ä…Ă‹â€ˇirokĂ„â€šĂ‹ĹĄ pre zvolenĂ„â€šĂ‹ĹĄ Ă„â€šÄąĹşsek pracovnej dosky."
+        ? "Placement: module moves along the back line under the worktop."
+        : "Placement: module is too wide for the selected worktop segment."
     };
   };
 

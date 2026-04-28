@@ -25,7 +25,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
         ctx.wallTypedHud.style.left = `${ctx.kitchenWorktopDraw.lastPointerPx.x}px`;
         ctx.wallTypedHud.style.top = `${ctx.kitchenWorktopDraw.lastPointerPx.y}px`;
         ctx.wallTypedHud.style.display = "block";
-        ctx.setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${ctx.kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
+        ctx.setUnderlayStatus(`Worktop: ${ctx.kitchenWorktopDraw.typedMm} mm (Enter = add point, Backspace = edit, Esc = confirm)`);
         ev.preventDefault();
         return;
       }
@@ -36,10 +36,10 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           ctx.wallTypedHud.style.left = `${ctx.kitchenWorktopDraw.lastPointerPx.x}px`;
           ctx.wallTypedHud.style.top = `${ctx.kitchenWorktopDraw.lastPointerPx.y}px`;
           ctx.wallTypedHud.style.display = "block";
-          ctx.setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${ctx.kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
+          ctx.setUnderlayStatus(`Worktop: ${ctx.kitchenWorktopDraw.typedMm} mm (Enter = add point, Backspace = edit, Esc = confirm)`);
         } else {
           ctx.wallTypedHud.style.display = "none";
-          ctx.setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: klikaj body alebo pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter. Esc = potvrdiĂ„Ä…Ă„â€ž.");
+          ctx.setUnderlayStatus("Worktop: click points or type mm + Enter. Esc = confirm.");
         }
         ev.preventDefault();
         return;
@@ -108,13 +108,13 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
             ctx.transformState.typed = `${ctx.transformState.typed}${ev.key}`.slice(0, 6);
-            ctx.setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${ctx.transformState.typed}Ä‚â€šĂ‚Â° (Enter)`);
+            ctx.setUnderlayStatus(`Rotate: ${ctx.transformState.typed} deg (Enter)`);
             ev.preventDefault();
             return;
           }
           if (ev.key === "Backspace") {
             ctx.transformState.typed = ctx.transformState.typed.slice(0, -1);
-            ctx.setUnderlayStatus(ctx.transformState.typed.length ? `RotĂ„â€šĂ‹â€ˇcia: ${ctx.transformState.typed}Ä‚â€šĂ‚Â° (Enter)` : "RotĂ„â€šĂ‹â€ˇcia: pohni myĂ„Ä…Ă‹â€ˇou pre smer, alebo zadaj stupne + Enter.");
+            ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Rotate: ${ctx.transformState.typed} deg (Enter)` : "Rotate: move mouse for direction, or type degrees + Enter.");
             ev.preventDefault();
             return;
           }
@@ -124,7 +124,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
               const sign = ctx.transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               ctx.applyRotateAngle(ang);
-              ctx.setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Ä‚â€šĂ‚Â° (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
+              ctx.setUnderlayStatus(`Rotate: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))} deg (click to finish)`);
             }
             ctx.transformState.typed = "";
             ev.preventDefault();
@@ -429,7 +429,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
             ctx.setUnderlayStatus(`Wall: ${ctx.wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             ctx.wallTypedHud.style.display = "none";
-            ctx.setUnderlayStatus("Stena: druhĂ„â€šĂ‹ĹĄ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -484,7 +484,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-            ctx.setUnderlayStatus("Stena: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
             ctx.selectedKind = "wall";
             ctx.selectedWallId = w.id;
             ctx.mountProps();

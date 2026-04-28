@@ -954,7 +954,7 @@ export function startApp(initialArgs: AppArgs) {
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: klikaj body tvaru. PĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter pre dÄ‚â€žÄąĹşĂ„Ä…Ă„Äľku segmentu. Esc = potvrdiĂ„Ä…Ă„â€ž hotovĂ„â€šĂ‹ĹĄ tvar.");
+    setUnderlayStatus("Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
     mountProps();
   };
 
@@ -967,7 +967,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.hoverPoint = point;
       kitchenWorktopDraw.typedMm = "";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: druhĂ„â€šĂ‹ĹĄ klik = Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod. PĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter.");
+      setUnderlayStatus("Worktop: second click adds the next point. Type mm + Enter.");
       return true;
     }
 
@@ -977,7 +977,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: pokraÄ‚â€žÄąÂ¤uj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­m bodom alebo Esc = potvrdiĂ„Ä…Ă„â€ž.");
+      setUnderlayStatus("Worktop: continue with the next point or press Esc to confirm.");
       return true;
     }
 
@@ -987,7 +987,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       updateKitchenWorktopPreview();
-      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: pokraÄ‚â€žÄąÂ¤uj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­m rohom alebo Esc = potvrdiĂ„Ä…Ă„â€ž tvar.");
+      setUnderlayStatus("Worktop: continue with the next corner or press Esc to confirm.");
       return true;
     }
 
@@ -996,7 +996,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.typedMm = "";
     wallTypedHud.style.display = "none";
     scheduleKitchenWorktopPreviewUpdate();
-    setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ klik = Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ roh, Esc = potvrdiĂ„Ä…Ă„â€ž hotovĂ„â€šĂ‹ĹĄ tvar.");
+    setUnderlayStatus("Worktop: next click adds another corner. Esc confirms the finished shape.");
     return true;
   };
 
@@ -1023,7 +1023,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
     scheduleKitchenWorktopPreviewUpdate();
     setUnderlayStatus(
-      `PracovnĂ„â€šĂ‹â€ˇ doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
+      `Worktop: mirroring ${kitchenWorktopDraw.mirrored ? "ON" : "OFF"} around ${kitchenWorktopDraw.justification.toUpperCase()} line.`
     );
   };
 
@@ -1108,7 +1108,7 @@ export function startApp(initialArgs: AppArgs) {
     if (!kitchenWorktopDraw.active) return false;
     if (kitchenWorktopDraw.points.length < 2) {
       cancelKitchenWorktopDraw({ silent: true });
-      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‚Â©.");
+      setUnderlayStatus("Worktop: canceled.");
       mountProps();
       return true;
     }
@@ -1127,7 +1127,7 @@ export function startApp(initialArgs: AppArgs) {
     const existingId = getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${worktopCounter}`;
     replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
     cancelKitchenWorktopDraw({ silent: true });
-    setUnderlayStatus(params.path.length >= 3 ? "RohovĂ„â€šĂ‹â€ˇ pracovnĂ„â€šĂ‹â€ˇ doska vytvorenĂ„â€šĂ‹â€ˇ." : "PracovnĂ„â€šĂ‹â€ˇ doska vytvorenĂ„â€šĂ‹â€ˇ.");
+    setUnderlayStatus(params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
     mountProps();
     return true;
   };
@@ -1297,6 +1297,7 @@ export function startApp(initialArgs: AppArgs) {
     get selectedUnderlayBox() { return selectedUnderlayBox; }, set selectedUnderlayBox(next: THREE.BoxHelper | null) { selectedUnderlayBox = next; },
     get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
     get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; },
+    get wallDrawSnap() { return wallDrawSnap; }, set wallDrawSnap(next: PlanSnapResult | null) { wallDrawSnap = next; },
     ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
     mountProps: () => mountProps(),
     resetMeasureSnapCycle: () => resetMeasureSnapCycle()
@@ -2049,7 +2050,7 @@ export function startApp(initialArgs: AppArgs) {
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂ„â€šĂ‹â€ˇstroj." : "Properties sĂ„â€šÄąĹş dostupnĂ„â€šĂ‚Â© iba v layout mode.";
+    p.textContent = mode === "layout" ? "Select an object or tool." : "Properties are available only in layout mode.";
     s.appendChild(p);
   };
 

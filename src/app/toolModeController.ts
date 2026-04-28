@@ -1,6 +1,114 @@
 import * as THREE from "three";
+import type { PlanSnapResult } from "./planSnap";
+import type { AppArgs } from "./bootstrap";
+import type { FloorBoundaryPoint, SelectedKind } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { PlacementHelpers } from "../layout/placementManager";
 
-export function createToolModeController(ctx: any) {
+type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+
+type ToolModeArgs = AppArgs & {
+  measureBtn: HTMLButtonElement;
+  measureReadoutEl: HTMLElement;
+};
+
+type MeasureState = {
+  enabled: boolean;
+  measures: unknown[];
+  firstPoint: THREE.Vector3 | null;
+  firstBinding: unknown | null;
+  hoverPoint: THREE.Vector3 | null;
+  hoverSnap: string;
+};
+
+type AlignState = {
+  ref: unknown | null;
+  hover: unknown | null;
+  lastA: unknown | null;
+  lastB: unknown | null;
+  lastUntilMs: number;
+};
+
+type TrimState = {
+  step: "pickTarget" | string;
+  targetWallId: string | null;
+  targetPick: unknown | null;
+  targetClick: unknown | null;
+  hover: unknown | null;
+  lastTarget: unknown | null;
+  lastCutter: unknown | null;
+  lastUntilMs: number;
+};
+
+type SectionDrawState = {
+  active: boolean;
+  a: FloorBoundaryPoint | null;
+  hoverPoint: FloorBoundaryPoint | null;
+};
+
+type WallDrawState = {
+  active: boolean;
+  a: FloorBoundaryPoint | null;
+  chainStart: FloorBoundaryPoint | null;
+  segments: number;
+  hoverB: FloorBoundaryPoint | null;
+  typedMm: string;
+  preview: THREE.Mesh | null;
+};
+
+type ToolModeControllerContext = {
+  S: AppState;
+  alignState: AlignState;
+  args: ToolModeArgs;
+  cancelKitchenWorktopDraw: (opts?: { silent?: boolean }) => void;
+  cancelPlacement: (S: AppState, helpers: PlacementHelpers) => void;
+  cancelSectionDraw: (opts?: { silent?: boolean }) => void;
+  clearAllMeasurements: () => void;
+  clearPreview: () => void;
+  clearToolHud: () => void;
+  dimensionState: { picked: unknown[] };
+  drawSnapOverlay: { hide: () => void };
+  ensureFloorplanViewerTab: () => void;
+  ensureLayoutMode: () => void;
+  hideHoverCursor: () => void;
+  isEscapeKey: (ev: KeyboardEvent) => boolean;
+  isTypingTarget: (target: EventTarget | null) => boolean;
+  layoutRoot: THREE.Object3D;
+  layoutTool: LayoutTool;
+  measurePlanSnap: PlanSnapResult | null;
+  measureState: MeasureState;
+  mode: "build" | "layout";
+  mountProps: () => void;
+  placement: { active: boolean };
+  placementHelpers: PlacementHelpers;
+  resetMeasureSnapCycle: () => void;
+  scene: THREE.Scene;
+  sectionDraw: SectionDrawState;
+  selectedFloorId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedKitchenGroupId: string | null;
+  selectedSectionId: string | null;
+  selectedUnderlayBox: THREE.BoxHelper | null;
+  selectedWallBox: THREE.BoxHelper | null;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  setFirstPointMarker: (point: THREE.Vector3 | null) => void;
+  setInstanceSelected: (id: string | null) => void;
+  setUnderlayStatus: (message: string) => void;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  syncSelectionState: () => void;
+  technicalDimensions: { resetDraft: () => void };
+  trimState: TrimState;
+  updateAllSectionVisuals: () => void;
+  updateSectionDrawPreview: () => void;
+  updateSelectionHighlights: () => void;
+  wallDraw: WallDrawState;
+  wallDrawSnap: PlanSnapResult | null;
+  wallTypedHud: HTMLElement;
+};
+
+export function createToolModeController(ctx: ToolModeControllerContext) {
   const clearMeasureDraft = () => {
     ctx.measureState.firstPoint = null;
     ctx.measureState.firstBinding = null;
@@ -138,7 +246,7 @@ export function createToolModeController(ctx: any) {
     if (opts?.clearSaved) ctx.clearAllMeasurements();
   };
 
-  const enterTool = (tool: string) => {
+  const enterTool = (tool: LayoutTool) => {
     ctx.ensureLayoutMode();
     if (ctx.placement.active) ctx.cancelPlacement(ctx.S, ctx.placementHelpers);
     ctx.layoutTool = tool;

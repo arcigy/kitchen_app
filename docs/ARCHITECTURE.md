@@ -1,127 +1,119 @@
-# Kitchen App — Architecture
+# Kitchen App Architecture
 
-See also: docs/AI_DEVELOPMENT_RULES.md.
+See also: `docs/AI_DEVELOPMENT_RULES.md`.
 
-Current app composition rule: do not add feature logic directly into src/app.ts. New logic must go into the matching controller/helper file and pp.ts should only wire it.
+Current app composition rule: do not add feature logic directly into `src/app.ts`. New logic must go into the matching controller/helper file and `app.ts` should only wire it.
 
 ## Stack
 
-TypeScript + Three.js + Vite. No UI framework. DOM API for UI.
+TypeScript, Three.js, Vite. No UI framework. DOM API for UI.
 
-## Current src/ structure
+## Current `src/` Structure
 
+```text
 src/
-├── core/ # Scene, camera, rendering, disposal, export
-├── data/ # Materials and hardware definitions
-├── geometry/ # Module geometry builder dispatcher
-├── layout/ # Kitchen layout state, wall solver, app state
-├── materials/ # PBR material definitions, UV grain
-├── model/ # Cabinet module types (god-file)
-├── modules/ # Parametric cabinet modules (drawerLow, etc.)
-│ ├── [module]/
-│ │ ├── geometry.ts
-│ │ ├── controls.ts
-│ │ └── types.ts
-│ └── \_registry.ts # Central export of all module builders & controls
-├── rendering/ # SSGI pipeline, photo path tracer
-├── ui/ # UI panels (layout, part, topbar, underlay)
-└── walls2d/ # 2D wall solver, snapping
+  app/        App controllers, UI workflow glue, layout tools
+  core/       Scene, camera, rendering, disposal, export
+  data/       Materials, pricing, hardware definitions
+  geometry/   Module geometry builder dispatcher
+  layout/     App state, history, placement, kitchen context
+  materials/  PBR material definitions, UV grain
+  model/      Cabinet module shared types
+  modules/    Parametric cabinet modules
+  rendering/  SSGI pipeline, photo path tracer
+  ui/         UI panels and form helpers
+  walls2d/    2D wall solver and snapping
+```
 
-## Folder ownership
+## Ownership
 
-- src/modules/ → Andrej (Build mode, parametric cabinet modules)
-- src/layout/ → Branislav (production layout, wall drawing, placement)
-- src/core/ → shared scene/camera/renderer — coordinate before changing
-- src/walls2d/ → Branislav (2D wall solver — do not touch during module work)
-- server/ → Blender render pipeline — completely separate from frontend
+- `src/modules/`: parametric module implementations.
+- `src/geometry/buildModule.ts`: shared module dispatcher. High impact.
+- `src/layout/`: production layout, state, history, placement.
+- `src/app/`: app workflow controllers and integration glue.
+- `src/core/`: shared scene/camera/renderer.
+- `src/ui/`: reusable DOM panels and UI helpers.
+- `src/walls2d/`: 2D wall solving. High impact.
+- `server/`: render pipeline, separate from frontend.
 
-## Module folder convention
+## Module Convention
 
-Every cabinet module lives in src/modules/[name]/ with exactly:
+Every cabinet module should live in `src/modules/[name]/` with:
 
-- geometry.ts — Three.js mesh construction + parameters
-- controls.ts — UI controls panel for this module
-- types.ts — TypeScript types for this module only
+- `geometry.ts`: Three.js mesh construction and module parameters.
+- `controls.ts`: UI controls for the module.
+- `types.ts`: module-specific TypeScript types.
 
-## Adding a new module
+Register modules through `src/modules/registry.ts`.
 
-1. Create src/modules/[name]/ with the 3 files above
-2. Register in src/modules/\_registry.ts
-3. Do NOT touch main.ts or app.ts
+## App Composition
 
-## Shared types rule
+`src/app.ts` must stay a composition layer:
 
-Only types used by 3 or more modules go in src/types/shared.ts
-Module-specific types stay in the module folder.
+- create shared state
+- create controllers
+- pass dependencies into controllers
+- expose wrappers for existing call sites
+- start render loop
 
-## God-file warning
+It should not contain new feature logic. If new logic is needed, place it in a focused controller under `src/app/`.
 
-src/model/cabinetTypes.ts contains all module types — do not split
-this file until explicitly instructed. Import from it as usual.
+Current extracted controllers include:
 
-## AI token rule
+- `buildModeController.ts`
+- `buildSelectionController.ts`
+- `classicTopbarController.ts`
+- `floorBoundaryController.ts`
+- `instanceRebuilder.ts`
+- `keyboardInputHandlers.ts`
+- `kitchenPlacementController.ts`
+- `measureValueCommitter.ts`
+- `moduleAdjacencySnapResolver.ts`
+- `pointerInputHandlers.ts`
+- `propertiesRouter.ts`
+- `selectionController.ts`
+- `toolModeController.ts`
+- `topbarIcons.ts`
+- `transformController.ts`
+- `viewModeController.ts`
+- `wallController.ts`
+- `wallEditHudUpdater.ts`
+- `windowControlsController.ts`
+- `worktopController.ts`
 
-Always read ARCHITECTURE.md first before reading any other file.
-Only read files directly relevant to the current task.
+## Shared Type Rule
 
-## AI collaboration rules (two developers)
+Only types used across multiple areas should move to shared type files. Feature-specific types stay beside the controller or module that owns them.
 
-DEVELOPER OWNERSHIP:
+## High-Risk Files
 
-- Andrej owns: src/modules/, src/geometry/buildModule.ts
-- Branislav owns: src/layout/, src/walls2d/, src/core/, src/ui/
+Do not modify these casually:
 
-BEFORE making any change, identify which developer owns the affected files.
+- `src/model/cabinetTypes.ts`
+- `src/geometry/buildModule.ts`
+- `src/main.ts`
+- `src/walls2d/*`
 
-IF the task touches ONLY one developer's files � proceed.
+If a change touches these files, keep the commit focused and run the full regression suite.
 
-IF the task touches src/model/cabinetTypes.ts OR src/modules/\_registry.ts:
-� State explicitly: This file is shared. I am modifying: [list exact changes]`n� Then proceed.
+## Required Checks
 
-IF the task touches files owned by BOTH developers:
-� Stop and ask: This change affects both Andrej's and Branislav's files. Should I split this into two separate tasks?`n
-NEVER modify these without being explicitly asked:
+For structural changes:
 
-- src/model/cabinetTypes.ts (god-file � high risk)
-- src/geometry/buildModule.ts (dispatcher � affects all modules)
-- src/main.ts
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run test:ui-regression
+```
 
-## Current refactor status (as of 2026-04-19)
+For UI-affecting changes, also load the app in the browser and verify current console errors are zero.
 
-### Completed
+## Current Refactor Status
 
-- src/data/materials.ts — MaterialDefinition, getMaterial, getAllMaterials
-- src/data/hardware.ts — HardwareDefinition, getHardware, getAllHardware
-- src/layout/kitchenContext.ts — KitchenContext, makeDefaultKitchenContext,
-  resolveContext, validateContext
-- src/layout/appState.ts — AppState interface with 143 fields, makeAppState()
-- src/layout/historyManager.ts — captureLayoutSnapshot, updateUndoRedoUi,
-  restoreLayoutSnapshot, commitHistory, undo, redo
-  All 31 call sites updated in app.ts. Ctrl+Z and Ctrl+Shift+Z working.
+As of the current refactor branch:
 
-### Next modules to extract from app.ts (in order)
-
-1. src/layout/placementManager.ts — cancelPlacement, rebuildGhost,
-   mountPlacementControls, commitPlacement, addInstance
-2. src/layout/dimensionManager.ts — all dimension functions
-3. src/layout/instanceManager.ts — createInstance, rebuildInstance,
-   deleteInstance, duplicateInstance
-4. src/layout/wallManager.ts — all wall functions
-5. src/layout/selectionManager.ts — all setSelected\* functions
-6. src/ui/panelManager.ts — all mountProps\* functions
-
-### Known issues
-
-- TS error count fluctuates between 62 and 91 — investigate before
-  next extraction
-- Placement mode ghost not visible in 2D view (known bug, deferred)
-- Reference point for module placement should be bottom-left (not center)
-
-### S and helpers pattern
-
-app.ts uses:
-
-- S: AppState — declared with let at line ~855, references local state
-- helpers: HistoryHelpers — declared with let helpers!: HistoryHelpers
-  early, assigned after all functions defined (~line 4526)
-- This pattern must be replicated for each new manager module
+- `src/app.ts` is below 4300 lines.
+- Feature logic is being moved into focused controllers.
+- New controllers should use typed contexts instead of `ctx: any`.
+- `dist/` build output is not committed as part of refactor commits.

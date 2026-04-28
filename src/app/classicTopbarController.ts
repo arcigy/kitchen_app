@@ -12,7 +12,7 @@ export function createClassicTopbarController(ctx: any) {
     ctx.tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: ctx.I_SECTION, onClick: () => ctx.setToolSection() });
     ctx.tb.toolButton(tools, {
       title: "Dimension",
-      label: "KĂ„â€šÄąâ€šta",
+      label: "Dimension",
       iconSvg: ctx.I_DIM,
       onClick: () => ctx.setToolDimension()
     });

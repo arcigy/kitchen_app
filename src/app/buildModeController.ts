@@ -10,9 +10,43 @@ import {
 import { buildModule } from "../geometry/buildModule";
 import { disposeObject3D } from "../core/dispose";
 import { getModuleDescriptorOrThrow } from "../modules/registry";
-import { validateModule } from "../model/cabinetTypes";
+import { validateModule, type ModuleParams } from "../model/cabinetTypes";
+import type { AppArgs } from "./bootstrap";
+import type { PartRow, OverlapRow } from "../ui/createPartPanel";
 
-export function createBuildModeController(ctx: any) {
+type ParamHighlightControls = {
+  highlightParamKeys?: (keys: string[]) => void;
+  clearHighlights?: () => void;
+};
+
+type BuildModePanel = {
+  setRows: (rows: PartRow[]) => void;
+  setOverlaps: (rows: OverlapRow[]) => void;
+  setSelected: (name: string | null) => void;
+};
+
+type BuildModeControllerContext = {
+  args: AppArgs & {
+    errorsEl: HTMLElement;
+    exportOutEl: HTMLTextAreaElement;
+  };
+  cam: () => THREE.Camera;
+  clearOverlapHighlight: () => void;
+  ctl: () => { target: THREE.Vector3; update: () => void };
+  editorHost: HTMLElement;
+  hasImportedModules: boolean;
+  hiddenParts: Set<string>;
+  noModulesMessage: string;
+  partPanel: BuildModePanel;
+  scene: THREE.Scene;
+  selectMesh: (mesh: THREE.Mesh | null) => void;
+  activeBuildControls: ParamHighlightControls | null;
+  cabinetGroup: THREE.Group | null;
+  params: ModuleParams;
+  selectedMesh: THREE.Mesh | null;
+};
+
+export function createBuildModeController(ctx: BuildModeControllerContext) {
   const mountControls = () => {
     ctx.editorHost.innerHTML = "";
     ctx.activeBuildControls = null;

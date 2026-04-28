@@ -1,6 +1,38 @@
 import * as THREE from "three";
+import type { LayoutInstance, SelectedKind, WallInstance } from "./localTypes";
 
-export function createSelectionController(ctx: any) {
+type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+
+type SelectionControllerContext = {
+  instances: LayoutInstance[];
+  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  layoutPanel: { setSelected: (id: string | null) => void };
+  layoutTool: LayoutTool;
+  mountProps: () => void;
+  pinnedInstanceIds: Set<string>;
+  pinnedWallIds: Set<string>;
+  scene: THREE.Scene;
+  selectedFloorId: string | null;
+  selectedInstanceBox: THREE.BoxHelper | null;
+  selectedInstanceId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedKitchenGroupId: string | null;
+  selectedSectionId: string | null;
+  selectedUnderlayBox: THREE.BoxHelper | null;
+  selectedWallBox: THREE.BoxHelper | null;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  syncSelectionState: () => void;
+  underlayMesh: THREE.Object3D & { visible: boolean };
+  underlayState: { pinned: boolean };
+  updateAllSectionVisuals: () => void;
+  updateSelectionHighlights: () => void;
+  walls: WallInstance[];
+};
+
+export function createSelectionController(ctx: SelectionControllerContext) {
   const disposeBox = (box: THREE.BoxHelper | null) => {
     if (!box) return;
     ctx.scene.remove(box);
@@ -47,7 +79,7 @@ export function createSelectionController(ctx: any) {
     ctx.selectedWallIds.clear();
     ctx.selectedInstanceIds.clear();
     if (groupId) {
-      for (const inst of ctx.instances) {
+    for (const inst of ctx.instances) {
         if (inst.kitchenGroupId === groupId) ctx.selectedInstanceIds.add(inst.id);
       }
     }
@@ -138,7 +170,7 @@ export function createSelectionController(ctx: any) {
     clearUnderlayBox();
     clearWallBox();
 
-    const wall = id ? ctx.walls.find((item: any) => item.id === id) ?? null : null;
+    const wall = id ? ctx.walls.find((item) => item.id === id) ?? null : null;
     if (!wall) {
       afterSelectionChanged({ wallSnapId: null });
       return;

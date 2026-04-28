@@ -106,11 +106,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           const a = picked?.a ?? alignPicked?.segA ?? null;
           const b = picked?.b ?? alignPicked?.segB ?? null;
           if (!a || !b) {
-            ctx.setUnderlayStatus("Floor boundary: nebola nĂ„â€šĂ‹â€ˇjdenĂ„â€šĂ‹â€ˇ hrana.");
+            ctx.setUnderlayStatus("Floor boundary: edge was not found.");
             return;
           }
           ctx.addFloorEditSegment(ctx.worldToFloorPoint(a), ctx.worldToFloorPoint(b));
-          ctx.setUnderlayStatus("Floor boundary: hrana pridanĂ„â€šĂ‹â€ˇ.");
+          ctx.setUnderlayStatus("Floor boundary: edge added.");
           return;
         }
 
@@ -170,7 +170,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const hitPoint = hit.point.clone();
         if (!ctx.underlayCal.first) {
           ctx.underlayCal.first = hitPoint.clone();
-          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? "ReferenÄ‚â€žÄąÂ¤nĂ„â€šĂ‹â€ˇ Ă„Ä…Ă‹â€ˇkĂ„â€šĂ‹â€ˇla: klikni druhĂ„â€šĂ‹ĹĄ bod..." : "KalibrĂ„â€šĂ‹â€ˇcia: klikni druhĂ„â€šĂ‹ĹĄ bod...");
+          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? "Reference scale: click second point..." : "Calibration: click second point...");
           return;
         }
 
@@ -187,7 +187,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         let desiredMm = Math.max(1, ctx.underlayCal.knownMm);
         if (ctx.underlayCal.mode === "reference") {
           const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("ReĂ„â€šĂ‹â€ˇlna vzdialenosĂ„Ä…Ă„â€ž (mm)", String(measuredMm));
+          const s = window.prompt("Real distance (mm)", String(measuredMm));
           const n = s === null ? null : Number(s.trim().replace(",", "."));
           if (!n || !Number.isFinite(n) || n <= 0) {
             ctx.setUnderlayStatus("Reference scale canceled.");
@@ -204,9 +204,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.underlayState.scale *= factor;
           ctx.updateUnderlayTransform();
           if (ctx.underlayScaleEl) ctx.underlayScaleEl.value = String(ctx.underlayState.scale);
-          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂ„â€šĂ‹â€ˇcia OK: ${Math.round(desiredMm)} mm`);
+          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `Calibration OK: ${Math.round(desiredMm)} mm`);
         } else {
-          ctx.setUnderlayStatus("KalibrĂ„â€šĂ‹â€ˇcia zlyhala (nulovĂ„â€šĂ‹â€ˇ vzdialenosĂ„Ä…Ă„â€ž).");
+          ctx.setUnderlayStatus("Calibration failed (zero distance).");
         }
 
         ctx.underlayCal.active = false;
@@ -282,13 +282,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         if (picked) {
           if (ctx.dimensionState.picked.length > 0 && !ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked)) {
-            ctx.setUnderlayStatus("KĂ„â€šÄąâ€šta: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇia Ä‚â€žÄąÂ¤iara musĂ„â€šĂ‚Â­ byĂ„Ä…Ă„â€ž rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‹â€ˇ s prvou.");
+            ctx.setUnderlayStatus("Dimension: next line must be parallel with the first one.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
           }
           if (ctx.technicalDimensions.isLinePicked(picked)) {
-            ctx.setUnderlayStatus("KĂ„â€šÄąâ€šta: tĂ„â€šĂ‹â€ˇto Ä‚â€žÄąÂ¤iara uĂ„Ä…Ă„Äľ je vybranĂ„â€šĂ‹â€ˇ.");
+            ctx.setUnderlayStatus("Dimension: this line is already selected.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
@@ -297,8 +297,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.dimensionState.preview = [];
           ctx.setUnderlayStatus(
             ctx.dimensionState.picked.length === 1
-              ? "KĂ„â€šÄąâ€šta: vyber Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu rovnobeĂ„Ä…Ă„ÄľnĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru."
-              : `KĂ„â€šÄąâ€šta: vybranĂ„â€šĂ‚Â© ${ctx.dimensionState.picked.length} Ä‚â€žÄąÂ¤iary. Pridaj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu alebo klikni do voÄ‚â€žĂ„ÄľnĂ„â€šĂ‚Â©ho miesta.`
+              ? "Dimension: select another parallel line."
+              : `Dimension: selected ${ctx.dimensionState.picked.length} lines. Add another one or click empty space.`
           );
           ctx.mountProps();
           ev.preventDefault();
@@ -307,7 +307,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         }
 
         if (ctx.dimensionState.picked.length < 2) {
-          ctx.setUnderlayStatus("KĂ„â€šÄąâ€šta: najprv vyber aspoĂ„Ä…Ă‚Â dve rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‚Â© Ä‚â€žÄąÂ¤iary.");
+          ctx.setUnderlayStatus("Dimension: select at least two parallel lines first.");
           ev.preventDefault();
           ev.stopPropagation();
           return;
@@ -316,7 +316,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const dims = ctx.technicalDimensions.buildFromPickedLines(ctx.dimensionState.picked, hitPoint, "dimension");
         ctx.technicalDimensions.commitDimensions(dims);
         ctx.technicalDimensions.resetDraft();
-        ctx.setUnderlayStatus(dims.length > 0 ? `KĂ„â€šÄąâ€šta: vloĂ„Ä…Ă„ÄľenĂ„â€šĂ‚Â© ${dims.length}. Vyber Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru.` : "KĂ„â€šÄąâ€šta: nepodarilo sa vloĂ„Ä…Ă„ÄľiĂ„Ä…Ă„â€ž.");
+        ctx.setUnderlayStatus(dims.length > 0 ? `Dimension: inserted ${dims.length}. Select the next first line.` : "Dimension: insert failed.");
         ctx.mountProps();
         ev.preventDefault();
         ev.stopPropagation();
@@ -583,9 +583,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.setFirstPointMarker(ctx.measureState.firstPoint);
           ctx.args.measureReadoutEl.textContent =
             normalMode
-              ? `NormĂ„â€šĂ‹â€ˇla (${kind}): ${ctx.formatMm(point)} Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni druhĂ„â€šĂ‹ĹĄ bod smernice.`
-              : `PrvĂ„â€šĂ‹ĹĄ bod (${kind}): ${ctx.formatMm(point)} Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni druhĂ„â€šĂ‹ĹĄ bod.`;
-          ctx.setUnderlayStatus(normalMode ? "Measure: klikni druhĂ„â€šĂ‹ĹĄ bod smernice pre normĂ„â€šĂ‹â€ˇlu." : "Measure: klikni druhĂ„â€šĂ‹ĹĄ bod.");
+              ? `Normal (${kind}): ${ctx.formatMm(point)} -> click second guide point.`
+              : `First point (${kind}): ${ctx.formatMm(point)} -> click second point.`;
+          ctx.setUnderlayStatus(normalMode ? "Measure: click second guide point for normal." : "Measure: click second point.");
           ctx.mountProps();
           return;
         }
@@ -635,7 +635,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.sectionDraw.a = point;
           ctx.sectionDraw.hoverPoint = point;
           ctx.updateSectionDrawPreview();
-          ctx.setUnderlayStatus("Section: klikni druhĂ„â€šĂ‹ĹĄ bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliĂ„Ä…Ă„â€ž smer.");
+          ctx.setUnderlayStatus("Section: click second point. Ortho = straight, Shift = no axis snap, Space = mirror direction.");
           ctx.mountProps();
           return;
         }
@@ -693,7 +693,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-        ctx.setUnderlayStatus("Stena: druhĂ„â€šĂ‹ĹĄ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
         return;
       }
 
@@ -738,7 +738,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-        ctx.setUnderlayStatus("Stena: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         ctx.selectedKind = "wall";
         ctx.selectedWallId = w.id;
@@ -995,7 +995,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (!ctx.measureState.firstPoint) {
         ctx.measureState.firstPoint = snapped.point;
         ctx.measureState.firstBinding = ctx.toFreePlanBinding(snapped.point);
-        ctx.args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${ctx.formatMm(snapped.point)} Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ pick second pointĂ„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚â€šĂ‚Â¦`;
+        ctx.args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${ctx.formatMm(snapped.point)} -> pick second point...`;
         return;
       }
 
@@ -1215,7 +1215,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
         const delta = p.clone().sub(ctx.transformState.base);
         ctx.applyMoveDelta(delta);
-        ctx.setUnderlayStatus(`Posun: Ä‚Ĺ˝Ă˘â‚¬ĹĄ ${Math.round(delta.x * 1000)}Ă„â€šĂ˘â‚¬â€ť${Math.round(delta.z * 1000)} mm (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
+        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click to finish)`);
         return;
       }
 
@@ -1229,7 +1229,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         while (d < -Math.PI) d += Math.PI * 2;
         ctx.transformState.lastAngleSign = d < 0 ? -1 : 1;
         ctx.applyRotateAngle(d);
-        ctx.setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${Math.round((d * 180) / Math.PI)}Ä‚â€šĂ‚Â° (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
+        ctx.setUnderlayStatus(`Rotate: ${Math.round((d * 180) / Math.PI)} deg (click to finish)`);
         return;
       }
     }
@@ -1695,7 +1695,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.measureState.hoverSnap = "none";
       ctx.hideHoverCursor();
       ctx.args.measureReadoutEl.textContent = ctx.measureState.firstPoint
-        ? "Pick second pointĂ„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚â€šĂ‚Â¦ (no surface)"
+        ? "Pick second point... (no surface)"
         : "Click 2 points to measure (planar X/Z).";
       ctx.clearPreview();
       return;
@@ -1713,9 +1713,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       let b = snapped.point;
       if (ctx.measureState.axisLock) b = ctx.axisLockXZ(a, b);
       ctx.updatePreview(a, b, rect);
-      ctx.args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ ${Math.round(ctx.planarDistanceMm(a, b))} mm`;
+      ctx.args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) -> ${Math.round(ctx.planarDistanceMm(a, b))} mm`;
     } else {
-      ctx.args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${ctx.formatMm(snapped.point)} Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ click first point`;
+      ctx.args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${ctx.formatMm(snapped.point)} -> click first point`;
       ctx.clearPreview();
     }
   });

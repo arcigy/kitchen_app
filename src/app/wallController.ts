@@ -851,7 +851,7 @@ export function createWallController(ctx: WallControllerContext) {
     rebuildWall(inst);
     rebuildWallPlanMesh();
 
-    // Disallow walls intersecting any module (prevents moduleĂ„â€šĂ‹ÂÄ‚ËĂ˘â€šÂ¬Ă‚Â Ä‚ËĂ˘â€šÂ¬ÄąÄ„wall overlap states).
+    // Disallow walls intersecting any module (prevents module-wall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
       layoutRoot.remove(root);

@@ -54,7 +54,7 @@ export function mountWallToolPropsPanel(ctx: ToolPropsContext) {
     flip.addEventListener("click", () => {
       wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
       updatePreview();
-      setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of Aâ†’B.`);
+      setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
     });
     mat.addEventListener("change", () => {
       wallDefault.materialId = mat.value || "default";
@@ -95,7 +95,7 @@ export function mountKitchenWorktopToolPropsPanel(ctx: ToolPropsContext) {
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.textContent =
-      "Klikaj body tvaru dosky. Môžeš pokračovať ďalšími rohmi aj pre U tvar. Esc = potvrdiť hotový tvar. Space zrkadlí dosku okolo tej istej back/front line.";
+      "Click worktop shape points. Continue through more corners for L/U shapes. Esc confirms the finished shape. Space mirrors the worktop around the same back/front line.";
     section.appendChild(hint);
 
     just.addEventListener("change", () => {
@@ -112,12 +112,12 @@ export function mountAlignToolPropsPanel(ctx: ToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni referenčnú líniu, potom druhú rovnobežnú líniu (stena sa posunie alebo sa upraví koniec). Esc = zrušiť.";
+    hint.textContent = "Click the reference line, then the second parallel line (the wall moves or its end is adjusted). Esc = cancel.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
     cur.style.marginTop = "8px";
-    cur.textContent = alignState.ref ? `Referencia: ${alignState.ref.label}` : "Referencia: (žiadna)";
+    cur.textContent = alignState.ref ? `Reference: ${alignState.ref.label}` : "Reference: (none)";
     s.appendChild(cur);
   
 }
@@ -128,19 +128,19 @@ export function mountTrimToolPropsPanel(ctx: ToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni cieľovú stenu (ktorú chceš skrátiť), potom klikni reznú líniu. Esc = späť.";
+    hint.textContent = "Click the target wall, then click the cutting line. Esc = back.";
     s.appendChild(hint);
 
     const step = document.createElement("div");
     step.className = "muted";
     step.style.marginTop = "8px";
-    step.textContent = trimState.step === "pickTarget" ? "Krok: vyber cieľ" : "Krok: vyber rez";
+    step.textContent = trimState.step === "pickTarget" ? "Step: select target" : "Step: select cut";
     s.appendChild(step);
 
     const cur = document.createElement("div");
     cur.className = "muted";
     cur.style.marginTop = "6px";
-    cur.textContent = trimState.targetPick ? `Cieľ: ${trimState.targetPick.label}` : "Cieľ: (žiadny)";
+    cur.textContent = trimState.targetPick ? `Target: ${trimState.targetPick.label}` : "Target: (none)";
     s.appendChild(cur);
   
 }
@@ -153,7 +153,7 @@ export function mountMeasureToolPropsPanel(ctx: ToolPropsContext) {
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.textContent =
-      "Funguje v 2D aj 3D. Klikni prvý snap bod alebo hranu. Pri druhom bode sa v 2D zapne aj perpendicular snap na hrany. Drž Shift pre normal guide mode. Esc len vypne tool, Shift+Esc vymaže všetky uložené merania.";
+      "Works in 2D and 3D. Click the first snap point or edge. For the second point, 2D also enables perpendicular snap to edges. Hold Shift for normal guide mode. Esc exits the tool, Shift+Esc clears saved measurements.";
     s.appendChild(hint);
 
     const axisWrap = document.createElement("label");
@@ -175,8 +175,8 @@ export function mountMeasureToolPropsPanel(ctx: ToolPropsContext) {
     status.className = "muted";
     status.style.marginTop = "8px";
     status.textContent = measureState.firstPoint
-      ? `Prvý bod: ${formatMm(measureState.firstPoint)}`
-      : "Prvý bod: (žiadny)";
+      ? `First point: ${formatMm(measureState.firstPoint)}`
+      : "First point: (none)";
     s.appendChild(status);
 
     const clearBtn = document.createElement("button");
@@ -185,7 +185,7 @@ export function mountMeasureToolPropsPanel(ctx: ToolPropsContext) {
     clearBtn.style.marginTop = "10px";
     clearBtn.addEventListener("click", () => {
       clearAllMeasurements();
-      setUnderlayStatus("Measure: klikni prvý bod.");
+      setUnderlayStatus("Measure: click first point.");
       mountProps();
     });
     s.appendChild(clearBtn);
