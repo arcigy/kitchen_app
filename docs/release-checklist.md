@@ -9,6 +9,7 @@ Use this checklist before promoting `staging` to `main`.
 - [ ] Lint passes with `npm run lint --if-present`, if configured.
 - [ ] Tests pass with `npm run test --if-present`, if configured.
 - [ ] Production build passes with `npm run build`.
+- [ ] With the local dev server running, UI regression passes with `npm run test:ui-regression`.
 
 ## Manual smoke test
 
