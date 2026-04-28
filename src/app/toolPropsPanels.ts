@@ -1,6 +1,62 @@
-type ToolPropsContext = Record<string, any>;
+import * as THREE from "three";
+import type { AppState } from "../layout/appState";
+import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
+import type { MeasureState } from "./measureTools";
 
-export function mountWallToolPropsPanel(ctx: ToolPropsContext) {
+export type PropertiesPanelApi = {
+  setTitle: (title: string) => void;
+  section: () => HTMLElement;
+  row: (section: HTMLElement, label: string, control: HTMLElement) => void;
+};
+
+type WallToolPropsContext = {
+  props: PropertiesPanelApi;
+  wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
+  wallDraw: {
+    preview: THREE.Mesh | null;
+    a: THREE.Vector3 | null;
+    hoverB: THREE.Vector3 | null;
+  };
+  updateWallMeshWithJustification: (
+    mesh: THREE.Mesh,
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    thicknessMm: number,
+    justification: NonNullable<WallParams["justification"]>,
+    exteriorSign: 1 | -1
+  ) => void;
+  setUnderlayStatus: (text: string) => void;
+};
+
+type KitchenWorktopToolPropsContext = {
+  props: PropertiesPanelApi;
+  S: AppState;
+  kitchenWorktopDraw: { justification: KitchenWorktopJustification };
+  scheduleKitchenWorktopPreviewUpdate: () => void;
+  getMaterialDefinitionById: (id: string) => { displayName: string } | null | undefined;
+};
+
+type AlignToolPropsContext = {
+  props: PropertiesPanelApi;
+  alignState: { ref: AlignPickedLine | null };
+};
+
+type TrimToolPropsContext = {
+  props: PropertiesPanelApi;
+  trimState: { step: "pickTarget" | "pickCutter"; targetPick: AlignPickedLine | null };
+};
+
+type MeasureToolPropsContext = {
+  props: PropertiesPanelApi;
+  measureState: Pick<MeasureState, "axisLock" | "firstPoint">;
+  args: { axisLockEl: HTMLInputElement };
+  formatMm: (point: THREE.Vector3) => string;
+  clearAllMeasurements: () => void;
+  setUnderlayStatus: (text: string) => void;
+  mountProps: () => void;
+};
+
+export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
   const { props, wallDefault, wallDraw, updateWallMeshWithJustification, setUnderlayStatus } = ctx;
     props.setTitle("Wall");
     const s = props.section();
@@ -15,7 +71,7 @@ export function mountWallToolPropsPanel(ctx: ToolPropsContext) {
       <option value="interior">Finish face: interior</option>
       <option value="exterior">Finish face: exterior</option>
     `;
-    just.value = wallDefault.justification;
+    just.value = wallDefault.justification ?? "center";
     props.row(s, "Justification", just);
     const flip = document.createElement("button");
     flip.type = "button";
@@ -37,8 +93,8 @@ export function mountWallToolPropsPanel(ctx: ToolPropsContext) {
         wallDraw.a,
         wallDraw.hoverB ?? wallDraw.a,
         wallDefault.thicknessMm,
-        wallDefault.justification,
-        wallDefault.exteriorSign
+        wallDefault.justification ?? "center",
+        wallDefault.exteriorSign ?? 1
       );
     };
     th.addEventListener("change", () => {
@@ -62,7 +118,7 @@ export function mountWallToolPropsPanel(ctx: ToolPropsContext) {
   
 }
 
-export function mountKitchenWorktopToolPropsPanel(ctx: ToolPropsContext) {
+export function mountKitchenWorktopToolPropsPanel(ctx: KitchenWorktopToolPropsContext) {
   const { props, S, kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById } = ctx;
     props.setTitle("Worktop");
     const section = props.section();
@@ -106,7 +162,7 @@ export function mountKitchenWorktopToolPropsPanel(ctx: ToolPropsContext) {
   
 }
 
-export function mountAlignToolPropsPanel(ctx: ToolPropsContext) {
+export function mountAlignToolPropsPanel(ctx: AlignToolPropsContext) {
   const { props, alignState } = ctx;
     props.setTitle("Align");
     const s = props.section();
@@ -122,7 +178,7 @@ export function mountAlignToolPropsPanel(ctx: ToolPropsContext) {
   
 }
 
-export function mountTrimToolPropsPanel(ctx: ToolPropsContext) {
+export function mountTrimToolPropsPanel(ctx: TrimToolPropsContext) {
   const { props, trimState } = ctx;
     props.setTitle("Trim");
     const s = props.section();
@@ -145,7 +201,7 @@ export function mountTrimToolPropsPanel(ctx: ToolPropsContext) {
   
 }
 
-export function mountMeasureToolPropsPanel(ctx: ToolPropsContext) {
+export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
   const { props, measureState, args, formatMm, clearAllMeasurements, setUnderlayStatus, mountProps } = ctx;
     props.setTitle("Measure");
     const s = props.section();

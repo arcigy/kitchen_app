@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
 import { getSectionBasis } from "./sectionViews";
 import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
@@ -8,12 +9,19 @@ import { getMaterialDefinitionById } from "../data/pricing/materialDefinitions";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
 import type { MeasureSelectionTarget } from "./measureEditing";
+import type { MeasureState } from "./measureTools";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { PropertiesPanelApi } from "./toolPropsPanels";
 import type {
+  AlignPickedLine,
   FloorInstance,
+  FloorParams,
+  KitchenWorktopJustification,
   LayoutInstance,
+  SectionParams,
   SelectedKind,
-  WallInstance
+  WallInstance,
+  WallParams
 } from "./localTypes";
 
 type RebuildInstanceOptions = {
@@ -23,18 +31,40 @@ type RebuildInstanceOptions = {
   sourceKey?: string;
 };
 
+type WallDrawState = {
+  preview: THREE.Mesh | null;
+  a: THREE.Vector3 | null;
+  hoverB: THREE.Vector3 | null;
+};
+
+type KitchenWorktopDrawState = {
+  active: boolean;
+  justification: KitchenWorktopJustification;
+};
+
+type AlignState = { ref: AlignPickedLine | null };
+type TrimState = { step: "pickTarget" | "pickCutter"; targetPick: AlignPickedLine | null };
+
+type FloorEditState = {
+  active: boolean;
+  params: FloorParams | null;
+  segments: unknown[];
+  ortho: boolean;
+  error: string;
+};
+
 type PropertiesRouterContext = {
-  props: unknown;
-  floorEdit: unknown & { active: boolean };
-  floorDefault: unknown;
-  wallDefault: unknown;
-  wallDraw: unknown;
-  kitchenWorktopDraw: unknown & { active: boolean };
+  props: PropertiesPanelApi;
+  floorEdit: FloorEditState;
+  floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
+  wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
+  wallDraw: WallDrawState;
+  kitchenWorktopDraw: KitchenWorktopDrawState;
   sectionDraw: unknown;
-  alignState: unknown;
-  trimState: unknown;
-  measureState: unknown;
-  args: { propertiesEl: HTMLElement };
+  alignState: AlignState;
+  trimState: TrimState;
+  measureState: Pick<MeasureState, "axisLock" | "firstPoint">;
+  args: { propertiesEl: HTMLElement; axisLockEl: HTMLInputElement };
   mode: "build" | "layout";
   layoutTool: string;
   selectedKind: SelectedKind;
@@ -48,7 +78,7 @@ type PropertiesRouterContext = {
   pinnedInstanceIds: Set<string>;
   walls: WallInstance[];
   floors: FloorInstance[];
-  sections: Array<{ id: string; params: Parameters<typeof getSectionBasis>[0] }>;
+  sections: Array<{ id: string; params: SectionParams }>;
   instances: LayoutInstance[];
   kitchenWorktops: Array<{ id: string; kitchenGroupId: string }>;
   S: AppState;
@@ -64,7 +94,14 @@ type PropertiesRouterContext = {
   showNoProps: () => void;
   mountPlacementControls: (state: AppState, helpers: PlacementHelpers) => void;
   mountActiveViewProps: () => void;
-  updateWallMeshWithJustification: (...args: never[]) => void;
+  updateWallMeshWithJustification: (
+    mesh: THREE.Mesh,
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    thicknessMm: number,
+    justification: NonNullable<WallParams["justification"]>,
+    exteriorSign: 1 | -1
+  ) => void;
   setUnderlayStatus: (status: string) => void;
   clearAllMeasurements: () => void;
   rebuildWall: (wall: WallInstance) => void;
