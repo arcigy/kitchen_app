@@ -41,8 +41,6 @@ import { createSnapOverlay } from "./app/snapOverlay";
 import { DimensionOverlay } from "./app/dimensionOverlay";
 import { createTechnicalDimensionManager } from "./app/technicalDimensions";
 import { distPointToSegment2, distPxPointToSeg } from "./app/screenGeometry";
-import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./app/toolPropsPanels";
-import { mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPropsPanel } from "./app/selectedPropsPanels";
 import {
   areAlignLinesParallel,
   buildModuleAlignCandidates,
@@ -159,8 +157,6 @@ import {
 } from "./app/kitchenWorktopVisuals";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
-import { getAllMaterials } from "./data/materials";
-import { getMaterialDefinitionById } from "./data/pricing/materialDefinitions";
 import { solveWallNetwork } from "./walls2d/solver";
 import { makeAppState, type AppState } from "./layout/appState";
 import {
@@ -219,6 +215,9 @@ import { createViewModeController } from "./app/viewModeController";
 import { createInstanceRebuilder } from "./app/instanceRebuilder";
 import { createMeasureValueCommitter } from "./app/measureValueCommitter";
 import { createBuildSelectionController } from "./app/buildSelectionController";
+import { createPropertiesRouter } from "./app/propertiesRouter";
+import { createFloorBoundaryController } from "./app/floorBoundaryController";
+import { topbarIcons } from "./app/topbarIcons";
 import { createModuleAdjacencySnapResolver } from "./app/moduleAdjacencySnapResolver";
 import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
@@ -2241,33 +2240,32 @@ export function startApp(initialArgs: AppArgs) {
 
 
 
-  // Top bar (single strip with icon buttons)
-  const icon = (d: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
-  const I_SELECT = icon("M4 4h7v2H6v5H4V4zm14 0v7h-2V6h-5V4h7zM4 20v-7h2v5h5v2H4zm16-7v7h-7v-2h5v-5h2z");
-  const I_WALL = icon("M4 6h16v2H4V6zm0 10h16v2H4v-2zM6 8h2v8H6V8zm10 0h2v8h-2V8z");
-  const I_UNDERLAY = icon("M6 2h9l3 3v17H6V2zm9 1.5V6h2.5L15 3.5zM8 9h8v2H8V9zm0 4h8v2H8v-2z");
-  const I_CABINET = icon("M4 6h16v14H4V6zm2 2v3h12V8H6zm0 5v5h5v-5H6zm7 0v5h5v-5h-5z");
-  const I_GRID2D = icon("M4 4h16v16H4V4zm2 2v4h4V6H6zm6 0v4h6V6h-6zM6 12v6h4v-6H6zm6 0v6h6v-6h-6z");
-  const I_DUP = icon("M7 7h10v10H7V7zm-3 3h2v10h10v2H4V10z");
-  const I_TRASH = icon("M9 3h6l1 2h5v2H3V5h5l1-2zm1 6h2v10h-2V9zm4 0h2v10h-2V9z");
-  const I_EXPORT = icon("M12 3v10l3-3 1.4 1.4L12 16.8 7.6 11.4 9 10l3 3V3h0zM5 19h14v2H5v-2z");
-  const I_COPY = icon("M8 7h11v14H8V7zM5 3h11v2H7v12H5V3z");
-  const I_RESET = icon("M12 6V3l-4 4 4 4V8c2.8 0 5 2.2 5 5a5 5 0 1 1-9.8-1H5.1A7 7 0 1 0 12 6z");
-  const I_VIEW = icon("M12 5c5.5 0 9.5 5.5 9.5 7s-4 7-9.5 7S2.5 14.5 2.5 12 6.5 5 12 5zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z");
-  const I_BOM = icon("M5 3h14v18H5V3zm2 2v4h10V5H7zm0 6v2h10v-2H7zm0 4v2h6v-2H7z");
-  const I_ALIGN = icon("M4 7h12v2H4V7zm0 8h12v2H4v-2zM18 6l4 3-4 3V6zm0 6l4 3-4 3v-6z");
-  const I_TRIM = icon("M4 7h11v2H4V7zm0 8h8v2H4v-2zM18 5l4 4-2 2-4-4 2-2zm-4 4l4 4-2 2-4-4 2-2z");
-  const I_DIM = icon("M3 7h18v2H3V7zm0 8h18v2H3v-2zM6 9v6H4V9h2zm16 0v6h-2V9h2z");
-  const I_SECTION = icon("M4 6h16v2H4V6zm2 4h2v8H6v-8zm10 0h2v8h-2v-8zm-5 1 4 4-1.4 1.4L12 13.8V20h-2v-6.2l-1.6 1.6L7 14l4-4z");
-  const I_FLOOR = icon("M4 15l8 4 8-4-8-4-8 4zm0-4l8 4 8-4-8-4-8 4z");
-  const I_UNDO = icon("M12 5H7.8l1.6-1.6L8 2 4 6l4 4 1.4-1.4L7.8 7H12c3.3 0 6 2.7 6 6 0 1.1-.3 2.1-.8 3l1.7 1c.7-1.2 1.1-2.6 1.1-4 0-4.4-3.6-8-8-8z");
-  const I_REDO = icon("M12 5c-4.4 0-8 3.6-8 8 0 1.4.4 2.8 1.1 4l1.7-1c-.5-.9-.8-1.9-.8-3 0-3.3 2.7-6 6-6h4.2l-1.6 1.6L16 10l4-4-4-4-1.4 1.4L16.2 5H12z");
-  const I_DONE = icon("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z");
-  const I_CANCEL = icon("M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z");
-  const I_MOVE = icon("M11 2h2v4h3l-4 4-4-4h3V2zm0 16H8l4-4 4 4h-3v4h-2v-4zM2 11h4V8l4 4-4 4v-3H2v-2zm16 0h4v2h-4v3l-4-4 4-4v3z");
-  const I_ROTATE = icon("M12 5V2L7.8 6.2 12 10V7c2.8 0 5 2.2 5 5 0 1.3-.5 2.5-1.3 3.4l1.4 1.4A7 7 0 0 0 12 5zm-5.1 2.2A7 7 0 0 0 12 19v3l4.2-4.2L12 14v3a5 5 0 0 1-3.7-8.4L6.9 7.2z");
-  const I_INSTALL = icon("M12 3v8.2l2.6-2.6 1.4 1.4-5 5-5-5 1.4-1.4 2.6 2.6V3h2zm-7 14h14v4H5v-4z");
-
+  const {
+    I_ALIGN,
+    I_BOM,
+    I_CABINET,
+    I_CANCEL,
+    I_COPY,
+    I_DIM,
+    I_DONE,
+    I_DUP,
+    I_EXPORT,
+    I_FLOOR,
+    I_GRID2D,
+    I_INSTALL,
+    I_MOVE,
+    I_REDO,
+    I_RESET,
+    I_ROTATE,
+    I_SECTION,
+    I_SELECT,
+    I_TRASH,
+    I_TRIM,
+    I_UNDERLAY,
+    I_UNDO,
+    I_VIEW,
+    I_WALL
+  } = topbarIcons;
   const tb = createTopbar(args.ribbonEl);
   tb.setChrome({
     title: "Kitchen Layout 2026 - Floor Plan",
@@ -2389,300 +2387,142 @@ export function startApp(initialArgs: AppArgs) {
     overlayEl: null as HTMLDivElement | null
   };
 
-  const syncDrawOrthoUi = () => {
-    floorEdit.ortho = drawOrthoEnabled;
-    if (drawOrthoToggleEl) {
-      drawOrthoToggleEl.textContent = `Ortho ${drawOrthoEnabled ? "ON" : "OFF"}`;
-      drawOrthoToggleEl.style.background = drawOrthoEnabled ? "rgba(16,42,60,0.96)" : "rgba(22,24,29,0.96)";
-      drawOrthoToggleEl.style.borderColor = drawOrthoEnabled ? "#53c6ff" : "rgba(255,255,255,0.14)";
-      drawOrthoToggleEl.style.color = drawOrthoEnabled ? "#dff6ff" : "#d7dde6";
-    }
-  };
+  let floorBoundaryController!: ReturnType<typeof createFloorBoundaryController>;
+  const syncDrawOrthoUi = () => floorBoundaryController.syncDrawOrthoUi();
+  const toggleDrawOrthoMode = () => floorBoundaryController.toggleDrawOrthoMode();
+  const floorOrthoPoint = (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => floorBoundaryController.floorOrthoPoint(start, raw);
+  const moveFloorEditVertex = (startSegments: FloorBoundarySegment[], startPoint: FloorBoundaryPoint, nextPoint: FloorBoundaryPoint) => floorBoundaryController.moveFloorEditVertex(startSegments, startPoint, nextPoint);
+  const moveFloorEditSegment = (startSegments: FloorBoundarySegment[], segmentIndex: number, startWorld: FloorBoundaryPoint, nextWorld: FloorBoundaryPoint) => floorBoundaryController.moveFloorEditSegment(startSegments, segmentIndex, startWorld, nextWorld);
+  const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) => floorBoundaryController.pickFloorEditElement(mousePx, rect);
+  const clearFloorBoundaryGroup = () => floorBoundaryController.clearFloorBoundaryGroup();
+  const renderFloorBoundaryEdit = () => floorBoundaryController.renderFloorBoundaryEdit();
+  const setFloorBoundaryTool = (tool: FloorBoundaryTool) => floorBoundaryController.setFloorBoundaryTool(tool);
+  const buildFloorBoundaryTopbar = () => floorBoundaryController.buildFloorBoundaryTopbar();
+  const enterFloorBoundaryEdit = (floorId?: string) => floorBoundaryController.enterFloorBoundaryEdit(floorId);
+  const discardFloorBoundaryEdit = () => floorBoundaryController.discardFloorBoundaryEdit();
+  const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => floorBoundaryController.addFloorEditSegment(a, b);
 
-  const toggleDrawOrthoMode = () => {
-    drawOrthoEnabled = !drawOrthoEnabled;
-    syncDrawOrthoUi();
-    if (floorEdit.active) {
-      buildFloorBoundaryTopbar();
-      renderFloorBoundaryEdit();
-    }
-    if (kitchenWorktopDraw.active && kitchenWorktopDraw.points.length > 0) {
-      scheduleKitchenWorktopPreviewUpdate();
-      mountProps();
-    }
-  };
-
+  floorBoundaryController = createFloorBoundaryController({
+    I_ALIGN,
+    I_CANCEL,
+    I_DIM,
+    I_DONE,
+    I_GRID2D,
+    I_VIEW,
+    S,
+    args,
+    cam,
+    cancelPlacement,
+    clearToolHud,
+    cloneFloorParams,
+    commitHistory,
+    createFloor,
+    ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
+    ensureLayoutMode,
+    floorBoundaryGroup,
+    floorDefault,
+    floorEdit,
+    floors,
+    kitchenWorktopDraw,
+    mountProps: () => mountProps(),
+    placement,
+    placementHelpers,
+    rebuildFloor,
+    selectedInstanceIds,
+    selectedWallIds,
+    setInstanceSelected,
+    setSelectedFloor,
+    setToolSelect,
+    setUnderlayStatus,
+    scheduleKitchenWorktopPreviewUpdate,
+    tb,
+    get buildClassicTopbar() { return buildClassicTopbar; },
+    get drawOrthoEnabled() { return drawOrthoEnabled; },
+    set drawOrthoEnabled(next: boolean) { drawOrthoEnabled = next; },
+    get drawOrthoToggleEl() { return drawOrthoToggleEl; },
+    get floorCounter() { return floorCounter; },
+    get rebuildStandardTopbar() { return rebuildStandardTopbar; },
+    get selectedFloorId() { return selectedFloorId; },
+    set selectedFloorId(next: string | null) { selectedFloorId = next; },
+    get selectedKind() { return selectedKind; },
+    set selectedKind(next: SelectedKind) { selectedKind = next; },
+    get selectedWallId() { return selectedWallId; },
+    set selectedWallId(next: string | null) { selectedWallId = next; }
+  });
   syncDrawOrthoUi();
-
-  const floorOrthoPoint = (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => {
-    return computeFloorOrthoPoint(start, raw, drawOrthoEnabled);
-  };
-
-  const moveFloorEditVertex = (startSegments: FloorBoundarySegment[], startPoint: FloorBoundaryPoint, nextPoint: FloorBoundaryPoint) => {
-    floorEdit.segments = moveFloorEditVertexBase(startSegments, startPoint, nextPoint);
-  };
-
-  const moveFloorEditSegment = (
-    startSegments: FloorBoundarySegment[],
-    segmentIndex: number,
-    startWorld: FloorBoundaryPoint,
-    nextWorld: FloorBoundaryPoint
-  ) => {
-    floorEdit.segments = moveFloorEditSegmentBase(startSegments, segmentIndex, startWorld, nextWorld);
-  };
-
-  const pickFloorEditElement = (mousePx: { x: number; y: number }, rect: DOMRect) =>
-    pickFloorEditElementBase({ floorEdit, mousePx, rect, camera: cam() });
-
-  const clearFloorBoundaryGroup = () => clearFloorBoundaryGroupBase(floorBoundaryGroup);
-
-  const renderFloorBoundaryEdit = () => renderFloorBoundaryEditBase({ group: floorBoundaryGroup, floorEdit });
-
-  const setFloorBoundaryTool = (tool: FloorBoundaryTool) => {
-    floorEdit.tool = tool;
-    floorEdit.first = null;
-    floorEdit.hover = null;
-    clearToolHud();
-    renderFloorBoundaryEdit();
-    setUnderlayStatus(
-      tool === "pickLines"
-        ? "Floor boundary: Pick Lines Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni hranu steny."
-        : tool === "rectangle"
-          ? "Floor boundary: Rectangle Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni prvĂ„â€šĂ‹ĹĄ a druhĂ„â€šĂ‹ĹĄ roh."
-          : tool === "circle"
-            ? "Floor boundary: Circle Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni stred a polomer."
-            : "Floor boundary: Line Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikaj body boundary line."
-    );
-    mountProps();
-  };
-
-  const buildFloorBoundaryTopbar = () => {
-    tb.clear();
-    buildClassicTopbar();
-    const row = tb.addRow({ title: "Floor boundary", className: "topbar-floor-ribbon" });
-    const draw = tb.addGroup("Draw", { row });
-    tb.toolButton(draw, { title: "Line", iconSvg: I_DIM, label: "Line", onClick: () => setFloorBoundaryTool("line") });
-    tb.toolButton(draw, { title: "Rectangle", iconSvg: I_GRID2D, label: "Rectangle", onClick: () => setFloorBoundaryTool("rectangle") });
-    tb.toolButton(draw, { title: "Circle", iconSvg: I_VIEW, label: "Circle", onClick: () => setFloorBoundaryTool("circle") });
-    tb.toolButton(draw, { title: "Pick Lines", iconSvg: I_ALIGN, label: "Pick Lines", onClick: () => setFloorBoundaryTool("pickLines") });
-    tb.toolButton(draw, {
-      title: "Ortho kreslenie",
-      iconSvg: I_ALIGN,
-      label: drawOrthoEnabled ? "Ortho ON" : "Ortho OFF",
-      onClick: () => {
-        toggleDrawOrthoMode();
-        buildFloorBoundaryTopbar();
-        mountProps();
-      }
-    });
-    tb.addSpacer({ row });
-    const finish = tb.addGroup("Boundary", { row });
-    tb.toolButton(finish, { title: "DokonÄ‚â€žÄąÂ¤iĂ„Ä…Ă„â€ž podlahu", iconSvg: I_DONE, label: "DokonÄ‚â€žÄąÂ¤iĂ„Ä…Ă„â€ž", variant: "success", onClick: () => finishFloorBoundaryEdit() });
-    tb.toolButton(finish, { title: "ZruĂ„Ä…Ă‹â€ˇiĂ„Ä…Ă„â€ž", iconSvg: I_CANCEL, label: "ZruĂ„Ä…Ă‹â€ˇiĂ„Ä…Ă„â€ž", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
-  };
-
-  const ensureFloorOverlay = () => {
-    floorEdit.overlayEl?.remove();
-    const overlay = document.createElement("div");
-    overlay.style.position = "absolute";
-    overlay.style.inset = "0";
-    overlay.style.background = "rgba(255,255,255,0.14)";
-    overlay.style.mixBlendMode = "screen";
-    overlay.style.pointerEvents = "none";
-    overlay.style.zIndex = "9";
-    args.viewerEl.appendChild(overlay);
-    floorEdit.overlayEl = overlay;
-  };
-
-  const enterFloorBoundaryEdit = (floorId?: string) => {
-    ensureLayoutMode();
-    ensureFloorplanViewerTab();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    setToolSelect();
-
-    const existing = floorId ? floors.find((floor) => floor.id === floorId) ?? null : null;
-    const params = existing
-      ? cloneFloorParams(existing.params)
-      : {
-          name: `Podlaha ${floorCounter}`,
-          heightMm: floorDefault.heightMm,
-          thicknessMm: floorDefault.thicknessMm,
-          materialId: floorDefault.materialId,
-          boundary: []
-        };
-
-    floorEdit.active = true;
-    floorEdit.floorId = existing?.id ?? null;
-    floorEdit.params = params;
-    floorEdit.snapshot = existing ? cloneFloorParams(existing.params) : null;
-    floorEdit.segments = floorBoundaryToSegments(params.boundary);
-    floorEdit.tool = "line";
-    floorEdit.first = null;
-    floorEdit.hover = null;
-    floorEdit.selectedSegmentIndex = null;
-    floorEdit.selectedVertex = null;
-    floorEdit.drag = null;
-    floorEdit.error = "";
-    selectedKind = null;
-    selectedFloorId = null;
-    selectedWallId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    ensureFloorOverlay();
-    buildFloorBoundaryTopbar();
-    renderFloorBoundaryEdit();
-    setUnderlayStatus("Floor boundary: Line Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ kresli boundary line alebo pouĂ„Ä…Ă„Äľi Pick Lines.");
-    mountProps();
-  };
-
-  const exitFloorBoundaryEditCommon = () => {
-    floorEdit.active = false;
-    floorEdit.floorId = null;
-    floorEdit.params = null;
-    floorEdit.snapshot = null;
-    floorEdit.segments = [];
-    floorEdit.first = null;
-    floorEdit.hover = null;
-    floorEdit.selectedSegmentIndex = null;
-    floorEdit.selectedVertex = null;
-    floorEdit.drag = null;
-    floorEdit.error = "";
-    floorEdit.overlayEl?.remove();
-    floorEdit.overlayEl = null;
-    clearFloorBoundaryGroup();
-    clearToolHud();
-    rebuildStandardTopbar();
-    mountProps();
-  };
-
-  const finishFloorBoundaryEdit = () => {
-    if (!floorEdit.active || !floorEdit.params) return;
-    const boundary = floorSegmentsToBoundary(floorEdit.segments);
-    if (!boundary || boundary.length < 3) {
-      floorEdit.error = "Boundary line nie je uzavretĂ„â€šĂ‹â€ˇ. Uzavri loop alebo doplĂ„Ä…Ă‚Â chĂ„â€šĂ‹ĹĄbajĂ„â€šÄąĹşce Ä‚â€žÄąÂ¤iary.";
-      setUnderlayStatus("Floor boundary: boundary musĂ„â€šĂ‚Â­ maĂ„Ä…Ă„â€ž aspoĂ„Ä…Ă‚Â 3 Ä‚â€žÄąÂ¤iary.");
-      mountProps();
-      return;
-    }
-    floorEdit.error = "";
-    floorEdit.params.boundary = boundary;
-    let floor = floorEdit.floorId ? floors.find((item) => item.id === floorEdit.floorId) ?? null : null;
-    if (floor) {
-      floor.params = cloneFloorParams(floorEdit.params);
-      rebuildFloor(floor);
-    } else {
-      floor = createFloor(cloneFloorParams(floorEdit.params), { skipHistory: true });
-    }
-    selectedFloorId = floor.id;
-    selectedKind = "floor";
-    exitFloorBoundaryEditCommon();
-    setSelectedFloor(floor.id);
-    commitHistory(S);
-    setUnderlayStatus("Floor boundary: uloĂ„Ä…Ă„ÄľenĂ„â€šĂ‚Â©.");
-  };
-
-  const discardFloorBoundaryEdit = () => {
-    if (!floorEdit.active) return;
-    const existing = floorEdit.floorId ? floors.find((floor) => floor.id === floorEdit.floorId) ?? null : null;
-    if (existing && floorEdit.snapshot) {
-      existing.params = cloneFloorParams(floorEdit.snapshot);
-      rebuildFloor(existing);
-    }
-    exitFloorBoundaryEditCommon();
-    setUnderlayStatus("Floor boundary: zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‚Â©.");
-  };
-
-  const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => {
-    if (floorPointDistMm(a, b) < 2) return;
-    floorEdit.error = "";
-    floorEdit.segments.push({ a: { ...a }, b: { ...b } });
-    renderFloorBoundaryEdit();
-  };
-
-  const mountFloorBoundaryProps = () => mountFloorBoundaryPropsPanel({ props, floorEdit, getAllMaterials, floorDefault });
-
-  const mountWallToolProps = () => mountWallToolPropsPanel({ props, wallDefault, wallDraw, updateWallMeshWithJustification, setUnderlayStatus });
-
-  const mountKitchenWorktopToolProps = () => mountKitchenWorktopToolPropsPanel({ props, S, kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById });
-
-  const mountAlignToolProps = () => mountAlignToolPropsPanel({ props, alignState });
-
-  const mountTrimToolProps = () => mountTrimToolPropsPanel({ props, trimState });
-
-  const mountMeasureToolProps = () => mountMeasureToolPropsPanel({ props, measureState, args, formatMm, clearAllMeasurements, setUnderlayStatus, mountProps });
-
-  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props, selectedWallIds, walls, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs }, w);
-
-  const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props, getAllMaterials, floorDefault, rebuildFloor, updateSelectionHighlights, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs }, floor);
-
-  const mountSectionToolProps = () => mountSectionToolPropsPanel({ props, sectionDraw, drawOrthoEnabled });
-
-  const mountSectionProps = (id: string) => mountSectionPropsPanel({ props, sections, showNoProps, getSectionBasis, updateAllSectionVisuals, mountProps, commitHistory, S }, id);
-
-  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, getModuleDescriptorOrThrow, args, rebuildInstance, appendLinkedMeasureInputs }, id);
-
-  const mountWindowProps = () => mountWindowPropsPanel({ props });
-
-  const mountUnderlayProps = () => mountUnderlayPropsPanel({ props, loadUnderlayToCanvas, ensureLayoutMode, setUnderlayStatus, setUnderlayFromCanvas, underlayState, commitHistory, S, setSelectedUnderlay, updateUnderlayTransform, underlayCal, underlayMesh, clearUnderlay, setSelectedModule, mountProps, setUnderlayScaleEl: (el: HTMLInputElement) => { underlayScaleEl = el; }, setUnderlayOffXEl: (el: HTMLInputElement) => { underlayOffXEl = el; }, setUnderlayOffZEl: (el: HTMLInputElement) => { underlayOffZEl = el; }, setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; }, markUnderlaySelected: () => { selectedKind = "underlay"; } });
-
   let kitchenMode: ReturnType<typeof createKitchenEditMode> | null = null;
-
-  const mountProps = () => {
-    if (mode !== "layout") return showNoProps();
-    if (floorEdit.active) return mountFloorBoundaryProps();
-    if (placement.active) return mountPlacementControls(S, placementHelpers);
-    if (layoutTool === "wall") return mountWallToolProps();
-    if (layoutTool === "measure") return mountMeasureToolProps();
-    if (layoutTool === "section") return mountSectionToolProps();
-    if (S.kitchenEditMode && kitchenWorktopDraw.active) return mountKitchenWorktopToolProps();
-    if (layoutTool === "align") return mountAlignToolProps();
-    if (layoutTool === "trim") return mountTrimToolProps();
-    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId && kitchenMode?.mountKitchenGroupProps(selectedKitchenGroupId)) {
-      const section = args.propertiesEl.querySelector(".props-section:last-of-type") as HTMLElement | null;
-      if (section) {
-        appendLinkedMeasureInputs(section, {
-          kind: "kitchenGroup",
-          groupId: selectedKitchenGroupId,
-          instanceIds: new Set(instances.filter((inst) => inst.kitchenGroupId === selectedKitchenGroupId).map((inst) => inst.id)),
-          worktopIds: new Set(
-            kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === selectedKitchenGroupId).map((worktop) => worktop.id)
-          )
-        });
-      }
-      return;
-    }
-    if (selectedKind === "underlay") return mountUnderlayProps();
-    if (selectedWallIds.size > 1 && selectedInstanceIds.size === 0) return mountWallProps();
-    if (selectedWallIds.size + selectedInstanceIds.size > 1) {
-      args.propertiesEl.innerHTML = "";
-      const t = document.createElement("div");
-      t.className = "props-title";
-      t.textContent = "Properties";
-      args.propertiesEl.appendChild(t);
-      const s = document.createElement("div");
-      s.className = "props-section";
-      s.innerHTML = `<div class="muted">Selected: ${selectedWallIds.size} wall(s), ${selectedInstanceIds.size} module(s)</div>
-      <div class="muted" style="margin-top:6px;">Delete = remove selected</div>`;
-      args.propertiesEl.appendChild(s);
-      return;
-    }
-    if (selectedKind === "wall") {
-      const w = walls.find((x) => x.id === selectedWallId) ?? null;
-      if (w) return mountWallProps(w);
-      return showNoProps();
-    }
-    if (selectedKind === "floor" && selectedFloorId) {
-      const floor = floors.find((x) => x.id === selectedFloorId) ?? null;
-      if (floor) return mountFloorProps(floor);
-      return showNoProps();
-    }
-    if (selectedKind === "window") return mountWindowProps();
-    if (selectedKind === "section" && selectedSectionId) return mountSectionProps(selectedSectionId);
-    if (selectedKind === "module" && selectedInstanceId) return mountModuleProps(selectedInstanceId);
-    if (kitchenMode && kitchenMode.tryMountActiveKitchenGroupProps()) return;
-    mountActiveViewProps();
-  };
+  const propertiesRouter = createPropertiesRouter({
+    S,
+    args,
+    alignState,
+    appendLinkedMeasureInputs: (section: HTMLElement, target: MeasureSelectionTarget | null) => appendLinkedMeasureInputs(section, target),
+    anyOverlap,
+    clearAllMeasurements,
+    clearUnderlay,
+    commitHistory,
+    ensureLayoutMode,
+    enterFloorBoundaryEdit,
+    findInstance,
+    floorDefault,
+    floorEdit,
+    floors,
+    getModuleDescriptorOrThrow,
+    instanceFitsRoom,
+    instances,
+    kitchenWorktopDraw,
+    kitchenWorktops,
+    measureState,
+    moduleOverlapsKitchenWorktops,
+    moduleOverlapsWalls,
+    mountActiveViewProps,
+    mountPlacementControls,
+    pinnedInstanceIds,
+    placement,
+    placementHelpers,
+    props,
+    rebuildFloor,
+    rebuildInstance,
+    rebuildWall,
+    rebuildWallPlanMesh,
+    sectionDraw,
+    sections,
+    selectedInstanceIds,
+    selectedWallIds,
+    setSelectedModule,
+    setSelectedUnderlay,
+    setUnderlayFromCanvas,
+    setUnderlayStatus,
+    showNoProps,
+    trimState,
+    underlayCal,
+    underlayMesh,
+    underlayState,
+    updateLayoutPanel,
+    updateSelectionHighlights,
+    updateUnderlayTransform,
+    updateWallMeshWithJustification,
+    wallDefault,
+    wallDraw,
+    walls,
+    get drawOrthoEnabled() { return drawOrthoEnabled; },
+    get kitchenMode() { return kitchenMode; },
+    get layoutTool() { return layoutTool; },
+    get mode() { return mode; },
+    get selectedFloorId() { return selectedFloorId; },
+    get selectedInstanceId() { return selectedInstanceId; },
+    get selectedKitchenGroupId() { return selectedKitchenGroupId; },
+    get selectedKind() { return selectedKind; },
+    set selectedKind(next: SelectedKind) { selectedKind = next; },
+    get selectedSectionId() { return selectedSectionId; },
+    get selectedWallId() { return selectedWallId; },
+    setUnderlayScaleEl: (el: HTMLInputElement) => { underlayScaleEl = el; },
+    setUnderlayOffXEl: (el: HTMLInputElement) => { underlayOffXEl = el; },
+    setUnderlayOffZEl: (el: HTMLInputElement) => { underlayOffZEl = el; },
+    setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; },
+    markUnderlaySelected: () => { selectedKind = "underlay"; },
+    scheduleKitchenWorktopPreviewUpdate
+  });
+  const mountProps = () => propertiesRouter.mountProps();
 
 
 

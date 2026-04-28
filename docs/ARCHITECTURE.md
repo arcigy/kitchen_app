@@ -1,5 +1,9 @@
 # Kitchen App — Architecture
 
+See also: docs/AI_DEVELOPMENT_RULES.md.
+
+Current app composition rule: do not add feature logic directly into src/app.ts. New logic must go into the matching controller/helper file and pp.ts should only wire it.
+
 ## Stack
 
 TypeScript + Three.js + Vite. No UI framework. DOM API for UI.
