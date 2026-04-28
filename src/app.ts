@@ -114,6 +114,12 @@ import { createSsgiPipeline, type SsgiPipeline } from "./rendering/ssgiPipeline"
 import { createPhotoPathTracer, type PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
+import {
+  cloneFloorParams as cloneFloorParamsBase,
+  floorMaterialColor,
+  makeFloorGeometry,
+  makeFloorOutlineGeometry
+} from "./app/floorGeometry";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
 import { bindLabelToControl } from "./ui/formFieldA11y";
 import { getAllMaterials } from "./data/materials";
@@ -1806,39 +1812,7 @@ export function startApp(initialArgs: AppArgs) {
     return inst;
   }
 
-  const cloneFloorParams = (params: FloorParams): FloorParams => ({
-    name: params.name,
-    heightMm: params.heightMm,
-    thicknessMm: params.thicknessMm,
-    materialId: params.materialId ?? floorDefault.materialId,
-    boundary: params.boundary.map((p) => ({ x: p.x, z: p.z }))
-  });
-
-  const floorMaterialColor = (materialId: string) => {
-    if (materialId === "mat_oak_natural" || materialId === "mat_worktop_oak") return 0xb98755;
-    if (materialId === "mat_white_melamine") return 0xf1f3f5;
-    return 0x9aa3af;
-  };
-
-  const makeFloorGeometry = (params: FloorParams) => {
-    const points = params.boundary;
-    if (points.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
-    const shape = new THREE.Shape(points.map((p) => new THREE.Vector2(p.x / 1000, p.z / 1000)));
-    const geom = new THREE.ExtrudeGeometry(shape, {
-      depth: Math.max(1, params.thicknessMm) / 1000,
-      bevelEnabled: false
-    });
-    geom.rotateX(Math.PI / 2);
-    return geom;
-  };
-
-  const makeFloorOutlineGeometry = (params: FloorParams) => {
-    if (params.boundary.length === 0) return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-    const y = params.heightMm / 1000 + 0.012;
-    const pts = params.boundary.map((p) => new THREE.Vector3(p.x / 1000, y, p.z / 1000));
-    pts.push(new THREE.Vector3(params.boundary[0].x / 1000, y, params.boundary[0].z / 1000));
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  };
+  const cloneFloorParams = (params: FloorParams): FloorParams => cloneFloorParamsBase(params, floorDefault.materialId);
 
   function rebuildFloor(floor: FloorInstance) {
     floor.params.heightMm = Math.round(floor.params.heightMm);
