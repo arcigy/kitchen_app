@@ -198,6 +198,7 @@ import { createExportActions } from "./app/exportActions";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { renderAppFrame } from "./app/frameRenderer";
+import { createModulePlacementHelpers } from "./app/modulePlacementHelpers";
 import {
   ensurePickAndOutline as ensurePickAndOutlineBase,
   footprintExtentsMatchXZ,
@@ -1730,7 +1731,7 @@ export function startApp(initialArgs: AppArgs) {
     rebuildWall(inst);
     rebuildWallPlanMesh();
 
-    // Disallow walls intersecting any module (prevents moduleĂ˘â€ â€ťwall overlap states).
+    // Disallow walls intersecting any module (prevents moduleĂ„â€šĂ‹ÂÄ‚ËĂ˘â€šÂ¬Ă‚Â Ä‚ËĂ˘â€šÂ¬ÄąÄ„wall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
       layoutRoot.remove(root);
@@ -2870,7 +2871,7 @@ export function startApp(initialArgs: AppArgs) {
       valid: true,
       enforceRoomBounds: true,
       enforceWallOverlap: true,
-      statusText: "Placement: Tall modul sa prisnapne vedÄľa pracovnej dosky."
+      statusText: "Placement: Tall modul sa prisnapne vedÄ‚â€žĂ„Äľa pracovnej dosky."
     };
   };
 
@@ -2923,7 +2924,7 @@ export function startApp(initialArgs: AppArgs) {
           valid: false,
           enforceRoomBounds: false,
           enforceWallOverlap: false,
-          statusText: "Placement: Corner sa dĂˇ vloĹľiĹĄ len do rohu pracovnej dosky."
+          statusText: "Placement: Corner sa dĂ„â€šĂ‹â€ˇ vloĂ„Ä…Ă„ÄľiĂ„Ä…Ă„â€ž len do rohu pracovnej dosky."
         };
       }
 
@@ -2935,8 +2936,8 @@ export function startApp(initialArgs: AppArgs) {
         enforceRoomBounds: false,
         enforceWallOverlap: false,
         statusText: best.valid
-          ? "Placement: Corner sa viaĹľe len na roh back lĂ­nie pracovnej dosky."
-          : "Placement: Corner sa zmestĂ­ len do rohu s dostatoÄŤne dlhĂ˝mi ramenami."
+          ? "Placement: Corner sa viaĂ„Ä…Ă„Äľe len na roh back lĂ„â€šĂ‚Â­nie pracovnej dosky."
+          : "Placement: Corner sa zmestĂ„â€šĂ‚Â­ len do rohu s dostatoÄ‚â€žÄąÂ¤ne dlhĂ„â€šĂ‹ĹĄmi ramenami."
       };
     }
 
@@ -3001,8 +3002,8 @@ export function startApp(initialArgs: AppArgs) {
       enforceRoomBounds: false,
       enforceWallOverlap: false,
       statusText: best.valid
-        ? "Placement: modul sa hĂ˝be po back lĂ­nii pod pracovnou doskou."
-        : "Placement: modul je prĂ­liĹˇ ĹˇirokĂ˝ pre zvolenĂ˝ Ăşsek pracovnej dosky."
+        ? "Placement: modul sa hĂ„â€šĂ‹ĹĄbe po back lĂ„â€šĂ‚Â­nii pod pracovnou doskou."
+        : "Placement: modul je prĂ„â€šĂ‚Â­liĂ„Ä…Ă‹â€ˇ Ă„Ä…Ă‹â€ˇirokĂ„â€šĂ‹ĹĄ pre zvolenĂ„â€šĂ‹ĹĄ Ă„â€šÄąĹşsek pracovnej dosky."
     };
   };
 
@@ -3023,7 +3024,7 @@ export function startApp(initialArgs: AppArgs) {
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    setUnderlayStatus("PracovnĂˇ doska: klikaj body tvaru. PĂ­Ĺˇ mm + Enter pre dÄşĹľku segmentu. Esc = potvrdiĹĄ hotovĂ˝ tvar.");
+    setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: klikaj body tvaru. PĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter pre dÄ‚â€žÄąĹşĂ„Ä…Ă„Äľku segmentu. Esc = potvrdiĂ„Ä…Ă„â€ž hotovĂ„â€šĂ‹ĹĄ tvar.");
     mountProps();
   };
 
@@ -3036,7 +3037,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.hoverPoint = point;
       kitchenWorktopDraw.typedMm = "";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("PracovnĂˇ doska: druhĂ˝ klik = ÄŹalĹˇĂ­ bod. PĂ­Ĺˇ mm + Enter.");
+      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: druhĂ„â€šĂ‹ĹĄ klik = Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod. PĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter.");
       return true;
     }
 
@@ -3046,7 +3047,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("PracovnĂˇ doska: pokraÄŤuj ÄŹalĹˇĂ­m bodom alebo Esc = potvrdiĹĄ.");
+      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: pokraÄ‚â€žÄąÂ¤uj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­m bodom alebo Esc = potvrdiĂ„Ä…Ă„â€ž.");
       return true;
     }
 
@@ -3056,7 +3057,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenWorktopDraw.typedMm = "";
       wallTypedHud.style.display = "none";
       updateKitchenWorktopPreview();
-      setUnderlayStatus("PracovnĂˇ doska: pokraÄŤuj ÄŹalĹˇĂ­m rohom alebo Esc = potvrdiĹĄ tvar.");
+      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: pokraÄ‚â€žÄąÂ¤uj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­m rohom alebo Esc = potvrdiĂ„Ä…Ă„â€ž tvar.");
       return true;
     }
 
@@ -3065,7 +3066,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.typedMm = "";
     wallTypedHud.style.display = "none";
     scheduleKitchenWorktopPreviewUpdate();
-    setUnderlayStatus("PracovnĂˇ doska: ÄŹalĹˇĂ­ klik = ÄŹalĹˇĂ­ roh, Esc = potvrdiĹĄ hotovĂ˝ tvar.");
+    setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ klik = Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ roh, Esc = potvrdiĂ„Ä…Ă„â€ž hotovĂ„â€šĂ‹ĹĄ tvar.");
     return true;
   };
 
@@ -3092,7 +3093,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
     scheduleKitchenWorktopPreviewUpdate();
     setUnderlayStatus(
-      `PracovnĂˇ doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
+      `PracovnĂ„â€šĂ‹â€ˇ doska: zrkadlenie ${kitchenWorktopDraw.mirrored ? "ZAP" : "VYP"} okolo ${kitchenWorktopDraw.justification.toUpperCase()} line.`
     );
   };
 
@@ -3177,7 +3178,7 @@ export function startApp(initialArgs: AppArgs) {
     if (!kitchenWorktopDraw.active) return false;
     if (kitchenWorktopDraw.points.length < 2) {
       cancelKitchenWorktopDraw({ silent: true });
-      setUnderlayStatus("PracovnĂˇ doska: zruĹˇenĂ©.");
+      setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‚Â©.");
       mountProps();
       return true;
     }
@@ -3196,7 +3197,7 @@ export function startApp(initialArgs: AppArgs) {
     const existingId = getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${worktopCounter}`;
     replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
     cancelKitchenWorktopDraw({ silent: true });
-    setUnderlayStatus(params.path.length >= 3 ? "RohovĂˇ pracovnĂˇ doska vytvorenĂˇ." : "PracovnĂˇ doska vytvorenĂˇ.");
+    setUnderlayStatus(params.path.length >= 3 ? "RohovĂ„â€šĂ‹â€ˇ pracovnĂ„â€šĂ‹â€ˇ doska vytvorenĂ„â€šĂ‹â€ˇ." : "PracovnĂ„â€šĂ‹â€ˇ doska vytvorenĂ„â€šĂ‹â€ˇ.");
     mountProps();
     return true;
   };
@@ -3321,7 +3322,7 @@ export function startApp(initialArgs: AppArgs) {
     resetMeasureSnapCycle();
     hideHoverCursor();
     setFirstPointMarker(null);
-    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvĂ˝ bod." : "";
+    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvĂ„â€šĂ‹ĹĄ bod." : "";
     setUnderlayStatus("Measurements cleared.");
     ev.preventDefault();
     ev.stopPropagation();
@@ -3383,10 +3384,10 @@ export function startApp(initialArgs: AppArgs) {
     if (layoutTool === "dimension") {
       if (dimensionState.picked.length > 0) {
         technicalDimensions.resetDraft();
-        setUnderlayStatus("KĂłta: vĂ˝ber zruĹˇenĂ˝. Vyber prvĂş ÄŤiaru.");
+        setUnderlayStatus("KĂ„â€šÄąâ€šta: vĂ„â€šĂ‹ĹĄber zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‹ĹĄ. Vyber prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru.");
       } else {
         setToolSelect();
-        setUnderlayStatus("KĂłta: stopped.");
+        setUnderlayStatus("KĂ„â€šÄąâ€šta: stopped.");
       }
       ev.preventDefault();
       return true;
@@ -3399,7 +3400,7 @@ export function startApp(initialArgs: AppArgs) {
         updateSectionDrawPreview();
         hideHoverCursor();
         drawSnapOverlay.hide();
-        setUnderlayStatus("Section: canceled current line. Klikni prvĂ˝ bod.");
+        setUnderlayStatus("Section: canceled current line. Klikni prvĂ„â€šĂ‹ĹĄ bod.");
         mountProps();
       } else {
         setToolSelect();
@@ -3569,7 +3570,7 @@ export function startApp(initialArgs: AppArgs) {
     syncSelectionState();
     updateAllSectionVisuals();
     updateSelectionHighlights();
-    setUnderlayStatus("Section: klikni prvĂ˝ bod, potom druhĂ˝ bod. Space = zrkadliĹĄ smer.");
+    setUnderlayStatus("Section: klikni prvĂ„â€šĂ‹ĹĄ bod, potom druhĂ„â€šĂ‹ĹĄ bod. Space = zrkadliĂ„Ä…Ă„â€ž smer.");
     mountProps();
   };
 
@@ -3604,8 +3605,8 @@ export function startApp(initialArgs: AppArgs) {
     syncSelectionState();
     updateSelectionHighlights();
     args.measureBtn.textContent = "Measure: On";
-    args.measureReadoutEl.textContent = "Measure: klikni prvĂ˝ bod.";
-    setUnderlayStatus("Measure: klikni prvĂ˝ roh alebo hranu.");
+    args.measureReadoutEl.textContent = "Measure: klikni prvĂ„â€šĂ‹ĹĄ bod.";
+    setUnderlayStatus("Measure: klikni prvĂ„â€šĂ‹ĹĄ roh alebo hranu.");
     mountProps();
   };
 
@@ -3631,7 +3632,7 @@ export function startApp(initialArgs: AppArgs) {
     setInstanceSelected(null);
     syncSelectionState();
     updateSelectionHighlights();
-    setUnderlayStatus("KĂłta: vyber prvĂş ÄŤiaru, potom ÄŹalĹˇie rovnobeĹľnĂ© ÄŤiary. Klik do voÄľnĂ©ho miesta vloĹľĂ­ kĂłtu.");
+    setUnderlayStatus("KĂ„â€šÄąâ€šta: vyber prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru, potom Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇie rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‚Â© Ä‚â€žÄąÂ¤iary. Klik do voÄ‚â€žĂ„ÄľnĂ„â€šĂ‚Â©ho miesta vloĂ„Ä…Ă„ÄľĂ„â€šĂ‚Â­ kĂ„â€šÄąâ€štu.");
     mountProps();
   };
 
@@ -3681,7 +3682,7 @@ export function startApp(initialArgs: AppArgs) {
         wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
         wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
         wallTypedHud.style.display = "block";
-        setUnderlayStatus(`PracovnĂˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĹĄ bod, Backspace = edit, Esc = potvrdiĹĄ)`);
+        setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
         ev.preventDefault();
         return;
       }
@@ -3692,10 +3693,10 @@ export function startApp(initialArgs: AppArgs) {
           wallTypedHud.style.left = `${kitchenWorktopDraw.lastPointerPx.x}px`;
           wallTypedHud.style.top = `${kitchenWorktopDraw.lastPointerPx.y}px`;
           wallTypedHud.style.display = "block";
-          setUnderlayStatus(`PracovnĂˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĹĄ bod, Backspace = edit, Esc = potvrdiĹĄ)`);
+          setUnderlayStatus(`PracovnĂ„â€šĂ‹â€ˇ doska: ${kitchenWorktopDraw.typedMm} mm (Enter = pridaĂ„Ä…Ă„â€ž bod, Backspace = edit, Esc = potvrdiĂ„Ä…Ă„â€ž)`);
         } else {
           wallTypedHud.style.display = "none";
-          setUnderlayStatus("PracovnĂˇ doska: klikaj body alebo pĂ­Ĺˇ mm + Enter. Esc = potvrdiĹĄ.");
+          setUnderlayStatus("PracovnĂ„â€šĂ‹â€ˇ doska: klikaj body alebo pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter. Esc = potvrdiĂ„Ä…Ă„â€ž.");
         }
         ev.preventDefault();
         return;
@@ -3764,13 +3765,13 @@ export function startApp(initialArgs: AppArgs) {
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
             transformState.typed = `${transformState.typed}${ev.key}`.slice(0, 6);
-            setUnderlayStatus(`RotĂˇcia: ${transformState.typed}Â° (Enter)`);
+            setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${transformState.typed}Ä‚â€šĂ‚Â° (Enter)`);
             ev.preventDefault();
             return;
           }
           if (ev.key === "Backspace") {
             transformState.typed = transformState.typed.slice(0, -1);
-            setUnderlayStatus(transformState.typed.length ? `RotĂˇcia: ${transformState.typed}Â° (Enter)` : "RotĂˇcia: pohni myĹˇou pre smer, alebo zadaj stupne + Enter.");
+            setUnderlayStatus(transformState.typed.length ? `RotĂ„â€šĂ‹â€ˇcia: ${transformState.typed}Ä‚â€šĂ‚Â° (Enter)` : "RotĂ„â€šĂ‹â€ˇcia: pohni myĂ„Ä…Ă‹â€ˇou pre smer, alebo zadaj stupne + Enter.");
             ev.preventDefault();
             return;
           }
@@ -3780,7 +3781,7 @@ export function startApp(initialArgs: AppArgs) {
               const sign = transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               applyRotateAngle(ang);
-              setUnderlayStatus(`RotĂˇcia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Â° (klikni pre dokonÄŤenie)`);
+              setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))}Ä‚â€šĂ‚Â° (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
             }
             transformState.typed = "";
             ev.preventDefault();
@@ -4085,7 +4086,7 @@ export function startApp(initialArgs: AppArgs) {
             setUnderlayStatus(`Wall: ${wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             wallTypedHud.style.display = "none";
-            setUnderlayStatus("Stena: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: druhĂ„â€šĂ‹ĹĄ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -4140,7 +4141,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-            setUnderlayStatus("Stena: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+            setUnderlayStatus("Stena: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
             selectedKind = "wall";
             selectedWallId = w.id;
             mountProps();
@@ -4862,7 +4863,7 @@ export function startApp(initialArgs: AppArgs) {
     const s = props.section();
     const p = document.createElement("div");
     p.className = "muted";
-    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂˇstroj." : "Properties sĂş dostupnĂ© iba v layout mode.";
+    p.textContent = mode === "layout" ? "Vyber objekt alebo nĂ„â€šĂ‹â€ˇstroj." : "Properties sĂ„â€šÄąĹş dostupnĂ„â€šĂ‚Â© iba v layout mode.";
     s.appendChild(p);
   };
 
@@ -4991,12 +4992,12 @@ export function startApp(initialArgs: AppArgs) {
     renderFloorBoundaryEdit();
     setUnderlayStatus(
       tool === "pickLines"
-        ? "Floor boundary: Pick Lines â€” klikni hranu steny."
+        ? "Floor boundary: Pick Lines Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni hranu steny."
         : tool === "rectangle"
-          ? "Floor boundary: Rectangle â€” klikni prvĂ˝ a druhĂ˝ roh."
+          ? "Floor boundary: Rectangle Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni prvĂ„â€šĂ‹ĹĄ a druhĂ„â€šĂ‹ĹĄ roh."
           : tool === "circle"
-            ? "Floor boundary: Circle â€” klikni stred a polomer."
-            : "Floor boundary: Line â€” klikaj body boundary line."
+            ? "Floor boundary: Circle Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni stred a polomer."
+            : "Floor boundary: Line Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikaj body boundary line."
     );
     mountProps();
   };
@@ -5022,8 +5023,8 @@ export function startApp(initialArgs: AppArgs) {
     });
     tb.addSpacer({ row });
     const finish = tb.addGroup("Boundary", { row });
-    tb.toolButton(finish, { title: "DokonÄŤiĹĄ podlahu", iconSvg: I_DONE, label: "DokonÄŤiĹĄ", variant: "success", onClick: () => finishFloorBoundaryEdit() });
-    tb.toolButton(finish, { title: "ZruĹˇiĹĄ", iconSvg: I_CANCEL, label: "ZruĹˇiĹĄ", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "DokonÄ‚â€žÄąÂ¤iĂ„Ä…Ă„â€ž podlahu", iconSvg: I_DONE, label: "DokonÄ‚â€žÄąÂ¤iĂ„Ä…Ă„â€ž", variant: "success", onClick: () => finishFloorBoundaryEdit() });
+    tb.toolButton(finish, { title: "ZruĂ„Ä…Ă‹â€ˇiĂ„Ä…Ă„â€ž", iconSvg: I_CANCEL, label: "ZruĂ„Ä…Ă‹â€ˇiĂ„Ä…Ă„â€ž", variant: "danger", onClick: () => discardFloorBoundaryEdit() });
   };
 
   const ensureFloorOverlay = () => {
@@ -5077,7 +5078,7 @@ export function startApp(initialArgs: AppArgs) {
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
     renderFloorBoundaryEdit();
-    setUnderlayStatus("Floor boundary: Line â€” kresli boundary line alebo pouĹľi Pick Lines.");
+    setUnderlayStatus("Floor boundary: Line Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ kresli boundary line alebo pouĂ„Ä…Ă„Äľi Pick Lines.");
     mountProps();
   };
 
@@ -5105,8 +5106,8 @@ export function startApp(initialArgs: AppArgs) {
     if (!floorEdit.active || !floorEdit.params) return;
     const boundary = floorSegmentsToBoundary(floorEdit.segments);
     if (!boundary || boundary.length < 3) {
-      floorEdit.error = "Boundary line nie je uzavretĂˇ. Uzavri loop alebo doplĹ chĂ˝bajĂşce ÄŤiary.";
-      setUnderlayStatus("Floor boundary: boundary musĂ­ maĹĄ aspoĹ 3 ÄŤiary.");
+      floorEdit.error = "Boundary line nie je uzavretĂ„â€šĂ‹â€ˇ. Uzavri loop alebo doplĂ„Ä…Ă‚Â chĂ„â€šĂ‹ĹĄbajĂ„â€šÄąĹşce Ä‚â€žÄąÂ¤iary.";
+      setUnderlayStatus("Floor boundary: boundary musĂ„â€šĂ‚Â­ maĂ„Ä…Ă„â€ž aspoĂ„Ä…Ă‚Â 3 Ä‚â€žÄąÂ¤iary.");
       mountProps();
       return;
     }
@@ -5124,7 +5125,7 @@ export function startApp(initialArgs: AppArgs) {
     exitFloorBoundaryEditCommon();
     setSelectedFloor(floor.id);
     commitHistory(S);
-    setUnderlayStatus("Floor boundary: uloĹľenĂ©.");
+    setUnderlayStatus("Floor boundary: uloĂ„Ä…Ă„ÄľenĂ„â€šĂ‚Â©.");
   };
 
   const discardFloorBoundaryEdit = () => {
@@ -5135,7 +5136,7 @@ export function startApp(initialArgs: AppArgs) {
       rebuildFloor(existing);
     }
     exitFloorBoundaryEditCommon();
-    setUnderlayStatus("Floor boundary: zruĹˇenĂ©.");
+    setUnderlayStatus("Floor boundary: zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‚Â©.");
   };
 
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => {
@@ -5250,6 +5251,27 @@ export function startApp(initialArgs: AppArgs) {
     layoutRoot
   };
 
+  let modulePlacementHelpers!: ReturnType<typeof createModulePlacementHelpers>;
+  function placeWithoutOverlap(inst: LayoutInstance) { return modulePlacementHelpers.placeWithoutOverlap(inst); }
+  function anyOverlap(moving: LayoutInstance, ignoreId: string | null) { return modulePlacementHelpers.anyOverlap(moving, ignoreId); }
+  function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) { return modulePlacementHelpers.anyOverlapIgnoring(moving, ignoreIds); }
+  function moduleWorldRing(inst: LayoutInstance) { return modulePlacementHelpers.moduleWorldRing(inst); }
+  function moduleOverlapsKitchenWorktops(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsKitchenWorktops(inst); }
+  function moduleOverlapsWalls(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsWalls(inst); }
+  function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: Record<string, unknown>) { return modulePlacementHelpers.snapPositionDetailed(moving, desired, opts); }
+  function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) { return modulePlacementHelpers.collectAdjacentModuleInfos(inst, referenceBox); }
+  function chooseResizeAnchorSide(inst: LayoutInstance, infos: any[]) { return modulePlacementHelpers.chooseResizeAnchorSide(inst, infos); }
+  function inferTallResizeAnchorSide(inst: LayoutInstance) { return modulePlacementHelpers.inferTallResizeAnchorSide(inst); }
+  function preserveAnchoredResizeSide(inst: LayoutInstance, prevWorldBox: THREE.Box3, anchorSide: "left" | "right" | "front" | "back" | null) { return modulePlacementHelpers.preserveAnchoredResizeSide(inst, prevWorldBox, anchorSide); }
+  function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) { return modulePlacementHelpers.nudgePinnedModuleChain(inst, delta); }
+  function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) { return modulePlacementHelpers.propagateCornerResizeToPinnedNeighbors(inst, previousParams); }
+  function propagateModuleResizeToPinnedNeighbors(inst: LayoutInstance, prevWorldBox: THREE.Box3, prevBoxesById?: Map<string, THREE.Box3>) { return modulePlacementHelpers.propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevBoxesById); }
+  function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) { return modulePlacementHelpers.snapPosition(moving, desired); }
+  function setPlacementAdjacencyPreview(link: ModuleAdjacencyLink | null) { return modulePlacementHelpers.setPlacementAdjacencyPreview(link); }
+  function updateModuleAdjacencyVisuals() { return modulePlacementHelpers.updateModuleAdjacencyVisuals(); }
+  function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) { return modulePlacementHelpers.applyWallConstraints(moving, desired); }
+  function autoOrientModuleToRoomWallIfSnapped(inst: LayoutInstance, ignoreIds?: Set<string>) { return modulePlacementHelpers.autoOrientModuleToRoomWallIfSnapped(inst, ignoreIds); }
+
   placementHelpers = {
     props,
     layoutRoot,
@@ -5354,7 +5376,7 @@ export function startApp(initialArgs: AppArgs) {
     tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: I_SECTION, onClick: () => setToolSection() });
     tb.toolButton(tools, {
       title: "Dimension",
-      label: "KĂłta",
+      label: "KĂ„â€šÄąâ€šta",
       iconSvg: I_DIM,
       onClick: () => setToolDimension()
     });
@@ -6672,641 +6694,31 @@ export function startApp(initialArgs: AppArgs) {
     updateLayoutPanel();
   }
 
-  function placeWithoutOverlap(inst: LayoutInstance) {
-    const step = 0.25;
-    const maxR = 40;
-    const origin = applyWallConstraints(inst, inst.root.position.clone());
-    for (let r = 0; r < maxR; r++) {
-      for (let dx = -r; dx <= r; dx++) {
-        for (let dz = -r; dz <= r; dz++) {
-          const desired = new THREE.Vector3(origin.x + dx * step, origin.y, origin.z + dz * step);
-          const clamped = applyWallConstraints(inst, desired);
-          inst.root.position.copy(clamped);
-          if (!instanceFitsRoom(inst)) continue;
-          if (!anyOverlap(inst, null) && !moduleOverlapsWalls(inst) && !moduleOverlapsKitchenWorktops(inst)) return;
-        }
-      }
-    }
-  }
-
-  function aabbOverlapXZ(a: THREE.Box3, b: THREE.Box3, eps = 0.0005) {
-    const ax0 = a.min.x;
-    const ax1 = a.max.x;
-    const az0 = a.min.z;
-    const az1 = a.max.z;
-    const bx0 = b.min.x;
-    const bx1 = b.max.x;
-    const bz0 = b.min.z;
-    const bz1 = b.max.z;
-    return ax0 < bx1 - eps && ax1 > bx0 + eps && az0 < bz1 - eps && az1 > bz0 + eps;
-  }
-
-  function aabbOverlapY(a: THREE.Box3, b: THREE.Box3, eps = 0.0005) {
-    return a.min.y < b.max.y - eps && a.max.y > b.min.y + eps;
-  }
-
-  function anyOverlap(moving: LayoutInstance, ignoreId: string | null) {
-    const a = instanceLayoutWorldBox(moving);
-    const movingRing = moduleWorldRing(moving);
-    const movingMp = movingRing.length >= 4 ? [[movingRing]] : null;
-    for (const other of instances) {
-      if (other.id === moving.id) continue;
-      if (ignoreId && other.id === ignoreId) continue;
-      const b = instanceLayoutWorldBox(other);
-      if (!aabbOverlapXZ(a, b)) continue;
-      if (!aabbOverlapY(a, b)) continue;
-      const otherRing = moduleWorldRing(other);
-      if (!movingMp || otherRing.length < 4) return true;
-      try {
-        const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
-        if (multiPolyArea(inter) > 1e-6) return true;
-      } catch {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) {
-    const a = instanceLayoutWorldBox(moving);
-    const movingRing = moduleWorldRing(moving);
-    const movingMp = movingRing.length >= 4 ? [[movingRing]] : null;
-    for (const other of instances) {
-      if (other.id === moving.id) continue;
-      if (ignoreIds.has(other.id)) continue;
-      const b = instanceLayoutWorldBox(other);
-      if (!aabbOverlapXZ(a, b)) continue;
-      if (!aabbOverlapY(a, b)) continue;
-      const otherRing = moduleWorldRing(other);
-      if (!movingMp || otherRing.length < 4) return true;
-      try {
-        const inter = (polygonClipping as any).intersection(movingMp, [[otherRing]]);
-        if (multiPolyArea(inter) > 1e-6) return true;
-      } catch {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function polyArea(ring: Array<[number, number]>) {
-    let a = 0;
-    for (let i = 0; i < ring.length - 1; i++) {
-      const [x0, y0] = ring[i];
-      const [x1, y1] = ring[i + 1];
-      a += x0 * y1 - x1 * y0;
-    }
-    return a / 2;
-  }
-
-  function multiPolyArea(mp: any) {
-    if (!mp || !Array.isArray(mp)) return 0;
-    let sum = 0;
-    for (const poly of mp as any[]) {
-      if (!poly || poly.length === 0) continue;
-      const rings = poly as any[];
-      const outer = rings[0] as Array<[number, number]>;
-      if (!outer || outer.length < 4) continue;
-      let a = Math.abs(polyArea(outer));
-      for (let i = 1; i < rings.length; i++) {
-        const hole = rings[i] as Array<[number, number]>;
-        if (!hole || hole.length < 4) continue;
-        a -= Math.abs(polyArea(hole));
-      }
-      sum += Math.max(0, a);
-    }
-    return sum;
-  }
-
-  function moduleWorldRing(inst: LayoutInstance) {
-    const polygon = getModulePlanPolygon(inst, getModuleLocalBackCenter);
-    const ring: Array<[number, number]> = polygon.map((point) => [point.x, point.z]);
-    if (ring.length > 0) ring.push(ring[0]);
-    return ring;
-  }
-
-  function worktopWorldRing(worktop: KitchenWorktopInstance) {
-    const polygon = getKitchenWorktopPolygon(worktop.params);
-    const ring: Array<[number, number]> = polygon.map((point) => [point.x, point.z]);
-    if (ring.length > 0) ring.push(ring[0]);
-    return ring;
-  }
-
-  function moduleOverlapsKitchenWorktops(inst: LayoutInstance) {
-    if (!moduleStaysOutsideKitchenWorktop(inst)) return false;
-    if (!inst.kitchenGroupId) return false;
-    const relatedWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === inst.kitchenGroupId);
-    if (relatedWorktops.length === 0) return false;
-
-    const moduleMp = [[moduleWorldRing(inst)]];
-    for (const worktop of relatedWorktops) {
-      const ring = worktopWorldRing(worktop);
-      if (ring.length < 4) continue;
-      try {
-        const inter = (polygonClipping as any).intersection([[ring]], moduleMp);
-        if (multiPolyArea(inter) > 1e-6) return true;
-      } catch {
-        // ignore broken clipping input and keep fallback-free behavior
-      }
-    }
-    return false;
-  }
-
-  function moduleOverlapsWalls(inst: LayoutInstance) {
-    if (walls.length === 0) return false;
-    const ring = moduleWorldRing(inst);
-    const moduleMp = [[ring]];
-
-    const wallMp = wallUnionPolys;
-    if (wallMp) {
-      try {
-        const inter = (polygonClipping as any).intersection(wallMp, moduleMp);
-        const area = multiPolyArea(inter);
-        return area > 1e-6; // ~1mm^2 in m^2
-      } catch {
-        // fall through
-      }
-    }
-
-    // Fallback: test against individual outlines + join polys (less robust but still blocks wall embedding).
-    const toRing = (poly: Array<{ x: number; z: number }>) => {
-      const r: Array<[number, number]> = poly.map((p) => [p.x, p.z]);
-      if (r.length > 0) r.push(r[0]);
-      return r;
-    };
-    const polys: any[] = [];
-    for (const poly of wallSolvedOutlines.values()) if (poly.length >= 3) polys.push([[toRing(poly)]]);
-    for (const poly of wallSolvedJoinPolys) if (poly.length >= 3) polys.push([[toRing(poly)]]);
-    for (const wmp of polys) {
-      try {
-        const inter = (polygonClipping as any).intersection(wmp, moduleMp);
-        const area = multiPolyArea(inter);
-        if (area > 1e-6) return true;
-      } catch {
-        // ignore
-      }
-    }
-    return false;
-  }
-
-  function snapPositionDetailed(
-    moving: LayoutInstance,
-    desired: THREE.Vector3,
-    opts?: {
-      stickyNeighborId?: string | null;
-      ignoreIds?: Set<string>;
-      snapDistanceM?: number;
-      enforceWallConstraints?: boolean;
-      enforceWallOverlap?: boolean;
-    }
-  ) {
-    if (isCornerKitchenModule(moving)) {
-      return { position: desired.clone(), link: null };
-    }
-    const currentPos = moving.root.position.clone();
-    moving.root.position.copy(desired);
-    const a = instanceWorldBox(moving);
-    moving.root.position.copy(currentPos);
-    const others = instances
-      .filter((other) => other.id !== moving.id && !(opts?.ignoreIds?.has(other.id)))
-      .filter((other) => !moving.kitchenGroupId || other.kitchenGroupId === moving.kitchenGroupId)
-      .map((other) => ({ id: other.id, box: instanceWorldBox(other) }));
-    const adjacencyCandidates = buildModuleSnapCandidates({
-      movingId: moving.id,
-      movingBox: a,
-      desired,
-      others,
-      stickyNeighborId: opts?.stickyNeighborId ?? null,
-      snapDistanceM: opts?.snapDistanceM
-    });
-
-    const candidates: Array<{ pos: THREE.Vector3; score: number; link: ModuleAdjacencyLink | null }> = [];
-    candidates.push({ pos: desired.clone(), score: 0, link: null });
-    for (const candidate of adjacencyCandidates) candidates.push(candidate);
-
-    let best = desired.clone();
-    let bestScore = Infinity;
-    let bestLink: ModuleAdjacencyLink | null = null;
-    const enforceWallConstraints = opts?.enforceWallConstraints ?? true;
-    const enforceWallOverlap = opts?.enforceWallOverlap ?? true;
-    for (const c of candidates) {
-      const clamped = enforceWallConstraints ? applyWallConstraints(moving, c.pos) : c.pos.clone();
-      const prev = moving.root.position.clone();
-      moving.root.position.copy(clamped);
-      const overlaps =
-        (opts?.ignoreIds ? anyOverlapIgnoring(moving, opts.ignoreIds) : anyOverlap(moving, null)) ||
-        (enforceWallOverlap ? moduleOverlapsWalls(moving) : false);
-      moving.root.position.copy(prev);
-      if (overlaps) continue;
-      if (c.score < bestScore) {
-        bestScore = c.score;
-        best = clamped;
-        bestLink = c.link ?? null;
-      }
-    }
-
-    return { position: best, link: bestLink };
-  }
-
-  function collectPinnedPushChain(startId: string, side: "left" | "right" | "front" | "back") {
-    const queue = [startId];
-    const visited = new Set<string>([startId]);
-    const result: string[] = [];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      const current = findInstance(currentId);
-      if (!current) continue;
-      const currentBox = instanceWorldBox(current);
-
-      for (const other of instances) {
-        if (other.id === currentId || visited.has(other.id)) continue;
-        if (current.kitchenGroupId && other.kitchenGroupId !== current.kitchenGroupId) continue;
-        const info = detectModuleAdjacencyInfo(currentBox, instanceWorldBox(other), other.id);
-        if (!info || info.side !== side) continue;
-        visited.add(other.id);
-        result.push(other.id);
-        queue.push(other.id);
-      }
-    }
-
-    return result;
-  }
-
-  function collectPinnedPushChainFromBoxes(
-    startId: string,
-    side: "left" | "right" | "front" | "back",
-    boxesById: Map<string, THREE.Box3>,
-    kitchenGroupId: string | null
-  ) {
-    const queue = [startId];
-    const visited = new Set<string>([startId]);
-    const result: string[] = [];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      const currentBox = boxesById.get(currentId);
-      if (!currentBox) continue;
-
-      for (const other of instances) {
-        if (other.id === currentId || visited.has(other.id)) continue;
-        if (kitchenGroupId && other.kitchenGroupId !== kitchenGroupId) continue;
-        const otherBox = boxesById.get(other.id);
-        if (!otherBox) continue;
-        const info = detectModuleAdjacencyInfo(currentBox, otherBox, other.id);
-        if (!info || info.side !== side) continue;
-        visited.add(other.id);
-        result.push(other.id);
-        queue.push(other.id);
-      }
-    }
-
-    return result;
-  }
-
-  function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) {
-    const infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }> = [];
-    for (const other of instances) {
-      if (other.id === inst.id) continue;
-      if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
-      const info = detectModuleAdjacencyInfo(referenceBox, instanceWorldBox(other), other.id);
-      if (!info) continue;
-      infos.push({ ...info, other });
-    }
-    return infos;
-  }
-
-  function chooseResizeAnchorSide(_inst: LayoutInstance, infos: Array<ReturnType<typeof detectModuleAdjacencyInfo> & { other: LayoutInstance }>) {
-    if (infos.length === 0) return null;
-
-    const bySide = new Map<"left" | "right" | "front" | "back", Array<(typeof infos)[number]>>();
-    for (const info of infos) {
-      const list = bySide.get(info.side) ?? [];
-      list.push(info);
-      bySide.set(info.side, list);
-    }
-
-    const choosePreferredCornerSide = (
-      primary: "left" | "right" | "front" | "back",
-      secondary: "left" | "right" | "front" | "back"
-    ) => {
-      const primaryInfos = bySide.get(primary) ?? [];
-      const secondaryInfos = bySide.get(secondary) ?? [];
-      if (primaryInfos.length === 0 && secondaryInfos.length === 0) return null;
-      const primaryHasCorner = primaryInfos.some((item) => item.other.params.type === "corner_shelf_lower");
-      const secondaryHasCorner = secondaryInfos.some((item) => item.other.params.type === "corner_shelf_lower");
-      if (primaryHasCorner && secondaryInfos.length === 0) return primary;
-      if (secondaryHasCorner && primaryInfos.length === 0) return secondary;
-      if (primaryHasCorner !== secondaryHasCorner) return primaryHasCorner ? primary : secondary;
-      if (primaryInfos.length > 0 && secondaryInfos.length === 0) return primary;
-      if (secondaryInfos.length > 0 && primaryInfos.length === 0) return secondary;
-      return null;
-    };
-
-    return choosePreferredCornerSide("left", "right") ?? choosePreferredCornerSide("back", "front");
-  }
-
-  function worldDirectionToBoxSide(dir: THREE.Vector3) {
-    if (Math.abs(dir.x) >= Math.abs(dir.z)) return dir.x >= 0 ? "right" : "left";
-    return dir.z >= 0 ? "front" : "back";
-  }
-
-  function inferTallResizeAnchorSide(inst: LayoutInstance) {
-    if (!inst.kitchenGroupId || !moduleStaysOutsideKitchenWorktop(inst)) return null;
-    const relatedWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === inst.kitchenGroupId);
-    if (relatedWorktops.length === 0) return null;
-
-    const widthMm = Number((inst.params as Record<string, unknown>).width);
-    const halfModuleWidthM =
-      Number.isFinite(widthMm) && widthMm > 0 ? widthMm / 2000 : Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
-    const backCenterWorld = getModuleLocalBackCenter(inst).clone().applyMatrix4(inst.root.matrixWorld);
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-
-    let best:
-      | {
-          distanceSq: number;
-          anchorSide: "left" | "right" | "front" | "back";
-        }
-      | null = null;
-
-    for (const worktop of relatedWorktops) {
-      const firstInfo = getKitchenGuideSegmentInfo(worktop, 0, backOffsetMm);
-      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
-      const lastInfo = guidePath.length >= 2 ? getKitchenGuideSegmentInfo(worktop, guidePath.length - 2, backOffsetMm) : null;
-      const candidates = [
-        firstInfo
-          ? {
-              point: firstInfo.start.clone().addScaledVector(firstInfo.dir, -halfModuleWidthM),
-              anchorSide: worldDirectionToBoxSide(firstInfo.dir)
-            }
-          : null,
-        lastInfo
-          ? {
-              point: lastInfo.start.clone().addScaledVector(lastInfo.dir, lastInfo.length + halfModuleWidthM),
-              anchorSide: worldDirectionToBoxSide(lastInfo.dir.clone().multiplyScalar(-1))
-            }
-          : null
-      ].filter((candidate): candidate is { point: THREE.Vector3; anchorSide: "left" | "right" | "front" | "back" } => candidate != null);
-
-      for (const candidate of candidates) {
-        const distanceSq = candidate.point.distanceToSquared(backCenterWorld);
-        if (!best || distanceSq < best.distanceSq) {
-          best = { distanceSq, anchorSide: candidate.anchorSide };
-        }
-      }
-    }
-
-    return best?.anchorSide ?? null;
-  }
-
-  function preserveAnchoredResizeSide(
-    inst: LayoutInstance,
-    prevWorldBox: THREE.Box3,
-    anchorSide: "left" | "right" | "front" | "back" | null
-  ) {
-    if (!anchorSide) return;
-    const nextWorldBox = instanceWorldBox(inst);
-    switch (anchorSide) {
-      case "left":
-        inst.root.position.x += prevWorldBox.min.x - nextWorldBox.min.x;
-        break;
-      case "right":
-        inst.root.position.x += prevWorldBox.max.x - nextWorldBox.max.x;
-        break;
-      case "back":
-        inst.root.position.z += prevWorldBox.min.z - nextWorldBox.min.z;
-        break;
-      case "front":
-        inst.root.position.z += prevWorldBox.max.z - nextWorldBox.max.z;
-        break;
-    }
-    inst.root.updateMatrixWorld(true);
-  }
-
-  function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
-    const moved: Array<{ id: string; prev: THREE.Vector3 }> = [];
-    if (!inst.kitchenGroupId) return moved;
-    const absX = Math.abs(delta.x);
-    const absZ = Math.abs(delta.z);
-    if (absX < 1e-9 && absZ < 1e-9) return moved;
-    const side =
-      absX >= absZ
-        ? delta.x >= 0
-          ? "right"
-          : "left"
-        : delta.z >= 0
-          ? "front"
-          : "back";
-    const chain = collectPinnedPushChain(inst.id, side);
-    for (const neighborId of chain) {
-      const neighbor = findInstance(neighborId);
-      if (!neighbor) continue;
-      moved.push({ id: neighbor.id, prev: neighbor.root.position.clone() });
-      neighbor.root.position.add(delta);
-      neighbor.root.updateMatrixWorld(true);
-    }
-    return moved;
-  }
-
-  function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) {
-    if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-    if (!group) return { ok: true, movedIds: [] as string[] };
-    void previousParams;
-
-    const armInfo = getKitchenCornerArmBindingInfo(inst, group.ctx.worktopBackOffsetMm);
-    if (!armInfo) return { ok: true, movedIds: [] as string[] };
-    const touchedSegments = new Set([armInfo.xSegmentIndex, armInfo.zSegmentIndex].filter((value): value is number => value != null));
-    if (touchedSegments.size === 0) return { ok: true, movedIds: [] as string[] };
-
-    const movedIds = new Set<string>();
-    for (const other of instances) {
-      if (other.id === inst.id || other.kitchenGroupId !== inst.kitchenGroupId) continue;
-      const otherBinding = other.kitchenPlacement;
-      if (!otherBinding || otherBinding.worktopId !== armInfo.worktopId) continue;
-      if ((otherBinding.kind ?? "segment") === "corner") continue;
-      if (!touchedSegments.has(otherBinding.segmentIndex)) continue;
-      const before = other.root.position.clone();
-      if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), group.ctx.worktopBackOffsetMm)) continue;
-      if (before.distanceToSquared(other.root.position) > 1e-10) movedIds.add(other.id);
-    }
-
-    return { ok: true, movedIds: Array.from(movedIds) };
-  }
-
-  function propagateModuleResizeToPinnedNeighbors(
-    inst: LayoutInstance,
-    prevWorldBox: THREE.Box3,
-    prevBoxesById?: Map<string, THREE.Box3>
-  ) {
-    if (!inst.kitchenGroupId) return { ok: true, movedIds: [] as string[] };
-
-    const nextWorldBox = instanceWorldBox(inst);
-    const moves: Array<{ side: "left" | "right" | "front" | "back"; delta: THREE.Vector3 }> = [];
-    const rightDelta = nextWorldBox.max.x - prevWorldBox.max.x;
-    const leftDelta = nextWorldBox.min.x - prevWorldBox.min.x;
-    const frontDelta = nextWorldBox.max.z - prevWorldBox.max.z;
-    const backDelta = nextWorldBox.min.z - prevWorldBox.min.z;
-
-    if (Math.abs(rightDelta) > 1e-6) moves.push({ side: "right", delta: new THREE.Vector3(rightDelta, 0, 0) });
-    if (Math.abs(leftDelta) > 1e-6) moves.push({ side: "left", delta: new THREE.Vector3(leftDelta, 0, 0) });
-    if (Math.abs(frontDelta) > 1e-6) moves.push({ side: "front", delta: new THREE.Vector3(0, 0, frontDelta) });
-    if (Math.abs(backDelta) > 1e-6) moves.push({ side: "back", delta: new THREE.Vector3(0, 0, backDelta) });
-
-    const movedIds = new Set<string>();
-    for (const move of moves) {
-      const chain = prevBoxesById
-        ? collectPinnedPushChainFromBoxes(inst.id, move.side, prevBoxesById, inst.kitchenGroupId)
-        : collectPinnedPushChain(inst.id, move.side);
-      for (const neighborId of chain) {
-        const neighbor = findInstance(neighborId);
-        if (!neighbor) continue;
-        neighbor.root.position.add(move.delta);
-        neighbor.root.updateMatrixWorld(true);
-        movedIds.add(neighborId);
-      }
-    }
-
-    return { ok: true, movedIds: Array.from(movedIds) };
-  }
-
-  function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
-    return snapPositionDetailed(moving, desired).position;
-  }
-
-  function setPlacementAdjacencyPreview(link: ModuleAdjacencyLink | null) {
-    if (!link) {
-      placementAdjacencyPreview.visible = false;
-      return;
-    }
-    placementAdjacencyPreview.geometry.dispose();
-    placementAdjacencyPreview.geometry = new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]);
-    placementAdjacencyPreview.visible = true;
-  }
-
-  function updateModuleAdjacencyVisuals() {
-    for (const child of [...moduleAdjacencyGroup.children]) {
-      if (child === placementAdjacencyPreview) continue;
-      moduleAdjacencyGroup.remove(child);
-      const line = child as THREE.Line;
-      line.geometry.dispose();
-      (line.material as THREE.Material).dispose();
-    }
-
-    if (viewMode !== "2d" || activeViewerTab !== "floorplan") {
-      moduleAdjacencyGroup.visible = placementAdjacencyPreview.visible;
-      return;
-    }
-
-    const done = new Set<string>();
-    for (const inst of instances) {
-      const box = instanceWorldBox(inst);
-      for (const other of instances) {
-        if (other.id === inst.id) continue;
-        const key = [inst.id, other.id].sort().join("|");
-        if (done.has(key)) continue;
-        done.add(key);
-        const info = detectModuleAdjacencyInfo(box, instanceWorldBox(other), other.id);
-        if (!info) continue;
-        const linePoints =
-          info.axis === "x"
-            ? [
-                new THREE.Vector3(info.seam, 0.014, info.overlapMin),
-                new THREE.Vector3(info.seam, 0.014, info.overlapMax)
-              ]
-            : [
-                new THREE.Vector3(info.overlapMin, 0.014, info.seam),
-                new THREE.Vector3(info.overlapMax, 0.014, info.seam)
-              ];
-        const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(linePoints),
-          new THREE.LineBasicMaterial({ color: 0x384253, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false })
-        );
-        line.renderOrder = 59;
-        moduleAdjacencyGroup.add(line);
-      }
-    }
-
-    moduleAdjacencyGroup.visible = moduleAdjacencyGroup.children.length > 0;
-  }
-
-  function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) {
-    const snapDist = 0.03; // 30mm
-
-    const currentPos = moving.root.position.clone();
-    moving.root.position.copy(desired);
-    const a = instanceLayoutWorldBox(moving);
-    moving.root.position.copy(currentPos);
-
-    const next = desired.clone();
-
-    // Hard clamp inside room bounds.
-    if (a.min.x < -roomBounds.halfW) next.x += -roomBounds.halfW - a.min.x;
-    if (a.max.x > roomBounds.halfW) next.x -= a.max.x - roomBounds.halfW;
-    if (a.min.z < -roomBounds.halfD) next.z += -roomBounds.halfD - a.min.z;
-    if (a.max.z > roomBounds.halfD) next.z -= a.max.z - roomBounds.halfD;
-
-    // Soft snap to walls when close.
-    const trySnap = (delta: THREE.Vector3) => {
-      const prev = moving.root.position.clone();
-      moving.root.position.copy(next.clone().add(delta));
-      const ok = !anyOverlap(moving, null) && !moduleOverlapsWalls(moving);
-      moving.root.position.copy(prev);
-      if (ok) next.add(delta);
-    };
-
-    const currentPos2 = moving.root.position.clone();
-    moving.root.position.copy(next);
-    const b = instanceLayoutWorldBox(moving);
-    moving.root.position.copy(currentPos2);
-
-    const dxL = -roomBounds.halfW - b.min.x;
-    const dxR = roomBounds.halfW - b.max.x;
-    const dzB = -roomBounds.halfD - b.min.z; // back wall (-Z)
-    const dzF = roomBounds.halfD - b.max.z; // front wall (+Z)
-
-    if (Math.abs(dxL) <= snapDist) trySnap(new THREE.Vector3(dxL, 0, 0));
-    if (Math.abs(dxR) <= snapDist) trySnap(new THREE.Vector3(dxR, 0, 0));
-    if (Math.abs(dzB) <= snapDist) trySnap(new THREE.Vector3(0, 0, dzB));
-    if (Math.abs(dzF) <= snapDist) trySnap(new THREE.Vector3(0, 0, dzF));
-
-    return next;
-  }
-
-  function autoOrientModuleToRoomWallIfSnapped(inst: LayoutInstance, ignoreIds?: Set<string>) {
-    const snapDist = 0.03; // 30mm
-    const box = instanceLayoutWorldBox(inst);
-    const dxL = -roomBounds.halfW - box.min.x;
-    const dxR = roomBounds.halfW - box.max.x;
-    const dzB = -roomBounds.halfD - box.min.z; // back (-Z)
-    const dzF = roomBounds.halfD - box.max.z; // front (+Z)
-
-    const candidates: Array<{ dist: number; rotY: number }> = [];
-    if (Math.abs(dxL) <= snapDist + 1e-6) candidates.push({ dist: Math.abs(dxL), rotY: Math.PI / 2 }); // back = -X
-    if (Math.abs(dxR) <= snapDist + 1e-6) candidates.push({ dist: Math.abs(dxR), rotY: -Math.PI / 2 }); // back = +X
-    if (Math.abs(dzB) <= snapDist + 1e-6) candidates.push({ dist: Math.abs(dzB), rotY: 0 }); // back = -Z
-    if (Math.abs(dzF) <= snapDist + 1e-6) candidates.push({ dist: Math.abs(dzF), rotY: Math.PI }); // back = +Z
-    if (candidates.length === 0) return;
-
-    candidates.sort((a, b) => a.dist - b.dist);
-    const targetRot = candidates[0].rotY;
-
-    const prevPos = inst.root.position.clone();
-    const prevRot = inst.root.rotation.y;
-
-    inst.root.rotation.y = targetRot;
-    inst.root.position.copy(applyWallConstraints(inst, inst.root.position.clone()));
-    const inRoom = instanceFitsRoom(inst);
-    const overlaps = ignoreIds ? anyOverlapIgnoring(inst, ignoreIds) : anyOverlap(inst, null);
-    if (!inRoom || overlaps || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst)) {
-      inst.root.rotation.y = prevRot;
-      inst.root.position.copy(prevPos);
-      inst.root.updateMatrixWorld(true);
-      return;
-    }
-    inst.root.updateMatrixWorld(true);
-  }
+  modulePlacementHelpers = createModulePlacementHelpers({
+    instances,
+    kitchenWorktops,
+    walls,
+    S,
+    roomBounds,
+    wallSolvedOutlines,
+    moduleAdjacencyGroup,
+    placementAdjacencyPreview,
+    instanceLayoutWorldBox,
+    instanceWorldBox,
+    instanceFitsRoom,
+    getModuleLocalBackCenter,
+    moduleStaysOutsideKitchenWorktop,
+    isCornerKitchenModule,
+    applyKitchenPlacementBinding,
+    getKitchenCornerArmBindingInfo,
+    getKitchenGuideSegmentInfo,
+    getKitchenWorktopBackGuidePath,
+    findInstance,
+    getWallUnionPolys: () => wallUnionPolys,
+    getWallSolvedJoinPolys: () => wallSolvedJoinPolys,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab
+  });
 
   function setView2d(enabled: boolean) {
     if (!enabled && S.kitchenEditMode && kitchenWorktopDraw.active) {
@@ -7799,11 +7211,11 @@ export function startApp(initialArgs: AppArgs) {
           const a = picked?.a ?? alignPicked?.segA ?? null;
           const b = picked?.b ?? alignPicked?.segB ?? null;
           if (!a || !b) {
-            setUnderlayStatus("Floor boundary: nebola nĂˇjdenĂˇ hrana.");
+            setUnderlayStatus("Floor boundary: nebola nĂ„â€šĂ‹â€ˇjdenĂ„â€šĂ‹â€ˇ hrana.");
             return;
           }
           addFloorEditSegment(worldToFloorPoint(a), worldToFloorPoint(b));
-          setUnderlayStatus("Floor boundary: hrana pridanĂˇ.");
+          setUnderlayStatus("Floor boundary: hrana pridanĂ„â€šĂ‹â€ˇ.");
           return;
         }
 
@@ -7863,7 +7275,7 @@ export function startApp(initialArgs: AppArgs) {
         const hitPoint = hit.point.clone();
         if (!underlayCal.first) {
           underlayCal.first = hitPoint.clone();
-          setUnderlayStatus(underlayCal.mode === "reference" ? "ReferenÄŤnĂˇ ĹˇkĂˇla: klikni druhĂ˝ bod..." : "KalibrĂˇcia: klikni druhĂ˝ bod...");
+          setUnderlayStatus(underlayCal.mode === "reference" ? "ReferenÄ‚â€žÄąÂ¤nĂ„â€šĂ‹â€ˇ Ă„Ä…Ă‹â€ˇkĂ„â€šĂ‹â€ˇla: klikni druhĂ„â€šĂ‹ĹĄ bod..." : "KalibrĂ„â€šĂ‹â€ˇcia: klikni druhĂ„â€šĂ‹ĹĄ bod...");
           return;
         }
 
@@ -7880,7 +7292,7 @@ export function startApp(initialArgs: AppArgs) {
         let desiredMm = Math.max(1, underlayCal.knownMm);
         if (underlayCal.mode === "reference") {
           const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("ReĂˇlna vzdialenosĹĄ (mm)", String(measuredMm));
+          const s = window.prompt("ReĂ„â€šĂ‹â€ˇlna vzdialenosĂ„Ä…Ă„â€ž (mm)", String(measuredMm));
           const n = s === null ? null : Number(s.trim().replace(",", "."));
           if (!n || !Number.isFinite(n) || n <= 0) {
             setUnderlayStatus("Reference scale canceled.");
@@ -7897,9 +7309,9 @@ export function startApp(initialArgs: AppArgs) {
           underlayState.scale *= factor;
           updateUnderlayTransform();
           if (underlayScaleEl) underlayScaleEl.value = String(underlayState.scale);
-          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂˇcia OK: ${Math.round(desiredMm)} mm`);
+          setUnderlayStatus(underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `KalibrĂ„â€šĂ‹â€ˇcia OK: ${Math.round(desiredMm)} mm`);
         } else {
-          setUnderlayStatus("KalibrĂˇcia zlyhala (nulovĂˇ vzdialenosĹĄ).");
+          setUnderlayStatus("KalibrĂ„â€šĂ‹â€ˇcia zlyhala (nulovĂ„â€šĂ‹â€ˇ vzdialenosĂ„Ä…Ă„â€ž).");
         }
 
         underlayCal.active = false;
@@ -7975,13 +7387,13 @@ export function startApp(initialArgs: AppArgs) {
 
         if (picked) {
           if (dimensionState.picked.length > 0 && !areAlignLinesParallel(dimensionState.picked[0]!, picked)) {
-            setUnderlayStatus("KĂłta: ÄŹalĹˇia ÄŤiara musĂ­ byĹĄ rovnobeĹľnĂˇ s prvou.");
+            setUnderlayStatus("KĂ„â€šÄąâ€šta: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇia Ä‚â€žÄąÂ¤iara musĂ„â€šĂ‚Â­ byĂ„Ä…Ă„â€ž rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‹â€ˇ s prvou.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
           }
           if (technicalDimensions.isLinePicked(picked)) {
-            setUnderlayStatus("KĂłta: tĂˇto ÄŤiara uĹľ je vybranĂˇ.");
+            setUnderlayStatus("KĂ„â€šÄąâ€šta: tĂ„â€šĂ‹â€ˇto Ä‚â€žÄąÂ¤iara uĂ„Ä…Ă„Äľ je vybranĂ„â€šĂ‹â€ˇ.");
             ev.preventDefault();
             ev.stopPropagation();
             return;
@@ -7990,8 +7402,8 @@ export function startApp(initialArgs: AppArgs) {
           dimensionState.preview = [];
           setUnderlayStatus(
             dimensionState.picked.length === 1
-              ? "KĂłta: vyber ÄŹalĹˇiu rovnobeĹľnĂş ÄŤiaru."
-              : `KĂłta: vybranĂ© ${dimensionState.picked.length} ÄŤiary. Pridaj ÄŹalĹˇiu alebo klikni do voÄľnĂ©ho miesta.`
+              ? "KĂ„â€šÄąâ€šta: vyber Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu rovnobeĂ„Ä…Ă„ÄľnĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru."
+              : `KĂ„â€šÄąâ€šta: vybranĂ„â€šĂ‚Â© ${dimensionState.picked.length} Ä‚â€žÄąÂ¤iary. Pridaj Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu alebo klikni do voÄ‚â€žĂ„ÄľnĂ„â€šĂ‚Â©ho miesta.`
           );
           mountProps();
           ev.preventDefault();
@@ -8000,7 +7412,7 @@ export function startApp(initialArgs: AppArgs) {
         }
 
         if (dimensionState.picked.length < 2) {
-          setUnderlayStatus("KĂłta: najprv vyber aspoĹ dve rovnobeĹľnĂ© ÄŤiary.");
+          setUnderlayStatus("KĂ„â€šÄąâ€šta: najprv vyber aspoĂ„Ä…Ă‚Â dve rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‚Â© Ä‚â€žÄąÂ¤iary.");
           ev.preventDefault();
           ev.stopPropagation();
           return;
@@ -8009,7 +7421,7 @@ export function startApp(initialArgs: AppArgs) {
         const dims = technicalDimensions.buildFromPickedLines(dimensionState.picked, hitPoint, "dimension");
         technicalDimensions.commitDimensions(dims);
         technicalDimensions.resetDraft();
-        setUnderlayStatus(dims.length > 0 ? `KĂłta: vloĹľenĂ© ${dims.length}. Vyber ÄŹalĹˇiu prvĂş ÄŤiaru.` : "KĂłta: nepodarilo sa vloĹľiĹĄ.");
+        setUnderlayStatus(dims.length > 0 ? `KĂ„â€šÄąâ€šta: vloĂ„Ä…Ă„ÄľenĂ„â€šĂ‚Â© ${dims.length}. Vyber Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇiu prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru.` : "KĂ„â€šÄąâ€šta: nepodarilo sa vloĂ„Ä…Ă„ÄľiĂ„Ä…Ă„â€ž.");
         mountProps();
         ev.preventDefault();
         ev.stopPropagation();
@@ -8276,9 +7688,9 @@ export function startApp(initialArgs: AppArgs) {
           setFirstPointMarker(measureState.firstPoint);
           args.measureReadoutEl.textContent =
             normalMode
-              ? `NormĂˇla (${kind}): ${formatMm(point)} â€” klikni druhĂ˝ bod smernice.`
-              : `PrvĂ˝ bod (${kind}): ${formatMm(point)} â€” klikni druhĂ˝ bod.`;
-          setUnderlayStatus(normalMode ? "Measure: klikni druhĂ˝ bod smernice pre normĂˇlu." : "Measure: klikni druhĂ˝ bod.");
+              ? `NormĂ„â€šĂ‹â€ˇla (${kind}): ${formatMm(point)} Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni druhĂ„â€šĂ‹ĹĄ bod smernice.`
+              : `PrvĂ„â€šĂ‹ĹĄ bod (${kind}): ${formatMm(point)} Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ klikni druhĂ„â€šĂ‹ĹĄ bod.`;
+          setUnderlayStatus(normalMode ? "Measure: klikni druhĂ„â€šĂ‹ĹĄ bod smernice pre normĂ„â€šĂ‹â€ˇlu." : "Measure: klikni druhĂ„â€šĂ‹ĹĄ bod.");
           mountProps();
           return;
         }
@@ -8328,7 +7740,7 @@ export function startApp(initialArgs: AppArgs) {
           sectionDraw.a = point;
           sectionDraw.hoverPoint = point;
           updateSectionDrawPreview();
-          setUnderlayStatus("Section: klikni druhĂ˝ bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliĹĄ smer.");
+          setUnderlayStatus("Section: klikni druhĂ„â€šĂ‹ĹĄ bod. Ortho = rovno, Shift = bez axis snap, Space = zrkadliĂ„Ä…Ă„â€ž smer.");
           mountProps();
           return;
         }
@@ -8386,7 +7798,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Stena: druhĂ˝ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: druhĂ„â€šĂ‹ĹĄ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         return;
       }
 
@@ -8431,7 +7843,7 @@ export function startApp(initialArgs: AppArgs) {
           wallDefault.justification,
           wallDefault.exteriorSign
         );
-        setUnderlayStatus("Stena: ÄŹalĹˇĂ­ bod... (pĂ­Ĺˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
+        setUnderlayStatus("Stena: Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇĂ„â€šĂ‚Â­ bod... (pĂ„â€šĂ‚Â­Ă„Ä…Ă‹â€ˇ mm + Enter, Shift = bez axis snap, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         selectedKind = "wall";
         selectedWallId = w.id;
@@ -8688,7 +8100,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!measureState.firstPoint) {
         measureState.firstPoint = snapped.point;
         measureState.firstBinding = toFreePlanBinding(snapped.point);
-        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} Ă˘â‚¬â€ť pick second pointĂ˘â‚¬Â¦`;
+        args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${formatMm(snapped.point)} Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ pick second pointĂ„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚â€šĂ‚Â¦`;
         return;
       }
 
@@ -8908,7 +8320,7 @@ export function startApp(initialArgs: AppArgs) {
       if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
         const delta = p.clone().sub(transformState.base);
         applyMoveDelta(delta);
-        setUnderlayStatus(`Posun: Î” ${Math.round(delta.x * 1000)}Ă—${Math.round(delta.z * 1000)} mm (klikni pre dokonÄŤenie)`);
+        setUnderlayStatus(`Posun: Ä‚Ĺ˝Ă˘â‚¬ĹĄ ${Math.round(delta.x * 1000)}Ă„â€šĂ˘â‚¬â€ť${Math.round(delta.z * 1000)} mm (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
         return;
       }
 
@@ -8922,7 +8334,7 @@ export function startApp(initialArgs: AppArgs) {
         while (d < -Math.PI) d += Math.PI * 2;
         transformState.lastAngleSign = d < 0 ? -1 : 1;
         applyRotateAngle(d);
-        setUnderlayStatus(`RotĂˇcia: ${Math.round((d * 180) / Math.PI)}Â° (klikni pre dokonÄŤenie)`);
+        setUnderlayStatus(`RotĂ„â€šĂ‹â€ˇcia: ${Math.round((d * 180) / Math.PI)}Ä‚â€šĂ‚Â° (klikni pre dokonÄ‚â€žÄąÂ¤enie)`);
         return;
       }
     }
@@ -9388,7 +8800,7 @@ export function startApp(initialArgs: AppArgs) {
       measureState.hoverSnap = "none";
       hideHoverCursor();
       args.measureReadoutEl.textContent = measureState.firstPoint
-        ? "Pick second pointĂ˘â‚¬Â¦ (no surface)"
+        ? "Pick second pointĂ„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚â€šĂ‚Â¦ (no surface)"
         : "Click 2 points to measure (planar X/Z).";
       clearPreview();
       return;
@@ -9406,9 +8818,9 @@ export function startApp(initialArgs: AppArgs) {
       let b = snapped.point;
       if (measureState.axisLock) b = axisLockXZ(a, b);
       updatePreview(a, b, rect);
-      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) Ă˘â‚¬â€ť ${Math.round(planarDistanceMm(a, b))} mm`;
+      args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ ${Math.round(planarDistanceMm(a, b))} mm`;
     } else {
-      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} Ă˘â‚¬â€ť click first point`;
+      args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${formatMm(snapped.point)} Ă„â€šĂ‹ÂÄ‚ËĂ˘â‚¬ĹˇĂ‚Â¬Ä‚ËĂ˘â€šÂ¬ÄąÄ„ click first point`;
       clearPreview();
     }
   });
