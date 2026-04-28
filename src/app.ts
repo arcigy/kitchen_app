@@ -27,7 +27,6 @@ import {
 } from "./app/planSnap";
 import {
   buildMeasureGuides,
-  resolveAssociativeMeasureWorld,
   resolvePlanBinding,
   toFreePlanBinding,
   type AssociativeMeasureContext
@@ -47,9 +46,7 @@ import {
   buildWallAlignCandidates,
   buildWorktopAlignCandidates,
   getAlignShiftVector,
-  pickBestAlignLine,
-  shiftPolylinePoint,
-  shiftPolylineSegment
+  pickBestAlignLine
 } from "./app/alignTool";
 import {
   buildModuleSnapCandidates,
@@ -220,6 +217,7 @@ import { createModuleAdjacencySnapResolver } from "./app/moduleAdjacencySnapReso
 import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
+import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -3650,155 +3648,46 @@ export function startApp(initialArgs: AppArgs) {
     hideModuleEditHud();
   };
 
-  const refreshAssociativeMeasures = () => {
-    if (measureState.measures.length === 0) return;
-    const ctx = getAssociativeMeasureContext();
-    for (const item of measureState.measures) {
-      const resolved = resolveAssociativeMeasureWorld(
-        {
-          id: item.id,
-          kind: item.kind,
-          aBinding: item.aBinding,
-          bBinding: item.bBinding
-        },
-        ctx
-      );
-      if (!resolved) continue;
-      const distanceMm =
-        item.kind === "normalGuide"
-          ? 0
-          : Math.abs(resolved.a.y - resolved.b.y) > 1e-6
-            ? distance3dMm(resolved.a, resolved.b)
-            : planarDistanceMm(resolved.a, resolved.b);
-      updateMeasurementGeometry(item, resolved.a, resolved.b, distanceMm);
-    }
-  };
-
-  type MeasureSelectionTarget =
-    | { kind: "wall"; wallId: string }
-    | { kind: "module"; instanceId: string }
-    | { kind: "floor"; floorId: string }
-    | { kind: "kitchenGroup"; groupId: string; instanceIds: Set<string>; worktopIds: Set<string> };
-
-  const getCurrentMeasureSelectionTarget = (): MeasureSelectionTarget | null => {
-    if (selectedKind === "wall" && selectedWallId) return { kind: "wall", wallId: selectedWallId };
-    if (selectedKind === "module" && selectedInstanceId) return { kind: "module", instanceId: selectedInstanceId };
-    if (selectedKind === "floor" && selectedFloorId) return { kind: "floor", floorId: selectedFloorId };
-    if (selectedKind === "kitchenGroup" && selectedKitchenGroupId) {
-      const instanceIds = new Set(instances.filter((inst) => inst.kitchenGroupId === selectedKitchenGroupId).map((inst) => inst.id));
-      const worktopIds = new Set(
-        kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === selectedKitchenGroupId).map((worktop) => worktop.id)
-      );
-      return { kind: "kitchenGroup", groupId: selectedKitchenGroupId, instanceIds, worktopIds };
-    }
-    return null;
-  };
-
-  const translateWallByMeasure = (wallId: string, dxMm: number, dzMm: number) => {
-    const wall = walls.find((item) => item.id === wallId) ?? null;
-    if (!wall) return false;
-    const oldA = { ...wall.params.aMm };
-    const oldB = { ...wall.params.bMm };
-    wall.params.aMm = { x: wall.params.aMm.x + dxMm, z: wall.params.aMm.z + dzMm };
-    wall.params.bMm = { x: wall.params.bMm.x + dxMm, z: wall.params.bMm.z + dzMm };
-
-    for (const otherWall of walls) {
-      if (otherWall.id === wall.id) continue;
-      const wa = wallEndpointWhich(otherWall, oldA, wallJoinTolMm);
-      if (wa) setWallEndpointMm(otherWall, wa, wall.params.aMm);
-      const wb = wallEndpointWhich(otherWall, oldB, wallJoinTolMm);
-      if (wb) setWallEndpointMm(otherWall, wb, wall.params.bMm);
-    }
-
-    rebuildWall(wall);
-    autoJoinAtMmPoint(wall.params.aMm);
-    autoJoinAtMmPoint(wall.params.bMm);
-    rebuildWallPlanMesh();
-    return true;
-  };
-
-  const translateModuleByMeasure = (instanceId: string, dxMm: number, dzMm: number) => {
-    const inst = findInstance(instanceId);
-    if (!inst) return false;
-    const prevPos = inst.root.position.clone();
-    inst.root.position.x += dxMm / 1000;
-    inst.root.position.z += dzMm / 1000;
-    const valid =
-      instanceFitsRoom(inst) &&
-      !anyOverlap(inst, null) &&
-      !moduleOverlapsWalls(inst) &&
-      !moduleOverlapsKitchenWorktops(inst);
-    if (!valid) {
-      inst.root.position.copy(prevPos);
-      return false;
-    }
-    if (inst.kitchenGroupId) {
-      const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-    }
-    return true;
-  };
-
-  const translateFloorByMeasure = (floorId: string, dxMm: number, dzMm: number) => {
-    const floor = floors.find((item) => item.id === floorId) ?? null;
-    if (!floor) return false;
-    floor.params.boundary = floor.params.boundary.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
-    rebuildFloor(floor);
-    updateSelectionHighlights();
-    return true;
-  };
-
-  const translateKitchenGroupByMeasure = (groupId: string, dxMm: number, dzMm: number) => {
-    const groupInstances = instances.filter((inst) => inst.kitchenGroupId === groupId);
-    const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
-    if (groupInstances.length === 0 && groupWorktops.length === 0) return false;
-
-    for (const inst of groupInstances) {
-      inst.root.position.x += dxMm / 1000;
-      inst.root.position.z += dzMm / 1000;
-    }
-    for (const worktop of groupWorktops) {
-      worktop.params.path = worktop.params.path.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
-      rebuildKitchenWorktop(worktop);
-    }
-
-    return true;
-  };
-
-  const reapplyKitchenGroupPlacementBindings = (groupId: string) => {
-    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
-    for (const inst of instances) {
-      if (inst.kitchenGroupId !== groupId) continue;
-      const binding = inst.kitchenPlacement ?? inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
-      if (binding && applyKitchenPlacementBinding(inst, binding, backOffsetMm)) continue;
-      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
-    }
-  };
-
-  const alignKitchenWorktopLine = (picked: AlignPickedLine, dxMm: number, dzMm: number) => {
-    if (picked.targetKind !== "worktop" || !picked.worktopId || picked.segmentIndex == null) return false;
-    const worktop = findKitchenWorktop(picked.worktopId);
-    if (!worktop) return false;
-    const prevPath = structuredClone(worktop.params.path);
-    const groupId = worktop.kitchenGroupId;
-    const pointIndex = picked.lineRole === "endB" ? picked.segmentIndex + 1 : picked.segmentIndex;
-    worktop.params.path =
-      picked.lineRole === "endA" || picked.lineRole === "endB"
-        ? shiftPolylinePoint(worktop.params.path, pointIndex, dxMm, dzMm)
-        : shiftPolylineSegment(worktop.params.path, picked.segmentIndex, dxMm, dzMm);
-    worktop.params.path = sanitizeKitchenWorktopPath(worktop.params.path);
-    if (worktop.params.path.length < 2) {
-      worktop.params.path = prevPath;
-      return false;
-    }
-    rebuildKitchenWorktop(worktop);
-    reapplyKitchenGroupPlacementBindings(groupId);
-    updateSelectionHighlights();
-    updateLayoutPanel();
-    return true;
-  };
+  const measureSelectionActions = createMeasureSelectionActions({
+    S,
+    measureState,
+    walls,
+    floors,
+    instances,
+    kitchenWorktops,
+    getAssociativeMeasureContext,
+    updateMeasurementGeometry,
+    getSelectedKind: () => selectedKind,
+    getSelectedWallId: () => selectedWallId,
+    getSelectedInstanceId: () => selectedInstanceId,
+    getSelectedFloorId: () => selectedFloorId,
+    getSelectedKitchenGroupId: () => selectedKitchenGroupId,
+    wallEndpointWhich,
+    setWallEndpointMm,
+    rebuildWall,
+    autoJoinAtMmPoint,
+    rebuildWallPlanMesh,
+    wallJoinTolMm,
+    findInstance,
+    instanceFitsRoom,
+    anyOverlap,
+    moduleOverlapsWalls,
+    moduleOverlapsKitchenWorktops,
+    inferKitchenPlacementBinding,
+    rebuildFloor,
+    rebuildKitchenWorktop,
+    applyKitchenPlacementBinding,
+    findKitchenWorktop,
+    updateSelectionHighlights,
+    updateLayoutPanel
+  });
+  const refreshAssociativeMeasures = measureSelectionActions.refreshAssociativeMeasures;
+  const getCurrentMeasureSelectionTarget = measureSelectionActions.getCurrentMeasureSelectionTarget;
+  const translateWallByMeasure = measureSelectionActions.translateWallByMeasure;
+  const translateModuleByMeasure = measureSelectionActions.translateModuleByMeasure;
+  const translateFloorByMeasure = measureSelectionActions.translateFloorByMeasure;
+  const translateKitchenGroupByMeasure = measureSelectionActions.translateKitchenGroupByMeasure;
+  const alignKitchenWorktopLine = measureSelectionActions.alignKitchenWorktopLine;
 
   let createModuleAdjacencySnapResolverResult!: ReturnType<typeof createModuleAdjacencySnapResolver>;
   function resolveModuleAdjacencySnap(...args: Parameters<ReturnType<typeof createModuleAdjacencySnapResolver>["resolveModuleAdjacencySnap"]>) { return createModuleAdjacencySnapResolverResult.resolveModuleAdjacencySnap(...args); }
