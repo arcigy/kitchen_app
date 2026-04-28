@@ -200,6 +200,7 @@ import {
 import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createLayoutExportPayload } from "./app/layoutExport";
+import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 import { installKitchenDebugApi } from "./app/kitchenDebugApi";
 
@@ -264,7 +265,6 @@ export function startApp(initialArgs: AppArgs) {
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewPanOffset!: THREE.Vector3;
 
-  type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
   let renderMode: RenderMode = "realtime";
   let ssgi: SsgiPipeline | null = null;
   let ssgiCameraUuid: string | null = null;
@@ -4401,171 +4401,34 @@ export function startApp(initialArgs: AppArgs) {
   drawOrthoToggleEl.addEventListener("click", () => toggleDrawOrthoMode());
   args.viewerEl.appendChild(drawOrthoToggleEl);
 
-  const sunHost = document.createElement("div");
-  sunHost.className = "field";
-  sunHost.style.display = "grid";
-  sunHost.style.gap = "10px";
-  sunHost.style.padding = "10px";
-  sunHost.style.border = "1px solid var(--border)";
-  sunHost.style.borderRadius = "12px";
-  sunHost.style.background = "rgba(10,12,16,0.4)";
-
-  const sunTitle = document.createElement("div");
-  sunTitle.textContent = "Lighting";
-  sunTitle.style.fontWeight = "600";
-  sunHost.appendChild(sunTitle);
-
-  const sunRow = (label: string, el: HTMLElement) => {
-    const wrap = document.createElement("div");
-    wrap.style.display = "grid";
-    wrap.style.gridTemplateColumns = "160px 1fr";
-    wrap.style.gap = "8px";
-    wrap.style.alignItems = "center";
-    const l = document.createElement("div");
-    l.textContent = label;
-    wrap.appendChild(l);
-    wrap.appendChild(el);
-    sunHost.appendChild(wrap);
-  };
-
-  const mkNum = (v: number) => {
-    const i = document.createElement("input");
-    i.type = "number";
-    i.value = String(v);
-    i.step = "1";
-    return i;
-  };
-
-  const day = document.createElement("input");
-  day.type = "range";
-  day.min = "0";
-  day.max = "25";
-  day.step = "0.1";
-  day.value = "9";
-  day.addEventListener("input", () => setDaylightIntensity(Number(day.value)));
-  sunRow("Window daylight", day);
-
-  const shadowSel = document.createElement("select");
-  shadowSel.innerHTML = `
-    <option value="pcfsoft">Shadows: PCFSoft</option>
-    <option value="vsm">Shadows: VSM (experimental)</option>
-  `;
-  shadowSel.value = getShadowAlgorithm();
-  shadowSel.addEventListener("change", () => {
-    const next = shadowSel.value === "vsm" ? "vsm" : "pcfsoft";
-    setShadowAlgorithm(next);
-  });
-  sunRow("Shadows", shadowSel);
-
-  const renderModeSel = document.createElement("select");
-  renderModeSel.innerHTML = `
-    <option value="realtime">Render: realtime</option>
-    ${ENABLE_SSGI ? `<option value="realtime_ssgi">Render: realtime + SSGI (experimental)</option>` : ""}
-    ${ENABLE_PHOTO ? `<option value="photo_pathtrace">Render: photo mode (path tracing)</option>` : ""}
-  `;
-  renderModeSel.value = renderMode;
-
-  const isPhotoRenderMode = (m: RenderMode) => m === "photo_pathtrace";
-
-  const photoWrap = document.createElement("div");
-  photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
-  photoWrap.style.paddingLeft = "168px";
-  photoWrap.style.marginTop = "-6px";
-
-  renderModeSel.addEventListener("change", () => {
-    const v = renderModeSel.value as RenderMode;
-    renderMode = v === "realtime_ssgi" || v === "photo_pathtrace" ? v : "realtime";
-
-    if (renderMode !== "realtime_ssgi") {
+  const { photoSamples, photoStatus } = createRenderControls({
+    layoutUi,
+    enableSsgi: ENABLE_SSGI,
+    enablePhoto: ENABLE_PHOTO,
+    getRenderMode: () => renderMode,
+    setRenderMode: (mode) => {
+      renderMode = mode;
+    },
+    setDaylightIntensity,
+    getShadowAlgorithm,
+    setShadowAlgorithm,
+    setHdri,
+    disposeSsgi: () => {
       ssgi?.dispose();
       ssgi = null;
       ssgiCameraUuid = null;
-    }
-    if (renderMode !== "photo_pathtrace") {
+    },
+    disposePhoto: () => {
       photo?.dispose();
       photo = null;
       photoCameraUuid = null;
       photoLastLightingRevision = -1;
-    }
-
-    photoWrap.style.display = isPhotoRenderMode(renderMode) ? "" : "none";
+    },
+    resetPhoto: () => {
+      photo?.reset();
+    },
+    downloadViewportPng
   });
-  sunRow("Render mode", renderModeSel);
-  sunHost.appendChild(photoWrap);
-
-  const photoControls = document.createElement("div");
-  photoControls.style.display = "flex";
-  photoControls.style.flexWrap = "wrap";
-  photoControls.style.gap = "8px";
-  photoWrap.appendChild(photoControls);
-
-  const photoSamples = document.createElement("input");
-  photoSamples.type = "number";
-  photoSamples.min = "1";
-  photoSamples.max = "4096";
-  photoSamples.step = "1";
-  photoSamples.value = "256";
-  photoSamples.style.width = "110px";
-  photoControls.appendChild(photoSamples);
-
-  const photoReset = document.createElement("button");
-  photoReset.type = "button";
-  photoReset.textContent = "Reset";
-  photoControls.appendChild(photoReset);
-
-  const photoSave = document.createElement("button");
-  photoSave.type = "button";
-  photoSave.textContent = "Save PNG";
-  photoControls.appendChild(photoSave);
-
-  const photoStatus = document.createElement("div");
-  photoStatus.style.opacity = "0.9";
-  photoStatus.style.fontSize = "12px";
-  photoStatus.style.marginTop = "6px";
-  photoWrap.appendChild(photoStatus);
-
-  photoReset.addEventListener("click", () => {
-    photo?.reset();
-  });
-
-  photoSave.addEventListener("click", () => {
-    downloadViewportPng();
-  });
-
-  const hdriSel = document.createElement("select");
-  hdriSel.innerHTML = `
-    <option value="">HDRI: off</option>
-    <option value="/hdri/OutdoorFieldBaseballDayClear001/HdrOutdoorFieldBaseballDayClear001_HDR_2K.exr">Outdoor day (2K)</option>
-    <option value="/hdri/SkySunset007/HdrSkySunset007_HDR_1K.exr">Sunset (1K)</option>
-  `;
-  hdriSel.value = "";
-  sunRow("HDRI", hdriSel);
-
-  const hdriBg = document.createElement("input");
-  hdriBg.type = "checkbox";
-  hdriBg.checked = false;
-  sunRow("HDRI background", hdriBg);
-
-  const hdriIntensity = document.createElement("input");
-  hdriIntensity.type = "range";
-  hdriIntensity.min = "0";
-  hdriIntensity.max = "1";
-  hdriIntensity.step = "0.01";
-  hdriIntensity.value = "0.15";
-  sunRow("HDRI intensity", hdriIntensity);
-
-  const applyHdri = () => {
-    const id = hdriSel.value || null;
-    const envIntensity = Number(hdriIntensity.value);
-    if (id && !hdriBg.checked) hdriBg.checked = true; // make it visible by default
-    setHdri({ id, background: hdriBg.checked, envIntensity, backgroundIntensity: 1 });
-  };
-
-  hdriSel.addEventListener("change", applyHdri);
-  hdriBg.addEventListener("change", applyHdri);
-  hdriIntensity.addEventListener("input", applyHdri);
-
-  layoutUi.appendChild(sunHost);
 
   const instanceEditorHost = document.createElement("div");
   layoutUi.appendChild(instanceEditorHost);
