@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import type { LayoutInstance, SectionInstance, WallInstance, WallParams } from "./localTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
 
 type KeyboardInputHandlersContext = Record<string, any> & {
   walls: WallInstance[];
   instances: LayoutInstance[];
   sections: SectionInstance[];
-  S: { kitchenEditMode: boolean; kitchenCtx: any; kitchenGroups: Array<{ id: string; ctx: any }> };
+  S: { kitchenEditMode: boolean; kitchenCtx: KitchenContext; kitchenGroups: Array<{ id: string; ctx: KitchenContext }> };
 };
 
 export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) {

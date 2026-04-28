@@ -5,6 +5,7 @@ import type {
   WallInstance
 } from "./localTypes";
 import type { PlanSnapBinding } from "./planSnap";
+import type { KitchenContext } from "../layout/kitchenContext";
 
 type PointerInputHandlersContext = Record<string, any> & {
   renderer: THREE.WebGLRenderer;
@@ -14,8 +15,8 @@ type PointerInputHandlersContext = Record<string, any> & {
   getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
   S: {
     activeKitchenGroupId: string | null;
-    kitchenCtx: any;
-    kitchenGroups: Array<{ id: string; ctx: any }>;
+    kitchenCtx: KitchenContext;
+    kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
     kitchenEditMode: boolean;
   };
 };

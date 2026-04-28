@@ -48,13 +48,22 @@ If a change needs more than a small wiring edit, create or update a focused file
 ## Hard limits
 
 - Do not grow `src/app.ts` unless there is no smaller safe option.
-- Keep `src/app.ts` below 4300 lines. If a task would exceed that, extract a focused controller first.
+- Keep `src/app.ts` below 4000 lines. If a task would exceed that, extract a focused controller first.
 - Do not put business logic in event-handler wiring.
 - Do not mix unrelated refactors in one commit.
 - Do not move code and change behavior in the same step.
 - Do not add new frameworks or test libraries without a separate decision.
 - Do not commit generated build output unless the release process explicitly requires it.
 - Do not commit secrets, `.env` values, API keys, tokens, or private customer data.
+
+## Controller contracts
+
+- New controllers must declare an explicit context type.
+- Do not use `Record<string, any>` for controller dependencies.
+- If a controller needs shared state, pass only the fields it uses.
+- Prefer typed getters/setters when the value is initialized later in `app.ts`.
+- Keep feature-specific types beside the controller that owns them.
+- Export a type only when another module genuinely consumes it.
 
 ## Required checks after structural changes
 

@@ -113,7 +113,7 @@ For UI-affecting changes, also load the app in the browser and verify current co
 
 As of the current refactor branch:
 
-- `src/app.ts` is below 4300 lines.
+- `src/app.ts` is below 4000 lines.
 - Feature logic is being moved into focused controllers.
 - New controllers should use typed contexts instead of `ctx: any`.
 - `dist/` build output is not committed as part of refactor commits.

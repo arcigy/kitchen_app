@@ -1,8 +1,67 @@
 import * as THREE from "three";
-import type { LayoutInstance } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 
-export function createInstanceRebuilder(ctx: any) {
+type ResizeAnchorSide = "left" | "right" | "front" | "back";
+
+export type RebuildDebugState = {
+  ok: boolean;
+  stage: string;
+  errors?: string[];
+  keepRootPositionStable?: boolean;
+  resizeAnchorSide?: ResizeAnchorSide | null;
+  prevWorldBox?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  nextWorldBox?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  inRoom?: boolean;
+  overlapsModules?: boolean;
+  overlapsWalls?: boolean;
+  overlapsWorktops?: boolean;
+  movedNeighborInvalid?: boolean;
+  propagatedMovedIds?: string[];
+} | null;
+
+type InstanceRebuilderContext = {
+  S: AppState;
+  anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
+  applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  args: { errorsEl: HTMLElement };
+  buildModule: (params: ModuleParams) => THREE.Group;
+  chooseResizeAnchorSide: (inst: LayoutInstance, infos: unknown[]) => ResizeAnchorSide | null;
+  collectAdjacentModuleInfos: (inst: LayoutInstance, referenceBox: THREE.Box3) => unknown[];
+  disposeObject3D: (obj: THREE.Object3D) => void;
+  ensurePickAndOutline: (inst: LayoutInstance) => void;
+  findInstance: (id: string) => LayoutInstance | null;
+  footprintExtentsMatchXZ: (a: THREE.Box3, b: THREE.Box3) => boolean;
+  getModuleLocalKitchenAnchor: (inst: LayoutInstance) => THREE.Vector3;
+  inferKitchenPlacementBinding: (inst: LayoutInstance, groupId: string, backOffsetMm: number) => KitchenPlacementBinding | null;
+  inferTallResizeAnchorSide: (inst: LayoutInstance) => ResizeAnchorSide | null;
+  instanceFitsLayoutBounds: (inst: LayoutInstance) => boolean;
+  instanceWorldBox: (inst: LayoutInstance) => THREE.Box3;
+  instances: LayoutInstance[];
+  isCornerKitchenModule: (inst: LayoutInstance) => boolean;
+  lastRebuildDebug: RebuildDebugState;
+  moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
+  moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
+  moduleRootLocalBox: (root: THREE.Object3D, module: THREE.Object3D) => THREE.Box3;
+  normalizeModuleParamsForSource: (params: ModuleParams, sourceKey?: string) => ModuleParams;
+  preserveAnchoredResizeSide: (inst: LayoutInstance, prevWorldBox: THREE.Box3, anchorSide: ResizeAnchorSide | null) => void;
+  preserveWorldKitchenAnchor: (inst: LayoutInstance, anchor: THREE.Vector3) => void;
+  propagateCornerResizeToPinnedNeighbors: (inst: LayoutInstance, previousParams: ModuleParams) => { movedIds: string[] };
+  propagateModuleResizeToPinnedNeighbors: (
+    inst: LayoutInstance,
+    prevWorldBox: THREE.Box3,
+    prevBoxesById?: Map<string, THREE.Box3>
+  ) => { movedIds: string[] };
+  rebuildWallPlanMesh?: () => void;
+  renderErrors: (errorsEl: HTMLElement, errors: string[]) => void;
+  tagModuleGeometry: (module: THREE.Object3D, instanceId: string) => void;
+  updateLayoutPanel: () => void;
+  validateModule: (params: ModuleParams) => string[];
+};
+
+export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
   function rebuildInstance(
     inst: LayoutInstance,
     opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
@@ -79,7 +138,7 @@ export function createInstanceRebuilder(ctx: any) {
     const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
     const movedNeighborInvalid =
       !opts?.skipLayoutValidation &&
-      propagated.movedIds.some((id: string) => {
+      propagated.movedIds.some((id) => {
         const other = ctx.findInstance(id);
         return !!other &&
           (!ctx.instanceFitsLayoutBounds(other) ||
@@ -139,14 +198,14 @@ export function createInstanceRebuilder(ctx: any) {
 
     ctx.disposeObject3D(prevModule);
     if (inst.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: any }) => item.id === inst.kitchenGroupId) ?? null;
+      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === inst.kitchenGroupId) ?? null;
       const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
       inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
     }
     for (const neighborId of propagated.movedIds) {
       const neighbor = ctx.findInstance(neighborId);
       if (!neighbor?.kitchenGroupId) continue;
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: any }) => item.id === neighbor.kitchenGroupId) ?? null;
+      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === neighbor.kitchenGroupId) ?? null;
       const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
       neighbor.kitchenPlacement = ctx.inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
     }

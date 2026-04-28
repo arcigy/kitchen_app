@@ -212,7 +212,7 @@ import { installPointerInputHandlers } from "./app/pointerInputHandlers";
 import { installKeyboardInputHandlers } from "./app/keyboardInputHandlers";
 import { createTransformController } from "./app/transformController";
 import { createViewModeController } from "./app/viewModeController";
-import { createInstanceRebuilder } from "./app/instanceRebuilder";
+import { createInstanceRebuilder, type RebuildDebugState } from "./app/instanceRebuilder";
 import { createMeasureValueCommitter } from "./app/measureValueCommitter";
 import { createBuildSelectionController } from "./app/buildSelectionController";
 import { createPropertiesRouter } from "./app/propertiesRouter";
@@ -313,7 +313,7 @@ export function startApp(initialArgs: AppArgs) {
   placementAdjacencyPreview.visible = false;
   placementAdjacencyPreview.renderOrder = 62;
   moduleAdjacencyGroup.add(placementAdjacencyPreview);
-  let lastRebuildDebug: Record<string, unknown> | null = null;
+  let lastRebuildDebug: RebuildDebugState = null;
 
   const wallPlanGroup = new THREE.Group();
   wallPlanGroup.name = "wallPlanGroup";
@@ -2236,6 +2236,7 @@ export function startApp(initialArgs: AppArgs) {
     underlayCal,
     underlayMesh,
     underlayState,
+    updateAllSectionVisuals: () => updateAllSectionVisuals(),
     updateLayoutPanel,
     updateSelectionHighlights,
     updateUnderlayTransform,

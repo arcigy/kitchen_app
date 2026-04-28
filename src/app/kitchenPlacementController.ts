@@ -4,29 +4,59 @@ import { buildMeasureGuides, type AssociativeMeasureContext } from "./measureAss
 import { pointInPolygonXZ } from "./sharedUtils";
 import type { FloorInstance, KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { LayoutTool } from "../layout/appState";
+import type { MeasureState } from "./measureTools";
 import { getKitchenModuleRole, staysOutsideKitchenWorktopFootprint } from "../layout/kitchenModuleRules";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import { toFreePlanBinding } from "./measureAssociative";
 
-export type KitchenPlacementControllerContext = Record<string, any>;
+type KitchenGroupState = {
+  id: string;
+  name: string;
+  ctx: KitchenContext;
+  instanceIds: string[];
+};
+
+type PolygonClipMultiPolygon = Array<Array<Array<[number, number]>>>;
+
+export type KitchenPlacementControllerContext = {
+  S: {
+    activeKitchenGroupId: string | null;
+    kitchenCtx: KitchenContext;
+    kitchenEditMode: boolean;
+    kitchenGroups: KitchenGroupState[];
+  };
+  walls: WallInstance[];
+  instances: LayoutInstance[];
+  floors: FloorInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
+  wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
+  getKitchenWorktopBackGuidePath: (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
+  rebuildInstance: (
+    inst: LayoutInstance,
+    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
+  ) => boolean;
+  rebuildKitchenGroupWorktops: (groupId: string, nextCtx?: KitchenContext) => void;
+  updateLayoutPanel: () => void;
+  getWallSolvedJoinPolys: () => Array<Array<{ x: number; z: number }>>;
+  getWallUnionPolys: () => PolygonClipMultiPolygon | null;
+  getLayoutTool: () => LayoutTool;
+  getWallChainStart: () => THREE.Vector3 | null;
+};
 
 export function createKitchenPlacementController(ctx: KitchenPlacementControllerContext) {
-  const S = ctx.S as {
-    activeKitchenGroupId: string | null;
-    kitchenCtx: any;
-    kitchenEditMode: boolean;
-    kitchenGroups: any[];
-  };
-  const walls = ctx.walls as WallInstance[];
-  const instances = ctx.instances as LayoutInstance[];
-  const floors = ctx.floors as FloorInstance[];
-  const kitchenWorktops = ctx.kitchenWorktops as KitchenWorktopInstance[];
-  const wallSolvedOutlines = ctx.wallSolvedOutlines as Map<string, Array<{ x: number; z: number }>>;
-  const getKitchenWorktopBackGuidePath = ctx.getKitchenWorktopBackGuidePath as (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
-  const rebuildInstance = ctx.rebuildInstance as (inst: LayoutInstance, opts?: Record<string, unknown>) => void;
-  const rebuildKitchenGroupWorktops = ctx.rebuildKitchenGroupWorktops as (groupId: string, nextCtx?: any) => void;
-  const updateLayoutPanel = ctx.updateLayoutPanel as () => void;
+  const S = ctx.S;
+  const walls = ctx.walls;
+  const instances = ctx.instances;
+  const floors = ctx.floors;
+  const kitchenWorktops = ctx.kitchenWorktops;
+  const wallSolvedOutlines = ctx.wallSolvedOutlines;
+  const getKitchenWorktopBackGuidePath = ctx.getKitchenWorktopBackGuidePath;
+  const rebuildInstance = ctx.rebuildInstance;
+  const rebuildKitchenGroupWorktops = ctx.rebuildKitchenGroupWorktops;
+  const updateLayoutPanel = ctx.updateLayoutPanel;
 
   const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
   const kitchenBackAnchorName = "__kitchen_back_anchor";
@@ -139,7 +169,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     inst.root.updateMatrixWorld(true);
   };
 
-  let measureStateRef: { measures: any[] } | null = null;
+  let measureStateRef: Pick<MeasureState, "measures"> | null = null;
 
   const getAssociativeMeasureContext = (): AssociativeMeasureContext => ({
     walls,
@@ -477,8 +507,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
   const rebuildKitchenGroupLayout = (
     groupId: string,
-    nextCtx: any,
-    prevCtx: any = nextCtx
+    nextCtx: KitchenContext,
+    prevCtx: KitchenContext = nextCtx
   ) => {
     const bindings = new Map<string, KitchenPlacementBinding>();
 
@@ -749,6 +779,6 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     rebuildKitchenGroupLayout,
     getTallKitchenPlacementConstraint,
     getKitchenPlacementConstraint,
-    setMeasureStateRef: (next: { measures: any[] }) => { measureStateRef = next; }
+    setMeasureStateRef: (next: Pick<MeasureState, "measures">) => { measureStateRef = next; }
   };
 }

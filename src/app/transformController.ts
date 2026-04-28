@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import type { LayoutInstance, SectionInstance, WallInstance, WallParams } from "./localTypes";
+import type { KitchenContext } from "../layout/kitchenContext";
 
 type TransformControllerContext = Record<string, any> & {
   walls: WallInstance[];
   instances: LayoutInstance[];
   sections: SectionInstance[];
   S: {
-    kitchenCtx: any;
-    kitchenGroups: Array<{ id: string; ctx: any }>;
+    kitchenCtx: KitchenContext;
+    kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
   };
 };
 
