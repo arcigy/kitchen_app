@@ -3143,7 +3143,8 @@ export function startApp(initialArgs: AppArgs) {
     setWindowOpening,
     wallDefs,
     windowEditorHost,
-    windowInst
+    get windowInst() { return windowInst; },
+    set windowInst(next: WindowInstance | null) { windowInst = next; }
   });
 
 

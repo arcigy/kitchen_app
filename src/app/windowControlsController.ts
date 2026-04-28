@@ -1,7 +1,34 @@
 import * as THREE from "three";
 import type { WallId, WindowInstance } from "./localTypes";
 
-export function createWindowControlsController(ctx: any) {
+type WallDefinition = {
+  plane: THREE.Plane;
+  inwardNormal: THREE.Vector3;
+  axis: "x" | "z";
+  fixedPos: THREE.Vector3;
+  axisHalf: number;
+};
+
+type WindowControlsControllerContext = {
+  clampWindowParams: (params: WindowInstance["params"]) => WindowInstance["params"];
+  createWindow: (defaultWall?: WallId) => WindowInstance;
+  mode: "build" | "layout";
+  scene: THREE.Scene;
+  setSelectedWindow: () => void;
+  setWindowCutout: (cutout: {
+    wall: WallId;
+    centerAxisM: number;
+    sillM: number;
+    widthM: number;
+    heightM: number;
+  }) => void;
+  setWindowOpening: (opening: { center: THREE.Vector3; inwardNormal: THREE.Vector3; width: number; height: number }) => void;
+  wallDefs: Record<WallId, WallDefinition>;
+  windowEditorHost: HTMLElement;
+  windowInst: WindowInstance | null;
+};
+
+export function createWindowControlsController(ctx: WindowControlsControllerContext) {
   function updateWindowTransform(inst: WindowInstance) {
     inst.params = ctx.clampWindowParams(inst.params);
     const def = ctx.wallDefs[inst.params.wall];

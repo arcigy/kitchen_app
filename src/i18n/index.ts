@@ -241,7 +241,6 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "ALLOWED: ": "POVOLENÉ: ",
   "Copied.": "Skopírované.",
   "Copy failed (browser permission).": "Kopírovanie zlyhalo (oprávnenie prehliadača).",
-  "Running Blender (up to 60s)â€¦": "Spúšťa sa Blender (max. 60 s)…",
   "Running Blender (up to 60s)…": "Spúšťa sa Blender (max. 60 s)…",
   "Blender export failed.": "Export z Blenderu zlyhal.",
   "Backend did not return previewUrl.": "Backend nevrátil previewUrl.",
@@ -728,8 +727,8 @@ export function translateText(text: string): string {
     return `Modul ${moduleSystemSummary[1]} obsahuje ${moduleSystemSummary[2]} systémových parametrov.`;
   }
 
-  if (text.includes(" â€” ")) {
-    return translateText(text.replaceAll(" â€” ", " — "));
+  if (text.includes(" — ")) {
+    return translateText(text.replaceAll(" — ", " - "));
   }
 
   return text
