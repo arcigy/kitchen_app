@@ -1,37 +1,37 @@
 import { getDefaultDrawerLowHandleComponentId } from "../data/pricing/handleComponentPresets"
 
 export interface KitchenContext {
-  // Identifikácia
+  // Identity
   name: string
 
-  // Spodné moduly — rozmery
-  heightMm: number              // výška modulov (bez sokla)
-  worktopDepthMm: number        // skutočná šírka pracovnej dosky
-  worktopFrontOffsetMm: number  // presah dosky vpredu
-  worktopBackOffsetMm: number   // medzera dosky vzadu od steny
+  // Base modules - dimensions
+  heightMm: number              // module height without plinth
+  worktopDepthMm: number        // real worktop depth
+  worktopFrontOffsetMm: number  // worktop front overhang
+  worktopBackOffsetMm: number   // worktop back gap from wall
   worktopThicknessMm: number
-  worktopCornerCutMm: number    // zrez rohu dosky pri L/U kuchyni
-  worktopOverhangSideMm: number // presah dosky na voľnom konci
+  worktopCornerCutMm: number    // worktop corner cut for L/U kitchens
+  worktopOverhangSideMm: number // side overhang on open end
 
-  // Odvodené — NIKDY nenastavuj manuálne, počítaj cez resolveContext()
+  // Derived - never set manually, use resolveContext()
   moduleDepthMm: number   // = worktopDepthMm - worktopFrontOffsetMm - worktopBackOffsetMm
   moduleHeightMm: number  // = heightMm - worktopThicknessMm
 
-  // Sokel
+  // Plinth
   plinthHeightMm: number
   plinthDepthMm: number
 
-  // Vrchné moduly
-  upperStartHeightMm: number  // výška od podlahy kde začína spodok hornej skrinky
+  // Upper modules
+  upperStartHeightMm: number  // floor height where upper cabinet bottom starts
   upperDepthMm: number
   upperHeightMm: number
 
-  // Dvierka a panely
+  // Doors and panels
   doorOverlayMm: number
   backPanelThicknessMm: number
   endPanelThicknessMm: number
 
-  // Materiály kuchyne
+  // Kitchen materials
   frontsMaterialId: string
   corpusMaterialId: string
   backMaterialId: string
@@ -39,10 +39,10 @@ export interface KitchenContext {
   worktopMaterialId: string
   handleComponentId: string
 
-  // Správanie layoutu
+  // Layout behavior
   fillerStrategy: 'auto' | 'warn' | 'ignore'
-  gapWarningMm: number   // medzera menšia ako toto = warning
-  overlapErrorMm: number // overlap väčší ako toto = error
+  gapWarningMm: number   // gap smaller than this = warning
+  overlapErrorMm: number // overlap larger than this = error
 }
 
 export function makeDefaultKitchenContext(): KitchenContext {
@@ -55,7 +55,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
   const handleComponentId = getDefaultDrawerLowHandleComponentId()
 
   return {
-    name: 'Kuchyňa 1',
+    name: 'Kuchy\u0148a 1',
 
     heightMm,
     worktopDepthMm,
@@ -92,8 +92,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
   }
 }
 
-// Vždy keď zmeníš worktopDepth, frontOffset, backOffset alebo height —
-// zavolaj toto aby sa odvodené hodnoty prepočítali.
+// Call after changing worktopDepth, frontOffset, backOffset, or height.
 export function resolveContext(ctx: KitchenContext): KitchenContext {
   return {
     ...ctx,
@@ -106,66 +105,65 @@ export function resolveContext(ctx: KitchenContext): KitchenContext {
   }
 }
 
-// Vráti warning ak odvodené alebo vstupné rozmery nedávajú zmysel.
 export function validateContext(ctx: KitchenContext): string[] {
   const warnings: string[] = []
 
   if (!ctx.name.trim())
-    warnings.push('name je prázdny')
+    warnings.push('name is empty')
   if (ctx.heightMm <= 0)
-    warnings.push(`heightMm je ${ctx.heightMm}mm — musí byť väčší ako 0`)
+    warnings.push(`heightMm is ${ctx.heightMm}mm - must be greater than 0`)
   if (ctx.worktopDepthMm <= 0)
-    warnings.push(`worktopDepthMm je ${ctx.worktopDepthMm}mm — musí byť väčší ako 0`)
+    warnings.push(`worktopDepthMm is ${ctx.worktopDepthMm}mm - must be greater than 0`)
   if (ctx.worktopFrontOffsetMm < 0)
-    warnings.push(`worktopFrontOffsetMm je ${ctx.worktopFrontOffsetMm}mm — nesmie byť záporný`)
+    warnings.push(`worktopFrontOffsetMm is ${ctx.worktopFrontOffsetMm}mm - cannot be negative`)
   if (ctx.worktopBackOffsetMm < 0)
-    warnings.push(`worktopBackOffsetMm je ${ctx.worktopBackOffsetMm}mm — nesmie byť záporný`)
+    warnings.push(`worktopBackOffsetMm is ${ctx.worktopBackOffsetMm}mm - cannot be negative`)
   if (ctx.worktopThicknessMm < 0)
-    warnings.push(`worktopThicknessMm je ${ctx.worktopThicknessMm}mm — nesmie byť záporný`)
+    warnings.push(`worktopThicknessMm is ${ctx.worktopThicknessMm}mm - cannot be negative`)
   if (ctx.worktopCornerCutMm < 0)
-    warnings.push(`worktopCornerCutMm je ${ctx.worktopCornerCutMm}mm — nesmie byť záporný`)
+    warnings.push(`worktopCornerCutMm is ${ctx.worktopCornerCutMm}mm - cannot be negative`)
   if (ctx.worktopOverhangSideMm < 0)
-    warnings.push(`worktopOverhangSideMm je ${ctx.worktopOverhangSideMm}mm — nesmie byť záporný`)
+    warnings.push(`worktopOverhangSideMm is ${ctx.worktopOverhangSideMm}mm - cannot be negative`)
   if (ctx.moduleDepthMm <= 0)
-    warnings.push(`moduleDepthMm je ${ctx.moduleDepthMm}mm — skontroluj frontOffset a backOffset`)
+    warnings.push(`moduleDepthMm is ${ctx.moduleDepthMm}mm - check frontOffset and backOffset`)
   if (ctx.moduleHeightMm <= 0)
-    warnings.push(`moduleHeightMm je ${ctx.moduleHeightMm}mm — skontroluj heightMm a worktopThicknessMm`)
+    warnings.push(`moduleHeightMm is ${ctx.moduleHeightMm}mm - check heightMm and worktopThicknessMm`)
   if (ctx.plinthHeightMm < 0)
-    warnings.push(`plinthHeightMm je ${ctx.plinthHeightMm}mm — nesmie byť záporný`)
+    warnings.push(`plinthHeightMm is ${ctx.plinthHeightMm}mm - cannot be negative`)
   if (ctx.plinthDepthMm < 0)
-    warnings.push(`plinthDepthMm je ${ctx.plinthDepthMm}mm — nesmie byť záporný`)
+    warnings.push(`plinthDepthMm is ${ctx.plinthDepthMm}mm - cannot be negative`)
   if (ctx.plinthDepthMm >= ctx.moduleDepthMm)
-    warnings.push(`plinthDepthMm (${ctx.plinthDepthMm}) je väčší ako moduleDepthMm (${ctx.moduleDepthMm})`)
+    warnings.push(`plinthDepthMm (${ctx.plinthDepthMm}) is greater than moduleDepthMm (${ctx.moduleDepthMm})`)
   if (ctx.upperStartHeightMm <= ctx.heightMm)
-    warnings.push(`upperStartHeightMm (${ctx.upperStartHeightMm}) je nižší ako výška spodných modulov (${ctx.heightMm})`)
+    warnings.push(`upperStartHeightMm (${ctx.upperStartHeightMm}) is lower than base module height (${ctx.heightMm})`)
   if (ctx.upperDepthMm <= 0)
-    warnings.push(`upperDepthMm je ${ctx.upperDepthMm}mm — musí byť väčší ako 0`)
+    warnings.push(`upperDepthMm is ${ctx.upperDepthMm}mm - must be greater than 0`)
   if (ctx.upperHeightMm <= 0)
-    warnings.push(`upperHeightMm je ${ctx.upperHeightMm}mm — musí byť väčší ako 0`)
+    warnings.push(`upperHeightMm is ${ctx.upperHeightMm}mm - must be greater than 0`)
   if (ctx.doorOverlayMm < 0)
-    warnings.push(`doorOverlayMm je ${ctx.doorOverlayMm}mm — nesmie byť záporný`)
+    warnings.push(`doorOverlayMm is ${ctx.doorOverlayMm}mm - cannot be negative`)
   if (ctx.backPanelThicknessMm < 0)
-    warnings.push(`backPanelThicknessMm je ${ctx.backPanelThicknessMm}mm — nesmie byť záporný`)
+    warnings.push(`backPanelThicknessMm is ${ctx.backPanelThicknessMm}mm - cannot be negative`)
   if (ctx.endPanelThicknessMm < 0)
-    warnings.push(`endPanelThicknessMm je ${ctx.endPanelThicknessMm}mm — nesmie byť záporný`)
+    warnings.push(`endPanelThicknessMm is ${ctx.endPanelThicknessMm}mm - cannot be negative`)
   if (!ctx.frontsMaterialId.trim())
-    warnings.push('frontsMaterialId je prázdny')
+    warnings.push('frontsMaterialId is empty')
   if (!ctx.corpusMaterialId.trim())
-    warnings.push('corpusMaterialId je prázdny')
+    warnings.push('corpusMaterialId is empty')
   if (!ctx.backMaterialId.trim())
-    warnings.push('backMaterialId je prázdny')
+    warnings.push('backMaterialId is empty')
   if (!ctx.drawerBottomMaterialId.trim())
-    warnings.push('drawerBottomMaterialId je prázdny')
+    warnings.push('drawerBottomMaterialId is empty')
   if (!ctx.worktopMaterialId.trim())
-    warnings.push('worktopMaterialId je prázdny')
+    warnings.push('worktopMaterialId is empty')
   if (!ctx.handleComponentId.trim())
-    warnings.push('handleComponentId je prázdny')
+    warnings.push('handleComponentId is empty')
   if (ctx.fillerStrategy !== 'auto' && ctx.fillerStrategy !== 'warn' && ctx.fillerStrategy !== 'ignore')
-    warnings.push(`fillerStrategy je neplatný: ${ctx.fillerStrategy}`)
+    warnings.push(`fillerStrategy is invalid: ${ctx.fillerStrategy}`)
   if (ctx.gapWarningMm < 0)
-    warnings.push(`gapWarningMm je ${ctx.gapWarningMm}mm — nesmie byť záporný`)
+    warnings.push(`gapWarningMm is ${ctx.gapWarningMm}mm - cannot be negative`)
   if (ctx.overlapErrorMm < 0)
-    warnings.push(`overlapErrorMm je ${ctx.overlapErrorMm}mm — nesmie byť záporný`)
+    warnings.push(`overlapErrorMm is ${ctx.overlapErrorMm}mm - cannot be negative`)
 
   return warnings
 }

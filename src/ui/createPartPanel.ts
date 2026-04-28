@@ -44,7 +44,7 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
   const selected = document.createElement("div");
   selected.className = "selected";
   selected.innerHTML = `
-    <div class="name muted">Click a part…</div>
+    <div class="name muted">Click a part...</div>
     <div class="dims muted"></div>
     <button type="button" disabled>Hide selected</button>
   `;
@@ -90,7 +90,7 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
 
   const renderSelected = () => {
     if (!selectedName) {
-      selectedNameEl.textContent = "Click a part…";
+      selectedNameEl.textContent = "Click a part...";
       selectedNameEl.classList.add("muted");
       selectedDimsEl.textContent = "";
       selectedBtn.disabled = true;
@@ -177,8 +177,8 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
       const oy = round1(o.overlapMm.y);
       const oz = round1(o.overlapMm.z);
       const prefix = o.status === "allowed" ? "ALLOWED: " : "";
-      const suffix = o.status === "allowed" && o.reason ? ` — ${o.reason}` : "";
-      text.textContent = `${prefix}${o.a} ↔ ${o.b} (${ox}×${oy}×${oz} mm)${suffix}`;
+      const suffix = o.status === "allowed" && o.reason ? ` - ${o.reason}` : "";
+      text.textContent = `${prefix}${o.a} <-> ${o.b} (${ox}x${oy}x${oz} mm)${suffix}`;
 
       const btn = document.createElement("button");
       btn.type = "button";
@@ -239,9 +239,9 @@ function formatDims(d: PartDimensionsMm, grainAlong: GrainAlong) {
   const w = round1(d.width);
   const h = round1(d.height);
   const dep = round1(d.depth);
-  const base = `${w}×${h}×${dep} mm`;
-  if (grainAlong === "none") return `${base} • grain: -`;
-  return `${base} • grain: ${grainAlong}`;
+  const base = `${w}x${h}x${dep} mm`;
+  if (grainAlong === "none") return `${base} - grain: -`;
+  return `${base} - grain: ${grainAlong}`;
 }
 
 function round1(n: number) {

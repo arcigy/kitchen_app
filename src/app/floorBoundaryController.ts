@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import {
   floorBoundaryToSegments,
   floorOrthoPoint as computeFloorOrthoPoint,
@@ -11,9 +12,99 @@ import {
   pickFloorEditElement as pickFloorEditElementBase,
   renderFloorBoundaryEdit as renderFloorBoundaryEditBase
 } from "./floorBoundaryVisuals";
-import type { FloorBoundaryPoint, FloorBoundarySegment, FloorBoundaryTool } from "./localTypes";
+import type { AppArgs } from "./bootstrap";
+import type {
+  FloorBoundaryPoint,
+  FloorBoundarySegment,
+  FloorBoundaryTool,
+  FloorEditDrag,
+  FloorEditVertexRef,
+  FloorInstance,
+  FloorParams,
+  SelectedKind
+} from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { PlacementHelpers } from "../layout/placementManager";
 
-export function createFloorBoundaryController(ctx: any) {
+type FloorEditState = {
+  active: boolean;
+  floorId: string | null;
+  params: FloorParams | null;
+  snapshot: FloorParams | null;
+  segments: FloorBoundarySegment[];
+  tool: FloorBoundaryTool;
+  ortho: boolean;
+  first: FloorBoundaryPoint | null;
+  hover: FloorBoundaryPoint | null;
+  selectedSegmentIndex: number | null;
+  selectedVertex: FloorEditVertexRef | null;
+  drag: FloorEditDrag | null;
+  error: string;
+  overlayEl: HTMLDivElement | null;
+};
+
+type FloorBoundaryToolbar = {
+  clear: () => void;
+  addRow: (opts?: { title?: string; className?: string }) => HTMLElement;
+  addGroup: (title: string, opts?: { row?: HTMLElement }) => HTMLElement;
+  addSpacer: (opts?: { row?: HTMLElement }) => void;
+  toolButton: (
+    group: HTMLElement,
+    opts: {
+      title: string;
+      iconSvg: string;
+      label: string;
+      variant?: "success" | "danger";
+      onClick: () => void;
+    }
+  ) => HTMLButtonElement;
+};
+
+type FloorBoundaryControllerContext = {
+  I_ALIGN: string;
+  I_CANCEL: string;
+  I_DIM: string;
+  I_DONE: string;
+  I_GRID2D: string;
+  I_VIEW: string;
+  S: AppState;
+  args: AppArgs & { viewerEl: HTMLElement };
+  buildClassicTopbar: () => void;
+  cam: () => THREE.Camera;
+  cancelPlacement: (S: AppState, helpers: PlacementHelpers) => void;
+  clearToolHud: () => void;
+  cloneFloorParams: (params: FloorParams) => FloorParams;
+  commitHistory: (S: AppState) => void;
+  createFloor: (params: FloorParams, opts?: { id?: string; skipHistory?: boolean }) => FloorInstance;
+  drawOrthoEnabled: boolean;
+  drawOrthoToggleEl: HTMLButtonElement | null;
+  ensureFloorplanViewerTab: () => void;
+  ensureLayoutMode: () => void;
+  floorBoundaryGroup: THREE.Group;
+  floorCounter: number;
+  floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
+  floorEdit: FloorEditState;
+  floors: FloorInstance[];
+  kitchenWorktopDraw: { active: boolean; points: FloorBoundaryPoint[] };
+  mountProps: () => void;
+  placement: { active: boolean };
+  placementHelpers: PlacementHelpers;
+  rebuildFloor: (floor: FloorInstance) => void;
+  rebuildStandardTopbar: () => void;
+  scheduleKitchenWorktopPreviewUpdate: () => void;
+  selectedFloorId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  setInstanceSelected: (id: string | null) => void;
+  setSelectedFloor: (id: string | null) => void;
+  setToolSelect: () => void;
+  setUnderlayStatus: (message: string) => void;
+  tb: FloorBoundaryToolbar;
+};
+
+export function createFloorBoundaryController(ctx: FloorBoundaryControllerContext) {
   const syncDrawOrthoUi = () => {
     ctx.floorEdit.ortho = ctx.drawOrthoEnabled;
     if (ctx.drawOrthoToggleEl) {
@@ -123,7 +214,7 @@ export function createFloorBoundaryController(ctx: any) {
     if (ctx.placement.active) ctx.cancelPlacement(ctx.S, ctx.placementHelpers);
     ctx.setToolSelect();
 
-    const existing = floorId ? ctx.floors.find((floor: any) => floor.id === floorId) ?? null : null;
+    const existing = floorId ? ctx.floors.find((floor) => floor.id === floorId) ?? null : null;
     const params = existing
       ? ctx.cloneFloorParams(existing.params)
       : {
@@ -190,7 +281,7 @@ export function createFloorBoundaryController(ctx: any) {
     }
     ctx.floorEdit.error = "";
     ctx.floorEdit.params.boundary = boundary;
-    let floor = ctx.floorEdit.floorId ? ctx.floors.find((item: any) => item.id === ctx.floorEdit.floorId) ?? null : null;
+    let floor = ctx.floorEdit.floorId ? ctx.floors.find((item) => item.id === ctx.floorEdit.floorId) ?? null : null;
     if (floor) {
       floor.params = ctx.cloneFloorParams(ctx.floorEdit.params);
       ctx.rebuildFloor(floor);
@@ -207,7 +298,7 @@ export function createFloorBoundaryController(ctx: any) {
 
   const discardFloorBoundaryEdit = () => {
     if (!ctx.floorEdit.active) return;
-    const existing = ctx.floorEdit.floorId ? ctx.floors.find((floor: any) => floor.id === ctx.floorEdit.floorId) ?? null : null;
+    const existing = ctx.floorEdit.floorId ? ctx.floors.find((floor) => floor.id === ctx.floorEdit.floorId) ?? null : null;
     if (existing && ctx.floorEdit.snapshot) {
       existing.params = ctx.cloneFloorParams(ctx.floorEdit.snapshot);
       ctx.rebuildFloor(existing);

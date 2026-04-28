@@ -1,7 +1,27 @@
 import * as THREE from "three";
 import { computeGrainArrow, findSelectableMeshByName, toggleSelectedPbr } from "./sharedUtils";
+import type { AppState } from "../layout/appState";
+import type { createPartPanel } from "../ui/createPartPanel";
 
-export function createBuildSelectionController(ctx: any) {
+type ParamHighlightControls = {
+  highlightParamKeys?: (keys: string[]) => void;
+  clearHighlights?: () => void;
+};
+
+type BuildSelectionControllerContext = {
+  S: AppState;
+  activeBuildControls: ParamHighlightControls | null;
+  cabinetGroup: THREE.Group | null;
+  grainArrow: THREE.ArrowHelper | null;
+  hiddenParts: Set<string>;
+  overlapBoxes: Array<{ mesh: THREE.Mesh; helper: THREE.BoxHelper }>;
+  partPanel: ReturnType<typeof createPartPanel>;
+  scene: THREE.Scene;
+  selectedBox: THREE.BoxHelper | null;
+  selectedMesh: THREE.Mesh | null;
+};
+
+export function createBuildSelectionController(ctx: BuildSelectionControllerContext) {
   const selectMesh = (mesh: THREE.Mesh | null) => {
     ctx.selectedMesh = mesh;
 
@@ -26,7 +46,9 @@ export function createBuildSelectionController(ctx: any) {
     }
 
     ctx.partPanel.setSelected(mesh.name);
-    ctx.activeBuildControls?.highlightParamKeys?.(((mesh as any).userData?.paramKeys as string[] | undefined) ?? []);
+    const rawParamKeys = mesh.userData?.paramKeys;
+    const paramKeys = Array.isArray(rawParamKeys) ? rawParamKeys.filter((key): key is string => typeof key === "string") : [];
+    ctx.activeBuildControls?.highlightParamKeys?.(paramKeys);
 
     ctx.selectedBox = new THREE.BoxHelper(mesh, 0xffe066);
     ctx.selectedBox.name = "selectionBox";
