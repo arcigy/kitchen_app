@@ -9,9 +9,17 @@ import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
 import { cancelPlacement } from "../layout/placementManager";
 import { normalizeModuleParamsForSource, type ModuleParams } from "../model/cabinetTypes";
-import type { FloorBoundaryPoint, FloorParams, KitchenWorktopJustification, LayoutInstance } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { MeasureState } from "./measureTools";
+import type { FloorBoundaryPoint, FloorParams, KitchenWorktopInstance, KitchenWorktopJustification, LayoutInstance, WallInstance } from "./localTypes";
 
 export type KitchenDebugApiContext = Record<string, any>;
+
+declare global {
+  interface Window {
+    __kitchenDebug?: Record<string, unknown>;
+  }
+}
 
 export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const {
@@ -167,7 +175,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       worldBackCenterM: { x: worldBackCenter.x, y: worldBackCenter.y, z: worldBackCenter.z },
       worldFrontCenterM: { x: worldFrontCenter.x, y: worldFrontCenter.y, z: worldFrontCenter.z },
       frontVectorM: { x: worldFrontDir.x, y: worldFrontDir.y, z: worldFrontDir.z },
-      planPolygonM: planPolygon.map((point: any) => ({ x: point.x, y: point.y, z: point.z })),
+      planPolygonM: planPolygon.map((point) => ({ x: point.x, y: point.y, z: point.z })),
       parts: partSnapshots,
       realizedDepthMm: Math.round(worldFrontCenter.clone().sub(worldBackCenter).dot(worldFrontDir) * 1000),
       structuralDepthMm: Math.round(
@@ -183,9 +191,12 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const getDebugKitchenSnapshot = (groupId: string | null) => {
-    const group = groupId ? S.kitchenGroups.find((item: any) => item.id === groupId) ?? null : null;
-    const groupWorktops = groupId ? kitchenWorktops.filter((item: any) => item.kitchenGroupId === groupId) : [];
-    const groupInstances = groupId ? instances.filter((item: any) => item.kitchenGroupId === groupId) : [];
+    const kitchenGroups = S.kitchenGroups as AppState["kitchenGroups"];
+    const allWorktops = kitchenWorktops as KitchenWorktopInstance[];
+    const allInstances = instances as LayoutInstance[];
+    const group = groupId ? kitchenGroups.find((item) => item.id === groupId) ?? null : null;
+    const groupWorktops = groupId ? allWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
+    const groupInstances = groupId ? allInstances.filter((item) => item.kitchenGroupId === groupId) : [];
     return {
       selectedKitchenGroupId: ctx.getSelectedKitchenGroupId(),
       activeKitchenGroupId: S.activeKitchenGroupId,
@@ -198,14 +209,14 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
             instanceIds: [...group.instanceIds]
           }
         : null,
-      worktops: groupWorktops.map((worktop: any) => ({
+      worktops: groupWorktops.map((worktop) => ({
         id: worktop.id,
         params: structuredClone(worktop.params),
         guidePathM: getKitchenWorktopBackGuidePath(worktop.params, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm).map(
-          (point: any) => ({ x: point.x, y: point.y, z: point.z })
+          (point: THREE.Vector3) => ({ x: point.x, y: point.y, z: point.z })
         )
       })),
-      instances: groupInstances.map((inst: any) => getDebugModuleSnapshot(inst))
+      instances: groupInstances.map((inst) => getDebugModuleSnapshot(inst))
     };
   };
 
@@ -494,9 +505,9 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const inst = findInstance(instanceId);
     if (!inst) throw new Error(`Instance ${instanceId} not found.`);
     const box = instanceWorldBox(inst);
-    return instances
-      .filter((other: any) => other.id !== inst.id && (!inst.kitchenGroupId || other.kitchenGroupId === inst.kitchenGroupId))
-      .map((other: any) => {
+    return (instances as LayoutInstance[])
+      .filter((other) => other.id !== inst.id && (!inst.kitchenGroupId || other.kitchenGroupId === inst.kitchenGroupId))
+      .map((other) => {
         const info = detectModuleAdjacencyInfo(box, instanceWorldBox(other), other.id);
         if (!info) return null;
         return {
@@ -508,12 +519,12 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
           seamMm: Math.round(info.seam * 1000)
         };
       })
-      .filter((value: any): value is NonNullable<typeof value> => !!value);
+      .filter((value): value is NonNullable<typeof value> => !!value);
   };
 
   const debugCommitSelectedMeasureValue = (measureId: string, valueMm: number) => {
     const target = getCurrentMeasureSelectionTarget();
-    const measure = measureState.measures.find((item: any) => item.id === measureId) ?? null;
+    const measure = (measureState as MeasureState).measures.find((item) => item.id === measureId) ?? null;
     const bindings = target && measure ? getSelectionMeasureBindings(measure, target) : null;
     const before = captureLayoutSnapshot(S);
     commitSelectedMeasureValueMm(measureId, String(valueMm));
@@ -623,7 +634,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     firstPointMm: measureState.firstPoint
       ? { x: Math.round(measureState.firstPoint.x * 1000), z: Math.round(measureState.firstPoint.z * 1000) }
       : null,
-    measures: measureState.measures.map((item: any) => ({
+    measures: (measureState as MeasureState).measures.map((item) => ({
       id: item.id,
       kind: item.kind,
       aBinding: item.aBinding,
@@ -660,7 +671,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         planOverlayVisible: sceneDebug.planOverlayVisible,
         planAmbientVisible: sceneDebug.planAmbientVisible
       },
-      walls: walls.map((wall: any) => ({
+      walls: (walls as WallInstance[]).map((wall) => ({
         id: wall.id,
         meshVisible: wall.mesh.visible,
         outlineVisible: wall.outline.visible,
@@ -672,7 +683,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
 
   const debugLayoutSnapshot = () => captureLayoutSnapshot(S);
 
-  (window as any).__kitchenDebug = {
+  window.__kitchenDebug = {
     reset: debugResetKitchenScenario,
     selectKitchenGroup: debugSelectKitchenGroup,
     createKitchenScenario: debugCreateKitchenScenario,
