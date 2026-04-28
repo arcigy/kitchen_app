@@ -179,7 +179,7 @@ export function toggleSelectedPbr(mesh: THREE.Mesh, kind: "all" | "normal" | "ro
   m.userData.__pbrBackup = backup;
 
   const toggle = (key: "map" | "normalMap" | "roughnessMap") => {
-    (m as any)[key] = (m as any)[key] ? null : (backup as any)[key];
+    m[key] = m[key] ? null : backup[key];
   };
 
   if (kind === "all") {

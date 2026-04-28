@@ -6,6 +6,7 @@ import type {
 } from "./localTypes";
 import type { PlanSnapBinding } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
+import type { MeasureState } from "./measureTools";
 
 type PointerInputHandlersContext = Record<string, any> & {
   renderer: THREE.WebGLRenderer;
@@ -1432,7 +1433,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       const snapTarget = ctx.getMeasure3DSnapTargetObject(hit.object);
       const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, 32);
-      let kind: any = snapped.kind;
+      let kind: MeasureState["hoverSnap"] = snapped.kind;
       let point = snapped.point.clone();
       if (!ctx.measureState.axisLock && snapped.kind === "free") {
         const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
