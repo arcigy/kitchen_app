@@ -47,6 +47,10 @@ type PlanSnapSegment = {
   bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null;
 };
 
+type WallUnionRing = Array<[number, number]>;
+type WallUnionPolygon = WallUnionRing[];
+type WallUnionMultiPolygon = WallUnionPolygon[];
+
 export type PlanSnapResult = {
   point: THREE.Vector3;
   kind: PlanSnapKind;
@@ -69,7 +73,7 @@ type CreatePlanSnapperArgs = {
   getMeasureGuides?: () => PlanSnapGuide[];
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
   getWallSolvedJoinPolys: () => Array<Array<{ x: number; z: number }>>;
-  getWallUnionPolys: () => any | null;
+  getWallUnionPolys: () => WallUnionMultiPolygon | null;
   getLayoutTool: () => string;
   getWallChainStart: () => THREE.Vector3 | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
@@ -205,13 +209,14 @@ export function getModulePlanLocalPolygon(
   inst: LayoutInstance,
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3
 ) {
-  if ((inst.params as Record<string, unknown> | null | undefined)?.type === "corner_shelf_lower") {
+  const moduleParams = inst.params as Record<string, unknown>;
+  if (moduleParams.type === "corner_shelf_lower") {
     const corner = getModuleLocalAnchor(inst, KITCHEN_CORNER_ANCHOR_NAME);
     const xAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_X_ANCHOR_NAME);
     const zAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_Z_ANCHOR_NAME);
     if (corner && xAnchor && zAnchor) {
-      const lengthX = Number((inst.params as any)?.lengthX);
-      const lengthZ = Number((inst.params as any)?.lengthZ);
+      const lengthX = Number(moduleParams.lengthX);
+      const lengthZ = Number(moduleParams.lengthZ);
       const xDir = xAnchor.clone().sub(corner).setY(0);
       const zDir = zAnchor.clone().sub(corner).setY(0);
       if (
@@ -222,7 +227,7 @@ export function getModulePlanLocalPolygon(
         Number.isFinite(lengthZ) &&
         lengthZ > 0
       ) {
-        const depthMm = Number((inst.params as any)?.depth);
+        const depthMm = Number(moduleParams.depth);
         const armDepthM = (Number.isFinite(depthMm) && depthMm > 0 ? depthMm : Math.min(lengthX, lengthZ)) / 1000;
         const xUnit = xDir.clone().normalize();
         const zUnit = zDir.clone().normalize();
@@ -244,8 +249,8 @@ export function getModulePlanLocalPolygon(
     }
   }
 
-  const widthMm = Number((inst.params as any)?.width);
-  const depthMm = Number((inst.params as any)?.depth);
+  const widthMm = Number(moduleParams.width);
+  const depthMm = Number(moduleParams.depth);
   const backCenter = getModuleLocalBackCenter(inst);
   if (Number.isFinite(widthMm) && widthMm > 0 && Number.isFinite(depthMm) && depthMm > 0) {
     const halfWidthM = widthMm / 2000;
@@ -498,9 +503,9 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
 
     const wallUnionPolys = args.getWallUnionPolys();
     if (wallUnionPolys) {
-      for (const poly of wallUnionPolys as any[]) {
-        for (const ring of poly as any[]) {
-          const pts = (ring as Array<[number, number]>).slice(0, -1).map(([x, z]) => new THREE.Vector3(x, 0, z));
+      for (const poly of wallUnionPolys) {
+        for (const ring of poly) {
+          const pts = ring.slice(0, -1).map(([x, z]) => new THREE.Vector3(x, 0, z));
           appendSnapCandidatesFromLoop(candidates, segments, raw, pts, "wall", true, options, {
             vertexBinding: (_vertexIndex, point) => getNearestWallBindingAtPoint(args.getWalls(), point),
             edgeBinding: (_segmentIndex, _t, point) => getNearestWallBindingAtPoint(args.getWalls(), point)
