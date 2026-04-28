@@ -12,6 +12,7 @@ import {
   matrixChanged,
   pickSurfacePoint,
   planarDistanceMm,
+  pointInPolygonXZ,
   readDimensionsMm,
   readGrainAlong,
   renderErrors,
@@ -154,19 +155,6 @@ import {
 } from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
-
-function pointInPoly(point: { x: number; z: number }, polygon: Array<{ x: number; z: number }>) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]!;
-    const b = polygon[j]!;
-    const intersects =
-      a.z > point.z !== b.z > point.z &&
-      point.x < ((b.x - a.x) * (point.z - a.z)) / ((b.z - a.z) || Number.EPSILON) + a.x;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -2999,7 +2987,7 @@ export function startApp(initialArgs: AppArgs) {
 
     for (const worktop of activeWorktops) {
       const polygon = getKitchenWorktopPolygon(worktop.params);
-      if (polygon.length >= 3 && pointInPlanPolygon({ x: cursorWorld.x, z: cursorWorld.z }, polygon.map((point) => ({ x: point.x, z: point.z })))) {
+      if (polygon.length >= 3 && pointInPolygonXZ({ x: cursorWorld.x, z: cursorWorld.z }, polygon.map((point) => ({ x: point.x, z: point.z })))) {
         cursorOnWorktop = true;
       }
 
@@ -8260,19 +8248,6 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   }
 
-  function pointInPlanPolygon(point: { x: number; z: number }, poly: Array<{ x: number; z: number }>) {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const xi = poly[i]!.x;
-      const zi = poly[i]!.z;
-      const xj = poly[j]!.x;
-      const zj = poly[j]!.z;
-      const intersect = (zi > point.z) !== (zj > point.z) && point.x < ((xj - xi) * (point.z - zi)) / (zj - zi + 1e-12) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
   function findSelectableFloorplanModuleAtPoint(
     pointMm: { x: number; z: number },
     mousePx: { x: number; y: number },
@@ -8286,7 +8261,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!selectableId) continue;
       const poly = getModulePlanPolygon(inst, getModuleLocalBackCenter).map((p) => ({ x: p.x, z: p.z }));
       if (poly.length < 3) continue;
-      if (!pointInPlanPolygon(pointWorld, poly)) continue;
+      if (!pointInPolygonXZ(pointWorld, poly)) continue;
       const center = worldToScreen(inst.root.position.clone(), cam(), rect);
       const score = Math.hypot(center.x - mousePx.x, center.y - mousePx.y);
       if (!best || score < best.score) best = { id: selectableId, score };
@@ -10357,7 +10332,7 @@ export function startApp(initialArgs: AppArgs) {
         const pW = { x: pMm.x / 1000, z: pMm.z / 1000 };
         for (const [id, poly] of wallSolvedOutlines) {
           if (poly.length < 3) continue;
-          if (!pointInPoly(pW, poly)) continue;
+          if (!pointInPolygonXZ(pW, poly)) continue;
           // score by distance to mouse from wall midpoint (stable pick)
           const w = walls.find((x) => x.id === id) ?? null;
           const mid = w ? new THREE.Vector3((w.params.aMm.x + w.params.bMm.x) / 2000, 0, (w.params.aMm.z + w.params.bMm.z) / 2000) : new THREE.Vector3(pW.x, 0, pW.z);

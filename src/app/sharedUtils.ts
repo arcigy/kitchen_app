@@ -71,6 +71,18 @@ export function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
 }
 
+export function pointInPolygonXZ(point: { x: number; z: number }, polygon: Array<{ x: number; z: number }>) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]!;
+    const b = polygon[j]!;
+    const denominator = b.z - a.z || Number.EPSILON;
+    const intersects = a.z > point.z !== b.z > point.z && point.x < ((b.x - a.x) * (point.z - a.z)) / denominator + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 export function formatMm(v: THREE.Vector3) {
   return `${Math.round(v.x * 1000)}, ${Math.round(v.z * 1000)}`;
 }
