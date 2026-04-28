@@ -218,6 +218,9 @@ import { createBuildSelectionController } from "./app/buildSelectionController";
 import { createPropertiesRouter } from "./app/propertiesRouter";
 import { createFloorBoundaryController } from "./app/floorBoundaryController";
 import { topbarIcons } from "./app/topbarIcons";
+import { createToolModeController } from "./app/toolModeController";
+import { createSelectionController } from "./app/selectionController";
+import { createBuildModeController } from "./app/buildModeController";
 import { createModuleAdjacencySnapResolver } from "./app/moduleAdjacencySnapResolver";
 import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
@@ -1235,334 +1238,69 @@ export function startApp(initialArgs: AppArgs) {
   detailViewPanOffset = viewNavigation.detailViewPanOffset;
   viewNavigation.syncControls();
 
-  const handleGlobalMeasurementClear = (ev: KeyboardEvent) => {
-    if (!ev.shiftKey || !isEscapeKey(ev)) return false;
-    if (measureState.measures.length === 0 && !measureState.firstPoint && !measureState.hoverPoint) return false;
-    clearAllMeasurements();
-    measureState.firstPoint = null;
-    measureState.firstBinding = null;
-    measureState.hoverPoint = null;
-    measureState.hoverSnap = "none";
-    clearPreview();
-    clearToolHud();
-    measurePlanSnap = null;
-    resetMeasureSnapCycle();
-    hideHoverCursor();
-    setFirstPointMarker(null);
-    args.measureReadoutEl.textContent = measureState.enabled ? "Measure: klikni prvĂ„â€šĂ‹ĹĄ bod." : "";
-    setUnderlayStatus("Measurements cleared.");
-    ev.preventDefault();
-    ev.stopPropagation();
-    return true;
-  };
+  let toolModeController!: ReturnType<typeof createToolModeController>;
+  const handleGlobalMeasurementClear = (ev: KeyboardEvent) => toolModeController.handleGlobalMeasurementClear(ev);
+  const handleLayoutEscape = (ev: KeyboardEvent) => toolModeController.handleLayoutEscape(ev);
+  const clearWallDrawState = () => toolModeController.clearWallDrawState();
+  const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => toolModeController.deactivateMeasureTool(opts);
+  const setToolSelect = () => toolModeController.setToolSelect();
+  const setToolWall = () => toolModeController.setToolWall();
+  const setToolAlign = () => toolModeController.setToolAlign();
+  const setToolTrim = () => toolModeController.setToolTrim();
+  const setToolSection = () => toolModeController.setToolSection();
+  const setToolMeasure = () => toolModeController.setToolMeasure();
+  const setToolDimension = () => toolModeController.setToolDimension();
 
-  const handleLayoutEscape = (ev: KeyboardEvent) => {
-    if (mode !== "layout") return false;
-
-    if (isTypingTarget(ev.target)) return false;
-
-    if (layoutTool === "align") {
-      if (alignState.ref) {
-        alignState.ref = null;
-        setUnderlayStatus("Align: canceled. Click reference line...");
-      } else {
-        setToolSelect();
-      }
-      ev.preventDefault();
-      return true;
-    }
-
-    if (layoutTool === "trim") {
-      if (trimState.step !== "pickTarget") {
-        trimState.step = "pickTarget";
-        trimState.targetWallId = null;
-        trimState.targetPick = null;
-        trimState.targetClick = null;
-        trimState.hover = null;
-        trimState.lastTarget = null;
-        trimState.lastCutter = null;
-        trimState.lastUntilMs = 0;
-        clearToolHud();
-        setUnderlayStatus("Trim: click target wall...");
-        mountProps();
-      } else {
-        setToolSelect();
-      }
-      ev.preventDefault();
-      return true;
-    }
-
-    if (layoutTool === "measure") {
-      measureState.enabled = false;
-      measureState.firstPoint = null;
-      measureState.firstBinding = null;
-      measureState.hoverPoint = null;
-      measureState.hoverSnap = "none";
-      clearPreview();
-      clearToolHud();
-      hideHoverCursor();
-      setFirstPointMarker(null);
-      setToolSelect();
-      setUnderlayStatus("Measure: stopped.");
-      ev.preventDefault();
-      return true;
-    }
-
-    if (layoutTool === "dimension") {
-      if (dimensionState.picked.length > 0) {
-        technicalDimensions.resetDraft();
-        setUnderlayStatus("KĂ„â€šÄąâ€šta: vĂ„â€šĂ‹ĹĄber zruĂ„Ä…Ă‹â€ˇenĂ„â€šĂ‹ĹĄ. Vyber prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru.");
-      } else {
-        setToolSelect();
-        setUnderlayStatus("KĂ„â€šÄąâ€šta: stopped.");
-      }
-      ev.preventDefault();
-      return true;
-    }
-
-    if (layoutTool === "section") {
-      if (sectionDraw.a) {
-        sectionDraw.a = null;
-        sectionDraw.hoverPoint = null;
-        updateSectionDrawPreview();
-        hideHoverCursor();
-        drawSnapOverlay.hide();
-        setUnderlayStatus("Section: canceled current line. Klikni prvĂ„â€šĂ‹ĹĄ bod.");
-        mountProps();
-      } else {
-        setToolSelect();
-        setUnderlayStatus("Section: stopped.");
-      }
-      ev.preventDefault();
-      return true;
-    }
-
-    if (layoutTool === "wall") {
-      setToolSelect();
-      setUnderlayStatus("Wall: stopped.");
-      ev.preventDefault();
-      return true;
-    }
-
-    return false;
-  };
-
-  const clearWallDrawState = () => {
-    wallDraw.active = false;
-    wallDraw.a = null;
-    wallDraw.chainStart = null;
-    wallDraw.segments = 0;
-    wallDraw.hoverB = null;
-    wallDraw.typedMm = "";
-    wallTypedHud.textContent = "";
-    if (wallDraw.preview) {
-      layoutRoot.remove(wallDraw.preview);
-      wallDraw.preview.geometry.dispose();
-      (wallDraw.preview.material as THREE.Material).dispose();
-      wallDraw.preview = null;
-    }
-    wallDrawSnap = null;
-    hideHoverCursor();
-    showWallSnapMarkersFor(selectedKind === "wall" ? selectedWallId : null);
-    wallTypedHud.style.display = "none";
-  };
-
-  const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => {
-    measureState.enabled = false;
-    measureState.firstPoint = null;
-    measureState.firstBinding = null;
-    measureState.hoverPoint = null;
-    measureState.hoverSnap = "none";
-    clearPreview();
-    clearToolHud();
-    measurePlanSnap = null;
-    resetMeasureSnapCycle();
-    hideHoverCursor();
-    setFirstPointMarker(null);
-    if (opts?.clearSaved) clearAllMeasurements();
-  };
-
-  const setToolSelect = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "select";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    setUnderlayStatus("");
-    mountProps();
-  };
-
-  const setToolWall = () => {
-    if (S.kitchenEditMode) {
-      setUnderlayStatus("Wall: v kitchen edit mode sa steny nekreslia.");
-      mountProps();
-      return;
-    }
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "wall";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    ensureFloorplanViewerTab();
-    selectedKind = null;
-    selectedWallId = null;
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    mountProps();
-  };
-
-  const setToolAlign = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "align";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    alignState.ref = null;
-    alignState.hover = null;
-    alignState.lastA = null;
-    alignState.lastB = null;
-    alignState.lastUntilMs = 0;
-    ensureFloorplanViewerTab();
-    setUnderlayStatus("Align: click reference line...");
-    mountProps();
-  };
-
-  const setToolTrim = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "trim";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    trimState.step = "pickTarget";
-    trimState.targetWallId = null;
-    trimState.targetPick = null;
-    trimState.targetClick = null;
-    trimState.hover = null;
-    trimState.lastTarget = null;
-    trimState.lastCutter = null;
-    trimState.lastUntilMs = 0;
-    ensureFloorplanViewerTab();
-    setUnderlayStatus("Trim: click target wall...");
-    mountProps();
-  };
-
-  const setToolSection = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "section";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelKitchenWorktopDraw({ silent: true });
-    cancelSectionDraw({ silent: true });
-    ensureFloorplanViewerTab();
-    selectedKind = null;
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedWallId = null;
-    selectedFloorId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    sectionDraw.active = true;
-    syncSelectionState();
-    updateAllSectionVisuals();
-    updateSelectionHighlights();
-    setUnderlayStatus("Section: klikni prvĂ„â€šĂ‹ĹĄ bod, potom druhĂ„â€šĂ‹ĹĄ bod. Space = zrkadliĂ„Ä…Ă„â€ž smer.");
-    mountProps();
-  };
-
-  const setToolMeasure = () => {
-    if (layoutTool === "measure") {
-      setToolSelect();
-      return;
-    }
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "measure";
-    measureState.enabled = true;
-    technicalDimensions.resetDraft();
-    measureState.firstPoint = null;
-    measureState.firstBinding = null;
-    measureState.hoverPoint = null;
-    measureState.hoverSnap = "none";
-    clearPreview();
-    clearToolHud();
-    hideHoverCursor();
-    resetMeasureSnapCycle();
-    setFirstPointMarker(null);
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    selectedKind = null;
-    selectedWallId = null;
-    selectedFloorId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    args.measureBtn.textContent = "Measure: On";
-    args.measureReadoutEl.textContent = "Measure: klikni prvĂ„â€šĂ‹ĹĄ bod.";
-    setUnderlayStatus("Measure: klikni prvĂ„â€šĂ‹ĹĄ roh alebo hranu.");
-    mountProps();
-  };
-
-  const setToolDimension = () => {
-    if (layoutTool === "dimension") {
-      setToolSelect();
-      return;
-    }
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    layoutTool = "dimension";
-    deactivateMeasureTool();
-    technicalDimensions.resetDraft();
-    clearWallDrawState();
-    cancelSectionDraw({ silent: true });
-    cancelKitchenWorktopDraw({ silent: true });
-    ensureFloorplanViewerTab();
-    selectedKind = null;
-    selectedWallId = null;
-    selectedFloorId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    setUnderlayStatus("KĂ„â€šÄąâ€šta: vyber prvĂ„â€šÄąĹş Ä‚â€žÄąÂ¤iaru, potom Ä‚â€žÄąÄ…alĂ„Ä…Ă‹â€ˇie rovnobeĂ„Ä…Ă„ÄľnĂ„â€šĂ‚Â© Ä‚â€žÄąÂ¤iary. Klik do voÄ‚â€žĂ„ÄľnĂ„â€šĂ‚Â©ho miesta vloĂ„Ä…Ă„ÄľĂ„â€šĂ‚Â­ kĂ„â€šÄąâ€štu.");
-    mountProps();
-  };
-
+  toolModeController = createToolModeController({
+    S,
+    alignState,
+    args,
+    cancelKitchenWorktopDraw,
+    cancelPlacement,
+    cancelSectionDraw,
+    clearAllMeasurements: () => clearAllMeasurements(),
+    clearPreview: () => clearPreview(),
+    clearToolHud,
+    dimensionState,
+    get drawSnapOverlay() { return drawSnapOverlay; },
+    ensureLayoutMode: () => ensureLayoutMode(),
+    hideHoverCursor: () => hideHoverCursor(),
+    isEscapeKey,
+    isTypingTarget,
+    layoutRoot,
+    get measureState() { return measureState; },
+    placement,
+    placementHelpers,
+    scene,
+    sectionDraw,
+    selectedInstanceIds,
+    selectedWallIds,
+    setFirstPointMarker: (point: THREE.Vector3 | null) => setFirstPointMarker(point),
+    setInstanceSelected,
+    setUnderlayStatus: (message: string) => setUnderlayStatus(message),
+    showWallSnapMarkersFor,
+    syncSelectionState,
+    technicalDimensions,
+    trimState,
+    updateAllSectionVisuals: () => updateAllSectionVisuals(),
+    updateSectionDrawPreview,
+    updateSelectionHighlights,
+    wallDraw,
+    get wallTypedHud() { return wallTypedHud; },
+    get layoutTool() { return layoutTool; }, set layoutTool(next: LayoutTool) { layoutTool = next; },
+    get measurePlanSnap() { return measurePlanSnap; }, set measurePlanSnap(next: PlanSnapResult | null) { measurePlanSnap = next; },
+    get mode() { return mode; },
+    get selectedFloorId() { return selectedFloorId; }, set selectedFloorId(next: string | null) { selectedFloorId = next; },
+    get selectedKind() { return selectedKind; }, set selectedKind(next: SelectedKind) { selectedKind = next; },
+    get selectedKitchenGroupId() { return selectedKitchenGroupId; }, set selectedKitchenGroupId(next: string | null) { selectedKitchenGroupId = next; },
+    get selectedSectionId() { return selectedSectionId; }, set selectedSectionId(next: string | null) { selectedSectionId = next; },
+    get selectedUnderlayBox() { return selectedUnderlayBox; }, set selectedUnderlayBox(next: THREE.BoxHelper | null) { selectedUnderlayBox = next; },
+    get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
+    get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; },
+    ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
+    mountProps: () => mountProps(),
+    resetMeasureSnapCycle: () => resetMeasureSnapCycle()
+  });
   document.addEventListener(
     "keydown",
     (ev) => {
@@ -3295,242 +3033,44 @@ export function startApp(initialArgs: AppArgs) {
     layoutPanel.setSelected(selectedInstanceId);
   }
 
-  function setInstanceSelected(id: string | null) {
-    selectedInstanceId = id;
-    layoutPanel.setSelected(id);
+  let selectionController!: ReturnType<typeof createSelectionController>;
+  function setInstanceSelected(id: string | null) { return selectionController.setInstanceSelected(id); }
+  function setSelectedKitchenGroup(groupId: string | null) { return selectionController.setSelectedKitchenGroup(groupId); }
+  function setSelectedModule(id: string | null) { return selectionController.setSelectedModule(id); }
+  function setSelectedWindow() { return selectionController.setSelectedWindow(); }
+  function setSelectedUnderlay() { return selectionController.setSelectedUnderlay(); }
+  function setSelectedSection(id: string | null) { return selectionController.setSelectedSection(id); }
+  function setSelectedWall(id: string | null) { return selectionController.setSelectedWall(id); }
+  function setSelectedFloor(id: string | null) { return selectionController.setSelectedFloor(id); }
 
-    if (selectedInstanceBox) {
-      scene.remove(selectedInstanceBox);
-      selectedInstanceBox.geometry.dispose();
-      (selectedInstanceBox.material as THREE.Material).dispose();
-      selectedInstanceBox = null;
-    }
-
-    if (!id) return;
-  }
-
-  function setSelectedKitchenGroup(groupId: string | null) {
-    if (layoutTool !== "wall") layoutTool = "select";
-    selectedKind = groupId ? "kitchenGroup" : null;
-    selectedSectionId = null;
-    selectedKitchenGroupId = groupId;
-    selectedFloorId = null;
-    selectedWallId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    if (groupId) {
-      for (const inst of instances) {
-        if (inst.kitchenGroupId !== groupId) continue;
-        selectedInstanceIds.add(inst.id);
-      }
-    }
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    showWallSnapMarkersFor(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-  function setSelectedModule(id: string | null) {
-    if (kitchenMode) id = kitchenMode.filterSelectableInstanceId(id);
-    if (layoutTool !== "wall") layoutTool = "select";
-    if (id && pinnedInstanceIds.has(id)) id = null;
-    selectedKind = id ? "module" : null;
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedFloorId = null;
-    selectedInstanceId = id;
-    selectedInstanceIds.clear();
-    if (id) selectedInstanceIds.add(id);
-    selectedWallId = null;
-    selectedWallIds.clear();
-    setInstanceSelected(id);
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    syncSelectionState();
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-  function setSelectedWindow() {
-    if (layoutTool !== "wall") layoutTool = "select";
-    selectedKind = "window";
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedFloorId = null;
-    selectedWallId = null;
-    setInstanceSelected(null);
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    syncSelectionState();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-  function setSelectedUnderlay() {
-    if (layoutTool !== "wall") layoutTool = "select";
-    if (!underlayMesh.visible || underlayState.pinned) return;
-    selectedKind = "underlay";
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedFloorId = null;
-    selectedWallId = null;
-    selectedWallIds.clear();
-    selectedInstanceId = null;
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    selectedUnderlayBox = new THREE.BoxHelper(underlayMesh, 0x5c8cff);
-    selectedUnderlayBox.name = "underlaySelectionBox";
-    scene.add(selectedUnderlayBox);
-    syncSelectionState();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-  function setSelectedSection(id: string | null) {
-    if (layoutTool !== "wall") layoutTool = "select";
-    selectedKind = id ? "section" : null;
-    selectedSectionId = id;
-    selectedKitchenGroupId = null;
-    selectedFloorId = null;
-    selectedWallId = null;
-    selectedWallIds.clear();
-    selectedInstanceId = null;
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    showWallSnapMarkersFor(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-
-
-
-
-  function setSelectedWall(id: string | null) {
-    if (layoutTool !== "wall") layoutTool = "select";
-    if (id && pinnedWallIds.has(id)) id = null;
-    selectedKind = id ? "wall" : null;
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedFloorId = null;
-    selectedWallId = id;
-    selectedWallIds.clear();
-    if (id) selectedWallIds.add(id);
-    setInstanceSelected(null);
-    selectedInstanceIds.clear();
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-
-    const w = id ? walls.find((x) => x.id === id) ?? null : null;
-    if (!w) {
-      showWallSnapMarkersFor(null);
-      syncSelectionState();
-      updateSelectionHighlights();
-      updateAllSectionVisuals();
-      mountProps();
-      return;
-    }
-
-    selectedWallBox = new THREE.BoxHelper(w.root, 0x3ddc97);
-    selectedWallBox.name = "wallSelectionBox";
-    scene.add(selectedWallBox);
-    showWallSnapMarkersFor(id);
-    syncSelectionState();
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
-  function setSelectedFloor(id: string | null) {
-    if (layoutTool !== "wall") layoutTool = "select";
-    selectedKind = id ? "floor" : null;
-    selectedSectionId = null;
-    selectedKitchenGroupId = null;
-    selectedFloorId = id;
-    selectedWallId = null;
-    selectedWallIds.clear();
-    selectedInstanceId = null;
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    if (selectedWallBox) {
-      scene.remove(selectedWallBox);
-      selectedWallBox.geometry.dispose();
-      (selectedWallBox.material as THREE.Material).dispose();
-      selectedWallBox = null;
-    }
-    if (selectedUnderlayBox) {
-      scene.remove(selectedUnderlayBox);
-      selectedUnderlayBox.geometry.dispose();
-      (selectedUnderlayBox.material as THREE.Material).dispose();
-      selectedUnderlayBox = null;
-    }
-    showWallSnapMarkersFor(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    updateAllSectionVisuals();
-    mountProps();
-  }
-
+  selectionController = createSelectionController({
+    instances,
+    layoutPanel,
+    pinnedInstanceIds,
+    pinnedWallIds,
+    scene,
+    selectedInstanceIds,
+    selectedWallIds,
+    showWallSnapMarkersFor,
+    syncSelectionState,
+    underlayMesh,
+    underlayState,
+    updateAllSectionVisuals: () => updateAllSectionVisuals(),
+    updateSelectionHighlights,
+    walls,
+    get kitchenMode() { return kitchenMode; },
+    get layoutTool() { return layoutTool; }, set layoutTool(next: LayoutTool) { layoutTool = next; },
+    mountProps: () => mountProps(),
+    get selectedFloorId() { return selectedFloorId; }, set selectedFloorId(next: string | null) { selectedFloorId = next; },
+    get selectedInstanceBox() { return selectedInstanceBox; }, set selectedInstanceBox(next: THREE.BoxHelper | null) { selectedInstanceBox = next; },
+    get selectedInstanceId() { return selectedInstanceId; }, set selectedInstanceId(next: string | null) { selectedInstanceId = next; },
+    get selectedKind() { return selectedKind; }, set selectedKind(next: SelectedKind) { selectedKind = next; },
+    get selectedKitchenGroupId() { return selectedKitchenGroupId; }, set selectedKitchenGroupId(next: string | null) { selectedKitchenGroupId = next; },
+    get selectedSectionId() { return selectedSectionId; }, set selectedSectionId(next: string | null) { selectedSectionId = next; },
+    get selectedUnderlayBox() { return selectedUnderlayBox; }, set selectedUnderlayBox(next: THREE.BoxHelper | null) { selectedUnderlayBox = next; },
+    get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
+    get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; }
+  });
   function deleteWall(id: string) {
     const idx = walls.findIndex((x) => x.id === id);
     if (idx < 0) return;
@@ -3781,97 +3321,28 @@ export function startApp(initialArgs: AppArgs) {
   });
   const { clearOverlapHighlight, highlightOverlap, selectByName, selectMesh, setVisibleByName } = buildSelectionController;
 
-  const mountControls = () => {
-    editorHost.innerHTML = "";
-    activeBuildControls = null;
-
-    if (!hasImportedModules) {
-      const empty = document.createElement("div");
-      empty.className = "muted";
-      empty.textContent = noModulesMessage;
-      editorHost.appendChild(empty);
-      renderErrors(args.errorsEl, [noModulesMessage]);
-      return;
-    }
-
-    const worktopArgs = { getWorktopThicknessMm: () => 0 };
-
-    activeBuildControls = getModuleDescriptorOrThrow(params.type).createControls(editorHost, params, {
-      ...worktopArgs,
-      onChange: () => afterParamsChanged()
-    });
-  };
-
-  const afterParamsChanged = () => {
-    rebuild();
-    args.exportOutEl.value = "";
-  };
-
-
-
-  const rebuild = () => {
-    if (!hasImportedModules) {
-      renderErrors(args.errorsEl, [noModulesMessage]);
-      if (cabinetGroup) {
-        scene.remove(cabinetGroup);
-        disposeObject3D(cabinetGroup);
-        cabinetGroup = null;
-      }
-      args.exportOutEl.value = "";
-      return;
-    }
-
-    const errors = validateModule(params);
-    renderErrors(args.errorsEl, errors);
-    if (errors.length > 0) return;
-
-    const next = buildModule(params);
-
-    if (cabinetGroup) {
-      scene.remove(cabinetGroup);
-      disposeObject3D(cabinetGroup);
-    }
-    cabinetGroup = next;
-    scene.add(cabinetGroup);
-
-    const parts = getSelectableMeshes(cabinetGroup).map((m) => {
-      m.visible = !hiddenParts.has(m.name);
-      return {
-        name: m.name,
-        visible: m.visible,
-        dimensionsMm: readDimensionsMm(m),
-        grainAlong: readGrainAlong(m)
-      };
-    });
-    partPanel.setRows(parts);
-
-    partPanel.setOverlaps(computeOverlaps(cabinetGroup));
-    clearOverlapHighlight();
-
-    if (selectedMesh) {
-      const keepName = selectedMesh.name;
-      const nextSelected = findSelectableMeshByName(cabinetGroup, keepName);
-      selectMesh(nextSelected && nextSelected.visible ? nextSelected : null);
-    } else {
-      partPanel.setSelected(null);
-    }
-
-    // Frame a bit better after rebuild.
-    const box = new THREE.Box3().setFromObject(cabinetGroup);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    const controls = ctl();
-    const camera = cam() as THREE.PerspectiveCamera;
-    controls.target.copy(center);
-    camera.position.set(center.x + maxDim * 0.9, center.y + maxDim * 0.6, center.z + maxDim * 1.2);
-    camera.near = Math.max(0.001, maxDim / 1000);
-    camera.far = Math.max(50, maxDim * 20);
-    camera.updateProjectionMatrix();
-    controls.update();
-  };
-
+  const buildModeController = createBuildModeController({
+    args,
+    cam,
+    clearOverlapHighlight,
+    ctl,
+    editorHost,
+    hasImportedModules,
+    hiddenParts,
+    noModulesMessage,
+    partPanel,
+    scene,
+    selectMesh,
+    get activeBuildControls() { return activeBuildControls; },
+    set activeBuildControls(next: ParamHighlightControls | null) { activeBuildControls = next; },
+    get cabinetGroup() { return cabinetGroup; },
+    set cabinetGroup(next: THREE.Group | null) { cabinetGroup = next; },
+    get params() { return params; },
+    get selectedMesh() { return selectedMesh; }
+  });
+  const mountControls = () => buildModeController.mountControls();
+  const afterParamsChanged = () => buildModeController.afterParamsChanged();
+  const rebuild = () => buildModeController.rebuild();
   args.resetBtn.addEventListener("click", () => {
     if (!selectedInstanceId) return;
     const inst = findInstance(selectedInstanceId);
