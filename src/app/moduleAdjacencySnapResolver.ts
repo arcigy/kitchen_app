@@ -1,7 +1,42 @@
 import * as THREE from "three";
-import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { ModuleAdjacencyLink } from "./moduleAdjacency";
+import type { KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
 
-export function createModuleAdjacencySnapResolver(ctx: any) {
+type SnapPositionDetailedOptions = {
+  stickyNeighborId?: string | null;
+  snapDistanceM?: number;
+  enforceWallConstraints?: boolean;
+  enforceWallOverlap?: boolean;
+};
+
+type KitchenGuideSegmentInfo = {
+  start: THREE.Vector3;
+  dir: THREE.Vector3;
+  length: number;
+};
+
+type ModuleAdjacencySnapResolverContext = {
+  S: AppState;
+  applyKitchenPlacementBinding: (inst: LayoutInstance, binding: KitchenPlacementBinding, backOffsetMm: number) => boolean;
+  clampNumber: (value: number, min: number, max: number) => number;
+  getKitchenGuideSegmentInfo: (
+    worktop: KitchenWorktopInstance,
+    segmentIndex: number,
+    backOffsetMm: number
+  ) => KitchenGuideSegmentInfo | null;
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  inferKitchenPlacementBinding: (inst: LayoutInstance, groupId: string, backOffsetMm: number) => KitchenPlacementBinding | null;
+  isCornerKitchenModule: (inst: LayoutInstance) => boolean;
+  kitchenWorktops: KitchenWorktopInstance[];
+  snapPositionDetailed: (
+    moving: LayoutInstance,
+    desired: THREE.Vector3,
+    opts?: SnapPositionDetailedOptions
+  ) => { position: THREE.Vector3; link: ModuleAdjacencyLink | null };
+};
+
+export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolverContext) {
   function resolveModuleAdjacencySnap(
     moving: LayoutInstance,
     desired: THREE.Vector3,
@@ -22,7 +57,7 @@ export function createModuleAdjacencySnapResolver(ctx: any) {
     let snappedPosition = result.position.clone();
     let snappedRotationY = moving.root.rotation.y;
     if (effectiveGroupId) {
-      const group = ctx.S.kitchenGroups.find((item: { id: string }) => item.id === effectiveGroupId) ?? null;
+      const group = ctx.S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null;
       const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
       const prevPos = moving.root.position.clone();
       const prevRot = moving.root.rotation.y;
@@ -34,7 +69,7 @@ export function createModuleAdjacencySnapResolver(ctx: any) {
           const desiredBackCenter = ctx.getModuleLocalBackCenter(moving).clone().applyMatrix4(
             new THREE.Matrix4().makeRotationY(moving.root.rotation.y).setPosition(result.position)
           );
-          const worktop = ctx.kitchenWorktops.find((item: { id: string }) => item.id === projectedBinding.worktopId) ?? null;
+          const worktop = ctx.kitchenWorktops.find((item) => item.id === projectedBinding.worktopId) ?? null;
           const segmentInfo =
             worktop && (projectedBinding.kind ?? "segment") !== "corner"
               ? ctx.getKitchenGuideSegmentInfo(worktop, projectedBinding.segmentIndex, backOffsetMm)
