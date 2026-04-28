@@ -9,6 +9,8 @@ import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import { commitHistory } from "../layout/historyManager";
 import { solveWallNetwork } from "../walls2d/solver";
+import type { AppState } from "../layout/appState";
+import type { WallJustification } from "../walls2d/model";
 import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
@@ -20,37 +22,76 @@ import {
   wallExteriorSign
 } from "./wallGeometryHelpers";
 
-export type WallControllerContext = Record<string, any>;
+type WallPlanPoint = { x: number; z: number };
+type PolygonRing = Array<[number, number]>;
+type WallPlanPolygon = PolygonRing[];
+export type WallPlanMultiPolygon = WallPlanPolygon[];
 
-export function createWallController(ctx: WallControllerContext) {
-  const walls = ctx.walls as WallInstance[];
-  const instances = ctx.instances as LayoutInstance[];
-  const kitchenWorktops = ctx.kitchenWorktops as KitchenWorktopInstance[];
-  const layoutRoot = ctx.layoutRoot as THREE.Group;
-  const wallPlanGroup = ctx.wallPlanGroup as THREE.Group;
-  const wallPlanMeshes = ctx.wallPlanMeshes as Map<string, THREE.Line>;
-  const wallJoinMeshes = ctx.wallJoinMeshes as THREE.Mesh[];
-  const wallDebugGroup = ctx.wallDebugGroup as THREE.Group;
-  const wallSolvedOutlines = ctx.wallSolvedOutlines as Map<string, Array<{ x: number; z: number }>>;
-  const wallDefault = ctx.wallDefault as {
+type PolygonClipper = {
+  union: (...polygons: WallPlanMultiPolygon[]) => WallPlanMultiPolygon;
+};
+
+const polygonClipper = polygonClipping as PolygonClipper;
+
+export type WallControllerContext = {
+  walls: WallInstance[];
+  instances: LayoutInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
+  layoutRoot: THREE.Group;
+  wallPlanGroup: THREE.Group;
+  wallPlanMeshes: Map<string, THREE.Line>;
+  wallJoinMeshes: THREE.Mesh[];
+  wallDebugGroup: THREE.Group;
+  wallSolvedOutlines: Map<string, WallPlanPoint[]>;
+  wallDefault: {
     thicknessMm: number;
     heightMm: number;
     materialId: string;
-    justification: "center" | "interior" | "exterior";
+    justification: WallJustification;
     exteriorSign: 1 | -1;
   };
-  const wallJoinTolMm = ctx.wallJoinTolMm as number;
-  const pinnedWallIds = ctx.pinnedWallIds as Set<string>;
-  const S = ctx.S;
-  const cam = ctx.cam as () => THREE.Camera;
-  const getModuleLocalBackCenter = ctx.getModuleLocalBackCenter as (inst: LayoutInstance) => THREE.Vector3;
-  const getKitchenWorktopGuidePathForAlign = ctx.getKitchenWorktopGuidePathForAlign as (
+  wallJoinTolMm: number;
+  pinnedWallIds: Set<string>;
+  S: AppState;
+  cam: () => THREE.Camera;
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  getKitchenWorktopGuidePathForAlign: (
     params: KitchenWorktopInstance["params"],
     guide: "center" | "back" | "front"
   ) => THREE.Vector3[];
-  const moduleOverlapsWalls = ctx.moduleOverlapsWalls as (inst: LayoutInstance) => boolean;
-  const setUnderlayStatus = ctx.setUnderlayStatus as (text: string) => void;
-  const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor as (wallId: string | null) => void;
+  moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
+  setUnderlayStatus: (text: string) => void;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  getViewMode: () => "2d" | "3d";
+  getSelectedKind: () => string | null;
+  getSelectedWallId: () => string | null;
+  setSelectedWallId: (next: string | null) => void;
+  getWallDebugEnabled: () => boolean;
+  setWallSolvedJoinPolys: (next: WallPlanPoint[][]) => void;
+  setWallUnionPolys: (next: WallPlanMultiPolygon | null) => void;
+  nextWallId: () => string;
+};
+
+export function createWallController(ctx: WallControllerContext) {
+  const walls = ctx.walls;
+  const instances = ctx.instances;
+  const kitchenWorktops = ctx.kitchenWorktops;
+  const layoutRoot = ctx.layoutRoot;
+  const wallPlanGroup = ctx.wallPlanGroup;
+  const wallPlanMeshes = ctx.wallPlanMeshes;
+  const wallJoinMeshes = ctx.wallJoinMeshes;
+  const wallDebugGroup = ctx.wallDebugGroup;
+  const wallSolvedOutlines = ctx.wallSolvedOutlines;
+  const wallDefault = ctx.wallDefault;
+  const wallJoinTolMm = ctx.wallJoinTolMm;
+  const pinnedWallIds = ctx.pinnedWallIds;
+  const S = ctx.S;
+  const cam = ctx.cam;
+  const getModuleLocalBackCenter = ctx.getModuleLocalBackCenter;
+  const getKitchenWorktopGuidePathForAlign = ctx.getKitchenWorktopGuidePathForAlign;
+  const moduleOverlapsWalls = ctx.moduleOverlapsWalls;
+  const setUnderlayStatus = ctx.setUnderlayStatus;
+  const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor;
 
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     const candidates: AlignPickedLine[] = [];
@@ -480,13 +521,13 @@ export function createWallController(ctx: WallControllerContext) {
       a: { x: w.params.aMm.x / 1000, z: w.params.aMm.z / 1000 },
       b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
       thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
-      justification: ((w.params as any).justification ?? "center") as any,
+      justification: w.params.justification ?? "center",
       exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
     }));
 
     const solved = solveWallNetwork(modelWalls, { nodeTolM: wallJoinTolMm / 1000, miterLimit: 8 });
     wallSolvedOutlines.clear();
-    ctx.setWallSolvedJoinPolys(solved.joinPolys.map((p: any) => p.map((q: any) => ({ x: q.x, z: q.z }))));
+    ctx.setWallSolvedJoinPolys(solved.joinPolys.map((poly) => poly.map((point) => ({ x: point.x, z: point.z }))));
     ctx.setWallUnionPolys(null);
 
     // Always keep per-wall solved outlines for hit-testing/export/debug.
@@ -508,19 +549,19 @@ export function createWallController(ctx: WallControllerContext) {
       return ring;
     };
 
-    const polys: any[] = [];
+    const polys: WallPlanMultiPolygon[] = [];
     for (const w of solved.walls) {
       if (w.outline.length < 3) continue;
-      polys.push([[[toRing(w.outline)]]]);
+      polys.push([[toRing(w.outline)]]);
     }
     for (const p of solved.joinPolys) {
       if (p.length < 3) continue;
-      polys.push([[[toRing(p)]]]);
+      polys.push([[toRing(p)]]);
     }
 
-    let merged: any = null;
+    let merged: WallPlanMultiPolygon | null = null;
     try {
-      merged = (polygonClipping as any).union(...polys);
+      merged = polygonClipper.union(...polys);
     } catch {
       merged = null;
     }
@@ -574,11 +615,11 @@ export function createWallController(ctx: WallControllerContext) {
       return mesh;
     };
 
-    const fallbackFillSource = [
+    const fallbackFillSource: WallPlanPolygon[] = [
       ...solved.walls.filter((w) => w.outline.length >= 3).map((w) => [toRing(w.outline)]),
       ...solved.joinPolys.filter((p) => p.length >= 3).map((p) => [toRing(p)])
     ];
-    const fillSource = merged && merged.length > 0 ? (merged as Array<Array<Array<[number, number]>>>) : fallbackFillSource;
+    const fillSource = merged && merged.length > 0 ? merged : fallbackFillSource;
     for (const rings of fillSource) {
       const mesh = makePlanFillMesh(rings);
       if (!mesh) continue;
@@ -604,9 +645,12 @@ export function createWallController(ctx: WallControllerContext) {
       while (wallDebugGroup.children.length > 0) {
         const c = wallDebugGroup.children.pop()!;
         wallDebugGroup.remove(c);
-        const any = c as any;
-        if (any.geometry?.dispose) any.geometry.dispose();
-        if (any.material?.dispose) any.material.dispose();
+        if ("geometry" in c && c.geometry instanceof THREE.BufferGeometry) c.geometry.dispose();
+        if ("material" in c) {
+          const material = c.material as THREE.Material | THREE.Material[] | undefined;
+          if (Array.isArray(material)) for (const mat of material) mat.dispose();
+          else material?.dispose();
+        }
       }
 
       const mkLine = (pts: Array<{ x: number; z: number }>, color: number, y = 0.031) => {

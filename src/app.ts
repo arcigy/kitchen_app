@@ -205,7 +205,7 @@ import {
 } from "./app/moduleVisualGeometry";
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 import { installKitchenDebugApi } from "./app/kitchenDebugApi";
-import { createWallController } from "./app/wallController";
+import { createWallController, type WallPlanMultiPolygon } from "./app/wallController";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
@@ -1662,7 +1662,7 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedWallId: (next: string | null) => { selectedWallId = next; },
     getWallDebugEnabled: () => wallDebugEnabled,
     setWallSolvedJoinPolys: (next: Array<Array<{ x: number; z: number }>>) => { wallSolvedJoinPolys = next; },
-    setWallUnionPolys: (next: any | null) => { wallUnionPolys = next; },
+    setWallUnionPolys: (next: WallPlanMultiPolygon | null) => { wallUnionPolys = next; },
     nextWallId: () => `w${wallCounter++}`
   });
 
