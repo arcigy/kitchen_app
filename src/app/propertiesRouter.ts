@@ -8,12 +8,15 @@ import { getAllMaterials } from "../data/materials";
 import { getMaterialDefinitionById } from "../data/pricing/materialDefinitions";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import type { ModuleDescriptor } from "../modules/registry";
+import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { MeasureState } from "./measureTools";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
 import type {
   AlignPickedLine,
+  FloorBoundarySegment,
   FloorInstance,
   FloorParams,
   KitchenWorktopJustification,
@@ -48,9 +51,27 @@ type TrimState = { step: "pickTarget" | "pickCutter"; targetPick: AlignPickedLin
 type FloorEditState = {
   active: boolean;
   params: FloorParams | null;
-  segments: unknown[];
+  segments: FloorBoundarySegment[];
   ortho: boolean;
   error: string;
+};
+
+type SectionDrawState = { a: { x: number; z: number } | null; mirrored: boolean };
+
+type UnderlayState = {
+  opacity: number;
+  scale: number;
+  rotationDeg: number;
+  offsetMm: { x: number; z: number };
+  pinned: boolean;
+  sourceName?: string | null;
+};
+
+type UnderlayCalibrationState = {
+  knownMm: number;
+  active: boolean;
+  mode: "calibrate" | "reference";
+  first: unknown | null;
 };
 
 type PropertiesRouterContext = {
@@ -60,7 +81,7 @@ type PropertiesRouterContext = {
   wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
   wallDraw: WallDrawState;
   kitchenWorktopDraw: KitchenWorktopDrawState;
-  sectionDraw: unknown;
+  sectionDraw: SectionDrawState;
   alignState: AlignState;
   trimState: TrimState;
   measureState: Pick<MeasureState, "axisLock" | "firstPoint">;
@@ -88,9 +109,9 @@ type PropertiesRouterContext = {
   };
   placement: AppState["placement"];
   placementHelpers: PlacementHelpers;
-  underlayState: unknown;
-  underlayCal: unknown;
-  underlayMesh: unknown;
+  underlayState: UnderlayState;
+  underlayCal: UnderlayCalibrationState;
+  underlayMesh: { visible: boolean };
   showNoProps: () => void;
   mountPlacementControls: (state: AppState, helpers: PlacementHelpers) => void;
   mountActiveViewProps: () => void;
@@ -118,19 +139,24 @@ type PropertiesRouterContext = {
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
   moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
-  getModuleDescriptorOrThrow: unknown;
+  getModuleDescriptorOrThrow: (type: ModuleParams["type"]) => ModuleDescriptor;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   ensureLayoutMode: () => void;
-  setUnderlayFromCanvas: (...args: never[]) => void;
-  setSelectedUnderlay: (...args: never[]) => void;
-  updateUnderlayTransform: (...args: never[]) => void;
+  setUnderlayFromCanvas: (
+    canvas: HTMLCanvasElement,
+    name: string,
+    kind: UnderlaySource["kind"],
+    physicalSizeMm?: UnderlaySource["physicalSizeMm"]
+  ) => void;
+  setSelectedUnderlay: () => void;
+  updateUnderlayTransform: () => void;
   clearUnderlay: () => void;
   setSelectedModule: (id: string | null) => void;
   setUnderlayScaleEl: (el: HTMLInputElement) => void;
   setUnderlayOffXEl: (el: HTMLInputElement) => void;
   setUnderlayOffZEl: (el: HTMLInputElement) => void;
   setUnderlayStatusEl: (el: HTMLDivElement) => void;
-  markUnderlaySelected: (...args: never[]) => void;
+  markUnderlaySelected: () => void;
   scheduleKitchenWorktopPreviewUpdate: () => void;
   drawOrthoEnabled: boolean;
 };

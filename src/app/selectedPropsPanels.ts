@@ -1,8 +1,152 @@
-import type { WallInstance, WallParams } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { ModuleParams } from "../model/cabinetTypes";
+import type { ModuleDescriptor } from "../modules/registry";
+import type { UnderlaySource } from "../ui/loadUnderlay";
+import type { MeasureSelectionTarget } from "./measureEditing";
+import type { PropertiesPanelApi } from "./toolPropsPanels";
+import type {
+  FloorBoundarySegment,
+  FloorInstance,
+  FloorParams,
+  LayoutInstance,
+  SectionInstance,
+  SectionParams,
+  WallInstance,
+  WallParams
+} from "./localTypes";
 
-type SelectedPropsContext = Record<string, any>;
+type MaterialOption = { id: string | number; name: string };
+type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
+type CommitHistory = (state: AppState) => void;
+type MountProps = () => void;
+type AppendLinkedMeasureInputs = (section: HTMLElement, target: MeasureSelectionTarget | null) => void;
+type SectionBasis = { length: number } | null;
+type RebuildInstanceOptions = {
+  skipLayoutValidation?: boolean;
+  preserveBackAnchor?: boolean;
+  previousParams?: ModuleParams;
+  sourceKey?: string;
+};
 
-export function mountWallPropsPanel(ctx: SelectedPropsContext, w?: any) {
+type WallPropsContext = {
+  props: PropertiesPanelApi;
+  selectedWallIds: Set<string>;
+  walls: WallInstance[];
+  showNoProps: () => void;
+  commitHistory: CommitHistory;
+  S: AppState;
+  mountProps: MountProps;
+  rebuildWall: (wall: WallInstance) => void;
+  rebuildWallPlanMesh: () => void;
+  appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+};
+
+type FloorPropsContext = {
+  props: PropertiesPanelApi;
+  getAllMaterials: () => MaterialOption[];
+  floorDefault: FloorDefaults;
+  rebuildFloor: (floor: FloorInstance) => void;
+  updateSelectionHighlights: () => void;
+  commitHistory: CommitHistory;
+  S: AppState;
+  enterFloorBoundaryEdit: (floorId?: string) => void;
+  appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+};
+
+type SectionToolContext = {
+  props: PropertiesPanelApi;
+  sectionDraw: { a: { x: number; z: number } | null; mirrored: boolean };
+  drawOrthoEnabled: boolean;
+};
+
+type SectionPropsContext = {
+  props: PropertiesPanelApi;
+  sections: Array<Pick<SectionInstance, "id" | "params">>;
+  showNoProps: () => void;
+  getSectionBasis: (params: SectionParams) => SectionBasis;
+  updateAllSectionVisuals: () => void;
+  mountProps: MountProps;
+  commitHistory: CommitHistory;
+  S: AppState;
+};
+
+type WindowPropsContext = { props: PropertiesPanelApi };
+
+type FloorBoundaryPropsContext = {
+  props: PropertiesPanelApi;
+  floorEdit: {
+    params: FloorParams | null;
+    segments: FloorBoundarySegment[];
+    ortho: boolean;
+    error: string;
+  };
+  getAllMaterials: () => MaterialOption[];
+  floorDefault: FloorDefaults;
+};
+
+type UnderlayState = {
+  opacity: number;
+  scale: number;
+  rotationDeg: number;
+  offsetMm: { x: number; z: number };
+  pinned: boolean;
+  sourceName?: string | null;
+};
+
+type UnderlayCalibrationState = {
+  knownMm: number;
+  active: boolean;
+  mode: "calibrate" | "reference";
+  first: unknown | null;
+};
+
+type UnderlayPropsContext = {
+  props: PropertiesPanelApi;
+  loadUnderlayToCanvas: (file: File) => Promise<UnderlaySource>;
+  ensureLayoutMode: () => void;
+  setUnderlayStatus: (text: string) => void;
+  setUnderlayFromCanvas: (
+    canvas: HTMLCanvasElement,
+    name: string,
+    kind: UnderlaySource["kind"],
+    physicalSizeMm?: UnderlaySource["physicalSizeMm"]
+  ) => void;
+  underlayState: UnderlayState;
+  commitHistory: CommitHistory;
+  S: AppState;
+  setSelectedUnderlay: () => void;
+  updateUnderlayTransform: () => void;
+  underlayCal: UnderlayCalibrationState;
+  underlayMesh: { visible: boolean };
+  clearUnderlay: () => void;
+  setSelectedModule: (id: string | null) => void;
+  mountProps: MountProps;
+  setUnderlayScaleEl: (el: HTMLInputElement) => void;
+  setUnderlayOffXEl: (el: HTMLInputElement) => void;
+  setUnderlayOffZEl: (el: HTMLInputElement) => void;
+  setUnderlayStatusEl: (el: HTMLDivElement) => void;
+  markUnderlaySelected: () => void;
+};
+
+type ModulePropsContext = {
+  findInstance: (id: string) => LayoutInstance | null;
+  showNoProps: () => void;
+  props: PropertiesPanelApi;
+  pinnedInstanceIds: Set<string>;
+  instanceFitsRoom: (inst: LayoutInstance) => boolean;
+  anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
+  moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
+  commitHistory: CommitHistory;
+  S: AppState;
+  mountProps: MountProps;
+  getModuleDescriptorOrThrow: (type: ModuleParams["type"]) => ModuleDescriptor;
+  args: { propertiesEl: HTMLElement };
+  rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
+  appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+};
+
+export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
   const { props, selectedWallIds, walls, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
     const selectedWalls =
       selectedWallIds.size > 1
@@ -115,7 +259,7 @@ export function mountWallPropsPanel(ctx: SelectedPropsContext, w?: any) {
 
 }
 
-export function mountFloorPropsPanel(ctx: SelectedPropsContext, floor: any) {
+export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstance) {
   const { props, getAllMaterials, floorDefault, rebuildFloor, updateSelectionHighlights, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs } = ctx;
     props.setTitle(`Podlaha (${floor.id})`);
     const s = props.section();
@@ -172,7 +316,7 @@ export function mountFloorPropsPanel(ctx: SelectedPropsContext, floor: any) {
 
 }
 
-export function mountSectionToolPropsPanel(ctx: SelectedPropsContext) {
+export function mountSectionToolPropsPanel(ctx: SectionToolContext) {
   const { props, sectionDraw, drawOrthoEnabled } = ctx;
     props.setTitle("Section");
     const s = props.section();
@@ -185,9 +329,9 @@ export function mountSectionToolPropsPanel(ctx: SelectedPropsContext) {
 
 }
 
-export function mountSectionPropsPanel(ctx: SelectedPropsContext, id: string) {
+export function mountSectionPropsPanel(ctx: SectionPropsContext, id: string) {
   const { props, sections, showNoProps, getSectionBasis, updateAllSectionVisuals, mountProps, commitHistory, S } = ctx;
-    const section = sections.find((item: any) => item.id === id) ?? null;
+    const section = sections.find((item) => item.id === id) ?? null;
     if (!section) return showNoProps();
     props.setTitle(`Section (${section.id})`);
     const s = props.section();
@@ -230,7 +374,7 @@ export function mountSectionPropsPanel(ctx: SelectedPropsContext, id: string) {
 
 }
 
-export function mountWindowPropsPanel(ctx: SelectedPropsContext) {
+export function mountWindowPropsPanel(ctx: WindowPropsContext) {
   const { props } = ctx;
     props.setTitle("Window");
     const s = props.section();
@@ -241,7 +385,7 @@ export function mountWindowPropsPanel(ctx: SelectedPropsContext) {
 
 }
 
-export function mountFloorBoundaryPropsPanel(ctx: SelectedPropsContext) {
+export function mountFloorBoundaryPropsPanel(ctx: FloorBoundaryPropsContext) {
   const { props, floorEdit, getAllMaterials, floorDefault } = ctx;
     props.setTitle("Floor Boundary");
     const s = props.section();
@@ -296,7 +440,7 @@ export function mountFloorBoundaryPropsPanel(ctx: SelectedPropsContext) {
 
 }
 
-export function mountUnderlayPropsPanel(ctx: SelectedPropsContext) {
+export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
   const { props, loadUnderlayToCanvas, ensureLayoutMode, setUnderlayStatus, setUnderlayFromCanvas, underlayState, commitHistory, S, setSelectedUnderlay, updateUnderlayTransform, underlayCal, underlayMesh, clearUnderlay, setSelectedModule, mountProps, setUnderlayScaleEl, setUnderlayOffXEl, setUnderlayOffZEl, setUnderlayStatusEl, markUnderlaySelected } = ctx;
     props.setTitle("Underlay");
     const s = props.section();
@@ -469,7 +613,7 @@ export function mountUnderlayPropsPanel(ctx: SelectedPropsContext) {
 
 }
 
-export function mountModulePropsPanel(ctx: SelectedPropsContext, id: string) {
+export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
   const { findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, getModuleDescriptorOrThrow, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
     const inst = findInstance(id);
     if (!inst) return showNoProps();
@@ -539,9 +683,9 @@ export function mountModulePropsPanel(ctx: SelectedPropsContext, id: string) {
     s.appendChild(editorHost);
 
     const worktopArgs = { getWorktopThicknessMm: () => 0 };
-    const onChange = (previousParams?: Record<string, unknown>, sourceKey?: string) => {
+    const onChange = (previousParams?: ModuleParams, sourceKey?: string) => {
       const accepted = rebuildInstance(inst, {
-        previousParams: previousParams as any | undefined,
+        previousParams,
         preserveBackAnchor: true,
         sourceKey
       });
