@@ -55,8 +55,7 @@ import {
   type ModuleAdjacencyLink
 } from "./app/moduleAdjacency";
 import {
-  cloneSectionParams,
-  getSectionBasis
+  cloneSectionParams
 } from "./app/sectionViews";
 import {
   createSelectionHighlights,
@@ -220,6 +219,7 @@ import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawCont
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
+import { createViewPropertiesController } from "./app/viewPropertiesController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1366,69 +1366,19 @@ export function startApp(initialArgs: AppArgs) {
 
   const props = createPropertiesPanelAdapter(args.propertiesEl);
 
-  const showNoProps = () => {
-    props.setTitle("Properties");
-    const s = props.section();
-    const p = document.createElement("div");
-    p.className = "muted";
-    p.textContent = mode === "layout" ? "Select an object or tool." : "Properties are available only in layout mode.";
-    s.appendChild(p);
-  };
-
-
-
-
-
-  const mountActiveViewProps = () => {
-    props.setTitle("View");
-    const s = props.section();
-    const row = (label: string, value: string) => {
-      const el = document.createElement("div");
-      el.className = "muted";
-      el.style.marginTop = "4px";
-      el.textContent = `${label}: ${value}`;
-      s.appendChild(el);
-    };
-    const wallCountText = `${walls.length}`;
-    const moduleCountText = `${instances.length}`;
-    const worktopCountText = `${kitchenWorktops.length}`;
-    if (viewMode === "3d") {
-      row("View", "3D");
-      row("Walls", wallCountText);
-      row("Modules", moduleCountText);
-      row("Worktops", worktopCountText);
-      return;
-    }
-    if (activeViewerTab === "floorplan") {
-      row("View", "Floorplan");
-      row("Ortho", drawOrthoEnabled ? "ON" : "OFF");
-      row("Walls", wallCountText);
-      row("Modules", moduleCountText);
-      row("Sections", `${sections.length}`);
-      return;
-    }
-    if (activeViewerTab.startsWith("section:")) {
-      const sectionId = activeViewerTab.slice("section:".length);
-      const section = sections.find((item) => item.id === sectionId) ?? null;
-      if (!section) return showNoProps();
-      const basis = getSectionBasis(section.params);
-      row("View", section.params.name || section.id);
-      row("Type", "Section");
-      row("Length", basis ? `${Math.round(basis.length * 1000)} mm` : "0 mm");
-      row("Direction", section.params.mirrored ? "Mirrored" : "Default");
-      row("Cut line", `${section.params.aMm.x}, ${section.params.aMm.z} -> ${section.params.bMm.x}, ${section.params.bMm.z}`);
-      return;
-    }
-    if (activeViewerTab.startsWith("elevation:")) {
-      row("View", activeViewerTab.slice("elevation:".length));
-      row("Type", "Elevation");
-      row("Walls", wallCountText);
-      row("Modules", moduleCountText);
-      row("Worktops", worktopCountText);
-      return;
-    }
-    showNoProps();
-  };
+  const viewPropertiesController = createViewPropertiesController({
+    props,
+    walls,
+    instances,
+    kitchenWorktops,
+    sections,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    isDrawOrthoEnabled: () => drawOrthoEnabled
+  });
+  const showNoProps = viewPropertiesController.showNoProps;
+  const mountActiveViewProps = viewPropertiesController.mountActiveViewProps;
 
   const floorEdit = {
     active: false,
