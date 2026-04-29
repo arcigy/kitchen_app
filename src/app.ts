@@ -56,9 +56,6 @@ import {
 } from "./app/moduleAdjacency";
 import {
   cloneSectionParams,
-  buildPlaneSliceStripGeometry,
-  computeElevationViewConfig,
-  computeSectionViewConfig,
   getSectionBasis
 } from "./app/sectionViews";
 import {
@@ -84,7 +81,6 @@ import type {
   LayoutInstance,
   LayoutSnapshot,
   PickedLine2D,
-  SectionElevationKey,
   SectionInstance,
   SectionParams,
   SelectedKind,
@@ -219,6 +215,7 @@ import { createWindowControlsController } from "./app/windowControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
+import { createDetailViewController } from "./app/detailViewController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -274,12 +271,19 @@ export function startApp(initialArgs: AppArgs) {
   let viewMode: "3d" | "2d" = "3d";
   const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs } = createViewerTabs(args.viewerEl);
   let activeViewerTab = "3d";
-  let activeDetailClipPlanes: THREE.Plane[] = [];
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
   let viewNavigation: ReturnType<typeof createViewNavigation>;
-  let detailViewPanOffset!: THREE.Vector3;
+  let detailViewController!: ReturnType<typeof createDetailViewController>;
+  const getNavigationSceneBounds = () => detailViewController.getNavigationSceneBounds();
+  const syncDetailClippingAndMaterials = () => detailViewController.syncDetailClippingAndMaterials();
+  const updateDetailSliceOverlay = () => detailViewController.updateDetailSliceOverlay();
+  const refreshViewerTabs = () => detailViewController.refreshViewerTabs();
+  const isCustomOrthoView = () => detailViewController.isCustomOrthoView();
+  const ensureFloorplanViewerTab = () => detailViewController.ensureFloorplanViewerTab();
+  const activateViewerTab = (key: string) => detailViewController.activateViewerTab(key);
+  const updateDetailViewCamera = () => detailViewController.updateDetailViewCamera();
 
   let renderMode: RenderMode = "realtime";
   let ssgi: SsgiPipeline | null = null;
@@ -967,12 +971,11 @@ export function startApp(initialArgs: AppArgs) {
       !!transformState.kind,
     getSceneBounds: () => getNavigationSceneBounds(),
     refreshDetailView: () => {
-      activeDetailClipPlanes = [];
+      detailViewController.activeDetailClipPlanes = [];
       updateDetailViewCamera();
       updateDetailSliceOverlay();
     }
   });
-  detailViewPanOffset = viewNavigation.detailViewPanOffset;
   viewNavigation.syncControls();
 
   let toolModeController!: ReturnType<typeof createToolModeController>;
@@ -1282,6 +1285,29 @@ export function startApp(initialArgs: AppArgs) {
   viewWrap.appendChild(viewLabel);
   viewWrap.appendChild(view2d);
   layoutUi.appendChild(viewWrap);
+
+  detailViewController = createDetailViewController({
+    renderer,
+    getCamera: cam,
+    getControls: ctl,
+    view2d,
+    setView2d: (enabled) => setView2d(enabled),
+    setExtraTabs,
+    syncViewerTabs,
+    viewNavigation,
+    detailSliceGroup,
+    walls,
+    floors,
+    instances,
+    kitchenWorktops,
+    sections,
+    getCabinetGroup: () => cabinetGroup,
+    getWindowInst: () => windowInst,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    setActiveViewerTab: (next) => { activeViewerTab = next; }
+  });
 
   drawOrthoToggleEl = document.createElement("button");
   drawOrthoToggleEl.type = "button";
@@ -2415,220 +2441,6 @@ export function startApp(initialArgs: AppArgs) {
     } satisfies PlanSnapResult;
   }
 
-  const getNavigationSceneBounds = () => {
-    const box = new THREE.Box3();
-    if (mode !== "layout") {
-      if (cabinetGroup) box.expandByObject(cabinetGroup);
-      if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
-      return box.expandByScalar(0.08);
-    }
-    for (const wall of walls) box.expandByObject(wall.root);
-    for (const floor of floors) box.expandByObject(floor.root);
-    for (const inst of instances) box.expandByObject(inst.root);
-    for (const worktop of kitchenWorktops) box.expandByObject(worktop.root);
-    if (windowInst) box.expandByObject(windowInst.root);
-    if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2.6, 1));
-    return box.expandByScalar(0.05);
-  };
-
-  const applyMaterialClippingPlanes = (material: THREE.Material | THREE.Material[] | undefined, planes: THREE.Plane[]) => {
-    const nextPlanes = planes.map((plane) => plane.clone());
-    const applyOne = (mat: THREE.Material) => {
-      (mat as THREE.Material & { clippingPlanes?: THREE.Plane[] }).clippingPlanes = nextPlanes;
-      mat.needsUpdate = true;
-    };
-    if (Array.isArray(material)) {
-      for (const mat of material) applyOne(mat);
-      return;
-    }
-    if (material) applyOne(material);
-  };
-
-  const applyMaterialOpacityMode = (
-    material: THREE.Material | THREE.Material[] | undefined,
-    transparent: boolean,
-    opacity: number,
-    depthWrite: boolean
-  ) => {
-    const applyOne = (mat: THREE.Material) => {
-      if (!("opacity" in mat)) return;
-      mat.transparent = transparent;
-      mat.opacity = opacity;
-      mat.depthWrite = depthWrite;
-      mat.needsUpdate = true;
-    };
-    if (Array.isArray(material)) {
-      for (const mat of material) applyOne(mat);
-      return;
-    }
-    if (material) applyOne(material);
-  };
-
-  const syncDetailClippingAndMaterials = () => {
-    const detailPlanes = viewMode === "2d" && activeViewerTab !== "floorplan" ? activeDetailClipPlanes : [];
-    const isSectionDetailView = viewMode === "2d" && activeViewerTab.startsWith("section:");
-    renderer.clippingPlanes = [];
-
-    for (const wall of walls) {
-      applyMaterialClippingPlanes(wall.mesh.material, detailPlanes);
-      applyMaterialOpacityMode(
-        wall.mesh.material,
-        viewMode === "2d",
-        viewMode === "2d" ? (activeViewerTab === "floorplan" ? 1 : isSectionDetailView ? 0.07 : 0.16) : 1,
-        viewMode !== "2d"
-      );
-    }
-
-    for (const floor of floors) {
-      applyMaterialClippingPlanes(floor.mesh.material, detailPlanes);
-      applyMaterialOpacityMode(floor.mesh.material, false, 1, true);
-    }
-
-    for (const worktop of kitchenWorktops) {
-      applyMaterialClippingPlanes(worktop.mesh.material, detailPlanes);
-      applyMaterialOpacityMode(
-        worktop.mesh.material,
-        viewMode === "2d",
-        viewMode === "2d" ? (activeViewerTab === "floorplan" ? 0.35 : 0.16) : 1,
-        viewMode !== "2d"
-      );
-    }
-
-    for (const inst of instances) {
-      inst.module.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        applyMaterialClippingPlanes(mesh.material as THREE.Material | THREE.Material[], detailPlanes);
-        applyMaterialOpacityMode(
-          mesh.material as THREE.Material | THREE.Material[],
-          viewMode === "2d" && activeViewerTab !== "floorplan",
-          viewMode === "2d" && activeViewerTab !== "floorplan" ? (isSectionDetailView ? 0.1 : 0.18) : 1,
-          viewMode !== "2d"
-        );
-      });
-    }
-  };
-
-  const applyOrthoViewConfig = (config: ReturnType<typeof computeElevationViewConfig> | ReturnType<typeof computeSectionViewConfig>) => {
-    const activeCam = cam();
-    if (!(activeCam instanceof THREE.OrthographicCamera) || !config) return;
-    activeDetailClipPlanes = [config.clipPlane.clone()];
-    syncDetailClippingAndMaterials();
-    activeCam.position.copy(config.position).add(detailViewPanOffset);
-    activeCam.up.copy(config.up);
-    activeCam.left = config.left;
-    activeCam.right = config.right;
-    activeCam.top = config.top;
-    activeCam.bottom = config.bottom;
-    activeCam.near = config.near;
-    activeCam.far = config.far;
-    const nextTarget = config.target.clone().add(detailViewPanOffset);
-    activeCam.lookAt(nextTarget);
-    activeCam.updateProjectionMatrix();
-    ctl().target.copy(nextTarget);
-    ctl().update();
-  };
-
-  const updateDetailSliceOverlay = () => {
-    for (const child of [...detailSliceGroup.children]) {
-      detailSliceGroup.remove(child);
-      disposeObject3D(child);
-    }
-    const isSectionView = viewMode === "2d" && activeViewerTab.startsWith("section:") && activeDetailClipPlanes.length > 0;
-    detailSliceGroup.visible = isSectionView;
-    if (!isSectionView) return;
-    const plane = activeDetailClipPlanes[0]?.clone();
-    if (!plane) return;
-    const addSliceMesh = (targets: THREE.Object3D[], thicknessM: number, color: number) => {
-      const sliceGeometry = buildPlaneSliceStripGeometry(targets, plane, thicknessM);
-      if (!sliceGeometry.getAttribute("position")?.count) return;
-      const mesh = new THREE.Mesh(
-        sliceGeometry,
-        new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
-      );
-      mesh.renderOrder = 75;
-      mesh.frustumCulled = false;
-      detailSliceGroup.add(mesh);
-    };
-
-    addSliceMesh(walls.map((wall) => wall.mesh), 0.09, 0x0b0f14);
-    addSliceMesh(instances.map((inst) => inst.module), 0.055, 0x1c2430);
-    addSliceMesh(kitchenWorktops.map((worktop) => worktop.mesh), 0.045, 0x202a37);
-  };
-
-  const viewerElevations: Array<{ key: `elevation:${SectionElevationKey}`; label: string; direction: SectionElevationKey }> = [
-    { key: "elevation:north", label: "North", direction: "north" },
-    { key: "elevation:east", label: "East", direction: "east" },
-    { key: "elevation:south", label: "South", direction: "south" },
-    { key: "elevation:west", label: "West", direction: "west" }
-  ];
-
-  const refreshViewerTabs = () => {
-    const sectionTabs = sections.map((section) => ({
-      key: `section:${section.id}`,
-      label: section.params.name,
-      onClick: () => activateViewerTab(`section:${section.id}`)
-    }));
-    const elevationTabs = viewerElevations.map((item) => ({
-      key: item.key,
-      label: item.label,
-      onClick: () => activateViewerTab(item.key)
-    }));
-    setExtraTabs([...sectionTabs, ...elevationTabs]);
-    syncViewerTabs(activeViewerTab);
-  };
-
-  const isCustomOrthoView = () => viewMode === "2d" && activeViewerTab !== "floorplan";
-  const ensureFloorplanViewerTab = () => {
-    if (activeViewerTab !== "floorplan" || viewMode !== "2d") {
-      activateViewerTab("floorplan");
-    } else {
-      view2d.checked = true;
-      setView2d(true);
-    }
-  };
-
-  const activateViewerTab = (key: string) => {
-    if (activeViewerTab === "floorplan" && key !== "floorplan" && viewMode === "2d") {
-      viewNavigation.captureFloorplanView();
-    }
-    if (key === "3d") {
-      activeViewerTab = "3d";
-      detailViewPanOffset.set(0, 0, 0);
-      activeDetailClipPlanes = [];
-      view2d.checked = false;
-      setView2d(false);
-      syncViewerTabs(activeViewerTab);
-      return;
-    }
-
-    activeViewerTab = key;
-    view2d.checked = true;
-    setView2d(true);
-    if (key === "floorplan") {
-      detailViewPanOffset.set(0, 0, 0);
-      activeDetailClipPlanes = [];
-      syncDetailClippingAndMaterials();
-      viewNavigation.restoreFloorplanView();
-      updateDetailSliceOverlay();
-      syncViewerTabs(activeViewerTab);
-      return;
-    }
-
-    const bounds = getNavigationSceneBounds();
-    detailViewPanOffset.set(0, 0, 0);
-    if (key.startsWith("section:")) {
-      const sectionId = key.slice("section:".length);
-      const section = sections.find((item) => item.id === sectionId) ?? null;
-      if (section) applyOrthoViewConfig(computeSectionViewConfig(section.params, bounds));
-    } else if (key.startsWith("elevation:")) {
-      const direction = key.slice("elevation:".length) as SectionElevationKey;
-      applyOrthoViewConfig(computeElevationViewConfig(direction, bounds));
-    }
-    updateDetailSliceOverlay();
-    syncViewerTabs(activeViewerTab);
-  };
-
   sectionDrawController = createSectionDrawController({
     layoutRoot,
     sectionDraw,
@@ -2642,23 +2454,6 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedSection,
     activateViewerTab
   });
-
-  const updateDetailViewCamera = () => {
-    if (!isCustomOrthoView()) return;
-    const bounds = getNavigationSceneBounds();
-    if (activeViewerTab.startsWith("section:")) {
-      const sectionId = activeViewerTab.slice("section:".length);
-      const section = sections.find((item) => item.id === sectionId) ?? null;
-      if (section) applyOrthoViewConfig(computeSectionViewConfig(section.params, bounds));
-      updateDetailSliceOverlay();
-      return;
-    }
-    if (activeViewerTab.startsWith("elevation:")) {
-      const direction = activeViewerTab.slice("elevation:".length) as SectionElevationKey;
-      applyOrthoViewConfig(computeElevationViewConfig(direction, bounds));
-    }
-    updateDetailSliceOverlay();
-  };
 
   const updateAllSectionVisuals = sectionController.updateAllSectionVisuals;
   refreshViewerTabs();
@@ -3563,7 +3358,7 @@ export function startApp(initialArgs: AppArgs) {
     wallSnapMarkers,
     walls,
     windowEditorHost,
-    get activeDetailClipPlanes() { return activeDetailClipPlanes; }, set activeDetailClipPlanes(next) { activeDetailClipPlanes = next; },
+    get activeDetailClipPlanes() { return detailViewController.activeDetailClipPlanes; }, set activeDetailClipPlanes(next) { detailViewController.activeDetailClipPlanes = next; },
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     get cabinetGroup() { return cabinetGroup; },
     get layoutTool() { return layoutTool; }, set layoutTool(next) { layoutTool = next; },
