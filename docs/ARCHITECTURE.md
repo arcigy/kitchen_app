@@ -67,18 +67,22 @@ Current extracted controllers include:
 - `instanceRebuilder.ts`
 - `keyboardInputHandlers.ts`
 - `kitchenPlacementController.ts`
+- `layoutActionsController.ts`
 - `measureValueCommitter.ts`
 - `moduleAdjacencySnapResolver.ts`
+- `moduleSelectionController.ts`
 - `pointerInputHandlers.ts`
 - `propertiesRouter.ts`
 - `selectionController.ts`
 - `toolModeController.ts`
 - `topbarIcons.ts`
 - `transformController.ts`
+- `viewPropertiesController.ts`
 - `viewModeController.ts`
 - `wallController.ts`
 - `wallEditHudUpdater.ts`
 - `windowControlsController.ts`
+- `windowInstanceController.ts`
 - `worktopController.ts`
 
 ## Shared Type Rule
@@ -113,7 +117,7 @@ For UI-affecting changes, also load the app in the browser and verify current co
 
 As of the current refactor branch:
 
-- `src/app.ts` is below 4000 lines.
+- `src/app.ts` is below 3000 lines.
 - Feature logic is being moved into focused controllers.
 - New controllers should use typed contexts instead of `ctx: any`.
 - `dist/` build output is not committed as part of refactor commits.

@@ -21,11 +21,14 @@ If a change needs more than a small wiring edit, create or update a focused file
 | Area | Correct location |
 | --- | --- |
 | Topbar buttons and ribbons | `src/app/*Topbar*.ts` or `src/app/topbarIcons.ts` |
+| Layout actions such as duplicate, delete, underlay, 2D toggle | `src/app/layoutActionsController.ts` |
 | Properties panel routing | `src/app/propertiesRouter.ts` |
+| Active view properties text | `src/app/viewPropertiesController.ts` |
 | Floor boundary editing | `src/app/floorBoundaryController.ts` |
 | Wall drawing, snapping, wall mesh updates | `src/app/wallController.ts` |
 | Worktop drawing and worktop group updates | `src/app/worktopController.ts` |
 | Kitchen module placement | `src/app/kitchenPlacementController.ts` |
+| Module hit-testing and floorplan selection | `src/app/moduleSelectionController.ts` |
 | Pointer and keyboard events | `src/app/pointerInputHandlers.ts`, `src/app/keyboardInputHandlers.ts` |
 | Tool modes, Escape behavior, wall/measure/dimension activation | `src/app/toolModeController.ts` |
 | Layout object selection state | `src/app/selectionController.ts` |
@@ -33,6 +36,8 @@ If a change needs more than a small wiring edit, create or update a focused file
 | Module transforms | `src/app/transformController.ts` |
 | Module rebuilds | `src/app/instanceRebuilder.ts` |
 | Build-mode part selection | `src/app/buildSelectionController.ts` |
+| Window model creation and clamp rules | `src/app/windowInstanceController.ts` |
+| Window UI controls | `src/app/windowControlsController.ts` |
 | Module geometry | `src/modules/[module]/geometry.ts` |
 | Module UI controls | `src/modules/[module]/controls.ts` |
 | Shared material/pricing data | `src/data/` |
@@ -48,7 +53,7 @@ If a change needs more than a small wiring edit, create or update a focused file
 ## Hard limits
 
 - Do not grow `src/app.ts` unless there is no smaller safe option.
-- Keep `src/app.ts` below 4000 lines. If a task would exceed that, extract a focused controller first.
+- Keep `src/app.ts` below 3000 lines. If a task would increase it, extract a focused controller first.
 - Do not put business logic in event-handler wiring.
 - Do not mix unrelated refactors in one commit.
 - Do not move code and change behavior in the same step.

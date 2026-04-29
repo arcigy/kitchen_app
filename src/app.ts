@@ -222,6 +222,7 @@ import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
+import { createKitchenWorktopSelectionController } from "./app/kitchenWorktopSelectionController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1832,28 +1833,15 @@ export function startApp(initialArgs: AppArgs) {
     return { point: rawPoint.clone(), kind: "none" as PlanSnapResult["kind"], axisLocked: false };
   }
 
-  function beginKitchenWorktopSelection(worktopId: string, ev: PointerEvent) {
-    const worktop = findKitchenWorktop(worktopId);
-    if (!worktop) return false;
-    if (marquee.pending && marquee.pointerId === ev.pointerId) {
-      marquee.hitSomething = true;
-      marquee.pending = false;
-      marquee.active = false;
-      marqueeEl.style.display = "none";
-    }
-    if (!S.kitchenEditMode && worktop.kitchenGroupId) {
-      const group = kitchenMode?.findKitchenGroup(worktop.kitchenGroupId) ?? null;
-      if (group) {
-        setSelectedKitchenGroup(group.id);
-        return true;
-      }
-    }
-    if (worktop.kitchenGroupId) {
-      setSelectedKitchenGroup(worktop.kitchenGroupId);
-      return true;
-    }
-    return false;
-  }
+  const kitchenWorktopSelectionController = createKitchenWorktopSelectionController({
+    marquee,
+    marqueeEl,
+    findKitchenWorktop,
+    getKitchenEditMode: () => S.kitchenEditMode,
+    getKitchenMode: () => kitchenMode,
+    setSelectedKitchenGroup
+  });
+  const beginKitchenWorktopSelection = kitchenWorktopSelectionController.beginKitchenWorktopSelection;
 
   function updateLayoutPanel() {
     layoutPanel.setRows(
