@@ -180,10 +180,7 @@ import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { renderAppFrame } from "./app/frameRenderer";
 import { createModulePlacementHelpers, type AdjacentModuleInfo, type ModulePlacementSnapOptions } from "./app/modulePlacementHelpers";
 import {
-  ensurePickAndOutline as ensurePickAndOutlineBase,
   footprintExtentsMatchXZ,
-  getInstanceGeometryMeshes as getInstanceGeometryMeshesBase,
-  instanceLayoutWorldBox as instanceLayoutWorldBoxBase,
   instanceVisualWorldBox,
   moduleRootLocalBox,
   tagModuleGeometry
@@ -216,6 +213,7 @@ import { createClassicTopbarController } from "./app/classicTopbarController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
+import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -790,6 +788,37 @@ export function startApp(initialArgs: AppArgs) {
     getLayoutTool: () => layoutTool,
     getWallChainStart: () => wallDraw.chainStart
   });
+
+  const layoutSceneQueries = createLayoutSceneQueries({
+    instances,
+    kitchenWorktops,
+    walls,
+    floors,
+    sections,
+    roomBounds,
+    getWindowInst: () => windowInst,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    getModuleLocalBackCenter
+  });
+  const findInstance = layoutSceneQueries.findInstance;
+  const instanceLayoutWorldBox = layoutSceneQueries.instanceLayoutWorldBox;
+  const instanceWorldBox = layoutSceneQueries.instanceWorldBox;
+  const instanceFitsRoom = layoutSceneQueries.instanceFitsRoom;
+  const instanceFitsLayoutBounds = layoutSceneQueries.instanceFitsLayoutBounds;
+  const roomContainsBoxXZ = layoutSceneQueries.roomContainsBoxXZ;
+  const ensurePickAndOutline = layoutSceneQueries.ensurePickAndOutline;
+  const getInstanceGeometryMeshes = layoutSceneQueries.getInstanceGeometryMeshes;
+  const getAllInstanceGeometryMeshes = layoutSceneQueries.getAllInstanceGeometryMeshes;
+  const getKitchenWorktopGeometryMeshes = layoutSceneQueries.getKitchenWorktopGeometryMeshes;
+  const getMeasure3DSnapTargetObject = layoutSceneQueries.getMeasure3DSnapTargetObject;
+  const getLayoutMeasureMeshes3d = layoutSceneQueries.getLayoutMeasureMeshes3d;
+  const getInstanceIdFromObject = layoutSceneQueries.getInstanceIdFromObject;
+  const getWorktopIdFromObject = layoutSceneQueries.getWorktopIdFromObject;
+  const getSectionIdFromObject = layoutSceneQueries.getSectionIdFromObject;
+  const getSectionPickMeshes = layoutSceneQueries.getSectionPickMeshes;
+  const findKitchenWorktop = layoutSceneQueries.findKitchenWorktop;
+  const keepStickyPlanSnap = layoutSceneQueries.keepStickyPlanSnap;
 
   const startKitchenWorktopDraw = () => {
     if (!S.kitchenEditMode || !S.activeKitchenGroupId) return;
@@ -2285,161 +2314,6 @@ export function startApp(initialArgs: AppArgs) {
     if (mode !== "layout") return;
     setView2d(view2d.checked);
   });
-
-  function findInstance(id: string) {
-    return instances.find((x) => x.id === id) ?? null;
-  }
-
-  function instanceLayoutWorldBox(inst: LayoutInstance) {
-    return instanceLayoutWorldBoxBase(inst, getModuleLocalBackCenter);
-  }
-
-  function instanceWorldBox(inst: LayoutInstance) {
-    return instanceLayoutWorldBox(inst);
-  }
-
-  function instanceFitsRoom(inst: LayoutInstance) {
-    return roomContainsBoxXZ(instanceLayoutWorldBox(inst));
-  }
-
-  function instanceFitsLayoutBounds(inst: LayoutInstance) {
-    if (inst.kitchenGroupId) return true;
-    return instanceFitsRoom(inst);
-  }
-
-  function roomContainsBoxXZ(box: THREE.Box3, eps = 0.0005) {
-    return (
-      box.min.x >= -roomBounds.halfW - eps &&
-      box.max.x <= roomBounds.halfW + eps &&
-      box.min.z >= -roomBounds.halfD - eps &&
-      box.max.z <= roomBounds.halfD + eps
-    );
-  }
-
-  function ensurePickAndOutline(inst: LayoutInstance, flattenToPlan = viewMode === "2d" && activeViewerTab === "floorplan") {
-    ensurePickAndOutlineBase(inst, {
-      flattenToPlan,
-      viewMode,
-      getModuleLocalBackCenter
-    });
-  }
-
-  function getInstanceGeometryMeshes(inst: LayoutInstance) {
-    return getInstanceGeometryMeshesBase(inst, viewMode);
-  }
-
-  function getAllInstanceGeometryMeshes() {
-    return instances.flatMap((inst) => getInstanceGeometryMeshes(inst));
-  }
-
-  function getKitchenWorktopGeometryMeshes() {
-    return kitchenWorktops.flatMap((worktop) => {
-      if (viewMode === "2d") return worktop.mesh.visible ? [worktop.mesh] : [];
-      return worktop.mesh.visible ? [worktop.mesh] : [];
-    });
-  }
-
-  function getMeasure3DSnapTargetObject(obj: THREE.Object3D | null | undefined) {
-    if (!obj) return null;
-    const instanceId = getInstanceIdFromObject(obj);
-    if (instanceId) {
-      const inst = findInstance(instanceId);
-      if (inst) return inst.module;
-    }
-
-    const worktopId = getWorktopIdFromObject(obj);
-    if (worktopId) {
-      const worktop = kitchenWorktops.find((item) => item.id === worktopId) ?? null;
-      if (worktop) return worktop.mesh;
-    }
-
-    const kind = obj.userData?.kind as string | undefined;
-    if (kind === "window" && windowInst) return windowInst.root;
-
-    const wallId = obj.userData?.wallId as string | undefined;
-    if (wallId) {
-      const wall = walls.find((item) => item.id === wallId) ?? null;
-      if (wall) return wall.mesh;
-    }
-
-    const floorId = obj.userData?.floorId as string | undefined;
-    if (floorId) {
-      const floor = floors.find((item) => item.id === floorId) ?? null;
-      if (floor) return floor.mesh;
-    }
-
-    return obj;
-  }
-
-  function getLayoutMeasureMeshes3d() {
-    const meshes: THREE.Mesh[] = [];
-    meshes.push(...getAllInstanceGeometryMeshes());
-    meshes.push(...getKitchenWorktopGeometryMeshes());
-    for (const wall of walls) if (wall.mesh.visible) meshes.push(wall.mesh);
-    for (const floor of floors) if (floor.mesh.visible) meshes.push(floor.mesh);
-    if (windowInst?.pick.visible) meshes.push(windowInst.pick);
-    return meshes;
-  }
-
-  function getInstanceIdFromObject(obj: THREE.Object3D | null | undefined) {
-    let current: THREE.Object3D | null | undefined = obj;
-    while (current) {
-      const id = current.userData?.instanceId as string | undefined;
-      if (id) return id;
-      current = current.parent;
-    }
-    return null;
-  }
-
-  function getWorktopIdFromObject(obj: THREE.Object3D | null | undefined) {
-    let current: THREE.Object3D | null | undefined = obj;
-    while (current) {
-      const id = current.userData?.worktopId as string | undefined;
-      if (id) return id;
-      current = current.parent;
-    }
-    return null;
-  }
-
-  function getSectionIdFromObject(obj: THREE.Object3D | null | undefined) {
-    let current: THREE.Object3D | null | undefined = obj;
-    while (current) {
-      const id = current.userData?.sectionId as string | undefined;
-      if (id) return id;
-      current = current.parent;
-    }
-    return null;
-  }
-
-  function getSectionPickMeshes() {
-    return sections.map((section) => section.pick);
-  }
-
-  function findKitchenWorktop(id: string) {
-    return kitchenWorktops.find((worktop) => worktop.id === id) ?? null;
-  }
-
-  function keepStickyPlanSnap(
-    rawPoint: THREE.Vector3,
-    sticky: PlanSnapResult | null,
-    camera: THREE.Camera,
-    rect: DOMRect,
-    thresholdPx = 20
-  ) {
-    if (!sticky || sticky.kind === "none") return null;
-    const rawScreen = worldToScreen(rawPoint, camera, rect);
-    const stickyScreen = worldToScreen(sticky.point, camera, rect);
-    const dx = rawScreen.x - stickyScreen.x;
-    const dy = rawScreen.y - stickyScreen.y;
-    if (Math.hypot(dx, dy) > thresholdPx) return null;
-    return {
-      point: sticky.point.clone(),
-      kind: sticky.kind,
-      a: sticky.a?.clone() ?? null,
-      b: sticky.b?.clone() ?? null,
-      owner: sticky.owner
-    } satisfies PlanSnapResult;
-  }
 
   sectionDrawController = createSectionDrawController({
     layoutRoot,
