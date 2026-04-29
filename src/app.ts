@@ -96,6 +96,7 @@ import { buildModule } from "./geometry/buildModule";
 import { createScene } from "./core/scene";
 import { createPartPanel } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
+import { createEditorShell } from "./ui/createEditorShell";
 import { disposeObject3D } from "./core/dispose";
 import { getModuleDescriptorOrThrow, getModuleDescriptors } from "./modules/registry";
 import type { SsgiPipeline } from "./rendering/ssgiPipeline";
@@ -1127,62 +1128,22 @@ export function startApp(initialArgs: AppArgs) {
     setFirstPointMarker
   });
 
-  // Editor UI
-  args.formEl.innerHTML = "";
-
-  const buildUi = document.createElement("div");
-  const layoutUi = document.createElement("div");
-  buildUi.style.display = "none";
-  args.formEl.appendChild(buildUi);
-  args.formEl.appendChild(layoutUi);
-
-  // Build UI: model switcher + model-specific controls
-  const modelWrap = document.createElement("div");
-  modelWrap.className = "field";
-
-  const modelLabel = document.createElement("label");
-  modelLabel.textContent = "Model";
-  modelLabel.htmlFor = "modelType";
-
-  const modelSelect = document.createElement("select");
-  modelSelect.id = "modelType";
-  modelSelect.style.width = "120px";
-  modelSelect.style.height = "36px";
-  modelSelect.style.borderRadius = "10px";
-  modelSelect.style.border = "1px solid var(--border)";
-  modelSelect.style.background = "#0f1117";
-  modelSelect.style.color = "var(--text)";
-
-  if (hasImportedModules) {
-    modelSelect.innerHTML = availableModuleDescriptors
-      .map((descriptor) => `<option value="${descriptor.type}">${descriptor.type}</option>`)
-      .join("");
-  } else {
-    modelSelect.innerHTML = `<option value="">No modules imported</option>`;
-    modelSelect.disabled = true;
-  }
-
-  modelWrap.appendChild(modelLabel);
-  modelWrap.appendChild(modelSelect);
-  buildUi.appendChild(modelWrap);
-
-  const editorHost = document.createElement("div");
-  buildUi.appendChild(editorHost);
-
-  // Layout UI: global view/render controls only. Module actions live in kitchen edit toolbar.
-  const viewWrap = document.createElement("div");
-  viewWrap.className = "field";
-  const viewLabel = document.createElement("label");
-  viewLabel.textContent = "2D top view";
-  viewLabel.htmlFor = "view2d";
-  const view2d = document.createElement("input");
-  view2d.id = "view2d";
-  view2d.type = "checkbox";
-  view2d.checked = true;
-  view2d.style.justifySelf = "start";
-  viewWrap.appendChild(viewLabel);
-  viewWrap.appendChild(view2d);
-  layoutUi.appendChild(viewWrap);
+  const {
+    buildUi,
+    layoutUi,
+    modelSelect,
+    editorHost,
+    view2d,
+    instanceEditorHost,
+    windowEditorHost,
+    partsBuildHost,
+    partsLayoutHost
+  } = createEditorShell({
+    formEl: args.formEl,
+    partsEl: args.partsEl,
+    hasImportedModules,
+    availableModuleDescriptors
+  });
 
   detailViewController = createDetailViewController({
     renderer,
@@ -1257,21 +1218,6 @@ export function startApp(initialArgs: AppArgs) {
     },
     downloadViewportPng
   });
-
-  const instanceEditorHost = document.createElement("div");
-  layoutUi.appendChild(instanceEditorHost);
-
-  const windowEditorHost = document.createElement("div");
-  windowEditorHost.style.display = "none";
-  layoutUi.appendChild(windowEditorHost);
-
-  // Panels
-  args.partsEl.innerHTML = "";
-  const partsBuildHost = document.createElement("div");
-  const partsLayoutHost = document.createElement("div");
-  partsLayoutHost.style.display = "none";
-  args.partsEl.appendChild(partsBuildHost);
-  args.partsEl.appendChild(partsLayoutHost);
 
   const partPanel = createPartPanel(partsBuildHost, {
     onSelect: (name) => selectByName(name),
