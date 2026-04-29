@@ -216,6 +216,7 @@ import { createDetailViewController } from "./app/detailViewController";
 import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
+import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -976,7 +977,7 @@ export function startApp(initialArgs: AppArgs) {
     wallDraw,
     get wallTypedHud() { return wallTypedHud; },
     get layoutTool() { return layoutTool; }, set layoutTool(next: LayoutTool) { layoutTool = next; },
-    get measurePlanSnap() { return measurePlanSnap; }, set measurePlanSnap(next: PlanSnapResult | null) { measurePlanSnap = next; },
+    get measurePlanSnap() { return measurePlanSnapController.measurePlanSnap; }, set measurePlanSnap(next: PlanSnapResult | null) { measurePlanSnapController.measurePlanSnap = next; },
     get mode() { return mode; },
     get selectedFloorId() { return selectedFloorId; }, set selectedFloorId(next: string | null) { selectedFloorId = next; },
     get selectedKind() { return selectedKind; }, set selectedKind(next: SelectedKind) { selectedKind = next; },
@@ -1000,14 +1001,9 @@ export function startApp(initialArgs: AppArgs) {
         viewMode === "2d" &&
         activeViewerTab === "floorplan" &&
         !isTypingTarget(ev.target) &&
-        measureSnapCyclePoint
+        measurePlanSnapController.hasMeasureSnapCyclePoint
       ) {
-        measureSnapCycleIndex += ev.shiftKey ? -1 : 1;
-        updateMeasureHoverFromPlanPoint(
-          measureSnapCyclePoint.clone(),
-          renderer.domElement.getBoundingClientRect(),
-          measureSnapCycleNormalMode
-        );
+        measurePlanSnapController.cycleMeasureSnap(ev.shiftKey ? -1 : 1, renderer.domElement.getBoundingClientRect());
         ev.preventDefault();
         ev.stopPropagation();
         return;
@@ -1026,7 +1022,7 @@ export function startApp(initialArgs: AppArgs) {
     wallDrawSnap = null;
     worktopDrawSnap = null;
     sectionDrawSnap = null;
-    measurePlanSnap = null;
+    measurePlanSnapController.measurePlanSnap = null;
     resetMeasureSnapCycle();
     selectPlanSnap = null;
     hideHoverCursor();
@@ -1049,11 +1045,13 @@ export function startApp(initialArgs: AppArgs) {
   let wallDrawSnap: PlanSnapResult | null = null;
   let worktopDrawSnap: PlanSnapResult | null = null;
   let sectionDrawSnap: PlanSnapResult | null = null;
-  let measurePlanSnap: PlanSnapResult | null = null;
-  let measureSnapCycleIndex = 0;
-  let measureSnapCyclePoint: THREE.Vector3 | null = null;
-  let measureSnapCycleNormalMode = false;
   let selectPlanSnap: PlanSnapResult | null = null;
+  let measurePlanSnapController!: ReturnType<typeof createMeasurePlanSnapController>;
+  const resetMeasureSnapCycle = () => measurePlanSnapController.resetMeasureSnapCycle();
+  const resolveMeasurePlanSnap = (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) =>
+    measurePlanSnapController.resolveMeasurePlanSnap(hitPoint, rect, normalMode);
+  const updateMeasureHoverFromPlanPoint = (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) =>
+    measurePlanSnapController.updateMeasureHoverFromPlanPoint(hitPoint, rect, normalMode);
 
   const {
     measureOverlay,
@@ -1115,98 +1113,19 @@ export function startApp(initialArgs: AppArgs) {
     replaceKitchenGroupWorktops
   });
 
-  const resetMeasureSnapCycle = () => {
-    measureSnapCycleIndex = 0;
-    measureSnapCyclePoint = null;
-    measureSnapCycleNormalMode = false;
-  };
-
-  const resolveMeasurePlanSnap = (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => {
-    if (
-      !measureSnapCyclePoint ||
-      measureSnapCyclePoint.distanceToSquared(hitPoint) > 1e-8 ||
-      measureSnapCycleNormalMode !== normalMode
-    ) {
-      measureSnapCycleIndex = 0;
-      measureSnapCyclePoint = hitPoint.clone();
-      measureSnapCycleNormalMode = normalMode;
-    }
-    const snapped = snapPoint2D(hitPoint, rect, cam(), 24, {
-      perpendicularFrom: normalMode ? null : measureState.firstPoint,
-      kindPriority: ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"],
-      sticky: measurePlanSnap,
-      cycleIndex: measureSnapCycleIndex
-    });
-    measurePlanSnap = snapped.kind !== "none" ? snapped : null;
-    return snapped;
-  };
-
-  const updateMeasureHoverFromPlanPoint = (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => {
-    const snapped = resolveMeasurePlanSnap(hitPoint, rect, normalMode);
-    let kind = snapped.kind;
-    let point = snapped.kind !== "none" ? snapped.point : hitPoint;
-    if (!measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
-      const axisAssist = applyMeasureAxisAssist(measureState.firstPoint, point, cam(), rect, 12);
-      if (axisAssist) {
-        point = axisAssist.point;
-        kind = "axis";
-      }
-    }
-    measureState.hoverPoint = point.clone();
-    measureState.hoverSnap = kind;
-    updateHoverCursor(worldToScreen(point, cam(), rect), kind);
-
-    const thick = hudLineThicknessM(rect);
-    if (
-      snapped.a &&
-      snapped.b &&
-      (snapped.kind === "edge" ||
-        snapped.kind === "axis" ||
-        snapped.kind === "midpoint" ||
-        snapped.kind === "perpendicular")
-    ) {
-      updateHudLine(hudHoverLine, snapped.a, snapped.b, thick * 1.75);
-    } else if (kind === "axis" && measureState.firstPoint) {
-      updateHudLine(hudHoverLine, measureState.firstPoint, point, thick * 1.75);
-    } else {
-      hudHoverLine.visible = false;
-    }
-
-    if (measureState.firstPoint) {
-      let a = measureState.firstPoint.clone();
-      let b = point.clone();
-      if (measureState.axisLock) b = axisLockXZ(a, b);
-      if (normalMode) {
-        const baseDir = b.clone().sub(a).setY(0);
-        if (baseDir.lengthSq() > 1e-10) {
-          baseDir.normalize();
-          const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
-          const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
-          updatePreview(
-            a.clone().addScaledVector(normalDir, -spanM / 2),
-            a.clone().addScaledVector(normalDir, spanM / 2),
-            rect,
-            planarDistanceMm(a, b),
-            { kind: "normalGuide" }
-          );
-        } else {
-          clearPreview();
-        }
-        args.measureReadoutEl.textContent = `Normal: ${Math.round(planarDistanceMm(a, b))} mm`;
-      } else {
-        updatePreview(a, b, rect);
-        args.measureReadoutEl.textContent = `Measure: ${Math.round(planarDistanceMm(a, b))} mm`;
-      }
-    } else {
-      clearPreview();
-      const cycleCount = snapped.cycleCount ?? 0;
-      const cycleHint = cycleCount > 1 ? ` (${Math.min(measureSnapCycleIndex + 1, cycleCount)}/${cycleCount}, Tab)` : "";
-      args.measureReadoutEl.textContent = normalMode
-        ? `Normal hover (${kind}): ${formatMm(point)}${cycleHint}`
-        : `Measure hover (${kind}): ${formatMm(point)}${cycleHint}`;
-    }
-    setFirstPointMarker(measureState.firstPoint);
-  };
+  measurePlanSnapController = createMeasurePlanSnapController({
+    measureState,
+    measureReadoutEl: args.measureReadoutEl,
+    hudHoverLine,
+    getCamera: cam,
+    snapPoint2D,
+    updateHoverCursor,
+    hudLineThicknessM,
+    updateHudLine,
+    updatePreview,
+    clearPreview,
+    setFirstPointMarker
+  });
 
   // Editor UI
   args.formEl.innerHTML = "";
