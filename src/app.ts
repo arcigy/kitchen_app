@@ -142,7 +142,7 @@ import {
   makeKitchenWorktopPreviewGeometry
 } from "./app/kitchenWorktopVisuals";
 import { loadUnderlayToCanvas } from "./ui/loadUnderlay";
-import { bindLabelToControl } from "./ui/formFieldA11y";
+import { createPropertiesPanelAdapter } from "./ui/propertiesPanelAdapter";
 import { solveWallNetwork } from "./walls2d/solver";
 import { makeAppState, type AppState } from "./layout/appState";
 import {
@@ -1364,32 +1364,7 @@ export function startApp(initialArgs: AppArgs) {
     ]
   });
 
-  const props = {
-    setTitle(title: string) {
-      args.propertiesEl.innerHTML = "";
-      const t = document.createElement("div");
-      t.className = "props-title";
-      t.textContent = title;
-      args.propertiesEl.appendChild(t);
-    },
-    section() {
-      const s = document.createElement("div");
-      s.className = "props-section";
-      args.propertiesEl.appendChild(s);
-      return s;
-    },
-    row(sectionEl: HTMLElement, label: string, inputEl: HTMLElement) {
-      const r = document.createElement("div");
-      r.className = "props-row";
-      const l = document.createElement("label");
-      l.textContent = label;
-      bindLabelToControl(l, inputEl, label);
-      r.appendChild(l);
-      r.appendChild(inputEl);
-      sectionEl.appendChild(r);
-      return r;
-    }
-  };
+  const props = createPropertiesPanelAdapter(args.propertiesEl);
 
   const showNoProps = () => {
     props.setTitle("Properties");
