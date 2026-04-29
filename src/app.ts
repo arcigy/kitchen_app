@@ -21,7 +21,6 @@ import { applyMeasureAxisAssist, createMeasureTools } from "./app/measureTools";
 import { applyMeasureAxisAssist3D, axisLockPoint3D, distance3dMm, snapPoint3D } from "./app/measure3d";
 import {
   createPlanSnapper,
-  getModulePlanPolygon,
   type PlanSnapBinding,
   type PlanSnapResult
 } from "./app/planSnap";
@@ -220,6 +219,9 @@ import { createMeasurePlanSnapController } from "./app/measurePlanSnapController
 import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
+import { createModuleSelectionController } from "./app/moduleSelectionController";
+import { createLayoutActionsController } from "./app/layoutActionsController";
+import { createWindowInstanceController } from "./app/windowInstanceController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1627,62 +1629,39 @@ export function startApp(initialArgs: AppArgs) {
 
 
   let rebuildStandardTopbar = () => {};
-  const openUnderlayPanel = () => {
-    ensureLayoutMode();
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    setToolSelect();
-    if (underlayMesh.visible && !underlayState.pinned) {
-      setSelectedUnderlay();
-      return;
-    }
-    setSelectedWall(null);
-    setSelectedModule(null);
-    selectedKind = "underlay";
-    mountProps();
-  };
-
-  const duplicateSelected = () => {
-    ensureLayoutMode();
-    if (selectedKind !== "module" || !selectedInstanceId) return;
-    duplicateInstance(selectedInstanceId);
-    commitHistory(S);
-  };
-
-  const deleteSelected = () => {
-    ensureLayoutMode();
-    if (selectedKind === "kitchenGroup") return;
-    if (selectedKind === "section" && selectedSectionId) {
-      deleteSectionInstance(selectedSectionId);
-      setSelectedSection(null);
-      mountProps();
-      return;
-    }
-    if (selectedKind === "floor" && selectedFloorId) {
-      deleteFloor(selectedFloorId);
-      setSelectedFloor(null);
-      return;
-    }
-    if (selectedKind === "module" && selectedInstanceIds.size > 0) {
-      const ids = Array.from(selectedInstanceIds);
-      for (const id of ids) deleteInstance(id);
-      setSelectedModule(null);
-      selectedInstanceIds.clear();
-      commitHistory(S);
-      return;
-    }
-    if (selectedKind === "wall" && selectedWallIds.size > 0) {
-      const ids = Array.from(selectedWallIds);
-      for (const id of ids) deleteWall(id);
-      setSelectedWall(null);
-      selectedWallIds.clear();
-    }
-  };
-
-  const toggle2dView = () => {
-    ensureLayoutMode();
-    view2d.checked = !view2d.checked;
-    setView2d(view2d.checked);
-  };
+  const layoutActionsController = createLayoutActionsController({
+    view2d,
+    ensureLayoutMode,
+    cancelPlacementIfActive: () => {
+      if (placement.active) cancelPlacement(S, placementHelpers);
+    },
+    setToolSelect,
+    isVisibleUnpinnedUnderlay: () => underlayMesh.visible && !underlayState.pinned,
+    getSelectedKind: () => selectedKind,
+    setSelectedKind: (kind) => { selectedKind = kind; },
+    getSelectedInstanceId: () => selectedInstanceId,
+    getSelectedSectionId: () => selectedSectionId,
+    getSelectedFloorId: () => selectedFloorId,
+    getSelectedInstanceIds: () => selectedInstanceIds,
+    getSelectedWallIds: () => selectedWallIds,
+    setSelectedUnderlay,
+    setSelectedWall,
+    setSelectedModule,
+    setSelectedSection,
+    setSelectedFloor,
+    mountProps,
+    duplicateInstance,
+    deleteInstance,
+    deleteWall,
+    deleteSectionInstance,
+    deleteFloor,
+    commitHistory: () => commitHistory(S),
+    setView2d: (checked) => setView2d(checked)
+  });
+  const openUnderlayPanel = layoutActionsController.openUnderlayPanel;
+  const duplicateSelected = layoutActionsController.duplicateSelected;
+  const deleteSelected = layoutActionsController.deleteSelected;
+  const toggle2dView = layoutActionsController.toggle2dView;
 
   floorplanTab.addEventListener("click", () => {
     if (mode !== "layout") return;
@@ -1941,52 +1920,20 @@ export function startApp(initialArgs: AppArgs) {
     commitHistory(S);
   }
 
-  function createWindow(defaultWall: WallId = "back") {
-    const params: WindowParams = {
-      wall: defaultWall,
-      widthMm: 900,
-      heightMm: 900,
-      sillHeightMm: 900,
-      centerMm: 0
-    };
-
-    const root = new THREE.Group();
-    root.name = "windowRoot";
-
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), new THREE.MeshBasicMaterial({ visible: false }));
-    pick.name = "windowPick";
-    pick.userData.kind = "window";
-    root.add(pick);
-
-    const outline = new THREE.Line(
-      new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95, depthTest: true, depthWrite: false })
-    );
-    outline.name = "windowOutline";
-    outline.renderOrder = 57;
-    root.add(outline);
-
-    const inst: WindowInstance = { params, root, pick, outline };
-    updateWindowTransform(inst);
-    return inst;
-  }
-
-  function clampWindowParams(p: WindowParams) {
-    const widthMm = Math.max(200, Math.min(4800, Math.round(p.widthMm)));
-    const heightMm = Math.max(200, Math.min(2600, Math.round(p.heightMm)));
-    const maxSill = Math.max(0, Math.round(roomBounds.h * 1000 - heightMm));
-    const sillHeightMm = Math.max(0, Math.min(Math.round(p.sillHeightMm), maxSill));
-
-    const axisHalfMm = wallDefs[p.wall].axisHalf * 1000;
-    const maxCenter = Math.max(0, axisHalfMm - widthMm / 2);
-    const centerMm = Math.max(-maxCenter, Math.min(Math.round(p.centerMm), maxCenter));
-
-    return { ...p, widthMm, heightMm, sillHeightMm, centerMm };
-  }
-
   let createWindowControlsControllerResult!: ReturnType<typeof createWindowControlsController>;
   const updateWindowTransform = (...args: Parameters<ReturnType<typeof createWindowControlsController>["updateWindowTransform"]>) => createWindowControlsControllerResult.updateWindowTransform(...args);
   const mountWindowControls = (...args: Parameters<ReturnType<typeof createWindowControlsController>["mountWindowControls"]>) => createWindowControlsControllerResult.mountWindowControls(...args);
+  const windowInstanceController = createWindowInstanceController({
+    roomHeightM: roomBounds.h,
+    wallDefs,
+    getWindowInst: () => windowInst,
+    setWindowOpening,
+    setWindowCutout,
+    updateWindowTransform: (inst) => updateWindowTransform(inst)
+  });
+  const createWindow = windowInstanceController.createWindow;
+  const clampWindowParams = windowInstanceController.clampWindowParams;
+  const clearWindowLightIfMissing = windowInstanceController.clearWindowLightIfMissing;
   createWindowControlsControllerResult = createWindowControlsController({
     clampWindowParams,
     createWindow,
@@ -2000,12 +1947,6 @@ export function startApp(initialArgs: AppArgs) {
     get windowInst() { return windowInst; },
     set windowInst(next: WindowInstance | null) { windowInst = next; }
   });
-
-
-  function clearWindowLightIfMissing() {
-    if (!windowInst) setWindowOpening(null);
-    if (!windowInst) setWindowCutout(null);
-  }
 
   function mountInstanceControls(inst: LayoutInstance) {
     instanceEditorHost.innerHTML = "";
@@ -2028,69 +1969,28 @@ export function startApp(initialArgs: AppArgs) {
     return createInstanceRebuilderResult.rebuildInstance(...args);
   }
 
-  function beginModuleSelection(selectableId: string, ev: PointerEvent) {
-    const inst = findInstance(selectableId);
-    if (!inst) return false;
-    if (marquee.pending && marquee.pointerId === ev.pointerId) {
-      marquee.hitSomething = true;
-      marquee.pending = false;
-      marquee.active = false;
-      marqueeEl.style.display = "none";
-    }
-    if (!S.kitchenEditMode && inst.kitchenGroupId) {
-      const group = kitchenMode?.findKitchenGroup(inst.kitchenGroupId) ?? null;
-      if (group) {
-        setSelectedKitchenGroup(group.id);
-        return true;
-      }
-    }
-    setSelectedModule(selectableId);
-
-    if (viewMode !== "2d") return true;
-    if (pinnedInstanceIds.has(selectableId)) return true;
-
-    const hitPoint = new THREE.Vector3();
-    if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return true;
-    dragState.active = true;
-    dragState.id = selectableId;
-    dragState.offset.set(hitPoint.x - inst.root.position.x, 0, hitPoint.z - inst.root.position.z);
-    dragState.lastValid.copy(inst.root.position);
-    renderer.domElement.setPointerCapture(ev.pointerId);
-    return true;
-  }
-
-  function findSelectableFloorplanModuleAtPoint(
-    pointMm: { x: number; z: number },
-    mousePx: { x: number; y: number },
-    rect: DOMRect
-  ) {
-    const pointWorld = { x: pointMm.x / 1000, z: pointMm.z / 1000 };
-    let best: { id: string; score: number } | null = null;
-
-    for (const inst of instances) {
-      const selectableId = kitchenMode ? kitchenMode.filterSelectableInstanceId(inst.id) : inst.id;
-      if (!selectableId) continue;
-      const poly = getModulePlanPolygon(inst, getModuleLocalBackCenter).map((p) => ({ x: p.x, z: p.z }));
-      if (poly.length < 3) continue;
-      if (!pointInPolygonXZ(pointWorld, poly)) continue;
-      const center = worldToScreen(inst.root.position.clone(), cam(), rect);
-      const score = Math.hypot(center.x - mousePx.x, center.y - mousePx.y);
-      if (!best || score < best.score) best = { id: selectableId, score };
-    }
-
-    return best?.id ?? null;
-  }
-
-  function selectInstanceById(id: string) {
-    if (mode !== "layout") return;
-    const inst = findInstance(id);
-    if (!inst) return;
-    if (!S.kitchenEditMode && inst.kitchenGroupId) {
-      setSelectedKitchenGroup(inst.kitchenGroupId);
-      return;
-    }
-    setSelectedModule(id);
-  }
+  const moduleSelectionController = createModuleSelectionController({
+    instances,
+    pinnedInstanceIds,
+    raycaster,
+    groundPlane,
+    renderer,
+    dragState,
+    marquee,
+    marqueeEl,
+    findInstance,
+    getCamera: cam,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getKitchenEditMode: () => S.kitchenEditMode,
+    getKitchenMode: () => kitchenMode,
+    getModuleLocalBackCenter,
+    setSelectedKitchenGroup,
+    setSelectedModule
+  });
+  const beginModuleSelection = moduleSelectionController.beginModuleSelection;
+  const findSelectableFloorplanModuleAtPoint = moduleSelectionController.findSelectableFloorplanModuleAtPoint;
+  const selectInstanceById = moduleSelectionController.selectInstanceById;
 
   modulePlacementHelpers = createModulePlacementHelpers({
     instances,
