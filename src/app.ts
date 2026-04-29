@@ -218,6 +218,7 @@ import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
+import { createEditHudController } from "./app/editHudController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1273,248 +1274,32 @@ export function startApp(initialArgs: AppArgs) {
     nextWallId: () => `w${wallCounter++}`
   });
 
-  const hideWallEditHud = () => {
-    wallEditHud.lenLine.style.display = "none";
-    wallEditHud.lenExtA.style.display = "none";
-    wallEditHud.lenExtB.style.display = "none";
-    wallEditHud.offsetLine.style.display = "none";
-    wallEditHud.offsetTickA.style.display = "none";
-    wallEditHud.offsetTickB.style.display = "none";
-    wallEditHud.handleA.style.display = "none";
-    wallEditHud.handleB.style.display = "none";
-    wallEditHud.handleMid.style.display = "none";
-    wallEditHud.label.style.display = "none";
-    wallEditHud.input.style.display = "none";
-    wallEditHud.offsetLabel.style.display = "none";
-    wallEditHud.offsetInput.style.display = "none";
-    wallEditHud.offsetRefWallId = null;
-  };
-
-  const hideModuleEditHud = () => {
-    moduleEditHud.widthLine.style.display = "none";
-    moduleEditHud.widthExtA.style.display = "none";
-    moduleEditHud.widthExtB.style.display = "none";
-    moduleEditHud.label.style.display = "none";
-    moduleEditHud.input.style.display = "none";
-  };
-
-  const getEditableModuleWidthMm = (inst: LayoutInstance) => {
-    const raw = (inst.params as any).widthMm ?? (inst.params as any).width;
-    return typeof raw === "number" && Number.isFinite(raw) ? Math.max(1, Math.round(raw)) : null;
-  };
-
-  const setEditableModuleWidthMm = (inst: LayoutInstance, valueMm: number) => {
-    if (typeof (inst.params as any).widthMm === "number") {
-      (inst.params as any).widthMm = valueMm;
-      return true;
-    }
-    if (typeof (inst.params as any).width === "number") {
-      (inst.params as any).width = valueMm;
-      return true;
-    }
-    return false;
-  };
-
-  const commitWallLengthMm = (raw: string) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    const w = walls.find((x) => x.id === selectedWallId) ?? null;
-    if (!w) return;
-
-    const v = Number(String(raw).trim().replace(/[^0-9.\\-]/g, ""));
-    if (!Number.isFinite(v)) return;
-    const lenMm = Math.max(1, Math.round(v));
-
-    const oldB = { ...w.params.bMm };
-    const a = fromMmPoint(w.params.aMm);
-    const b = fromMmPoint(w.params.bMm);
-    const d = b.clone().sub(a);
-    if (d.lengthSq() < 1e-8) d.set(1, 0, 0);
-    d.normalize();
-    const newB = a.clone().addScaledVector(d, lenMm / 1000);
-    const newBMm = toMmPoint(newB);
-    setWallEndpointMm(w, "b", newBMm);
-
-    // Keep connected joins attached (move any walls that shared the old endpoint).
-    for (const other of walls) {
-      if (other.id === w.id) continue;
-      const which = wallEndpointWhich(other, oldB, wallJoinTolMm);
-      if (which) setWallEndpointMm(other, which, newBMm);
-    }
-
-    autoJoinAtMmPoint(w.params.aMm);
-    autoJoinAtMmPoint(w.params.bMm);
-    rebuildWallPlanMesh();
-    mountProps();
-  };
-
-  const commitWallOffsetMm = (raw: string) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    const w = walls.find((x) => x.id === selectedWallId) ?? null;
-    const refId = wallEditHud.offsetRefWallId;
-    const ref = refId ? walls.find((x) => x.id === refId) ?? null : null;
-    if (!w || !ref) return;
-
-    const v = Number(String(raw).trim().replace(/[^0-9.\\-]/g, ""));
-    if (!Number.isFinite(v)) return;
-    const desiredOffsetMm = Math.max(0, Math.round(v));
-
-    const a = fromMmPoint(w.params.aMm);
-    const b = fromMmPoint(w.params.bMm);
-    const d = b.clone().sub(a);
-    if (d.lengthSq() < 1e-8) return;
-    d.normalize();
-    const n = new THREE.Vector3(-d.z, 0, d.x).normalize();
-
-    const ra = fromMmPoint(ref.params.aMm);
-    const rb = fromMmPoint(ref.params.bMm);
-    const rmid = ra.clone().add(rb).multiplyScalar(0.5);
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-
-    const signed = rmid.clone().sub(mid).dot(n);
-    const sign = signed >= 0 ? 1 : -1;
-    const desiredCenterDistM = desiredOffsetMm / 1000 + (w.params.thicknessMm + ref.params.thicknessMm) / 2000;
-    const desiredSigned = sign * desiredCenterDistM;
-    const shift = signed - desiredSigned;
-
-    const shiftMm = { x: Math.round(n.x * shift * 1000), z: Math.round(n.z * shift * 1000) };
-
-    const oldA = { ...w.params.aMm };
-    const oldB = { ...w.params.bMm };
-
-    w.params.aMm = { x: w.params.aMm.x + shiftMm.x, z: w.params.aMm.z + shiftMm.z };
-    w.params.bMm = { x: w.params.bMm.x + shiftMm.x, z: w.params.bMm.z + shiftMm.z };
-
-    // Keep connected joins attached at both ends.
-    for (const other of walls) {
-      if (other.id === w.id) continue;
-      const wa = wallEndpointWhich(other, oldA, wallJoinTolMm);
-      if (wa) setWallEndpointMm(other, wa, w.params.aMm);
-      const wb = wallEndpointWhich(other, oldB, wallJoinTolMm);
-      if (wb) setWallEndpointMm(other, wb, w.params.bMm);
-    }
-
-    rebuildWall(w);
-    autoJoinAtMmPoint(w.params.aMm);
-    autoJoinAtMmPoint(w.params.bMm);
-    rebuildWallPlanMesh();
-    mountProps();
-  };
-
-  const commitModuleWidthMm = (raw: string) => {
-    if (selectedKind !== "module" || !selectedInstanceId) return;
-    const inst = findInstance(selectedInstanceId) ?? null;
-    if (!inst) return;
-    const nextMm = Number(String(raw).trim().replace(/[^0-9.\-]/g, ""));
-    if (!Number.isFinite(nextMm)) return;
-    const widthMm = Math.max(1, Math.round(nextMm));
-    const previousParams = structuredClone(inst.params);
-    if (!setEditableModuleWidthMm(inst, widthMm)) return;
-    const accepted = rebuildInstance(inst, {
-      previousParams,
-      preserveBackAnchor: true,
-      sourceKey: typeof (inst.params as any).widthMm === "number" ? "widthMm" : "width"
-    });
-    if (!accepted) return;
-    mountProps();
-    commitHistory(S);
-  };
-
-  wallEditHud.label.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    if (mode !== "layout" || viewMode !== "2d") return;
-    if (layoutTool === "wall" && wallDraw.active) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    const w = walls.find((x) => x.id === selectedWallId) ?? null;
-    if (!w) return;
-    wallEditHud.input.value = String(Math.round(mmDist(w.params.aMm, w.params.bMm)));
-    wallEditHud.input.style.left = wallEditHud.label.style.left;
-    wallEditHud.input.style.top = wallEditHud.label.style.top;
-    wallEditHud.input.style.transform = "translate(-50%, -50%)";
-    wallEditHud.input.style.display = "block";
-    wallEditHud.input.focus();
-    wallEditHud.input.select();
+  const editHudController = createEditHudController({
+    S,
+    wallEditHud,
+    moduleEditHud,
+    walls,
+    wallJoinTolMm,
+    findInstance,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getActiveViewerTab: () => activeViewerTab,
+    getLayoutTool: () => layoutTool,
+    isWallDrawActive: () => wallDraw.active,
+    getSelectedKind: () => selectedKind,
+    getSelectedWallId: () => selectedWallId,
+    getSelectedInstanceId: () => selectedInstanceId,
+    setWallEndpointMm,
+    autoJoinAtMmPoint,
+    rebuildWall,
+    rebuildWallPlanMesh,
+    rebuildInstance,
+    mountProps: () => mountProps(),
+    commitHistory: () => commitHistory(S)
   });
-
-  wallEditHud.input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      commitWallLengthMm(wallEditHud.input.value);
-      wallEditHud.input.blur();
-      ev.preventDefault();
-    } else if (ev.key === "Escape") {
-      wallEditHud.input.style.display = "none";
-      wallEditHud.input.blur();
-      ev.preventDefault();
-    }
-  });
-  wallEditHud.input.addEventListener("blur", () => {
-    wallEditHud.input.style.display = "none";
-  });
-
-  wallEditHud.offsetLabel.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    if (mode !== "layout" || viewMode !== "2d") return;
-    if (layoutTool === "wall" && wallDraw.active) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    wallEditHud.offsetInput.value = String(wallEditHud.offsetLabel.textContent?.replace(/[^0-9\\-]/g, "") ?? "");
-    wallEditHud.offsetInput.style.left = wallEditHud.offsetLabel.style.left;
-    wallEditHud.offsetInput.style.top = wallEditHud.offsetLabel.style.top;
-    wallEditHud.offsetInput.style.transform = "translate(-50%, -50%)";
-    wallEditHud.offsetInput.style.display = "block";
-    wallEditHud.offsetInput.focus();
-    wallEditHud.offsetInput.select();
-  });
-
-  wallEditHud.offsetInput.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      commitWallOffsetMm(wallEditHud.offsetInput.value);
-      wallEditHud.offsetInput.blur();
-      ev.preventDefault();
-    } else if (ev.key === "Escape") {
-      wallEditHud.offsetInput.style.display = "none";
-      wallEditHud.offsetInput.blur();
-      ev.preventDefault();
-    }
-  });
-  wallEditHud.offsetInput.addEventListener("blur", () => {
-    wallEditHud.offsetInput.style.display = "none";
-  });
-
-  moduleEditHud.label.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "module" || !selectedInstanceId) return;
-    if (mode !== "layout" || viewMode !== "2d" || activeViewerTab !== "floorplan") return;
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    const inst = findInstance(selectedInstanceId) ?? null;
-    const widthMm = inst ? getEditableModuleWidthMm(inst) : null;
-    if (!inst || widthMm == null) return;
-    moduleEditHud.input.value = String(widthMm);
-    moduleEditHud.input.style.left = moduleEditHud.label.style.left;
-    moduleEditHud.input.style.top = moduleEditHud.label.style.top;
-    moduleEditHud.input.style.transform = "translate(-50%, -50%)";
-    moduleEditHud.input.style.display = "block";
-    moduleEditHud.input.focus();
-    moduleEditHud.input.select();
-  });
-
-  moduleEditHud.input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      commitModuleWidthMm(moduleEditHud.input.value);
-      moduleEditHud.input.blur();
-      ev.preventDefault();
-    } else if (ev.key === "Escape") {
-      moduleEditHud.input.style.display = "none";
-      moduleEditHud.input.blur();
-      ev.preventDefault();
-    }
-  });
-  moduleEditHud.input.addEventListener("blur", () => {
-    moduleEditHud.input.style.display = "none";
-  });
+  const hideWallEditHud = editHudController.hideWallEditHud;
+  const hideModuleEditHud = editHudController.hideModuleEditHud;
+  editHudController.installInlineEditors();
 
   const beginWallDrag = (
     ev: PointerEvent,
