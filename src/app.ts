@@ -215,6 +215,7 @@ import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
 import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
+import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -848,128 +849,18 @@ export function startApp(initialArgs: AppArgs) {
     updateLayoutPanel
   });
 
-  const startKitchenWorktopDraw = () => {
-    if (!S.kitchenEditMode || !S.activeKitchenGroupId) return;
-    cancelKitchenWorktopDraw({ silent: true });
-    if (placement.active) cancelPlacement(S, placementHelpers);
-    ensureFloorplanViewerTab();
-    kitchenWorktopDraw.active = true;
-    kitchenWorktopDraw.mirrored = false;
-    worktopDrawSnap = null;
-    selectedKind = null;
-    selectedWallId = null;
-    selectedFloorId = null;
-    selectedInstanceId = null;
-    selectedWallIds.clear();
-    selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    syncSelectionState();
-    updateSelectionHighlights();
-    setUnderlayStatus("Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
-    mountProps();
-  };
-
-  const appendKitchenWorktopPoint = (point: FloorBoundaryPoint) => {
-    const prev = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1] ?? null;
-    if (prev && Math.hypot(point.x - prev.x, point.z - prev.z) < 5) return false;
-
-    if (kitchenWorktopDraw.points.length === 0) {
-      kitchenWorktopDraw.points = [point];
-      kitchenWorktopDraw.hoverPoint = point;
-      kitchenWorktopDraw.typedMm = "";
-      scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("Worktop: second click adds the next point. Type mm + Enter.");
-      return true;
-    }
-
-    if (kitchenWorktopDraw.points.length === 1) {
-      kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
-      kitchenWorktopDraw.hoverPoint = point;
-      kitchenWorktopDraw.typedMm = "";
-      wallTypedHud.style.display = "none";
-      scheduleKitchenWorktopPreviewUpdate();
-      setUnderlayStatus("Worktop: continue with the next point or press Esc to confirm.");
-      return true;
-    }
-
-    if (kitchenWorktopDraw.points.length === 2) {
-      kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
-      kitchenWorktopDraw.hoverPoint = point;
-      kitchenWorktopDraw.typedMm = "";
-      wallTypedHud.style.display = "none";
-      updateKitchenWorktopPreview();
-      setUnderlayStatus("Worktop: continue with the next corner or press Esc to confirm.");
-      return true;
-    }
-
-    kitchenWorktopDraw.points = [...kitchenWorktopDraw.points, point];
-    kitchenWorktopDraw.hoverPoint = point;
-    kitchenWorktopDraw.typedMm = "";
-    wallTypedHud.style.display = "none";
-    scheduleKitchenWorktopPreviewUpdate();
-    setUnderlayStatus("Worktop: next click adds another corner. Esc confirms the finished shape.");
-    return true;
-  };
-
-  const commitKitchenWorktopTypedLength = () => {
-    if (!kitchenWorktopDraw.active || kitchenWorktopDraw.points.length === 0) return false;
-    const mm = Math.max(1, Math.round(Number(kitchenWorktopDraw.typedMm)));
-    if (!Number.isFinite(mm)) return false;
-
-    const start = kitchenWorktopDraw.points[kitchenWorktopDraw.points.length - 1];
-    if (!start) return false;
-    const startWorld = kitchenWorktopPointToWorld(start);
-    const hover = kitchenWorktopDraw.hoverPoint ?? { x: start.x + 1000, z: start.z };
-    const hoverWorld = kitchenWorktopPointToWorld(hover);
-    const dir = hoverWorld.clone().sub(startWorld);
-    if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
-    dir.normalize();
-    const endWorld = startWorld.clone().addScaledVector(dir, mm / 1000);
-    const rawPoint = { x: Math.round(endWorld.x * 1000), z: Math.round(endWorld.z * 1000) };
-    const point = floorOrthoPoint(start, rawPoint);
-    return appendKitchenWorktopPoint(point);
-  };
-
-  const mirrorKitchenWorktopDraw = () => {
-    kitchenWorktopDraw.mirrored = !kitchenWorktopDraw.mirrored;
-    scheduleKitchenWorktopPreviewUpdate();
-    setUnderlayStatus(
-      `Worktop: mirroring ${kitchenWorktopDraw.mirrored ? "ON" : "OFF"} around ${kitchenWorktopDraw.justification.toUpperCase()} line.`
-    );
-  };
+  let kitchenWorktopDrawController!: ReturnType<typeof createKitchenWorktopDrawController>;
+  const startKitchenWorktopDraw = () => kitchenWorktopDrawController.startKitchenWorktopDraw();
+  const appendKitchenWorktopPoint = (point: FloorBoundaryPoint) => kitchenWorktopDrawController.appendKitchenWorktopPoint(point);
+  const commitKitchenWorktopTypedLength = () => kitchenWorktopDrawController.commitKitchenWorktopTypedLength();
+  const mirrorKitchenWorktopDraw = () => kitchenWorktopDrawController.mirrorKitchenWorktopDraw();
 
   let sectionDrawController!: ReturnType<typeof createSectionDrawController>;
   const updateSectionDrawPreview = () => sectionDrawController.updateSectionDrawPreview();
   const cancelSectionDraw = (opts?: { silent?: boolean }) => sectionDrawController.cancelSectionDraw(opts);
   const commitSectionDraw = (bMm: FloorBoundaryPoint) => sectionDrawController.commitSectionDraw(bMm);
 
-  const handleKitchenWorktopEscape = () => {
-    if (!kitchenWorktopDraw.active) return false;
-    if (kitchenWorktopDraw.points.length < 2) {
-      cancelKitchenWorktopDraw({ silent: true });
-      setUnderlayStatus("Worktop: canceled.");
-      mountProps();
-      return true;
-    }
-    const groupId = S.activeKitchenGroupId;
-    if (!groupId) {
-      cancelKitchenWorktopDraw({ silent: true });
-      mountProps();
-      return true;
-    }
-    const params = makeKitchenWorktopParamsFromPath(kitchenWorktopDraw.points);
-    if (params.path.length < 2) {
-      cancelKitchenWorktopDraw({ silent: true });
-      mountProps();
-      return true;
-    }
-    const existingId = getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${worktopCounter}`;
-    replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
-    cancelKitchenWorktopDraw({ silent: true });
-    setUnderlayStatus(params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
-    mountProps();
-    return true;
-  };
+  const handleKitchenWorktopEscape = () => kitchenWorktopDrawController.handleKitchenWorktopEscape();
 
   const wallDefs = createRoomWallDefinitions(roomBounds);
 
@@ -1192,6 +1083,37 @@ export function startApp(initialArgs: AppArgs) {
     measureReadoutEl: args.measureReadoutEl
   });
   kitchenPlacementController.setMeasureStateRef(measureState);
+
+  kitchenWorktopDrawController = createKitchenWorktopDrawController({
+    S,
+    kitchenWorktopDraw,
+    wallTypedHud,
+    getWorktopCounter: () => worktopCounter,
+    setWorktopDrawSnap: (next) => { worktopDrawSnap = next; },
+    cancelKitchenWorktopDraw,
+    cancelPlacement: () => cancelPlacement(S, placementHelpers),
+    isPlacementActive: () => placement.active,
+    ensureFloorplanViewerTab,
+    clearSelectionForDraw: () => {
+      selectedKind = null;
+      selectedWallId = null;
+      selectedFloorId = null;
+      selectedInstanceId = null;
+      selectedWallIds.clear();
+      selectedInstanceIds.clear();
+      setInstanceSelected(null);
+    },
+    syncSelectionState,
+    updateSelectionHighlights,
+    setUnderlayStatus: (text) => setUnderlayStatus(text),
+    mountProps: () => mountProps(),
+    scheduleKitchenWorktopPreviewUpdate,
+    updateKitchenWorktopPreview,
+    floorOrthoPoint: (start, raw) => floorOrthoPoint(start, raw),
+    makeKitchenWorktopParamsFromPath,
+    getKitchenGroupWorktops,
+    replaceKitchenGroupWorktops
+  });
 
   const resetMeasureSnapCycle = () => {
     measureSnapCycleIndex = 0;
