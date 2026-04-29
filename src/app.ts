@@ -214,6 +214,7 @@ import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
 import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
+import { createInstanceActionsController } from "./app/instanceActionsController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -819,6 +820,33 @@ export function startApp(initialArgs: AppArgs) {
   const getSectionPickMeshes = layoutSceneQueries.getSectionPickMeshes;
   const findKitchenWorktop = layoutSceneQueries.findKitchenWorktop;
   const keepStickyPlanSnap = layoutSceneQueries.keepStickyPlanSnap;
+
+  let instanceActionsController!: ReturnType<typeof createInstanceActionsController>;
+  function createInstance(...args: Parameters<ReturnType<typeof createInstanceActionsController>["createInstance"]>) {
+    return instanceActionsController.createInstance(...args);
+  }
+  function duplicateInstance(...args: Parameters<ReturnType<typeof createInstanceActionsController>["duplicateInstance"]>) {
+    return instanceActionsController.duplicateInstance(...args);
+  }
+  function deleteInstance(...args: Parameters<ReturnType<typeof createInstanceActionsController>["deleteInstance"]>) {
+    return instanceActionsController.deleteInstance(...args);
+  }
+
+  instanceActionsController = createInstanceActionsController({
+    S,
+    instances,
+    layoutRoot,
+    getMode: () => mode,
+    getInstanceCounter: () => instanceCounter,
+    setInstanceCounter: (next) => { instanceCounter = next; },
+    findInstance,
+    getSelectedInstanceId: () => selectedInstanceId,
+    ensurePickAndOutline,
+    placeWithoutOverlap,
+    inferKitchenPlacementBinding,
+    setSelectedModule,
+    updateLayoutPanel
+  });
 
   const startKitchenWorktopDraw = () => {
     if (!S.kitchenEditMode || !S.activeKitchenGroupId) return;
@@ -2397,49 +2425,6 @@ export function startApp(initialArgs: AppArgs) {
     return false;
   }
 
-  function createInstance(nextParams: ModuleParams, opts?: { id?: string }) {
-    const id = opts?.id ?? `m${instanceCounter++}`;
-    // Keep counter ahead of restored ids ("m123" => 124)
-    if (opts?.id) {
-      const m = /^m(\d+)$/.exec(id);
-      const n = m ? Number(m[1]) : NaN;
-      if (Number.isFinite(n) && n >= instanceCounter) instanceCounter = n + 1;
-    }
-    const root = new THREE.Group();
-    root.name = `module_${id}`;
-
-    const module = buildModule(nextParams);
-    module.name = `moduleGeom_${id}`;
-    tagModuleGeometry(module, id);
-    root.add(module);
-
-    const localBox = moduleRootLocalBox(root, module);
-
-    const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.1), pickMat);
-    pick.name = `pick_${id}`;
-    pick.userData.kind = "module";
-    pick.userData.instanceId = id;
-    root.add(pick);
-
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x525c70, transparent: true, opacity: 0.92, depthTest: true, depthWrite: false });
-    const outline = new THREE.LineSegments(gEmpty(), lineMat);
-    outline.name = `outline_${id}`;
-    outline.visible = true;
-    outline.userData.kind = "modulePlan";
-    outline.userData.instanceId = id;
-    outline.renderOrder = 58;
-    root.add(outline);
-
-    const inst: LayoutInstance = { id, params: nextParams, kitchenGroupId: null, kitchenPlacement: null, root, module, localBox, pick, outline };
-    ensurePickAndOutline(inst);
-    return inst;
-  }
-
-  function gEmpty() {
-    return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
-  }
-
   function updateLayoutPanel() {
     layoutPanel.setRows(
       instances.map((i) => ({
@@ -2654,41 +2639,6 @@ export function startApp(initialArgs: AppArgs) {
       return;
     }
     setSelectedModule(id);
-  }
-
-  function duplicateInstance(id: string) {
-    if (mode !== "layout") return;
-    const inst = findInstance(id);
-    if (!inst) return;
-    const clonedParams = structuredClone(inst.params) as ModuleParams;
-    const next = createInstance(clonedParams);
-    next.kitchenGroupId = S.kitchenEditMode ? S.activeKitchenGroupId : null;
-    next.root.position.copy(inst.root.position).add(new THREE.Vector3(0.2, 0, 0.2));
-    layoutRoot.add(next.root);
-    instances.push(next);
-    placeWithoutOverlap(next);
-    if (next.kitchenGroupId) {
-      const group = S.kitchenGroups.find((item) => item.id === next.kitchenGroupId) ?? null;
-      next.kitchenPlacement = inferKitchenPlacementBinding(
-        next,
-        next.kitchenGroupId,
-        group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm
-      );
-    }
-    setSelectedModule(next.id);
-    updateLayoutPanel();
-  }
-
-  function deleteInstance(id: string) {
-    if (mode !== "layout") return;
-    const idx = instances.findIndex((x) => x.id === id);
-    if (idx < 0) return;
-    const inst = instances[idx];
-    if (selectedInstanceId === id) setSelectedModule(null);
-    layoutRoot.remove(inst.root);
-    disposeObject3D(inst.root);
-    instances.splice(idx, 1);
-    updateLayoutPanel();
   }
 
   modulePlacementHelpers = createModulePlacementHelpers({
