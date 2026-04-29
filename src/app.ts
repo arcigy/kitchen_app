@@ -219,6 +219,7 @@ import { createInstanceActionsController } from "./app/instanceActionsController
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 import { createEditHudController } from "./app/editHudController";
+import { createWallEditDragController } from "./app/wallEditDragController";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1301,69 +1302,22 @@ export function startApp(initialArgs: AppArgs) {
   const hideModuleEditHud = editHudController.hideModuleEditHud;
   editHudController.installInlineEditors();
 
-  const beginWallDrag = (
-    ev: PointerEvent,
-    wallId: string,
-    kind: "a" | "b" | "move"
-  ) => {
-    if (mode !== "layout" || viewMode !== "2d") return;
-    if (layoutTool !== "select") return;
-    if (measureState.enabled) return;
-
-    const w = walls.find((x) => x.id === wallId) ?? null;
-    if (!w) return;
-
-    const rect = renderer.domElement.getBoundingClientRect();
-    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-    pointerNdc.set(x, y);
-    raycaster.setFromCamera(pointerNdc, cam());
-    const hitPoint = new THREE.Vector3();
-    if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
-
-    const gatherConnected = (p: { x: number; z: number }) => {
-      const out: Array<{ wallId: string; which: "a" | "b" }> = [];
-      for (const other of walls) {
-        if (other.id === wallId) continue;
-        const which = wallEndpointWhich(other, p, wallJoinTolMm);
-        if (which) out.push({ wallId: other.id, which });
-      }
-      return out;
-    };
-
-    wallEditHud.drag = {
-      wallId,
-      kind,
-      pointerId: ev.pointerId,
-      startWorld: hitPoint.clone(),
-      startA: { ...w.params.aMm },
-      startB: { ...w.params.bMm },
-      connectedA: gatherConnected(w.params.aMm),
-      connectedB: gatherConnected(w.params.bMm)
-    };
-
-    try {
-      renderer.domElement.setPointerCapture(ev.pointerId);
-    } catch {
-      // ignore
-    }
-
-    ev.preventDefault();
-    ev.stopPropagation();
-  };
-
-  wallEditHud.handleA.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    beginWallDrag(ev, selectedWallId, "a");
-  });
-  wallEditHud.handleB.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    beginWallDrag(ev, selectedWallId, "b");
-  });
-  wallEditHud.handleMid.addEventListener("pointerdown", (ev) => {
-    if (selectedKind !== "wall" || !selectedWallId) return;
-    beginWallDrag(ev, selectedWallId, "move");
-  });
+  createWallEditDragController({
+    wallEditHud,
+    walls,
+    renderer,
+    pointerNdc,
+    raycaster,
+    groundPlane,
+    wallJoinTolMm,
+    getMode: () => mode,
+    getViewMode: () => viewMode,
+    getLayoutTool: () => layoutTool,
+    isMeasureEnabled: () => measureState.enabled,
+    getSelectedKind: () => selectedKind,
+    getSelectedWallId: () => selectedWallId,
+    getCamera: cam
+  }).installHandleListeners();
 
   const ensureLayoutMode = () => {
     if (mode !== "layout") setMode("layout");
