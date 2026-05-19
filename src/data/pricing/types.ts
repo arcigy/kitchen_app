@@ -42,6 +42,17 @@ export type ComponentType =
   | "waste_system"
   | "lighting";
 
+export type CatalogSupplierSource = {
+  supplier: "demos-sk" | "system";
+  supplierProductId: string;
+  url?: string;
+  imageUrl?: string;
+  usageCategory?: string;
+  usageSubcategory?: string;
+  sourceCategory?: string;
+  rawUnit?: string;
+};
+
 export type ComponentGeometryArchetype =
   | "runner_pair"
   | "handle_bar"
@@ -104,6 +115,7 @@ export type MaterialDefinition = {
   grainDirectionRelevant?: boolean;
   edgeFamily?: EdgeFamily;
   recommendedBoardMatch?: string;
+  supplierSource?: CatalogSupplierSource;
 };
 
 export type ComponentDefinition = {
@@ -127,6 +139,7 @@ export type ComponentDefinition = {
   nominalHeightMm?: number;
   recommendedUse?: string;
   notes?: string[];
+  supplierSource?: CatalogSupplierSource;
 };
 
 export type PricingCatalogRecord = MaterialDefinition | ComponentDefinition;

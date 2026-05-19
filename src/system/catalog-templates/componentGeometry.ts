@@ -1,3 +1,3 @@
-import { componentGeometryDefinitions } from "../../data/pricing/componentGeometryDefinitions";
+import { demosComponentGeometryTemplates } from "./demosCatalog";
 
-export const systemComponentGeometryTemplates = componentGeometryDefinitions;
+export const systemComponentGeometryTemplates = demosComponentGeometryTemplates;

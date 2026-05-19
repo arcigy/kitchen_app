@@ -1,3 +1,3 @@
-import { componentDefinitions } from "../../data/pricing/componentDefinitions";
+import { demosComponentTemplates } from "./demosCatalog";
 
-export const systemComponentTemplates = componentDefinitions;
+export const systemComponentTemplates = demosComponentTemplates;

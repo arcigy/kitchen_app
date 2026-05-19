@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5180",
     "build": "vite build",
+    "build:demos-catalog": "tsx scripts/buildDemosCatalog.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview",

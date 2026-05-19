@@ -89,6 +89,14 @@ function createUsedModulePackageSnapshots(
     });
 }
 
+function createPriceListSnapshot(catalog: ClientCatalog, usedCatalogIds: readonly string[]) {
+  const used = new Set(usedCatalogIds);
+  return {
+    ...catalog.priceList,
+    prices: Object.fromEntries(Object.entries(catalog.priceList.prices).filter(([id]) => used.has(id)))
+  };
+}
+
 export function createCatalogSnapshot(
   catalog: ClientCatalog,
   source: unknown,
@@ -98,6 +106,11 @@ export function createCatalogSnapshot(
   const usedComponentIds = collectStringIds(source, new Set(["componentId", "handleComponentId", "hingeComponentId", "drawerSystemComponentId"]));
   const usedModuleTypes = collectStringIds(source, new Set(["type", "moduleType"]));
   const usedModulePackageSnapshots = createUsedModulePackageSnapshots(modulePackages, usedModuleTypes, source);
+  const usedCatalogIds = [...new Set([...usedMaterialIds, ...usedComponentIds])].sort();
+  const materials = catalog.materials.filter((item) => usedMaterialIds.includes(item.id));
+  const components = catalog.components.filter((item) => usedComponentIds.includes(item.id));
+  const modules = catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType));
+  const priceListSnapshot = createPriceListSnapshot(catalog, usedCatalogIds);
   return {
     catalogVersion: catalog.meta.catalogVersion,
     capturedAt: nowIso(),
@@ -105,11 +118,17 @@ export function createCatalogSnapshot(
     usedComponentIds,
     usedModuleTypes,
     usedModulePackageSnapshots,
-    materials: catalog.materials.filter((item) => usedMaterialIds.includes(item.id)),
-    components: catalog.components.filter((item) => usedComponentIds.includes(item.id)),
-    modules: catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType)),
-    priceListSnapshot: cloneJson(catalog.priceList),
-    fullCatalog: cloneJson(catalog)
+    materials,
+    components,
+    modules,
+    priceListSnapshot: cloneJson(priceListSnapshot),
+    fullCatalog: cloneJson({
+      ...catalog,
+      materials,
+      components,
+      modules,
+      priceList: priceListSnapshot
+    })
   };
 }
 

@@ -7,6 +7,7 @@ import { createFileModulePackageRepository } from "../module-package/module-pack
 import { resolveClientCatalogPath } from "../storage/storage-path-resolver";
 import { sanitizeStorageFileName } from "../storage/storage-types";
 import { systemModulePackageTemplates } from "../../system/catalog-templates";
+import { isDemosCatalogGenerated } from "../../system/catalog-templates/demosCatalog";
 import type { ClientCatalog } from "./catalog-types";
 import {
   createSystemSeedClientCatalogRepository,
@@ -146,10 +147,34 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     };
   }
 
+  function ensureCurrentSystemCatalogData(catalog: ClientCatalog): ClientCatalog {
+    if (!isDemosCatalogGenerated()) return catalog;
+    const hasDemosMaterials = catalog.materials.some((material) => material.id.startsWith("mat.demos."));
+    const hasDemosComponents = catalog.components.some((component) => component.id.startsWith("cmp.demos."));
+    if (hasDemosMaterials && hasDemosComponents) return catalog;
+    if (catalog.meta.source !== "system-seed") return catalog;
+
+    const seed = memory.getCatalogForClient(catalog.clientId);
+    return validateClientCatalog({
+      ...catalog,
+      materials: seed.materials,
+      components: seed.components,
+      componentGeometry: seed.componentGeometry,
+      priceList: seed.priceList,
+      kitchenDefaults: seed.kitchenDefaults,
+      meta: {
+        ...catalog.meta,
+        catalogVersion: Math.max(catalog.meta.catalogVersion ?? 1, 2),
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
   const ensureCatalogExists = async (ctx: ClientContext): Promise<ClientCatalog> => {
     const existing = await readCatalog(ctx);
     if (existing) {
-      const repaired = await ensureSystemModulePackages(ctx, existing);
+      const withCurrentSystemData = ensureCurrentSystemCatalogData(existing);
+      const repaired = await ensureSystemModulePackages(ctx, withCurrentSystemData);
       if (repaired !== existing) await writeCatalog(ctx, repaired);
       return repaired;
     }

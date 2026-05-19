@@ -1,3 +1,3 @@
-import { priceList } from "../../data/pricing/priceList";
+import { demosPriceListTemplate } from "./demosCatalog";
 
-export const systemPriceListTemplate = priceList;
+export const systemPriceListTemplate = demosPriceListTemplate;

@@ -62,12 +62,14 @@ async function main() {
         return { ok: false, reason: "Missing material/thickness selectors" };
       }
 
-      const greyOption = [...materialSelect.options].find((option) => (option.textContent || "").includes("DTD Grey"));
-      if (!greyOption) {
-        return { ok: false, reason: "Missing DTD Grey material option" };
+      const demosBoardOption = [...materialSelect.options].find((option) =>
+        option.value !== materialSelect.value && (option.textContent || "").includes("DTDL")
+      );
+      if (!demosBoardOption) {
+        return { ok: false, reason: "Missing alternate Démos board material option" };
       }
 
-      materialSelect.value = greyOption.value;
+      materialSelect.value = demosBoardOption.value;
       materialSelect.dispatchEvent(new Event("change", { bubbles: true }));
       const afterMaterialColor = getLeftSideColor();
 

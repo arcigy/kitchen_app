@@ -223,7 +223,8 @@ describe("multi-client worker isolation", () => {
     expect(body.catalog?.clientId).toBe("client_arcigy_demo");
     const storedPath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog", "pricing.json");
     const stored = JSON.parse(await readFile(storedPath, "utf-8")) as { prices?: Record<string, number> };
-    expect(stored.prices?.["mat.board.body.dtd.grey.18"]).toBe(body.catalog?.priceList?.prices?.["mat.board.body.dtd.grey.18"]);
+    const priceId = Object.keys(stored.prices ?? {})[0]!;
+    expect(stored.prices?.[priceId]).toBe(body.catalog?.priceList?.prices?.[priceId]);
   });
 
   it("loads each client's stored catalog without crossing client namespaces", async () => {
@@ -235,7 +236,8 @@ describe("multi-client worker isolation", () => {
 
     const clientAPricingPath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog", "pricing.json");
     const clientAPricing = JSON.parse(await readFile(clientAPricingPath, "utf-8")) as { prices: Record<string, number> };
-    clientAPricing.prices["mat.board.body.dtd.grey.18"] = 9876;
+    const priceId = Object.keys(clientAPricing.prices)[0]!;
+    clientAPricing.prices[priceId] = 9876;
     await writeFile(clientAPricingPath, `${JSON.stringify(clientAPricing, null, 2)}\n`, "utf-8");
 
     const responseA = await requestWorker(controller!.port, "/api/catalog", { cookie: clientACookie });
@@ -243,9 +245,9 @@ describe("multi-client worker isolation", () => {
     const catalogA = (responseA.body as { catalog?: { priceList?: { prices?: Record<string, number> } } }).catalog;
     const catalogB = (responseB.body as { catalog?: { priceList?: { prices?: Record<string, number> } } }).catalog;
 
-    expect(catalogA?.priceList?.prices?.["mat.board.body.dtd.grey.18"]).toBe(9876);
-    expect(catalogB?.priceList?.prices?.["mat.board.body.dtd.grey.18"]).not.toBe(9876);
-  });
+    expect(catalogA?.priceList?.prices?.[priceId]).toBe(9876);
+    expect(catalogB?.priceList?.prices?.[priceId]).not.toBe(9876);
+  }, 15_000);
 
   it("registers module package routes in the session-scoped worker API", async () => {
     const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });

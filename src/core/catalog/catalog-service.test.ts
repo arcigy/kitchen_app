@@ -35,27 +35,29 @@ describe("ClientCatalog repository and service", () => {
   it("ensureCatalogExists reads an existing stored catalog instead of replacing it with a new seed", async () => {
     const repo = createFileClientCatalogRepository(projectRoot);
     const catalog = await repo.ensureCatalogExists(clientA);
-    catalog.priceList.prices["mat.board.body.dtd.grey.18"] = 4321;
+    const materialId = catalog.materials[0]!.id;
+    catalog.priceList.prices[materialId] = 4321;
     await repo.saveCatalog(clientA, catalog);
 
     const loaded = await repo.ensureCatalogExists(clientA);
 
-    expect(loaded.priceList.prices["mat.board.body.dtd.grey.18"]).toBe(4321);
+    expect(loaded.priceList.prices[materialId]).toBe(4321);
   });
 
   it("keeps client A and client B catalogs isolated", async () => {
     const repo = createFileClientCatalogRepository(projectRoot);
     const catalogA = await repo.ensureCatalogExists(clientA);
     const catalogB = await repo.ensureCatalogExists(clientB);
-    catalogA.priceList.prices["mat.board.body.dtd.grey.18"] = 1234;
+    const materialId = catalogA.materials[0]!.id;
+    catalogA.priceList.prices[materialId] = 1234;
     catalogA.materials[0] = { ...catalogA.materials[0]!, displayName: "Client A Board" };
 
     await repo.saveCatalog(clientA, catalogA);
 
     const nextA = await repo.getCatalog(clientA);
     const nextB = await repo.getCatalog(clientB);
-    expect(nextA.priceList.prices["mat.board.body.dtd.grey.18"]).toBe(1234);
-    expect(nextB.priceList.prices["mat.board.body.dtd.grey.18"]).toBe(catalogB.priceList.prices["mat.board.body.dtd.grey.18"]);
+    expect(nextA.priceList.prices[materialId]).toBe(1234);
+    expect(nextB.priceList.prices[materialId]).toBe(catalogB.priceList.prices[materialId]);
     expect(nextA.materials[0]!.displayName).toBe("Client A Board");
     expect(nextB.materials[0]!.displayName).not.toBe("Client A Board");
   });
@@ -63,10 +65,11 @@ describe("ClientCatalog repository and service", () => {
   it("service updates prices and exposes enabled modules", async () => {
     const repo = createSystemSeedClientCatalogRepository();
     const service = createClientCatalogService({ context: clientA, repository: repo });
-    await service.updatePrice("mat.board.body.dtd.grey.18", 77);
+    const materialId = repo.getCatalogForClient(clientA.clientId).materials[0]!.id;
+    await service.updatePrice(materialId, 77);
     await service.setModuleEnabled("drawer_low", false);
 
-    expect(await repo.getPrice(clientA, "mat.board.body.dtd.grey.18")).toBe(77);
+    expect(await repo.getPrice(clientA, materialId)).toBe(77);
     expect(service.getEnabledModules().some((module) => module.moduleType === "drawer_low")).toBe(false);
   });
 
