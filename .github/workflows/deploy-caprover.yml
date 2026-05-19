@@ -1,0 +1,35 @@
+name: Deploy to CapRover
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Create deploy archive
+        run: tar -cf kitchenapp.tar captain-definition nginx.conf dist
+
+      - name: Deploy
+        run: npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a kitchenapp -t kitchenapp.tar
+        env:
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
