@@ -1,5 +1,5 @@
-import { getUnitPriceForCatalogId } from "../../data/pricing";
-import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
+import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { getModuleDescriptor } from "../../modules/registry";
 import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
@@ -65,8 +65,8 @@ function buildWorktopFormulaView(worktop: KitchenWorktopInstance): WorktopFormul
   };
 }
 
-function toPortableMaterialRef(materialId: string): PortableMaterialRef | null {
-  const material = getMaterialDefinitionById(materialId);
+function toPortableMaterialRef(catalog: ClientCatalog, materialId: string): PortableMaterialRef | null {
+  const material = createPricingCatalog(catalog).getMaterialDefinitionById(materialId);
   if (!material) return null;
   return {
     ...material,
@@ -77,10 +77,11 @@ function toPortableMaterialRef(materialId: string): PortableMaterialRef | null {
   } satisfies PortableMaterialRef;
 }
 
-function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number): PortableQuoteBomPayload {
+function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number, catalog: ClientCatalog): PortableQuoteBomPayload {
+  const pricingCatalog = createPricingCatalog(catalog);
   const areaM2 = getKitchenWorktopAreaM2(worktop.params);
   const bounds = getKitchenWorktopBoundsMm(worktop.params);
-  const material = toPortableMaterialRef(worktop.params.materialId);
+  const material = toPortableMaterialRef(catalog, worktop.params.materialId);
   const formulaView = buildWorktopFormulaView(worktop);
   const description = areaM2 > 0 ? formulaView.shapeLabel : "Pracovná doska";
 
@@ -141,7 +142,7 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number): 
         sourcePartIds: [worktop.id],
         notes: [
           `Plocha: ${round(areaM2, 4)} m2`,
-          `Cena: ${round(areaM2, 4)} m2 x ${round(getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} EUR/m2`,
+          `Cena: ${round(areaM2, 4)} m2 x ${round(pricingCatalog.getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} EUR/m2`,
           `Tvar: ${formulaView.shapeKey}`,
           ...formulaView.segmentLengthsMm.map((lengthMm, segmentIndex) => `Úsek ${segmentIndex + 1}: ${lengthMm} mm`),
           `Hĺbka: ${formulaView.depthMm} mm`
@@ -153,14 +154,15 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number): 
   };
 }
 
-function createWorktopBOM(worktop: KitchenWorktopInstance, index: number): BOMResult {
-  const quoteBom = createWorktopQuoteBom(worktop, index);
+function createWorktopBOM(worktop: KitchenWorktopInstance, index: number, catalog: ClientCatalog): BOMResult {
+  const quoteBom = createWorktopQuoteBom(worktop, index, catalog);
   return {
     moduleType: quoteBom.moduleType,
     displayName: quoteBom.displayName,
     quoteBom,
     pricing: calculateCommercialPricingFromQuoteBom({
       quoteBom,
+      catalog,
       boardWasteMultiplier: 1,
       laborCostFixed: 0
     }),
@@ -171,7 +173,8 @@ function createWorktopBOM(worktop: KitchenWorktopInstance, index: number): BOMRe
 export function buildProjectPricingViews(
   instances: LayoutInstance[],
   worktops: KitchenWorktopInstance[],
-  ctx: KitchenContext
+  ctx: KitchenContext,
+  catalog: ClientCatalog
 ): ProjectPricingView[] {
   const counts = new Map<string, number>();
 
@@ -183,7 +186,7 @@ export function buildProjectPricingViews(
       instanceId: instance.id,
       kind: "module" as const,
       label: `${label} #${nextCount}`,
-      result: calculateModuleBOM(instance, ctx)
+      result: calculateModuleBOM(instance, ctx, catalog)
     };
   });
 
@@ -191,7 +194,7 @@ export function buildProjectPricingViews(
     instanceId: worktop.id,
     kind: "worktop" as const,
     label: `Pracovná doska #${index + 1}`,
-    result: createWorktopBOM(worktop, index + 1),
+    result: createWorktopBOM(worktop, index + 1, catalog),
     worktopFormula: buildWorktopFormulaView(worktop)
   }));
 

@@ -1,4 +1,4 @@
-import { add, clamp, dist, intersectLines, mul, sub, type Point } from "./geom";
+import { add, clamp, dist, dot, intersectLines, mul, sub, type Point } from "./geom";
 import { rawEndCorners, sideLineAtNode, spineDir, type Wall } from "./model";
 
 export type WallEnd = "a" | "b";
@@ -166,6 +166,39 @@ function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, br
   return { branchEnd };
 }
 
+function solveButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, endBranch: WallEnd) {
+  const rawMain = rawEndCorners(main, endMain);
+  const rawBranch = rawEndCorners(branch, endBranch);
+  const node = endBranch === "a" ? branch.a : branch.b;
+  const mainNode = endMain === "a" ? main.a : main.b;
+  const mainDir = spineDir(main, endMain);
+  const branchDir = spineDir(branch, endBranch);
+  const branchProjectionsOnMain = [
+    dot(sub(rawBranch.left, mainNode), mainDir),
+    dot(sub(rawBranch.right, mainNode), mainDir)
+  ];
+  const mainExtension = Math.max(0, -Math.min(...branchProjectionsOnMain));
+  const mainShift = mul(mainDir, -mainExtension);
+  const cut = Math.max(
+    0,
+    sub(rawMain.left, node).x * branchDir.x + sub(rawMain.left, node).z * branchDir.z,
+    sub(rawMain.right, node).x * branchDir.x + sub(rawMain.right, node).z * branchDir.z
+  );
+  const shift = mul(branchDir, cut);
+  return {
+    mainEnd: {
+      left: add(rawMain.left, mainShift),
+      right: add(rawMain.right, mainShift),
+      join: "butt" as const
+    },
+    branchEnd: {
+      left: add(rawBranch.left, shift),
+      right: add(rawBranch.right, shift),
+      join: "butt" as const
+    }
+  };
+}
+
 export function solveWallNetwork(
   walls: Wall[],
   opts: { nodeTolM?: number; miterLimit?: number } = {}
@@ -205,16 +238,15 @@ export function solveWallNetwork(
     const inc = node.incident;
     if (inc.length < 2) continue;
 
-    // Try to resolve 2-wall corner join
+    // 2-wall corner: keep the earlier wall full and butt the later wall into it.
     if (inc.length === 2) {
       const A = inc[0];
       const B = inc[1];
-      const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+      const res = solveButtCornerAtNode(A.wall, A.end, B.wall, B.end);
       const sa = solvedEnds.get(A.wall.id)!;
       const sb = solvedEnds.get(B.wall.id)!;
-      sa[A.end] = res.aEnd;
-      sb[B.end] = res.bEnd;
-      if (res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
+      sa[A.end] = res.mainEnd;
+      sb[B.end] = res.branchEnd;
       continue;
     }
 

@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { worldToScreen } from "./sharedUtils";
 import type { PlanSnapResult } from "./planSnap";
 import type {
+  ColumnInstance,
+  DoorInstance,
   FloorInstance,
   KitchenWorktopInstance,
   LayoutInstance,
@@ -24,10 +26,14 @@ type LayoutSceneQueriesContext = {
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   walls: WallInstance[];
+  columns: ColumnInstance[];
   floors: FloorInstance[];
   sections: SectionInstance[];
   roomBounds: RoomBounds;
   getWindowInst: () => WindowInstance | null;
+  getWindowInsts: () => WindowInstance[];
+  getDoorInst: () => DoorInstance | null;
+  getDoorInsts: () => DoorInstance[];
   getViewMode: () => "2d" | "3d";
   getActiveViewerTab: () => string;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
@@ -104,6 +110,36 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
     return null;
   };
 
+  const getColumnIdFromObject = (obj: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.columnId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const getWindowIdFromObject = (obj: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.windowId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const getDoorIdFromObject = (obj: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.doorId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  };
+
   const getMeasure3DSnapTargetObject = (obj: THREE.Object3D | null | undefined) => {
     if (!obj) return null;
     const instanceId = getInstanceIdFromObject(obj);
@@ -119,8 +155,23 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
     }
 
     const kind = obj.userData?.kind as string | undefined;
-    const windowInst = ctx.getWindowInst();
-    if (kind === "window" && windowInst) return windowInst.root;
+    const columnId = getColumnIdFromObject(obj);
+    if (kind === "column" || columnId) {
+      const column = ctx.columns.find((item) => item.id === columnId) ?? null;
+      if (column) return column.mesh;
+    }
+
+    const windowId = getWindowIdFromObject(obj);
+    if (kind === "window" || windowId) {
+      const windowInst = ctx.getWindowInsts().find((item) => item.id === windowId) ?? ctx.getWindowInst();
+      if (windowInst) return windowInst.root;
+    }
+
+    const doorId = getDoorIdFromObject(obj);
+    if (kind === "door" || doorId) {
+      const doorInst = ctx.getDoorInsts().find((item) => item.id === doorId) ?? ctx.getDoorInst();
+      if (doorInst) return doorInst.root;
+    }
 
     const wallId = obj.userData?.wallId as string | undefined;
     if (wallId) {
@@ -142,13 +193,19 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
     meshes.push(...getAllInstanceGeometryMeshes());
     meshes.push(...getKitchenWorktopGeometryMeshes());
     for (const wall of ctx.walls) if (wall.mesh.visible) meshes.push(wall.mesh);
+    for (const column of ctx.columns) if (column.mesh.visible) meshes.push(column.mesh);
     for (const floor of ctx.floors) if (floor.mesh.visible) meshes.push(floor.mesh);
-    const windowInst = ctx.getWindowInst();
-    if (windowInst?.pick.visible) meshes.push(windowInst.pick);
+    for (const windowInst of ctx.getWindowInsts()) {
+      if (windowInst.pick.visible) meshes.push(windowInst.pick);
+    }
+    for (const doorInst of ctx.getDoorInsts()) {
+      if (doorInst.pick.visible) meshes.push(doorInst.pick);
+    }
     return meshes;
   };
 
   const getSectionPickMeshes = () => ctx.sections.map((section) => section.pick);
+  const getColumnPickMeshes = () => ctx.columns.map((column) => column.pick);
 
   const findKitchenWorktop = (id: string) =>
     ctx.kitchenWorktops.find((worktop) => worktop.id === id) ?? null;
@@ -191,7 +248,10 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
     getInstanceIdFromObject,
     getWorktopIdFromObject,
     getSectionIdFromObject,
+    getColumnIdFromObject,
+    getDoorIdFromObject,
     getSectionPickMeshes,
+    getColumnPickMeshes,
     findKitchenWorktop,
     keepStickyPlanSnap
   };

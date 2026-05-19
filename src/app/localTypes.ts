@@ -17,17 +17,82 @@ export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {
   wall: WallId;
+  wallId?: string | null;
   widthMm: number;
   heightMm: number;
   sillHeightMm: number;
   centerMm: number;
+  frameWidthMm: number;
+  offsetFromInteriorMm: number;
+  sashWidthMm: number;
+  sashProfileDepthMm: number;
+  frameProfileDepthMm: number;
+  materialId: string;
 };
 
 export type WindowInstance = {
+  id: string;
   params: WindowParams;
   root: THREE.Group;
+  frame: THREE.Group;
+  plan: THREE.Group;
+  selection: THREE.Group;
   pick: THREE.Mesh;
   outline: THREE.Line;
+};
+
+export type DoorSwingDirection = "left" | "right";
+
+export type DoorParams = {
+  wall: WallId;
+  wallId?: string | null;
+  widthMm: number;
+  heightMm: number;
+  centerMm: number;
+  frameWidthMm: number;
+  offsetFromInteriorMm: number;
+  panelThicknessMm: number;
+  swingDirection: DoorSwingDirection;
+  swingAngleDeg: number;
+  materialId: string;
+};
+
+export type DoorInstance = {
+  id: string;
+  params: DoorParams;
+  root: THREE.Group;
+  frame: THREE.Group;
+  plan: THREE.Group;
+  selection: THREE.Group;
+  pick: THREE.Mesh;
+  outline: THREE.Line;
+};
+
+export type ColumnShape = "square" | "rectangular" | "round";
+export type ColumnJustifyX = "left" | "center" | "right";
+export type ColumnJustifyY = "up" | "center" | "down";
+
+export type ColumnParams = {
+  name: string;
+  shape: ColumnShape;
+  xMm: number;
+  zMm: number;
+  justifyX: ColumnJustifyX;
+  justifyY: ColumnJustifyY;
+  widthMm: number;
+  depthMm: number;
+  diameterMm: number;
+  heightMm: number;
+  materialId: string;
+};
+
+export type ColumnInstance = {
+  id: string;
+  params: ColumnParams;
+  root: THREE.Group;
+  mesh: THREE.Mesh;
+  outline: THREE.LineSegments;
+  pick: THREE.Mesh;
 };
 
 export type SectionParams = {
@@ -48,7 +113,7 @@ export type SectionInstance = {
 
 export type SectionElevationKey = "north" | "east" | "south" | "west";
 
-export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "section" | null;
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 
 export type WallParams = {
   thicknessMm: number;
@@ -125,6 +190,8 @@ export type LayoutSnapshot = {
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
   floors?: Array<{ id: string; params: FloorParams }>;
+  columnCounter?: number;
+  columns?: Array<{ id: string; params: ColumnParams }>;
   sectionCounter?: number;
   sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
@@ -146,6 +213,7 @@ export type LayoutSnapshot = {
     wallId: string | null;
     wallIds: string[];
     floorId?: string | null;
+    columnId?: string | null;
     sectionId?: string | null;
     instId: string | null;
     instIds: string[];

@@ -1,10 +1,12 @@
 import * as THREE from "three";
+import type { ClientProjectPhaseScope } from "./storage/storage-types";
 
 export type SceneExportV1 = {
   meta: {
     unit: "meters";
     version: 1;
     coordinateSystem: "blender_z_up";
+    storage: ClientProjectPhaseScope;
     warnings?: string[];
   };
   colorManagement?: {
@@ -255,6 +257,7 @@ export type ExportSceneArgs = {
   lighting?: { sunDirection?: THREE.Vector3; sunStrength?: number; sunAngle?: number };
   window?: { opening?: { center: THREE.Vector3; inwardNormal: THREE.Vector3; width: number; height: number } | null; daylightIntensity?: number };
   includeInvisible?: boolean;
+  storageScope: ClientProjectPhaseScope;
 };
 
 export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
@@ -383,7 +386,13 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
   objects.sort((a, b) => a.name.localeCompare(b.name));
 
   return {
-    meta: { unit: "meters", version: 1, coordinateSystem: "blender_z_up", ...(warnings.length ? { warnings } : {}) },
+    meta: {
+      unit: "meters",
+      version: 1,
+      coordinateSystem: "blender_z_up",
+      storage: args.storageScope,
+      ...(warnings.length ? { warnings } : {})
+    },
     ...(args.colorManagement ? { colorManagement: args.colorManagement } : {}),
     camera: {
       type: cameraType,

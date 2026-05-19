@@ -1,0 +1,795 @@
+{
+  "format": "furnquote-module",
+  "packageVersion": 1,
+  "module": {
+    "modulePackageId": "flap_shelves_low_family_v1",
+    "moduleType": "flap_shelves_low",
+    "familyName": "Flap Shelves Low",
+    "displayName": "Flap Top",
+    "description": "System module definition for a wall-mounted flap-door cabinet.",
+    "category": "wall_cabinet",
+    "version": "1.0.0",
+    "isSystemModule": true,
+    "tags": [
+      "kitchen",
+      "wall",
+      "flap"
+    ]
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "key": "type",
+        "label": "Type",
+        "type": "string",
+        "required": true,
+        "defaultValue": "flap_shelves_low",
+        "group": "general",
+        "affects": "all"
+      },
+      {
+        "key": "width",
+        "label": "Width",
+        "type": "number",
+        "required": true,
+        "defaultValue": 900,
+        "min": 300,
+        "max": 1800,
+        "step": 50,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "height",
+        "label": "Height",
+        "type": "number",
+        "required": true,
+        "defaultValue": 720,
+        "min": 300,
+        "max": 1200,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "depth",
+        "label": "Depth",
+        "type": "number",
+        "required": true,
+        "defaultValue": 560,
+        "min": 200,
+        "max": 700,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "shelfCount",
+        "label": "Shelf count",
+        "type": "number",
+        "required": true,
+        "defaultValue": 3,
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "unit": "pcs",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "doorOpen",
+        "label": "Door open",
+        "type": "boolean",
+        "required": true,
+        "defaultValue": false,
+        "group": "fronts",
+        "affects": "visual"
+      },
+      {
+        "key": "handleComponentId",
+        "label": "Handle",
+        "type": "component",
+        "required": false,
+        "defaultValue": "cmp.handle.bar.160.black",
+        "group": "components",
+        "affects": "visual"
+      },
+      {
+        "key": "liftUpComponentId",
+        "label": "Lift-up system",
+        "type": "component",
+        "required": false,
+        "defaultValue": "cmp.lift_up.softclose.600",
+        "group": "components",
+        "affects": "bom"
+      },
+      {
+        "key": "assemblyContext",
+        "label": "Assembly Context",
+        "type": "string",
+        "required": false,
+        "defaultValue": "kitchen",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "kitchenModuleRole",
+        "label": "Kitchen Module Role",
+        "type": "string",
+        "required": false,
+        "defaultValue": "top",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "requiresWorktop",
+        "label": "Requires Worktop",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": false,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "worktopThicknessMm",
+        "label": "Worktop Thickness mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "boardThickness",
+        "label": "Board Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backThickness",
+        "label": "Back Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 8,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontThicknessMm",
+        "label": "Front Thickness mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "wallMounted",
+        "label": "Wall Mounted",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": true,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthHeight",
+        "label": "Plinth Height",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthSetbackMm",
+        "label": "Plinth Setback mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontGap",
+        "label": "Front Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "sideGap",
+        "label": "Side Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "topGap",
+        "label": "Top Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "bottomGap",
+        "label": "Bottom Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "shelfThickness",
+        "label": "Shelf Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "shelfAutoFit",
+        "label": "Shelf Auto Fit",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": true,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "shelfGaps",
+        "label": "Shelf Gaps",
+        "type": "string",
+        "required": false,
+        "defaultValue": [
+          176,
+          342,
+          509
+        ],
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "doorSystem",
+        "label": "Door System",
+        "type": "string",
+        "required": false,
+        "defaultValue": "flap_up",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handlePositionMm",
+        "label": "Handle Position mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleHorizontalPositionMm",
+        "label": "Handle Horizontal Position mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "hingeComponentId",
+        "label": "Hinge Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.hinge.clip_on.softclose",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "hangingBracketComponentId",
+        "label": "Hanging Bracket Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.hanging_bracket.wall.standard",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "shelfSupportComponentId",
+        "label": "Shelf Support Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.shelf_support.standard.nickel",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "materials",
+        "label": "Materials",
+        "type": "string",
+        "required": false,
+        "defaultValue": {
+          "bodyKey": "mat.board.body.dtd.white.18",
+          "bodyColor": "#f3f3ef",
+          "frontKey": "mat.board.front.mdf.white_supermat.18",
+          "frontColor": "#d7d9dd",
+          "drawerKey": "mat.board.front.mdf.white_supermat.18",
+          "drawerColor": "#d7d9dd"
+        },
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleType",
+        "label": "Handle Type",
+        "type": "string",
+        "required": false,
+        "defaultValue": "bar",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleLengthMm",
+        "label": "Handle Length mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 160,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleSizeMm",
+        "label": "Handle Size mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 12,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleProjectionMm",
+        "label": "Handle Projection mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 14,
+        "group": "advanced",
+        "affects": "geometry"
+      }
+    ]
+  },
+  "placement": {
+    "allowedContexts": [
+      "wall_mounted",
+      "above_countertop",
+      "kitchen_wall"
+    ],
+    "requiredAnchors": [
+      "wall"
+    ],
+    "requiresWall": true,
+    "requiresFloor": false,
+    "allowFreePlacement": false,
+    "wall": {
+      "mustAttachToWall": true,
+      "minWallLengthMm": 300
+    },
+    "collision": {
+      "allowOverlap": false
+    }
+  },
+  "constraints": {
+    "dimensionRules": {
+      "width": {
+        "min": 300,
+        "max": 1800,
+        "step": 50
+      },
+      "height": {
+        "min": 300,
+        "max": 1200,
+        "step": 10
+      },
+      "depth": {
+        "min": 200,
+        "max": 700,
+        "step": 10
+      }
+    }
+  },
+  "snapping": {
+    "enabled": true,
+    "snapTargets": [
+      "wall",
+      "adjacent_module"
+    ],
+    "priority": [
+      "wall",
+      "adjacent_module",
+      "grid"
+    ],
+    "snapDistanceMm": 50,
+    "rotationSnapDeg": 90,
+    "align": {
+      "backToWall": true,
+      "topAlignWithAdjacent": true
+    }
+  },
+  "geometry": {
+    "mode": "trusted-runtime",
+    "runtimeBuilderKey": "flapShelvesLow.v1"
+  },
+  "materials": {
+    "slots": [
+      {
+        "slotId": "carcass",
+        "label": "Carcass material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.carcassMaterialId",
+        "affects": [
+          "geometry",
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "front",
+        "label": "Front material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.frontMaterialId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "components": {
+    "slots": [
+      {
+        "slotId": "handle",
+        "label": "Handle",
+        "componentType": "handle",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.defaultHandleComponentId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "liftUp",
+        "label": "Lift-up system",
+        "componentType": "other",
+        "required": false,
+        "affects": [
+          "geometry",
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "bom": {
+    "rules": [
+      {
+        "id": "front-area",
+        "itemType": "material",
+        "source": "materialSlot",
+        "sourceKey": "front",
+        "quantityFormula": {
+          "type": "area",
+          "widthParam": "width",
+          "heightParam": "height"
+        }
+      }
+    ]
+  },
+  "pricing": {
+    "marginCategory": "wall_cabinet",
+    "quoteGroup": "kitchen-cabinets"
+  },
+  "ui": {
+    "icon": "flapShelvesLow-icon.png",
+    "previewImage": "flapShelvesLow-preview.png",
+    "groups": [
+      {
+        "id": "dimensions",
+        "label": "Dimensions",
+        "order": 1
+      },
+      {
+        "id": "fronts",
+        "label": "Fronts",
+        "order": 2
+      },
+      {
+        "id": "components",
+        "label": "Components",
+        "order": 3
+      },
+      {
+        "id": "advanced",
+        "label": "Advanced",
+        "order": 90
+      }
+    ],
+    "controls": [
+      {
+        "parameterKey": "width",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 1
+      },
+      {
+        "parameterKey": "height",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 2
+      },
+      {
+        "parameterKey": "depth",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 3
+      },
+      {
+        "parameterKey": "shelfCount",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 4
+      },
+      {
+        "parameterKey": "doorOpen",
+        "controlType": "checkbox",
+        "groupId": "fronts",
+        "order": 1
+      },
+      {
+        "parameterKey": "handleComponentId",
+        "controlType": "componentPicker",
+        "groupId": "components",
+        "order": 1
+      },
+      {
+        "parameterKey": "requiresWorktop",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 7
+      },
+      {
+        "parameterKey": "worktopThicknessMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 8
+      },
+      {
+        "parameterKey": "boardThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 9
+      },
+      {
+        "parameterKey": "backThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 10
+      },
+      {
+        "parameterKey": "frontThicknessMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 11
+      },
+      {
+        "parameterKey": "wallMounted",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 12
+      },
+      {
+        "parameterKey": "plinthHeight",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 13
+      },
+      {
+        "parameterKey": "plinthSetbackMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 14
+      },
+      {
+        "parameterKey": "frontGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 15
+      },
+      {
+        "parameterKey": "sideGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 16
+      },
+      {
+        "parameterKey": "topGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 17
+      },
+      {
+        "parameterKey": "bottomGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 18
+      },
+      {
+        "parameterKey": "shelfThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 19
+      },
+      {
+        "parameterKey": "shelfAutoFit",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 20
+      },
+      {
+        "parameterKey": "handlePositionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 21
+      },
+      {
+        "parameterKey": "handleHorizontalPositionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 22
+      },
+      {
+        "parameterKey": "handleLengthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 23
+      },
+      {
+        "parameterKey": "handleSizeMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 24
+      },
+      {
+        "parameterKey": "handleProjectionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 25
+      }
+    ]
+  },
+  "exports": {
+    "exportTags": [
+      "kitchen",
+      "wall",
+      "cnc"
+    ],
+    "manufacturingCode": "FLAP_SHELVES_LOW"
+  },
+  "manufacturing": {
+    "cncStrategy": "panelized-wall",
+    "edgeBandingStrategy": "front-visible-edges"
+  },
+  "assets": {
+    "files": []
+  },
+  "compatibility": {
+    "requiredRuntimeBuilderKeys": [
+      "flapShelvesLow.v1"
+    ],
+    "requiredCatalogFeatures": [
+      "materials",
+      "components",
+      "kitchenDefaults"
+    ]
+  },
+  "integrity": {
+    "createdAt": "2026-05-19T00:00:00.000Z",
+    "updatedAt": "2026-05-19T00:00:00.000Z",
+    "author": "Arcigy"
+  },
+  "behavior": {
+    "contextBindings": [
+      {
+        "contextType": "kitchenGroup",
+        "required": true,
+        "scope": "single",
+        "autoAssign": "activeKitchenGroup",
+        "liveSync": true,
+        "forbidCrossContextAdjacency": true,
+        "parameterSync": [
+          {
+            "targetParameter": "height",
+            "source": "ctx.upperHeightMm"
+          },
+          {
+            "targetParameter": "depth",
+            "source": "ctx.upperDepthMm"
+          }
+        ],
+        "materialSync": [
+          {
+            "targetSlot": "carcass",
+            "source": "ctx.corpusMaterialId",
+            "family": "body",
+            "thicknessParameter": "boardThickness",
+            "aliases": [
+              "body",
+              "shelf"
+            ]
+          },
+          {
+            "targetSlot": "front",
+            "source": "ctx.frontsMaterialId",
+            "family": "front",
+            "thicknessParameter": "frontThicknessMm",
+            "aliases": [
+              "front"
+            ]
+          },
+          {
+            "source": "ctx.backMaterialId",
+            "family": "back",
+            "thicknessParameter": "backThickness",
+            "aliases": [
+              "back"
+            ]
+          },
+          {
+            "source": "ctx.drawerBottomMaterialId",
+            "family": "drawer_bottom",
+            "aliases": [
+              "drawer_bottom"
+            ]
+          }
+        ],
+        "componentSync": [
+          {
+            "targetSlot": "handle",
+            "targetParameter": "handleComponentId",
+            "source": "ctx.handleComponentId",
+            "componentType": "handle",
+            "transforms": [
+              "handleGeometryKind",
+              "componentNominalLength"
+            ]
+          }
+        ],
+        "commercialSelectionSync": [
+          {
+            "source": "materialSnapshot"
+          }
+        ],
+        "overridePolicy": {
+          "allowUserOverride": false,
+          "warnWhenDetachedFromContext": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,912 @@
+{
+  "format": "furnquote-module",
+  "packageVersion": 1,
+  "module": {
+    "modulePackageId": "drawer_low_family_v1",
+    "moduleType": "drawer_low",
+    "familyName": "Drawer Low",
+    "displayName": "Drawer",
+    "description": "System module definition for a lower drawer cabinet.",
+    "category": "base_cabinet",
+    "version": "1.0.0",
+    "isSystemModule": true,
+    "tags": [
+      "kitchen",
+      "base",
+      "drawer"
+    ]
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "key": "type",
+        "label": "Type",
+        "type": "string",
+        "required": true,
+        "defaultValue": "drawer_low",
+        "group": "general",
+        "affects": "all"
+      },
+      {
+        "key": "width",
+        "label": "Width",
+        "type": "number",
+        "required": true,
+        "defaultValue": 800,
+        "min": 300,
+        "max": 1600,
+        "step": 50,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "height",
+        "label": "Height",
+        "type": "number",
+        "required": true,
+        "defaultValue": 700,
+        "min": 500,
+        "max": 1200,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "heightCarcass",
+        "label": "Carcass height",
+        "type": "number",
+        "required": true,
+        "defaultValue": 662,
+        "min": 450,
+        "max": 1160,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "depth",
+        "label": "Depth",
+        "type": "number",
+        "required": true,
+        "defaultValue": 560,
+        "min": 300,
+        "max": 900,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "drawerCount",
+        "label": "Drawer count",
+        "type": "number",
+        "required": true,
+        "defaultValue": 3,
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "unit": "pcs",
+        "group": "fronts",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontThicknessMm",
+        "label": "Front thickness",
+        "type": "number",
+        "required": true,
+        "defaultValue": 18,
+        "min": 10,
+        "max": 40,
+        "step": 1,
+        "unit": "mm",
+        "group": "fronts",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleComponentId",
+        "label": "Handle",
+        "type": "component",
+        "required": false,
+        "defaultValue": "cmp.handle.bar.160.black",
+        "group": "components",
+        "affects": "visual"
+      },
+      {
+        "key": "worktopThicknessMm",
+        "label": "Worktop Thickness mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 38,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "boardThickness",
+        "label": "Board Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backThickness",
+        "label": "Back Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 6,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backGrooveDepthMm",
+        "label": "Back Groove Depth mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 8,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backGrooveWidthMm",
+        "label": "Back Groove Width mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 8,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backGrooveOffsetMm",
+        "label": "Back Groove Offset mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 12,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backGrooveClearanceMm",
+        "label": "Back Groove Clearance mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 1,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthHeight",
+        "label": "Plinth Height",
+        "type": "number",
+        "required": false,
+        "defaultValue": 100,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthSetbackMm",
+        "label": "Plinth Setback mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontGap",
+        "label": "Front Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "sideGap",
+        "label": "Side Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "topGap",
+        "label": "Top Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "bottomGap",
+        "label": "Bottom Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "sideClearanceMm",
+        "label": "Side Clearance mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 4,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontStackPreset",
+        "label": "Front Stack Preset",
+        "type": "string",
+        "required": false,
+        "defaultValue": "equal",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "topFrontHeightMm",
+        "label": "Top Front Height mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 160,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleType",
+        "label": "Handle Type",
+        "type": "string",
+        "required": false,
+        "defaultValue": "bar",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handlePositionMm",
+        "label": "Handle Position mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleLengthMm",
+        "label": "Handle Length mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 160,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleSizeMm",
+        "label": "Handle Size mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 12,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleProjectionMm",
+        "label": "Handle Projection mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 14,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "drawerBoxThickness",
+        "label": "Drawer Box Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 13,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "drawerBoxSideHeight",
+        "label": "Drawer Box Side Height",
+        "type": "number",
+        "required": false,
+        "defaultValue": 110,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "drawerBackReserveMm",
+        "label": "Drawer Back Reserve mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 8,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "drawerFrontHeights",
+        "label": "Drawer Front Heights",
+        "type": "string",
+        "required": false,
+        "defaultValue": [
+          184,
+          184,
+          186
+        ],
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "materials",
+        "label": "Materials",
+        "type": "string",
+        "required": false,
+        "defaultValue": {
+          "bodyKey": "2",
+          "frontKey": "3",
+          "drawerKey": "5"
+        },
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "assemblyContext",
+        "label": "Assembly Context",
+        "type": "string",
+        "required": false,
+        "defaultValue": "kitchen",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "autoFit",
+        "label": "Auto Fit",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": true,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "kitchenModuleRole",
+        "label": "Kitchen Module Role",
+        "type": "string",
+        "required": false,
+        "defaultValue": "base",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "legComponentId",
+        "label": "Leg Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.leg.adjustable.100.black",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "requiresWorktop",
+        "label": "Requires Worktop",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": true,
+        "group": "advanced",
+        "affects": "geometry"
+      }
+    ]
+  },
+  "placement": {
+    "allowedContexts": [
+      "kitchen_wall"
+    ],
+    "requiredAnchors": [
+      "wall",
+      "floor"
+    ],
+    "requiresWall": true,
+    "requiresFloor": true,
+    "allowFreePlacement": false,
+    "wall": {
+      "mustAttachToWall": true,
+      "minWallLengthMm": 300
+    },
+    "collision": {
+      "allowOverlap": false
+    }
+  },
+  "constraints": {
+    "dimensionRules": {
+      "width": {
+        "min": 300,
+        "max": 1600,
+        "step": 50
+      },
+      "height": {
+        "min": 500,
+        "max": 1200,
+        "step": 10
+      },
+      "depth": {
+        "min": 300,
+        "max": 900,
+        "step": 10
+      }
+    }
+  },
+  "snapping": {
+    "enabled": true,
+    "snapTargets": [
+      "wall",
+      "floor",
+      "adjacent_module"
+    ],
+    "priority": [
+      "wall",
+      "adjacent_module",
+      "grid"
+    ],
+    "snapDistanceMm": 50,
+    "rotationSnapDeg": 90,
+    "align": {
+      "backToWall": true,
+      "frontFlushWithAdjacent": true
+    }
+  },
+  "geometry": {
+    "mode": "trusted-runtime",
+    "runtimeBuilderKey": "drawerLow.v1"
+  },
+  "materials": {
+    "slots": [
+      {
+        "slotId": "carcass",
+        "label": "Carcass material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.carcassMaterialId",
+        "affects": [
+          "geometry",
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "front",
+        "label": "Front material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.frontMaterialId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "drawerBottom",
+        "label": "Drawer bottom material",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.carcassMaterialId",
+        "affects": [
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "components": {
+    "slots": [
+      {
+        "slotId": "handle",
+        "label": "Handle",
+        "componentType": "handle",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.defaultHandleComponentId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "runner",
+        "label": "Drawer runner",
+        "componentType": "runner",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.defaultDrawerSystemComponentId",
+        "affects": [
+          "geometry",
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "bom": {
+    "rules": [
+      {
+        "id": "front-area",
+        "itemType": "material",
+        "source": "materialSlot",
+        "sourceKey": "front",
+        "quantityFormula": {
+          "type": "area",
+          "widthParam": "width",
+          "heightParam": "height"
+        }
+      },
+      {
+        "id": "drawer-runners",
+        "itemType": "component",
+        "source": "componentSlot",
+        "sourceKey": "runner",
+        "quantityFormula": {
+          "type": "count",
+          "param": "drawerCount"
+        }
+      }
+    ]
+  },
+  "pricing": {
+    "marginCategory": "base_cabinet",
+    "quoteGroup": "kitchen-cabinets"
+  },
+  "ui": {
+    "icon": "drawerLow-icon.png",
+    "previewImage": "drawerLow-preview.png",
+    "groups": [
+      {
+        "id": "dimensions",
+        "label": "Dimensions",
+        "order": 1
+      },
+      {
+        "id": "fronts",
+        "label": "Fronts",
+        "order": 2
+      },
+      {
+        "id": "components",
+        "label": "Components",
+        "order": 3
+      },
+      {
+        "id": "advanced",
+        "label": "Advanced",
+        "order": 90
+      }
+    ],
+    "controls": [
+      {
+        "parameterKey": "width",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 1
+      },
+      {
+        "parameterKey": "height",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 2
+      },
+      {
+        "parameterKey": "depth",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 3
+      },
+      {
+        "parameterKey": "drawerCount",
+        "controlType": "number",
+        "groupId": "fronts",
+        "order": 1
+      },
+      {
+        "parameterKey": "handleComponentId",
+        "controlType": "componentPicker",
+        "groupId": "components",
+        "order": 1
+      },
+      {
+        "parameterKey": "worktopThicknessMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 6
+      },
+      {
+        "parameterKey": "boardThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 7
+      },
+      {
+        "parameterKey": "backThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 8
+      },
+      {
+        "parameterKey": "backGrooveDepthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 9
+      },
+      {
+        "parameterKey": "backGrooveWidthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 10
+      },
+      {
+        "parameterKey": "backGrooveOffsetMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 11
+      },
+      {
+        "parameterKey": "backGrooveClearanceMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 12
+      },
+      {
+        "parameterKey": "plinthHeight",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 13
+      },
+      {
+        "parameterKey": "plinthSetbackMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 14
+      },
+      {
+        "parameterKey": "frontGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 15
+      },
+      {
+        "parameterKey": "sideGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 16
+      },
+      {
+        "parameterKey": "topGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 17
+      },
+      {
+        "parameterKey": "bottomGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 18
+      },
+      {
+        "parameterKey": "sideClearanceMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 19
+      },
+      {
+        "parameterKey": "topFrontHeightMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 20
+      },
+      {
+        "parameterKey": "handlePositionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 21
+      },
+      {
+        "parameterKey": "handleLengthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 22
+      },
+      {
+        "parameterKey": "handleSizeMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 23
+      },
+      {
+        "parameterKey": "handleProjectionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 24
+      },
+      {
+        "parameterKey": "drawerBoxThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 25
+      },
+      {
+        "parameterKey": "drawerBoxSideHeight",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 26
+      },
+      {
+        "parameterKey": "drawerBackReserveMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 27
+      },
+      {
+        "parameterKey": "autoFit",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 28
+      },
+      {
+        "parameterKey": "requiresWorktop",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 29
+      }
+    ]
+  },
+  "exports": {
+    "exportTags": [
+      "kitchen",
+      "base",
+      "cnc"
+    ],
+    "manufacturingCode": "DRAWER_LOW"
+  },
+  "manufacturing": {
+    "cncStrategy": "panelized",
+    "edgeBandingStrategy": "front-visible-edges"
+  },
+  "assets": {
+    "files": []
+  },
+  "compatibility": {
+    "requiredRuntimeBuilderKeys": [
+      "drawerLow.v1"
+    ],
+    "requiredCatalogFeatures": [
+      "materials",
+      "components",
+      "kitchenDefaults"
+    ]
+  },
+  "integrity": {
+    "createdAt": "2026-05-19T00:00:00.000Z",
+    "updatedAt": "2026-05-19T00:00:00.000Z",
+    "author": "Arcigy"
+  },
+  "behavior": {
+    "contextBindings": [
+      {
+        "contextType": "kitchenGroup",
+        "required": true,
+        "scope": "single",
+        "autoAssign": "activeKitchenGroup",
+        "liveSync": true,
+        "forbidCrossContextAdjacency": true,
+        "parameterSync": [
+          {
+            "targetParameter": "height",
+            "source": "ctx.heightMm"
+          },
+          {
+            "targetParameter": "heightCarcass",
+            "source": "ctx.moduleHeightMm"
+          },
+          {
+            "targetParameter": "depth",
+            "source": "ctx.moduleDepthMm"
+          },
+          {
+            "targetParameter": "plinthHeight",
+            "source": "ctx.plinthHeightMm"
+          },
+          {
+            "targetParameter": "plinthSetbackMm",
+            "source": "ctx.plinthDepthMm"
+          },
+          {
+            "targetParameter": "worktopThicknessMm",
+            "source": "ctx.worktopThicknessMm",
+            "transform": "resolvedWorktopThickness"
+          }
+        ],
+        "materialSync": [
+          {
+            "targetSlot": "carcass",
+            "source": "ctx.corpusMaterialId",
+            "family": "body",
+            "thicknessParameter": "boardThickness",
+            "aliases": [
+              "body",
+              "shelf"
+            ]
+          },
+          {
+            "targetSlot": "front",
+            "source": "ctx.frontsMaterialId",
+            "family": "front",
+            "thicknessParameter": "frontThicknessMm",
+            "aliases": [
+              "front"
+            ]
+          },
+          {
+            "source": "ctx.backMaterialId",
+            "family": "back",
+            "thicknessParameter": "backThickness",
+            "aliases": [
+              "back"
+            ]
+          },
+          {
+            "targetSlot": "drawerBottom",
+            "source": "ctx.drawerBottomMaterialId",
+            "family": "drawer_bottom",
+            "aliases": [
+              "drawer_bottom"
+            ]
+          }
+        ],
+        "componentSync": [
+          {
+            "targetSlot": "handle",
+            "targetParameter": "handleComponentId",
+            "source": "ctx.handleComponentId",
+            "componentType": "handle",
+            "transforms": [
+              "handleGeometryKind",
+              "componentNominalLength"
+            ]
+          }
+        ],
+        "commercialSelectionSync": [
+          {
+            "source": "materialSnapshot",
+            "dynamicSlots": [
+              {
+                "countParameter": "drawerCount",
+                "slotIdPattern": "drawer-front-{index}",
+                "family": "front"
+              },
+              {
+                "countParameter": "drawerCount",
+                "slotIdPattern": "drawer-box-{index}-side-panels",
+                "family": "drawer_box"
+              },
+              {
+                "countParameter": "drawerCount",
+                "slotIdPattern": "drawer-box-{index}-front-back-panels",
+                "family": "drawer_box"
+              },
+              {
+                "countParameter": "drawerCount",
+                "slotIdPattern": "drawer-box-{index}-bottom-panel",
+                "family": "drawer_bottom"
+              }
+            ]
+          }
+        ],
+        "overridePolicy": {
+          "allowUserOverride": false,
+          "warnWhenDetachedFromContext": true
+        }
+      }
+    ]
+  }
+}

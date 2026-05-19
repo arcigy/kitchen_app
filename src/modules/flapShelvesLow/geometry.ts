@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Group } from "three";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { FlapShelvesLowParams } from "./types";
 
 const MM_TO_M = 0.001;
@@ -75,7 +76,8 @@ function getShelfCenters(params: FlapShelvesLowParams, heightMm: number, boardTh
   });
 }
 
-export function buildFlapShelvesLow(params: FlapShelvesLowParams): Group {
+export function buildFlapShelvesLow(params: FlapShelvesLowParams, catalog: ClientCatalog): Group {
+  void catalog;
   const group = new THREE.Group();
   group.name = "flap_shelves_lowParametricModule";
 

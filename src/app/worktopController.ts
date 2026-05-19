@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FloorBoundaryPoint, KitchenWorktopInstance, KitchenWorktopParams } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
 import { disposeObject3D } from "../core/dispose";
@@ -51,6 +52,7 @@ export type WorktopControllerContext = {
   setWorktopDrawSnap: (snap: PlanSnapResult | null) => void;
   getSelectedKind: () => string | null;
   getSelectedWallId: () => string | null;
+  catalog: ClientCatalog;
 };
 
 export function createWorktopController(ctx: WorktopControllerContext) {
@@ -79,7 +81,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     inst.mesh.geometry.dispose();
     inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params);
     const prevMaterial = inst.mesh.material as THREE.Material;
-    inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId);
+    inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
     prevMaterial.dispose();
     inst.mesh.position.y = inst.params.heightMm / 1000;
     inst.mesh.castShadow = true;
@@ -91,7 +93,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     inst.outline.geometry.dispose();
     inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params, flattenWorktopOutline);
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
-    outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId));
+    outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId, ctx.catalog));
     inst.outline.position.set(0, inst.params.heightMm / 1000 + (flattenWorktopOutline ? 0.0015 : 0), 0);
     inst.outline.visible = ctx.getViewMode() === "2d";
     const meshMaterial = inst.mesh.material as THREE.MeshStandardMaterial;
@@ -118,7 +120,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     root.userData.worktopId = id;
     root.userData.kitchenGroupId = kitchenGroupId;
 
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId));
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId, { catalog: ctx.catalog }));
     mesh.name = `kitchenWorktopMesh_${id}`;
     mesh.renderOrder = 16;
     mesh.frustumCulled = false;
@@ -130,7 +132,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     const outline = new THREE.Line(
       new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({
-        color: kitchenWorktopOutlineColor(params.materialId),
+        color: kitchenWorktopOutlineColor(params.materialId, ctx.catalog),
         transparent: true,
         opacity: 0.92,
         depthTest: false,
@@ -228,13 +230,13 @@ export function createWorktopController(ctx: WorktopControllerContext) {
 
     if (!kitchenWorktopDraw.previewRoot || !kitchenWorktopDraw.previewMesh || !kitchenWorktopDraw.previewOutline || !kitchenWorktopDraw.previewBackLine) {
       const root = new THREE.Group();
-      const mesh = new THREE.Mesh(makeKitchenWorktopPreviewGeometry(params), makeKitchenWorktopMaterial(params.materialId, { preview: true }));
+      const mesh = new THREE.Mesh(makeKitchenWorktopPreviewGeometry(params), makeKitchenWorktopMaterial(params.materialId, { preview: true, catalog: ctx.catalog }));
       (mesh.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
       mesh.frustumCulled = false;
       const outline = new THREE.Line(
         new THREE.BufferGeometry(),
         new THREE.LineBasicMaterial({
-          color: kitchenWorktopOutlineColor(params.materialId),
+          color: kitchenWorktopOutlineColor(params.materialId, ctx.catalog),
           transparent: true,
           opacity: 0.98,
           depthTest: false,
@@ -278,7 +280,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     }
     if (kitchenWorktopDraw.previewMaterialId !== params.materialId) {
       const previewMaterial = kitchenWorktopDraw.previewMesh.material as THREE.Material;
-      kitchenWorktopDraw.previewMesh.material = makeKitchenWorktopMaterial(params.materialId, { preview: true });
+      kitchenWorktopDraw.previewMesh.material = makeKitchenWorktopMaterial(params.materialId, { preview: true, catalog: ctx.catalog });
       (kitchenWorktopDraw.previewMesh.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
       previewMaterial.dispose();
       kitchenWorktopDraw.previewMaterialId = params.materialId;
@@ -287,7 +289,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     kitchenWorktopDraw.previewMesh.visible = true;
 
     kitchenWorktopDraw.previewOutline.position.set(0, params.heightMm / 1000 + 0.0015, 0);
-    (kitchenWorktopDraw.previewOutline.material as THREE.LineBasicMaterial).color.setHex(kitchenWorktopOutlineColor(params.materialId));
+    (kitchenWorktopDraw.previewOutline.material as THREE.LineBasicMaterial).color.setHex(kitchenWorktopOutlineColor(params.materialId, ctx.catalog));
     kitchenWorktopDraw.previewOutline.visible = true;
 
     kitchenWorktopDraw.previewBackLine.position.set(0, params.heightMm / 1000 + 0.0015, 0);

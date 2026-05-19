@@ -5,6 +5,7 @@ import { makeDefaultKitchenContext } from "../src/layout/kitchenContext";
 import { getComponentDefinitionById } from "../src/data/pricing/componentDefinitions";
 import { getMaterialDefinitionById } from "../src/data/pricing/materialDefinitions";
 import { applyKitchenContextToModuleParams } from "../src/layout/kitchenMaterialSync";
+import { getSystemSeedCatalog } from "../src/core/catalog/catalog-repository";
 import { calculateBOM as calculateCornerShelfLowerBOM } from "../src/modules/cornerShelfLower/calculation";
 import { makeDefaultCornerShelfLowerParams } from "../src/modules/cornerShelfLower/types";
 import { calculateBOM as calculateDrawerLowBOM } from "../src/modules/drawerLow/calculation";
@@ -22,7 +23,8 @@ import {
 } from "../src/modules/runtime/portableCommercial";
 import { getUnitPriceForCatalogId } from "../src/data/pricing";
 
-const ctx: KitchenContext = makeDefaultKitchenContext();
+const catalog = getSystemSeedCatalog();
+const ctx: KitchenContext = makeDefaultKitchenContext(catalog);
 
 function approx(actual: number, expected: number, epsilon = 0.0001) {
   assert.ok(Math.abs(actual - expected) <= epsilon, `Expected ${actual} to be within ${epsilon} of ${expected}`);
@@ -86,7 +88,7 @@ function runCornerShelfLowerScenario() {
   assert.equal(clipsItem?.component?.catalogId, "cmp.clip.plinth.standard");
 
   const synced = structuredClone(params);
-  applyKitchenContextToModuleParams(synced, ctx);
+  applyKitchenContextToModuleParams(synced, ctx, catalog);
   assert.equal(synced.height, ctx.heightMm);
   assert.equal(synced.heightCarcass, ctx.moduleHeightMm);
   assert.equal(synced.depth, ctx.moduleDepthMm);
@@ -147,7 +149,7 @@ function runFridgeTallScenario() {
   assert.equal(clipsItem?.component?.catalogId, "cmp.clip.plinth.standard");
 
   const synced = structuredClone(params);
-  applyKitchenContextToModuleParams(synced, ctx);
+  applyKitchenContextToModuleParams(synced, ctx, catalog);
   assert.equal(synced.depth, ctx.moduleDepthMm);
   assert.equal(synced.plinthHeight, ctx.plinthHeightMm);
   assert.equal(synced.plinthSetbackMm, ctx.plinthDepthMm);
@@ -201,7 +203,7 @@ function runFlapShelvesLowScenario() {
   );
 
   const synced = structuredClone(params);
-  applyKitchenContextToModuleParams(synced, ctx);
+  applyKitchenContextToModuleParams(synced, ctx, catalog);
   assert.equal(synced.height, ctx.upperHeightMm);
   assert.equal(synced.depth, ctx.upperDepthMm);
   assert.equal(synced.worktopThicknessMm, 0);
@@ -276,7 +278,7 @@ function runSwingShelvesLowScenario() {
   );
 
   const synced = structuredClone(params);
-  applyKitchenContextToModuleParams(synced, ctx);
+  applyKitchenContextToModuleParams(synced, ctx, catalog);
   assert.equal(synced.height, ctx.heightMm);
   assert.equal(synced.heightCarcass, ctx.moduleHeightMm);
   assert.equal(synced.depth, ctx.moduleDepthMm);

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { buildModule } from "../geometry/buildModule";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
 import { disposeObject3D } from "../core/dispose";
@@ -10,6 +11,7 @@ type InstanceActionsContext = {
   S: AppState;
   instances: LayoutInstance[];
   layoutRoot: THREE.Group;
+  clientCatalog: ClientCatalog;
   getMode: () => "build" | "layout";
   getInstanceCounter: () => number;
   setInstanceCounter: (next: number) => void;
@@ -51,7 +53,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     const root = new THREE.Group();
     root.name = `module_${id}`;
 
-    const module = buildModule(nextParams);
+    const module = buildModule(nextParams, ctx.clientCatalog);
     module.name = `moduleGeom_${id}`;
     tagModuleGeometry(module, id);
     root.add(module);

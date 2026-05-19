@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import liveStateSnapshot from "./package/integration/current-live-state.json";
 import materialsSnapshot from "./package/definitions/fridge_tall.materials.snapshot.json";
 import { buildPortableLiveModuleGroup } from "../runtime/portableGeometry";
@@ -430,11 +431,12 @@ function attachBackAnchor(group: THREE.Group, params: FridgeTallParams) {
   group.add(anchor);
 }
 
-export function buildFridgeTall(params: FridgeTallParams): THREE.Group {
+export function buildFridgeTall(params: FridgeTallParams, catalog: ClientCatalog): THREE.Group {
   const group = buildPortableLiveModuleGroup(
     params as Record<string, unknown>,
     liveStateSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[1],
-    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2]
+    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2],
+    catalog
   );
 
   applyFridgeCarcassGeometry(group, params);

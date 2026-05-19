@@ -9,8 +9,11 @@ type LayoutActionsControllerContext = {
   getSelectedKind: () => SelectedKind;
   setSelectedKind: (kind: SelectedKind) => void;
   getSelectedInstanceId: () => string | null;
+  getSelectedKitchenGroupId: () => string | null;
   getSelectedSectionId: () => string | null;
   getSelectedFloorId: () => string | null;
+  getSelectedColumnId: () => string | null;
+  getSelectedWallId: () => string | null;
   getSelectedInstanceIds: () => Set<string>;
   getSelectedWallIds: () => Set<string>;
   setSelectedUnderlay: () => void;
@@ -18,12 +21,19 @@ type LayoutActionsControllerContext = {
   setSelectedModule: (id: string | null) => void;
   setSelectedSection: (id: string | null) => void;
   setSelectedFloor: (id: string | null) => void;
+  setSelectedColumn: (id: string | null) => void;
   mountProps: () => void;
   duplicateInstance: (id: string) => void;
   deleteInstance: (id: string) => void;
   deleteWall: (id: string) => void;
   deleteSectionInstance: (id: string) => void;
   deleteFloor: (id: string) => void;
+  deleteColumn: (id: string) => boolean;
+  deleteKitchenGroup: (id: string) => boolean;
+  deleteWindow: () => boolean;
+  deleteDoor: () => boolean;
+  deleteUnderlay: () => boolean;
+  deleteWardrobeSelection: () => boolean;
   commitHistory: () => void;
   setView2d: (checked: boolean) => void;
 };
@@ -54,39 +64,99 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
 
   const deleteSelected = () => {
     ctx.ensureLayoutMode();
+    ctx.cancelPlacementIfActive();
+
+    if (ctx.deleteWardrobeSelection()) {
+      ctx.mountProps();
+      return true;
+    }
+
     const selectedKind = ctx.getSelectedKind();
-    if (selectedKind === "kitchenGroup") return;
+    if (selectedKind === "kitchenGroup") {
+      const selectedKitchenGroupId = ctx.getSelectedKitchenGroupId();
+      if (!selectedKitchenGroupId) return false;
+      if (!ctx.deleteKitchenGroup(selectedKitchenGroupId)) return false;
+      ctx.setSelectedKind(null);
+      ctx.setSelectedModule(null);
+      ctx.commitHistory();
+      ctx.mountProps();
+      return true;
+    }
     if (selectedKind === "section") {
       const selectedSectionId = ctx.getSelectedSectionId();
-      if (!selectedSectionId) return;
+      if (!selectedSectionId) return false;
       ctx.deleteSectionInstance(selectedSectionId);
       ctx.setSelectedSection(null);
       ctx.mountProps();
-      return;
+      return true;
     }
     if (selectedKind === "floor") {
       const selectedFloorId = ctx.getSelectedFloorId();
-      if (!selectedFloorId) return;
+      if (!selectedFloorId) return false;
       ctx.deleteFloor(selectedFloorId);
       ctx.setSelectedFloor(null);
-      return;
+      return true;
     }
-    if (selectedKind === "module" && ctx.getSelectedInstanceIds().size > 0) {
-      const selectedInstanceIds = ctx.getSelectedInstanceIds();
-      const ids = Array.from(selectedInstanceIds);
+    if (selectedKind === "column") {
+      const selectedColumnId = ctx.getSelectedColumnId();
+      if (!selectedColumnId) return false;
+      if (!ctx.deleteColumn(selectedColumnId)) return false;
+      ctx.setSelectedColumn(null);
+      ctx.mountProps();
+      return true;
+    }
+    if (selectedKind === "window") {
+      if (!ctx.deleteWindow()) return false;
+      ctx.setSelectedKind(null);
+      ctx.commitHistory();
+      ctx.mountProps();
+      return true;
+    }
+    if (selectedKind === "door") {
+      if (!ctx.deleteDoor()) return false;
+      ctx.setSelectedKind(null);
+      ctx.commitHistory();
+      ctx.mountProps();
+      return true;
+    }
+    if (selectedKind === "underlay") {
+      if (!ctx.deleteUnderlay()) return false;
+      ctx.setSelectedKind(null);
+      ctx.setSelectedModule(null);
+      ctx.commitHistory();
+      ctx.mountProps();
+      return true;
+    }
+    const selectedInstanceIds = ctx.getSelectedInstanceIds();
+    const instanceIds =
+      selectedInstanceIds.size > 0
+        ? Array.from(selectedInstanceIds)
+        : selectedKind === "module" && ctx.getSelectedInstanceId()
+          ? [ctx.getSelectedInstanceId()!]
+          : [];
+    if (instanceIds.length > 0) {
+      const ids = [...new Set(instanceIds)];
       for (const id of ids) ctx.deleteInstance(id);
       ctx.setSelectedModule(null);
       selectedInstanceIds.clear();
       ctx.commitHistory();
-      return;
+      return true;
     }
-    if (selectedKind === "wall" && ctx.getSelectedWallIds().size > 0) {
-      const selectedWallIds = ctx.getSelectedWallIds();
-      const ids = Array.from(selectedWallIds);
+    const selectedWallIds = ctx.getSelectedWallIds();
+    const wallIds =
+      selectedWallIds.size > 0
+        ? Array.from(selectedWallIds)
+        : selectedKind === "wall" && ctx.getSelectedWallId()
+          ? [ctx.getSelectedWallId()!]
+          : [];
+    if (wallIds.length > 0) {
+      const ids = [...new Set(wallIds)];
       for (const id of ids) ctx.deleteWall(id);
       ctx.setSelectedWall(null);
       selectedWallIds.clear();
+      return true;
     }
+    return false;
   };
 
   const toggle2dView = () => {

@@ -1,10 +1,16 @@
 import type { AppState } from "../layout/appState";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ModuleParams } from "../model/cabinetTypes";
-import type { ModuleDescriptor } from "../modules/registry";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
 import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
 import type {
+  ColumnInstance,
+  ColumnParams,
+  DoorInstance,
+  DoorParams,
   FloorBoundarySegment,
   FloorInstance,
   FloorParams,
@@ -12,8 +18,12 @@ import type {
   SectionInstance,
   SectionParams,
   WallInstance,
-  WallParams
+  WallParams,
+  WindowInstance,
+  WindowParams
 } from "./localTypes";
+import { DOOR_MATERIAL_OPTIONS } from "./doorMaterials";
+import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -70,7 +80,54 @@ type SectionPropsContext = {
   S: AppState;
 };
 
-type WindowPropsContext = { props: PropertiesPanelApi };
+type ColumnPropsContext = {
+  props: PropertiesPanelApi;
+  column: ColumnInstance | null;
+  showNoProps: () => void;
+  rebuildColumn: (column: ColumnInstance) => void;
+  commitHistory: CommitHistory;
+  S: AppState;
+  mountProps: MountProps;
+};
+
+type ColumnPlacementPropsContext = {
+  props: PropertiesPanelApi;
+  params: ColumnParams;
+  onChange: (params: Partial<ColumnParams>) => void;
+  mountProps: MountProps;
+};
+
+type WindowPropsContext = {
+  props: PropertiesPanelApi;
+  windowInst: WindowInstance | null;
+  walls: WallInstance[];
+  updateWindowTransform: (windowInst: WindowInstance) => void;
+  commitHistory: CommitHistory;
+  S: AppState;
+  mountProps: MountProps;
+};
+
+type WindowPlacementPropsContext = {
+  props: PropertiesPanelApi;
+  params: WindowParams;
+  onChange: (params: Partial<WindowParams>) => void;
+};
+
+type DoorPropsContext = {
+  props: PropertiesPanelApi;
+  doorInst: DoorInstance | null;
+  walls: WallInstance[];
+  updateDoorTransform: (doorInst: DoorInstance) => void;
+  commitHistory: CommitHistory;
+  S: AppState;
+  mountProps: MountProps;
+};
+
+type DoorPlacementPropsContext = {
+  props: PropertiesPanelApi;
+  params: DoorParams;
+  onChange: (params: Partial<DoorParams>) => void;
+};
 
 type FloorBoundaryPropsContext = {
   props: PropertiesPanelApi;
@@ -140,8 +197,9 @@ type ModulePropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
-  getModuleDescriptorOrThrow: (type: ModuleParams["type"]) => ModuleDescriptor;
+  modulePackages: readonly FurnQuoteModulePackage[];
   args: { propertiesEl: HTMLElement };
+  clientCatalog: ClientCatalog;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
 };
@@ -374,15 +432,403 @@ export function mountSectionPropsPanel(ctx: SectionPropsContext, id: string) {
 
 }
 
-export function mountWindowPropsPanel(ctx: WindowPropsContext) {
-  const { props } = ctx;
-    props.setTitle("Window");
-    const s = props.section();
-    const p = document.createElement("div");
-    p.className = "muted";
-    p.textContent = "Nastavenia okna zatiaľ zostávajú vpravo (TODO: presunúť do properties).";
-    s.appendChild(p);
+export function mountColumnPropsPanel(ctx: ColumnPropsContext) {
+  const { props, column, showNoProps, rebuildColumn, commitHistory, S, mountProps } = ctx;
+  if (!column) return showNoProps();
 
+  props.setTitle(`Stlp (${column.id})`);
+  const s = props.section();
+  const params = column.params;
+
+  const apply = (commit: boolean, _patch: Partial<ColumnParams>, remount = false) => {
+    rebuildColumn(column);
+    if (commit) commitHistory(S);
+    if (remount) mountProps();
+  };
+
+  appendColumnParameterRows(props, s, params, apply, { includePosition: true });
+}
+
+export function mountColumnPlacementPropsPanel(ctx: ColumnPlacementPropsContext) {
+  const { props, params, onChange, mountProps } = ctx;
+  props.setTitle("Stlp - vlozenie");
+  const s = props.section();
+  const info = document.createElement("div");
+  info.className = "muted";
+  info.textContent = "Nastav parametre a klikni miesto v podoryse. Esc zrusi vkladanie.";
+  s.appendChild(info);
+  appendColumnParameterRows(
+    props,
+    s,
+    params,
+    (_commit, patch, remount) => {
+      onChange(patch);
+      if (remount) mountProps();
+    },
+    { includePosition: false }
+  );
+}
+
+function appendColumnParameterRows(
+  props: PropertiesPanelApi,
+  s: HTMLElement,
+  params: ColumnParams,
+  apply: (commit: boolean, patch: Partial<ColumnParams>, remount?: boolean) => void,
+  options: { includePosition: boolean }
+) {
+  const commitPatch = (commit: boolean, patch: Partial<ColumnParams>, remount = false) => {
+    Object.assign(params, patch);
+    apply(commit, patch, remount);
+  };
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.value = params.name;
+  props.row(s, "Nazov", name);
+
+  const shape = document.createElement("select");
+  shape.innerHTML = `
+    <option value="square">Stvorcovy</option>
+    <option value="rectangular">Obdlznikovy</option>
+    <option value="round">Kruhovy</option>
+  `;
+  shape.value = params.shape;
+  props.row(s, "Prierez", shape);
+
+  const addNumberRow = (
+    label: string,
+    key: keyof Pick<ColumnParams, "xMm" | "zMm" | "widthMm" | "depthMm" | "diameterMm" | "heightMm">,
+    onRead?: (next: number) => Partial<ColumnParams>
+  ) => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "1";
+    input.value = String(Math.round(Number(params[key] ?? 0)));
+    props.row(s, label, input);
+    const restoreValue = () => {
+      input.value = String(Math.round(Number(params[key] ?? 0)));
+    };
+    const read = (final = false): Partial<ColumnParams> | null => {
+      const raw = input.value.trim();
+      if (raw === "" || raw === "-" || raw === "+") {
+        if (final) restoreValue();
+        return null;
+      }
+      const next = Math.round(Number(raw));
+      if (!Number.isFinite(next)) {
+        if (final) restoreValue();
+        return null;
+      }
+      return onRead ? onRead(next) : ({ [key]: next } as Partial<ColumnParams>);
+    };
+    input.addEventListener("input", () => {
+      const patch = read();
+      if (patch) commitPatch(false, patch);
+    });
+    input.addEventListener("change", () => {
+      const patch = read(true);
+      if (patch) {
+        commitPatch(true, patch);
+        restoreValue();
+      }
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        const patch = read(true);
+        if (!patch) return;
+        commitPatch(true, patch);
+        restoreValue();
+      }
+    });
+  };
+
+  if (options.includePosition) {
+    addNumberRow("X (mm)", "xMm");
+    addNumberRow("Z (mm)", "zMm");
+  }
+  addNumberRow("Vyska (mm)", "heightMm");
+
+  if (params.shape === "round") {
+    addNumberRow("Priemer (mm)", "diameterMm");
+  } else if (params.shape === "square") {
+    addNumberRow("Sirka (mm)", "widthMm", (next) => {
+      return { widthMm: next, depthMm: next };
+    });
+  } else {
+    addNumberRow("Sirka (mm)", "widthMm");
+    addNumberRow("Hlbka (mm)", "depthMm");
+  }
+
+  const justifyX = document.createElement("select");
+  justifyX.innerHTML = `
+    <option value="left">Left</option>
+    <option value="center">Center</option>
+    <option value="right">Right</option>
+  `;
+  justifyX.value = params.justifyX ?? "center";
+  props.row(s, "Justification X", justifyX);
+
+  const justifyY = document.createElement("select");
+  justifyY.innerHTML = `
+    <option value="up">Up</option>
+    <option value="center">Center</option>
+    <option value="down">Down</option>
+  `;
+  justifyY.value = params.justifyY ?? "center";
+  props.row(s, "Justification Y", justifyY);
+
+  const material = document.createElement("select");
+  material.innerHTML = `<option value="default">Default</option>`;
+  material.value = params.materialId || "default";
+  props.row(s, "Material", material);
+
+  name.addEventListener("change", () => {
+    const nextName = name.value.trim() || params.name;
+    name.value = nextName;
+    commitPatch(true, { name: nextName });
+  });
+  shape.addEventListener("change", () => {
+    const nextShape = shape.value === "round" ? "round" : shape.value === "rectangular" ? "rectangular" : "square";
+    const patch: Partial<ColumnParams> = { shape: nextShape };
+    if (nextShape === "square") patch.depthMm = params.widthMm;
+    if (nextShape === "round") patch.diameterMm = params.diameterMm || params.widthMm;
+    commitPatch(true, patch, true);
+  });
+  justifyX.addEventListener("change", () => {
+    commitPatch(true, { justifyX: justifyX.value === "left" || justifyX.value === "right" ? justifyX.value : "center" });
+  });
+  justifyY.addEventListener("change", () => {
+    commitPatch(true, { justifyY: justifyY.value === "up" || justifyY.value === "down" ? justifyY.value : "center" });
+  });
+  material.addEventListener("change", () => {
+    commitPatch(true, { materialId: material.value || "default" });
+  });
+}
+
+function appendWindowParameterRows(
+  props: PropertiesPanelApi,
+  section: HTMLElement,
+  params: WindowParams,
+  apply: (commit: boolean, patch: Partial<WindowParams>) => void,
+  options: { includeCenter: boolean }
+) {
+  const numberRow = (
+    label: string,
+    key: keyof Pick<
+      WindowParams,
+      | "widthMm"
+      | "heightMm"
+      | "sillHeightMm"
+      | "centerMm"
+      | "frameWidthMm"
+      | "offsetFromInteriorMm"
+      | "sashWidthMm"
+      | "sashProfileDepthMm"
+      | "frameProfileDepthMm"
+    >
+  ) => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "1";
+    input.value = String(Math.round(Number(params[key] ?? 0)));
+    props.row(section, label, input);
+    const read = () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next)) return false;
+      params[key] = Math.round(next) as never;
+      return true;
+    };
+    input.addEventListener("input", () => {
+      if (read()) apply(false, { [key]: params[key] } as Partial<WindowParams>);
+    });
+    input.addEventListener("change", () => {
+      if (read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
+    });
+  };
+
+  numberRow("Sirka (mm)", "widthMm");
+  numberRow("Vyska (mm)", "heightMm");
+  numberRow("Sill height (mm)", "sillHeightMm");
+  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
+  numberRow("Sirka ramu (mm)", "frameWidthMm");
+  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
+  numberRow("Sirka kridla (mm)", "sashWidthMm");
+  numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
+  numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
+
+  const material = document.createElement("select");
+  material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
+  material.value = params.materialId;
+  material.addEventListener("change", () => {
+    params.materialId = material.value;
+    apply(true, { materialId: material.value });
+  });
+  props.row(section, "Material", material);
+}
+
+export function mountWindowPlacementPropsPanel(ctx: WindowPlacementPropsContext) {
+  const { props, params } = ctx;
+  props.setTitle("Okno - vlozenie");
+  const s = props.section();
+  const info = document.createElement("div");
+  info.className = "muted";
+  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene.";
+  s.appendChild(info);
+  appendWindowParameterRows(
+    props,
+    s,
+    params,
+    (_commit, patch) => {
+      ctx.onChange(patch);
+    },
+    { includeCenter: false }
+  );
+}
+
+export function mountWindowPropsPanel(ctx: WindowPropsContext) {
+  const { props, windowInst } = ctx;
+  if (!windowInst) return;
+
+  props.setTitle("Okno");
+  const s = props.section();
+  const params = windowInst.params;
+  const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
+
+  const wallInfo = document.createElement("div");
+  wallInfo.className = "muted";
+  wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Okno nie je vlozene v kreslenej stene.";
+  s.appendChild(wallInfo);
+
+  appendWindowParameterRows(
+    props,
+    s,
+    params,
+    (commit) => {
+      ctx.updateWindowTransform(windowInst);
+      if (commit) {
+        ctx.commitHistory(ctx.S);
+        ctx.mountProps();
+      }
+    },
+    { includeCenter: true }
+  );
+}
+
+function appendDoorParameterRows(
+  props: PropertiesPanelApi,
+  section: HTMLElement,
+  params: DoorParams,
+  apply: (commit: boolean, patch: Partial<DoorParams>) => void,
+  options: { includeCenter: boolean }
+) {
+  const numberRow = (
+    label: string,
+    key: keyof Pick<
+      DoorParams,
+      "widthMm" | "heightMm" | "centerMm" | "frameWidthMm" | "offsetFromInteriorMm" | "panelThicknessMm" | "swingAngleDeg"
+    >
+  ) => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "1";
+    input.value = String(Math.round(Number(params[key] ?? 0)));
+    props.row(section, label, input);
+    const read = () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next)) return false;
+      params[key] = Math.round(next) as never;
+      return true;
+    };
+    input.addEventListener("input", () => {
+      if (read()) apply(false, { [key]: params[key] } as Partial<DoorParams>);
+    });
+    input.addEventListener("change", () => {
+      if (read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
+    });
+  };
+
+  numberRow("Sirka (mm)", "widthMm");
+  numberRow("Vyska (mm)", "heightMm");
+  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
+  numberRow("Sirka ramu (mm)", "frameWidthMm");
+  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
+  numberRow("Hrubka kridla (mm)", "panelThicknessMm");
+  numberRow("Uhol otvorenia", "swingAngleDeg");
+
+  const swing = document.createElement("select");
+  swing.innerHTML = `
+    <option value="left">Lave</option>
+    <option value="right">Prave</option>
+  `;
+  swing.value = params.swingDirection;
+  swing.addEventListener("change", () => {
+    params.swingDirection = swing.value === "right" ? "right" : "left";
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  props.row(section, "Otvaranie", swing);
+
+  const material = document.createElement("select");
+  material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
+  material.value = params.materialId;
+  material.addEventListener("change", () => {
+    params.materialId = material.value;
+    apply(true, { materialId: material.value });
+  });
+  props.row(section, "Material", material);
+}
+
+export function mountDoorPlacementPropsPanel(ctx: DoorPlacementPropsContext) {
+  const { props, params } = ctx;
+  props.setTitle("Dvere - vlozenie");
+  const s = props.section();
+  const info = document.createElement("div");
+  info.className = "muted";
+  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space otaca dvere.";
+  s.appendChild(info);
+  appendDoorParameterRows(
+    props,
+    s,
+    params,
+    (_commit, patch) => {
+      ctx.onChange(patch);
+    },
+    { includeCenter: false }
+  );
+}
+
+export function mountDoorPropsPanel(ctx: DoorPropsContext) {
+  const { props, doorInst } = ctx;
+  if (!doorInst) return;
+
+  props.setTitle("Dvere");
+  const s = props.section();
+  const params = doorInst.params;
+  const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
+
+  const wallInfo = document.createElement("div");
+  wallInfo.className = "muted";
+  wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Dvere nie su vlozene v kreslenej stene.";
+  s.appendChild(wallInfo);
+
+  appendDoorParameterRows(
+    props,
+    s,
+    params,
+    (commit) => {
+      ctx.updateDoorTransform(doorInst);
+      if (commit) {
+        ctx.commitHistory(ctx.S);
+        ctx.mountProps();
+      }
+    },
+    { includeCenter: true }
+  );
 }
 
 export function mountFloorBoundaryPropsPanel(ctx: FloorBoundaryPropsContext) {
@@ -614,7 +1060,7 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
 }
 
 export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
-  const { findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, getModuleDescriptorOrThrow, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
+  const { findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, modulePackages, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
     const inst = findInstance(id);
     if (!inst) return showNoProps();
     props.setTitle(`Module (${inst.id})`);
@@ -682,7 +1128,7 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
     editorHost.style.marginTop = "10px";
     s.appendChild(editorHost);
 
-    const worktopArgs = { getWorktopThicknessMm: () => 0 };
+    const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog };
     const onChange = (previousParams?: ModuleParams, sourceKey?: string) => {
       const accepted = rebuildInstance(inst, {
         previousParams,
@@ -696,12 +1142,20 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
       return true;
     };
 
-    getModuleDescriptorOrThrow(inst.params.type).createControls(editorHost, inst.params, {
-      ...worktopArgs,
-      onChange,
-      textInputCommitMode: "explicit",
-      commitBoundary: args.propertiesEl
-    });
+    const modulePackage = findModulePackageForParams(modulePackages, inst.params);
+    if (!modulePackage) {
+      const missing = document.createElement("div");
+      missing.className = "muted";
+      missing.textContent = `Module package missing for ${inst.params.type}.`;
+      editorHost.appendChild(missing);
+    } else {
+      createModulePackageControls(editorHost, modulePackage, inst.params, {
+        ...worktopArgs,
+        onChange,
+        textInputCommitMode: "explicit",
+        commitBoundary: args.propertiesEl
+      });
+    }
 
     appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
 

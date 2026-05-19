@@ -1,4 +1,4 @@
-import { getDefaultDrawerLowHandleComponentId } from "../data/pricing/handleComponentPresets"
+import type { ClientCatalog } from "../core/catalog/catalog-types"
 
 export interface KitchenContext {
   // Identity
@@ -45,14 +45,27 @@ export interface KitchenContext {
   overlapErrorMm: number // overlap larger than this = error
 }
 
-export function makeDefaultKitchenContext(): KitchenContext {
+const FALLBACK_KITCHEN_DEFAULTS = {
+  carcassMaterialId: "mat.board.body.dtd.grey.18",
+  frontMaterialId: "mat.board.front.veneer.oak_natural.19",
+  worktopMaterialId: "mat.board.worktop.laminate_oak.38",
+  backPanelMaterialId: "mat.board.back.hdf.grey.6",
+  drawerBottomMaterialId: "mat.board.drawer_bottom.hdf.white.8",
+  defaultHandleComponentId: "cmp.handle.bar.160.black",
+  defaultWorktopThicknessMm: 38,
+  defaultBackPanelThicknessMm: 8,
+  defaultPlinthHeightMm: 150
+} as const
+
+export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchenDefaults">): KitchenContext {
+  const defaults = catalog?.kitchenDefaults ?? FALLBACK_KITCHEN_DEFAULTS
   const worktopDepthMm = 620
   const worktopFrontOffsetMm = 20
   const worktopBackOffsetMm = 20
-  const worktopThicknessMm = 38
+  const worktopThicknessMm = defaults.defaultWorktopThicknessMm ?? FALLBACK_KITCHEN_DEFAULTS.defaultWorktopThicknessMm
   const heightMm = 820
 
-  const handleComponentId = getDefaultDrawerLowHandleComponentId()
+  const handleComponentId = defaults.defaultHandleComponentId ?? FALLBACK_KITCHEN_DEFAULTS.defaultHandleComponentId
 
   return {
     name: 'Kuchy\u0148a 1',
@@ -68,7 +81,7 @@ export function makeDefaultKitchenContext(): KitchenContext {
     moduleDepthMm: worktopDepthMm - worktopFrontOffsetMm - worktopBackOffsetMm,
     moduleHeightMm: heightMm - worktopThicknessMm,
 
-    plinthHeightMm: 150,
+    plinthHeightMm: defaults.defaultPlinthHeightMm ?? FALLBACK_KITCHEN_DEFAULTS.defaultPlinthHeightMm,
     plinthDepthMm: 50,
 
     upperStartHeightMm: 1400,
@@ -76,14 +89,14 @@ export function makeDefaultKitchenContext(): KitchenContext {
     upperHeightMm: 720,
 
     doorOverlayMm: 18,
-    backPanelThicknessMm: 8,
+    backPanelThicknessMm: defaults.defaultBackPanelThicknessMm ?? FALLBACK_KITCHEN_DEFAULTS.defaultBackPanelThicknessMm,
     endPanelThicknessMm: 18,
 
-    frontsMaterialId: 'mat.board.front.veneer.oak_natural.19',
-    corpusMaterialId: 'mat.board.body.dtd.grey.18',
-    backMaterialId: 'mat.board.back.hdf.grey.6',
-    drawerBottomMaterialId: 'mat.board.drawer_bottom.hdf.white.8',
-    worktopMaterialId: 'mat.board.worktop.laminate_oak.38',
+    frontsMaterialId: defaults.frontMaterialId ?? FALLBACK_KITCHEN_DEFAULTS.frontMaterialId,
+    corpusMaterialId: defaults.carcassMaterialId ?? FALLBACK_KITCHEN_DEFAULTS.carcassMaterialId,
+    backMaterialId: defaults.backPanelMaterialId ?? FALLBACK_KITCHEN_DEFAULTS.backPanelMaterialId,
+    drawerBottomMaterialId: defaults.drawerBottomMaterialId ?? FALLBACK_KITCHEN_DEFAULTS.drawerBottomMaterialId,
+    worktopMaterialId: defaults.worktopMaterialId ?? FALLBACK_KITCHEN_DEFAULTS.worktopMaterialId,
     handleComponentId,
 
     fillerStrategy: 'warn',
@@ -99,7 +112,7 @@ export function resolveContext(ctx: KitchenContext): KitchenContext {
     handleComponentId:
       typeof ctx.handleComponentId === 'string' && ctx.handleComponentId.trim().length > 0
         ? ctx.handleComponentId
-        : getDefaultDrawerLowHandleComponentId(),
+        : FALLBACK_KITCHEN_DEFAULTS.defaultHandleComponentId,
     moduleDepthMm: ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
     moduleHeightMm: ctx.heightMm - ctx.worktopThicknessMm,
   }

@@ -8,11 +8,13 @@ import {
   renderErrors
 } from "./sharedUtils";
 import { buildModule } from "../geometry/buildModule";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { disposeObject3D } from "../core/dispose";
-import { getModuleDescriptorOrThrow } from "../modules/registry";
 import { validateModule, type ModuleParams } from "../model/cabinetTypes";
 import type { AppArgs } from "./bootstrap";
 import type { PartRow, OverlapRow } from "../ui/createPartPanel";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
 
 type ParamHighlightControls = {
   highlightParamKeys?: (keys: string[]) => void;
@@ -42,6 +44,8 @@ type BuildModeControllerContext = {
   selectMesh: (mesh: THREE.Mesh | null) => void;
   activeBuildControls: ParamHighlightControls | null;
   cabinetGroup: THREE.Group | null;
+  clientCatalog: ClientCatalog;
+  modulePackages: readonly FurnQuoteModulePackage[];
   params: ModuleParams;
   selectedMesh: THREE.Mesh | null;
 };
@@ -60,9 +64,20 @@ export function createBuildModeController(ctx: BuildModeControllerContext) {
       return;
     }
 
-    const worktopArgs = { getWorktopThicknessMm: () => 0 };
-    ctx.activeBuildControls = getModuleDescriptorOrThrow(ctx.params.type).createControls(ctx.editorHost, ctx.params, {
-      ...worktopArgs,
+    const modulePackage = findModulePackageForParams(ctx.modulePackages, ctx.params);
+    if (!modulePackage) {
+      const message = `Module package missing for ${ctx.params.type}.`;
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.textContent = message;
+      ctx.editorHost.appendChild(empty);
+      renderErrors(ctx.args.errorsEl, [message]);
+      return;
+    }
+
+    ctx.activeBuildControls = createModulePackageControls(ctx.editorHost, modulePackage, ctx.params, {
+      getWorktopThicknessMm: () => 0,
+      clientCatalog: ctx.clientCatalog,
       onChange: () => afterParamsChanged()
     });
   };
@@ -88,7 +103,7 @@ export function createBuildModeController(ctx: BuildModeControllerContext) {
     renderErrors(ctx.args.errorsEl, errors);
     if (errors.length > 0) return;
 
-    const next = buildModule(ctx.params);
+    const next = buildModule(ctx.params, ctx.clientCatalog);
 
     if (ctx.cabinetGroup) {
       ctx.scene.remove(ctx.cabinetGroup);

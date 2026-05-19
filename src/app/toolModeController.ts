@@ -61,6 +61,7 @@ type ToolModeControllerContext = {
   alignState: AlignState;
   args: ToolModeArgs;
   cancelKitchenWorktopDraw: (opts?: { silent?: boolean }) => void;
+  cancelColumnPlacement?: (opts?: { silent?: boolean }) => boolean;
   cancelPlacement: (S: AppState, helpers: PlacementHelpers) => void;
   cancelSectionDraw: (opts?: { silent?: boolean }) => void;
   clearAllMeasurements: () => void;
@@ -72,6 +73,7 @@ type ToolModeControllerContext = {
   ensureLayoutMode: () => void;
   hideHoverCursor: () => void;
   isEscapeKey: (ev: KeyboardEvent) => boolean;
+  isColumnPlacementActive?: () => boolean;
   isTypingTarget: (target: EventTarget | null) => boolean;
   layoutRoot: THREE.Object3D;
   layoutTool: LayoutTool;
@@ -137,6 +139,12 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
   const handleLayoutEscape = (ev: KeyboardEvent) => {
     if (ctx.mode !== "layout") return false;
     if (ctx.isTypingTarget(ev.target)) return false;
+
+    if (ctx.isColumnPlacementActive?.()) {
+      ctx.cancelColumnPlacement?.();
+      ev.preventDefault();
+      return true;
+    }
 
     if (ctx.layoutTool === "align") {
       if (ctx.alignState.ref) {
@@ -249,6 +257,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
   const enterTool = (tool: LayoutTool) => {
     ctx.ensureLayoutMode();
     if (ctx.placement.active) ctx.cancelPlacement(ctx.S, ctx.placementHelpers);
+    ctx.cancelColumnPlacement?.({ silent: true });
     ctx.layoutTool = tool;
     deactivateMeasureTool();
     ctx.technicalDimensions.resetDraft();

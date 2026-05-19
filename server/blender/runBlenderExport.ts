@@ -2,13 +2,17 @@ import { spawn } from "node:child_process";
 import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { assertOutputPathInsideStorage, resolveStorageRootPath } from "../../src/core/storage/storage-path-resolver";
+import type { StorageService } from "../../src/core/storage/storageService";
+import type { ClientProjectPhaseScope } from "../../src/core/storage/storage-types";
 
 type RunBlenderExportArgs = {
   sceneJson: unknown;
+  storage: Pick<StorageService, "scope" | "ensurePhaseDirectories" | "getRenderPath">;
+  sceneFileName: string;
+  blendFileName: string;
+  previewFileName?: string | null;
   projectRoot?: string;
-  jsonOutPath?: string;
-  blendOutPath?: string;
-  previewOutPath?: string | null;
   blenderPath?: string;
   timeoutMs?: number;
 };
@@ -68,31 +72,61 @@ const resolveBlenderBin = async (explicit: string | undefined) => {
   return auto ?? "blender";
 };
 
-const normalizeHdriPath = (projectRoot: string, hdriPath: unknown): string | null => {
-  if (typeof hdriPath !== "string" || !hdriPath.trim()) return null;
-  const p = hdriPath.trim();
-  if (p.startsWith("http://") || p.startsWith("https://")) {
-    try {
-      const u = new URL(p);
-      if (u.pathname.startsWith("/")) return path.join(projectRoot, "public", u.pathname.slice(1));
-      return path.resolve(projectRoot, u.pathname);
-    } catch {
-      // fall through
-    }
+const assertAllowedResolvedAssetPath = (projectRoot: string, storageScope: ClientProjectPhaseScope, resolvedPath: string): string => {
+  const resolved = path.resolve(resolvedPath);
+  const allowedRoots = [
+    path.resolve(projectRoot, "public"),
+    path.resolve(projectRoot, "src", "assets"),
+    path.resolve(
+      resolveStorageRootPath(projectRoot),
+      "clients",
+      storageScope.clientId,
+      "projects",
+      storageScope.projectId,
+      "phases",
+      storageScope.phaseId,
+      "uploads"
+    )
+  ];
+
+  for (const root of allowedRoots) {
+    const rel = path.relative(root, resolved);
+    if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) return resolved;
   }
-  if (path.isAbsolute(p) && !p.startsWith("/")) return p; // Windows/Posix absolute filesystem path
-  if (p.startsWith("/")) return path.join(projectRoot, "public", p.slice(1));
-  return path.resolve(projectRoot, p);
+
+  throw new Error("Scene asset path is not allowed for this client/project/phase.");
 };
 
-const normalizePublicAssetPath = (projectRoot: string, uri: unknown): string | null => {
+const resolvePublicOrStorageUrlPath = (projectRoot: string, storageScope: ClientProjectPhaseScope, pathname: string): string => {
+  if (pathname.startsWith("/storage/clients/")) {
+    return path.join(resolveStorageRootPath(projectRoot), pathname.slice("/storage/".length));
+  }
+  if (pathname.startsWith("/")) return path.join(projectRoot, "public", pathname.slice(1));
+  return path.resolve(projectRoot, pathname);
+};
+
+const normalizeHdriPath = (projectRoot: string, storageScope: ClientProjectPhaseScope, hdriPath: unknown): string | null => {
+  if (typeof hdriPath !== "string" || !hdriPath.trim()) return null;
+  const p = hdriPath.trim();
+  if (path.isAbsolute(p) && !p.startsWith("/")) throw new Error("Absolute filesystem asset paths are not allowed.");
+  if (p.startsWith("http://") || p.startsWith("https://")) {
+    const u = new URL(p);
+    return assertAllowedResolvedAssetPath(projectRoot, storageScope, resolvePublicOrStorageUrlPath(projectRoot, storageScope, u.pathname));
+  }
+  if (p.startsWith("/")) return assertAllowedResolvedAssetPath(projectRoot, storageScope, resolvePublicOrStorageUrlPath(projectRoot, storageScope, p));
+  return assertAllowedResolvedAssetPath(projectRoot, storageScope, path.resolve(projectRoot, p));
+};
+
+const normalizePublicAssetPath = (projectRoot: string, storageScope: ClientProjectPhaseScope, uri: unknown): string | null => {
   if (typeof uri !== "string" || !uri.trim()) return null;
   const raw = uri.trim();
+  if (path.isAbsolute(raw) && !raw.startsWith("/")) throw new Error("Absolute filesystem asset paths are not allowed.");
 
   const fromPath = (p: string) => {
-    if (path.isAbsolute(p) && !p.startsWith("/")) return p;
-    if (p.startsWith("/")) return path.join(projectRoot, "public", p.slice(1));
-    return path.resolve(projectRoot, p);
+    const resolved = p.startsWith("/")
+      ? resolvePublicOrStorageUrlPath(projectRoot, storageScope, p)
+      : path.resolve(projectRoot, p);
+    return assertAllowedResolvedAssetPath(projectRoot, storageScope, resolved);
   };
 
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
@@ -107,11 +141,11 @@ const normalizePublicAssetPath = (projectRoot: string, uri: unknown): string | n
   return fromPath(raw);
 };
 
-const withResolvedHdri = (projectRoot: string, sceneJson: unknown) => {
+const withResolvedHdri = (projectRoot: string, storageScope: ClientProjectPhaseScope, sceneJson: unknown) => {
   if (!isRecord(sceneJson)) return sceneJson;
   const env = sceneJson.environment;
   if (!isRecord(env)) return sceneJson;
-  const resolved = normalizeHdriPath(projectRoot, env.hdriPath);
+  const resolved = normalizeHdriPath(projectRoot, storageScope, env.hdriPath);
   return {
     ...sceneJson,
     environment: {
@@ -121,7 +155,7 @@ const withResolvedHdri = (projectRoot: string, sceneJson: unknown) => {
   };
 };
 
-const withResolvedMaterialTextures = (projectRoot: string, sceneJson: unknown) => {
+const withResolvedMaterialTextures = (projectRoot: string, storageScope: ClientProjectPhaseScope, sceneJson: unknown) => {
   if (!isRecord(sceneJson)) return sceneJson;
   const objects = sceneJson.objects;
   if (!Array.isArray(objects)) return sceneJson;
@@ -135,7 +169,7 @@ const withResolvedMaterialTextures = (projectRoot: string, sceneJson: unknown) =
 
     const resolveOne = (t: unknown) => {
       if (!isRecord(t)) return t;
-      const resolvedUri = normalizePublicAssetPath(projectRoot, t.uri);
+      const resolvedUri = normalizePublicAssetPath(projectRoot, storageScope, t.uri);
       if (!resolvedUri) return t;
       return { ...t, uri: resolvedUri };
     };
@@ -155,22 +189,38 @@ const withResolvedMaterialTextures = (projectRoot: string, sceneJson: unknown) =
   return { ...sceneJson, objects: nextObjects };
 };
 
+const withStorageMeta = (sceneJson: unknown, storageScope: ClientProjectPhaseScope) => {
+  if (!isRecord(sceneJson)) return sceneJson;
+  const meta = isRecord(sceneJson.meta) ? sceneJson.meta : {};
+  return {
+    ...sceneJson,
+    meta: {
+      ...meta,
+      storage: storageScope
+    }
+  };
+};
+
 export async function runBlenderExport(args: RunBlenderExportArgs): Promise<RunBlenderExportResult> {
   const projectRoot = args.projectRoot ? path.resolve(args.projectRoot) : process.cwd();
-  const exportsDir = path.join(projectRoot, "exports");
-
-  const jsonPath = args.jsonOutPath ? path.resolve(projectRoot, args.jsonOutPath) : path.join(exportsDir, "scene.json");
-  const blendPath = args.blendOutPath ? path.resolve(projectRoot, args.blendOutPath) : path.join(exportsDir, "scene.blend");
+  await args.storage.ensurePhaseDirectories();
+  const jsonPath = assertOutputPathInsideStorage(projectRoot, args.storage.getRenderPath(args.sceneFileName));
+  const blendPath = assertOutputPathInsideStorage(projectRoot, args.storage.getRenderPath(args.blendFileName));
   const previewPath =
-    args.previewOutPath === null
+    args.previewFileName === null
       ? null
-      : args.previewOutPath
-        ? path.resolve(projectRoot, args.previewOutPath)
+      : args.previewFileName
+        ? assertOutputPathInsideStorage(projectRoot, args.storage.getRenderPath(args.previewFileName))
         : null;
 
-  await mkdir(exportsDir, { recursive: true });
+  await mkdir(path.dirname(jsonPath), { recursive: true });
+  await mkdir(path.dirname(blendPath), { recursive: true });
+  if (previewPath) await mkdir(path.dirname(previewPath), { recursive: true });
 
-  const sceneJson = withResolvedMaterialTextures(projectRoot, withResolvedHdri(projectRoot, args.sceneJson));
+  const sceneJson = withStorageMeta(
+    withResolvedMaterialTextures(projectRoot, args.storage.scope, withResolvedHdri(projectRoot, args.storage.scope, args.sceneJson)),
+    args.storage.scope
+  );
   await writeFile(jsonPath, JSON.stringify(sceneJson, null, 2), "utf-8");
 
   const blenderBin = await resolveBlenderBin(args.blenderPath);

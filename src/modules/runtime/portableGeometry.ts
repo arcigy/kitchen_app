@@ -3,10 +3,13 @@ import {
   getPortableMaterialsSnapshotSelections,
   type PortableMaterialsSnapshot
 } from "./portableCommercial";
-import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
-import { getComponentGeometryDefinitionForComponentId } from "../../data/pricing/componentGeometryDefinitions";
-import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
-import type { ComponentGeometryDefinition } from "../../data/pricing/types";
+import type { ClientCatalog, ComponentGeometryDefinition, ComponentType } from "../../core/catalog/catalog-types";
+import {
+  createModuleRuntimeCatalogContext,
+  SYSTEM_PLACEHOLDER_MATERIAL,
+  type MaterialFallbackKind,
+  type ModuleRuntimeCatalogContext
+} from "./runtimeCatalog";
 
 export type PortableGeometryPart = {
   id: string;
@@ -475,29 +478,41 @@ function getLegacyMaterialColorForFamily(
   return readString(params.bodyColor, materials?.bodyColor);
 }
 
-function resolvePortableComponentAssignment(partName: string, params: Record<string, unknown>, snapshot: PortableMaterialsSnapshot | null | undefined) {
+function materialFallbackKindForFamily(family: string | undefined): MaterialFallbackKind {
+  if (family === "front") return "front";
+  if (family === "back") return "backPanel";
+  if (family === "drawer_bottom" || family === "drawer_box" || family === "drawer") return "drawer";
+  return "carcass";
+}
+
+function resolvePortableComponentAssignment(
+  partName: string,
+  params: Record<string, unknown>,
+  snapshot: PortableMaterialsSnapshot | null | undefined,
+  catalogContext: ModuleRuntimeCatalogContext | null
+) {
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const findAssigned = (assignmentKey: string) => componentAssignments.find((entry) => entry.assignmentKey === assignmentKey)?.component ?? null;
+  const resolveExplicit = (paramKey: string, componentType: ComponentType, assignmentKey: string) => {
+    const explicitId = typeof params[paramKey] === "string" ? params[paramKey] as string : undefined;
+    const explicit = catalogContext?.resolveComponent(explicitId, componentType);
+    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned(assignmentKey);
+  };
 
   if (isDoorHandlePartName(partName)) {
-    const explicit = typeof params.handleComponentId === "string" ? getComponentDefinitionById(params.handleComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : (findAssigned("door-handles") ?? findAssigned("drawer-handles"));
+    return resolveExplicit("handleComponentId", "handle", "door-handles") ?? findAssigned("drawer-handles");
   }
   if (/^leg_/i.test(partName)) {
-    const explicit = typeof params.legComponentId === "string" ? getComponentDefinitionById(params.legComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("adjustable-legs");
+    return resolveExplicit("legComponentId", "leg", "adjustable-legs");
   }
   if (/^drawer_\d+_rail[LR]$/i.test(partName)) {
-    const explicit = typeof params.runnerComponentId === "string" ? getComponentDefinitionById(params.runnerComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("drawer-runners");
+    return resolveExplicit("runnerComponentId", "runner", "drawer-runners");
   }
   if (/^hinge_/i.test(partName)) {
-    const explicit = typeof params.hingeComponentId === "string" ? getComponentDefinitionById(params.hingeComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("door-hinges");
+    return resolveExplicit("hingeComponentId", "hinge", "door-hinges");
   }
   if (/^kickClip_/i.test(partName) || /^plinth-clip/i.test(partName)) {
-    const explicit = typeof params.clipComponentId === "string" ? getComponentDefinitionById(params.clipComponentId) : null;
-    return explicit ? { ...explicit, catalogId: explicit.id } : findAssigned("plinth-clips");
+    return resolveExplicit("clipComponentId", "plinth_clip", "plinth-clips");
   }
   return null;
 }
@@ -505,17 +520,22 @@ function resolvePortableComponentAssignment(partName: string, params: Record<str
 function resolveLivePartOverride(
   partName: string,
   params: Record<string, unknown>,
-  snapshot: PortableMaterialsSnapshot | null | undefined
+  snapshot: PortableMaterialsSnapshot | null | undefined,
+  catalogContext: ModuleRuntimeCatalogContext | null
 ) {
   const boardSlot = resolvePortableBoardSlot(partName, snapshot);
   if (boardSlot) {
-    const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params);
+    const { slotMaterialCatalogIds, slotThicknesses } = catalogContext
+      ? getPortableMaterialsSnapshotSelections(snapshot, params, catalogContext.catalog)
+      : { slotMaterialCatalogIds: {} as Record<string, string>, slotThicknesses: {} as Record<string, number> };
     const slotAssignment = (snapshot?.slotAssignments ?? []).find((slot) => slot.slotId === boardSlot || slot.partId === boardSlot) ?? null;
     const selectedCatalogId = slotMaterialCatalogIds[boardSlot];
     const legacyCatalogId = getLegacyMaterialIdForFamily(slotAssignment?.boardFamily, params);
     const selectedMaterial =
-      (selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null) ??
-      (legacyCatalogId ? getMaterialDefinitionById(legacyCatalogId) : null);
+      (selectedCatalogId ? catalogContext?.getMaterialById(selectedCatalogId) : null) ??
+      (legacyCatalogId ? catalogContext?.resolveMaterial(legacyCatalogId, materialFallbackKindForFamily(slotAssignment?.boardFamily)) : null) ??
+      catalogContext?.resolveMaterial(undefined, materialFallbackKindForFamily(slotAssignment?.boardFamily)) ??
+      slotAssignment?.assignedMaterial;
     if (selectedMaterial) {
       return {
         colorHex: selectedMaterial.preview.colorHex,
@@ -542,11 +562,17 @@ function resolveLivePartOverride(
             : null)
       };
     }
+    return {
+      colorHex: SYSTEM_PLACEHOLDER_MATERIAL.colorHex,
+      roughness: SYSTEM_PLACEHOLDER_MATERIAL.roughness,
+      metalness: SYSTEM_PLACEHOLDER_MATERIAL.metalness,
+      thicknessMm: null
+    };
   }
 
-  const component = resolvePortableComponentAssignment(partName, params, snapshot);
+  const component = resolvePortableComponentAssignment(partName, params, snapshot, catalogContext);
   if (component) {
-    const geometry = getComponentGeometryDefinitionForComponentId(component.catalogId);
+    const geometry = catalogContext?.getComponentGeometryById(component.geometryId) ?? null;
     return {
       colorHex: component.preview.colorHex,
       roughness: component.preview.roughness,
@@ -784,7 +810,8 @@ function buildMeshFromLivePart(
   part: PortableLivePart,
   currentParams: Record<string, unknown>,
   baseParams: Record<string, unknown>,
-  materialsSnapshot?: PortableMaterialsSnapshot | null
+  materialsSnapshot?: PortableMaterialsSnapshot | null,
+  catalogContext?: ModuleRuntimeCatalogContext | null
 ) {
   if (!part.sizeMm) return null;
   const baseDims = resolveLiveDimensions(baseParams, baseParams);
@@ -826,7 +853,7 @@ function buildMeshFromLivePart(
     y: Math.max(1, y.sizeMm),
     z: Math.max(1, z.sizeMm)
   };
-  const override = resolveLivePartOverride(part.name, currentParams, materialsSnapshot);
+  const override = resolveLivePartOverride(part.name, currentParams, materialsSnapshot, catalogContext ?? null);
   const componentGeometry = override?.componentGeometry ?? null;
   if (override?.thicknessMm) {
     const minAxis = (["x", "y", "z"] as Array<keyof typeof sizeMm>).sort((left, right) => sizeMm[left] - sizeMm[right])[0];
@@ -867,14 +894,16 @@ function buildMeshFromLivePart(
 export function buildPortableLiveModuleGroup(
   params: Record<string, unknown>,
   snapshot: PortableLiveStateSnapshot,
-  materialsSnapshot?: PortableMaterialsSnapshot | null
+  materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
+  catalog: ClientCatalog
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = `${snapshot.moduleType}PortableLiveModule`;
   const baseParams = snapshot.liveRuntime?.params ?? snapshot.params ?? {};
   const parts = snapshot.liveRuntime?.parts ?? [];
+  const catalogContext = catalog ? createModuleRuntimeCatalogContext(catalog) : null;
   for (const part of parts) {
-    const mesh = buildMeshFromLivePart(part, params, baseParams, materialsSnapshot);
+    const mesh = buildMeshFromLivePart(part, params, baseParams, materialsSnapshot, catalogContext);
     if (!mesh) continue;
     group.add(mesh);
   }

@@ -11,7 +11,7 @@ export default defineConfig({
         target: "http://127.0.0.1:5191",
         changeOrigin: true
       },
-      "/exports": {
+      "/storage": {
         target: "http://127.0.0.1:5191",
         changeOrigin: true
       }

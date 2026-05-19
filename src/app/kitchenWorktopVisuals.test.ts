@@ -9,6 +9,7 @@ import {
   makeKitchenWorktopOutlineGeometry,
   makeKitchenWorktopPreviewGeometry
 } from "./kitchenWorktopVisuals";
+import { getSystemSeedCatalog } from "../core/catalog/catalog-repository";
 import type { KitchenWorktopParams } from "./localTypes";
 
 const sampleWorktop: KitchenWorktopParams = {
@@ -36,14 +37,15 @@ describe("kitchenWorktopVisuals", () => {
   });
 
   it("creates solid and preview materials", () => {
-    const solid = makeKitchenWorktopMaterial(sampleWorktop.materialId);
-    const preview = makeKitchenWorktopMaterial(sampleWorktop.materialId, { preview: true });
+    const catalog = getSystemSeedCatalog();
+    const solid = makeKitchenWorktopMaterial(sampleWorktop.materialId, { catalog });
+    const preview = makeKitchenWorktopMaterial(sampleWorktop.materialId, { preview: true, catalog });
 
     expect(solid.transparent).toBe(false);
     expect(solid.opacity).toBe(1);
     expect(preview.transparent).toBe(true);
     expect(preview.opacity).toBe(0.52);
-    expect(kitchenWorktopOutlineColor(sampleWorktop.materialId)).toBeTypeOf("number");
+    expect(kitchenWorktopOutlineColor(sampleWorktop.materialId, catalog)).toBeTypeOf("number");
   });
 
   it("creates worktop geometry variants", () => {

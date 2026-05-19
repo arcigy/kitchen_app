@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { installAuthSession } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
@@ -15,18 +16,34 @@ async function clickToolbarButton(page, predicateSource) {
   if (!clicked) throw new Error(`Toolbar button not found: ${predicateSource}`);
 }
 
+async function clickTopbarTab(page, labels) {
+  const clicked = await page.evaluate((items) => {
+    const wanted = items.map((item) => item.toLowerCase());
+    const button = [...document.querySelectorAll(".revit-tab")].find((item) =>
+      wanted.includes((item.textContent || "").trim().toLowerCase())
+    );
+    if (!button) return false;
+    button.click();
+    return true;
+  }, labels);
+  if (!clicked) throw new Error(`Topbar tab not found: ${labels.join(", ")}`);
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await installAuthSession(page);
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
     await page.waitForSelector("button", { timeout: 30000 });
 
+    await clickTopbarTab(page, ["View", "Zobrazenie"]);
     await clickToolbarButton(page, `(title, text) => title.includes("catalog") || title.includes("katal")`);
     await page.locator("h2").filter({ hasText: /Pricing Catalog|Cenový katalóg/i }).first().waitFor();
     const catalogScrollTop = await page.evaluate(() => {

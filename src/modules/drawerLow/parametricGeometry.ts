@@ -1,14 +1,13 @@
 import * as THREE from "three";
 import { normalizeDrawerLowParams, type DrawerLowParams } from "./types";
+import type { ClientCatalog, ComponentType } from "../../core/catalog/catalog-types";
 import type { PortableMaterialsSnapshot } from "../runtime/portableCommercial";
 import { getPortableMaterialsSnapshotSelections } from "../runtime/portableCommercial";
-import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
-import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
 import {
-  resolveDrawerLowHandleComponentIdFromParams,
-  resolveDrawerLowLegComponentIdFromParams,
-  resolveDrawerLowRunnerComponentIdFromParams
-} from "../../data/pricing/handleComponentPresets";
+  createModuleRuntimeCatalogContext,
+  type MaterialFallbackKind,
+  type ModuleRuntimeCatalogContext
+} from "../runtime/runtimeCatalog";
 
 const MM_TO_M = 0.001;
 
@@ -141,17 +140,29 @@ function resolveDrawerLowBoardSlot(partName: string) {
   return null;
 }
 
+function fallbackKindForDrawerPart(partName: string): MaterialFallbackKind {
+  if (/front/i.test(partName)) return "front";
+  if (/back/i.test(partName)) return "backPanel";
+  if (/drawer_/i.test(partName)) return "drawer";
+  return "carcass";
+}
+
 function resolveBoardPreview(
   partName: string,
   params: Record<string, unknown>,
   materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
-  fallback: PreviewMaterial
+  fallback: PreviewMaterial,
+  catalogContext: ModuleRuntimeCatalogContext | null
 ): PreviewMaterial {
   const boardSlot = resolveDrawerLowBoardSlot(partName);
   if (!boardSlot) return fallback;
-  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+  const { slotMaterialCatalogIds, slotThicknesses } = catalogContext
+    ? getPortableMaterialsSnapshotSelections(materialsSnapshot, params, catalogContext.catalog)
+    : { slotMaterialCatalogIds: {} as Record<string, string>, slotThicknesses: {} as Record<string, number> };
   const selectedCatalogId = slotMaterialCatalogIds[boardSlot];
-  const selectedMaterial = selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null;
+  const selectedMaterial =
+    (selectedCatalogId ? catalogContext?.getMaterialById(selectedCatalogId) : null) ??
+    catalogContext?.resolveMaterial(undefined, fallbackKindForDrawerPart(partName));
   if (!selectedMaterial) return fallback;
   return {
     colorHex: selectedMaterial.preview.colorHex,
@@ -163,10 +174,11 @@ function resolveBoardPreview(
 
 function resolveComponentPreview(
   componentId: string | null | undefined,
-  fallback: PreviewMaterial
+  fallback: PreviewMaterial,
+  catalogContext: ModuleRuntimeCatalogContext | null,
+  componentType: ComponentType
 ): PreviewMaterial {
-  if (!componentId) return fallback;
-  const component = getComponentDefinitionById(componentId);
+  const component = catalogContext?.resolveComponent(componentId, componentType);
   if (!component) return fallback;
   return {
     colorHex: component.preview.colorHex,
@@ -179,9 +191,10 @@ function resolveBoardThickness(
   partName: string,
   params: Record<string, unknown>,
   materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
-  fallback: number
+  fallback: number,
+  catalogContext: ModuleRuntimeCatalogContext | null
 ) {
-  return getNumber(resolveBoardPreview(partName, params, materialsSnapshot, fallbackBoardPreview).thicknessMm, fallback);
+  return getNumber(resolveBoardPreview(partName, params, materialsSnapshot, fallbackBoardPreview, catalogContext).thicknessMm, fallback);
 }
 
 const fallbackBoardPreview: PreviewMaterial = {
@@ -238,9 +251,11 @@ function resolveFrontHeights(params: Record<string, unknown>, drawerCount: numbe
 
 export function buildDrawerLowParametric(
   params: DrawerLowParams,
-  materialsSnapshot?: PortableMaterialsSnapshot | null
+  materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
+  catalog: ClientCatalog
 ): THREE.Group {
   params = normalizeDrawerLowParams(params);
+  const catalogContext = catalog ? createModuleRuntimeCatalogContext(catalog) : null;
   const group = new THREE.Group();
   group.name = "drawerLowModule";
 
@@ -251,25 +266,21 @@ export function buildDrawerLowParametric(
   const carcassTopMm = Math.max(50, getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm));
   const plinthHeightMm = clamp(getNumber(params.plinthHeight, 100), 0, carcassTopMm - 20);
 
-  const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, getNumber(params.boardThickness, 18));
-  const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, getNumber(params.backThickness, 6));
+  const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, getNumber(params.boardThickness, 18), catalogContext);
+  const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, getNumber(params.backThickness, 6), catalogContext);
   const frontThicknessMm = resolveBoardThickness(
     "front_1",
     params as Record<string, unknown>,
     materialsSnapshot,
-    getNumber(params.frontThicknessMm, 18)
+    getNumber(params.frontThicknessMm, 18),
+    catalogContext
   );
   const drawerBoxThicknessMm = resolveBoardThickness(
     "drawer_1_sideL",
     params as Record<string, unknown>,
     materialsSnapshot,
-    getNumber(params.drawerBoxThickness, 13)
-  );
-  const drawerBottomThicknessMm = resolveBoardThickness(
-    "drawer_1_bottom",
-    params as Record<string, unknown>,
-    materialsSnapshot,
-    8
+    getNumber(params.drawerBoxThickness, 13),
+    catalogContext
   );
   const carcassDepthMm = Math.max(80, totalDepthMm - frontThicknessMm);
   const carcassCenterZMm = -frontThicknessMm / 2;
@@ -300,29 +311,32 @@ export function buildDrawerLowParametric(
   const kickThicknessMm = Math.min(boardThicknessMm, carcassDepthMm * 0.2);
   const kickCenterZMm = carcassCenterZMm + carcassDepthMm / 2 - kickThicknessMm / 2 - plinthSetbackMm;
 
-  const bodyPreview = resolveBoardPreview("leftSide", params as Record<string, unknown>, materialsSnapshot, fallbackBoardPreview);
-  const topPreview = resolveBoardPreview("topRailFront", params as Record<string, unknown>, materialsSnapshot, bodyPreview);
-  const backPreview = resolveBoardPreview("back", params as Record<string, unknown>, materialsSnapshot, fallbackBoardPreview);
-  const kickPreview = resolveBoardPreview("kick", params as Record<string, unknown>, materialsSnapshot, bodyPreview);
-  const frontPreview = resolveBoardPreview("front_1", params as Record<string, unknown>, materialsSnapshot, fallbackFrontPreview);
-  const drawerSidePreview = resolveBoardPreview("drawer_1_sideL", params as Record<string, unknown>, materialsSnapshot, fallbackDrawerPreview);
-  const drawerBottomPreview = resolveBoardPreview("drawer_1_bottom", params as Record<string, unknown>, materialsSnapshot, fallbackDrawerPreview);
-  const handlePreview = resolveComponentPreview(resolveDrawerLowHandleComponentIdFromParams(params as Record<string, unknown>), fallbackHardwarePreview);
-  const legPreview = resolveComponentPreview(resolveDrawerLowLegComponentIdFromParams(params as Record<string, unknown>), {
+  const bodyPreview = resolveBoardPreview("leftSide", params as Record<string, unknown>, materialsSnapshot, fallbackBoardPreview, catalogContext);
+  const topPreview = resolveBoardPreview("topRailFront", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext);
+  const backPreview = resolveBoardPreview("back", params as Record<string, unknown>, materialsSnapshot, fallbackBoardPreview, catalogContext);
+  const kickPreview = resolveBoardPreview("kick", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext);
+  const frontPreview = resolveBoardPreview("front_1", params as Record<string, unknown>, materialsSnapshot, fallbackFrontPreview, catalogContext);
+  const drawerSidePreview = resolveBoardPreview("drawer_1_sideL", params as Record<string, unknown>, materialsSnapshot, fallbackDrawerPreview, catalogContext);
+  const drawerBottomPreview = resolveBoardPreview("drawer_1_bottom", params as Record<string, unknown>, materialsSnapshot, fallbackDrawerPreview, catalogContext);
+  const handleComponentId = catalogContext?.resolveComponentId(params.handleComponentId as string | undefined, "handle", "handle") ?? null;
+  const legComponentId = catalogContext?.resolveComponentId(params.legComponentId as string | undefined, "leg") ?? null;
+  const runnerComponentId = catalogContext?.resolveComponentId(params.runnerComponentId as string | undefined, "runner", "drawerSystem") ?? null;
+  const handlePreview = resolveComponentPreview(handleComponentId, fallbackHardwarePreview, catalogContext, "handle");
+  const legPreview = resolveComponentPreview(legComponentId, {
     colorHex: "#1e232b",
     roughness: 0.45,
     metalness: 0.55
-  });
-  const runnerPreview = resolveComponentPreview(resolveDrawerLowRunnerComponentIdFromParams(params as Record<string, unknown>), {
+  }, catalogContext, "leg");
+  const runnerPreview = resolveComponentPreview(runnerComponentId, {
     colorHex: "#9ca3ad",
     roughness: 0.3,
     metalness: 0.82
-  });
-  const clipPreview = resolveComponentPreview("cmp.clip.plinth.standard", {
+  }, catalogContext, "runner");
+  const clipPreview = resolveComponentPreview(params.clipComponentId as string | undefined, {
     colorHex: "#1e232b",
     roughness: 0.45,
     metalness: 0.35
-  });
+  }, catalogContext, "plinth_clip");
 
   addBoxPart({
     group,
@@ -395,7 +409,7 @@ export function buildDrawerLowParametric(
   });
 
   if (plinthHeightMm > 0) {
-    const legComponent = getComponentDefinitionById(resolveDrawerLowLegComponentIdFromParams(params as Record<string, unknown>));
+    const legComponent = catalogContext?.resolveComponent(legComponentId, "leg");
     const legDiameterMm = getNumber(legComponent?.nominalHeightMm, 100) > 120 ? 44 : 40;
     const legXOffsetMm = widthMm / 2 - 30;
     const legFrontZMm = Math.min(carcassCenterZMm + carcassDepthMm / 2 - 60, kickCenterZMm - kickThicknessMm / 2 - legDiameterMm / 2 - 10);
@@ -465,7 +479,6 @@ export function buildDrawerLowParametric(
   const drawerOuterWidthMm = Math.max(40, widthMm - 2 * boardThicknessMm - sideClearanceMm * 2);
   const drawerBackWidthMm = Math.max(20, drawerOuterWidthMm - drawerBoxThicknessMm * 2);
   const drawerSideDepthMm = Math.max(50, carcassDepthMm - drawerBackReserveMm - 12);
-  const drawerBottomDepthMm = Math.max(20, drawerSideDepthMm - drawerBoxThicknessMm);
   const railDepthMm = Math.max(50, drawerSideDepthMm - 5);
   const railWidthMm = 8;
   const railHeightMm = 12;
@@ -478,16 +491,25 @@ export function buildDrawerLowParametric(
     const frontHeightMm = Math.max(1, frontHeightsMm[index] ?? 1);
     const frontCenterYMm = frontBaseMm + frontHeightMm / 2;
     const drawerApertureHeightMm = Math.max(20, frontHeightMm - frontGapMm * 2);
-    const drawerBottomYMm = frontBaseMm + drawerBottomOffsetMm + drawerBottomThicknessMm / 2;
-    const drawerSideCenterYMm = drawerBottomYMm + (drawerBoxSideHeightMm - drawerBottomThicknessMm) / 2;
+    const drawerBoxBaseYMm = frontBaseMm + drawerBottomOffsetMm;
+    const drawerSideCenterYMm = drawerBoxBaseYMm + drawerBoxSideHeightMm / 2;
     const drawerCenterZMm = carcassCenterZMm + carcassDepthMm / 2 - drawerSideDepthMm / 2 - 11;
+    const drawerBottomThicknessMm = resolveBoardThickness(
+      `drawer_${drawerIndex}_bottom`,
+      params as Record<string, unknown>,
+      materialsSnapshot,
+      getNumber(params.drawerBottomThickness, drawerBoxThicknessMm),
+      catalogContext
+    );
+    const drawerBottomWidthMm = Math.max(1, drawerOuterWidthMm - drawerBoxThicknessMm * 2);
+    const drawerBottomDepthMm = Math.max(1, drawerSideDepthMm - drawerBoxThicknessMm);
 
     addBoxPart({
       group,
       name: `front_${drawerIndex}`,
       sizeMm: { width: frontWidthMm, height: frontHeightMm, depth: frontThicknessMm },
       positionMm: { x: 0, y: frontCenterYMm, z: frontPlaneZMm },
-      preview: resolveBoardPreview(`front_${drawerIndex}`, params as Record<string, unknown>, materialsSnapshot, frontPreview),
+      preview: resolveBoardPreview(`front_${drawerIndex}`, params as Record<string, unknown>, materialsSnapshot, frontPreview, catalogContext),
       paramKeys: [
         "width",
         "height",
@@ -620,7 +642,7 @@ export function buildDrawerLowParametric(
         y: drawerSideCenterYMm,
         z: drawerCenterZMm
       },
-      preview: resolveBoardPreview(`drawer_${drawerIndex}_sideL`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview),
+      preview: resolveBoardPreview(`drawer_${drawerIndex}_sideL`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
       paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
@@ -633,17 +655,8 @@ export function buildDrawerLowParametric(
         y: drawerSideCenterYMm,
         z: drawerCenterZMm
       },
-      preview: resolveBoardPreview(`drawer_${drawerIndex}_sideR`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview),
+      preview: resolveBoardPreview(`drawer_${drawerIndex}_sideR`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
       paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
-    });
-
-    addBoxPart({
-      group,
-      name: `drawer_${drawerIndex}_bottom`,
-      sizeMm: { width: drawerBackWidthMm, height: drawerBottomThicknessMm, depth: drawerBottomDepthMm },
-      positionMm: { x: 0, y: drawerBottomYMm, z: drawerCenterZMm + drawerBoxThicknessMm / 2 },
-      preview: resolveBoardPreview(`drawer_${drawerIndex}_bottom`, params as Record<string, unknown>, materialsSnapshot, drawerBottomPreview),
-      paramKeys: ["drawerBoxThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -655,8 +668,21 @@ export function buildDrawerLowParametric(
         y: drawerSideCenterYMm,
         z: drawerCenterZMm - drawerSideDepthMm / 2 + drawerBoxThicknessMm / 2
       },
-      preview: resolveBoardPreview(`drawer_${drawerIndex}_back`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview),
+      preview: resolveBoardPreview(`drawer_${drawerIndex}_back`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
       paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+    });
+
+    addBoxPart({
+      group,
+      name: `drawer_${drawerIndex}_bottom`,
+      sizeMm: { width: drawerBottomWidthMm, height: drawerBottomThicknessMm, depth: drawerBottomDepthMm },
+      positionMm: {
+        x: 0,
+        y: drawerBoxBaseYMm + drawerBottomThicknessMm / 2,
+        z: drawerCenterZMm + drawerBoxThicknessMm / 2
+      },
+      preview: resolveBoardPreview(`drawer_${drawerIndex}_bottom`, params as Record<string, unknown>, materialsSnapshot, drawerBottomPreview, catalogContext),
+      paramKeys: ["drawerBottomThickness", "drawerBoxThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -665,7 +691,7 @@ export function buildDrawerLowParametric(
       sizeMm: { width: railWidthMm, height: railHeightMm, depth: railDepthMm },
       positionMm: {
         x: -drawerOuterWidthMm / 2 + railWidthMm / 2,
-        y: drawerBottomYMm - railHeightMm / 2 - 8,
+        y: drawerBoxBaseYMm - railHeightMm / 2 - 8,
         z: drawerCenterZMm + (drawerSideDepthMm - railDepthMm) / 2
       },
       preview: runnerPreview,
@@ -678,7 +704,7 @@ export function buildDrawerLowParametric(
       sizeMm: { width: railWidthMm, height: railHeightMm, depth: railDepthMm },
       positionMm: {
         x: drawerOuterWidthMm / 2 - railWidthMm / 2,
-        y: drawerBottomYMm - railHeightMm / 2 - 8,
+        y: drawerBoxBaseYMm - railHeightMm / 2 - 8,
         z: drawerCenterZMm + (drawerSideDepthMm - railDepthMm) / 2
       },
       preview: runnerPreview,

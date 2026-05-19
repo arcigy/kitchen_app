@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { installAuthSession } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
@@ -1061,9 +1062,11 @@ async function main() {
     serviceWorkers: "block"
   });
   const page = await context.newPage();
+  await installAuthSession(page);
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
 
     const drawerFailures = await runMatrix(
       page,

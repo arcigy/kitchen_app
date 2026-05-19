@@ -1,14 +1,17 @@
+import * as THREE from "three";
 import type { Group, Object3D } from "three";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState, KitchenGroup, KitchenWorktopParams, LayoutInstance } from "./appState";
 import { resolveContext, type KitchenContext } from "./kitchenContext";
-import { getModuleDescriptors, type ModuleDescriptor } from "../modules/registry";
+import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catalog";
+import { getPackageDefaultValue } from "../core/module-package/module-package-catalog";
 import {
   getKitchenBoardMaterialSelectOptions,
   getKitchenWorktopThicknessOptions,
   resolveKitchenWorktopThickness
 } from "./kitchenMaterialSync";
-import { getDrawerLowHandleComponentOptions } from "../data/pricing/handleComponentPresets";
 import { t, translateParamLabel } from "../i18n";
 
 type TopbarApi = {
@@ -40,6 +43,52 @@ type GroupWorktopSnapshot = {
   params: KitchenWorktopParams;
 };
 
+const inactiveMaterialKey = "__kitchenInactiveOriginalMaterial";
+const inactiveCloneKey = "__kitchenInactiveClone";
+const inactivePreviewColor = new THREE.Color(0xf4f7fa);
+const inactivePreviewOpacity = 0.24;
+
+type MeshMaterial = THREE.Material | THREE.Material[];
+type MaterialObject = Object3D & { material: MeshMaterial };
+
+const getMaterialObject = (object: Object3D): MaterialObject | null => {
+  const material = (object as { material?: unknown }).material;
+  const hasMaterial =
+    material instanceof THREE.Material ||
+    (Array.isArray(material) && material.every((item) => item instanceof THREE.Material));
+  return hasMaterial ? (object as MaterialObject) : null;
+};
+
+const cloneInactiveMaterial = (material: THREE.Material) => {
+  const clone = material.clone();
+  clone.transparent = true;
+  clone.opacity = Math.min(material.opacity, inactivePreviewOpacity);
+  clone.depthWrite = false;
+  clone.userData[inactiveCloneKey] = true;
+  const colorMaterial = clone as THREE.Material & { color?: THREE.Color; emissive?: THREE.Color };
+  if (colorMaterial.color instanceof THREE.Color) colorMaterial.color.lerp(inactivePreviewColor, 0.78);
+  if (colorMaterial.emissive instanceof THREE.Color) colorMaterial.emissive.lerp(inactivePreviewColor, 0.5);
+  clone.needsUpdate = true;
+  return clone;
+};
+
+const forEachMaterial = (material: MeshMaterial, visit: (material: THREE.Material) => void) => {
+  if (Array.isArray(material)) {
+    material.forEach(visit);
+    return;
+  }
+  visit(material);
+};
+
+const makeInactiveMaterial = (material: MeshMaterial): MeshMaterial =>
+  Array.isArray(material) ? material.map(cloneInactiveMaterial) : cloneInactiveMaterial(material);
+
+const disposeInactiveClones = (material: MeshMaterial) => {
+  forEachMaterial(material, (item) => {
+    if (item.userData[inactiveCloneKey]) item.dispose();
+  });
+};
+
 type CreateKitchenEditModeArgs = {
   S: AppState;
   layoutRoot: Group;
@@ -65,6 +114,8 @@ type CreateKitchenEditModeArgs = {
   createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
   findInstance: (id: string) => LayoutInstance | null;
   setSelectedModule: (id: string | null) => void;
+  getSelectedKitchenGroupId: () => string | null;
+  setSelectedKitchenGroup: (id: string | null) => void;
   updateLayoutPanel: () => void;
   startWorktopDraw: () => void;
   cancelWorktopDraw: (opts?: { silent?: boolean }) => void;
@@ -78,8 +129,11 @@ type CreateKitchenEditModeArgs = {
   ) => void;
   rebuildGroupWorktops: (groupId: string, ctx: KitchenContext) => void;
   buildClassicTopbar: () => void;
+  showKitchenTab: () => void;
   restoreStandardTopbar: () => void;
   refreshProps: () => void;
+  catalog: ClientCatalog;
+  modulePackages?: readonly FurnQuoteModulePackage[];
 };
 
 export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
@@ -130,6 +184,41 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
   const rebuildGroupModules = (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => {
     args.rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
+  };
+
+  const setInstanceInactivePreview = (inst: LayoutInstance, inactive: boolean) => {
+    inst.root.userData.kitchenInactivePickDisabled = inactive || undefined;
+    const setObjectInactivePreview = (object: Object3D) => {
+      const target = getMaterialObject(object);
+      if (!target) return;
+      if (inactive) {
+        if (target.userData[inactiveMaterialKey]) return;
+        target.userData[inactiveMaterialKey] = target.material;
+        target.material = makeInactiveMaterial(target.material);
+        target.userData.kitchenInactivePreview = true;
+        return;
+      }
+
+      const original = target.userData[inactiveMaterialKey] as MeshMaterial | undefined;
+      if (!original) return;
+      disposeInactiveClones(target.material);
+      target.material = original;
+      delete target.userData[inactiveMaterialKey];
+      delete target.userData.kitchenInactivePreview;
+    };
+    inst.module.traverse(setObjectInactivePreview);
+    setObjectInactivePreview(inst.outline);
+  };
+
+  const syncInactiveModulePreviews = () => {
+    const activeGroupId = args.S.kitchenEditMode ? args.S.activeKitchenGroupId : null;
+    for (const inst of args.S.instances) {
+      setInstanceInactivePreview(inst, !!activeGroupId && inst.kitchenGroupId !== activeGroupId);
+    }
+  };
+
+  const clearInactiveModulePreviews = () => {
+    for (const inst of args.S.instances) setInstanceInactivePreview(inst, false);
   };
 
   const applyNormalGroupCtx = (groupId: string, next: KitchenContext, opts?: { refreshProps?: boolean }) => {
@@ -189,28 +278,72 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     window.addEventListener("keydown", escapeHandler, { capture: true });
   };
 
-  const buildKitchenTopbar = () => {
-    args.tb.clear();
-    args.buildClassicTopbar();
+  const ensureKitchenEditSession = () => {
+    if (args.S.kitchenEditMode) return;
+    const selectedGroupId = args.getSelectedKitchenGroupId();
+    if (selectedGroupId && findKitchenGroup(selectedGroupId)) {
+      enterExisting(selectedGroupId);
+      return;
+    }
+    enterNew();
+  };
 
-    const row = args.tb.addRow({ title: t("Kitchen settings"), className: "topbar-kitchen-ribbon" });
+  const mountTopbar = (row: HTMLElement) => {
+    const groupTools = args.tb.addGroup(t("Kitchen group"), { row });
+    if (args.S.kitchenEditMode) {
+      args.tb.toolButton(groupTools, {
+        title: t("Accept group"),
+        iconSvg: args.icons.done,
+        label: t("Accept"),
+        variant: "success",
+        onClick: () => exitFinish()
+      });
+      args.tb.toolButton(groupTools, {
+        title: t("Discard"),
+        iconSvg: args.icons.cancel,
+        label: t("Discard"),
+        variant: "danger",
+        onClick: () => exitDiscard()
+      });
+    } else {
+      const selectedGroupId = args.getSelectedKitchenGroupId();
+      if (selectedGroupId && findKitchenGroup(selectedGroupId)) {
+        args.tb.toolButton(groupTools, {
+          title: t("Edit group"),
+          iconSvg: args.icons.done,
+          label: t("Edit"),
+          onClick: () => enterExisting(selectedGroupId)
+        });
+      }
+      args.tb.toolButton(groupTools, {
+        title: t("New group"),
+        iconSvg: args.icons.cabinet,
+        label: t("New"),
+        onClick: () => enterNew()
+      });
+    }
+
     const modulesByVisualRole = {
-      low: [] as ModuleDescriptor[],
-      top: [] as ModuleDescriptor[],
-      tall: [] as ModuleDescriptor[]
+      low: [] as FurnQuoteModulePackage[],
+      top: [] as FurnQuoteModulePackage[],
+      tall: [] as FurnQuoteModulePackage[]
     };
-    for (const descriptor of getModuleDescriptors()) {
-      const params = descriptor.defaultParams() as Record<string, unknown>;
-      const rawRole = typeof params.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "base";
+    for (const modulePackage of getEnabledModulePackageDefinitions(args.catalog, args.modulePackages ?? [])) {
+      const defaultRole = getPackageDefaultValue(modulePackage, "kitchenModuleRole");
+      const rawRole = typeof defaultRole === "string" ? defaultRole.trim().toLowerCase() : "";
       if (rawRole === "tall") {
-        modulesByVisualRole.tall.push(descriptor);
+        modulesByVisualRole.tall.push(modulePackage);
         continue;
       }
-      if (rawRole === "top" || rawRole === "upper" || rawRole === "wall") {
-        modulesByVisualRole.top.push(descriptor);
+      if (rawRole === "top" || rawRole === "upper" || rawRole === "wall" || modulePackage.module.category === "wall_cabinet") {
+        modulesByVisualRole.top.push(modulePackage);
         continue;
       }
-      modulesByVisualRole.low.push(descriptor);
+      if (modulePackage.module.category === "tall_cabinet") {
+        modulesByVisualRole.tall.push(modulePackage);
+        continue;
+      }
+      modulesByVisualRole.low.push(modulePackage);
     }
 
     const addModule = (title: string, label: string, type: ModuleParams["type"]) => {
@@ -220,6 +353,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         iconSvg: args.icons.cabinet,
         label,
         onClick: () => {
+          ensureKitchenEditSession();
           args.ensureLayoutMode();
           args.ensureFloorplanViewerTab();
           args.handleWorktopEscape();
@@ -229,11 +363,15 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         });
     };
 
-    const addModuleGroup = (groupLabel: string, descriptors: ReturnType<typeof getModuleDescriptors>) => {
-      if (descriptors.length === 0) return;
+    const addModuleGroup = (groupLabel: string, modulePackages: FurnQuoteModulePackage[]) => {
+      if (modulePackages.length === 0) return;
       const groupEl = args.tb.addGroup(groupLabel, { row });
-      for (const descriptor of descriptors) {
-        addModule(descriptor.type, descriptor.label, descriptor.type)(groupEl);
+      for (const modulePackage of modulePackages) {
+        addModule(
+          modulePackage.module.moduleType,
+          modulePackage.module.displayName,
+          modulePackage.module.moduleType as ModuleParams["type"]
+        )(groupEl);
       }
     };
 
@@ -241,46 +379,18 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     addModuleGroup(t("Top"), modulesByVisualRole.top);
     addModuleGroup(t("Tall"), modulesByVisualRole.tall);
 
-    if (
-      modulesByVisualRole.low.length > 0 ||
-      modulesByVisualRole.top.length > 0 ||
-      modulesByVisualRole.tall.length > 0
-    ) {
-      args.tb.addSpacer({ row });
-    }
-
     const worktopsGroup = args.tb.addGroup(t("Worktops"), { row });
     args.tb.toolButton(worktopsGroup, {
       title: t("Draw worktop"),
       iconSvg: args.icons.worktop,
       label: t("Draw"),
       onClick: () => {
+        ensureKitchenEditSession();
         args.ensureLayoutMode();
         args.cancelPlacementIfActive();
         args.startWorktopDraw();
       }
     });
-
-    args.tb.addSpacer({ row });
-
-    const exitGroup = args.tb.addGroup(t("Group"), { row });
-    const finishBtn = args.tb.toolButton(exitGroup, {
-      title: t("Finish kitchen"),
-      iconSvg: args.icons.done,
-      label: t("Finish"),
-      variant: "success",
-      onClick: () => exitFinish()
-    });
-    void finishBtn;
-
-    const cancelBtn = args.tb.toolButton(exitGroup, {
-      title: t("Discard"),
-      iconSvg: args.icons.cancel,
-      label: t("Discard"),
-      variant: "danger",
-      onClick: () => exitDiscard()
-    });
-    void cancelBtn;
   };
 
   const beginEdit = (groupId: string, name: string, ctx: KitchenContext, existingGroupId: string | null) => {
@@ -300,8 +410,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     args.S.activeKitchenGroupId = groupId;
 
     rebuildGroupModules(groupId, args.S.kitchenCtx);
+    syncInactiveModulePreviews();
     ensureOverlay();
-    buildKitchenTopbar();
+    args.showKitchenTab();
     addEscapeHandler();
     args.setSelectedModule(null);
   };
@@ -317,6 +428,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const exitCommon = () => {
+    clearInactiveModulePreviews();
     args.S.kitchenEditMode = false;
     args.S.activeKitchenGroupId = null;
     activeName = "";
@@ -362,6 +474,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     args.updateLayoutPanel();
     exitCommon();
+    args.setSelectedKitchenGroup(groupId);
   };
 
   const restoreExistingInstances = (groupId: string) => {
@@ -527,7 +640,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       onChange: (id: string) => void
     ) => {
       const select = document.createElement("select");
-      const options = getKitchenBoardMaterialSelectOptions(family);
+      const options = getKitchenBoardMaterialSelectOptions(family, args.catalog);
       select.innerHTML = options.map((material) => `<option value="${material.id}">${material.label}</option>`).join("");
       const selectedOption = options.find((material) => material.id === value);
       select.value = selectedOption?.id ?? options[0]?.id ?? "";
@@ -537,9 +650,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     const makeHandleSelect = (value: string, onChange: (id: string) => void) => {
       const select = document.createElement("select");
-      const options = getDrawerLowHandleComponentOptions();
-      select.innerHTML = options.map((handle) => `<option value="${handle.componentId}">${handle.displayName}</option>`).join("");
-      select.value = options.find((handle) => handle.componentId === value)?.componentId ?? options[0]?.componentId ?? "";
+      const options = args.catalog.components.filter((component) => component.componentType === "handle" && component.isActive);
+      select.innerHTML = options.map((handle) => `<option value="${handle.id}">${handle.displayName}</option>`).join("");
+      select.value = options.find((handle) => handle.id === value)?.id ?? options[0]?.id ?? "";
       select.addEventListener("change", () => onChange(select.value));
       return select;
     };
@@ -578,7 +691,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           commitCtx((base) => ({
             ...base,
             worktopMaterialId: id,
-            worktopThicknessMm: resolveKitchenWorktopThickness(id, base.worktopThicknessMm)
+            worktopThicknessMm: resolveKitchenWorktopThickness(id, base.worktopThicknessMm, args.catalog)
           }))
       )
     );
@@ -589,8 +702,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     );
 
     const worktopThicknessSelect = document.createElement("select");
-    const worktopThicknessOptions = getKitchenWorktopThicknessOptions(ctx.worktopMaterialId);
-    const resolvedWorktopThickness = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+    const worktopThicknessOptions = getKitchenWorktopThicknessOptions(ctx.worktopMaterialId, args.catalog);
+    const resolvedWorktopThickness = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm, args.catalog);
     worktopThicknessSelect.innerHTML = worktopThicknessOptions
       .map((value) => `<option value="${value}">${value} mm</option>`)
       .join("");
@@ -600,7 +713,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       if (!Number.isFinite(next)) return;
       commitCtx((base) => ({
         ...base,
-        worktopThicknessMm: resolveKitchenWorktopThickness(base.worktopMaterialId, next)
+        worktopThicknessMm: resolveKitchenWorktopThickness(base.worktopMaterialId, next, args.catalog)
       }));
     });
     args.props.row(section, translateParamLabel("worktopThicknessMm"), worktopThicknessSelect);
@@ -629,6 +742,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     enterExisting,
     exitFinish,
     exitDiscard,
+    mountTopbar,
     findKitchenGroup,
     getGroupForInstance(instanceId: string) {
       const inst = args.findInstance(instanceId);

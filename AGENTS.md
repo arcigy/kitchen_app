@@ -4,6 +4,7 @@ Scope: whole repository.
 
 ## Git Safety
 
+- Before any GitHub, push, pull, merge, branch, PR, or release operation, read and follow `docs/git-github-codex-workflow.md`.
 - Do not create or switch branches unless the user explicitly asks.
 - Never push directly to `main` unless the user explicitly approves a tested release.
 - Keep refactor commits small and reversible.

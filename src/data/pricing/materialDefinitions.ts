@@ -48,6 +48,8 @@ function resolvePreviewColor(args: Pick<SharedMaterialArgs, "decor" | "color" | 
     case "plywood":
     case "multiplex":
       return "#d3b58f";
+    case "solid_wood":
+      return "#b98455";
     case "laminate":
       return "#b08e6d";
     case "compact":
@@ -119,6 +121,37 @@ function defineBoard(
     boardFamily,
     recommendedUse: args.recommendedUse,
     grainDirectionRelevant: args.grainDirectionRelevant
+  };
+}
+
+function defineSolidBoard(
+  boardFamily: BoardFamily,
+  args: Omit<SharedMaterialArgs, "baseMaterial" | "availableThicknessesMm" | "defaultThicknessMm" | "tags" | "recommendedUse"> & {
+    defaultThicknessMm?: number;
+    recommendedUse?: string;
+  }
+): MaterialDefinition {
+  return {
+    id: args.id,
+    entityType: "material",
+    materialType: "board",
+    name: args.name,
+    displayName: args.displayName,
+    category: args.category,
+    baseMaterial: "solid_wood",
+    decor: args.decor,
+    color: args.color,
+    finish: args.finish,
+    pricingBasis: "custom",
+    pricingUnit: "custom",
+    availableThicknessesMm: [],
+    defaultThicknessMm: args.defaultThicknessMm ?? 18,
+    isActive: true,
+    tags: ["solid-wood", "masiv", boardFamily],
+    preview: resolvePreviewAppearance({ ...args, baseMaterial: "solid_wood" }),
+    boardFamily,
+    recommendedUse: args.recommendedUse ?? "Solid wood board placeholder for custom wardrobe panels.",
+    grainDirectionRelevant: true
   };
 }
 
@@ -272,6 +305,17 @@ export const materialDefinitions: MaterialDefinition[] = [
     grainDirectionRelevant: false,
     recommendedUse: "Service zones, sink modules and humid kitchen areas requiring better moisture resistance.",
     tags: ["body", "carcass", "moisture-resistant", "green", "technical"]
+  }),
+  defineSolidBoard("body", {
+    id: "mat.board.body.solid.oak.custom",
+    name: "Solid Oak",
+    displayName: "Masiv Oak",
+    category: "Solid Wood Boards",
+    decor: "Oak",
+    color: "Oak",
+    finish: "Natural Solid Wood",
+    defaultThicknessMm: 18,
+    recommendedUse: "Solid wood carcass panels for custom wardrobe builds."
   }),
 
   defineBoard("front", {
@@ -500,6 +544,17 @@ export const materialDefinitions: MaterialDefinition[] = [
     recommendedUse: "Thicker grey back panel for dark interiors and premium builds.",
     tags: ["back", "hdf", "grey", "8mm", "premium"]
   }),
+  defineSolidBoard("back", {
+    id: "mat.board.back.solid.oak.custom",
+    name: "Solid Oak Back",
+    displayName: "Masiv Oak",
+    category: "Solid Wood Boards",
+    decor: "Oak",
+    color: "Oak",
+    finish: "Natural Solid Wood",
+    defaultThicknessMm: 18,
+    recommendedUse: "Solid wood back panel placeholder for custom wardrobe builds."
+  }),
 
   defineBoard("drawer_box", {
     id: "mat.board.drawer_box.plywood.birch.13",
@@ -682,6 +737,17 @@ export const materialDefinitions: MaterialDefinition[] = [
     grainDirectionRelevant: true,
     recommendedUse: "Premium shelf board for open shelving and utility modules.",
     tags: ["shelf", "plywood", "birch", "premium", "open-shelf"]
+  }),
+  defineSolidBoard("shelf", {
+    id: "mat.board.shelf.solid.oak.custom",
+    name: "Solid Oak Shelf",
+    displayName: "Masiv Oak",
+    category: "Solid Wood Boards",
+    decor: "Oak",
+    color: "Oak",
+    finish: "Natural Solid Wood",
+    defaultThicknessMm: 18,
+    recommendedUse: "Solid wood shelf panels for custom wardrobe builds."
   }),
 
   defineBoard("worktop", {

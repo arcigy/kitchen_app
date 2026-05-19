@@ -1,6 +1,8 @@
 import * as THREE from "three";
+import type { ClientContext } from "../core/client/client-context";
 import { exportSceneToJson, type ExportSceneArgs } from "../core/exportScene";
 import { downloadCanvasPng, saveTextFile, saveTextFileAs, type WritableHandle } from "../core/filePersistence";
+import { createClientProjectPhaseScope } from "../core/storage/storage-types";
 import { attachFileMenu } from "../ui/createFileMenu";
 import type { AppArgs } from "./bootstrap";
 
@@ -9,9 +11,22 @@ type HdriSettings = {
   background: boolean;
 };
 
+type ExportAppArgs = Pick<
+  Required<AppArgs>,
+  "exportOutEl" | "copyBtn" | "copyStatusEl" | "exportBtn" | "exportSceneBtn"
+>;
+
 type ExportActionsArgs = {
-  appArgs: Required<AppArgs>;
+  appArgs: ExportAppArgs;
+  clientContext: ClientContext;
   fileTab: HTMLElement | null;
+  projectMenuActions?: {
+    newProject: () => void | Promise<void>;
+    openProject: () => void | Promise<void>;
+    saveProject: () => void | Promise<void>;
+    downloadProject: () => void | Promise<void>;
+    loadProjectFile: () => void | Promise<void>;
+  };
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   getCamera: () => THREE.Camera;
@@ -28,9 +43,6 @@ type BlenderExportResponse = {
   error?: string;
   previewUrl?: string;
 };
-
-const buildTimestampedFileName = (prefix: string, extension: string) =>
-  `${prefix}-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.${extension}`;
 
 const copyTextToClipboard = async (text: string) => {
   try {
@@ -58,9 +70,17 @@ const parseBlenderExportResponse = (text: string): BlenderExportResponse | null 
 
 export function createExportActions(args: ExportActionsArgs) {
   let layoutSaveHandle: WritableHandle | null = null;
+  const storageScope = createClientProjectPhaseScope(args.clientContext);
+
+  const attachStorageScope = (payload: unknown): unknown => {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return { storage: storageScope, data: payload };
+    }
+    return { ...(payload as Record<string, unknown>), storage: storageScope };
+  };
 
   const buildLayoutExportJson = () => {
-    const json = JSON.stringify(args.buildLayoutExportPayload(), null, 2);
+    const json = JSON.stringify(attachStorageScope(args.buildLayoutExportPayload()), null, 2);
     args.appArgs.exportOutEl.value = json;
     return json;
   };
@@ -85,7 +105,8 @@ export function createExportActions(args: ExportActionsArgs) {
       colorManagement: { viewTransform: "AgX", exposure: 0.5, look: "Medium High Contrast" },
       lighting: { sunDirection, sunStrength: 5, sunAngle: 30 },
       window: { opening, daylightIntensity },
-      includeInvisible: false
+      includeInvisible: false,
+      storageScope
     });
   };
 
@@ -97,27 +118,34 @@ export function createExportActions(args: ExportActionsArgs) {
   };
 
   const downloadViewportPng = () => {
-    downloadCanvasPng(args.renderer.domElement, buildTimestampedFileName("kitchen", "png"));
+    downloadCanvasPng({ canvas: args.renderer.domElement, scope: storageScope, prefix: "kitchen" });
   };
 
   const saveLayoutFile = async () => {
-    layoutSaveHandle = await saveTextFile(
-      buildLayoutExportJson(),
-      buildTimestampedFileName("kitchen-layout", "json"),
-      layoutSaveHandle
-    );
+    layoutSaveHandle = await saveTextFile({
+      text: buildLayoutExportJson(),
+      scope: storageScope,
+      prefix: "kitchen-layout",
+      extension: "json",
+      handle: layoutSaveHandle
+    });
   };
 
   const saveLayoutFileAs = async () => {
-    layoutSaveHandle = await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-layout", "json"));
+    layoutSaveHandle = await saveTextFileAs({
+      text: buildLayoutExportJson(),
+      scope: storageScope,
+      prefix: "kitchen-layout",
+      extension: "json"
+    });
   };
 
   const exportLayoutJsonFile = async () => {
-    await saveTextFileAs(buildLayoutExportJson(), buildTimestampedFileName("kitchen-export", "json"));
+    await saveTextFileAs({ text: buildLayoutExportJson(), scope: storageScope, prefix: "kitchen-export", extension: "json" });
   };
 
   const exportSceneJsonFile = async () => {
-    await saveTextFileAs(buildSceneExportJson().json, buildTimestampedFileName("kitchen-scene", "json"));
+    await saveTextFileAs({ text: buildSceneExportJson().json, scope: storageScope, prefix: "kitchen-scene", extension: "json" });
   };
 
   const copyCurrentExport = async () => {
@@ -170,7 +198,7 @@ export function createExportActions(args: ExportActionsArgs) {
       const res = await fetch("/api/blender/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sceneJson: payload }),
+        body: JSON.stringify({ sceneJson: payload, projectId: storageScope.projectId, phaseId: storageScope.phaseId }),
         signal: ctrl.signal
       });
       window.clearTimeout(t);
@@ -206,6 +234,7 @@ export function createExportActions(args: ExportActionsArgs) {
 
   if (args.fileTab) {
     attachFileMenu(args.fileTab, {
+      ...args.projectMenuActions,
       save: saveLayoutFile,
       saveAs: saveLayoutFileAs,
       exportLayoutJson: exportLayoutJsonFile,

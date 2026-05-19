@@ -3,6 +3,7 @@ import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { BOMResult } from "../layout/bom/bomTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { CornerShelfLowerParams } from "./cornerShelfLower/types";
 import { buildCornerShelfLower } from "./cornerShelfLower/geometry";
 import { createCornerShelfLowerControls } from "./cornerShelfLower/controls";
@@ -34,6 +35,7 @@ export type ModuleControlsApi = {
 export type ModuleControlsArgs = {
   onChange: () => void | boolean;
   getWorktopThicknessMm: () => number;
+  clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
 };
@@ -52,13 +54,13 @@ export type ModuleDescriptor = {
   packageName: string;
   packageVersion: string;
   defaultParams: () => ModuleParams;
-  build: (params: ModuleParams) => Group;
+  build: (params: ModuleParams, catalog: ClientCatalog) => Group;
   createControls: (
     container: HTMLElement,
     params: ModuleParams,
     args: ModuleControlsArgs
   ) => ModuleControlsApi;
-  calculateBOM: (params: ModuleParams, ctx: KitchenContext) => BOMResult;
+  calculateBOM: (params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
 
@@ -70,9 +72,9 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "module-builder-corner_shelf_lower",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("corner_shelf_lower"),
-    build: (params) => buildCornerShelfLower(params as CornerShelfLowerParams),
+    build: (params, catalog) => buildCornerShelfLower(params as CornerShelfLowerParams, catalog),
     createControls: (container, params, args) => createCornerShelfLowerControls(container, params as CornerShelfLowerParams, args),
-    calculateBOM: (params, ctx) => calculateCornerShelfLowerBOM(params as CornerShelfLowerParams, ctx),
+    calculateBOM: (params, ctx, catalog) => calculateCornerShelfLowerBOM(params as CornerShelfLowerParams, ctx, catalog),
     capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true,
@@ -86,9 +88,9 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "module-builder-drawer_low",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("drawer_low"),
-    build: (params) => buildDrawerLow(params as DrawerLowParams),
+    build: (params, catalog) => buildDrawerLow(params as DrawerLowParams, catalog),
     createControls: (container, params, args) => createDrawerLowControls(container, params as DrawerLowParams, args),
-    calculateBOM: (params, ctx) => calculateDrawerLowBOM(params as DrawerLowParams, ctx),
+    calculateBOM: (params, ctx, catalog) => calculateDrawerLowBOM(params as DrawerLowParams, ctx, catalog),
     capabilities: {
           "hasWorktop": true,
           "supportsKitchenContextDimensions": true,
@@ -102,9 +104,9 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "module-builder-flap_shelves_low",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("flap_shelves_low"),
-    build: (params) => buildFlapShelvesLow(params as FlapShelvesLowParams),
+    build: (params, catalog) => buildFlapShelvesLow(params as FlapShelvesLowParams, catalog),
     createControls: (container, params, args) => createFlapShelvesLowControls(container, params as FlapShelvesLowParams, args),
-    calculateBOM: (params, ctx) => calculateFlapShelvesLowBOM(params as FlapShelvesLowParams, ctx),
+    calculateBOM: (params, ctx, catalog) => calculateFlapShelvesLowBOM(params as FlapShelvesLowParams, ctx, catalog),
     capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
@@ -117,9 +119,9 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "module-builder-fridge_tall",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("fridge_tall"),
-    build: (params) => buildFridgeTall(params as FridgeTallParams),
+    build: (params, catalog) => buildFridgeTall(params as FridgeTallParams, catalog),
     createControls: (container, params, args) => createFridgeTallControls(container, params as FridgeTallParams, args),
-    calculateBOM: (params, ctx) => calculateFridgeTallBOM(params as FridgeTallParams, ctx),
+    calculateBOM: (params, ctx, catalog) => calculateFridgeTallBOM(params as FridgeTallParams, ctx, catalog),
     capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
@@ -132,9 +134,9 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     packageName: "module-builder-swing_shelves_low",
     packageVersion: "1.0.0",
     defaultParams: () => makeDefaultModuleParams("swing_shelves_low"),
-    build: (params) => buildSwingShelvesLow(params as SwingShelvesLowParams),
+    build: (params, catalog) => buildSwingShelvesLow(params as SwingShelvesLowParams, catalog),
     createControls: (container, params, args) => createSwingShelvesLowControls(container, params as SwingShelvesLowParams, args),
-    calculateBOM: (params, ctx) => calculateSwingShelvesLowBOM(params as SwingShelvesLowParams, ctx),
+    calculateBOM: (params, ctx, catalog) => calculateSwingShelvesLowBOM(params as SwingShelvesLowParams, ctx, catalog),
     capabilities: {
           "hasWorktop": true,
           "supportsKitchenContextDimensions": true,

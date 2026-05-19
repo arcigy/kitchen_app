@@ -4,7 +4,7 @@ import { getModulePlanPolygon } from "./planSnap";
 import { buildModuleAlignCandidates, buildWallAlignCandidates, buildWorktopAlignCandidates, pickBestAlignLine } from "./alignTool";
 import { distPointToSegment2 } from "./screenGeometry";
 import { worldToScreen } from "./sharedUtils";
-import type { AlignPickedLine, KitchenWorktopInstance, LayoutInstance, PickedLine2D, WallInstance, WallParams } from "./localTypes";
+import type { AlignPickedLine, DoorInstance, KitchenWorktopInstance, LayoutInstance, PickedLine2D, WallInstance, WallParams, WindowInstance } from "./localTypes";
 import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import { commitHistory } from "../layout/historyManager";
@@ -29,9 +29,25 @@ export type WallPlanMultiPolygon = WallPlanPolygon[];
 
 type PolygonClipper = {
   union: (...polygons: WallPlanMultiPolygon[]) => WallPlanMultiPolygon;
+  difference: (subject: WallPlanMultiPolygon, ...clips: WallPlanMultiPolygon[]) => WallPlanMultiPolygon;
+};
+type WallMeshCutout = {
+  centerLocalX: number;
+  widthM: number;
+  sillM: number;
+  heightM: number;
 };
 
 const polygonClipper = polygonClipping as PolygonClipper;
+export const WALL_PLAN_FILL_ROTATION_X = Math.PI / 2;
+const WALL_CUTOUT_REVEAL_NAME = "wallWindowCutoutReveal";
+
+type WallCutoutBounds = {
+  holeX0: number;
+  holeX1: number;
+  holeY0: number;
+  holeY1: number;
+};
 
 export type WallControllerContext = {
   walls: WallInstance[];
@@ -69,6 +85,10 @@ export type WallControllerContext = {
   getWallDebugEnabled: () => boolean;
   setWallSolvedJoinPolys: (next: WallPlanPoint[][]) => void;
   setWallUnionPolys: (next: WallPlanMultiPolygon | null) => void;
+  getWindowInst?: () => WindowInstance | null;
+  getWindowInsts?: () => WindowInstance[];
+  getDoorInst?: () => DoorInstance | null;
+  getDoorInsts?: () => DoorInstance[];
   nextWallId: () => string;
 };
 
@@ -92,6 +112,8 @@ export function createWallController(ctx: WallControllerContext) {
   const moduleOverlapsWalls = ctx.moduleOverlapsWalls;
   const setUnderlayStatus = ctx.setUnderlayStatus;
   const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor;
+  const getWindowInsts = () => ctx.getWindowInsts?.() ?? (ctx.getWindowInst?.() ? [ctx.getWindowInst()!] : []);
+  const getDoorInsts = () => ctx.getDoorInsts?.() ?? (ctx.getDoorInst?.() ? [ctx.getDoorInst()!] : []);
 
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     const candidates: AlignPickedLine[] = [];
@@ -264,12 +286,20 @@ export function createWallController(ctx: WallControllerContext) {
     return computeJoinExtensionM(w, node, walls, wallJoinTolMm);
   }
 
+  function disposeMaterialValue(material: THREE.Material | THREE.Material[]) {
+    if (Array.isArray(material)) {
+      for (const item of material) item.dispose();
+    } else {
+      material.dispose();
+    }
+  }
+
   function removeWall(w: WallInstance) {
     layoutRoot.remove(w.root);
     w.outline.geometry.dispose();
     (w.outline.material as THREE.Material).dispose();
     w.mesh.geometry.dispose();
-    (w.mesh.material as THREE.Material).dispose();
+    disposeMaterialValue(w.mesh.material as THREE.Material | THREE.Material[]);
     const idx = walls.indexOf(w);
     if (idx >= 0) walls.splice(idx, 1);
     if (ctx.getSelectedWallId() === w.id) ctx.setSelectedWallId(null);
@@ -472,12 +502,251 @@ export function createWallController(ctx: WallControllerContext) {
     return { outer: out, inner: inn };
   }
 
+  function configureWallBodyMaterial(material: THREE.MeshBasicMaterial) {
+    material.color.setHex(0xb8c0cb);
+    material.transparent = false;
+    material.opacity = 1;
+    material.depthWrite = true;
+    material.side = THREE.DoubleSide;
+    material.needsUpdate = true;
+  }
+
+  function configureWallRevealMaterial(material: THREE.MeshBasicMaterial) {
+    material.color.setHex(0xffffff);
+    material.transparent = false;
+    material.opacity = 1;
+    material.depthWrite = true;
+    material.side = THREE.DoubleSide;
+    material.needsUpdate = true;
+  }
+
+  function createWallBodyMaterial() {
+    const material = new THREE.MeshBasicMaterial();
+    configureWallBodyMaterial(material);
+    return material;
+  }
+
+  function createWallRevealMaterial() {
+    const material = new THREE.MeshBasicMaterial();
+    configureWallRevealMaterial(material);
+    return material;
+  }
+
+  function syncWallMeshMaterials(mesh: THREE.Mesh, hasCutoutReveal: boolean) {
+    const current = mesh.material as THREE.Material | THREE.Material[];
+    if (hasCutoutReveal) {
+      if (Array.isArray(current)) {
+        const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial();
+        const reveal = current[1] instanceof THREE.MeshBasicMaterial ? current[1] : createWallRevealMaterial();
+        if (current[0] && current[0] !== body) current[0].dispose();
+        if (current[1] && current[1] !== reveal) current[1].dispose();
+        for (const extra of current.slice(2)) extra.dispose();
+        configureWallBodyMaterial(body);
+        configureWallRevealMaterial(reveal);
+        mesh.material = [body, reveal];
+      } else {
+        const body = current instanceof THREE.MeshBasicMaterial ? current : createWallBodyMaterial();
+        if (current !== body) current.dispose();
+        configureWallBodyMaterial(body);
+        mesh.material = [body, createWallRevealMaterial()];
+      }
+      return;
+    }
+
+    if (Array.isArray(current)) {
+      const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial();
+      if (current[0] && current[0] !== body) current[0].dispose();
+      for (const extra of current.slice(1)) extra.dispose();
+      configureWallBodyMaterial(body);
+      mesh.material = body;
+      return;
+    }
+
+    if (current instanceof THREE.MeshBasicMaterial) {
+      configureWallBodyMaterial(current);
+      return;
+    }
+
+    current.dispose();
+    mesh.material = createWallBodyMaterial();
+  }
+
+  function getWallCutoutBounds(len: number, h: number, cutout: WallMeshCutout): WallCutoutBounds | null {
+    const xMin = -len / 2;
+    const xMax = len / 2;
+    const yMin = -h / 2;
+    const yMax = h / 2;
+    const eps = 0.001;
+
+    const holeX0 = Math.max(xMin + eps, cutout.centerLocalX - cutout.widthM / 2);
+    const holeX1 = Math.min(xMax - eps, cutout.centerLocalX + cutout.widthM / 2);
+    const holeY0 = Math.max(yMin + eps, cutout.sillM - h / 2);
+    const holeY1 = Math.min(yMax - eps, cutout.sillM + cutout.heightM - h / 2);
+    if (holeX1 - holeX0 <= eps || holeY1 - holeY0 <= eps) {
+      return null;
+    }
+
+    return { holeX0, holeX1, holeY0, holeY1 };
+  }
+
+  function getWallCutoutBoundsList(len: number, h: number, cutouts: WallMeshCutout[] = []) {
+    return cutouts
+      .map((cutout) => getWallCutoutBounds(len, h, cutout))
+      .filter((bounds): bounds is WallCutoutBounds => !!bounds);
+  }
+
+  function isCutoutOutlinePoint(point: THREE.Vector3, bounds: WallCutoutBounds, eps = 0.003) {
+    const near = (value: number, target: number) => Math.abs(value - target) <= eps;
+    const within = (value: number, min: number, max: number) => value >= min - eps && value <= max + eps;
+    return (
+      ((near(point.x, bounds.holeX0) || near(point.x, bounds.holeX1)) && within(point.y, bounds.holeY0, bounds.holeY1)) ||
+      ((near(point.y, bounds.holeY0) || near(point.y, bounds.holeY1)) && within(point.x, bounds.holeX0, bounds.holeX1))
+    );
+  }
+
+  function makeWallEdgeGeometry(geometry: THREE.BufferGeometry, boundsList: WallCutoutBounds[]) {
+    const edgeGeometry = new THREE.EdgesGeometry(geometry, 1);
+    if (boundsList.length === 0) return edgeGeometry;
+
+    const position = edgeGeometry.getAttribute("position");
+    const points: THREE.Vector3[] = [];
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    for (let index = 0; index + 1 < position.count; index += 2) {
+      a.fromBufferAttribute(position, index);
+      b.fromBufferAttribute(position, index + 1);
+      const isCutoutEdge = boundsList.some((bounds) => isCutoutOutlinePoint(a, bounds) && isCutoutOutlinePoint(b, bounds));
+      if (isCutoutEdge) continue;
+      points.push(a.clone(), b.clone());
+    }
+    edgeGeometry.dispose();
+    return new THREE.BufferGeometry().setFromPoints(points);
+  }
+
+  function applyCutoutRevealMaterialGroups(geometry: THREE.BufferGeometry, boundsList: WallCutoutBounds[]) {
+    const position = geometry.getAttribute("position");
+    if (!position || boundsList.length === 0) return;
+
+    const index = geometry.getIndex();
+    const triCount = Math.floor((index ? index.count : position.count) / 3);
+    if (triCount <= 0) return;
+
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const ab = new THREE.Vector3();
+    const ac = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    const centroid = new THREE.Vector3();
+    const eps = 0.0025;
+    const within = (value: number, min: number, max: number) => value >= min - eps && value <= max + eps;
+    const near = (value: number, target: number) => Math.abs(value - target) <= eps;
+
+    const setVertex = (target: THREE.Vector3, vertexIndex: number) => {
+      const srcIndex = index ? index.getX(vertexIndex) : vertexIndex;
+      target.set(position.getX(srcIndex), position.getY(srcIndex), position.getZ(srcIndex));
+    };
+
+    const isRevealTriangle = (bounds: WallCutoutBounds) => {
+      const onVerticalReveal =
+        (near(centroid.x, bounds.holeX0) || near(centroid.x, bounds.holeX1)) &&
+        within(centroid.y, bounds.holeY0, bounds.holeY1);
+      const onHorizontalReveal =
+        (near(centroid.y, bounds.holeY0) || near(centroid.y, bounds.holeY1)) &&
+        within(centroid.x, bounds.holeX0, bounds.holeX1);
+      return onVerticalReveal || onHorizontalReveal;
+    };
+
+    const materialIndexForTriangle = (triIndex: number) => {
+      setVertex(a, triIndex * 3);
+      setVertex(b, triIndex * 3 + 1);
+      setVertex(c, triIndex * 3 + 2);
+      ab.subVectors(b, a);
+      ac.subVectors(c, a);
+      normal.crossVectors(ab, ac).normalize();
+      if (Math.abs(normal.z) > 0.35) return 0;
+
+      centroid.set((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3);
+      return boundsList.some(isRevealTriangle) ? 1 : 0;
+    };
+
+    geometry.clearGroups();
+    let groupStart = 0;
+    let groupMaterial = materialIndexForTriangle(0);
+    for (let tri = 1; tri < triCount; tri += 1) {
+      const materialIndex = materialIndexForTriangle(tri);
+      if (materialIndex === groupMaterial) continue;
+      geometry.addGroup(groupStart * 3, (tri - groupStart) * 3, groupMaterial);
+      groupStart = tri;
+      groupMaterial = materialIndex;
+    }
+    geometry.addGroup(groupStart * 3, (triCount - groupStart) * 3, groupMaterial);
+  }
+
+  function makeWallBoxGeometry(len: number, h: number, thickM: number, cutouts: WallMeshCutout[] = []) {
+    const boundsList = getWallCutoutBoundsList(len, h, cutouts);
+    if (boundsList.length === 0) {
+      return new THREE.BoxGeometry(len, h, thickM);
+    }
+
+    const xMin = -len / 2;
+    const xMax = len / 2;
+    const yMin = -h / 2;
+    const yMax = h / 2;
+
+    const shape = new THREE.Shape();
+    shape.moveTo(xMin, yMin);
+    shape.lineTo(xMax, yMin);
+    shape.lineTo(xMax, yMax);
+    shape.lineTo(xMin, yMax);
+    shape.lineTo(xMin, yMin);
+
+    for (const { holeX0, holeX1, holeY0, holeY1 } of boundsList) {
+      const hole = new THREE.Path();
+      hole.moveTo(holeX0, holeY0);
+      hole.lineTo(holeX0, holeY1);
+      hole.lineTo(holeX1, holeY1);
+      hole.lineTo(holeX1, holeY0);
+      hole.lineTo(holeX0, holeY0);
+      shape.holes.push(hole);
+    }
+
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: thickM,
+      bevelEnabled: false,
+      steps: 1
+    });
+    geometry.translate(0, 0, -thickM / 2);
+    applyCutoutRevealMaterialGroups(geometry, boundsList);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  function removeWallCutoutReveal(mesh: THREE.Mesh) {
+    for (const child of [...mesh.children]) {
+      if (child.name !== WALL_CUTOUT_REVEAL_NAME) continue;
+      mesh.remove(child);
+      child.traverse((object) => {
+        if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
+        if ("material" in object) {
+          const material = object.material as THREE.Material | THREE.Material[] | undefined;
+          if (Array.isArray(material)) for (const item of material) item.dispose();
+          else material?.dispose();
+        }
+      });
+    }
+  }
+
   function updateWallMesh(
     mesh: THREE.Mesh,
     a: THREE.Vector3 | null,
     b: THREE.Vector3 | null,
     thicknessMm: number,
-    heightMm = wallDefault.heightMm
+    heightMm = wallDefault.heightMm,
+    cutouts: WallMeshCutout | WallMeshCutout[] = [],
+    syncMaterials = false
   ) {
     const aa = a ?? new THREE.Vector3(0, 0, 0);
     const bb = b ?? aa.clone();
@@ -490,11 +759,17 @@ export function createWallController(ctx: WallControllerContext) {
 
     const thickM = Math.max(0.01, thicknessMm / 1000);
     const h = Math.max(1, heightMm) / 1000;
+    const cutoutList = Array.isArray(cutouts) ? cutouts : [cutouts];
+    const cutoutBounds = getWallCutoutBoundsList(len, h, cutoutList);
 
+    removeWallCutoutReveal(mesh);
+    if (syncMaterials) syncWallMeshMaterials(mesh, cutoutBounds.length > 0);
     mesh.geometry.dispose();
-    mesh.geometry = new THREE.BoxGeometry(len, h, thickM);
+    mesh.geometry = makeWallBoxGeometry(len, h, thickM, cutoutList);
     mesh.position.set(midX, h / 2, midZ);
     mesh.rotation.set(0, rotY, 0);
+    mesh.userData.viewDisplaySkipEdges = ctx.getViewMode() === "2d";
+    mesh.userData.wallCutoutBounds = cutoutBounds.map((bounds) => ({ ...bounds }));
   }
 
   function rebuildWallPlanMesh() {
@@ -549,6 +824,68 @@ export function createWallController(ctx: WallControllerContext) {
       return ring;
     };
 
+    const makeWallOpeningClips = () => {
+      const clips: Array<{
+        kind: "window" | "door";
+        center: THREE.Vector3;
+        dir: THREE.Vector3;
+        normal: THREE.Vector3;
+        halfW: number;
+        halfT: number;
+        faceHalfT: number;
+        corners: Array<{ x: number; z: number }>;
+      }> = [];
+
+      const addClip = (kind: "window" | "door", wallId: string | null, centerMm: number, widthMm: number) => {
+        if (!wallId) return;
+        const wall = walls.find((item) => item.id === wallId) ?? null;
+        if (!wall) return;
+
+        const refA = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+        const refB = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+        const dir = refB.clone().sub(refA);
+        const lengthM = dir.length();
+        if (lengthM < 0.001) return;
+        dir.multiplyScalar(1 / lengthM);
+
+        const leftNormal = new THREE.Vector3(-dir.z, 0, dir.x);
+        const exteriorSign = (wall.params.exteriorSign ?? 1) as 1 | -1;
+        const thicknessM = Math.max(0.01, wall.params.thicknessMm / 1000);
+        const half = thicknessM / 2;
+        const justification = wall.params.justification ?? "center";
+        const centerOffset =
+          justification === "center"
+            ? 0
+            : justification === "exterior"
+              ? -exteriorSign * half
+              : exteriorSign * half;
+
+        const center = refA
+          .clone()
+          .addScaledVector(leftNormal, centerOffset)
+          .addScaledVector(dir, centerMm / 1000);
+        const halfW = Math.max(0.001, widthMm / 2000);
+        const halfT = half + 0.006;
+        const corners = [
+          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, -halfT),
+          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, -halfT),
+          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, halfT),
+          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
+        ].map((point) => ({ x: point.x, z: point.z }));
+
+        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
+      };
+
+      for (const windowInst of getWindowInsts()) {
+        addClip("window", windowInst.params.wallId ?? null, windowInst.params.centerMm, windowInst.params.widthMm);
+      }
+      for (const doorInst of getDoorInsts()) {
+        addClip("door", doorInst.params.wallId ?? null, doorInst.params.centerMm, doorInst.params.widthMm);
+      }
+
+      return clips;
+    };
+
     const polys: WallPlanMultiPolygon[] = [];
     for (const w of solved.walls) {
       if (w.outline.length < 3) continue;
@@ -566,14 +903,60 @@ export function createWallController(ctx: WallControllerContext) {
       merged = null;
     }
 
-    if (merged && merged.length > 0) ctx.setWallUnionPolys(merged);
+    const fallbackFillSource: WallPlanPolygon[] = [
+      ...solved.walls.filter((w) => w.outline.length >= 3).map((w) => [toRing(w.outline)]),
+      ...solved.joinPolys.filter((p) => p.length >= 3).map((p) => [toRing(p)])
+    ];
+    let fillSource = merged && merged.length > 0 ? merged : fallbackFillSource;
+    const windowOpeningClips = makeWallOpeningClips();
+    const windowOpeningPolys: WallPlanMultiPolygon[] = windowOpeningClips.map((clip) => [[toRing(clip.corners)]]);
+    if (windowOpeningPolys.length > 0) {
+      try {
+        fillSource = polygonClipper.difference(fillSource, ...windowOpeningPolys);
+      } catch {
+        fillSource = merged && merged.length > 0 ? merged : fallbackFillSource;
+      }
+    }
+
+    if (fillSource.length > 0) ctx.setWallUnionPolys(fillSource);
+
+    const isWindowOpeningOutlineSegment = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+      const isSegmentForClip = (clip: (typeof windowOpeningClips)[number]) => {
+        const toLocal = (point: { x: number; z: number }) => {
+          const dx = point.x - clip.center.x;
+          const dz = point.z - clip.center.z;
+          return {
+            along: dx * clip.dir.x + dz * clip.dir.z,
+            across: dx * clip.normal.x + dz * clip.normal.z
+          };
+        };
+        const la = toLocal(a);
+        const lb = toLocal(b);
+        const mid = { along: (la.along + lb.along) / 2, across: (la.across + lb.across) / 2 };
+        const eps = 0.018;
+        const insideAlong = mid.along >= -clip.halfW - eps && mid.along <= clip.halfW + eps;
+        const insideAcross = mid.across >= -clip.halfT - eps && mid.across <= clip.halfT + eps;
+        if (!insideAlong || !insideAcross) return false;
+        const onLongOpeningEdge = Math.abs(Math.abs(mid.across) - clip.halfT) <= eps;
+        const onEndOpeningEdge = Math.abs(Math.abs(mid.along) - clip.halfW) <= eps;
+        return onLongOpeningEdge || onEndOpeningEdge;
+      };
+      return windowOpeningClips.some(isSegmentForClip);
+    };
 
     const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02) => {
       if (pts.length < 2) return null;
-      const linePts = pts.map((p) => new THREE.Vector3(p.x, y, p.z));
-      if (pts.length >= 3) linePts.push(new THREE.Vector3(pts[0].x, y, pts[0].z));
+      const linePts: THREE.Vector3[] = [];
+      const count = pts.length >= 3 ? pts.length : pts.length - 1;
+      for (let i = 0; i < count; i += 1) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        if (!a || !b || isWindowOpeningOutlineSegment(a, b)) continue;
+        linePts.push(new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z));
+      }
+      if (linePts.length < 2) return null;
       const geom = new THREE.BufferGeometry().setFromPoints(linePts);
-      return new THREE.Line(
+      return new THREE.LineSegments(
         geom,
         new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
       );
@@ -609,33 +992,77 @@ export function createWallController(ctx: WallControllerContext) {
           side: THREE.DoubleSide
         })
       );
-      mesh.rotation.x = -Math.PI / 2;
+      mesh.rotation.x = WALL_PLAN_FILL_ROTATION_X;
       mesh.position.y = y;
       mesh.renderOrder = 6;
       return mesh;
     };
 
-    const fallbackFillSource: WallPlanPolygon[] = [
-      ...solved.walls.filter((w) => w.outline.length >= 3).map((w) => [toRing(w.outline)]),
-      ...solved.joinPolys.filter((p) => p.length >= 3).map((p) => [toRing(p)])
-    ];
-    const fillSource = merged && merged.length > 0 ? merged : fallbackFillSource;
     for (const rings of fillSource) {
       const mesh = makePlanFillMesh(rings);
       if (!mesh) continue;
       mesh.name = "wallPlanFill";
+      mesh.userData.viewDisplaySkipEdges = true;
       wallJoinMeshes.push(mesh);
       wallPlanGroup.add(mesh);
     }
 
-    for (const solvedWall of solved.walls) {
-      const line = makePlanPolyline(solvedWall.outline, 0x4f4f4f);
-      if (!line) continue;
-      line.name = `wallPlan_${solvedWall.id}`;
-      line.userData.kind = "wallPlan";
-      line.userData.wallId = solvedWall.id;
-      line.renderOrder = 20;
-      wallPlanMeshes.set(solvedWall.id, line);
+    let unionLineIndex = 0;
+    for (const rings of fillSource) {
+      for (const ring of rings) {
+        const pts = (ring.length > 1 ? ring.slice(0, -1) : ring).map(([x, z]) => ({ x, z }));
+        const line = makePlanPolyline(pts, 0x4f4f4f);
+        if (!line) continue;
+        line.name = `wallPlan_union_${unionLineIndex}`;
+        line.userData.kind = "wallPlanUnion";
+        line.renderOrder = 20;
+        wallPlanMeshes.set(line.name, line);
+        wallPlanGroup.add(line);
+        unionLineIndex += 1;
+      }
+    }
+
+    for (let index = 0; index < windowOpeningClips.length; index += 1) {
+      const windowOpeningClip = windowOpeningClips[index];
+      if (windowOpeningClip.kind !== "window") continue;
+      const faceHalfT = windowOpeningClip.faceHalfT;
+      const startInner = windowOpeningClip.center
+        .clone()
+        .addScaledVector(windowOpeningClip.dir, -windowOpeningClip.halfW)
+        .addScaledVector(windowOpeningClip.normal, -faceHalfT);
+      const endInner = windowOpeningClip.center
+        .clone()
+        .addScaledVector(windowOpeningClip.dir, windowOpeningClip.halfW)
+        .addScaledVector(windowOpeningClip.normal, -faceHalfT);
+      const startOuter = windowOpeningClip.center
+        .clone()
+        .addScaledVector(windowOpeningClip.dir, -windowOpeningClip.halfW)
+        .addScaledVector(windowOpeningClip.normal, faceHalfT);
+      const endOuter = windowOpeningClip.center
+        .clone()
+        .addScaledVector(windowOpeningClip.dir, windowOpeningClip.halfW)
+        .addScaledVector(windowOpeningClip.normal, faceHalfT);
+      const geom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(startInner.x, 0.023, startInner.z),
+        new THREE.Vector3(endInner.x, 0.023, endInner.z),
+        new THREE.Vector3(startOuter.x, 0.023, startOuter.z),
+        new THREE.Vector3(endOuter.x, 0.023, endOuter.z)
+      ]);
+      const line = new THREE.LineSegments(
+        geom,
+        new THREE.LineBasicMaterial({
+          color: 0x4f4f4f,
+          transparent: true,
+          opacity: 0.98,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+      line.name = index === 0 ? "wallPlan_window_parapet" : `wallPlan_window_parapet_${index}`;
+      line.userData.kind = "wallPlanWindowParapet";
+      line.userData.viewDisplaySkipEdges = true;
+      line.renderOrder = 24;
+      wallPlanMeshes.set(line.name, line);
       wallPlanGroup.add(line);
     }
 
@@ -682,13 +1109,7 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, heightMm = wallDefault.heightMm) {
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xb8c0cb,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      side: THREE.DoubleSide
-    });
+    const mat = createWallBodyMaterial();
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, Math.max(1, heightMm) / 1000, thicknessMm / 1000), mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -704,9 +1125,9 @@ export function createWallController(ctx: WallControllerContext) {
     return mesh;
   }
 
-  function createWallOutline(geometry: THREE.BufferGeometry, wallId?: string) {
+  function createWallOutline(geometry: THREE.BufferGeometry, wallId?: string, cutoutBounds: WallCutoutBounds[] = []) {
     const outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry, 1),
+      makeWallEdgeGeometry(geometry, cutoutBounds),
       new THREE.LineBasicMaterial({
         color: 0x4f5663,
         transparent: true,
@@ -725,11 +1146,12 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function syncWallOutline(w: WallInstance) {
+    const cutoutBounds = Array.isArray(w.mesh.userData.wallCutoutBounds) ? w.mesh.userData.wallCutoutBounds : [];
     if (!w.outline || !w.outline.parent) {
-      w.outline = createWallOutline(w.mesh.geometry as THREE.BufferGeometry, w.id);
+      w.outline = createWallOutline(w.mesh.geometry as THREE.BufferGeometry, w.id, cutoutBounds);
       w.mesh.add(w.outline);
     }
-    const nextGeometry = new THREE.EdgesGeometry(w.mesh.geometry as THREE.BufferGeometry, 1);
+    const nextGeometry = makeWallEdgeGeometry(w.mesh.geometry as THREE.BufferGeometry, cutoutBounds);
     w.outline.geometry.dispose();
     w.outline.geometry = nextGeometry;
     w.outline.visible = ctx.getViewMode() === "3d";
@@ -786,12 +1208,6 @@ export function createWallController(ctx: WallControllerContext) {
   function rebuildWall(w: WallInstance) {
     w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
     w.heightMm = w.params.heightMm;
-    const meshMaterial = w.mesh.material as THREE.MeshBasicMaterial;
-    meshMaterial.color.setHex(0xb8c0cb);
-    meshMaterial.transparent = false;
-    meshMaterial.opacity = 1;
-    meshMaterial.depthWrite = true;
-    meshMaterial.side = THREE.DoubleSide;
 
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
@@ -802,7 +1218,8 @@ export function createWallController(ctx: WallControllerContext) {
     // This does not change stored axis endpoints (aMm/bMm); only the rendered mesh.
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-8) {
-      updateWallMesh(w.mesh, a, b, w.params.thicknessMm, w.params.heightMm);
+      updateWallMesh(w.mesh, a, b, w.params.thicknessMm, w.params.heightMm, [], true);
+      syncWallOutline(w);
       return;
     }
     d.normalize();
@@ -859,7 +1276,36 @@ export function createWallController(ctx: WallControllerContext) {
 
     const aExt = a.clone().addScaledVector(d, -extA);
     const bExt = b.clone().addScaledVector(d, extB);
-    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm);
+    const wallWindows = getWindowInsts().filter((windowInst) => windowInst.params.wallId === w.id);
+    const wallDoors = getDoorInsts().filter((doorInst) => doorInst.params.wallId === w.id);
+    const cutouts: WallMeshCutout[] = [];
+    for (const windowInst of wallWindows) {
+      const widthM = Math.max(0.05, windowInst.params.widthMm / 1000);
+      const heightM = Math.max(0.05, windowInst.params.heightMm / 1000);
+      const sillM = Math.max(0, windowInst.params.sillHeightMm / 1000);
+      const centerFromExtendedStartM = extA + windowInst.params.centerMm / 1000;
+      const extendedLenM = aExt.distanceTo(bExt);
+      cutouts.push({
+        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        widthM,
+        sillM,
+        heightM
+      });
+    }
+    for (const doorInst of wallDoors) {
+      const widthM = Math.max(0.05, doorInst.params.widthMm / 1000);
+      const heightM = Math.max(0.05, doorInst.params.heightMm / 1000);
+      const centerFromExtendedStartM = extA + doorInst.params.centerMm / 1000;
+      const extendedLenM = aExt.distanceTo(bExt);
+      cutouts.push({
+        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        widthM,
+        sillM: 0,
+        heightM
+      });
+    }
+
+    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm, cutouts, true);
     syncWallOutline(w);
   }
 

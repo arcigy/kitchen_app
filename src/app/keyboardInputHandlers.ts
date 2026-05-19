@@ -13,6 +13,26 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
   window.addEventListener("keydown", (ev) => {
     if (ev.defaultPrevented) return;
     if (ctx.isTypingTarget(ev.target) && ev.key !== "Escape") return;
+    if (ev.key === "Escape" && ctx.isDoorPlacementActive?.()) {
+      ctx.cancelDoorPlacement?.();
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    if (ev.key === "Escape" && ctx.isWindowPlacementActive?.()) {
+      ctx.cancelWindowPlacement?.();
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    if ((ev.key === " " || ev.code === "Space") && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      return;
+    }
     if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.mode === "layout" && ctx.viewMode === "2d") {
       if (ev.key === " " || ev.code === "Space") {
         ctx.mirrorKitchenWorktopDraw();
@@ -152,7 +172,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       const nudgeSelection = (dxM: number, dzM: number) => {
         if (ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
         if (ctx.measureState.enabled) return false;
-        if (ctx.dragState.active || ctx.windowDragState.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
+        if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
         if (ctx.underlayCal.active) return false;
 
         const dxMm = Math.round(dxM * 1000);
@@ -496,20 +516,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       }
 
       if (ev.key === "Delete" || ev.key === "Backspace") {
-        if (ctx.selectedInstanceIds.size > 0) {
-          const ids = Array.from(ctx.selectedInstanceIds);
-          for (const id of ids) ctx.deleteInstance(id);
-          ctx.setSelectedModule(null);
-          ctx.selectedInstanceIds.clear();
-          ctx.commitHistory(ctx.S);
-          ev.preventDefault();
-          return;
-        }
-        if (ctx.selectedWallIds.size > 0) {
-          const ids = Array.from(ctx.selectedWallIds);
-          for (const id of ids) ctx.deleteWall(id);
-          ctx.setSelectedWall(null);
-          ctx.selectedWallIds.clear();
+        if (ctx.deleteSelected()) {
           ev.preventDefault();
           return;
         }

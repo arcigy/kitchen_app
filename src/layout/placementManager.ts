@@ -1,9 +1,37 @@
+import * as THREE from "three";
 import type { AppState, KitchenPlacementBinding, LayoutInstance } from "./appState";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catalog";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import {
+  createDefaultModulePackageParameters,
+  resolveModulePackageComponentAssignments,
+  resolveModulePackageMaterialAssignments
+} from "../core/module-package/runtime/module-runtime-adapter";
 import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
-import { getModuleDescriptorOrThrow } from "../modules/registry";
 import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
+
+function makeGhostMaterial(material: THREE.Material) {
+  const ghostMaterial = material.clone();
+  ghostMaterial.transparent = true;
+  ghostMaterial.opacity = Math.min(ghostMaterial.opacity, 0.48);
+  ghostMaterial.depthWrite = false;
+  ghostMaterial.needsUpdate = true;
+  return ghostMaterial;
+}
+
+function showGhostModulePreview(ghost: LayoutInstance) {
+  ghost.module.visible = true;
+  ghost.module.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    object.material = Array.isArray(object.material)
+      ? object.material.map(makeGhostMaterial)
+      : makeGhostMaterial(object.material);
+    object.renderOrder = Math.max(object.renderOrder, 40);
+  });
+}
 
 type PropsApi = {
   setTitle: (title: string) => void;
@@ -42,6 +70,8 @@ export interface PlacementHelpers {
   setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
   finalizePlacedInstance?: (inst: LayoutInstance) => void;
   syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
+  catalog: ClientCatalog;
+  modulePackages?: readonly FurnQuoteModulePackage[];
   resolvePlacementConstraint?: (
     ghost: LayoutInstance,
     cursorWorld: any
@@ -82,7 +112,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   if (!S.placement.ghost) {
     const ghost = helpers.createInstance(structuredClone(S.placement.params) as ModuleParams, { id: "ghost" });
     ghost.root.name = "placementGhost";
-    ghost.module.visible = false;
+    showGhostModulePreview(ghost);
     (ghost.pick.material as any).transparent = true;
     (ghost.pick.material as any).opacity = 0;
     (ghost.pick.material as any).depthWrite = false;
@@ -90,6 +120,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
     ghost.outline.visible = true;
     (ghost.outline.material as any).transparent = true;
     (ghost.outline.material as any).opacity = 0.9;
+    (ghost.outline.material as any).depthTest = false;
     helpers.layoutRoot.add(ghost.root);
     S.placement.ghost = ghost;
   }
@@ -243,20 +274,31 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
 export const addInstance = (S: AppState, helpers: PlacementHelpers, type: ModuleParams["type"]) => {
   if (S.placement.active) cancelPlacement(S, helpers);
 
-  const nextParams = structuredClone(
-    helpers.getBuildParams(type) ?? getModuleDescriptorOrThrow(type).defaultParams()
-  ) as ModuleParams;
-
-  if (S.kitchenEditMode && S.activeKitchenGroupId) {
-    applyKitchenContextToModuleParams(nextParams, S.kitchenCtx);
+  const modulePackage = getEnabledModulePackageDefinitions(helpers.catalog, helpers.modulePackages ?? [])
+    .find((candidate) => candidate.module.moduleType === type) ?? null;
+  if (!modulePackage) {
+    helpers.setUnderlayStatus(`Placement: module package missing or disabled for ${type}.`);
+    return;
   }
 
+  const defaults = {
+    ...createDefaultModulePackageParameters(modulePackage),
+    materialAssignments: resolveModulePackageMaterialAssignments({ modulePackage, catalog: helpers.catalog }),
+    componentAssignments: resolveModulePackageComponentAssignments({ modulePackage, catalog: helpers.catalog }),
+    type
+  } as ModuleParams;
+  const nextParams = structuredClone(helpers.getBuildParams(type) ?? defaults) as ModuleParams;
+
+  if (S.kitchenEditMode && S.activeKitchenGroupId) {
+    applyKitchenContextToModuleParams(nextParams, S.kitchenCtx, helpers.catalog, modulePackage);
+  }
+
+  helpers.setSelectedModule(null);
   S.placement.active = true;
   S.placement.params = nextParams;
   S.placement.ghostValid = false;
 
   helpers.setUnderlayStatus("Placement: move cursor, click to place. Esc cancels.");
-  helpers.setSelectedModule(null);
   rebuildGhost(S, helpers, S.placement.lastCursor);
   mountPlacementControls(S, helpers);
 };

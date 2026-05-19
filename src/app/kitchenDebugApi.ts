@@ -9,6 +9,10 @@ import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
 import { cancelPlacement } from "../layout/placementManager";
 import { normalizeModuleParamsForSource, type ModuleParams } from "../model/cabinetTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { createDefaultModulePackageParameters } from "../core/module-package/runtime/module-runtime-adapter";
+import { findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 import type { FloorBoundaryPoint, FloorParams, KitchenWorktopInstance, KitchenWorktopJustification, LayoutInstance, WallInstance } from "./localTypes";
@@ -22,6 +26,9 @@ declare global {
 }
 
 export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
+  const catalog = ctx.catalog as ClientCatalog | undefined;
+  if (!catalog) throw new Error("ClientCatalog is required for kitchen debug API.");
+  const modulePackages = (ctx.modulePackages ?? []) as readonly FurnQuoteModulePackage[];
   const {
     S,
     kitchenWorktops,
@@ -47,7 +54,6 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     setSelectedModule,
     mountProps,
     updateLayoutPanel,
-    getModuleDescriptorOrThrow,
     createInstance,
     getKitchenCornerPlacementInfo,
     applyKitchenPlacementBinding,
@@ -233,7 +239,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     }
 
     S.kitchenGroups.splice(0, S.kitchenGroups.length);
-    S.kitchenCtx = resolveContext(makeDefaultKitchenContext());
+    S.kitchenCtx = resolveContext(makeDefaultKitchenContext(catalog));
     setSelectedKitchenGroup(null);
     setSelectedModule(null);
     mountProps();
@@ -252,8 +258,14 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const worktop = kitchenWorktops.find((item: any) => item.kitchenGroupId === groupId) ?? null;
     if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
 
-    const nextParams = structuredClone(getModuleDescriptorOrThrow(opts?.type ?? "drawer_low").defaultParams()) as ModuleParams;
-    applyKitchenContextToModuleParams(nextParams, group.ctx);
+    const requestedType = opts?.type ?? "drawer_low";
+    const modulePackage = findModulePackageForParams(modulePackages, { type: requestedType });
+    if (!modulePackage) throw new Error(`Debug module package missing for ${requestedType}.`);
+    const nextParams = structuredClone({
+      ...createDefaultModulePackageParameters(modulePackage),
+      type: requestedType
+    }) as ModuleParams;
+    applyKitchenContextToModuleParams(nextParams, group.ctx, catalog, modulePackage);
     const inst = createInstance(nextParams);
     inst.kitchenGroupId = groupId;
 
@@ -323,7 +335,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     ensureLayoutMode();
 
     const nextCtx = resolveContext({
-      ...makeDefaultKitchenContext(),
+      ...makeDefaultKitchenContext(catalog),
       ...(opts?.ctxPatch ?? {})
     });
     const groupId = `dbg_kg_${Date.now()}`;

@@ -145,20 +145,50 @@ export function createDetailViewController(ctx: DetailViewControllerContext) {
     }
   };
 
+  const fitOrthoConfigToViewport = (
+    config: ReturnType<typeof computeElevationViewConfig> | ReturnType<typeof computeSectionViewConfig>
+  ) => {
+    if (!config) return null;
+    const canvas = ctx.renderer.domElement;
+    const aspect = Math.max(0.0001, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    const width = Math.max(0.0001, config.right - config.left);
+    const height = Math.max(0.0001, config.top - config.bottom);
+    const frustumAspect = width / height;
+    const centerU = (config.left + config.right) / 2;
+    const centerV = (config.top + config.bottom) / 2;
+
+    if (frustumAspect < aspect) {
+      const nextWidth = height * aspect;
+      return {
+        ...config,
+        left: centerU - nextWidth / 2,
+        right: centerU + nextWidth / 2
+      };
+    }
+
+    const nextHeight = width / aspect;
+    return {
+      ...config,
+      top: centerV + nextHeight / 2,
+      bottom: centerV - nextHeight / 2
+    };
+  };
+
   const applyOrthoViewConfig = (config: ReturnType<typeof computeElevationViewConfig> | ReturnType<typeof computeSectionViewConfig>) => {
     const activeCam = ctx.getCamera();
-    if (!(activeCam instanceof THREE.OrthographicCamera) || !config) return;
-    activeDetailClipPlanes = [config.clipPlane.clone()];
+    const fittedConfig = fitOrthoConfigToViewport(config);
+    if (!(activeCam instanceof THREE.OrthographicCamera) || !fittedConfig) return;
+    activeDetailClipPlanes = [fittedConfig.clipPlane.clone()];
     syncDetailClippingAndMaterials();
-    activeCam.position.copy(config.position).add(ctx.viewNavigation.detailViewPanOffset);
-    activeCam.up.copy(config.up);
-    activeCam.left = config.left;
-    activeCam.right = config.right;
-    activeCam.top = config.top;
-    activeCam.bottom = config.bottom;
-    activeCam.near = config.near;
-    activeCam.far = config.far;
-    const nextTarget = config.target.clone().add(ctx.viewNavigation.detailViewPanOffset);
+    activeCam.position.copy(fittedConfig.position).add(ctx.viewNavigation.detailViewPanOffset);
+    activeCam.up.copy(fittedConfig.up);
+    activeCam.left = fittedConfig.left;
+    activeCam.right = fittedConfig.right;
+    activeCam.top = fittedConfig.top;
+    activeCam.bottom = fittedConfig.bottom;
+    activeCam.near = fittedConfig.near;
+    activeCam.far = fittedConfig.far;
+    const nextTarget = fittedConfig.target.clone().add(ctx.viewNavigation.detailViewPanOffset);
     activeCam.lookAt(nextTarget);
     activeCam.updateProjectionMatrix();
     const controls = ctx.getControls();

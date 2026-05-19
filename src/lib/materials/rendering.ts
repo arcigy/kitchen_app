@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { findMaterialById, getMaterialRenderProfile } from "../../data/materials";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import { getPbrMaterial } from "../../materials/pbrMaterials";
 
 export type MaterialDimensionsMm = {
@@ -22,11 +22,37 @@ function makeDvdMaterialSet(insideHex: string, outsideHex: string, roughnessInsi
   return [outside, outside, outside, outside, inside, outside];
 }
 
+function findLegacyMaterial(catalog: Pick<ClientCatalog, "legacyMaterials">, materialId: number) {
+  return catalog.legacyMaterials.find((material) => material.id === materialId) ?? null;
+}
+
+function getMaterialRenderProfile(materialId: number | null | undefined) {
+  switch (materialId) {
+    case 1:
+      return { kind: "solid" as const, color: "#f6f6f6", roughness: 0.86 };
+    case 2:
+      return { kind: "solid" as const, color: "#d9dee5", roughness: 0.86 };
+    case 3:
+      return { kind: "solid" as const, color: "#a98a72", roughness: 0.9 };
+    case 4:
+      return { kind: "dvd" as const, insideColor: "#f4f4f4", outsideColor: "#bf8f62", roughnessInside: 0.78, roughnessOutside: 0.94 };
+    case 5:
+      return { kind: "solid" as const, color: "#d1d7e0", roughness: 0.88 };
+    case 6:
+      return { kind: "oak_pbr" as const, fallbackColor: "#b5885e", tintStrength: 0 };
+    case 7:
+      return { kind: "oak_pbr" as const, fallbackColor: "#c49a6c", tintStrength: 0 };
+    default:
+      return null;
+  }
+}
+
 export function buildCatalogMaterialVisual(
   materialId: number,
-  dimsMm?: Partial<MaterialDimensionsMm>
+  dimsMm: Partial<MaterialDimensionsMm> | undefined,
+  catalog: Pick<ClientCatalog, "legacyMaterials">
 ): THREE.Material | THREE.Material[] {
-  const material = findMaterialById(materialId);
+  const material = findLegacyMaterial(catalog, materialId);
   const profile = getMaterialRenderProfile(materialId);
 
   if (profile?.kind === "oak_pbr") {

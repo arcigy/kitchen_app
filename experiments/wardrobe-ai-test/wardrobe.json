@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "wardrobe-ai-test.v1",
+    "source": {
+      "language": "sk-SK",
+      "summary": "Built-in wardrobe parsed from a natural language prompt and corrected from a reference drawing."
+  },
+  "units": "mm",
+  "wardrobe": {
+    "id": "wardrobe-test-001",
+    "type": "built_in_wardrobe",
+    "dimensions": {
+      "width": 2000,
+      "height": 2860,
+      "depth": null,
+      "heightExpression": "1700 + 1160"
+    },
+    "materials": {
+      "carcass": {
+        "status": "not_specified",
+        "previewColor": "#d9d4c8"
+      },
+      "fronts": {
+        "status": "not_specified",
+        "previewColor": "#f2efe7"
+      },
+      "fillers": {
+        "status": "not_specified",
+        "previewColor": "#c7c0b2"
+      }
+    },
+    "construction": {
+      "moduleSplit": {
+        "count": 2,
+        "moduleWidth": 1000,
+        "divider": "center_carcass_divider"
+      },
+      "columns": [
+        {
+          "id": "left",
+          "label": "Left module",
+          "x": 0,
+          "width": 1000,
+          "openings": [
+            { "id": "left-drawer-bottom-left", "kind": "drawer", "label": "D1", "x": 0, "width": 500, "yFromBottom": 0, "height": 180 },
+            { "id": "left-drawer-bottom-right", "kind": "drawer", "label": "D2", "x": 500, "width": 500, "yFromBottom": 0, "height": 180 },
+            { "id": "left-drawer-top-left", "kind": "drawer", "label": "D3", "x": 0, "width": 500, "yFromBottom": 180, "height": 180 },
+            { "id": "left-drawer-top-right", "kind": "drawer", "label": "D4", "x": 500, "width": 500, "yFromBottom": 180, "height": 180 },
+            { "id": "left-hanging", "kind": "hanging", "label": "Hanging space", "yFromBottom": 360, "height": 1190 },
+            { "id": "left-lower-top-shelf", "kind": "shelf_opening", "label": "Lower top shelf", "yFromBottom": 1550, "height": 150 },
+            { "id": "left-upper-shelf-330", "kind": "shelf_opening", "label": "Upper shelf", "yFromBottom": 1700, "height": 330 },
+            { "id": "left-upper-shelf-450", "kind": "shelf_opening", "label": "Upper shelf", "yFromBottom": 2030, "height": 450 },
+            { "id": "left-upper-remaining", "kind": "unresolved_gap", "label": "Upper remaining", "yFromBottom": 2480, "height": 380 }
+          ]
+        },
+        {
+          "id": "right",
+          "label": "Right module",
+          "x": 1000,
+          "width": 1000,
+          "openings": [
+            { "id": "right-bottom-clearance", "kind": "unresolved_gap", "label": "Bottom clearance", "yFromBottom": 0, "height": 60 },
+            { "id": "right-lower-shelf-230", "kind": "shelf_opening", "label": "Lower shelf", "yFromBottom": 60, "height": 230 },
+            { "id": "right-hanging", "kind": "hanging", "label": "Hanging space", "yFromBottom": 290, "height": 1110 },
+            { "id": "right-lower-top-shelf", "kind": "shelf_opening", "label": "Lower top shelf", "yFromBottom": 1400, "height": 300 },
+            { "id": "right-upper-shelf-330", "kind": "shelf_opening", "label": "Upper shelf", "yFromBottom": 1700, "height": 330 },
+            { "id": "right-upper-shelf-450", "kind": "shelf_opening", "label": "Upper shelf", "yFromBottom": 2030, "height": 450 },
+            { "id": "right-upper-remaining", "kind": "unresolved_gap", "label": "Upper remaining", "yFromBottom": 2480, "height": 380 }
+          ]
+        }
+      ],
+      "fillers": []
+    },
+    "parseNotes": [
+      {
+        "severity": "info",
+        "message": "Total wardrobe height was parsed as 2860 mm from 1700 + 1160."
+      },
+      {
+        "severity": "info",
+        "message": "Lower wardrobe height is 1700 mm and upper extension height is 1160 mm."
+      },
+      {
+        "severity": "info",
+        "message": "Left lower module fits as 360 mm drawers, 1190 mm hanging space, and 150 mm top shelf."
+      },
+      {
+        "severity": "info",
+        "message": "Right lower module fits as 60 mm bottom clearance, 230 mm lower shelf, 1110 mm hanging space, and 300 mm top shelf."
+      },
+      {
+        "severity": "info",
+        "message": "Upper extension fits as 330 mm shelf opening, 450 mm shelf opening, and 380 mm remaining construction space."
+      },
+      {
+        "severity": "warning",
+        "message": "Depth, material, and filler panels were not specified in the prompt."
+      }
+    ]
+  }
+}

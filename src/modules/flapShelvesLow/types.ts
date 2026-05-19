@@ -6,15 +6,6 @@ import {
   normalizePortableParams,
   validatePortableParams
 } from "../runtime/portableTypes";
-import {
-  applyDrawerLowHandleComponentToParams,
-  applyFlapHangingBracketComponentToParams,
-  applyFlapLiftUpComponentToParams,
-  applyFlapShelfSupportComponentToParams,
-  getDefaultFlapHangingBracketComponentId,
-  getDefaultFlapLiftUpComponentId,
-  getDefaultFlapShelfSupportComponentId
-} from "../../data/pricing/handleComponentPresets";
 
 export type FlapShelvesLowParams = {
   type: "flap_shelves_low";
@@ -67,11 +58,8 @@ function sanitizeShelfGaps(params: FlapShelvesLowParams, shelfCount: number) {
   return next;
 }
 
-function getHandleComponentForType(handleType: unknown) {
-  if (handleType === "none") return null;
-  if (handleType === "knob") return "cmp.handle.knob.round.black";
-  if (handleType === "gola") return "cmp.handle.profile.aluminium";
-  return "cmp.handle.bar.160.black";
+function cleanString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 export function makeDefaultFlapShelvesLowParams(): FlapShelvesLowParams {
@@ -159,44 +147,13 @@ export function normalizeFlapShelvesLowParams(
     Math.max(0, normalized.width / 2)
   );
 
-  Object.assign(
-    normalized,
-    applyDrawerLowHandleComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      options.sourceKey === "handleType"
-        ? getHandleComponentForType(normalized.handleType)
-        : typeof normalized.handleComponentId === "string" && normalized.handleComponentId.trim().length > 0
-          ? normalized.handleComponentId
-          : null
-    )
-  );
-  Object.assign(
-    normalized,
-    applyFlapLiftUpComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.liftUpComponentId === "string" && normalized.liftUpComponentId.trim().length > 0
-        ? normalized.liftUpComponentId
-        : getDefaultFlapLiftUpComponentId()
-    )
-  );
-  Object.assign(
-    normalized,
-    applyFlapHangingBracketComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.hangingBracketComponentId === "string" && normalized.hangingBracketComponentId.trim().length > 0
-        ? normalized.hangingBracketComponentId
-        : getDefaultFlapHangingBracketComponentId()
-    )
-  );
-  Object.assign(
-    normalized,
-    applyFlapShelfSupportComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.shelfSupportComponentId === "string" && normalized.shelfSupportComponentId.trim().length > 0
-        ? normalized.shelfSupportComponentId
-        : getDefaultFlapShelfSupportComponentId()
-    )
-  );
+  if (normalized.handleType === "none") delete normalized.handleComponentId;
+  else normalized.handleComponentId = cleanString(normalized.handleComponentId) ?? cleanString(MODULE_DEFAULTS.handleComponentId) ?? null;
+  normalized.liftUpComponentId = cleanString(normalized.liftUpComponentId) ?? cleanString(MODULE_DEFAULTS.liftUpComponentId) ?? null;
+  normalized.hangingBracketComponentId =
+    cleanString(normalized.hangingBracketComponentId) ?? cleanString(MODULE_DEFAULTS.hangingBracketComponentId) ?? null;
+  normalized.shelfSupportComponentId =
+    cleanString(normalized.shelfSupportComponentId) ?? cleanString(MODULE_DEFAULTS.shelfSupportComponentId) ?? null;
 
   return normalized;
 }

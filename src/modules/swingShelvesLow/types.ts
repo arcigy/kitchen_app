@@ -6,14 +6,6 @@ import {
   normalizePortableParams,
   validatePortableParams
 } from "../runtime/portableTypes";
-import {
-  applyCornerClipComponentToParams,
-  applyCornerHingeComponentToParams,
-  applyDrawerLowHandleComponentToParams,
-  getDefaultDrawerLowLegComponentId,
-  resolveDrawerLowHandleComponentIdFromParams,
-  resolveDrawerLowLegComponentIdFromParams
-} from "../../data/pricing/handleComponentPresets";
 
 export type SwingShelvesLowParams = {
   type: "swing_shelves_low";
@@ -27,6 +19,10 @@ type SwingShelvesLowNormalizeOptions = {
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -146,37 +142,11 @@ export function normalizeSwingShelvesLowParams(
     6
   );
 
-  Object.assign(
-    normalized,
-    applyDrawerLowHandleComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      resolveDrawerLowHandleComponentIdFromParams(normalized as unknown as Record<string, unknown>)
-    )
-  );
-
-  normalized.legComponentId =
-    typeof normalized.legComponentId === "string" && normalized.legComponentId.trim().length > 0
-      ? resolveDrawerLowLegComponentIdFromParams(normalized as unknown as Record<string, unknown>)
-      : getDefaultDrawerLowLegComponentId();
-
-  Object.assign(
-    normalized,
-    applyCornerHingeComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.hingeComponentId === "string" && normalized.hingeComponentId.trim().length > 0
-        ? normalized.hingeComponentId
-        : (MODULE_DEFAULTS.hingeComponentId as string)
-    )
-  );
-  Object.assign(
-    normalized,
-    applyCornerClipComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.clipComponentId === "string" && normalized.clipComponentId.trim().length > 0
-        ? normalized.clipComponentId
-        : (MODULE_DEFAULTS.clipComponentId as string)
-    )
-  );
+  if (normalized.handleType === "none") delete normalized.handleComponentId;
+  else normalized.handleComponentId = cleanString(normalized.handleComponentId) ?? cleanString(MODULE_DEFAULTS.handleComponentId) ?? null;
+  normalized.legComponentId = cleanString(normalized.legComponentId) ?? cleanString(MODULE_DEFAULTS.legComponentId) ?? null;
+  normalized.hingeComponentId = cleanString(normalized.hingeComponentId) ?? cleanString(MODULE_DEFAULTS.hingeComponentId) ?? null;
+  normalized.clipComponentId = cleanString(normalized.clipComponentId) ?? cleanString(MODULE_DEFAULTS.clipComponentId) ?? null;
 
   return normalized;
 }

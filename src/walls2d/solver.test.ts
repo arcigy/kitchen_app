@@ -27,7 +27,9 @@ describe("walls2d join solver", () => {
     const min = Math.min(
       ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
     );
-    expect(min).toBeLessThan(1e-6);
+    expect(min).toBeLessThanOrEqual(0.075);
+    expect(res.walls[0].a.join).toBe("butt");
+    expect(res.walls[1].a.join).toBe("butt");
   });
 
   test("Case 2: 45° same thickness (no broken acute join)", () => {
@@ -48,7 +50,7 @@ describe("walls2d join solver", () => {
     const min = Math.min(
       ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
     );
-    expect(min).toBeLessThan(1e-6);
+    expect(min).toBeLessThanOrEqual(0.075);
   });
 
   test("Case 6: T join (branch cut to main)", () => {
@@ -58,6 +60,31 @@ describe("walls2d join solver", () => {
     const branch = wall("b", P(0, 0), P(0, 5), 100);
     const res = solveWallNetwork([main0, main1, branch], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(3);
+  });
+  test("2-wall corner dominant wall owns the full branch thickness", () => {
+    const main = wall("main", P(0, 0), P(5, 0), 150);
+    const branch = wall("branch", P(0, 0), P(0, 5), 150);
+    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
+    const solvedMain = res.walls.find((w) => w.id === "main")!;
+    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+
+    expect(solvedMain.a.left.x).toBeCloseTo(-0.075, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(-0.075, 6);
+    expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
+  });
+
+  test("2-wall corner dominant wall extension follows branch thickness", () => {
+    const main = wall("main", P(0, 0), P(5, 0), 150);
+    const branch = wall("branch", P(0, 0), P(0, 5), 300);
+    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
+    const solvedMain = res.walls.find((w) => w.id === "main")!;
+    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+
+    expect(solvedMain.a.left.x).toBeCloseTo(-0.15, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(-0.15, 6);
+    expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
   });
 });
 

@@ -271,6 +271,7 @@ export function createUnderlayController(args: {
   });
   const underlayMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), underlayMat);
   underlayMesh.name = "underlay";
+  underlayMesh.userData.viewDisplaySkipEdges = true;
   underlayMesh.rotation.x = -Math.PI / 2;
   underlayMesh.position.y = 0.006;
   underlayMesh.visible = false;
@@ -308,6 +309,11 @@ export function createUnderlayController(args: {
     underlayMat.opacity = underlayState.opacity;
     underlayMesh.position.x = underlayState.offsetMm.x / 1000;
     underlayMesh.position.z = underlayState.offsetMm.z / 1000;
+    if (!underlayState.sourceName || !underlayMat.map) underlayMesh.visible = false;
+  }
+
+  function hasUnderlaySource() {
+    return !!underlayState.sourceName && !!underlayMat.map;
   }
 
   function setUnderlayBaseSize(wM: number, hM: number) {
@@ -385,6 +391,7 @@ export function createUnderlayController(args: {
     underlayCal,
     roomBounds,
     updateUnderlayTransform,
+    hasUnderlaySource,
     setUnderlayBaseSize,
     setUnderlayFromCanvas,
     clearUnderlay

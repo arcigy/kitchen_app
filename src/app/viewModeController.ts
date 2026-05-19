@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { AppMode, AppState, LayoutTool } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
 import type {
+  ColumnInstance,
+  DoorInstance,
   FloorInstance,
   KitchenWorktopInstance,
   KitchenWorktopParams,
@@ -31,6 +33,8 @@ type ViewModeControllerContext = {
   clearAllMeasurements: () => void;
   clearOverlapHighlight: () => void;
   clearWallDrawState: () => void;
+  columns: ColumnInstance[];
+  doors: DoorInstance[];
   drawOrthoToggleEl: HTMLButtonElement | null;
   drawSnapOverlay: SnapOverlayController;
   ensurePickAndOutline: (inst: LayoutInstance, planMode: boolean) => void;
@@ -57,6 +61,7 @@ type ViewModeControllerContext = {
   rebuildWallPlanMesh: () => void;
   selectMesh: (mesh: THREE.Mesh | null) => void;
   selectedFloorId: string | null;
+  selectedColumnId: string | null;
   selectedInstanceId: string | null;
   selectedKind: SelectedKind;
   selectedSectionId: string | null;
@@ -64,6 +69,8 @@ type ViewModeControllerContext = {
   setInstanceSelected: (id: string | null) => void;
   setPlanPresentation: (enabled: boolean) => void;
   setSelectedFloor: (id: string | null) => void;
+  setSelectedColumn: (id: string | null) => void;
+  setSelectedDoor: () => void;
   setSelectedModule: (id: string | null) => void;
   setSelectedSection: (id: string | null) => void;
   setSelectedWall: (id: string | null) => void;
@@ -71,7 +78,10 @@ type ViewModeControllerContext = {
   setViewMode: (mode: "2d" | "3d") => void;
   showNoProps: () => void;
   syncDetailClippingAndMaterials: () => void;
+  syncColumnPresentation: () => void;
+  syncDoorSelectionVisuals: () => void;
   syncViewerTabs: (activeKey: string) => void;
+  syncWindowSelectionVisuals: () => void;
   updateAllSectionVisuals: () => void;
   updateDetailSliceOverlay: () => void;
   updateLayoutPanel: () => void;
@@ -83,7 +93,9 @@ type ViewModeControllerContext = {
   wallSnapMarkers: THREE.Object3D;
   walls: WallInstance[];
   windowEditorHost: HTMLElement;
+  windows: WindowInstance[];
   windowInst: WindowInstance | null;
+  doorInst: DoorInstance | null;
 };
 
 export function createViewModeController(ctx: ViewModeControllerContext) {
@@ -111,21 +123,29 @@ export function createViewModeController(ctx: ViewModeControllerContext) {
       const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
       outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
       outlineMaterial.depthTest = !enabled;
-      inst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
+      inst.outline.visible = enabled && (isFloorplanView || isDetailOrthoView);
     }
 
-    if (ctx.windowInst) {
-      const outlineMaterial = ctx.windowInst.outline.material as THREE.LineBasicMaterial;
-      outlineMaterial.opacity = isFloorplanView ? 0.98 : 0.75;
-      outlineMaterial.depthTest = !enabled;
-      ctx.windowInst.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
+    for (const windowInst of ctx.windows) {
+      windowInst.outline.visible = false;
+      windowInst.plan.visible = isFloorplanView;
+      windowInst.frame.visible = !enabled || isDetailOrthoView;
     }
+    ctx.syncWindowSelectionVisuals();
+
+    for (const doorInst of ctx.doors) {
+      doorInst.outline.visible = false;
+      doorInst.plan.visible = isFloorplanView;
+      doorInst.frame.visible = !enabled || isDetailOrthoView;
+    }
+    ctx.syncDoorSelectionVisuals();
 
     for (const floor of ctx.floors) {
       floor.mesh.visible = !enabled || isFloorplanView;
       (floor.outline.material as THREE.LineBasicMaterial).depthTest = !enabled;
       floor.outline.visible = enabled ? isFloorplanView || isDetailOrthoView : true;
     }
+    ctx.syncColumnPresentation();
 
     for (const worktop of ctx.kitchenWorktops) {
       worktop.outline.geometry.dispose();
@@ -149,7 +169,8 @@ export function createViewModeController(ctx: ViewModeControllerContext) {
     ctx.wallPlanGroup.visible = isFloorplanView;
     ctx.rebuildWallPlanMesh();
     for (const w of ctx.walls) {
-      w.mesh.visible = !enabled || isFloorplanView || isDetailOrthoView;
+      w.mesh.userData.viewDisplaySkipEdges = isFloorplanView;
+      w.mesh.visible = !enabled || isDetailOrthoView;
       w.outline.visible = !enabled || isDetailOrthoView;
       const outlineMaterial = w.outline.material as THREE.LineBasicMaterial;
       outlineMaterial.opacity = isFloorplanView ? 0 : 0.94;
@@ -195,7 +216,9 @@ export function createViewModeController(ctx: ViewModeControllerContext) {
       setView2d(ctx.view2d.checked);
       ctx.updateLayoutPanel();
       if (ctx.selectedKind === "window") ctx.setSelectedWindow();
+      else if (ctx.selectedKind === "door") ctx.setSelectedDoor();
       else if (ctx.selectedKind === "section") ctx.setSelectedSection(ctx.selectedSectionId);
+      else if (ctx.selectedKind === "column") ctx.setSelectedColumn(ctx.selectedColumnId);
       else if (ctx.selectedKind === "wall") ctx.setSelectedWall(ctx.selectedWallId);
       else if (ctx.selectedKind === "floor") ctx.setSelectedFloor(ctx.selectedFloorId);
       else ctx.setSelectedModule(ctx.selectedInstanceId);

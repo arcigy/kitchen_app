@@ -1,0 +1,813 @@
+{
+  "format": "furnquote-module",
+  "packageVersion": 1,
+  "module": {
+    "modulePackageId": "fridge_tall_family_v1",
+    "moduleType": "fridge_tall",
+    "familyName": "Fridge Tall",
+    "displayName": "Fridge",
+    "description": "System module definition for a tall integrated fridge cabinet.",
+    "category": "tall_cabinet",
+    "version": "1.0.0",
+    "isSystemModule": true,
+    "tags": [
+      "kitchen",
+      "tall",
+      "appliance"
+    ]
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "key": "type",
+        "label": "Type",
+        "type": "string",
+        "required": true,
+        "defaultValue": "fridge_tall",
+        "group": "general",
+        "affects": "all"
+      },
+      {
+        "key": "width",
+        "label": "Width",
+        "type": "number",
+        "required": true,
+        "defaultValue": 600,
+        "min": 450,
+        "max": 900,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "height",
+        "label": "Height",
+        "type": "number",
+        "required": true,
+        "defaultValue": 1916,
+        "min": 1600,
+        "max": 2400,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "depth",
+        "label": "Depth",
+        "type": "number",
+        "required": true,
+        "defaultValue": 600,
+        "min": 450,
+        "max": 800,
+        "step": 10,
+        "unit": "mm",
+        "group": "dimensions",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeWidthMm",
+        "label": "Appliance width",
+        "type": "number",
+        "required": true,
+        "defaultValue": 560,
+        "min": 400,
+        "max": 800,
+        "step": 10,
+        "unit": "mm",
+        "group": "appliance",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeHeightMm",
+        "label": "Appliance height",
+        "type": "number",
+        "required": true,
+        "defaultValue": 1770,
+        "min": 1200,
+        "max": 2200,
+        "step": 10,
+        "unit": "mm",
+        "group": "appliance",
+        "affects": "geometry"
+      },
+      {
+        "key": "doorOpen",
+        "label": "Door open",
+        "type": "boolean",
+        "required": true,
+        "defaultValue": false,
+        "group": "fronts",
+        "affects": "visual"
+      },
+      {
+        "key": "handleComponentId",
+        "label": "Handle",
+        "type": "component",
+        "required": false,
+        "defaultValue": "cmp.handle.bar.160.black",
+        "group": "components",
+        "affects": "visual"
+      },
+      {
+        "key": "assemblyContext",
+        "label": "Assembly Context",
+        "type": "string",
+        "required": false,
+        "defaultValue": "kitchen",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "kitchenModuleRole",
+        "label": "Kitchen Module Role",
+        "type": "string",
+        "required": false,
+        "defaultValue": "tall",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "requiresWorktop",
+        "label": "Requires Worktop",
+        "type": "boolean",
+        "required": false,
+        "defaultValue": false,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "worktopThicknessMm",
+        "label": "Worktop Thickness mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "boardThickness",
+        "label": "Board Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "backThickness",
+        "label": "Back Thickness",
+        "type": "number",
+        "required": false,
+        "defaultValue": 6,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "frontThicknessMm",
+        "label": "Front Thickness mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 18,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handlePositionMm",
+        "label": "Handle Position mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "doorHandleOffsetFromSplitMm",
+        "label": "Door Handle Offset From Split mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "__fridgeHandleSplitScaleVersion",
+        "label": "Fridge Handle Split Scale Version",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "freezerDoorHeightMm",
+        "label": "Freezer Door Height mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 700,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeBottomClearanceMm",
+        "label": "Fridge Bottom Clearance mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 5,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeDepthMm",
+        "label": "Fridge Depth mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 550,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeDoorGapMm",
+        "label": "Fridge Door Gap mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeSideClearanceMm",
+        "label": "Fridge Side Clearance mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 2,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "fridgeTopClearanceMm",
+        "label": "Fridge Top Clearance mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 5,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "hingeComponentId",
+        "label": "Hinge Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.hinge.fridge_integrated.softclose",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "legComponentId",
+        "label": "Leg Component Id",
+        "type": "string",
+        "required": false,
+        "defaultValue": "cmp.leg.adjustable.100.black",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthHeight",
+        "label": "Plinth Height",
+        "type": "number",
+        "required": false,
+        "defaultValue": 100,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "plinthSetbackMm",
+        "label": "Plinth Setback mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 60,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "materials",
+        "label": "Materials",
+        "type": "string",
+        "required": false,
+        "defaultValue": {
+          "bodyKey": "mat.board.body.dtd.white.18",
+          "bodyColor": "#f3f3ef",
+          "frontKey": "mat.board.front.mdf.white_supermat.18",
+          "frontColor": "#d7d9dd"
+        },
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleType",
+        "label": "Handle Type",
+        "type": "string",
+        "required": false,
+        "defaultValue": "bar",
+        "group": "runtime",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleLengthMm",
+        "label": "Handle Length mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 160,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleSizeMm",
+        "label": "Handle Size mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 12,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "handleProjectionMm",
+        "label": "Handle Projection mm",
+        "type": "number",
+        "required": false,
+        "defaultValue": 14,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "sideGap",
+        "label": "Side Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "topGap",
+        "label": "Top Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      },
+      {
+        "key": "bottomGap",
+        "label": "Bottom Gap",
+        "type": "number",
+        "required": false,
+        "defaultValue": 0,
+        "group": "advanced",
+        "affects": "geometry"
+      }
+    ]
+  },
+  "placement": {
+    "allowedContexts": [
+      "floor",
+      "free_standing",
+      "appliance_zone"
+    ],
+    "requiredAnchors": [
+      "floor"
+    ],
+    "requiresFloor": true,
+    "allowFreePlacement": true,
+    "collision": {
+      "allowOverlap": false
+    }
+  },
+  "constraints": {
+    "dimensionRules": {
+      "width": {
+        "min": 450,
+        "max": 900,
+        "step": 10
+      },
+      "height": {
+        "min": 1600,
+        "max": 2400,
+        "step": 10
+      },
+      "depth": {
+        "min": 450,
+        "max": 800,
+        "step": 10
+      }
+    }
+  },
+  "snapping": {
+    "enabled": true,
+    "snapTargets": [
+      "floor",
+      "wall",
+      "adjacent_module"
+    ],
+    "priority": [
+      "wall",
+      "adjacent_module",
+      "grid"
+    ],
+    "snapDistanceMm": 50,
+    "rotationSnapDeg": 90,
+    "align": {
+      "backToWall": true,
+      "frontFlushWithAdjacent": true
+    }
+  },
+  "geometry": {
+    "mode": "trusted-runtime",
+    "runtimeBuilderKey": "fridgeTall.v1"
+  },
+  "materials": {
+    "slots": [
+      {
+        "slotId": "carcass",
+        "label": "Carcass material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.carcassMaterialId",
+        "affects": [
+          "geometry",
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "front",
+        "label": "Front material",
+        "required": true,
+        "defaultFrom": "catalog.kitchenDefaults.frontMaterialId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "components": {
+    "slots": [
+      {
+        "slotId": "handle",
+        "label": "Handle",
+        "componentType": "handle",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.defaultHandleComponentId",
+        "affects": [
+          "visual",
+          "bom",
+          "pricing"
+        ]
+      },
+      {
+        "slotId": "hinge",
+        "label": "Integrated fridge hinge",
+        "componentType": "hinge",
+        "required": false,
+        "defaultFrom": "catalog.kitchenDefaults.defaultHingeComponentId",
+        "affects": [
+          "geometry",
+          "bom",
+          "pricing"
+        ]
+      }
+    ]
+  },
+  "bom": {
+    "rules": [
+      {
+        "id": "front-area",
+        "itemType": "material",
+        "source": "materialSlot",
+        "sourceKey": "front",
+        "quantityFormula": {
+          "type": "area",
+          "widthParam": "width",
+          "heightParam": "height"
+        }
+      }
+    ]
+  },
+  "pricing": {
+    "marginCategory": "tall_cabinet",
+    "quoteGroup": "kitchen-cabinets"
+  },
+  "ui": {
+    "icon": "fridgeTall-icon.png",
+    "previewImage": "fridgeTall-preview.png",
+    "groups": [
+      {
+        "id": "dimensions",
+        "label": "Dimensions",
+        "order": 1
+      },
+      {
+        "id": "appliance",
+        "label": "Appliance",
+        "order": 2
+      },
+      {
+        "id": "components",
+        "label": "Components",
+        "order": 3
+      },
+      {
+        "id": "advanced",
+        "label": "Advanced",
+        "order": 90
+      }
+    ],
+    "controls": [
+      {
+        "parameterKey": "width",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 1
+      },
+      {
+        "parameterKey": "height",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 2
+      },
+      {
+        "parameterKey": "depth",
+        "controlType": "number",
+        "groupId": "dimensions",
+        "order": 3
+      },
+      {
+        "parameterKey": "fridgeWidthMm",
+        "controlType": "number",
+        "groupId": "appliance",
+        "order": 1
+      },
+      {
+        "parameterKey": "fridgeHeightMm",
+        "controlType": "number",
+        "groupId": "appliance",
+        "order": 2
+      },
+      {
+        "parameterKey": "handleComponentId",
+        "controlType": "componentPicker",
+        "groupId": "components",
+        "order": 1
+      },
+      {
+        "parameterKey": "requiresWorktop",
+        "controlType": "checkbox",
+        "groupId": "advanced",
+        "order": 7
+      },
+      {
+        "parameterKey": "worktopThicknessMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 8
+      },
+      {
+        "parameterKey": "boardThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 9
+      },
+      {
+        "parameterKey": "backThickness",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 10
+      },
+      {
+        "parameterKey": "frontThicknessMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 11
+      },
+      {
+        "parameterKey": "handlePositionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 12
+      },
+      {
+        "parameterKey": "doorHandleOffsetFromSplitMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 13
+      },
+      {
+        "parameterKey": "__fridgeHandleSplitScaleVersion",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 14
+      },
+      {
+        "parameterKey": "freezerDoorHeightMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 15
+      },
+      {
+        "parameterKey": "fridgeBottomClearanceMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 16
+      },
+      {
+        "parameterKey": "fridgeDepthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 17
+      },
+      {
+        "parameterKey": "fridgeDoorGapMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 18
+      },
+      {
+        "parameterKey": "fridgeSideClearanceMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 19
+      },
+      {
+        "parameterKey": "fridgeTopClearanceMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 20
+      },
+      {
+        "parameterKey": "plinthHeight",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 21
+      },
+      {
+        "parameterKey": "plinthSetbackMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 22
+      },
+      {
+        "parameterKey": "handleLengthMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 23
+      },
+      {
+        "parameterKey": "handleSizeMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 24
+      },
+      {
+        "parameterKey": "handleProjectionMm",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 25
+      },
+      {
+        "parameterKey": "sideGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 26
+      },
+      {
+        "parameterKey": "topGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 27
+      },
+      {
+        "parameterKey": "bottomGap",
+        "controlType": "number",
+        "groupId": "advanced",
+        "order": 28
+      }
+    ]
+  },
+  "exports": {
+    "exportTags": [
+      "kitchen",
+      "tall",
+      "appliance",
+      "cnc"
+    ],
+    "manufacturingCode": "FRIDGE_TALL"
+  },
+  "manufacturing": {
+    "cncStrategy": "panelized-tall",
+    "edgeBandingStrategy": "front-visible-edges"
+  },
+  "assets": {
+    "files": []
+  },
+  "compatibility": {
+    "requiredRuntimeBuilderKeys": [
+      "fridgeTall.v1"
+    ],
+    "requiredCatalogFeatures": [
+      "materials",
+      "components",
+      "kitchenDefaults"
+    ]
+  },
+  "integrity": {
+    "createdAt": "2026-05-19T00:00:00.000Z",
+    "updatedAt": "2026-05-19T00:00:00.000Z",
+    "author": "Arcigy"
+  },
+  "behavior": {
+    "contextBindings": [
+      {
+        "contextType": "kitchenGroup",
+        "required": true,
+        "scope": "single",
+        "autoAssign": "activeKitchenGroup",
+        "liveSync": true,
+        "forbidCrossContextAdjacency": true,
+        "parameterSync": [
+          {
+            "targetParameter": "depth",
+            "source": "ctx.moduleDepthMm"
+          },
+          {
+            "targetParameter": "plinthHeight",
+            "source": "ctx.plinthHeightMm"
+          },
+          {
+            "targetParameter": "plinthSetbackMm",
+            "source": "ctx.plinthDepthMm"
+          }
+        ],
+        "materialSync": [
+          {
+            "targetSlot": "carcass",
+            "source": "ctx.corpusMaterialId",
+            "family": "body",
+            "thicknessParameter": "boardThickness",
+            "aliases": [
+              "body",
+              "shelf"
+            ]
+          },
+          {
+            "targetSlot": "front",
+            "source": "ctx.frontsMaterialId",
+            "family": "front",
+            "thicknessParameter": "frontThicknessMm",
+            "aliases": [
+              "front"
+            ]
+          },
+          {
+            "source": "ctx.backMaterialId",
+            "family": "back",
+            "thicknessParameter": "backThickness",
+            "aliases": [
+              "back"
+            ]
+          },
+          {
+            "source": "ctx.drawerBottomMaterialId",
+            "family": "drawer_bottom",
+            "aliases": [
+              "drawer_bottom"
+            ]
+          }
+        ],
+        "componentSync": [
+          {
+            "targetSlot": "handle",
+            "targetParameter": "handleComponentId",
+            "source": "ctx.handleComponentId",
+            "componentType": "handle",
+            "transforms": [
+              "handleGeometryKind",
+              "componentNominalLength"
+            ]
+          }
+        ],
+        "commercialSelectionSync": [
+          {
+            "source": "materialSnapshot"
+          }
+        ],
+        "overridePolicy": {
+          "allowUserOverride": false,
+          "warnWhenDetachedFromContext": true
+        }
+      }
+    ]
+  }
+}

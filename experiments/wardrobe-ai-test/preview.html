@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wardrobe AI JSON Preview</title>
+  <style>
+    :root {
+      color: #241f1a;
+      background: #f7f4ee;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 28px;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .meta {
+      margin: 0 0 20px;
+      color: #5f564c;
+      font-size: 14px;
+    }
+
+    .preview {
+      overflow: auto;
+      border: 1px solid #d4cbbd;
+      background: #fffaf1;
+      padding: 16px;
+    }
+
+    svg {
+      display: block;
+      width: min(100%, 980px);
+      min-width: 720px;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    .frame {
+      fill: none;
+      stroke: #2e2923;
+      stroke-width: 14;
+    }
+
+    .divider {
+      stroke: #2e2923;
+      stroke-width: 14;
+    }
+
+    .drawer {
+      fill: #eee3d2;
+      stroke: #6f6457;
+      stroke-width: 5;
+    }
+
+    .shelf {
+      fill: #f7efe1;
+      stroke: #8a7d6e;
+      stroke-width: 5;
+    }
+
+    .hanging {
+      fill: #e9f0ed;
+      stroke: #678070;
+      stroke-width: 5;
+    }
+
+    .gap {
+      fill: #fff;
+      stroke: #b28f2f;
+      stroke-dasharray: 24 16;
+      stroke-width: 5;
+    }
+
+    .overflow {
+      fill: #f8dfdc;
+      stroke: #bd3d35;
+      stroke-width: 7;
+    }
+
+    .label,
+    .small-label,
+    .module-label,
+    .dimension {
+      fill: #241f1a;
+      font-weight: 700;
+    }
+
+    .label {
+      font-size: 42px;
+    }
+
+    .small-label {
+      font-size: 32px;
+    }
+
+    .module-label,
+    .dimension {
+      font-size: 40px;
+    }
+
+    .height-line {
+      stroke: #695f54;
+      stroke-width: 5;
+    }
+
+    .overflow-line {
+      stroke: #bd3d35;
+      stroke-width: 6;
+      stroke-dasharray: 20 14;
+    }
+
+    .notes {
+      margin-top: 18px;
+      padding-left: 20px;
+      color: #3f382f;
+      line-height: 1.45;
+    }
+
+    .warning {
+      color: #8b2d25;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Wardrobe AI JSON Preview</h1>
+    <p class="meta">
+      Front view from JSON. Width 2000 mm, height 2860 mm (1700 + 1160).
+    </p>
+    <section class="preview" aria-label="Wardrobe front preview">
+      <svg viewBox="0 0 2240 3100" role="img" aria-label="Wardrobe front elevation">
+        <rect class="frame" x="120" y="120" width="2000" height="2860" />
+
+    <g>
+      <rect class="drawer" x="120" y="2800" width="500" height="180" />
+      <text class="small-label" x="370" y="2890" text-anchor="middle">
+        D1 / 180 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="drawer" x="620" y="2800" width="500" height="180" />
+      <text class="small-label" x="870" y="2890" text-anchor="middle">
+        D2 / 180 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="drawer" x="120" y="2620" width="500" height="180" />
+      <text class="small-label" x="370" y="2710" text-anchor="middle">
+        D3 / 180 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="drawer" x="620" y="2620" width="500" height="180" />
+      <text class="small-label" x="870" y="2710" text-anchor="middle">
+        D4 / 180 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="hanging" x="120" y="1430" width="1000" height="1190" />
+      <text class="label" x="620" y="2025" text-anchor="middle">
+        Hanging space / 1190 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="120" y="1280" width="1000" height="150" />
+      <text class="small-label" x="620" y="1355" text-anchor="middle">
+        Lower top shelf / 150 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="120" y="950" width="1000" height="330" />
+      <text class="label" x="620" y="1115" text-anchor="middle">
+        Upper shelf / 330 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="120" y="500" width="1000" height="450" />
+      <text class="label" x="620" y="725" text-anchor="middle">
+        Upper shelf / 450 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="gap" x="120" y="120" width="1000" height="380" />
+      <text class="label" x="620" y="310" text-anchor="middle">
+        Upper remaining / 380 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="gap" x="1120" y="2920" width="1000" height="60" />
+      <text class="small-label" x="1620" y="2954" text-anchor="middle">
+        Bottom clearance / 60 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="1120" y="2690" width="1000" height="230" />
+      <text class="label" x="1620" y="2805" text-anchor="middle">
+        Lower shelf / 230 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="hanging" x="1120" y="1580" width="1000" height="1110" />
+      <text class="label" x="1620" y="2135" text-anchor="middle">
+        Hanging space / 1110 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="1120" y="1280" width="1000" height="300" />
+      <text class="label" x="1620" y="1430" text-anchor="middle">
+        Lower top shelf / 300 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="1120" y="950" width="1000" height="330" />
+      <text class="label" x="1620" y="1115" text-anchor="middle">
+        Upper shelf / 330 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="shelf" x="1120" y="500" width="1000" height="450" />
+      <text class="label" x="1620" y="725" text-anchor="middle">
+        Upper shelf / 450 mm
+      </text>
+    </g>
+
+    <g>
+      <rect class="gap" x="1120" y="120" width="1000" height="380" />
+      <text class="label" x="1620" y="310" text-anchor="middle">
+        Upper remaining / 380 mm
+      </text>
+    </g>
+        <line class="divider" x1="1120" y1="120" x2="1120" y2="2980" />
+        <rect class="frame" x="120" y="120" width="2000" height="2860" />
+        <line class="height-line" x1="2180" y1="120" x2="2180" y2="2980" />
+        <text class="dimension" x="2212" y="1550" transform="rotate(90 2212 1550)" text-anchor="middle">2860 mm</text>
+
+        <text class="module-label" x="620" y="3035" text-anchor="middle">Left module / 1000 mm</text>
+<text class="module-label" x="1620" y="3035" text-anchor="middle">Right module / 1000 mm</text>
+        <text class="dimension" x="1120" y="3085" text-anchor="middle">2000 mm</text>
+      </svg>
+    </section>
+    <ul class="notes"><li class="info">Total wardrobe height was parsed as 2860 mm from 1700 + 1160.</li><li class="info">Lower wardrobe height is 1700 mm and upper extension height is 1160 mm.</li><li class="info">Left lower module fits as 360 mm drawers, 1190 mm hanging space, and 150 mm top shelf.</li><li class="info">Right lower module fits as 60 mm bottom clearance, 230 mm lower shelf, 1110 mm hanging space, and 300 mm top shelf.</li><li class="info">Upper extension fits as 330 mm shelf opening, 450 mm shelf opening, and 380 mm remaining construction space.</li><li class="warning">Depth, material, and filler panels were not specified in the prompt.</li></ul>
+  </main>
+</body>
+</html>

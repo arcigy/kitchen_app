@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { WallId, WindowInstance, WindowParams } from "./localTypes";
+import type { WallId, WallInstance, WindowInstance, WindowParams } from "./localTypes";
+import { getWindowMaterialOption } from "./windowMaterials";
 
 type WindowWallDefinition = {
   axisHalf: number;
@@ -23,28 +24,63 @@ type WindowCutout = {
 type WindowInstanceControllerContext = {
   roomHeightM: number;
   wallDefs: Record<WallId, WindowWallDefinition>;
+  walls: WallInstance[];
   getWindowInst: () => WindowInstance | null;
+  nextWindowId: () => string;
   setWindowOpening: (opening: WindowOpening) => void;
   setWindowCutout: (cutout: WindowCutout) => void;
   updateWindowTransform: (inst: WindowInstance) => void;
 };
 
 export function createWindowInstanceController(ctx: WindowInstanceControllerContext) {
-  const createWindow = (defaultWall: WallId = "back") => {
+  const defaultParams = (defaultWall: WallId, wallId: string | null): WindowParams => ({
+    wall: defaultWall,
+    wallId,
+    widthMm: 900,
+    heightMm: 900,
+    sillHeightMm: 900,
+    centerMm: 0,
+    frameWidthMm: 70,
+    offsetFromInteriorMm: 20,
+    sashWidthMm: 48,
+    sashProfileDepthMm: 56,
+    frameProfileDepthMm: 72,
+    materialId: getWindowMaterialOption(null).id
+  });
+
+  const createWindow = (defaultWall: WallId = "back", wallId: string | null = null, opts: { id?: string } = {}) => {
+    const id = opts.id ?? ctx.nextWindowId();
     const params: WindowParams = {
-      wall: defaultWall,
-      widthMm: 900,
-      heightMm: 900,
-      sillHeightMm: 900,
-      centerMm: 0
+      ...defaultParams(defaultWall, wallId)
     };
 
     const root = new THREE.Group();
-    root.name = "windowRoot";
+    root.name = `windowRoot_${id}`;
+    root.userData.windowId = id;
+
+    const frame = new THREE.Group();
+    frame.name = "windowFrame";
+    frame.userData.windowId = id;
+    root.add(frame);
+
+    const plan = new THREE.Group();
+    plan.name = "windowPlanSymbol";
+    plan.visible = false;
+    plan.userData.windowId = id;
+    root.add(plan);
+
+    const selection = new THREE.Group();
+    selection.name = "windowSelection";
+    selection.visible = false;
+    selection.userData.windowId = id;
+    root.add(selection);
 
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), new THREE.MeshBasicMaterial({ visible: false }));
     pick.name = "windowPick";
     pick.userData.kind = "window";
+    pick.userData.windowId = id;
+    pick.userData.viewDisplaySkipEdges = true;
+    pick.userData.viewDisplaySkipMaterialRestore = true;
     root.add(pick);
 
     const outline = new THREE.Line(
@@ -53,24 +89,41 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     );
     outline.name = "windowOutline";
     outline.renderOrder = 57;
+    outline.visible = false;
+    outline.userData.windowId = id;
     root.add(outline);
 
-    const inst: WindowInstance = { params, root, pick, outline };
+    const inst: WindowInstance = { id, params, root, frame, plan, selection, pick, outline };
     ctx.updateWindowTransform(inst);
     return inst;
   };
 
   const clampWindowParams = (p: WindowParams) => {
-    const widthMm = Math.max(200, Math.min(4800, Math.round(p.widthMm)));
-    const heightMm = Math.max(200, Math.min(2600, Math.round(p.heightMm)));
-    const maxSill = Math.max(0, Math.round(ctx.roomHeightM * 1000 - heightMm));
-    const sillHeightMm = Math.max(0, Math.min(Math.round(p.sillHeightMm), maxSill));
+    const positiveMm = (value: unknown, fallback: number) => {
+      const next = Math.round(Number(value));
+      return Number.isFinite(next) ? Math.max(1, next) : fallback;
+    };
+    const nonNegativeMm = (value: unknown, fallback: number) => {
+      const next = Math.round(Number(value));
+      return Number.isFinite(next) ? Math.max(0, next) : fallback;
+    };
+    const anyMm = (value: unknown, fallback: number) => {
+      const next = Math.round(Number(value));
+      return Number.isFinite(next) ? next : fallback;
+    };
 
-    const axisHalfMm = ctx.wallDefs[p.wall].axisHalf * 1000;
-    const maxCenter = Math.max(0, axisHalfMm - widthMm / 2);
-    const centerMm = Math.max(-maxCenter, Math.min(Math.round(p.centerMm), maxCenter));
-
-    return { ...p, widthMm, heightMm, sillHeightMm, centerMm };
+    p.wallId = p.wallId ?? null;
+    p.widthMm = positiveMm(p.widthMm, 900);
+    p.heightMm = positiveMm(p.heightMm, 900);
+    p.sillHeightMm = nonNegativeMm(p.sillHeightMm, 900);
+    p.centerMm = anyMm(p.centerMm, 0);
+    p.frameWidthMm = nonNegativeMm(p.frameWidthMm, 70);
+    p.offsetFromInteriorMm = nonNegativeMm(p.offsetFromInteriorMm, 20);
+    p.sashWidthMm = nonNegativeMm(p.sashWidthMm, 48);
+    p.sashProfileDepthMm = positiveMm(p.sashProfileDepthMm, 56);
+    p.frameProfileDepthMm = positiveMm(p.frameProfileDepthMm, 72);
+    p.materialId = getWindowMaterialOption(p.materialId).id;
+    return p;
   };
 
   const clearWindowLightIfMissing = () => {

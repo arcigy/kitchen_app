@@ -7,13 +7,15 @@ import type {
   WallInstance,
   KitchenWorktopParams,
   KitchenPlacementBinding,
-  SectionParams
+  SectionParams,
+  ColumnParams
 } from "./appState";
 import { getKitchenModuleRole } from "./kitchenModuleRules";
 
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
   setSelectedFloor?: (id: string | null) => void;
+  setSelectedColumn?: (id: string | null) => void;
   setSelectedModule: (id: string | null) => void;
   updateSelectionHighlights: () => void;
   disposeObject3D: (obj: THREE.Object3D) => void;
@@ -23,6 +25,7 @@ export interface HistoryHelpers {
   rebuildWall: (inst: WallInstance) => void;
   rebuildWallPlanMesh: () => void;
   restoreFloors?: (floors: NonNullable<LayoutSnapshot["floors"]>, floorCounter?: number) => void;
+  restoreColumns?: (columns: NonNullable<LayoutSnapshot["columns"]>, columnCounter?: number) => void;
   restoreSections?: (sections: NonNullable<LayoutSnapshot["sections"]>, sectionCounter?: number) => void;
   restoreWorktops?: (
     worktops: NonNullable<LayoutSnapshot["worktops"]>,
@@ -49,6 +52,9 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const floors = (s.floors ?? [])
     .map((f) => `${f.id}:${f.params.name}:${f.params.heightMm}:${f.params.thicknessMm}:${f.params.materialId ?? ""}:${f.params.boundary.map((p) => `${p.x},${p.z}`).join(";")}`)
     .join("|");
+  const columns = (s.columns ?? [])
+    .map((c) => `${c.id}:${c.params.name}:${c.params.shape}:${c.params.xMm},${c.params.zMm}:${c.params.widthMm}:${c.params.depthMm}:${c.params.diameterMm}:${c.params.heightMm}:${c.params.materialId}`)
+    .join("|");
   const sections = (s.sections ?? [])
     .map((section) => `${section.id}:${section.params.name}:${section.params.aMm.x},${section.params.aMm.z}-${section.params.bMm.x},${section.params.bMm.z}:${section.params.mirrored ? 1 : 0}`)
     .join("|");
@@ -61,7 +67,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
     )
     .join("|");
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${sections}::${worktops}::${mods}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${mods}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -82,6 +88,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   // Clear selection visuals first
   helpers.setSelectedWall(null);
   helpers.setSelectedModule(null);
+  helpers.setSelectedColumn?.(null);
   helpers.setSelectedSection?.(null);
   S.selectedWallIds.clear();
   S.selectedInstanceIds.clear();
@@ -95,6 +102,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
 
   S.wallCounter = snap.wallCounter;
   S.floorCounter = snap.floorCounter ?? S.floorCounter;
+  S.columnCounter = snap.columnCounter ?? S.columnCounter;
   S.sectionCounter = snap.sectionCounter ?? S.sectionCounter;
   S.worktopCounter = snap.worktopCounter ?? S.worktopCounter;
   S.instanceCounter = snap.instanceCounter ?? S.instanceCounter;
@@ -109,6 +117,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   }
 
   helpers.restoreSections?.(snap.sections ?? [], snap.sectionCounter);
+  helpers.restoreColumns?.(snap.columns ?? [], snap.columnCounter);
 
   if (helpers.restoreWorktops) {
     helpers.restoreWorktops(snap.worktops ?? [], snap.worktopCounter);
@@ -167,6 +176,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     helpers.setSelectedWall(snap.selected.wallId);
   } else if (snap.selected.kind === "floor" && snap.selected.floorId && S.floors.some((f) => f.id === snap.selected.floorId)) {
     helpers.setSelectedFloor?.(snap.selected.floorId);
+  } else if (snap.selected.kind === "column" && snap.selected.columnId && S.columns.some((c) => c.id === snap.selected.columnId)) {
+    helpers.setSelectedColumn?.(snap.selected.columnId);
   } else if (snap.selected.kind === "section" && snap.selected.sectionId && S.sections.some((section) => section.id === snap.selected.sectionId)) {
     helpers.setSelectedSection?.(snap.selected.sectionId);
   } else if (snap.selected.kind === "module" && snap.selected.instId && S.instances.some((i) => i.id === snap.selected.instId)) {
@@ -174,6 +185,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   } else {
     helpers.setSelectedWall(null);
     helpers.setSelectedModule(null);
+    helpers.setSelectedColumn?.(null);
   }
   helpers.updateSelectionHighlights();
   helpers.mountProps();
@@ -183,11 +195,14 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
   const copyParams = (p: WallParams) => JSON.parse(JSON.stringify(p)) as WallParams;
   const copyWorktopParams = (p: KitchenWorktopParams) => JSON.parse(JSON.stringify(p)) as KitchenWorktopParams;
   const copySectionParams = (p: SectionParams) => JSON.parse(JSON.stringify(p)) as SectionParams;
+  const copyColumnParams = (p: ColumnParams) => JSON.parse(JSON.stringify(p)) as ColumnParams;
   return {
     wallCounter: S.wallCounter,
     walls: S.walls.map((w) => ({ id: w.id, params: copyParams(w.params) })),
     floorCounter: S.floorCounter,
     floors: S.floors.map((floor) => ({ id: floor.id, params: JSON.parse(JSON.stringify(floor.params)) })),
+    columnCounter: S.columnCounter,
+    columns: S.columns.map((column) => ({ id: column.id, params: copyColumnParams(column.params) })),
     sectionCounter: S.sectionCounter,
     sections: S.sections.map((section) => ({ id: section.id, params: copySectionParams(section.params) })),
     worktopCounter: S.worktopCounter,
@@ -217,6 +232,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       wallId: S.selectedWallId,
       wallIds: Array.from(S.selectedWallIds),
       floorId: S.selectedFloorId,
+      columnId: S.selectedColumnId,
       sectionId: S.selectedSectionId,
       instId: S.selectedInstanceId,
       instIds: Array.from(S.selectedInstanceIds)

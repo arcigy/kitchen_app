@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { installAuthSession } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
@@ -59,9 +60,11 @@ async function snapshot(page, groupId) {
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  await installAuthSession(page);
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
     await page.evaluate((aliases) => {
       window.__kitchenInputAliases = aliases;
     }, kitchenInputAliases);

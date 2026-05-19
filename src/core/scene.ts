@@ -182,6 +182,9 @@ export function createScene(container: HTMLElement) {
     new THREE.MeshBasicMaterial({ color: 0xe7e7e7, transparent: true, opacity: 1, depthWrite: false })
   );
   planBg.name = "planBg";
+  planBg.userData.viewDisplaySkipEdges = true;
+  planBg.visible = false;
+  planBg.raycast = () => {};
   planBg.rotation.x = -Math.PI / 2;
   planBg.position.y = 0.001;
   planBg.renderOrder = 0;
@@ -259,6 +262,7 @@ export function createScene(container: HTMLElement) {
   // - Optional window opening can add extra daylight (but is not required).
   let windowOpening: { center: THREE.Vector3; inwardNormal: THREE.Vector3; width: number; height: number } | null = null;
   let daylightIntensity = 9; // tweak via UI in app
+  let presentationMode: "solid" | "realistic" = "solid";
 
   // Gentle sky directional bias from above (north daylight feel); no shadows.
   const skyBias = new THREE.DirectionalLight(0xdbe6ff, 0);
@@ -414,7 +418,7 @@ export function createScene(container: HTMLElement) {
         hdriProbeRt = null;
       }
       scene.environment = null;
-      scene.background = new THREE.Color(0xf3f3f3);
+      if (activeCamera !== camera2d) scene.background = new THREE.Color(0xf3f3f3);
       lightProbe.intensity = 0;
       lastEnvIntensityApplied = -1;
       updateLighting();
@@ -422,8 +426,8 @@ export function createScene(container: HTMLElement) {
     }
 
     if (args.id === hdriId && hdriSrc) {
-      scene.environment = hdriEnv;
-      scene.background = hdriUseBackground ? hdriBg : new THREE.Color(0xf3f3f3);
+      scene.environment = presentationMode === "realistic" ? hdriEnv : null;
+      if (activeCamera !== camera2d) scene.background = presentationMode === "realistic" && hdriUseBackground ? hdriBg : new THREE.Color(0xf3f3f3);
       updateLighting();
       return;
     }
@@ -454,8 +458,8 @@ export function createScene(container: HTMLElement) {
     hdriEnv = rt.texture;
     hdriBg = src;
 
-    scene.environment = hdriEnv;
-    scene.background = hdriUseBackground ? hdriBg : new THREE.Color(0x0a0c10);
+    scene.environment = presentationMode === "realistic" ? hdriEnv : null;
+    if (activeCamera !== camera2d) scene.background = presentationMode === "realistic" && hdriUseBackground ? hdriBg : new THREE.Color(0x0a0c10);
 
     // LightProbe for extremely weak diffuse environment (gated in updateLighting).
     hdriProbeRt = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
@@ -479,6 +483,43 @@ export function createScene(container: HTMLElement) {
   const updateLighting = () => {
     lightingRevision++;
     const envStrength = hdriEnv ? Math.max(0, Math.min(0.3, hdriEnvIntensity)) : 0;
+
+    if (presentationMode === "solid") {
+      renderer.shadowMap.enabled = false;
+      scene.environment = null;
+      if (activeCamera !== camera2d) {
+        scene.background = new THREE.Color(0xf3f3f3);
+        renderer.setClearColor(0xf3f3f3, 1);
+      }
+      studioHemi.color.set(0xffffff);
+      studioHemi.groundColor.set(0xffffff);
+      studioHemi.intensity = 1.35;
+      studioKey.intensity = 0;
+      studioFill.intensity = 0;
+      skyBias.intensity = 0;
+      lightProbe.intensity = 0;
+      windowRect.intensity = 0;
+      windowFill.intensity = 0;
+      windowShadow.intensity = 0;
+      bounceCeilingNear.intensity = 0;
+      bounceCeilingFar.intensity = 0;
+      bounceFloorNear.intensity = 0;
+      bounceOppositeWall.intensity = 0;
+      setSceneEnvIntensity(0);
+      return;
+    }
+
+    renderer.shadowMap.enabled = true;
+    scene.environment = hdriEnv;
+    if (activeCamera !== camera2d) {
+      scene.background = hdriUseBackground && hdriBg ? hdriBg : new THREE.Color(0xf3f3f3);
+      renderer.setClearColor(0xf3f3f3, 1);
+    }
+    studioHemi.color.set(0xffffff);
+    studioHemi.groundColor.set(0x1a1f2a);
+    studioHemi.intensity = 1.15;
+    studioKey.intensity = 2.65;
+    studioFill.intensity = 0.55;
 
     if (!windowOpening) {
       // Default: readable studio lighting with optional weak HDRI fill.
@@ -574,6 +615,11 @@ export function createScene(container: HTMLElement) {
 
   const setShadowAlgorithmPublic = (algo: ShadowAlgorithm) => {
     applyShadowAlgorithm(algo);
+    updateLighting();
+  };
+
+  const setPresentationMode = (next: "solid" | "realistic") => {
+    presentationMode = next;
     updateLighting();
   };
 
@@ -676,6 +722,8 @@ export function createScene(container: HTMLElement) {
     setViewMode,
     setPlanPresentation,
     setHdri,
+    setPresentationMode,
+    getPresentationMode: () => presentationMode,
     getHdriSettings: () => ({
       id: hdriId,
       envIntensity: hdriEnvIntensity,

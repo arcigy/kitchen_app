@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import liveStateSnapshot from "./package/integration/current-live-state.json";
 import materialsSnapshot from "./package/definitions/corner_shelf_lower.materials.snapshot.json";
 import { buildPortableLiveModuleGroup } from "../runtime/portableGeometry";
@@ -84,21 +85,6 @@ const baseHingeInsetXMm =
 const baseHingeInsetZMm =
   ((getBasePart("door_front_x")?.sizeMm?.z ?? 418) * 0.5) -
     ((getBasePart("hinge_front_x_1_door_plate")?.centerMm?.z ?? 0) - (getBasePart("door_front_x")?.centerMm?.z ?? 0)) || 37;
-const baseDoorFrontZCenterZMm = getBasePart("door_front_z")?.centerMm?.z ?? 69.7;
-const baseDoorFrontXCenterXMm = getBasePart("door_front_x")?.centerMm?.x ?? 69.7;
-const baseDoorFrontZBackFaceZMm = baseDoorFrontZCenterZMm - baseFrontThicknessMm * 0.5;
-const baseDoorFrontXBackFaceXMm = baseDoorFrontXCenterXMm - baseFrontThicknessMm * 0.5;
-
-function getBasePartCenterAxisMm(name: string, axis: "x" | "y" | "z") {
-  const center = getBasePart(name)?.centerMm;
-  const value = center?.[axis];
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function getBaseHingeBackFaceOffsetMm(partName: string, axis: "x" | "z") {
-  const baseCenter = getBasePartCenterAxisMm(partName, axis);
-  return axis === "z" ? baseCenter - baseDoorFrontZBackFaceZMm : baseCenter - baseDoorFrontXBackFaceXMm;
-}
 
 function getShelfGapValues(params: CornerShelfLowerParams) {
   const raw = Array.isArray(params.shelfGaps)
@@ -527,8 +513,10 @@ function applyCornerHeightAdjustments(group: THREE.Group, params: CornerShelfLow
   setCenterY("top_x_back", topCenterYMm);
   setCenterY("top_z", topCenterYMm);
 
-  resizeHeight("back_corner_panel", clearInternalHeightMm);
-  setCenterY("back_corner_panel", (internalBottomYMm + internalTopYMm) * 0.5);
+  for (const name of ["back_x", "back_z", "back_corner_panel"]) {
+    resizeHeight(name, clearInternalHeightMm);
+    setCenterY(name, (internalBottomYMm + internalTopYMm) * 0.5);
+  }
 
   for (const name of ["kick_x", "kick_z", "leg_inner_rear", "leg_outer_x_rear", "leg_outer_x_front", "leg_inner_x_front", "leg_outer_z_rear", "leg_outer_z_front", "leg_inner_z_front"]) {
     resizeHeight(name, plinthHeightMm);
@@ -687,11 +675,9 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
         const hingeThicknessMm = getMeshDimensionsMm(hinge)?.depth ?? getBasePart(hingeName)?.sizeMm?.z ?? 0;
-        const outsideCenterZMm =
-          doorFrontZCenter.z + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_z_1_${suffix}`, "z");
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterX(hinge, doorFrontZCenter.x + doorFrontZWidthMm * 0.5 - baseHingeInsetXMm);
-        setObjectCenterZ(hinge, outsideCenterZMm - frontThicknessMm - hingeThicknessMm);
+        setObjectCenterZ(hinge, doorFrontZCenter.z - frontThicknessMm * 0.5 - hingeThicknessMm * 0.5);
       }
     }
   }
@@ -715,11 +701,9 @@ function applyCornerFrontAdjustments(group: THREE.Group, params: CornerShelfLowe
         const hinge = group.getObjectByName(hingeName);
         if (!hinge) continue;
         const hingeThicknessMm = getMeshDimensionsMm(hinge)?.width ?? getBasePart(hingeName)?.sizeMm?.x ?? 0;
-        const outsideCenterXMm =
-          doorFrontXCenter.x + frontThicknessMm * 0.5 - getBaseHingeBackFaceOffsetMm(`hinge_front_x_1_${suffix}`, "x");
         setObjectCenterY(hinge, hingeCenters[index]!);
         setObjectCenterZ(hinge, doorFrontXCenter.z + doorFrontXDepthMm * 0.5 - baseHingeInsetZMm);
-        setObjectCenterX(hinge, outsideCenterXMm - frontThicknessMm - hingeThicknessMm);
+        setObjectCenterX(hinge, doorFrontXCenter.x - frontThicknessMm * 0.5 - hingeThicknessMm * 0.5);
       }
     }
   }
@@ -871,11 +855,12 @@ function attachKitchenCornerAnchors(group: THREE.Group) {
   group.add(zAnchor);
 }
 
-export function buildCornerShelfLower(params: CornerShelfLowerParams): THREE.Group {
+export function buildCornerShelfLower(params: CornerShelfLowerParams, catalog: ClientCatalog): THREE.Group {
   const group = buildPortableLiveModuleGroup(
     params as Record<string, unknown>,
     liveStateSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[1],
-    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2]
+    materialsSnapshot as unknown as Parameters<typeof buildPortableLiveModuleGroup>[2],
+    catalog
   );
 
   syncCornerShelfMeshes(group, params);

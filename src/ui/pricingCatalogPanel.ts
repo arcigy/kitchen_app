@@ -1,4 +1,4 @@
-import { componentDefinitions, materialDefinitions, priceList } from "../data/pricing";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 
 function table(headers: string[], rows: string[][]) {
   const wrap = document.createElement("div");
@@ -56,7 +56,7 @@ function formatCurrency(value: number | null) {
   }).format(value);
 }
 
-export function mountPricingCatalogPanel(container: HTMLElement) {
+export function mountPricingCatalogPanel(container: HTMLElement, catalog: ClientCatalog) {
   container.innerHTML = "";
   container.style.display = "grid";
   container.style.gap = "18px";
@@ -88,7 +88,7 @@ export function mountPricingCatalogPanel(container: HTMLElement) {
   materialsSection.appendChild(
     table(
       ["Display Name", "Catalog ID", "Type", "Base", "Decor", "Finish", "Thicknesses", "Unit", "Unit price"],
-      materialDefinitions.map((material) => [
+      catalog.materials.map((material) => [
         material.displayName,
         material.id,
         material.materialType,
@@ -97,7 +97,7 @@ export function mountPricingCatalogPanel(container: HTMLElement) {
         material.finish,
         material.availableThicknessesMm.join(", "),
         material.pricingUnit,
-        formatCurrency(priceList.prices[material.id] ?? null)
+        formatCurrency(catalog.priceList.prices[material.id] ?? null)
       ])
     )
   );
@@ -114,7 +114,7 @@ export function mountPricingCatalogPanel(container: HTMLElement) {
   componentsSection.appendChild(
     table(
       ["Display Name", "Catalog ID", "Type", "Brand", "Series", "Variant", "Geometry", "Unit price"],
-      componentDefinitions.map((component) => [
+      catalog.components.map((component) => [
         component.displayName,
         component.id,
         component.componentType,
@@ -122,7 +122,7 @@ export function mountPricingCatalogPanel(container: HTMLElement) {
         component.series,
         component.variant,
         component.geometryId,
-        formatCurrency(priceList.prices[component.id] ?? null)
+        formatCurrency(catalog.priceList.prices[component.id] ?? null)
       ])
     )
   );

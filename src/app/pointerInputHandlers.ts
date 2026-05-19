@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import type {
+  ColumnInstance,
+  DoorInstance,
   FloorInstance,
   LayoutInstance,
-  WallInstance
+  WallInstance,
+  WindowInstance
 } from "./localTypes";
 import type { PlanSnapBinding } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
@@ -11,6 +14,9 @@ import type { MeasureState } from "./measureTools";
 type PointerInputHandlersContext = Record<string, any> & {
   renderer: THREE.WebGLRenderer;
   walls: WallInstance[];
+  windows: WindowInstance[];
+  doors: DoorInstance[];
+  columns: ColumnInstance[];
   instances: LayoutInstance[];
   floors: FloorInstance[];
   getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
@@ -22,24 +28,409 @@ type PointerInputHandlersContext = Record<string, any> & {
   };
 };
 
+type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
+type DoorDimensionParam = "widthMm" | "heightMm";
+
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
+  const isPickableObject = (object: THREE.Object3D | null | undefined) =>
+    !ctx.isObjectPickable || ctx.isObjectPickable(object);
+  const isPickableKey = (key: string | null | undefined) =>
+    !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
+  const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
+  const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const windowPlacementWallSnapPx = 34;
+  const windowSelectionSnapPx = 20;
+  const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
+    let bestPoly: { id: string; px: number } | null = null;
+    const pW = { x: pMm.x / 1000, z: pMm.z / 1000 };
+    for (const [id, poly] of ctx.wallSolvedOutlines) {
+      if (!isPickableKey(`wall:${id}`)) continue;
+      if (poly.length < 3) continue;
+      if (!ctx.pointInPolygonXZ(pW, poly)) continue;
+      const w = ctx.walls.find((x) => x.id === id) ?? null;
+      const mid = w
+        ? new THREE.Vector3((w.params.aMm.x + w.params.bMm.x) / 2000, 0, (w.params.aMm.z + w.params.bMm.z) / 2000)
+        : new THREE.Vector3(pW.x, 0, pW.z);
+      const s = ctx.worldToScreen(mid, ctx.cam(), rect);
+      const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
+      if (!bestPoly || px < bestPoly.px) bestPoly = { id, px };
+    }
+    if (bestPoly) return bestPoly.id;
+
+    let best: { id: string; px: number } | null = null;
+    for (const w of ctx.walls) {
+      if (!isPickableKey(`wall:${w.id}`)) continue;
+      const closest = ctx.pointOnWallAxisMm(w, pMm);
+      if (!Number.isFinite(closest.distMm)) continue;
+      const cp = new THREE.Vector3(closest.closest.x / 1000, 0, closest.closest.z / 1000);
+      const s = ctx.worldToScreen(cp, ctx.cam(), rect);
+      const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
+      if (!best || px < best.px) best = { id: w.id, px };
+    }
+    return best && best.px <= windowPlacementWallSnapPx ? best.id : null;
+  };
+  const pickFloorplanWindow = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
+    let best: { inst: WindowInstance; px: number } | null = null;
+    for (const inst of ctx.windows) {
+      const wallId = inst.params.wallId ?? null;
+      if (!wallId || !isPickableKey(`window:${inst.id}`)) continue;
+      const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
+      if (!wall) continue;
+      const closest = ctx.pointOnWallAxisMm(wall, pMm);
+      if (!Number.isFinite(closest.distMm)) continue;
+      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+      const alongMm = closest.t * lengthMm;
+      const alongPadMm = Math.max(130, inst.params.widthMm * 0.08);
+      const lateralPadMm = Math.max(180, wall.params.thicknessMm * 1.4);
+      const aMm = Math.max(0, inst.params.centerMm - inst.params.widthMm / 2);
+      const bMm = Math.min(lengthMm, inst.params.centerMm + inst.params.widthMm / 2);
+      const ax = wall.params.aMm.x;
+      const az = wall.params.aMm.z;
+      const bx = wall.params.bMm.x;
+      const bz = wall.params.bMm.z;
+      const dirX = (bx - ax) / Math.max(1, lengthMm);
+      const dirZ = (bz - az) / Math.max(1, lengthMm);
+      const screenA = ctx.worldToScreen(new THREE.Vector3((ax + dirX * aMm) / 1000, 0, (az + dirZ * aMm) / 1000), ctx.cam(), rect);
+      const screenB = ctx.worldToScreen(new THREE.Vector3((ax + dirX * bMm) / 1000, 0, (az + dirZ * bMm) / 1000), ctx.cam(), rect);
+      const px = ctx.distPxPointToSeg(mouse.x, mouse.y, screenA.x, screenA.y, screenB.x, screenB.y);
+      const hit =
+        px <= windowSelectionSnapPx ||
+        (alongMm >= inst.params.centerMm - inst.params.widthMm / 2 - alongPadMm &&
+          alongMm <= inst.params.centerMm + inst.params.widthMm / 2 + alongPadMm &&
+          closest.distMm <= lateralPadMm);
+      if (hit && (!best || px < best.px)) best = { inst, px };
+    }
+    return best?.inst ?? null;
+  };
+
+  const pickFloorplanDoor = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
+    let best: { inst: DoorInstance; px: number } | null = null;
+    for (const inst of ctx.doors) {
+      const wallId = inst.params.wallId ?? null;
+      if (!wallId || !isPickableKey(`door:${inst.id}`)) continue;
+      const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
+      if (!wall) continue;
+      const closest = ctx.pointOnWallAxisMm(wall, pMm);
+      if (!Number.isFinite(closest.distMm)) continue;
+      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+      const alongMm = closest.t * lengthMm;
+      const alongPadMm = Math.max(130, inst.params.widthMm * 0.08);
+      const lateralPadMm = Math.max(180, wall.params.thicknessMm * 1.4);
+      const aMm = Math.max(0, inst.params.centerMm - inst.params.widthMm / 2);
+      const bMm = Math.min(lengthMm, inst.params.centerMm + inst.params.widthMm / 2);
+      const ax = wall.params.aMm.x;
+      const az = wall.params.aMm.z;
+      const bx = wall.params.bMm.x;
+      const bz = wall.params.bMm.z;
+      const dirX = (bx - ax) / Math.max(1, lengthMm);
+      const dirZ = (bz - az) / Math.max(1, lengthMm);
+      const screenA = ctx.worldToScreen(new THREE.Vector3((ax + dirX * aMm) / 1000, 0, (az + dirZ * aMm) / 1000), ctx.cam(), rect);
+      const screenB = ctx.worldToScreen(new THREE.Vector3((ax + dirX * bMm) / 1000, 0, (az + dirZ * bMm) / 1000), ctx.cam(), rect);
+      const px = ctx.distPxPointToSeg(mouse.x, mouse.y, screenA.x, screenA.y, screenB.x, screenB.y);
+      const hit =
+        px <= windowSelectionSnapPx ||
+        (alongMm >= inst.params.centerMm - inst.params.widthMm / 2 - alongPadMm &&
+          alongMm <= inst.params.centerMm + inst.params.widthMm / 2 + alongPadMm &&
+          closest.distMm <= lateralPadMm);
+      if (hit && (!best || px < best.px)) best = { inst, px };
+    }
+    return best?.inst ?? null;
+  };
+
+  const resolveColumnPlacementPoint = (raw: THREE.Vector3, rect: DOMRect) => {
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 24, {
+      sticky: ctx.selectPlanSnap
+    });
+    const activeSnap =
+      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 28);
+    ctx.selectPlanSnap = activeSnap;
+    if (activeSnap) {
+      ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
+      ctx.drawSnapOverlay.showWorld(activeSnap.point, ctx.cam(), rect, activeSnap.kind);
+      return activeSnap.point;
+    }
+    ctx.hideHoverCursor();
+    ctx.drawSnapOverlay.hide();
+    return raw;
+  };
+
+  const getWindowIdFromObject = (obj: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.windowId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const findWindowFromObject = (obj: THREE.Object3D | null | undefined) => {
+    const id = getWindowIdFromObject(obj);
+    return id ? ctx.windows.find((item) => item.id === id) ?? null : null;
+  };
+
+  const getDoorIdFromObject = (obj: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = obj;
+    while (current) {
+      const id = current.userData?.doorId as string | undefined;
+      if (id) return id;
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const findDoorFromObject = (obj: THREE.Object3D | null | undefined) => {
+    const id = getDoorIdFromObject(obj);
+    return id ? ctx.doors.find((item) => item.id === id) ?? null : null;
+  };
+
+  let windowDimensionInput: HTMLInputElement | null = null;
+  let activeWindowDimensionParam: WindowDimensionParam | null = null;
+  let doorDimensionInput: HTMLInputElement | null = null;
+  let activeDoorDimensionParam: DoorDimensionParam | null = null;
+
+  const ensureWindowDimensionInput = () => {
+    if (windowDimensionInput) return windowDimensionInput;
+    const input = document.createElement("input");
+    input.id = "window-dimension-edit";
+    input.name = "window-dimension-edit";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.placeholder = "mm";
+    input.setAttribute("aria-label", "Window dimension in millimeters");
+    input.style.position = "absolute";
+    input.style.display = "none";
+    input.style.pointerEvents = "auto";
+    input.style.zIndex = "18";
+    input.style.width = "76px";
+    input.style.height = "22px";
+    input.style.borderRadius = "7px";
+    input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
+    input.style.background = "#0f1117";
+    input.style.color = "#ffffff";
+    input.style.caretColor = "#ffffff";
+    input.style.padding = "0 6px";
+    input.style.fontSize = "12px";
+    input.style.outline = "none";
+    input.style.transform = "translate(-50%, -50%)";
+
+    const hide = () => {
+      input.style.display = "none";
+      activeWindowDimensionParam = null;
+    };
+    const parseMm = (raw: string) => {
+      const value = Number(String(raw).trim().replace(",", ".").replace(/[^0-9.\-]/g, ""));
+      return Number.isFinite(value) ? Math.round(value) : null;
+    };
+    const commit = () => {
+      const inst = ctx.windowInst;
+      const param = activeWindowDimensionParam;
+      if (!inst || !param) return;
+      const parsed = parseMm(input.value);
+      if (parsed == null) return;
+      inst.params[param] = param === "sillHeightMm" ? Math.max(0, parsed) : Math.max(1, parsed);
+      ctx.updateWindowTransform(inst);
+      ctx.setSelectedWindow();
+      ctx.mountProps();
+      ctx.commitHistory(ctx.S);
+    };
+
+    input.addEventListener("pointerdown", (ev) => {
+      ev.stopPropagation();
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        commit();
+        input.blur();
+        ev.preventDefault();
+      } else if (ev.key === "Escape") {
+        hide();
+        input.blur();
+        ev.preventDefault();
+      }
+    });
+    input.addEventListener("blur", hide);
+
+    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
+    host.appendChild(input);
+    windowDimensionInput = input;
+    return input;
+  };
+
+  const ensureDoorDimensionInput = () => {
+    if (doorDimensionInput) return doorDimensionInput;
+    const input = document.createElement("input");
+    input.id = "door-dimension-edit";
+    input.name = "door-dimension-edit";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.placeholder = "mm";
+    input.setAttribute("aria-label", "Door dimension in millimeters");
+    input.style.position = "absolute";
+    input.style.display = "none";
+    input.style.pointerEvents = "auto";
+    input.style.zIndex = "18";
+    input.style.width = "76px";
+    input.style.height = "22px";
+    input.style.borderRadius = "7px";
+    input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
+    input.style.background = "#0f1117";
+    input.style.color = "#ffffff";
+    input.style.caretColor = "#ffffff";
+    input.style.padding = "0 6px";
+    input.style.fontSize = "12px";
+    input.style.outline = "none";
+    input.style.transform = "translate(-50%, -50%)";
+
+    const hide = () => {
+      input.style.display = "none";
+      activeDoorDimensionParam = null;
+    };
+    const parseMm = (raw: string) => {
+      const value = Number(String(raw).trim().replace(",", ".").replace(/[^0-9.\-]/g, ""));
+      return Number.isFinite(value) ? Math.round(value) : null;
+    };
+    const commit = () => {
+      const inst = ctx.doorInst;
+      const param = activeDoorDimensionParam;
+      if (!inst || !param) return;
+      const parsed = parseMm(input.value);
+      if (parsed == null) return;
+      inst.params[param] = Math.max(1, parsed);
+      ctx.updateDoorTransform(inst);
+      ctx.setSelectedDoor();
+      ctx.mountProps();
+      ctx.commitHistory(ctx.S);
+    };
+
+    input.addEventListener("pointerdown", (ev) => {
+      ev.stopPropagation();
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        commit();
+        input.blur();
+        ev.preventDefault();
+      } else if (ev.key === "Escape") {
+        hide();
+        input.blur();
+        ev.preventDefault();
+      }
+    });
+    input.addEventListener("blur", hide);
+
+    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
+    host.appendChild(input);
+    doorDimensionInput = input;
+    return input;
+  };
+
+  const cancelPendingMarquee = (pointerId: number) => {
+    if (ctx.marquee.pending && ctx.marquee.pointerId === pointerId) {
+      ctx.marquee.hitSomething = true;
+      ctx.marquee.pending = false;
+      ctx.marquee.active = false;
+      ctx.marqueeEl.style.display = "none";
+    }
+  };
+
+  const isVisibleThroughSelection = (object: THREE.Object3D) => {
+    const selection = ctx.windowInst?.selection ?? null;
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      if (!current.visible) return false;
+      if (current === selection) return true;
+      current = current.parent;
+    }
+    return false;
+  };
+
+  const pickWindowDimensionParam = (): WindowDimensionParam | null => {
+    const inst = ctx.windowInst;
+    if (!inst || ctx.selectedKind !== "window" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const param = hit.object.userData.windowDimensionParam as WindowDimensionParam | undefined;
+      if (param && hit.object.userData.kind === "windowDimensionEdit" && isVisibleThroughSelection(hit.object)) return param;
+    }
+    return null;
+  };
+
+  const isVisibleThroughDoorSelection = (object: THREE.Object3D) => {
+    const selection = ctx.doorInst?.selection ?? null;
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      if (!current.visible) return false;
+      if (current === selection) return true;
+      current = current.parent;
+    }
+    return false;
+  };
+
+  const pickDoorDimensionParam = (): DoorDimensionParam | null => {
+    const inst = ctx.doorInst;
+    if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const param = hit.object.userData.doorDimensionParam as DoorDimensionParam | undefined;
+      if (param && hit.object.userData.kind === "doorDimensionEdit" && isVisibleThroughDoorSelection(hit.object)) return param;
+    }
+    return null;
+  };
+
+  const beginWindowDimensionEdit = (param: WindowDimensionParam, ev: PointerEvent) => {
+    const inst = ctx.windowInst;
+    if (!inst) return false;
+    const input = ensureWindowDimensionInput();
+    const hostRect = (ctx.args?.viewerEl ?? ctx.renderer.domElement).getBoundingClientRect();
+    activeWindowDimensionParam = param;
+    input.value = String(Math.round(inst.params[param]));
+    input.style.left = `${ev.clientX - hostRect.left}px`;
+    input.style.top = `${ev.clientY - hostRect.top}px`;
+    input.style.display = "block";
+    input.focus();
+    input.select();
+    return true;
+  };
+
+  const beginDoorDimensionEdit = (param: DoorDimensionParam, ev: PointerEvent) => {
+    const inst = ctx.doorInst;
+    if (!inst) return false;
+    const input = ensureDoorDimensionInput();
+    const hostRect = (ctx.args?.viewerEl ?? ctx.renderer.domElement).getBoundingClientRect();
+    activeDoorDimensionParam = param;
+    input.value = String(Math.round(inst.params[param]));
+    input.style.left = `${ev.clientX - hostRect.left}px`;
+    input.style.top = `${ev.clientY - hostRect.top}px`;
+    input.style.display = "block";
+    input.focus();
+    input.select();
+    return true;
+  };
+
   ctx.renderer.domElement.addEventListener("pointerdown", (ev) => {
     if (ctx.viewNavigation.handlePointerDown(ev)) {
       return;
     }
 
-    // Marquee selection in 2D layout select tool (left button) - start pending, activate on drag.
-    if (
+    // Marquee selection in layout select tool: left in floorplan, right in any layout view.
+    const startsMarquee =
       ctx.mode === "layout" &&
-      ctx.viewMode === "2d" &&
-      ctx.activeViewerTab === "floorplan" &&
       ctx.layoutTool === "select" &&
+      !ctx.isWindowPlacementActive?.() &&
+      !ctx.isDoorPlacementActive?.() &&
+      !ctx.isColumnPlacementActive?.() &&
       !ctx.floorEdit.active &&
       !ctx.transformState.kind &&
       !ctx.placement.active &&
-      ev.button === 0 &&
-      !ctx.measureState.enabled
+      !ctx.measureState.enabled &&
+      ((ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ev.button === 0) || ev.button === 2);
+    if (
+      startsMarquee
     ) {
+      if (ev.button === 2) ev.preventDefault();
       const rect = ctx.renderer.domElement.getBoundingClientRect();
       ctx.marquee.pending = true;
       ctx.marquee.active = false;
@@ -65,6 +456,23 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
 
     if (ctx.mode === "layout") {
+      if (ev.button === 0) {
+        const windowDimensionParam = pickWindowDimensionParam();
+        if (windowDimensionParam && beginWindowDimensionEdit(windowDimensionParam, ev)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        const doorDimensionParam = pickDoorDimensionParam();
+        if (doorDimensionParam && beginDoorDimensionEdit(doorDimensionParam, ev)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+      }
+
       if (ctx.floorEdit.active) {
         if (ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
@@ -157,7 +565,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
 
       if (ctx.underlayCal.active) {
-        if (!ctx.underlayMesh.visible || ctx.underlayState.pinned) {
+        if (!ctx.underlayMesh.visible || !hasLoadedUnderlay() || ctx.underlayState.pinned) {
           ctx.underlayCal.active = false;
           ctx.underlayCal.first = null;
           ctx.setUnderlayStatus("Underlay not available.");
@@ -758,7 +1166,67 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
 
-        const sectionHit = ctx.raycaster.intersectObjects(ctx.getSectionPickMeshes(), false)[0]?.object;
+        if (ctx.isColumnPlacementActive?.()) {
+          const placementPoint = resolveColumnPlacementPoint(hitPoint, rect2);
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.insertColumnAtPoint?.(ctx.toMmPoint(placementPoint));
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+
+        if (ctx.isWindowPlacementActive?.()) {
+          const wallId = pickFloorplanWallId(pMm, mouse, rect2);
+          if (!wallId) {
+            ctx.setUnderlayStatus("Window: klikni priamo na stenu.");
+            return;
+          }
+          ctx.insertWindowAtWallPoint?.(wallId, pMm);
+          return;
+        }
+
+        if (ctx.isDoorPlacementActive?.()) {
+          const wallId = pickFloorplanWallId(pMm, mouse, rect2);
+          if (!wallId) {
+            ctx.setUnderlayStatus("Door: klikni priamo na stenu.");
+            return;
+          }
+          ctx.insertDoorAtWallPoint?.(wallId, pMm);
+          return;
+        }
+
+        const pickedWindow = pickFloorplanWindow(pMm, mouse, rect2);
+        if (pickedWindow) {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.windowInst = pickedWindow;
+          ctx.setSelectedWindow();
+          return;
+        }
+
+        const pickedDoor = pickFloorplanDoor(pMm, mouse, rect2);
+        if (pickedDoor) {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.doorInst = pickedDoor;
+          ctx.setSelectedDoor();
+          return;
+        }
+
+        const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
         const sectionId = ctx.getSectionIdFromObject(sectionHit);
         if (sectionId) {
           if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
@@ -771,20 +1239,34 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
-        const moduleHit = ctx.raycaster.intersectObjects(ctx.getAllInstanceGeometryMeshes(), false)[0]?.object;
+        const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+        const columnId = ctx.getColumnIdFromObject(columnHit);
+        if (columnId) {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.setSelectedColumn(columnId);
+          return;
+        }
+
+        const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
         const moduleId = ctx.getInstanceIdFromObject(moduleHit);
         const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
         if (selectableModuleId && ctx.beginModuleSelection(selectableModuleId, ev)) return;
 
         const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect2);
-        if (fallbackModuleId && ctx.beginModuleSelection(fallbackModuleId, ev)) return;
+        if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.beginModuleSelection(fallbackModuleId, ev)) return;
 
-        const worktopHit = ctx.raycaster.intersectObjects(ctx.getKitchenWorktopGeometryMeshes(), false)[0]?.object;
+        const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
         const worktopId = ctx.getWorktopIdFromObject(worktopHit);
         if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
 
         let bestFloor: { id: string; px: number } | null = null;
         for (const floor of ctx.floors) {
+          if (!isPickableKey(`floor:${floor.id}`)) continue;
           const boundary = floor.params.boundary;
           for (let i = 0; i < boundary.length; i++) {
             const a = boundary[i];
@@ -812,6 +1294,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         let bestPoly: { id: string; px: number } | null = null;
         const pW = { x: pMm.x / 1000, z: pMm.z / 1000 };
         for (const [id, poly] of ctx.wallSolvedOutlines) {
+          if (!isPickableKey(`wall:${id}`)) continue;
           if (poly.length < 3) continue;
           if (!ctx.pointInPolygonXZ(pW, poly)) continue;
           // score by distance to mouse from wall midpoint (stable pick)
@@ -834,6 +1317,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         let best: { id: string; px: number } | null = null;
         for (const w of ctx.walls) {
+          if (!isPickableKey(`wall:${w.id}`)) continue;
           const closest = ctx.pointOnWallAxisMm(w, pMm);
           if (!Number.isFinite(closest.distMm)) continue;
           const cp = new THREE.Vector3(closest.closest.x / 1000, 0, closest.closest.z / 1000);
@@ -855,16 +1339,29 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
 
       const picks: THREE.Object3D[] = ctx.getAllInstanceGeometryMeshes();
-      if (ctx.windowInst) picks.push(ctx.windowInst.pick);
+      const windowPicks = ctx.windows.map((inst) => inst.pick);
+      const doorPicks = ctx.doors.map((inst) => inst.pick);
+      picks.push(...windowPicks);
+      picks.push(...doorPicks);
+      picks.push(...ctx.getColumnPickMeshes());
       for (const w of ctx.walls) picks.push(w.mesh);
       for (const floor of ctx.floors) picks.push(floor.mesh, floor.outline as any);
-      const hits = ctx.raycaster.intersectObjects(picks, false);
-      const first = hits[0]?.object as THREE.Mesh | undefined;
-      const worktopHit3d = ctx.raycaster.intersectObjects(ctx.getKitchenWorktopGeometryMeshes(), false)[0]?.object as THREE.Mesh | undefined;
+      const hits = ctx.raycaster.intersectObjects(pickableObjects(picks), false);
+      const windowHit = ctx.raycaster.intersectObjects(pickableObjects(windowPicks), false)[0] ?? null;
+      const doorHit = ctx.raycaster.intersectObjects(pickableObjects(doorPicks), false)[0] ?? null;
+      const openingHit =
+        doorHit && windowHit
+          ? (doorHit.distance <= windowHit.distance ? doorHit : windowHit)
+          : doorHit ?? windowHit;
+      const firstHit = openingHit && (!hits[0] || openingHit.distance <= hits[0].distance + 0.25) ? openingHit : hits[0];
+      const first = firstHit?.object as THREE.Mesh | undefined;
+      const worktopHit3d = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object as THREE.Mesh | undefined;
       const kind = (first?.userData?.kind as string | undefined) ?? "module";
 
       if (kind === "window") {
-        if (!ctx.windowInst) return;
+        const pickedWindow = findWindowFromObject(first);
+        if (!pickedWindow) return;
+        ctx.windowInst = pickedWindow;
         if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
           ctx.marquee.hitSomething = true;
           ctx.marquee.pending = false;
@@ -874,26 +1371,80 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.setSelectedWindow();
 
         ctx.windowDragState.active = true;
-        ctx.windowDragState.wall = ctx.windowInst.params.wall;
-
-        const def = ctx.wallDefs[ctx.windowInst.params.wall];
-        const hitPoint = new THREE.Vector3();
-        const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
-        if (!okWall) {
-          if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const customWallId = ctx.windowInst.params.wallId ?? null;
+        ctx.windowDragState.wall = customWallId ?? ctx.windowInst.params.wall;
+        if (customWallId) {
+          const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
+          const hitPoint = new THREE.Vector3();
+          if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+          const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
+          const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+          ctx.windowDragState.offsetMm = ctx.windowInst.params.centerMm - closest.t * lengthMm;
+        } else {
+          const def = ctx.wallDefs[ctx.windowInst.params.wall];
+          const hitPoint = new THREE.Vector3();
+          const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
+          if (!okWall) {
+            if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+          }
+          const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
+          ctx.windowDragState.offsetMm = ctx.windowInst.params.centerMm - axis * 1000;
         }
-        const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
-        ctx.windowDragState.offsetMm = ctx.windowInst.params.centerMm - axis * 1000;
+        ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+        return;
+      }
+
+      if (kind === "door") {
+        const pickedDoor = findDoorFromObject(first);
+        if (!pickedDoor) return;
+        ctx.doorInst = pickedDoor;
+        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+          ctx.marquee.hitSomething = true;
+          ctx.marquee.pending = false;
+          ctx.marquee.active = false;
+          ctx.marqueeEl.style.display = "none";
+        }
+        ctx.setSelectedDoor();
+
+        ctx.doorDragState.active = true;
+        const customWallId = ctx.doorInst.params.wallId ?? null;
+        ctx.doorDragState.wall = customWallId;
+        if (customWallId) {
+          const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
+          const hitPoint = new THREE.Vector3();
+          if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+          const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
+          const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+          ctx.doorDragState.offsetMm = ctx.doorInst.params.centerMm - closest.t * lengthMm;
+        }
         ctx.renderer.domElement.setPointerCapture(ev.pointerId);
         return;
       }
 
       const id = ctx.getInstanceIdFromObject(first);
+      const columnId = ctx.getColumnIdFromObject(first);
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       const floorId = (first?.userData?.floorId as string | undefined) ?? null;
+      const worktopId = ctx.getWorktopIdFromObject(first) ?? ctx.getWorktopIdFromObject(worktopHit3d);
+      if (!id && worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
+      if (kind === "column" || columnId) {
+        if (!columnId) {
+          ctx.setSelectedColumn(null);
+          return;
+        }
+        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+          ctx.marquee.hitSomething = true;
+          ctx.marquee.pending = false;
+          ctx.marquee.active = false;
+          ctx.marqueeEl.style.display = "none";
+        }
+        ctx.setSelectedColumn(columnId);
+        return;
+      }
       if (kind === "floor") {
         if (ctx.viewMode === "2d" && ctx.activeViewerTab !== "floorplan") {
           ctx.selectedKind = null;
+          ctx.selectedColumnId = null;
           ctx.selectedSectionId = null;
           ctx.selectedKitchenGroupId = null;
           ctx.selectedFloorId = null;
@@ -938,9 +1489,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
 
       if (!id) {
-        const worktopId = ctx.getWorktopIdFromObject(first) ?? ctx.getWorktopIdFromObject(worktopHit3d);
-        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
-        if (ctx.viewMode === "2d" && ctx.layoutTool === "select" && ev.button === 0 && ctx.underlayMesh.visible && !ctx.underlayState.pinned) {
+        if (ctx.viewMode === "2d" && ctx.layoutTool === "select" && ev.button === 0 && ctx.underlayMesh.visible && hasLoadedUnderlay() && isPickableKey("underlay:main") && !ctx.underlayState.pinned) {
           const underlayHit = ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0];
           if (underlayHit) {
             if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
@@ -968,15 +1517,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.setSelectedFloor(null);
         ctx.setSelectedWall(null);
         ctx.setSelectedModule(null);
+        ctx.doorInst = null;
         ctx.clearWindowLightIfMissing();
         return;
       }
 
       const selectableId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
       if (!selectableId) {
-        const worktopId = ctx.getWorktopIdFromObject(first) ?? ctx.getWorktopIdFromObject(worktopHit3d);
         if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
         ctx.setSelectedModule(null);
+        ctx.doorInst = null;
         ctx.clearWindowLightIfMissing();
         return;
       }
@@ -1064,6 +1614,61 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.floorEdit.hover = ctx.floorEdit.ortho ? ctx.floorOrthoPoint(ctx.floorEdit.first, floorPoint) : floorPoint;
         ctx.renderFloorBoundaryEdit();
       }
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.isWindowPlacementActive?.()) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      ctx.pointerNdc.set(x, y);
+      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      const hitPoint = new THREE.Vector3();
+      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
+        ctx.clearWindowPlacementPreview?.();
+        return;
+      }
+      const pMm = ctx.toMmPoint(hitPoint);
+      const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+      const wallId = pickFloorplanWallId(pMm, mouse, rect);
+      ctx.updateWindowPlacementPreview?.(wallId, pMm);
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.isDoorPlacementActive?.()) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      ctx.pointerNdc.set(x, y);
+      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      const hitPoint = new THREE.Vector3();
+      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
+        ctx.clearDoorPlacementPreview?.();
+        return;
+      }
+      const pMm = ctx.toMmPoint(hitPoint);
+      const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+      const wallId = pickFloorplanWallId(pMm, mouse, rect);
+      ctx.updateDoorPlacementPreview?.(wallId, pMm);
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && ctx.isColumnPlacementActive?.()) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      ctx.pointerNdc.set(x, y);
+      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      const hitPoint = new THREE.Vector3();
+      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
+        ctx.updateColumnPlacementPreview?.(null);
+        ctx.selectPlanSnap = null;
+        ctx.drawSnapOverlay.hide();
+        ctx.hideHoverCursor();
+        return;
+      }
+      const placementPoint = resolveColumnPlacementPoint(hitPoint, rect);
+      ctx.updateColumnPlacementPreview?.(ctx.toMmPoint(placementPoint));
       return;
     }
 
@@ -1593,24 +2198,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
     }
 
-    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && !ctx.dragState.active && !ctx.windowDragState.active && !ctx.wallEditHud.drag && !ctx.marquee.active) {
-      const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 12, {
-        sticky: ctx.selectPlanSnap
-      });
-      const activeSnap = snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(hitPoint, ctx.selectPlanSnap, ctx.cam(), rect, 16);
-      ctx.selectPlanSnap = activeSnap;
-      if (activeSnap) {
-        ctx.drawSnapOverlay.showWorld(activeSnap.point, ctx.cam(), rect, activeSnap.kind);
-      } else {
-        ctx.drawSnapOverlay.hide();
-      }
+    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && !ctx.dragState.active && !ctx.windowDragState.active && !ctx.doorDragState.active && !ctx.wallEditHud.drag && !ctx.marquee.active) {
+      ctx.selectPlanSnap = null;
+      ctx.drawSnapOverlay.hide();
+      ctx.hideHoverCursor();
     }
 
     if (ctx.mode === "layout" && ctx.windowDragState.active && ctx.windowInst && ctx.windowDragState.wall) {
@@ -1620,17 +2211,45 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.pointerNdc.set(x, y);
       ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
 
-      const def = ctx.wallDefs[ctx.windowDragState.wall];
       const hitPoint = new THREE.Vector3();
-      const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
-      if (!okWall) {
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      const customWallId = ctx.windowInst.params.wallId ?? null;
+      if (customWallId) {
+        const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
+        if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
+        const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+        ctx.windowInst.params.centerMm = closest.t * lengthMm + ctx.windowDragState.offsetMm;
+      } else {
+        const def = ctx.wallDefs[ctx.windowDragState.wall];
+        const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
+        if (!okWall) {
+          if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        }
+        const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
+        ctx.windowInst.params.centerMm = axis * 1000 + ctx.windowDragState.offsetMm;
       }
 
-      const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
-      ctx.windowInst.params.centerMm = axis * 1000 + ctx.windowDragState.offsetMm;
       ctx.updateWindowTransform(ctx.windowInst);
-      ctx.mountWindowControls();
+      ctx.mountProps();
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.doorDragState.active && ctx.doorInst && ctx.doorDragState.wall) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+      ctx.pointerNdc.set(x, y);
+      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+
+      const wall = ctx.walls.find((item) => item.id === ctx.doorDragState.wall) ?? null;
+      const hitPoint = new THREE.Vector3();
+      if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
+      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+      ctx.doorInst.params.centerMm = closest.t * lengthMm + ctx.doorDragState.offsetMm;
+
+      ctx.updateDoorTransform(ctx.doorInst);
+      ctx.mountProps();
       return;
     }
 
@@ -1774,6 +2393,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
 
     if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId && !ctx.marquee.active) {
+      const wasRightClick = ev.button === 2;
       ctx.marquee.pending = false;
       ctx.marquee.pointerId = null;
       if (!ctx.marquee.hitSomething && ctx.viewMode === "2d" && ctx.layoutTool === "select") {
@@ -1785,6 +2405,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       } catch {
         // ignore
       }
+      if (wasRightClick) ctx.openQuickActionMenu?.(ev.clientX, ev.clientY);
       return;
     }
 
@@ -1805,41 +2426,59 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       const h = y1 - y0;
 
       // If it's a click-sized drag, let normal click selection handle it.
-      if (w >= 6 && h >= 6 && ctx.viewMode === "2d" && ctx.layoutTool === "select") {
+      if (w >= 6 && h >= 6 && ctx.layoutTool === "select") {
         const rectSel = { x0, y0, x1, y1 };
         const contains = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
           b.minX >= rectSel.x0 && b.maxX <= rectSel.x1 && b.minY >= rectSel.y0 && b.maxY <= rectSel.y1;
         const overlaps = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
           b.maxX >= rectSel.x0 && b.minX <= rectSel.x1 && b.maxY >= rectSel.y0 && b.minY <= rectSel.y1;
 
-        const wallBounds = (w: WallInstance) => {
+        const wallScreenPolygon = (w: WallInstance) => {
+          const solved = ctx.wallSolvedOutlines.get(w.id) ?? null;
+          if (solved && solved.length >= 3) {
+            return solved.map((p: { x: number; z: number }) => ctx.worldToScreen(new THREE.Vector3(p.x, 0, p.z), ctx.cam(), rect));
+          }
           const a = ctx.fromMmPoint(w.params.aMm);
           const b = ctx.fromMmPoint(w.params.bMm);
           const d = b.clone().sub(a);
           const len = d.length();
-          if (len < 1e-8) {
-            const s = ctx.worldToScreen(a, ctx.cam(), rect);
-            return { minX: s.x, maxX: s.x, minY: s.y, maxY: s.y };
-          }
+          if (len < 1e-8) return [ctx.worldToScreen(a, ctx.cam(), rect)];
           d.multiplyScalar(1 / len);
           const n = new THREE.Vector3(-d.z, 0, d.x);
-          const h = Math.max(1, w.params.thicknessMm / 2) / 1000;
-          const p1 = a.clone().addScaledVector(n, h);
-          const p2 = a.clone().addScaledVector(n, -h);
-          const p3 = b.clone().addScaledVector(n, -h);
-          const p4 = b.clone().addScaledVector(n, h);
-          const s1 = ctx.worldToScreen(p1, ctx.cam(), rect);
-          const s2 = ctx.worldToScreen(p2, ctx.cam(), rect);
-          const s3 = ctx.worldToScreen(p3, ctx.cam(), rect);
-          const s4 = ctx.worldToScreen(p4, ctx.cam(), rect);
-          const xs = [s1.x, s2.x, s3.x, s4.x];
-          const ys = [s1.y, s2.y, s3.y, s4.y];
-          return {
-            minX: Math.min(...xs),
-            maxX: Math.max(...xs),
-            minY: Math.min(...ys),
-            maxY: Math.max(...ys)
-          };
+          const halfThickness = Math.max(1, w.params.thicknessMm / 2) / 1000;
+          return [
+            a.clone().addScaledVector(n, halfThickness),
+            a.clone().addScaledVector(n, -halfThickness),
+            b.clone().addScaledVector(n, -halfThickness),
+            b.clone().addScaledVector(n, halfThickness)
+          ].map((p) => ctx.worldToScreen(p, ctx.cam(), rect));
+        };
+        const pointInRect = (p: { x: number; y: number }) => p.x >= rectSel.x0 && p.x <= rectSel.x1 && p.y >= rectSel.y0 && p.y <= rectSel.y1;
+        const orientation = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) =>
+          (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        const segmentIntersects = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }) => {
+          const abC = orientation(a, b, c);
+          const abD = orientation(a, b, d);
+          const cdA = orientation(c, d, a);
+          const cdB = orientation(c, d, b);
+          return abC * abD <= 0 && cdA * cdB <= 0;
+        };
+        const polygonTouchesRect = (poly: Array<{ x: number; y: number }>) => {
+          if (poly.some(pointInRect)) return true;
+          const corners = [
+            { x: rectSel.x0, y: rectSel.y0 },
+            { x: rectSel.x1, y: rectSel.y0 },
+            { x: rectSel.x1, y: rectSel.y1 },
+            { x: rectSel.x0, y: rectSel.y1 }
+          ];
+          for (let i = 0; i < poly.length; i++) {
+            const a = poly[i];
+            const b = poly[(i + 1) % poly.length];
+            for (let j = 0; j < corners.length; j++) {
+              if (segmentIntersects(a, b, corners[j], corners[(j + 1) % corners.length])) return true;
+            }
+          }
+          return false;
         };
 
         const instBounds = (id: string) => {
@@ -1864,8 +2503,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const hitWalls: string[] = [];
         for (const ww of ctx.walls) {
           if (ctx.pinnedWallIds.has(ww.id)) continue;
-          const b = wallBounds(ww);
-          const ok = ctx.marquee.mode === "contain" ? contains(b) : overlaps(b);
+          if (!isPickableKey(`wall:${ww.id}`)) continue;
+          const poly = wallScreenPolygon(ww);
+          if (poly.length === 0) continue;
+          const xs = poly.map((p: { x: number; y: number }) => p.x);
+          const ys = poly.map((p: { x: number; y: number }) => p.y);
+          const b = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+          const ok = overlaps(b) && polygonTouchesRect(poly);
           if (ok) hitWalls.push(ww.id);
         }
 
@@ -1920,6 +2564,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     if (ctx.windowDragState.active) {
       ctx.windowDragState.active = false;
       ctx.windowDragState.wall = null;
+      try {
+        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    if (ctx.doorDragState.active) {
+      ctx.doorDragState.active = false;
+      ctx.doorDragState.wall = null;
       try {
         ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
       } catch {

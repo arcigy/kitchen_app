@@ -1,10 +1,12 @@
 import { mountBomDevPanel } from "../ui/bomDevPanel";
 import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 
 type BomPanelArgs = {
   instances: Parameters<typeof mountBomDevPanel>[1];
   kitchenWorktops: Parameters<typeof mountBomDevPanel>[2];
   kitchenCtx: Parameters<typeof mountBomDevPanel>[3];
+  catalog: ClientCatalog;
 };
 
 export function openBomPanel(args: BomPanelArgs) {
@@ -40,11 +42,11 @@ export function openBomPanel(args: BomPanelArgs) {
     if (event.target === overlay) close();
   });
 
-  mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.kitchenCtx);
+  mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.kitchenCtx, args.catalog);
   document.body.appendChild(overlay);
 }
 
-export function openPricingCatalog() {
+export function openPricingCatalog(catalog: ClientCatalog) {
   const overlay = document.createElement("div");
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
@@ -99,6 +101,6 @@ export function openPricingCatalog() {
     if (event.target === overlay) close();
   });
 
-  mountPricingCatalogPanel(content);
+  mountPricingCatalogPanel(content, catalog);
   document.body.appendChild(overlay);
 }

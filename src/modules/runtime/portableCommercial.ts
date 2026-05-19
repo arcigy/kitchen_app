@@ -1,7 +1,5 @@
-import { getUnitPriceForCatalogId } from "../../data/pricing";
-import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
-import { getMaterialDefinitionById, materialDefinitions } from "../../data/pricing/materialDefinitions";
-import type { ComponentDefinition, MaterialDefinition, PricingBasis, PricingUnit } from "../../data/pricing/types";
+import type { ClientCatalog, ComponentDefinition, MaterialDefinition, PricingBasis, PricingUnit } from "../../core/catalog/catalog-types";
+import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 
 export type CommercialPricingStatus = "ok" | "incomplete";
 
@@ -177,6 +175,8 @@ export type PortableMaterialsSnapshot = {
 
 const COMMERCIAL_SELECTIONS_KEY = "commercialSelections";
 
+const getPricingCatalog = (catalog: ClientCatalog) => createPricingCatalog(catalog);
+
 function roundMetric(value: number, digits = 4): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -279,8 +279,10 @@ export function updateCommercialSelections(
 
 export function getPortableMaterialsSnapshotSelections(
   snapshot: PortableMaterialsSnapshot | null | undefined,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  catalog: ClientCatalog
 ) {
+  const pricingCatalog = getPricingCatalog(catalog);
   const commercialSelections = getCommercialSelections(params);
   const slotAssignments = snapshot?.slotAssignments ?? [];
   const slotMaterialCatalogIds: Record<string, string> = {};
@@ -296,7 +298,7 @@ export function getPortableMaterialsSnapshotSelections(
       continue;
     }
 
-    const selectedMaterial = getMaterialDefinitionById(selectedCatalogId) ?? slot.assignedMaterial;
+    const selectedMaterial = pricingCatalog.getMaterialDefinitionById(selectedCatalogId) ?? slot.assignedMaterial;
     const parameterValue =
       slot.thicknessParameterKey && asFiniteNumber(params[slot.thicknessParameterKey]) && asFiniteNumber(params[slot.thicknessParameterKey])! > 0
         ? asFiniteNumber(params[slot.thicknessParameterKey])!
@@ -324,7 +326,7 @@ function formatThicknessToken(thickness: number) {
   return Number.isInteger(thickness) ? String(thickness) : String(thickness).replace(".", "_");
 }
 
-export function getBoardMaterialFamilyOptions() {
+export function getBoardMaterialFamilyOptions(catalog: ClientCatalog) {
   const variantsByBaseId = new Map<
     string,
     {
@@ -334,7 +336,7 @@ export function getBoardMaterialFamilyOptions() {
     }
   >();
 
-  for (const material of materialDefinitions) {
+  for (const material of catalog.materials) {
     if (material.materialType !== "board" || !material.isActive) continue;
     const baseId = normalizeBaseMaterialId(material.id);
     const baseDisplayName = material.displayName.replace(/\s+\d+(?:[.,]\d+)?\s*mm$/i, "");
@@ -358,8 +360,8 @@ export function getBoardMaterialFamilyOptions() {
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
-export function resolveBoardMaterialVariant(baseMaterialId: string, desiredThicknessMm: number) {
-  const family = getBoardMaterialFamilyOptions().find((entry) => entry.baseId === baseMaterialId);
+export function resolveBoardMaterialVariant(baseMaterialId: string, desiredThicknessMm: number, catalog: ClientCatalog) {
+  const family = getBoardMaterialFamilyOptions(catalog).find((entry) => entry.baseId === baseMaterialId);
   if (!family) return null;
   const nearestThickness = getNearestThickness(
     family.variants.map((variant) => variant.defaultThicknessMm),
@@ -368,8 +370,12 @@ export function resolveBoardMaterialVariant(baseMaterialId: string, desiredThick
   return family.variants.find((variant) => variant.defaultThicknessMm === nearestThickness) ?? family.variants[0] ?? null;
 }
 
-function deriveBoardThicknessContext(snapshot: PortableMaterialsSnapshot | null | undefined, params: Record<string, unknown>) {
-  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params);
+function deriveBoardThicknessContext(
+  snapshot: PortableMaterialsSnapshot | null | undefined,
+  params: Record<string, unknown>,
+  catalog: ClientCatalog
+) {
+  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params, catalog);
   const slotAssignments = snapshot?.slotAssignments ?? [];
   const thicknessByKey: Record<string, number> = {};
 
@@ -418,7 +424,11 @@ function deriveBoardThicknessContext(snapshot: PortableMaterialsSnapshot | null 
   };
 }
 
-function createEdgeMaterialFromBoard(boardMaterial: MaterialDefinition, fallback: PortableMaterialRef | null | undefined) {
+function createEdgeMaterialFromBoard(
+  boardMaterial: MaterialDefinition,
+  fallback: PortableMaterialRef | null | undefined,
+  catalog: ClientCatalog
+) {
   const desiredThickness = fallback?.defaultThicknessMm ?? 0.8;
   const family = boardMaterial.boardFamily === "front" ? "front" : boardMaterial.boardFamily === "drawer_box" ? "drawer_box" : boardMaterial.boardFamily === "shelf" ? "shelf" : boardMaterial.boardFamily === "worktop" ? "worktop" : "body";
   const colorTokens = [boardMaterial.decor, boardMaterial.color, boardMaterial.name]
@@ -428,7 +438,7 @@ function createEdgeMaterialFromBoard(boardMaterial: MaterialDefinition, fallback
     .split(" ")
     .filter(Boolean);
 
-  const edgeCandidates = materialDefinitions.filter(
+  const edgeCandidates = catalog.materials.filter(
     (material) => material.materialType === "edge" && material.isActive && material.edgeFamily === family
   );
 
@@ -451,9 +461,11 @@ function createEdgeMaterialFromBoard(boardMaterial: MaterialDefinition, fallback
 function resolveBoardMaterialForSlot(
   item: PortableQuoteBomItem,
   snapshot: PortableMaterialsSnapshot | null | undefined,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  catalog: ClientCatalog
 ) {
-  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params);
+  const pricingCatalog = getPricingCatalog(catalog);
+  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(snapshot, params, catalog);
   const slotAssignments = snapshot?.slotAssignments ?? [];
   const slotAssignment = item.materialSlotId ? slotAssignments.find((entry) => entry.slotId === item.materialSlotId) : null;
   const selectedCatalogId =
@@ -462,7 +474,7 @@ function resolveBoardMaterialForSlot(
     item.material?.catalogId ??
     null;
 
-  const selectedMaterial = selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null;
+  const selectedMaterial = selectedCatalogId ? pricingCatalog.getMaterialDefinitionById(selectedCatalogId) : null;
   const thickness =
     (item.materialSlotId ? slotThicknesses[item.materialSlotId] : null) ??
     slotAssignment?.assignedMaterial.defaultThicknessMm ??
@@ -493,8 +505,10 @@ function resolveBoardMaterialForSlot(
 function resolveComponentForItem(
   item: PortableQuoteBomItem,
   snapshot: PortableMaterialsSnapshot | null | undefined,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  catalog: ClientCatalog
 ) {
+  const pricingCatalog = getPricingCatalog(catalog);
   const current = item.component;
   const componentAssignments = snapshot?.componentAssignments ?? [];
   const normalizedItemId = item.id.toLowerCase();
@@ -542,7 +556,7 @@ function resolveComponentForItem(
           : null;
 
   if (explicitComponentId) {
-    const definition = getComponentDefinitionById(explicitComponentId);
+    const definition = pricingCatalog.getComponentDefinitionById(explicitComponentId);
     if (definition) {
       return { ...definition, catalogId: definition.id } satisfies PortableComponentRef;
     }
@@ -677,8 +691,8 @@ function buildRuntimeAggregates(items: PortableQuoteBomItem[]) {
   };
 }
 
-function buildFormulaContext(snapshot: PortableMaterialsSnapshot | null | undefined, params: Record<string, unknown>) {
-  const { paramsWithThicknesses } = deriveBoardThicknessContext(snapshot, params);
+function buildFormulaContext(snapshot: PortableMaterialsSnapshot | null | undefined, params: Record<string, unknown>, catalog: ClientCatalog) {
+  const { paramsWithThicknesses } = deriveBoardThicknessContext(snapshot, params, catalog);
   return { ...paramsWithThicknesses };
 }
 
@@ -695,11 +709,13 @@ export function buildRuntimeQuoteBom(args: {
   bom: PortableQuoteBomPayload;
   materialsSnapshot?: PortableMaterialsSnapshot | null;
   params: Record<string, unknown>;
+  catalog: ClientCatalog;
 }): PortableQuoteBomPayload {
-  const { bom, materialsSnapshot, params } = args;
+  const { bom, materialsSnapshot, params, catalog } = args;
+  const pricingCatalog = getPricingCatalog(catalog);
   const nextBom = deepClone(bom);
   const validationErrors: string[] = [];
-  const context = buildFormulaContext(materialsSnapshot, params);
+  const context = buildFormulaContext(materialsSnapshot, params, catalog);
   const slotAssignments = materialsSnapshot?.slotAssignments ?? [];
   const drawerSideItem = nextBom.items.find((item) => /drawer-box-\d+-side-panels$/.test(item.id) && item.dimensionsMm);
   if (drawerSideItem?.dimensionsMm) {
@@ -723,7 +739,7 @@ export function buildRuntimeQuoteBom(args: {
 
     if (item.itemType === "board" && item.materialSlotId) {
       const slot = slotAssignments.find((entry) => entry.slotId === item.materialSlotId);
-      const resolved = resolveBoardMaterialForSlot(item, materialsSnapshot, params);
+      const resolved = resolveBoardMaterialForSlot(item, materialsSnapshot, params, catalog);
       if (resolved.material) {
         item.material = resolved.material;
         item.name = `${resolved.material.name} - ${item.description}`;
@@ -751,8 +767,8 @@ export function buildRuntimeQuoteBom(args: {
     if (item.itemType === "edge_band" && item.materialSlotId) {
       const baseBoardItem = nextBom.items.find((candidate) => candidate.materialSlotId === item.materialSlotId && candidate.itemType === "board");
       if (baseBoardItem?.material?.catalogId) {
-        const boardMaterial = getMaterialDefinitionById(baseBoardItem.material.catalogId);
-        const edgeMaterial = boardMaterial ? createEdgeMaterialFromBoard(boardMaterial, item.material ?? undefined) : item.material ?? null;
+        const boardMaterial = pricingCatalog.getMaterialDefinitionById(baseBoardItem.material.catalogId);
+        const edgeMaterial = boardMaterial ? createEdgeMaterialFromBoard(boardMaterial, item.material ?? undefined, catalog) : item.material ?? null;
         if (edgeMaterial) {
           item.material = {
             ...edgeMaterial,
@@ -782,7 +798,7 @@ export function buildRuntimeQuoteBom(args: {
     }
 
     if (item.itemType === "hardware") {
-      const component = resolveComponentForItem(item, materialsSnapshot, params);
+      const component = resolveComponentForItem(item, materialsSnapshot, params, catalog);
       if (component) {
         item.component = component;
         item.name = component.displayName;
@@ -926,9 +942,11 @@ export function buildRuntimeQuoteBom(args: {
 
 export function calculateCommercialPricingFromQuoteBom(args: {
   quoteBom: PortableQuoteBomPayload;
+  catalog: ClientCatalog;
   boardWasteMultiplier?: number;
   laborCostFixed?: number;
 }): PortableCommercialPricingPayload {
+  const pricingCatalog = getPricingCatalog(args.catalog);
   const boardWasteMultiplier = args.boardWasteMultiplier ?? 1.1;
   const laborCostFixed = roundCurrency(args.laborCostFixed ?? 48);
   const validationErrors: string[] = [];
@@ -937,7 +955,7 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     const nextItem = deepClone(item);
     const lookupKey = nextItem.pricingLookup?.sourceCatalogId ?? nextItem.pricingLookup?.key ?? nextItem.catalogRef?.catalogId ?? null;
     const itemErrors = [...(nextItem.validationErrors ?? [])];
-    const unitPrice = lookupKey ? getUnitPriceForCatalogId(lookupKey) : null;
+    const unitPrice = lookupKey ? pricingCatalog.getUnitPriceForCatalogId(lookupKey) : null;
 
     if (!lookupKey) itemErrors.push(`Item ${nextItem.id} is missing pricing lookup.`);
     if (unitPrice === null) itemErrors.push(`Item ${nextItem.id} is missing unit price.`);

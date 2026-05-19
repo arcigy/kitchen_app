@@ -20,6 +20,11 @@ type MenuSubmenu = {
 type MenuItem = MenuAction | MenuSeparator | MenuSubmenu;
 
 type FileMenuActions = {
+  newProject?: () => void | Promise<void>;
+  openProject?: () => void | Promise<void>;
+  saveProject?: () => void | Promise<void>;
+  downloadProject?: () => void | Promise<void>;
+  loadProjectFile?: () => void | Promise<void>;
   save: () => void | Promise<void>;
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
@@ -72,7 +77,18 @@ export function attachFileMenu(anchor: HTMLElement, actions: FileMenuActions) {
 
 function buildItems(actions: FileMenuActions): MenuItem[] {
   const currentLanguage = getCurrentLanguage();
+  const projectItems: MenuItem[] = actions.newProject
+    ? [
+        { label: t("New Project"), onSelect: actions.newProject },
+        { label: t("Open Project"), onSelect: actions.openProject ?? actions.save },
+        { label: t("Save Project"), onSelect: actions.saveProject ?? actions.save },
+        { label: t("Download Project File"), onSelect: actions.downloadProject ?? actions.saveAs },
+        { label: t("Load Project File"), onSelect: actions.loadProjectFile ?? actions.saveAs },
+        { type: "separator" }
+      ]
+    : [];
   return [
+    ...projectItems,
     { label: t("Save"), onSelect: actions.save },
     { label: t("Save As…"), onSelect: actions.saveAs },
     { type: "separator" },

@@ -1,6 +1,7 @@
 import type { GrainAlong } from "../materials/uvGrain";
-import type { BoardMaterialPresetId } from "../data/materials";
 export type { GrainAlong };
+
+export type BoardMaterialPresetId = "DTD1" | "DTD2" | "DTD3" | "MDF" | "DVD" | "DTD16";
 
 export type PartDimensionsMm = {
   width: number;

@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { installAuthSession } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
@@ -21,16 +22,30 @@ async function clickButton(page, predicateSource) {
   }, predicateSource);
 }
 
+async function clickTopbarTab(page, labels) {
+  return await page.evaluate((items) => {
+    const wanted = items.map((item) => item.toLowerCase());
+    const button = [...document.querySelectorAll(".revit-tab")].find((item) =>
+      wanted.includes((item.textContent || "").trim().toLowerCase())
+    );
+    if (!button) return false;
+    button.click();
+    return true;
+  }, labels);
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  await installAuthSession(page);
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
     await page.waitForSelector("button", { timeout: 30000 });
 
     const boot = await page.evaluate(() => ({
@@ -38,6 +53,39 @@ async function main() {
       hasDebug: !!window.__kitchenDebug
     }));
     assert(boot.title === "Arcigy Kitchen Layout" && boot.hasDebug, "Boot/debug check failed", boot);
+
+    assert(await clickTopbarTab(page, ["Kitchen", "Kuchyňa"]), "Kitchen tab not found");
+    const kitchenTab = await page.evaluate(() => {
+      const rows = document.querySelector(".topbar-rows");
+      const row = rows?.querySelector(".topbar");
+      const children = [...(row?.children ?? [])].map((el) => ({
+        title: (el.querySelector(".topbar-group-title")?.textContent || "").trim().toLowerCase(),
+        flex: el instanceof HTMLElement ? el.style.flex : ""
+      }));
+      const text = (rows?.textContent || "").toLowerCase();
+      const toolTitles = [...(rows?.querySelectorAll("button") ?? [])].map((button) =>
+        (button.getAttribute("title") || button.textContent || "").trim().toLowerCase()
+      );
+      return { children, text, toolTitles };
+    });
+    const worktopsIndex = kitchenTab.children.findIndex((child) => /worktops|pracovn/.test(child.title));
+    assert(
+      (/worktops|pracovn/.test(kitchenTab.text) || kitchenTab.toolTitles.some((title) => /worktop|pracovn/.test(title))) &&
+        !kitchenTab.toolTitles.some((title) => title === "kitchen" || title === "kuchyňa"),
+      "Kitchen tab is not broken into direct tools",
+      kitchenTab
+    );
+    assert(worktopsIndex > 0 && !kitchenTab.children[worktopsIndex - 1]?.flex, "Worktop button is separated from kitchen tools", kitchenTab);
+    assert(await clickButton(page, `(title, text) => title.includes("new group") || title.includes("nov") && title.includes("skup")`), "New kitchen group button not found");
+    const hasAcceptGroup = await page.evaluate(() => {
+      const titles = [...document.querySelectorAll(".topbar-rows button")].map((button) =>
+        (button.getAttribute("title") || button.textContent || "").trim().toLowerCase()
+      );
+      return titles.some((title) => title.includes("accept group") || title.includes("potvr"));
+    });
+    assert(hasAcceptGroup, "Accept group button not shown while editing kitchen group");
+    assert(await clickButton(page, `(title, text) => title.includes("discard") || title.includes("zru") || text.includes("zru")`), "Discard kitchen group button not found");
+    assert(await clickTopbarTab(page, ["Architecture", "Architektúra"]), "Architecture tab not found");
 
     const scenario = await page.evaluate(() =>
       window.__kitchenDebug.createKitchenScenario({
@@ -114,6 +162,7 @@ async function main() {
       });
     });
 
+    assert(await clickTopbarTab(page, ["View", "Zobrazenie"]), "View tab not found");
     assert(await clickButton(page, `(title, text) => title === "export json"`), "Export button not found");
     const exported = await page.evaluate(() => window.__qaCopiedText);
     const exportedJson = JSON.parse(exported || "{}");
@@ -142,7 +191,11 @@ async function main() {
     assert((await page.locator(".bom-modal").count()) === 1, "BOM modal did not open");
     await page.locator(".bom-modal__close").click();
 
-    assert(await clickButton(page, `(title, text) => title === "dimension" || title.includes("kot") || text.includes("kot")`), "Dimension button not found");
+    assert(await clickTopbarTab(page, ["Modify", "Upraviť", "UpraviĹĄ"]), "Modify tab not found");
+    assert(
+      await clickButton(page, `(title, text) => title === "dimension" || title.includes("kot") || title.includes("kót") || text.includes("kot") || text.includes("kót")`),
+      "Dimension button not found"
+    );
     const dimensionState = await page.evaluate(() => window.__kitchenDebug.viewState());
     assert(dimensionState.layoutTool === "dimension", "Dimension tool did not activate", dimensionState);
 

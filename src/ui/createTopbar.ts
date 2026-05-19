@@ -157,10 +157,12 @@ export function createTopbar(container: HTMLElement) {
     projectLabel: "Project 1",
     tabs: [
       { id: "file", label: "File", accent: true },
-      { label: "Architecture" },
-      { label: "Modify", active: true },
-      { label: "View" },
-      { label: "Manage" }
+      { id: "architecture", label: "Architecture", active: true },
+      { id: "kitchen", label: "Kitchen" },
+      { id: "livingWall", label: "Living Wall" },
+      { id: "room", label: "Room" },
+      { id: "modify", label: "Modify" },
+      { id: "view", label: "View" }
     ]
   });
 
@@ -171,6 +173,7 @@ export function createTopbar(container: HTMLElement) {
     addSpacer,
     toolButton,
     setChrome,
+    setProjectLabel: (labelText: string) => { project.textContent = labelText; },
     getTab: (id: string) => tabMap.get(id) ?? null
   };
 }

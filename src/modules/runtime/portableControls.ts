@@ -7,23 +7,11 @@ import {
   updateCommercialSelections
 } from "./portableCommercial";
 import {
-  applyCornerClipComponentToParams,
-  applyCornerHingeComponentToParams,
-  applyDrawerLowHandleComponentToParams,
-  applyDrawerLowLegComponentToParams,
-  applyDrawerLowRunnerComponentToParams,
-  applyFlapHangingBracketComponentToParams,
-  applyFlapLiftUpComponentToParams,
-  applyFlapShelfSupportComponentToParams,
-  getCornerClipComponentOptions,
-  getCornerHingeComponentOptions,
-  getDrawerLowHandleComponentOptions,
-  getDrawerLowLegComponentOptions,
-  getDrawerLowRunnerComponentOptions,
-  getFlapHangingBracketComponentOptions,
-  getFlapLiftUpComponentOptions,
-  getFlapShelfSupportComponentOptions
-} from "../../data/pricing/handleComponentPresets";
+  applyCatalogComponentToParams,
+  componentOptionsForParameter,
+  createModuleRuntimeCatalogContext
+} from "./runtimeCatalog";
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import { t, translateEnumLabel, translateParamDescription, translateParamLabel } from "../../i18n";
 
 export type PortableJsonValue =
@@ -81,6 +69,7 @@ export type PortableModuleControlsApi = {
 export type PortableModuleControlsArgs = {
   onChange: (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
   getWorktopThicknessMm: () => number;
+  clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
 };
@@ -362,56 +351,8 @@ function shouldRenderSystemField(
   return true;
 }
 
-function deriveComponentOptions(parameterKey: string): PortableFieldOption[] | null {
-  if (parameterKey === "handleComponentId") {
-    return getDrawerLowHandleComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "legComponentId") {
-    return getDrawerLowLegComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "runnerComponentId") {
-    return getDrawerLowRunnerComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "hingeComponentId") {
-    return getCornerHingeComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "clipComponentId") {
-    return getCornerClipComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "liftUpComponentId") {
-    return getFlapLiftUpComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "hangingBracketComponentId") {
-    return getFlapHangingBracketComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  if (parameterKey === "shelfSupportComponentId") {
-    return getFlapShelfSupportComponentOptions().map((option) => ({
-      value: option.componentId,
-      label: option.displayName
-    }));
-  }
-  return null;
+function deriveComponentOptions(parameterKey: string, clientCatalog: ClientCatalog): PortableFieldOption[] | null {
+  return componentOptionsForParameter(clientCatalog, parameterKey);
 }
 
 function deriveScalarOptions(parameterKey: string): PortableFieldOption[] | null {
@@ -521,6 +462,8 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
   const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, fieldState, materialsSnapshot, systemCatalog, systemValues } = args;
+  const clientCatalog = controlArgs.clientCatalog;
+  const runtimeCatalog = createModuleRuntimeCatalogContext(clientCatalog);
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
   void controlArgs.getWorktopThicknessMm;
   void controlArgs.commitBoundary;
@@ -667,7 +610,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       if (parameter.type === "string" || parameter.type === "null" || parameter.type === "unknown") {
         const options =
           fieldOptions?.[parameter.key] ??
-          deriveComponentOptions(parameter.key) ??
+          deriveComponentOptions(parameter.key, clientCatalog) ??
           deriveScalarOptions(parameter.key) ??
           undefined;
         if (options && options.length > 0) {
@@ -683,22 +626,8 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
 
           const apply = () => {
             applyParamMutation(parameter.key, () => {
-              if (parameter.key === "handleComponentId") {
-                Object.assign(params, applyDrawerLowHandleComponentToParams(params, select.value));
-              } else if (parameter.key === "legComponentId") {
-                Object.assign(params, applyDrawerLowLegComponentToParams(params, select.value));
-              } else if (parameter.key === "runnerComponentId") {
-                Object.assign(params, applyDrawerLowRunnerComponentToParams(params, select.value));
-              } else if (parameter.key === "hingeComponentId") {
-                Object.assign(params, applyCornerHingeComponentToParams(params, select.value));
-              } else if (parameter.key === "clipComponentId") {
-                Object.assign(params, applyCornerClipComponentToParams(params, select.value));
-              } else if (parameter.key === "liftUpComponentId") {
-                Object.assign(params, applyFlapLiftUpComponentToParams(params, select.value));
-              } else if (parameter.key === "hangingBracketComponentId") {
-                Object.assign(params, applyFlapHangingBracketComponentToParams(params, select.value));
-              } else if (parameter.key === "shelfSupportComponentId") {
-                Object.assign(params, applyFlapShelfSupportComponentToParams(params, select.value));
+              if (deriveComponentOptions(parameter.key, clientCatalog)) {
+                Object.assign(params, applyCatalogComponentToParams(params, parameter.key, select.value, runtimeCatalog));
               } else if (parameter.key === "assemblyContext") {
                 setTopLevelValue(params, parameter.key, select.value);
                 if (select.value !== "kitchen") {
@@ -843,7 +772,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       "Board material and thickness per slot. Thickness options follow the selected catalog material.",
       "editable"
     );
-    const materialFamilies = getBoardMaterialFamilyOptions();
+    const materialFamilies = getBoardMaterialFamilyOptions(clientCatalog);
     const familyByBaseId = new Map(materialFamilies.map((family) => [family.baseId, family]));
     const slotsByFamily = new Map<string, PortableMaterialSlotAssignment[]>();
 
@@ -861,7 +790,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
       fallbackCatalogId: string,
       allowedFamilies: ReturnType<typeof getBoardMaterialFamilyOptions>
     ) => {
-      const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+      const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params, clientCatalog);
       const selectedCatalogId = slotMaterialCatalogIds[slotId] ?? fallbackCatalogId;
       const selectedBaseId = normalizeBaseMaterialId(selectedCatalogId);
       const family =
@@ -911,10 +840,10 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const targetFamily = familyByBaseId.get(materialSelect.value);
         if (!targetFamily) return;
         applyParamMutation(thicknessParameterKey ?? "materials", () => {
-          const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+          const { slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params, clientCatalog);
           for (const slotId of slotIds) {
             const currentThickness = slotThicknesses[slotId] ?? targetFamily.variants[0]?.defaultThicknessMm ?? 18;
-            const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, currentThickness) ?? targetFamily.variants[0];
+            const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, currentThickness, clientCatalog) ?? targetFamily.variants[0];
             if (!nextVariant) continue;
             updateCommercialSelections(params, (current) => {
               current.boardMaterials[slotId] = nextVariant.id;
@@ -933,7 +862,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
         const targetFamily = familyByBaseId.get(materialSelect.value);
         const nextThickness = Number(thicknessSelect.value);
         if (!targetFamily || !Number.isFinite(nextThickness)) return;
-        const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, nextThickness) ?? targetFamily.variants[0];
+        const nextVariant = resolveBoardMaterialVariant(targetFamily.baseId, nextThickness, clientCatalog) ?? targetFamily.variants[0];
         if (!nextVariant) return;
         applyParamMutation(thicknessParameterKey ?? "materials", () => {
           for (const slotId of slotIds) {

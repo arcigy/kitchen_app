@@ -118,10 +118,8 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
       (controls as OrbitControls & { minTargetRadius?: number }).minTargetRadius = 0;
       (controls as OrbitControls & { maxTargetRadius?: number }).maxTargetRadius = Infinity;
       controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
-        MIDDLE: THREE.MOUSE.DOLLY,
-        RIGHT: THREE.MOUSE.PAN
-      };
+        MIDDLE: THREE.MOUSE.ROTATE
+      } as typeof controls.mouseButtons;
       stabilize3dCamera();
       controls.update();
       return;

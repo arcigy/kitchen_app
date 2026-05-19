@@ -1,19 +1,23 @@
 import { chromium } from "playwright";
+import { installAuthSession } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  await installAuthSession(page);
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
 
     const result = await page.evaluate(async () => {
-      const [{ createDrawerLowControls }, { makeDefaultDrawerLowParams }, { buildDrawerLow }] = await Promise.all([
+      const [{ createDrawerLowControls }, { makeDefaultDrawerLowParams }, { buildDrawerLow }, { getSystemSeedCatalog }] = await Promise.all([
         import("/src/modules/drawerLow/controls.ts"),
         import("/src/modules/drawerLow/types.ts"),
-        import("/src/modules/drawerLow/geometry.ts")
+        import("/src/modules/drawerLow/geometry.ts"),
+        import("/src/core/catalog/catalog-repository.ts")
       ]);
 
       const host = document.createElement("div");
@@ -21,9 +25,10 @@ async function main() {
 
       const params = makeDefaultDrawerLowParams();
       params.width = 1500;
+      const clientCatalog = getSystemSeedCatalog();
 
       const getLeftSideColor = () => {
-        const group = buildDrawerLow(params);
+        const group = buildDrawerLow(params, clientCatalog);
         const mesh = group.getObjectByName("leftSide");
         return mesh?.material?.color?.getHexString?.() ?? null;
       };
@@ -38,6 +43,7 @@ async function main() {
           return true;
         },
         getWorktopThicknessMm: () => 0,
+        clientCatalog,
         textInputCommitMode: "explicit",
         commitBoundary: host
       });

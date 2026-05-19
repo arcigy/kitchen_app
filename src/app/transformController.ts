@@ -61,7 +61,7 @@ export function createTransformController(ctx: TransformControllerContext) {
   const startTransformFromSelection = (kind: "move" | "rotate") => {
     if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
     if (ctx.measureState.enabled) return false;
-    if (ctx.dragState.active || ctx.windowDragState.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
+    if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
     if (ctx.underlayCal.active) return false;
 
     const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];

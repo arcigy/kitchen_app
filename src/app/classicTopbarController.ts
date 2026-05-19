@@ -3,8 +3,14 @@ import type { HistoryHelpers } from "../layout/historyManager";
 import type { AppArgs } from "./bootstrap";
 import type { createTopbar } from "../ui/createTopbar";
 import type { AppInstallState } from "../pwa/installController";
+import { t } from "../i18n";
 
 type KitchenModeActions = {
+  enterNew: () => void;
+  mountTopbar: (row: HTMLElement) => void;
+};
+
+type WardrobeModeActions = {
   enterNew: () => void;
 };
 
@@ -12,26 +18,38 @@ type ClassicTopbarControllerContext = {
   I_ALIGN: string;
   I_BOM: string;
   I_CABINET: string;
+  I_COLUMN: string;
   I_COPY: string;
   I_DIM: string;
+  I_DOOR: string;
   I_DUP: string;
   I_EXPORT: string;
   I_FLOOR: string;
   I_GRID2D: string;
+  I_HIDE: string;
   I_INSTALL: string;
+  I_ISOLATE: string;
+  I_MEASURE: string;
   I_MOVE: string;
   I_REDO: string;
   I_RESET: string;
   I_ROTATE: string;
   I_SECTION: string;
   I_SELECT: string;
+  I_STAIR: string;
   I_TRASH: string;
   I_TRIM: string;
   I_UNDERLAY: string;
   I_UNDO: string;
+  I_UNHIDE: string;
   I_VIEW: string;
+  I_WARDROBE: string;
+  I_WINDOW: string;
   I_WALL: string;
   S: AppState;
+  addColumn: () => void;
+  addOrSelectDoor: () => void;
+  addOrSelectWindow: () => void;
   args: AppArgs & {
     copyBtn: HTMLButtonElement;
     exportBtn: HTMLButtonElement;
@@ -44,6 +62,7 @@ type ClassicTopbarControllerContext = {
   getInstallState: () => AppInstallState;
   helpers: HistoryHelpers;
   kitchenMode: KitchenModeActions | null;
+  wardrobeMode: WardrobeModeActions | null;
   layoutTool: string;
   openBomPanel: (args: Pick<AppState, "instances" | "kitchenWorktops" | "kitchenCtx">) => void;
   openPricingCatalog: () => void;
@@ -63,58 +82,166 @@ type ClassicTopbarControllerContext = {
   toggle2dView: () => void;
   undo: (S: AppState, helpers: HistoryHelpers) => void;
   updateUndoRedoUi: (S: AppState) => void;
+  visibility: {
+    hasSelection: () => boolean;
+    selectedHasHidden: () => boolean;
+    isShowHidden: () => boolean;
+    hasHiddenObjects: () => boolean;
+    hideSelected: () => void;
+    unhideSelected: () => void;
+    isolateSelected: () => void;
+    unhideAll: () => void;
+  };
 };
 
-export function createClassicTopbarController(ctx: ClassicTopbarControllerContext) {
-  const buildClassicTopbar = () => {
-    const row = ctx.tb.addRow({ className: "topbar-classic-ribbon" });
+type TopbarTab = "architecture" | "kitchen" | "livingWall" | "room" | "modify" | "view";
+const TOPBAR_TABS: TopbarTab[] = ["architecture", "kitchen", "livingWall", "room", "modify", "view"];
 
-    const tools = ctx.tb.addGroup("Layout", { row });
-    ctx.tb.toolButton(tools, { title: "Select", label: "Select", iconSvg: ctx.I_SELECT, onClick: () => ctx.setToolSelect() });
-    ctx.tb.toolButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => ctx.setToolWall() });
-    ctx.tb.toolButton(tools, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
-    ctx.tb.toolButton(tools, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
-    ctx.tb.toolButton(tools, { title: "Section", label: "Section", iconSvg: ctx.I_SECTION, onClick: () => ctx.setToolSection() });
-    ctx.tb.toolButton(tools, {
-      title: "Dimension",
-      label: "Dimension",
-      iconSvg: ctx.I_DIM,
-      onClick: () => ctx.setToolDimension()
+export function createClassicTopbarController(ctx: ClassicTopbarControllerContext) {
+  let hideBtn: HTMLButtonElement | null = null;
+  let isolateBtn: HTMLButtonElement | null = null;
+  let unhideAllBtn: HTMLButtonElement | null = null;
+  let activeTab: TopbarTab = "architecture";
+  let tabHandlersInstalled = false;
+
+  const setToolButton = (button: HTMLButtonElement | null, args: { title: string; label: string; iconSvg?: string; disabled?: boolean }) => {
+    if (!button) return;
+    const title = t(args.title);
+    const labelText = t(args.label);
+    button.title = title;
+    button.setAttribute("aria-label", title);
+    button.disabled = !!args.disabled;
+    const label = button.querySelector<HTMLElement>(".tool-label");
+    if (label) label.textContent = labelText;
+    if (args.iconSvg) {
+      const icon = button.querySelector<HTMLElement>(".tool-icon");
+      if (icon) icon.innerHTML = args.iconSvg;
+    }
+  };
+
+  const syncClassicTopbarVisibility = () => {
+    const hasSelection = ctx.visibility.hasSelection();
+    const selectedHidden = ctx.visibility.selectedHasHidden();
+    setToolButton(hideBtn, {
+      title: selectedHidden ? "Unhide" : "Hide",
+      label: selectedHidden ? "Unhide" : "Hide",
+      iconSvg: selectedHidden ? ctx.I_UNHIDE : ctx.I_HIDE,
+      disabled: !hasSelection
     });
-    ctx.tb.toolButton(tools, {
+    setToolButton(isolateBtn, {
+      title: "Isolate",
+      label: "Isolate",
+      disabled: !hasSelection
+    });
+    if (unhideAllBtn) {
+      const visible = ctx.visibility.isShowHidden() && ctx.visibility.hasHiddenObjects();
+      unhideAllBtn.style.display = visible ? "" : "none";
+      unhideAllBtn.disabled = !visible;
+    }
+  };
+
+  const syncTopbarTabs = () => {
+    for (const tabId of TOPBAR_TABS) {
+      ctx.tb.getTab(tabId)?.classList.toggle("active", tabId === activeTab);
+    }
+  };
+
+  const installTabHandlers = () => {
+    if (tabHandlersInstalled) return;
+    tabHandlersInstalled = true;
+    for (const tabId of TOPBAR_TABS) {
+      ctx.tb.getTab(tabId)?.addEventListener("click", () => {
+        setActiveTab(tabId);
+      });
+    }
+  };
+
+  const addButton = (
+    toolsEl: HTMLElement,
+    args: { title: string; label: string; iconSvg: string; onClick?: () => void; variant?: "success" | "danger" }
+  ) => ctx.tb.toolButton(toolsEl, args);
+
+  const addArchitectureTab = (row: HTMLElement) => {
+    const tools = ctx.tb.addGroup("Architecture", { row });
+    addButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => ctx.setToolWall() });
+    addButton(tools, { title: "Door", label: "Door", iconSvg: ctx.I_DOOR, onClick: ctx.addOrSelectDoor });
+    addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: ctx.addOrSelectWindow });
+    addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: ctx.addColumn });
+    addButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => ctx.enterFloorBoundaryEdit() });
+    addButton(tools, { title: "Stair", label: "Stair", iconSvg: ctx.I_STAIR });
+  };
+
+  const addKitchenTab = (row: HTMLElement) => {
+    ctx.kitchenMode?.mountTopbar(row);
+  };
+
+  const addLivingWallTab = (row: HTMLElement) => {
+    const tools = ctx.tb.addGroup("Living Wall", { row });
+    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_CABINET });
+  };
+
+  const addRoomTab = (row: HTMLElement) => {
+    const tools = ctx.tb.addGroup("Room", { row });
+    addButton(tools, { title: "Room", label: "Room", iconSvg: ctx.I_WARDROBE });
+    addButton(tools, { title: "Wardrobe", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, onClick: () => ctx.wardrobeMode?.enterNew() });
+  };
+
+  const addModifyTab = (row: HTMLElement) => {
+    const select = ctx.tb.addGroup("Selection", { row });
+    addButton(select, { title: "Select", label: "Select", iconSvg: ctx.I_SELECT, onClick: () => ctx.setToolSelect() });
+
+    const edit = ctx.tb.addGroup("Edit", { row });
+    ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
+    ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
+    addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move") });
+    addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => ctx.startTransformFromSelection("rotate") });
+    addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
+    addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
+    addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => ctx.setToolDimension() });
+    addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: ctx.duplicateSelected });
+    hideBtn = ctx.tb.toolButton(edit, {
+      title: "Hide",
+      label: "Hide",
+      iconSvg: ctx.I_HIDE,
+      onClick: () => {
+        if (ctx.visibility.selectedHasHidden()) ctx.visibility.unhideSelected();
+        else ctx.visibility.hideSelected();
+        syncClassicTopbarVisibility();
+      }
+    });
+    isolateBtn = addButton(edit, { title: "Isolate", label: "Isolate", iconSvg: ctx.I_ISOLATE, onClick: ctx.visibility.isolateSelected });
+    unhideAllBtn = addButton(edit, { title: "Unhide All", label: "Unhide All", iconSvg: ctx.I_UNHIDE, onClick: ctx.visibility.unhideAll });
+    addButton(edit, { title: "Delete", label: "Delete", iconSvg: ctx.I_TRASH, onClick: ctx.deleteSelected });
+  };
+
+  const addViewTab = (row: HTMLElement) => {
+    const view = ctx.tb.addGroup("View", { row });
+    addButton(view, { title: "Section", label: "Section", iconSvg: ctx.I_SECTION, onClick: () => ctx.setToolSection() });
+    addButton(view, {
       title: "Measure",
       label: "Measure",
-      iconSvg: ctx.I_DIM,
+      iconSvg: ctx.I_MEASURE,
       onClick: () => {
         if (ctx.layoutTool === "measure") ctx.setToolSelect();
         else ctx.setToolMeasure();
       }
     });
-    ctx.tb.toolButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => ctx.enterFloorBoundaryEdit() });
-    ctx.tb.toolButton(tools, { title: "Underlay", label: "Underlay", iconSvg: ctx.I_UNDERLAY, onClick: ctx.openUnderlayPanel });
-    ctx.tb.toolButton(tools, { title: "Kitchen", label: "Kitchen", iconSvg: ctx.I_CABINET, onClick: () => ctx.kitchenMode?.enterNew() });
+    addButton(view, { title: "Underlay", label: "Underlay", iconSvg: ctx.I_UNDERLAY, onClick: ctx.openUnderlayPanel });
+    addButton(view, { title: "2D View", label: "2D View", iconSvg: ctx.I_GRID2D, onClick: ctx.toggle2dView });
+    const resetViewBtn = ctx.args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
+    addButton(view, { title: "Reset View", label: "View", iconSvg: ctx.I_VIEW, onClick: () => resetViewBtn?.click() });
 
-    const edit = ctx.tb.addGroup("Edit", { row });
-    ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
-    ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
-    ctx.tb.toolButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move") });
-    ctx.tb.toolButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => ctx.startTransformFromSelection("rotate") });
-    ctx.tb.toolButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: ctx.duplicateSelected });
-    ctx.tb.toolButton(edit, { title: "Delete", label: "Delete", iconSvg: ctx.I_TRASH, onClick: ctx.deleteSelected });
-
-    const project = ctx.tb.addGroup("Project", { row });
-    ctx.tb.toolButton(project, { title: "2D View", label: "2D View", iconSvg: ctx.I_GRID2D, onClick: ctx.toggle2dView });
-    ctx.tb.toolButton(project, { title: "Reset Defaults", label: "Reset", iconSvg: ctx.I_RESET, onClick: () => ctx.args.resetBtn.click() });
-    ctx.tb.toolButton(project, { title: "Export JSON", label: "Export", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportBtn.click() });
-    ctx.tb.toolButton(project, { title: "Copy Export", label: "Copy", iconSvg: ctx.I_COPY, onClick: () => ctx.args.copyBtn.click() });
-    ctx.tb.toolButton(project, { title: "Pricing Catalog", iconSvg: ctx.I_BOM, label: "Catalog", onClick: ctx.openPricingCatalog });
-    ctx.tb.toolButton(project, {
+    const output = ctx.tb.addGroup("Output", { row });
+    addButton(output, { title: "Export JSON", label: "Export", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportBtn.click() });
+    addButton(output, { title: "Copy Export", label: "Copy", iconSvg: ctx.I_COPY, onClick: () => ctx.args.copyBtn.click() });
+    addButton(output, { title: "Pricing Catalog", iconSvg: ctx.I_BOM, label: "Catalog", onClick: ctx.openPricingCatalog });
+    ctx.tb.toolButton(output, {
       title: "BOM",
       iconSvg: ctx.I_BOM,
       label: "BOM",
       onClick: () => ctx.openBomPanel({ instances: ctx.S.instances, kitchenWorktops: ctx.S.kitchenWorktops, kitchenCtx: ctx.S.kitchenCtx })
     });
-    const installBtn = ctx.tb.toolButton(project, {
+    const installBtn = ctx.tb.toolButton(output, {
       title: "Install App",
       label: "Install",
       iconSvg: ctx.I_INSTALL,
@@ -135,11 +262,35 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     };
     syncInstallButton();
     ctx.subscribeInstallState(syncInstallButton);
-    const resetViewBtn = ctx.args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
-    ctx.tb.toolButton(project, { title: "Reset View", label: "View", iconSvg: ctx.I_VIEW, onClick: () => resetViewBtn?.click() });
-
-    ctx.updateUndoRedoUi(ctx.S);
+    addButton(output, { title: "Reset Defaults", label: "Reset", iconSvg: ctx.I_RESET, onClick: () => ctx.args.resetBtn.click() });
   };
 
-  return { buildClassicTopbar };
+  function buildClassicTopbar() {
+    installTabHandlers();
+    syncTopbarTabs();
+    ctx.tb.clear();
+    ctx.S.undoBtnEl = null;
+    ctx.S.redoBtnEl = null;
+    hideBtn = null;
+    isolateBtn = null;
+    unhideAllBtn = null;
+
+    const row = ctx.tb.addRow({ className: "topbar-classic-ribbon" });
+    if (activeTab === "architecture") addArchitectureTab(row);
+    else if (activeTab === "kitchen") addKitchenTab(row);
+    else if (activeTab === "livingWall") addLivingWallTab(row);
+    else if (activeTab === "room") addRoomTab(row);
+    else if (activeTab === "modify") addModifyTab(row);
+    else addViewTab(row);
+
+    ctx.updateUndoRedoUi(ctx.S);
+    syncClassicTopbarVisibility();
+  }
+
+  function setActiveTab(tab: TopbarTab) {
+    activeTab = tab;
+    buildClassicTopbar();
+  }
+
+  return { buildClassicTopbar, setActiveTab, syncClassicTopbarVisibility };
 }

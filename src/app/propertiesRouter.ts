@@ -2,13 +2,13 @@ import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
 import { getSectionBasis } from "./sectionViews";
 import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
-import { mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPropsPanel } from "./selectedPropsPanels";
+import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlacementPropsPanel, mountDoorPropsPanel, mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPlacementPropsPanel, mountWindowPropsPanel } from "./selectedPropsPanels";
 import { loadUnderlayToCanvas } from "../ui/loadUnderlay";
-import { getAllMaterials } from "../data/materials";
-import { getMaterialDefinitionById } from "../data/pricing/materialDefinitions";
+import type { Material } from "../types/material";
+import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
-import type { ModuleDescriptor } from "../modules/registry";
 import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { MeasureState } from "./measureTools";
@@ -16,6 +16,10 @@ import type { ModuleParams } from "../model/cabinetTypes";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
 import type {
   AlignPickedLine,
+  ColumnInstance,
+  ColumnParams,
+  DoorInstance,
+  DoorParams,
   FloorBoundarySegment,
   FloorInstance,
   FloorParams,
@@ -24,7 +28,9 @@ import type {
   SectionParams,
   SelectedKind,
   WallInstance,
-  WallParams
+  WallParams,
+  WindowInstance,
+  WindowParams
 } from "./localTypes";
 
 type RebuildInstanceOptions = {
@@ -92,12 +98,17 @@ type PropertiesRouterContext = {
   selectedKitchenGroupId: string | null;
   selectedWallId: string | null;
   selectedFloorId: string | null;
+  selectedColumnId: string | null;
   selectedSectionId: string | null;
   selectedInstanceId: string | null;
   selectedWallIds: Set<string>;
   selectedInstanceIds: Set<string>;
   pinnedInstanceIds: Set<string>;
   walls: WallInstance[];
+  columns: ColumnInstance[];
+  columnPlacementParams: ColumnParams | null;
+  windowInst: WindowInstance | null;
+  windowPlacementParams: WindowParams | null;
   floors: FloorInstance[];
   sections: Array<{ id: string; params: SectionParams }>;
   instances: LayoutInstance[];
@@ -106,6 +117,9 @@ type PropertiesRouterContext = {
   kitchenMode: null | {
     mountKitchenGroupProps: (groupId: string) => boolean;
     tryMountActiveKitchenGroupProps: () => boolean;
+  };
+  wardrobeMode: null | {
+    tryMountActiveWardrobeProps: () => boolean;
   };
   placement: AppState["placement"];
   placementHelpers: PlacementHelpers;
@@ -127,6 +141,15 @@ type PropertiesRouterContext = {
   clearAllMeasurements: () => void;
   rebuildWall: (wall: WallInstance) => void;
   rebuildWallPlanMesh: () => void;
+  rebuildColumn: (column: ColumnInstance) => void;
+  updateWindowTransform: (windowInst: WindowInstance) => void;
+  updateDoorTransform: (doorInst: DoorInstance) => void;
+  updateColumnPlacementParams: (params: Partial<ColumnParams>) => ColumnParams;
+  updateWindowPlacementParams: (params: Partial<WindowParams>) => WindowParams;
+  updateDoorPlacementParams: (params: Partial<DoorParams>) => DoorParams;
+  isColumnPlacementActive: () => boolean;
+  isWindowPlacementActive: () => boolean;
+  isDoorPlacementActive: () => boolean;
   rebuildFloor: (floor: FloorInstance) => void;
   updateSelectionHighlights: () => void;
   updateLayoutPanel: () => void;
@@ -139,7 +162,7 @@ type PropertiesRouterContext = {
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
   moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
-  getModuleDescriptorOrThrow: (type: ModuleParams["type"]) => ModuleDescriptor;
+  modulePackages: readonly FurnQuoteModulePackage[];
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   ensureLayoutMode: () => void;
   setUnderlayFromCanvas: (
@@ -159,21 +182,69 @@ type PropertiesRouterContext = {
   markUnderlaySelected: () => void;
   scheduleKitchenWorktopPreviewUpdate: () => void;
   drawOrthoEnabled: boolean;
+  doorInst: DoorInstance | null;
+  doorPlacementParams: DoorParams | null;
+  getAllMaterials: () => Material[];
+  getMaterialDefinitionById: (id: string) => MaterialDefinition | null;
+  catalog: ClientCatalog;
 };
 
 export function createPropertiesRouter(ctx: PropertiesRouterContext) {
-  const mountFloorBoundaryProps = () => mountFloorBoundaryPropsPanel({ props: ctx.props, floorEdit: ctx.floorEdit, getAllMaterials, floorDefault: ctx.floorDefault });
+  const mountFloorBoundaryProps = () => mountFloorBoundaryPropsPanel({ props: ctx.props, floorEdit: ctx.floorEdit, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault });
   const mountWallToolProps = () => mountWallToolPropsPanel({ props: ctx.props, wallDefault: ctx.wallDefault, wallDraw: ctx.wallDraw, updateWallMeshWithJustification: ctx.updateWallMeshWithJustification, setUnderlayStatus: ctx.setUnderlayStatus });
-  const mountKitchenWorktopToolProps = () => mountKitchenWorktopToolPropsPanel({ props: ctx.props, S: ctx.S, kitchenWorktopDraw: ctx.kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate: ctx.scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById });
+  const mountKitchenWorktopToolProps = () => mountKitchenWorktopToolPropsPanel({ props: ctx.props, S: ctx.S, kitchenWorktopDraw: ctx.kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate: ctx.scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById: ctx.getMaterialDefinitionById });
   const mountAlignToolProps = () => mountAlignToolPropsPanel({ props: ctx.props, alignState: ctx.alignState });
   const mountTrimToolProps = () => mountTrimToolPropsPanel({ props: ctx.props, trimState: ctx.trimState });
   const mountMeasureToolProps = () => mountMeasureToolPropsPanel({ props: ctx.props, measureState: ctx.measureState, args: ctx.args, formatMm, clearAllMeasurements: ctx.clearAllMeasurements, setUnderlayStatus: ctx.setUnderlayStatus, mountProps });
   const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
-  const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props: ctx.props, getAllMaterials, floorDefault: ctx.floorDefault, rebuildFloor: ctx.rebuildFloor, updateSelectionHighlights: ctx.updateSelectionHighlights, commitHistory: ctx.commitHistory, S: ctx.S, enterFloorBoundaryEdit: ctx.enterFloorBoundaryEdit, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, floor);
+  const mountColumnProps = () => mountColumnPropsPanel({ props: ctx.props, column: ctx.columns.find((x) => x.id === ctx.selectedColumnId) ?? null, showNoProps: ctx.showNoProps, rebuildColumn: ctx.rebuildColumn, commitHistory: ctx.commitHistory, S: ctx.S, mountProps });
+  const mountColumnPlacementProps = () => {
+    if (!ctx.columnPlacementParams) return ctx.showNoProps();
+    return mountColumnPlacementPropsPanel({
+      props: ctx.props,
+      params: ctx.columnPlacementParams,
+      onChange: ctx.updateColumnPlacementParams,
+      mountProps
+    });
+  };
+  const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props: ctx.props, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault, rebuildFloor: ctx.rebuildFloor, updateSelectionHighlights: ctx.updateSelectionHighlights, commitHistory: ctx.commitHistory, S: ctx.S, enterFloorBoundaryEdit: ctx.enterFloorBoundaryEdit, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, floor);
   const mountSectionToolProps = () => mountSectionToolPropsPanel({ props: ctx.props, sectionDraw: ctx.sectionDraw, drawOrthoEnabled: ctx.drawOrthoEnabled });
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props: ctx.props, sections: ctx.sections, showNoProps: ctx.showNoProps, getSectionBasis, updateAllSectionVisuals: ctx.updateAllSectionVisuals, mountProps, commitHistory: ctx.commitHistory, S: ctx.S }, id);
-  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, pinnedInstanceIds: ctx.pinnedInstanceIds, instanceFitsRoom: ctx.instanceFitsRoom, anyOverlap: ctx.anyOverlap, moduleOverlapsWalls: ctx.moduleOverlapsWalls, moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, getModuleDescriptorOrThrow: ctx.getModuleDescriptorOrThrow, args: ctx.args, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, id);
-  const mountWindowProps = () => mountWindowPropsPanel({ props: ctx.props });
+  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, pinnedInstanceIds: ctx.pinnedInstanceIds, instanceFitsRoom: ctx.instanceFitsRoom, anyOverlap: ctx.anyOverlap, moduleOverlapsWalls: ctx.moduleOverlapsWalls, moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, id);
+  const mountWindowProps = () => mountWindowPropsPanel({
+    props: ctx.props,
+    windowInst: ctx.windowInst,
+    walls: ctx.walls,
+    updateWindowTransform: ctx.updateWindowTransform,
+    commitHistory: ctx.commitHistory,
+    S: ctx.S,
+    mountProps
+  });
+  const mountWindowPlacementProps = () => {
+    if (!ctx.windowPlacementParams) return ctx.showNoProps();
+    return mountWindowPlacementPropsPanel({
+      props: ctx.props,
+      params: ctx.windowPlacementParams,
+      onChange: ctx.updateWindowPlacementParams
+    });
+  };
+  const mountDoorProps = () => mountDoorPropsPanel({
+    props: ctx.props,
+    doorInst: ctx.doorInst,
+    walls: ctx.walls,
+    updateDoorTransform: ctx.updateDoorTransform,
+    commitHistory: ctx.commitHistory,
+    S: ctx.S,
+    mountProps
+  });
+  const mountDoorPlacementProps = () => {
+    if (!ctx.doorPlacementParams) return ctx.showNoProps();
+    return mountDoorPlacementPropsPanel({
+      props: ctx.props,
+      params: ctx.doorPlacementParams,
+      onChange: ctx.updateDoorPlacementParams
+    });
+  };
   const mountUnderlayProps = () => mountUnderlayPropsPanel({
     props: ctx.props,
     loadUnderlayToCanvas,
@@ -201,12 +272,16 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     if (ctx.mode !== "layout") return ctx.showNoProps();
     if (ctx.floorEdit.active) return mountFloorBoundaryProps();
     if (ctx.placement.active) return ctx.mountPlacementControls(ctx.S, ctx.placementHelpers);
+    if (ctx.isColumnPlacementActive()) return mountColumnPlacementProps();
     if (ctx.layoutTool === "wall") return mountWallToolProps();
+    if (ctx.isWindowPlacementActive()) return mountWindowPlacementProps();
+    if (ctx.isDoorPlacementActive()) return mountDoorPlacementProps();
     if (ctx.layoutTool === "measure") return mountMeasureToolProps();
     if (ctx.layoutTool === "section") return mountSectionToolProps();
     if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active) return mountKitchenWorktopToolProps();
     if (ctx.layoutTool === "align") return mountAlignToolProps();
     if (ctx.layoutTool === "trim") return mountTrimToolProps();
+    if (ctx.wardrobeMode?.tryMountActiveWardrobeProps()) return;
     if (ctx.selectedKind === "kitchenGroup" && ctx.selectedKitchenGroupId && ctx.kitchenMode?.mountKitchenGroupProps(ctx.selectedKitchenGroupId)) {
       const section = ctx.args.propertiesEl.querySelector(".props-section:last-of-type") as HTMLElement | null;
       if (section) {
@@ -244,7 +319,9 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
       if (floor) return mountFloorProps(floor);
       return ctx.showNoProps();
     }
+    if (ctx.selectedKind === "column" && ctx.selectedColumnId) return mountColumnProps();
     if (ctx.selectedKind === "window") return mountWindowProps();
+    if (ctx.selectedKind === "door") return mountDoorProps();
     if (ctx.selectedKind === "section" && ctx.selectedSectionId) return mountSectionProps(ctx.selectedSectionId);
     if (ctx.selectedKind === "module" && ctx.selectedInstanceId) return mountModuleProps(ctx.selectedInstanceId);
     if (ctx.kitchenMode && ctx.kitchenMode.tryMountActiveKitchenGroupProps()) return;

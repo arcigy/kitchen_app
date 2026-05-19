@@ -1,7 +1,17 @@
+import { t } from "../i18n";
+import type { ClientContext } from "../core/client/client-context";
+import type { ClientProfile } from "../core/client/client-types";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+
 export type AppArgs = {
   viewerEl: HTMLElement;
   ribbonEl: HTMLElement;
   propertiesEl: HTMLElement;
+  clientContext: ClientContext;
+  clientCatalog: ClientCatalog;
+  modulePackages: FurnQuoteModulePackage[];
+  clientProfile?: ClientProfile | undefined;
   formEl?: HTMLElement;
   errorsEl?: HTMLElement;
   partsEl?: HTMLElement;
@@ -86,4 +96,126 @@ export function createViewerTabs(viewerEl: HTMLElement) {
   };
 
   return { viewerTabbar, floorplanTab, view3dTab, setExtraTabs, syncViewerTabs };
+}
+
+export type ViewerDisplayMode = "solid" | "realistic" | "wireframe";
+
+const viewerDisplayLabels: Record<ViewerDisplayMode, string> = {
+  solid: "Solid",
+  realistic: "Realistic",
+  wireframe: "Wireframe"
+};
+
+export function createViewerDownbar(
+  viewerEl: HTMLElement,
+  args: {
+    getMode: () => ViewerDisplayMode;
+    setMode: (mode: ViewerDisplayMode) => void;
+    hidden?: {
+      hasHiddenObjects: () => boolean;
+      isShowHidden: () => boolean;
+      toggleShowHidden: () => void;
+    };
+  }
+) {
+  const downbar = document.createElement("div");
+  downbar.className = "viewer-downbar";
+
+  const displayWrap = document.createElement("div");
+  displayWrap.className = "viewer-display";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "viewer-display-button";
+  button.setAttribute("aria-haspopup", "menu");
+  button.setAttribute("aria-expanded", "false");
+
+  const cube = document.createElement("span");
+  cube.className = "viewer-display-cube";
+  cube.setAttribute("aria-hidden", "true");
+
+  const label = document.createElement("span");
+  label.className = "viewer-display-label";
+
+  const caret = document.createElement("span");
+  caret.className = "viewer-display-caret";
+  caret.textContent = "▾";
+  caret.setAttribute("aria-hidden", "true");
+
+  button.append(cube, label, caret);
+
+  const menu = document.createElement("div");
+  menu.className = "viewer-display-menu";
+  menu.setAttribute("role", "menu");
+  menu.hidden = true;
+
+  const sync = () => {
+    const mode = args.getMode();
+    label.textContent = t(viewerDisplayLabels[mode]);
+    button.title = t(`View display: ${viewerDisplayLabels[mode]}`);
+    for (const item of Array.from(menu.querySelectorAll<HTMLButtonElement>("button"))) {
+      item.classList.toggle("viewer-display-menu-active", item.dataset.mode === mode);
+    }
+  };
+
+  const closeMenu = () => {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+
+  const openMenu = () => {
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+  };
+
+  for (const mode of ["wireframe", "realistic", "solid"] as ViewerDisplayMode[]) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.dataset.mode = mode;
+    item.setAttribute("role", "menuitem");
+    item.textContent = t(viewerDisplayLabels[mode]);
+    item.addEventListener("click", () => {
+      args.setMode(mode);
+      sync();
+      closeMenu();
+    });
+    menu.appendChild(item);
+  }
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (menu.hidden) openMenu();
+    else closeMenu();
+  });
+
+  document.addEventListener("click", closeMenu);
+  displayWrap.append(button, menu);
+  downbar.appendChild(displayWrap);
+
+  let showHiddenBtn: HTMLButtonElement | null = null;
+  if (args.hidden) {
+    showHiddenBtn = document.createElement("button");
+    showHiddenBtn.type = "button";
+    showHiddenBtn.className = "viewer-downbar-button";
+    showHiddenBtn.textContent = t("Show Hidden");
+    showHiddenBtn.title = t("Show Hidden");
+    showHiddenBtn.addEventListener("click", () => {
+      args.hidden?.toggleShowHidden();
+      sync();
+    });
+    downbar.appendChild(showHiddenBtn);
+  }
+
+  const syncHidden = () => {
+    if (!showHiddenBtn || !args.hidden) return;
+    const active = args.hidden.isShowHidden();
+    showHiddenBtn.classList.toggle("active", active);
+    showHiddenBtn.disabled = !args.hidden.hasHiddenObjects() && !active;
+  };
+
+  viewerEl.appendChild(downbar);
+  sync();
+  syncHidden();
+
+  return { downbar, sync: () => { sync(); syncHidden(); } };
 }

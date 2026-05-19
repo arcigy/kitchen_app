@@ -8,22 +8,60 @@ import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
-export type SelectedKind = "module" | "kitchenGroup" | "window" | "wall" | "floor" | "underlay" | "section" | null;
+export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 export type WallId = "back" | "left" | "right";
 
 export type WindowParams = {
   wall: WallId;
+  wallId?: string | null;
   widthMm: number;
   heightMm: number;
   sillHeightMm: number;
   centerMm: number;
+  frameWidthMm: number;
+  offsetFromInteriorMm: number;
+  sashWidthMm: number;
+  sashProfileDepthMm: number;
+  frameProfileDepthMm: number;
+  materialId: string;
 };
 
 export type WindowInstance = {
+  id: string;
   params: WindowParams;
   root: THREE.Group;
+  frame: THREE.Group;
+  plan: THREE.Group;
+  selection: THREE.Group;
   pick: THREE.Mesh;
   outline: THREE.Line;
+};
+
+export type ColumnShape = "square" | "rectangular" | "round";
+export type ColumnJustifyX = "left" | "center" | "right";
+export type ColumnJustifyY = "up" | "center" | "down";
+
+export type ColumnParams = {
+  name: string;
+  shape: ColumnShape;
+  xMm: number;
+  zMm: number;
+  justifyX: ColumnJustifyX;
+  justifyY: ColumnJustifyY;
+  widthMm: number;
+  depthMm: number;
+  diameterMm: number;
+  heightMm: number;
+  materialId: string;
+};
+
+export type ColumnInstance = {
+  id: string;
+  params: ColumnParams;
+  root: THREE.Group;
+  mesh: THREE.Mesh;
+  outline: THREE.LineSegments;
+  pick: THREE.Mesh;
 };
 
 export type LayoutSnapshot = {
@@ -31,6 +69,8 @@ export type LayoutSnapshot = {
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
   floors?: Array<{ id: string; params: FloorParams }>;
+  columnCounter?: number;
+  columns?: Array<{ id: string; params: ColumnParams }>;
   sectionCounter?: number;
   sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
@@ -52,6 +92,7 @@ export type LayoutSnapshot = {
     wallId: string | null;
     wallIds: string[];
     floorId?: string | null;
+    columnId?: string | null;
     sectionId?: string | null;
     instId: string | null;
     instIds: string[];
@@ -199,6 +240,8 @@ export interface AppState {
   wallUnionPolys: any | null;
   floors: FloorInstance[];
   floorCounter: number;
+  columns: ColumnInstance[];
+  columnCounter: number;
   sections: SectionInstance[];
   sectionCounter: number;
   kitchenWorktops: KitchenWorktopInstance[];
@@ -219,6 +262,7 @@ export interface AppState {
   selectedInstanceId: string | null;
   selectedWallId: string | null;
   selectedFloorId: string | null;
+  selectedColumnId: string | null;
   selectedSectionId: string | null;
   selectedWallIds: Set<string>;
   selectedInstanceIds: Set<string>;
@@ -282,6 +326,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     wallUnionPolys: null,
     floors: [],
     floorCounter: 1,
+    columns: [],
+    columnCounter: 1,
     sections: [],
     sectionCounter: 1,
     kitchenWorktops: [],
@@ -300,6 +346,7 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     selectedInstanceId: null,
     selectedWallId: null,
     selectedFloorId: null,
+    selectedColumnId: null,
     selectedSectionId: null,
     selectedWallIds: new Set(),
     selectedInstanceIds: new Set(),

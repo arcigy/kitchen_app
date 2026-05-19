@@ -200,8 +200,11 @@ export function ensurePickAndOutline(
   pickMaterial.transparent = true;
   pickMaterial.depthWrite = false;
   pickMaterial.depthTest = false;
+  pickMaterial.colorWrite = false;
   pickMaterial.color.setHex(0xc5cfdb);
-  pickMaterial.opacity = opts.viewMode === "2d" ? 0.18 : 0;
+  pickMaterial.opacity = 0;
+  inst.pick.userData.viewDisplaySkipEdges = true;
+  inst.pick.userData.viewDisplaySkipMaterialRestore = true;
 
   const geometry = buildModuleEdgeGeometry(inst, opts.flattenToPlan, opts.getModuleLocalBackCenter);
   inst.outline.geometry.dispose();

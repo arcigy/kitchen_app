@@ -1,6 +1,8 @@
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { BOMResult } from "../layout/bom/bomTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { DEFAULT_PHASE_ID, DEFAULT_PROJECT_ID } from "../core/storage/storage-types";
 import { exportMarketingOfferPdf } from "../layout/bom/exportMarketingPdf";
 import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
 import { buildProjectPricingPayload, buildProjectPricingViews, type ProjectPricingView } from "../layout/bom/projectPricing";
@@ -13,7 +15,9 @@ import {
   type ProjectQuoteSettings
 } from "../layout/bom/projectQuote";
 
-const SETTINGS_STORAGE_KEY = "bom.projectQuoteSettings";
+export function quoteSettingsStorageKey(catalog: Pick<ClientCatalog, "clientId">, projectId = DEFAULT_PROJECT_ID, phaseId = DEFAULT_PHASE_ID) {
+  return `bom.${catalog.clientId}.${projectId}.${phaseId}.projectQuoteSettings`;
+}
 
 function formatNumber(value: number, digits = 3) {
   return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: digits }).format(value);
@@ -27,9 +31,9 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function readStoredSettings(): ProjectQuoteSettings {
+function readStoredSettings(storageKey: string): ProjectQuoteSettings {
   try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return sanitizeProjectQuoteSettings();
     return sanitizeProjectQuoteSettings(JSON.parse(raw) as Partial<ProjectQuoteSettings>);
   } catch {
@@ -37,8 +41,8 @@ function readStoredSettings(): ProjectQuoteSettings {
   }
 }
 
-function writeStoredSettings(settings: ProjectQuoteSettings) {
-  window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+function writeStoredSettings(storageKey: string, settings: ProjectQuoteSettings) {
+  window.localStorage.setItem(storageKey, JSON.stringify(settings));
 }
 
 function table(headers: string[], rows: string[][]) {
@@ -189,10 +193,12 @@ export function mountBomDevPanel(
   container: HTMLElement,
   instances: LayoutInstance[],
   worktops: KitchenWorktopInstance[],
-  ctx: KitchenContext
+  ctx: KitchenContext,
+  catalog: ClientCatalog
 ): void {
-  const entries = buildProjectPricingViews(instances, worktops, ctx);
-  let settings = readStoredSettings();
+  const entries = buildProjectPricingViews(instances, worktops, ctx, catalog);
+  const storageKey = quoteSettingsStorageKey(catalog);
+  let settings = readStoredSettings(storageKey);
 
   container.className = "bom-dev";
 
@@ -208,7 +214,7 @@ export function mountBomDevPanel(
     }
 
     settings = sanitizeProjectQuoteSettings(settings);
-    writeStoredSettings(settings);
+    writeStoredSettings(storageKey, settings);
 
     const boards = aggregateProjectBoards(entries);
     const edges = aggregateProjectEdges(entries);

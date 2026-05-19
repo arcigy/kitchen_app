@@ -42,6 +42,7 @@ export type FrameRendererContext = {
   getLightingRevision: () => number;
   photoSamples: HTMLInputElement;
   photoStatus: HTMLElement;
+  viewDisplay: { sync: () => void };
   lastCameraWorld: Float32Array;
   lastCameraProj: Float32Array;
   technicalDimensions: { render: () => void };
@@ -76,6 +77,7 @@ export function renderAppFrame(ctx: FrameRendererContext, dt: number) {
   ctx.updateWallEditHud();
   ctx.updateModuleEditHud();
   ctx.updateDetailViewCamera();
+  ctx.viewDisplay.sync();
 
   const activeCam = ctx.cam();
   const isPhoto =

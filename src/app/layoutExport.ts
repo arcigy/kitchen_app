@@ -1,7 +1,11 @@
-import type { FloorInstance, LayoutInstance, SectionInstance, WindowInstance } from "./localTypes";
+import type { ColumnInstance, DoorInstance, FloorInstance, LayoutInstance, SectionInstance, WindowInstance } from "./localTypes";
 
 type LayoutExportArgs = {
   windowInst: WindowInstance | null;
+  windows: WindowInstance[];
+  doorInst: DoorInstance | null;
+  doors: DoorInstance[];
+  columns: ColumnInstance[];
   floors: FloorInstance[];
   sections: SectionInstance[];
   instances: LayoutInstance[];
@@ -13,6 +17,19 @@ export function createLayoutExportPayload(args: LayoutExportArgs) {
     units: "mm" as const,
     generatedAt: new Date().toISOString(),
     window: args.windowInst ? args.windowInst.params : null,
+    windows: args.windows.map((window) => ({
+      id: window.id,
+      params: window.params
+    })),
+    door: args.doorInst ? args.doorInst.params : null,
+    doors: args.doors.map((door) => ({
+      id: door.id,
+      params: door.params
+    })),
+    columns: args.columns.map((column) => ({
+      id: column.id,
+      params: column.params
+    })),
     floors: args.floors.map((floor) => ({
       id: floor.id,
       params: floor.params

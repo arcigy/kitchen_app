@@ -1,8 +1,12 @@
 import * as THREE from "three";
+import type { ClientCatalog, ComponentType } from "../../core/catalog/catalog-types";
 import type { PortableMaterialsSnapshot } from "../runtime/portableCommercial";
 import { getPortableMaterialsSnapshotSelections } from "../runtime/portableCommercial";
-import { getMaterialDefinitionById } from "../../data/pricing/materialDefinitions";
-import { getComponentDefinitionById } from "../../data/pricing/componentDefinitions";
+import {
+  createModuleRuntimeCatalogContext,
+  type MaterialFallbackKind,
+  type ModuleRuntimeCatalogContext
+} from "../runtime/runtimeCatalog";
 import { normalizeSwingShelvesLowParams, type SwingShelvesLowParams } from "./types";
 
 const MM_TO_M = 0.001;
@@ -147,17 +151,29 @@ function resolveBoardSlot(partName: string) {
   return null;
 }
 
+function fallbackKindForPart(partName: string): MaterialFallbackKind {
+  if (/front/i.test(partName)) return "front";
+  if (/back/i.test(partName)) return "backPanel";
+  if (/plinth/i.test(partName)) return "plinth";
+  return "carcass";
+}
+
 function resolveBoardPreview(
   partName: string,
   params: Record<string, unknown>,
   materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
-  fallback: PreviewMaterial
+  fallback: PreviewMaterial,
+  catalogContext: ModuleRuntimeCatalogContext | null
 ): PreviewMaterial {
   const boardSlot = resolveBoardSlot(partName);
   if (!boardSlot) return fallback;
-  const { slotMaterialCatalogIds, slotThicknesses } = getPortableMaterialsSnapshotSelections(materialsSnapshot, params);
+  const { slotMaterialCatalogIds, slotThicknesses } = catalogContext
+    ? getPortableMaterialsSnapshotSelections(materialsSnapshot, params, catalogContext.catalog)
+    : { slotMaterialCatalogIds: {} as Record<string, string>, slotThicknesses: {} as Record<string, number> };
   const selectedCatalogId = slotMaterialCatalogIds[boardSlot];
-  const selectedMaterial = selectedCatalogId ? getMaterialDefinitionById(selectedCatalogId) : null;
+  const selectedMaterial =
+    (selectedCatalogId ? catalogContext?.getMaterialById(selectedCatalogId) : null) ??
+    catalogContext?.resolveMaterial(undefined, fallbackKindForPart(partName));
   if (!selectedMaterial) return fallback;
   return {
     colorHex: selectedMaterial.preview.colorHex,
@@ -171,14 +187,19 @@ function resolveBoardThickness(
   partName: string,
   params: Record<string, unknown>,
   materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
-  fallback: number
+  fallback: number,
+  catalogContext: ModuleRuntimeCatalogContext | null
 ) {
-  return getNumber(resolveBoardPreview(partName, params, materialsSnapshot, fallbackBodyPreview).thicknessMm, fallback);
+  return getNumber(resolveBoardPreview(partName, params, materialsSnapshot, fallbackBodyPreview, catalogContext).thicknessMm, fallback);
 }
 
-function resolveComponentPreview(componentId: string | null | undefined, fallback: PreviewMaterial) {
-  if (!componentId) return fallback;
-  const component = getComponentDefinitionById(componentId);
+function resolveComponentPreview(
+  componentId: string | null | undefined,
+  fallback: PreviewMaterial,
+  catalogContext: ModuleRuntimeCatalogContext | null,
+  componentType: ComponentType
+) {
+  const component = catalogContext?.resolveComponent(componentId, componentType);
   if (!component) return fallback;
   return {
     colorHex: component.preview.colorHex,
@@ -313,9 +334,11 @@ function attachDoorPivot(group: THREE.Group, pivotName: string, pivotXMm: number
 
 export function buildSwingShelvesLowParametric(
   params: SwingShelvesLowParams,
-  materialsSnapshot?: PortableMaterialsSnapshot | null
+  materialsSnapshot: PortableMaterialsSnapshot | null | undefined,
+  catalog: ClientCatalog
 ) {
   params = normalizeSwingShelvesLowParams(params);
+  const catalogContext = catalog ? createModuleRuntimeCatalogContext(catalog) : null;
   const group = new THREE.Group();
   group.name = "swingShelvesLowModule";
 
@@ -325,10 +348,10 @@ export function buildSwingShelvesLowParametric(
   const heightCarcassMm = Math.max(80, Math.round(getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm)));
   const totalDepthMm = Math.max(200, Math.round(getNumber(params.depth, 560)));
 
-  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 19)));
-  const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.boardThickness, 18)));
-  const shelfThicknessMm = resolveBoardThickness("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.shelfThickness, boardThicknessMm)));
-  const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.backThickness, 6)));
+  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 19)), catalogContext);
+  const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.boardThickness, 18)), catalogContext);
+  const shelfThicknessMm = resolveBoardThickness("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.shelfThickness, boardThicknessMm)), catalogContext);
+  const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.backThickness, 6)), catalogContext);
 
   const carcassDepthMm = Math.max(80, totalDepthMm - frontThicknessMm);
   const carcassCenterZMm = -frontThicknessMm * 0.5;
@@ -359,15 +382,17 @@ export function buildSwingShelvesLowParametric(
   const plinthThicknessMm = boardThicknessMm;
   const plinthCenterZMm = carcassCenterZMm + carcassDepthMm * 0.5 - plinthSetbackMm - plinthThicknessMm * 0.5;
 
-  const bodyPreview = resolveBoardPreview("leftSide", params as Record<string, unknown>, materialsSnapshot, fallbackBodyPreview);
-  const topPreview = resolveBoardPreview("top", params as Record<string, unknown>, materialsSnapshot, bodyPreview);
-  const shelfPreview = resolveBoardPreview("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, bodyPreview);
-  const backPreview = resolveBoardPreview("back", params as Record<string, unknown>, materialsSnapshot, fallbackBackPreview);
-  const frontPreview = resolveBoardPreview("door_front_z", params as Record<string, unknown>, materialsSnapshot, fallbackFrontPreview);
-  const plinthPreview = resolveBoardPreview("plinth", params as Record<string, unknown>, materialsSnapshot, bodyPreview);
+  const bodyPreview = resolveBoardPreview("leftSide", params as Record<string, unknown>, materialsSnapshot, fallbackBodyPreview, catalogContext);
+  const topPreview = resolveBoardPreview("top", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext);
+  const shelfPreview = resolveBoardPreview("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext);
+  const backPreview = resolveBoardPreview("back", params as Record<string, unknown>, materialsSnapshot, fallbackBackPreview, catalogContext);
+  const frontPreview = resolveBoardPreview("door_front_z", params as Record<string, unknown>, materialsSnapshot, fallbackFrontPreview, catalogContext);
+  const plinthPreview = resolveBoardPreview("plinth", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext);
   const handlePreview = resolveComponentPreview(
     typeof params.handleComponentId === "string" ? params.handleComponentId : null,
-    fallbackHardwarePreview
+    fallbackHardwarePreview,
+    catalogContext,
+    "handle"
   );
   const hingePreview = resolveComponentPreview(
     typeof params.hingeComponentId === "string" ? params.hingeComponentId : null,
@@ -375,7 +400,9 @@ export function buildSwingShelvesLowParametric(
       colorHex: "#aeb3bb",
       roughness: 0.25,
       metalness: 0.88
-    }
+    },
+    catalogContext,
+    "hinge"
   );
   const legPreview = resolveComponentPreview(
     typeof params.legComponentId === "string" ? params.legComponentId : null,
@@ -383,7 +410,9 @@ export function buildSwingShelvesLowParametric(
       colorHex: "#1e232b",
       roughness: 0.45,
       metalness: 0.55
-    }
+    },
+    catalogContext,
+    "leg"
   );
   const clipPreview = resolveComponentPreview(
     typeof params.clipComponentId === "string" ? params.clipComponentId : null,
@@ -391,7 +420,9 @@ export function buildSwingShelvesLowParametric(
       colorHex: "#1e232b",
       roughness: 0.45,
       metalness: 0.55
-    }
+    },
+    catalogContext,
+    "plinth_clip"
   );
 
   addBoxPart({
@@ -417,8 +448,8 @@ export function buildSwingShelvesLowParametric(
     name: "bottom",
     sizeMm: { width: innerWidthMm, height: boardThicknessMm, depth: carcassDepthMm },
     positionMm: { x: 0, y: plinthHeightMm + boardThicknessMm * 0.5, z: carcassCenterZMm },
-    preview: bodyPreview,
-    paramKeys: ["width", "depth", "boardThickness", "plinthHeight"]
+    preview: resolveBoardPreview("bottom", params as Record<string, unknown>, materialsSnapshot, bodyPreview, catalogContext),
+    paramKeys: ["width", "heightCarcass", "depth", "plinthHeight", "boardThickness", "worktopThicknessMm"]
   });
 
   addBoxPart({

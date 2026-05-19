@@ -1,6 +1,6 @@
-export type PricingBasis = "sheet_area" | "linear_length" | "piece";
+export type PricingBasis = "sheet_area" | "linear_length" | "piece" | "custom";
 
-export type PricingUnit = "m2" | "lm" | "pcs";
+export type PricingUnit = "m2" | "lm" | "pcs" | "custom";
 
 export type MaterialType = "board" | "edge";
 
@@ -14,6 +14,7 @@ export type MaterialBase =
   | "hdf"
   | "plywood"
   | "multiplex"
+  | "solid_wood"
   | "laminate"
   | "compact"
   | "veneer"

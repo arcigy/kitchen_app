@@ -4,9 +4,12 @@ import { buildMeasureGuides, type AssociativeMeasureContext } from "./measureAss
 import { pointInPolygonXZ } from "./sharedUtils";
 import type { FloorInstance, KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutTool } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
+import { validateKitchenModulePackagePlacement } from "../layout/modulePackagePlacementIntegration";
 import { getKitchenModuleRole, staysOutsideKitchenWorktopFootprint } from "../layout/kitchenModuleRules";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
@@ -44,6 +47,8 @@ export type KitchenPlacementControllerContext = {
   getWallUnionPolys: () => PolygonClipMultiPolygon | null;
   getLayoutTool: () => LayoutTool;
   getWallChainStart: () => THREE.Vector3 | null;
+  catalog: ClientCatalog;
+  modulePackages?: readonly FurnQuoteModulePackage[];
 };
 
 export function createKitchenPlacementController(ctx: KitchenPlacementControllerContext) {
@@ -65,6 +70,18 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
   const kitchenAnchorMaxDistanceM = 0.18;
   const kitchenAnchorMaxAngleDeltaRad = Math.PI / 3;
+
+  const getModulePackageForInstance = (inst: LayoutInstance) => {
+    const params = inst.params as Record<string, unknown>;
+    const explicitPackageId = typeof params.modulePackageId === "string" ? params.modulePackageId : null;
+    if (explicitPackageId) {
+      return ctx.modulePackages?.find((modulePackage) => modulePackage.module.modulePackageId === explicitPackageId) ?? null;
+    }
+    return ctx.modulePackages?.find((modulePackage) => modulePackage.module.moduleType === inst.params.type) ?? null;
+  };
+
+  const firstPlacementError = (result: { errors: Array<{ message: string }> }) =>
+    result.errors[0]?.message ?? "Placement does not match module package rules.";
 
   const normalizeAngleRad = (angle: number) => {
     let next = angle;
@@ -522,7 +539,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;
-      applyKitchenContextToModuleParams(inst.params, nextCtx);
+      applyKitchenContextToModuleParams(inst.params, nextCtx, ctx.catalog, getModulePackageForInstance(inst));
       rebuildInstance(inst, { skipLayoutValidation: true, preserveBackAnchor: true });
     }
 
@@ -635,6 +652,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     }
 
     if (isCornerKitchenModule(ghost)) {
+      const modulePackage = getModulePackageForInstance(ghost);
       let best:
         | {
             binding: KitchenPlacementBinding;
@@ -664,6 +682,19 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       }
 
       if (!best) {
+        const packageValidation = modulePackage
+          ? validateKitchenModulePackagePlacement({
+              modulePackage,
+              candidate: {
+                placementContext: "kitchen_wall",
+                hasWall: true,
+                hasFloor: true,
+                hasCorner: false,
+                hasTwoPerpendicularWalls: false,
+                touchesBothWalls: false
+              }
+            })
+          : null;
         return {
           kitchenPlacement: null,
           position: ghost.root.position.clone(),
@@ -671,18 +702,40 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
           valid: false,
           enforceRoomBounds: false,
           enforceWallOverlap: false,
-          statusText: "Placement: Corner module can be inserted only into a worktop corner."
+          statusText: packageValidation && !packageValidation.valid
+            ? `Placement: ${firstPlacementError(packageValidation)}`
+            : "Placement: Corner module can be inserted only into a worktop corner."
         };
       }
+
+      const packageValidation = modulePackage
+        ? validateKitchenModulePackagePlacement({
+            modulePackage,
+            candidate: {
+              placementContext: "kitchen_corner",
+              hasWall: true,
+              hasFloor: true,
+              hasCorner: true,
+              cornerAngleDeg: 90,
+              hasTwoPerpendicularWalls: best.valid,
+              touchesBothWalls: best.valid,
+              snapPosition: best.position,
+              snapRotation: best.rotationY
+            }
+          })
+        : null;
+      const validByPackage = packageValidation?.valid ?? true;
 
       return {
         kitchenPlacement: best.binding,
         position: best.position,
         rotationY: best.rotationY,
-        valid: best.valid,
+        valid: best.valid && validByPackage,
         enforceRoomBounds: false,
         enforceWallOverlap: false,
-        statusText: best.valid
+        statusText: !validByPackage && packageValidation
+          ? `Placement: ${firstPlacementError(packageValidation)}`
+          : best.valid
           ? "Placement: Corner module binds only to the worktop back-line corner."
           : "Placement: Corner module needs a corner with long enough sides."
       };

@@ -1,6 +1,6 @@
-import { getMaterialDefinitionById, materialDefinitions } from "../data/pricing/materialDefinitions";
-import type { MaterialDefinition } from "../data/pricing/types";
-import { applyDrawerLowHandleComponentToParams } from "../data/pricing/handleComponentPresets";
+import type { ClientCatalog, ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import { applyModuleContextBindings } from "../core/module-package/runtime/module-context-binding";
 import type { ModuleParams } from "../model/cabinetTypes";
 import {
   normalizeCornerShelfLowerParams,
@@ -56,13 +56,30 @@ const flapShelvesLowSnapshot = flapShelvesLowMaterialsSnapshot as unknown as Por
 const fridgeTallSnapshot = fridgeTallMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 const swingShelvesLowSnapshot = swingShelvesLowMaterialsSnapshot as unknown as PortableMaterialsSnapshot;
 
+function getMaterialSnapshotForModuleType(type: ModuleParams["type"]): PortableMaterialsSnapshot | undefined {
+  if (type === "corner_shelf_lower") return cornerShelfLowerSnapshot;
+  if (type === "drawer_low") return drawerLowSnapshot;
+  if (type === "fridge_tall") return fridgeTallSnapshot;
+  if (type === "flap_shelves_low") return flapShelvesLowSnapshot;
+  if (type === "swing_shelves_low") return swingShelvesLowSnapshot;
+  return undefined;
+}
+
+function normalizeSyncedModuleParams(params: ModuleParams) {
+  const record = params as Record<string, unknown>;
+  if (params.type === "corner_shelf_lower") Object.assign(record, normalizeCornerShelfLowerParams(record as CornerShelfLowerParams));
+  if (params.type === "fridge_tall") Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
+  if (params.type === "flap_shelves_low") Object.assign(record, normalizeFlapShelvesLowParams(record as FlapShelvesLowParams));
+  if (params.type === "swing_shelves_low") Object.assign(record, normalizeSwingShelvesLowParams(record as SwingShelvesLowParams));
+}
+
 function matchesKitchenBoardFamily(material: MaterialDefinition, family: KitchenBoardFamily) {
   if (family === "shelf") return material.boardFamily === "body";
   return material.boardFamily === family;
 }
 
-function getBoardMaterialOptions(family: KitchenBoardFamily): MaterialDefinition[] {
-  return materialDefinitions.filter(
+function getBoardMaterialOptions(family: KitchenBoardFamily, catalog: ClientCatalog): MaterialDefinition[] {
+  return catalog.materials.filter(
     (material): material is MaterialDefinition =>
       material.materialType === "board" && material.isActive && matchesKitchenBoardFamily(material, family)
   );
@@ -77,25 +94,34 @@ function stripThicknessSuffix(label: string) {
   return label.replace(/\s+\d+(?:[.,]\d+)?\s*mm$/i, "").trim();
 }
 
-function getKitchenMaterial(ctx: KitchenContext, family: KitchenBoardFamily): MaterialDefinition | null {
+function getMaterialDefinitionById(catalog: ClientCatalog, id: string): MaterialDefinition | null {
+  return catalog.materials.find((material) => material.id === id) ?? null;
+}
+
+function getComponentDefinitionById(catalog: ClientCatalog, id: string): ComponentDefinition | null {
+  return catalog.components.find((component) => component.id === id) ?? null;
+}
+
+function getKitchenMaterial(ctx: KitchenContext, family: KitchenBoardFamily, catalog: ClientCatalog): MaterialDefinition | null {
   const field = kitchenMaterialFieldByFamily[family];
   const requestedId = ctx[field];
-  const requested = getMaterialDefinitionById(requestedId);
+  const requested = getMaterialDefinitionById(catalog, requestedId);
   if (requested?.materialType === "board" && matchesKitchenBoardFamily(requested, family)) {
     return requested;
   }
-  return getBoardMaterialOptions(family)[0] ?? null;
+  return getBoardMaterialOptions(family, catalog)[0] ?? null;
 }
 
 function getMaterialByIdForFamily(
   materialId: string,
-  family: KitchenBoardFamily
+  family: KitchenBoardFamily,
+  catalog: ClientCatalog
 ): MaterialDefinition | null {
-  const requested = getMaterialDefinitionById(materialId);
+  const requested = getMaterialDefinitionById(catalog, materialId);
   if (requested?.materialType === "board" && matchesKitchenBoardFamily(requested, family)) {
     return requested;
   }
-  return getBoardMaterialOptions(family)[0] ?? null;
+  return getBoardMaterialOptions(family, catalog)[0] ?? null;
 }
 
 function getSortedThicknesses(material: MaterialDefinition | null): number[] {
@@ -105,12 +131,12 @@ function getSortedThicknesses(material: MaterialDefinition | null): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
 }
 
-export function getKitchenWorktopThicknessOptions(worktopMaterialId: string): number[] {
-  return getSortedThicknesses(getMaterialByIdForFamily(worktopMaterialId, "worktop"));
+export function getKitchenWorktopThicknessOptions(worktopMaterialId: string, catalog: ClientCatalog): number[] {
+  return getSortedThicknesses(getMaterialByIdForFamily(worktopMaterialId, "worktop", catalog));
 }
 
-export function resolveKitchenWorktopThickness(worktopMaterialId: string, desiredThicknessMm: number): number {
-  const material = getMaterialByIdForFamily(worktopMaterialId, "worktop");
+export function resolveKitchenWorktopThickness(worktopMaterialId: string, desiredThicknessMm: number, catalog: ClientCatalog): number {
+  const material = getMaterialByIdForFamily(worktopMaterialId, "worktop", catalog);
   const options = getSortedThicknesses(material);
   if (options.length === 0) return Math.max(1, Math.round(desiredThicknessMm || 0));
 
@@ -132,9 +158,20 @@ function ensureRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function applyKitchenHandleSelection(params: Record<string, unknown>, ctx: KitchenContext) {
-  const nextParams = applyDrawerLowHandleComponentToParams(params, ctx.handleComponentId);
-  Object.assign(params, nextParams);
+function resolveHandleGeometryKind(componentId: string): "bar" | "knob" {
+  return componentId.includes(".knob.") ? "knob" : "bar";
+}
+
+function applyKitchenHandleSelection(params: Record<string, unknown>, ctx: KitchenContext, catalog: ClientCatalog) {
+  const component = getComponentDefinitionById(catalog, ctx.handleComponentId);
+  if (!component || component.componentType !== "handle") {
+    params.handleType = "none";
+    delete params.handleComponentId;
+    return;
+  }
+  params.handleComponentId = component.id;
+  params.handleType = resolveHandleGeometryKind(component.id);
+  params.handleLengthMm = component.nominalLengthMm ?? 160;
 }
 
 function applyLegacyMaterialAliases(
@@ -197,6 +234,7 @@ function applyLegacyMaterialAliases(
 function applyKitchenCommercialSelections(
   params: Record<string, unknown>,
   ctx: KitchenContext,
+  catalog: ClientCatalog,
   snapshot: PortableMaterialsSnapshot
 ) {
   const boardMaterials: Record<string, string> = {};
@@ -205,7 +243,7 @@ function applyKitchenCommercialSelections(
   for (const slot of snapshot.slotAssignments ?? []) {
     const family = (slot.boardFamily ?? slot.assignedMaterial.family ?? null) as KitchenBoardFamily | null;
     if (!family || family === "worktop") continue;
-    const selected = getKitchenMaterial(ctx, family);
+    const selected = getKitchenMaterial(ctx, family, catalog);
     if (!selected) continue;
     boardMaterials[slot.slotId] = selected.id;
     boardThicknesses[slot.slotId] = selected.defaultThicknessMm;
@@ -217,7 +255,37 @@ function applyKitchenCommercialSelections(
   };
 }
 
-function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+function getPositiveInteger(value: unknown, fallback: number) {
+  return Math.max(1, Math.round(typeof value === "number" && Number.isFinite(value) ? value : fallback));
+}
+
+function setBoardSelection(
+  params: Record<string, unknown>,
+  slotId: string,
+  material: MaterialDefinition
+) {
+  const commercialSelections = ensureRecord(params.commercialSelections);
+  const boardMaterials = ensureRecord(commercialSelections.boardMaterials);
+  const boardThicknesses = ensureRecord(commercialSelections.boardThicknesses);
+  boardMaterials[slotId] = material.id;
+  boardThicknesses[slotId] = material.defaultThicknessMm;
+  commercialSelections.boardMaterials = boardMaterials;
+  commercialSelections.boardThicknesses = boardThicknesses;
+  params.commercialSelections = commercialSelections;
+}
+
+function applyDrawerLowDynamicSelections(params: Record<string, unknown>, ctx: KitchenContext, catalog: ClientCatalog) {
+  const drawerCount = getPositiveInteger(params.drawerCount, 3);
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
+  const drawerBottom = getKitchenMaterial(ctx, "drawer_bottom", catalog);
+
+  for (let index = 1; index <= drawerCount; index += 1) {
+    if (fronts) setBoardSelection(params, `drawer-front-${index}`, fronts);
+    if (drawerBottom) setBoardSelection(params, `drawer-box-${index}-bottom-panel`, drawerBottom);
+  }
+}
+
+function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
@@ -235,41 +303,42 @@ function applyDrawerLowKitchenMaterials(params: ModuleParams, ctx: KitchenContex
     record.depth = ctx.upperDepthMm;
   }
 
-  const corpus = getKitchenMaterial(ctx, "body");
+  const corpus = getKitchenMaterial(ctx, "body", catalog);
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "body", corpus);
     applyLegacyMaterialAliases(record, "shelf", corpus);
   }
 
-  const fronts = getKitchenMaterial(ctx, "front");
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "front", fronts);
   }
 
-  const back = getKitchenMaterial(ctx, "back");
+  const back = getKitchenMaterial(ctx, "back", catalog);
   if (back) {
     record.backThickness = back.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "back", back);
   }
 
-  const drawerBottom = getKitchenMaterial(ctx, "drawer_bottom");
+  const drawerBottom = getKitchenMaterial(ctx, "drawer_bottom", catalog);
   if (drawerBottom) {
     record.drawerBottomThickness = drawerBottom.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "drawer_bottom", drawerBottom);
   }
 
   if ("worktopThicknessMm" in record) {
-    record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+    record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm, catalog);
   }
 
-  applyKitchenHandleSelection(record, ctx);
+  applyKitchenHandleSelection(record, ctx, catalog);
 
-  applyKitchenCommercialSelections(record, ctx, drawerLowSnapshot);
+  applyKitchenCommercialSelections(record, ctx, catalog, drawerLowSnapshot);
+  applyDrawerLowDynamicSelections(record, ctx, catalog);
 }
 
-function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
@@ -287,32 +356,32 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
     record.depth = ctx.upperDepthMm;
   }
 
-  const corpus = getKitchenMaterial(ctx, "body");
+  const corpus = getKitchenMaterial(ctx, "body", catalog);
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "body", corpus);
     applyLegacyMaterialAliases(record, "shelf", corpus);
   }
 
-  const fronts = getKitchenMaterial(ctx, "front");
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "front", fronts);
   }
 
-  const back = getKitchenMaterial(ctx, "back");
+  const back = getKitchenMaterial(ctx, "back", catalog);
   if (back) {
     record.backThickness = back.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "back", back);
   }
 
   if ("worktopThicknessMm" in record) {
-    record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+    record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm, catalog);
   }
 
-  applyKitchenHandleSelection(record, ctx);
+  applyKitchenHandleSelection(record, ctx, catalog);
 
-  applyKitchenCommercialSelections(record, ctx, cornerShelfLowerSnapshot);
+  applyKitchenCommercialSelections(record, ctx, catalog, cornerShelfLowerSnapshot);
 
   Object.assign(
     record,
@@ -320,7 +389,7 @@ function applyCornerShelfLowerKitchenMaterials(params: ModuleParams, ctx: Kitche
   );
 }
 
-function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
@@ -329,31 +398,31 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   record.plinthHeight = ctx.plinthHeightMm;
   record.plinthSetbackMm = ctx.plinthDepthMm;
 
-  const corpus = getKitchenMaterial(ctx, "body");
+  const corpus = getKitchenMaterial(ctx, "body", catalog);
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "body", corpus);
   }
 
-  const fronts = getKitchenMaterial(ctx, "front");
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "front", fronts);
   }
 
-  const back = getKitchenMaterial(ctx, "back");
+  const back = getKitchenMaterial(ctx, "back", catalog);
   if (back) {
     record.backThickness = back.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "back", back);
   }
 
-  applyKitchenHandleSelection(record, ctx);
-  applyKitchenCommercialSelections(record, ctx, fridgeTallSnapshot);
+  applyKitchenHandleSelection(record, ctx, catalog);
+  applyKitchenCommercialSelections(record, ctx, catalog, fridgeTallSnapshot);
 
   Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
 }
 
-function applyFlapShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+function applyFlapShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
@@ -365,37 +434,37 @@ function applyFlapShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenC
   record.depth = ctx.upperDepthMm;
   record.plinthHeight = 0;
 
-  const corpus = getKitchenMaterial(ctx, "body");
+  const corpus = getKitchenMaterial(ctx, "body", catalog);
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "body", corpus);
   }
 
-  const shelf = getKitchenMaterial(ctx, "shelf");
+  const shelf = getKitchenMaterial(ctx, "shelf", catalog);
   if (shelf) {
     record.shelfThickness = shelf.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "shelf", shelf);
   }
 
-  const fronts = getKitchenMaterial(ctx, "front");
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "front", fronts);
   }
 
-  const back = getKitchenMaterial(ctx, "back");
+  const back = getKitchenMaterial(ctx, "back", catalog);
   if (back) {
     record.backThickness = back.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "back", back);
   }
 
-  applyKitchenHandleSelection(record, ctx);
-  applyKitchenCommercialSelections(record, ctx, flapShelvesLowSnapshot);
+  applyKitchenHandleSelection(record, ctx, catalog);
+  applyKitchenCommercialSelections(record, ctx, catalog, flapShelvesLowSnapshot);
 
   Object.assign(record, normalizeFlapShelvesLowParams(record as FlapShelvesLowParams));
 }
 
-function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext) {
+function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) {
   const record = params as Record<string, unknown>;
   const materials = ensureRecord(record.materials);
   record.materials = materials;
@@ -407,9 +476,9 @@ function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: Kitchen
   record.depth = ctx.moduleDepthMm;
   record.plinthHeight = ctx.plinthHeightMm;
   record.plinthSetbackMm = ctx.plinthDepthMm;
-  record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm);
+  record.worktopThicknessMm = resolveKitchenWorktopThickness(ctx.worktopMaterialId, ctx.worktopThicknessMm, catalog);
 
-  const corpus = getKitchenMaterial(ctx, "body");
+  const corpus = getKitchenMaterial(ctx, "body", catalog);
   if (corpus) {
     record.boardThickness = corpus.defaultThicknessMm;
     record.shelfThickness = corpus.defaultThicknessMm;
@@ -417,28 +486,28 @@ function applySwingShelvesLowKitchenMaterials(params: ModuleParams, ctx: Kitchen
     applyLegacyMaterialAliases(record, "shelf", corpus);
   }
 
-  const fronts = getKitchenMaterial(ctx, "front");
+  const fronts = getKitchenMaterial(ctx, "front", catalog);
   if (fronts) {
     record.frontThicknessMm = fronts.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "front", fronts);
   }
 
-  const back = getKitchenMaterial(ctx, "back");
+  const back = getKitchenMaterial(ctx, "back", catalog);
   if (back) {
     record.backThickness = back.defaultThicknessMm;
     applyLegacyMaterialAliases(record, "back", back);
   }
 
-  applyKitchenHandleSelection(record, ctx);
-  applyKitchenCommercialSelections(record, ctx, swingShelvesLowSnapshot);
+  applyKitchenHandleSelection(record, ctx, catalog);
+  applyKitchenCommercialSelections(record, ctx, catalog, swingShelvesLowSnapshot);
 
   Object.assign(record, normalizeSwingShelvesLowParams(record as SwingShelvesLowParams));
 }
 
-export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily): KitchenMaterialSelectOption[] {
+export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily, catalog: ClientCatalog): KitchenMaterialSelectOption[] {
   const options = new Map<string, KitchenMaterialSelectOption>();
 
-  for (const material of getBoardMaterialOptions(family)) {
+  for (const material of getBoardMaterialOptions(family, catalog)) {
     const baseId = normalizeBaseMaterialId(material.id);
     if (options.has(baseId)) continue;
     options.set(baseId, {
@@ -450,21 +519,39 @@ export function getKitchenBoardMaterialSelectOptions(family: KitchenBoardFamily)
   return [...options.values()].sort((left, right) => left.label.localeCompare(right.label));
 }
 
-export function applyKitchenContextToModuleParams(params: ModuleParams, ctx: KitchenContext): ModuleParams {
+export function applyKitchenContextToModuleParams(
+  params: ModuleParams,
+  ctx: KitchenContext,
+  catalog: ClientCatalog,
+  modulePackage?: FurnQuoteModulePackage | null
+): ModuleParams {
+  if (modulePackage?.behavior?.contextBindings?.some((binding) => binding.contextType === "kitchenGroup")) {
+    applyModuleContextBindings({
+      modulePackage,
+      params: params as unknown as Record<string, unknown>,
+      contextType: "kitchenGroup",
+      context: ctx as unknown as Record<string, unknown>,
+      catalog,
+      materialSnapshot: getMaterialSnapshotForModuleType(params.type)
+    });
+    normalizeSyncedModuleParams(params);
+    return params;
+  }
+
   if (params.type === "corner_shelf_lower") {
-    applyCornerShelfLowerKitchenMaterials(params, ctx);
+    applyCornerShelfLowerKitchenMaterials(params, ctx, catalog);
   }
   if (params.type === "drawer_low") {
-    applyDrawerLowKitchenMaterials(params, ctx);
+    applyDrawerLowKitchenMaterials(params, ctx, catalog);
   }
   if (params.type === "fridge_tall") {
-    applyFridgeTallKitchenMaterials(params, ctx);
+    applyFridgeTallKitchenMaterials(params, ctx, catalog);
   }
   if (params.type === "flap_shelves_low") {
-    applyFlapShelvesLowKitchenMaterials(params, ctx);
+    applyFlapShelvesLowKitchenMaterials(params, ctx, catalog);
   }
   if (params.type === "swing_shelves_low") {
-    applySwingShelvesLowKitchenMaterials(params, ctx);
+    applySwingShelvesLowKitchenMaterials(params, ctx, catalog);
   }
   return params;
 }

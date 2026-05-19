@@ -12,6 +12,7 @@ type SelectionControllerContext = {
   pinnedInstanceIds: Set<string>;
   pinnedWallIds: Set<string>;
   scene: THREE.Scene;
+  selectedColumnId: string | null;
   selectedFloorId: string | null;
   selectedInstanceBox: THREE.BoxHelper | null;
   selectedInstanceId: string | null;
@@ -24,7 +25,11 @@ type SelectionControllerContext = {
   selectedWallId: string | null;
   selectedWallIds: Set<string>;
   showWallSnapMarkersFor: (wallId: string | null) => void;
+  syncColumnSelectionVisuals: () => void;
+  syncDoorSelectionVisuals: (selected?: boolean) => void;
+  syncWindowSelectionVisuals: (selected?: boolean) => void;
   syncSelectionState: () => void;
+  hasUnderlaySource: () => boolean;
   underlayMesh: THREE.Object3D & { visible: boolean };
   underlayState: { pinned: boolean };
   updateAllSectionVisuals: () => void;
@@ -57,6 +62,9 @@ export function createSelectionController(ctx: SelectionControllerContext) {
 
   const afterSelectionChanged = (opts?: { highlights?: boolean; wallSnapId?: string | null }) => {
     if (opts?.wallSnapId !== undefined) ctx.showWallSnapMarkersFor(opts.wallSnapId);
+    ctx.syncWindowSelectionVisuals(ctx.selectedKind === "window");
+    ctx.syncDoorSelectionVisuals(ctx.selectedKind === "door");
+    ctx.syncColumnSelectionVisuals();
     ctx.syncSelectionState();
     if (opts?.highlights !== false) ctx.updateSelectionHighlights();
     ctx.updateAllSectionVisuals();
@@ -72,6 +80,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   function setSelectedKitchenGroup(groupId: string | null) {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     ctx.selectedKind = groupId ? "kitchenGroup" : null;
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = groupId;
     ctx.selectedFloorId = null;
@@ -94,6 +103,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     if (id && ctx.pinnedInstanceIds.has(id)) id = null;
     ctx.selectedKind = id ? "module" : null;
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
@@ -110,10 +120,28 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   function setSelectedWindow() {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     ctx.selectedKind = "window";
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
     ctx.selectedWallId = null;
+    ctx.selectedWallIds.clear();
+    ctx.selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    clearUnderlayBox();
+    afterSelectionChanged({ highlights: false });
+  }
+
+  function setSelectedDoor() {
+    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
+    ctx.selectedKind = "door";
+    ctx.selectedColumnId = null;
+    ctx.selectedSectionId = null;
+    ctx.selectedKitchenGroupId = null;
+    ctx.selectedFloorId = null;
+    ctx.selectedWallId = null;
+    ctx.selectedWallIds.clear();
+    ctx.selectedInstanceIds.clear();
     setInstanceSelected(null);
     clearUnderlayBox();
     afterSelectionChanged({ highlights: false });
@@ -121,8 +149,9 @@ export function createSelectionController(ctx: SelectionControllerContext) {
 
   function setSelectedUnderlay() {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    if (!ctx.underlayMesh.visible || ctx.underlayState.pinned) return;
+    if (!ctx.underlayMesh.visible || !ctx.hasUnderlaySource() || ctx.underlayState.pinned) return;
     ctx.selectedKind = "underlay";
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
@@ -142,6 +171,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   function setSelectedSection(id: string | null) {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     ctx.selectedKind = id ? "section" : null;
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = id;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
@@ -159,6 +189,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     if (id && ctx.pinnedWallIds.has(id)) id = null;
     ctx.selectedKind = id ? "wall" : null;
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
@@ -185,6 +216,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   function setSelectedFloor(id: string | null) {
     if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
     ctx.selectedKind = id ? "floor" : null;
+    ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = id;
@@ -198,8 +230,27 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     afterSelectionChanged({ wallSnapId: null });
   }
 
+  function setSelectedColumn(id: string | null) {
+    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
+    ctx.selectedKind = id ? "column" : null;
+    ctx.selectedColumnId = id;
+    ctx.selectedSectionId = null;
+    ctx.selectedKitchenGroupId = null;
+    ctx.selectedFloorId = null;
+    ctx.selectedWallId = null;
+    ctx.selectedWallIds.clear();
+    ctx.selectedInstanceId = null;
+    ctx.selectedInstanceIds.clear();
+    setInstanceSelected(null);
+    clearWallBox();
+    clearUnderlayBox();
+    afterSelectionChanged({ wallSnapId: null });
+  }
+
   return {
     setInstanceSelected,
+    setSelectedColumn,
+    setSelectedDoor,
     setSelectedFloor,
     setSelectedKitchenGroup,
     setSelectedModule,

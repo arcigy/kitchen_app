@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { getMaterialDefinitionById } from "../data/pricing/materialDefinitions";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import type { KitchenWorktopParams } from "./localTypes";
 
@@ -16,8 +16,12 @@ export function cloneKitchenWorktopParams(params: KitchenWorktopParams): Kitchen
   };
 }
 
-export function makeKitchenWorktopMaterial(materialId: string, opts?: { preview?: boolean }) {
-  const preview = getMaterialDefinitionById(materialId)?.preview;
+function getCatalogMaterialPreview(materialId: string, catalog: ClientCatalog) {
+  return catalog.materials.find((material) => material.id === materialId)?.preview ?? null;
+}
+
+export function makeKitchenWorktopMaterial(materialId: string, opts: { preview?: boolean; catalog: ClientCatalog }) {
+  const preview = getCatalogMaterialPreview(materialId, opts.catalog);
   return new THREE.MeshStandardMaterial({
     color: preview?.colorHex ?? "#b08e6d",
     roughness: preview?.roughness ?? 0.78,
@@ -28,8 +32,8 @@ export function makeKitchenWorktopMaterial(materialId: string, opts?: { preview?
   });
 }
 
-export function kitchenWorktopOutlineColor(materialId: string) {
-  const color = new THREE.Color(getMaterialDefinitionById(materialId)?.preview.colorHex ?? "#b08e6d");
+export function kitchenWorktopOutlineColor(materialId: string, catalog: ClientCatalog) {
+  const color = new THREE.Color(getCatalogMaterialPreview(materialId, catalog)?.colorHex ?? "#b08e6d");
   return color.offsetHSL(0, 0, -0.24).getHex();
 }
 

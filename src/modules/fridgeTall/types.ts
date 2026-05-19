@@ -6,11 +6,6 @@ import {
   normalizePortableParams,
   validatePortableParams
 } from "../runtime/portableTypes";
-import {
-  applyDrawerLowHandleComponentToParams,
-  getDefaultDrawerLowLegComponentId,
-  resolveDrawerLowLegComponentIdFromParams
-} from "../../data/pricing/handleComponentPresets";
 
 export type FridgeTallParams = {
   type: "fridge_tall";
@@ -20,6 +15,10 @@ const MODULE_DEFAULTS = defaults as FridgeTallParams;
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -143,21 +142,9 @@ export function normalizeFridgeTallParams(params: FridgeTallParams): FridgeTallP
   normalized.bottomGap = 0;
   normalized.doorOpen = normalized.doorOpen === true;
 
-  Object.assign(
-    normalized,
-    applyDrawerLowHandleComponentToParams(
-      normalized as unknown as Record<string, unknown>,
-      typeof normalized.handleComponentId === "string" && normalized.handleComponentId.trim().length > 0
-        ? normalized.handleComponentId
-        : null
-    )
-  );
-
-  const resolvedLegComponentId =
-    typeof normalized.legComponentId === "string" && normalized.legComponentId.trim().length > 0
-      ? resolveDrawerLowLegComponentIdFromParams(normalized as unknown as Record<string, unknown>)
-      : getDefaultDrawerLowLegComponentId();
-  normalized.legComponentId = resolvedLegComponentId;
+  if (normalized.handleType === "none") delete normalized.handleComponentId;
+  else normalized.handleComponentId = cleanString(normalized.handleComponentId) ?? cleanString(MODULE_DEFAULTS.handleComponentId) ?? null;
+  normalized.legComponentId = cleanString(normalized.legComponentId) ?? cleanString(MODULE_DEFAULTS.legComponentId) ?? null;
 
   return normalized;
 }
