@@ -814,7 +814,7 @@ function appendDoorParameterRows(
   numberRow("Vyska (mm)", "heightMm");
   if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
   numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
+  numberRow("Odsadenie kridla (mm)", "offsetFromInteriorMm");
   numberRow("Hrubka kridla (mm)", "panelThicknessMm");
   numberRow("Uhol otvorenia", "swingAngleDeg");
 

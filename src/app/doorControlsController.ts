@@ -200,6 +200,12 @@ const createDoorSwingControlSprite = (action: DoorSwingControlAction, rotationRa
   return sprite;
 };
 
+const getDoorWallCenterOffset = (params: DoorParams, wallThicknessM: number, panelThicknessM: number) => {
+  const leafCenterFromFaceM = params.offsetFromInteriorMm / 1000 + panelThicknessM / 2;
+  const inwardOffsetM = -wallThicknessM / 2 + leafCenterFromFaceM;
+  return params.swingSide === "outward" ? -inwardOffsetM : inwardOffsetM;
+};
+
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
@@ -578,8 +584,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const heightM = inst.params.heightMm / 1000;
     const panelThicknessM = Math.max(0.006, inst.params.panelThicknessMm / 1000);
     const frameW = Math.max(0.002, inst.params.frameWidthMm / 1000);
-    const depthCenterM = inst.params.offsetFromInteriorMm / 1000 + panelThicknessM / 2;
-    const wallCenterOffsetM = -basis.thicknessM / 2 + depthCenterM;
+    const wallCenterOffsetM = getDoorWallCenterOffset(inst.params, basis.thicknessM, panelThicknessM);
     const center = basis.centerA.clone().addScaledVector(basis.dir, inst.params.centerMm / 1000);
     center.addScaledVector(basis.exteriorNormal, wallCenterOffsetM);
     center.y = heightM / 2;
@@ -673,19 +678,22 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
     const widthMm = Math.max(1, Math.round(draft.widthMm));
     const valid = isPlacementPointValid(lengthMm, centerMm, widthMm);
+    const panelThicknessM = Math.max(0.006, draft.panelThicknessMm / 1000);
+    const wallCenterOffsetM = getDoorWallCenterOffset(draft, basis.thicknessM, panelThicknessM);
     const center = basis.centerA.clone().addScaledVector(basis.dir, centerMm / 1000);
+    center.addScaledVector(basis.exteriorNormal, wallCenterOffsetM);
     placementPreview.position.set(center.x, 0, center.z);
     placementPreview.rotation.set(0, -Math.atan2(basis.dir.z, basis.dir.x), 0);
     syncDoorPlanSymbol(placementPreview, {
       widthM: widthMm / 1000,
       wallThicknessM: basis.thicknessM,
       yLocal: 0.078,
-      zCenter: 0,
+      zCenter: -wallCenterOffsetM,
       swingDirection: draft.swingDirection,
       swingSide: draft.swingSide,
       swingAngleDeg: draft.swingAngleDeg,
       frameWidthM: Math.max(0.004, draft.frameWidthMm / 1000),
-      panelThicknessM: Math.max(0.006, draft.panelThicknessMm / 1000),
+      panelThicknessM,
       color: valid ? 0x12b981 : 0xef4444,
       opacity: valid ? 0.95 : 0.78,
       preview: true
