@@ -2186,10 +2186,10 @@ body {
 }
 
 .door-swing-button {
-  width: 34px;
-  min-height: 28px;
+  width: 28px;
+  min-height: 24px;
   padding: 0;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
 }

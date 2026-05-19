@@ -196,7 +196,7 @@ const createDoorSwingControlSprite = (action: DoorSwingControlAction, rotationRa
       rotation: rotationRad
     })
   );
-  sprite.scale.set(0.22, 0.22, 1);
+  sprite.scale.set(0.145, 0.145, 1);
   sprite.renderOrder = 98;
   sprite.userData.kind = "doorSwingControl";
   sprite.userData.doorSwingAction = action;
@@ -543,12 +543,28 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       heightLabel,
       labelRotationRad: planLabelRotationRad
     });
-    const controlX = halfW + 0.34;
+    const hingeX = inst.params.swingDirection === "right" ? halfW - frameW : -halfW + frameW;
+    const freeClosedX = inst.params.swingDirection === "right" ? -halfW + frameW : halfW - frameW;
+    const sideSign = inst.params.swingSide === "outward" ? 1 : -1;
+    const arcStart = inst.params.swingDirection === "right" ? Math.PI : 0;
+    const swingAngle = THREE.MathUtils.degToRad(inst.params.swingAngleDeg);
+    const arcEnd = inst.params.swingDirection === "right" ? Math.PI - sideSign * swingAngle : sideSign * swingAngle;
+    const arcMid = (arcStart + arcEnd) / 2;
+    const controlRadius = Math.min(Math.abs(freeClosedX - hingeX) * 0.42, 0.34);
+    const controlCenter = new THREE.Vector3(
+      hingeX + Math.cos(arcMid) * controlRadius,
+      planY,
+      args.planZCenter + Math.sin(arcMid) * controlRadius
+    );
+    const stackAxis = new THREE.Vector3(0, 0, 1)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
+      .normalize()
+      .multiplyScalar(0.085);
     const handedness = createDoorSwingControlSprite("toggleHandedness", planLabelRotationRad);
-    handedness.position.set(controlX, planY, args.planZCenter - 0.16);
+    handedness.position.copy(controlCenter).addScaledVector(stackAxis, -1);
     plan.add(handedness);
     const side = createDoorSwingControlSprite("toggleSwingSide", planLabelRotationRad);
-    side.position.set(controlX, planY, args.planZCenter + 0.16);
+    side.position.copy(controlCenter).add(stackAxis);
     plan.add(side);
     inst.selection.add(plan);
     inst.selection.visible = selected;
