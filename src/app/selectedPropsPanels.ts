@@ -625,7 +625,6 @@ function appendWindowParameterRows(
       | "sashWidthMm"
       | "sashProfileDepthMm"
       | "frameProfileDepthMm"
-      | "swingAngleDeg"
     >
   ) => {
     const input = document.createElement("input");
@@ -659,7 +658,6 @@ function appendWindowParameterRows(
   numberRow("Sirka kridla (mm)", "sashWidthMm");
   numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
   numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
-  numberRow("Uhol otvorenia", "swingAngleDeg");
 
   const swingControls = document.createElement("div");
   swingControls.className = "door-swing-controls";

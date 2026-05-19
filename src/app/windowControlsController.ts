@@ -177,10 +177,6 @@ const syncPlanSymbol = (
     wallThicknessM: number;
     yLocal: number;
     zCenter: number;
-    frameWidthM?: number;
-    swingDirection: WindowParams["swingDirection"];
-    swingSide: WindowParams["swingSide"];
-    swingAngleDeg: number;
     color: number;
     opacity: number;
     preview?: boolean;
@@ -189,18 +185,9 @@ const syncPlanSymbol = (
   resetFrame(group);
   const halfW = Math.max(0.001, args.widthM / 2);
   const halfT = Math.max(0.025, args.wallThicknessM / 2);
-  const frameW = Math.max(0.004, Math.min(args.frameWidthM ?? 0.07, halfW - 0.01));
   const glassOffset = Math.min(0.035, Math.max(0.012, halfT * 0.35));
   const y = args.yLocal;
   const z = args.zCenter;
-  const hingeX = args.swingDirection === "right" ? halfW - frameW : -halfW + frameW;
-  const freeClosedX = args.swingDirection === "right" ? -halfW + frameW : halfW - frameW;
-  const angle = THREE.MathUtils.degToRad(Math.max(1, Math.min(180, args.swingAngleDeg)));
-  const sideSign = args.swingSide === "outward" ? 1 : -1;
-  const arcStart = args.swingDirection === "right" ? Math.PI : 0;
-  const arcEnd = args.swingDirection === "right" ? Math.PI - sideSign * angle : sideSign * angle;
-  const leafRadius = Math.max(0.08, Math.abs(freeClosedX - hingeX));
-  const arcEndPoint = new THREE.Vector3(hingeX + Math.cos(arcEnd) * leafRadius, y, z + Math.sin(arcEnd) * leafRadius);
   const pts: THREE.Vector3[] = [
     new THREE.Vector3(-halfW, y, z - halfT),
     new THREE.Vector3(-halfW, y, z + halfT),
@@ -209,19 +196,8 @@ const syncPlanSymbol = (
     new THREE.Vector3(-halfW, y, z - glassOffset),
     new THREE.Vector3(halfW, y, z - glassOffset),
     new THREE.Vector3(-halfW, y, z + glassOffset),
-    new THREE.Vector3(halfW, y, z + glassOffset),
-    new THREE.Vector3(hingeX, y, z),
-    arcEndPoint
+    new THREE.Vector3(halfW, y, z + glassOffset)
   ];
-  const arcSegments = 18;
-  for (let i = 0; i < arcSegments; i += 1) {
-    const a0 = arcStart + (arcEnd - arcStart) * (i / arcSegments);
-    const a1 = arcStart + (arcEnd - arcStart) * ((i + 1) / arcSegments);
-    pts.push(
-      new THREE.Vector3(hingeX + Math.cos(a0) * leafRadius, y, z + Math.sin(a0) * leafRadius),
-      new THREE.Vector3(hingeX + Math.cos(a1) * leafRadius, y, z + Math.sin(a1) * leafRadius)
-    );
-  }
   if (args.preview) {
     pts.push(
       new THREE.Vector3(-halfW, y, z - halfT),
@@ -663,10 +639,6 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
         wallThicknessM: planWallThicknessM,
         yLocal: planYLocal,
         zCenter: planZCenter,
-        frameWidthM: inst.params.frameWidthMm / 1000,
-        swingDirection: inst.params.swingDirection,
-        swingSide: inst.params.swingSide,
-        swingAngleDeg: inst.params.swingAngleDeg,
         color: 0x111827,
         opacity: 0.95
       });
@@ -700,10 +672,6 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
         wallThicknessM: planWallThicknessM,
         yLocal: planYLocal,
         zCenter: planZCenter,
-        frameWidthM: inst.params.frameWidthMm / 1000,
-        swingDirection: inst.params.swingDirection,
-        swingSide: inst.params.swingSide,
-        swingAngleDeg: inst.params.swingAngleDeg,
         color: 0x111827,
         opacity: 0.95
       });
@@ -807,10 +775,6 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
       wallThicknessM: basis.thicknessM,
       yLocal: 0.075,
       zCenter: 0,
-      frameWidthM: draft.frameWidthMm / 1000,
-      swingDirection: draft.swingDirection,
-      swingSide: draft.swingSide,
-      swingAngleDeg: draft.swingAngleDeg,
       color: valid ? 0x12b981 : 0xef4444,
       opacity: valid ? 0.95 : 0.78,
       preview: true
