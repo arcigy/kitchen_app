@@ -151,6 +151,12 @@ const buildWindowFrame = (inst: WindowInstance) => {
     depthWrite: false,
     side: THREE.DoubleSide
   });
+  const handleMat = new THREE.MeshBasicMaterial({
+    color: 0x2f343b,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false
+  });
 
   addBox(inst.frame, "window-frame-left", { x: frameW, y: heightM, z: frameDepth }, { x: -widthM / 2 + frameW / 2, y: 0, z: 0 }, frameMat);
   addBox(inst.frame, "window-frame-right", { x: frameW, y: heightM, z: frameDepth }, { x: widthM / 2 - frameW / 2, y: 0, z: 0 }, frameMat);
@@ -164,10 +170,20 @@ const buildWindowFrame = (inst: WindowInstance) => {
   addBox(inst.frame, "window-sash-bottom", { x: glassW, y: sashW, z: sashDepth }, { x: 0, y: -innerH / 2 + sashW / 2, z: sashZ }, sashMat);
   const glass = addBox(inst.frame, "window-glass", { x: glassW, y: glassH, z: 0.006 }, { x: 0, y: 0, z: sashZ }, glassMat);
   glass.userData.viewDisplaySkipMaterialRestore = true;
+  const handleSide = inst.params.swingDirection === "right" ? -1 : 1;
+  const handleX = handleSide * Math.max(0.045, innerW / 2 - sashW * 1.25);
+  const gripH = Math.min(0.22, Math.max(0.15, innerH * 0.24));
+  for (const faceSign of [-1, 1] as const) {
+    const faceName = faceSign > 0 ? "outer" : "inner";
+    const handleZ = sashZ + faceSign * (sashDepth / 2 + 0.012);
+    addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.058, y: gripH * 0.82, z: 0.012 }, { x: handleX, y: 0, z: handleZ }, handleMat);
+    addBox(inst.frame, `window-handle-grip-${faceName}`, { x: 0.028, y: gripH, z: 0.032 }, { x: handleX, y: -0.01, z: handleZ + faceSign * 0.018 }, handleMat);
+  }
 
   frameMat.dispose();
   sashMat.dispose();
   glassMat.dispose();
+  handleMat.dispose();
 };
 
 const syncPlanSymbol = (

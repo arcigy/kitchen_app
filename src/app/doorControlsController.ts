@@ -458,14 +458,28 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const material = getDoorMaterialOption(inst.params.materialId);
     const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(material.color).multiplyScalar(0.82) });
     const panelMat = new THREE.MeshBasicMaterial({ color: material.color, transparent: true, opacity: 0.94 });
+    const handleMat = new THREE.MeshBasicMaterial({ color: 0x2f343b });
 
     addDoorBox(inst.frame, inst.id, "door-frame-left", { x: frameW, y: heightM, z: frameDepth }, { x: -widthM / 2 + frameW / 2, y: 0, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-frame-right", { x: frameW, y: heightM, z: frameDepth }, { x: widthM / 2 - frameW / 2, y: 0, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-frame-top", { x: innerW, y: frameW, z: frameDepth }, { x: 0, y: heightM / 2 - frameW / 2, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-panel", { x: innerW, y: panelH, z: panelThicknessM }, { x: 0, y: -frameW / 2, z: 0 }, panelMat);
+    const handleSide = inst.params.swingDirection === "right" ? -1 : 1;
+    const handleX = handleSide * Math.max(0.08, innerW / 2 - 0.08);
+    const handleMinY = -panelH / 2 + 0.18;
+    const handleMaxY = panelH / 2 - 0.18;
+    const preferredHandleY = -heightM / 2 + Math.min(1.05, heightM * 0.58);
+    const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : -frameW / 2;
+    const leverLength = Math.min(0.18, Math.max(0.12, innerW * 0.22));
+    for (const faceSign of [-1, 1] as const) {
+      const faceName = faceSign > 0 ? "outer" : "inner";
+      addDoorBox(inst.frame, inst.id, `door-handle-plate-${faceName}`, { x: 0.055, y: 0.11, z: 0.012 }, { x: handleX, y: handleY, z: faceSign * (panelThicknessM / 2 + 0.006) }, handleMat);
+      addDoorBox(inst.frame, inst.id, `door-handle-lever-${faceName}`, { x: leverLength, y: 0.026, z: 0.026 }, { x: handleX - handleSide * leverLength / 2, y: handleY, z: faceSign * (panelThicknessM / 2 + 0.024) }, handleMat);
+    }
 
     frameMat.dispose();
     panelMat.dispose();
+    handleMat.dispose();
   };
 
   const rebuildDoorSelection = (
