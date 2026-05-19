@@ -23,6 +23,8 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     swingDirection: "left",
     swingSide: "inward",
     swingAngleDeg: 90,
+    handleType: "lever",
+    handlePlacement: "auto",
     materialId: getDoorMaterialOption(null).id
   });
 
@@ -98,6 +100,8 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     p.swingDirection = p.swingDirection === "right" ? "right" : "left";
     p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
     p.swingAngleDeg = Math.max(1, Math.min(180, Math.round(Number(p.swingAngleDeg) || 90)));
+    p.handleType = p.handleType === "none" || p.handleType === "knob" || p.handleType === "bar" ? p.handleType : "lever";
+    p.handlePlacement = p.handlePlacement === "left" || p.handlePlacement === "right" ? p.handlePlacement : "auto";
     p.materialId = getDoorMaterialOption(p.materialId).id;
     return p;
   };

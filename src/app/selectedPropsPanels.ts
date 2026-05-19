@@ -15,6 +15,8 @@ import type {
   FloorInstance,
   FloorParams,
   LayoutInstance,
+  OpeningHandlePlacement,
+  OpeningHandleType,
   SectionInstance,
   SectionParams,
   WallInstance,
@@ -605,6 +607,51 @@ function appendColumnParameterRows(
   });
 }
 
+type OpeningHandleEditableParams = {
+  handleType: OpeningHandleType;
+  handlePlacement: OpeningHandlePlacement;
+};
+
+const HANDLE_TYPE_OPTIONS: Array<{ value: OpeningHandleType; label: string }> = [
+  { value: "lever", label: "Paka" },
+  { value: "knob", label: "Gula" },
+  { value: "bar", label: "Madlo" },
+  { value: "none", label: "Bez klucky" }
+];
+
+const HANDLE_PLACEMENT_OPTIONS: Array<{ value: OpeningHandlePlacement; label: string }> = [
+  { value: "auto", label: "Automaticky" },
+  { value: "left", label: "Vlavo" },
+  { value: "right", label: "Vpravo" }
+];
+
+function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
+  props: PropertiesPanelApi,
+  section: HTMLElement,
+  params: T,
+  apply: (commit: boolean, patch: Partial<T>) => void
+) {
+  const typeSelect = document.createElement("select");
+  typeSelect.innerHTML = HANDLE_TYPE_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+  typeSelect.value = params.handleType;
+  typeSelect.addEventListener("change", () => {
+    const next = HANDLE_TYPE_OPTIONS.find((option) => option.value === typeSelect.value)?.value ?? "lever";
+    params.handleType = next;
+    apply(true, { handleType: next } as Partial<T>);
+  });
+  props.row(section, "Typ klucky", typeSelect);
+
+  const placementSelect = document.createElement("select");
+  placementSelect.innerHTML = HANDLE_PLACEMENT_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+  placementSelect.value = params.handlePlacement;
+  placementSelect.addEventListener("change", () => {
+    const next = HANDLE_PLACEMENT_OPTIONS.find((option) => option.value === placementSelect.value)?.value ?? "auto";
+    params.handlePlacement = next;
+    apply(true, { handlePlacement: next } as Partial<T>);
+  });
+  props.row(section, "Umiestnenie klucky", placementSelect);
+}
+
 function appendWindowParameterRows(
   props: PropertiesPanelApi,
   section: HTMLElement,
@@ -715,6 +762,8 @@ function appendWindowParameterRows(
   });
   props.row(section, "Smer", swingSide);
   syncSwingControls();
+
+  appendOpeningHandleRows(props, section, params, apply);
 
   const material = document.createElement("select");
   material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
@@ -878,6 +927,8 @@ function appendDoorParameterRows(
   });
   props.row(section, "Smer", swingSide);
   syncSwingControls();
+
+  appendOpeningHandleRows(props, section, params, apply);
 
   const material = document.createElement("select");
   material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");

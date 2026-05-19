@@ -103,6 +103,12 @@ const resetFrame = (frame: THREE.Group) => {
   }
 };
 
+const getWindowHandleSide = (params: WindowParams) => {
+  if (params.handlePlacement === "left") return -1;
+  if (params.handlePlacement === "right") return 1;
+  return params.swingDirection === "right" ? -1 : 1;
+};
+
 const addBox = (
   parent: THREE.Group,
   name: string,
@@ -170,14 +176,23 @@ const buildWindowFrame = (inst: WindowInstance) => {
   addBox(inst.frame, "window-sash-bottom", { x: glassW, y: sashW, z: sashDepth }, { x: 0, y: -innerH / 2 + sashW / 2, z: sashZ }, sashMat);
   const glass = addBox(inst.frame, "window-glass", { x: glassW, y: glassH, z: 0.006 }, { x: 0, y: 0, z: sashZ }, glassMat);
   glass.userData.viewDisplaySkipMaterialRestore = true;
-  const handleSide = inst.params.swingDirection === "right" ? -1 : 1;
-  const handleX = handleSide * Math.max(0.045, innerW / 2 - sashW * 1.25);
-  const gripH = Math.min(0.22, Math.max(0.15, innerH * 0.24));
-  for (const faceSign of [-1, 1] as const) {
-    const faceName = faceSign > 0 ? "outer" : "inner";
-    const handleZ = sashZ + faceSign * (sashDepth / 2 + 0.012);
-    addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.058, y: gripH * 0.82, z: 0.012 }, { x: handleX, y: 0, z: handleZ }, handleMat);
-    addBox(inst.frame, `window-handle-grip-${faceName}`, { x: 0.028, y: gripH, z: 0.032 }, { x: handleX, y: -0.01, z: handleZ + faceSign * 0.018 }, handleMat);
+  if (inst.params.handleType !== "none") {
+    const handleSide = getWindowHandleSide(inst.params);
+    const handleX = handleSide * Math.max(0.045, innerW / 2 - sashW * 1.25);
+    const gripH = Math.min(0.22, Math.max(0.15, innerH * 0.24));
+    const barH = Math.min(0.34, Math.max(0.2, innerH * 0.34));
+    for (const faceSign of [-1, 1] as const) {
+      const faceName = faceSign > 0 ? "outer" : "inner";
+      const handleZ = sashZ + faceSign * (sashDepth / 2 + 0.012);
+      addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.058, y: gripH * 0.82, z: 0.012 }, { x: handleX, y: 0, z: handleZ }, handleMat);
+      if (inst.params.handleType === "knob") {
+        addBox(inst.frame, `window-handle-knob-${faceName}`, { x: 0.052, y: 0.052, z: 0.04 }, { x: handleX, y: 0, z: handleZ + faceSign * 0.018 }, handleMat);
+      } else if (inst.params.handleType === "bar") {
+        addBox(inst.frame, `window-handle-bar-${faceName}`, { x: 0.028, y: barH, z: 0.032 }, { x: handleX, y: 0, z: handleZ + faceSign * 0.018 }, handleMat);
+      } else {
+        addBox(inst.frame, `window-handle-grip-${faceName}`, { x: 0.028, y: gripH, z: 0.032 }, { x: handleX, y: -0.01, z: handleZ + faceSign * 0.018 }, handleMat);
+      }
+    }
   }
 
   frameMat.dispose();
@@ -614,6 +629,8 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     swingDirection: "left",
     swingSide: "inward",
     swingAngleDeg: 90,
+    handleType: "lever",
+    handlePlacement: "auto",
     materialId: getWindowMaterialOption(null).id
   });
 

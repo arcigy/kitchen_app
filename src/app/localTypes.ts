@@ -16,6 +16,8 @@ export type LayoutInstance = {
 export type WallId = "back" | "left" | "right";
 export type DoorSwingDirection = "left" | "right";
 export type DoorSwingSide = "inward" | "outward";
+export type OpeningHandleType = "lever" | "knob" | "bar" | "none";
+export type OpeningHandlePlacement = "auto" | "left" | "right";
 
 export type WindowParams = {
   wall: WallId;
@@ -32,6 +34,8 @@ export type WindowParams = {
   swingDirection: DoorSwingDirection;
   swingSide: DoorSwingSide;
   swingAngleDeg: number;
+  handleType: OpeningHandleType;
+  handlePlacement: OpeningHandlePlacement;
   materialId: string;
 };
 
@@ -58,6 +62,8 @@ export type DoorParams = {
   swingDirection: DoorSwingDirection;
   swingSide: DoorSwingSide;
   swingAngleDeg: number;
+  handleType: OpeningHandleType;
+  handlePlacement: OpeningHandlePlacement;
   materialId: string;
 };
 

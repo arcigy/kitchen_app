@@ -206,6 +206,12 @@ const getDoorWallCenterOffset = (params: DoorParams, wallThicknessM: number, pan
   return params.swingSide === "outward" ? -inwardOffsetM : inwardOffsetM;
 };
 
+const getDoorHandleSide = (params: DoorParams) => {
+  if (params.handlePlacement === "left") return -1;
+  if (params.handlePlacement === "right") return 1;
+  return params.swingDirection === "right" ? -1 : 1;
+};
+
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
@@ -433,6 +439,8 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     swingDirection: "left",
     swingSide: "inward",
     swingAngleDeg: 90,
+    handleType: "lever",
+    handlePlacement: "auto",
     materialId: getDoorMaterialOption(null).id
   });
 
@@ -464,17 +472,28 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     addDoorBox(inst.frame, inst.id, "door-frame-right", { x: frameW, y: heightM, z: frameDepth }, { x: widthM / 2 - frameW / 2, y: 0, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-frame-top", { x: innerW, y: frameW, z: frameDepth }, { x: 0, y: heightM / 2 - frameW / 2, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-panel", { x: innerW, y: panelH, z: panelThicknessM }, { x: 0, y: -frameW / 2, z: 0 }, panelMat);
-    const handleSide = inst.params.swingDirection === "right" ? -1 : 1;
-    const handleX = handleSide * Math.max(0.08, innerW / 2 - 0.08);
-    const handleMinY = -panelH / 2 + 0.18;
-    const handleMaxY = panelH / 2 - 0.18;
-    const preferredHandleY = -heightM / 2 + Math.min(1.05, heightM * 0.58);
-    const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : -frameW / 2;
-    const leverLength = Math.min(0.18, Math.max(0.12, innerW * 0.22));
-    for (const faceSign of [-1, 1] as const) {
-      const faceName = faceSign > 0 ? "outer" : "inner";
-      addDoorBox(inst.frame, inst.id, `door-handle-plate-${faceName}`, { x: 0.055, y: 0.11, z: 0.012 }, { x: handleX, y: handleY, z: faceSign * (panelThicknessM / 2 + 0.006) }, handleMat);
-      addDoorBox(inst.frame, inst.id, `door-handle-lever-${faceName}`, { x: leverLength, y: 0.026, z: 0.026 }, { x: handleX - handleSide * leverLength / 2, y: handleY, z: faceSign * (panelThicknessM / 2 + 0.024) }, handleMat);
+    if (inst.params.handleType !== "none") {
+      const handleSide = getDoorHandleSide(inst.params);
+      const handleX = handleSide * Math.max(0.08, innerW / 2 - 0.08);
+      const handleMinY = -panelH / 2 + 0.18;
+      const handleMaxY = panelH / 2 - 0.18;
+      const preferredHandleY = -heightM / 2 + Math.min(1.05, heightM * 0.58);
+      const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : -frameW / 2;
+      const leverLength = Math.min(0.18, Math.max(0.12, innerW * 0.22));
+      const barHeight = Math.min(0.42, Math.max(0.24, panelH * 0.24));
+      for (const faceSign of [-1, 1] as const) {
+        const faceName = faceSign > 0 ? "outer" : "inner";
+        const plateZ = faceSign * (panelThicknessM / 2 + 0.006);
+        const gripZ = faceSign * (panelThicknessM / 2 + 0.024);
+        addDoorBox(inst.frame, inst.id, `door-handle-plate-${faceName}`, { x: 0.055, y: 0.11, z: 0.012 }, { x: handleX, y: handleY, z: plateZ }, handleMat);
+        if (inst.params.handleType === "knob") {
+          addDoorBox(inst.frame, inst.id, `door-handle-knob-${faceName}`, { x: 0.058, y: 0.058, z: 0.046 }, { x: handleX, y: handleY, z: gripZ }, handleMat);
+        } else if (inst.params.handleType === "bar") {
+          addDoorBox(inst.frame, inst.id, `door-handle-bar-${faceName}`, { x: 0.032, y: barHeight, z: 0.032 }, { x: handleX - handleSide * 0.02, y: handleY, z: gripZ }, handleMat);
+        } else {
+          addDoorBox(inst.frame, inst.id, `door-handle-lever-${faceName}`, { x: leverLength, y: 0.026, z: 0.026 }, { x: handleX - handleSide * leverLength / 2, y: handleY, z: gripZ }, handleMat);
+        }
+      }
     }
 
     frameMat.dispose();
