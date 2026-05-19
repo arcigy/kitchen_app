@@ -523,6 +523,14 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       widthLabel,
       heightLabel
     });
+    const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
+    const modelStackAxis = new THREE.Vector3(0, 0.17, 0);
+    const modelHandedness = createDoorSwingControlSprite("toggleHandedness");
+    modelHandedness.position.copy(modelControlCenter).add(modelStackAxis);
+    model.add(modelHandedness);
+    const modelSide = createDoorSwingControlSprite("toggleSwingSide");
+    modelSide.position.copy(modelControlCenter).addScaledVector(modelStackAxis, -1);
+    model.add(modelSide);
     inst.selection.add(model);
 
     const plan = new THREE.Group();

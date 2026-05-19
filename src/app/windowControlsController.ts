@@ -529,6 +529,14 @@ const rebuildWindowSelection = (
     heightLabel,
     sillLabel
   });
+  const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
+  const modelStackAxis = new THREE.Vector3(0, 0.17, 0);
+  const modelHandedness = createWindowSwingControlSprite("toggleHandedness");
+  modelHandedness.position.copy(modelControlCenter).add(modelStackAxis);
+  modelGroup.add(modelHandedness);
+  const modelSide = createWindowSwingControlSprite("toggleSwingSide");
+  modelSide.position.copy(modelControlCenter).addScaledVector(modelStackAxis, -1);
+  modelGroup.add(modelSide);
   inst.selection.add(modelGroup);
 
   const planGroup = new THREE.Group();
