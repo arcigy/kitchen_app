@@ -625,6 +625,7 @@ function appendWindowParameterRows(
       | "sashWidthMm"
       | "sashProfileDepthMm"
       | "frameProfileDepthMm"
+      | "swingAngleDeg"
     >
   ) => {
     const input = document.createElement("input");
@@ -658,6 +659,64 @@ function appendWindowParameterRows(
   numberRow("Sirka kridla (mm)", "sashWidthMm");
   numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
   numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
+  numberRow("Uhol otvorenia", "swingAngleDeg");
+
+  const swingControls = document.createElement("div");
+  swingControls.className = "door-swing-controls";
+  const makeSwingButton = (html: string, title: string) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "door-swing-button";
+    button.innerHTML = html;
+    button.title = title;
+    return button;
+  };
+  const handednessButton = makeSwingButton("&#8596;", "Prehodit lave/prave okno");
+  const sideButton = makeSwingButton("&#8597;", "Prehodit otvaranie dovnutra/von");
+  swingControls.append(handednessButton, sideButton);
+  props.row(section, "Sipky", swingControls);
+
+  const swing = document.createElement("select");
+  swing.innerHTML = `
+    <option value="left">Lave</option>
+    <option value="right">Prave</option>
+  `;
+  swing.value = params.swingDirection;
+  const swingSide = document.createElement("select");
+  swingSide.innerHTML = `
+    <option value="inward">Dovnutra</option>
+    <option value="outward">Von</option>
+  `;
+  swingSide.value = params.swingSide;
+  const syncSwingControls = () => {
+    swing.value = params.swingDirection;
+    swingSide.value = params.swingSide;
+    handednessButton.title = params.swingDirection === "right" ? "Prehodit na lave okno" : "Prehodit na prave okno";
+    sideButton.title = params.swingSide === "outward" ? "Prehodit otvaranie dovnutra" : "Prehodit otvaranie von";
+  };
+  handednessButton.addEventListener("click", () => {
+    params.swingDirection = params.swingDirection === "right" ? "left" : "right";
+    syncSwingControls();
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  sideButton.addEventListener("click", () => {
+    params.swingSide = params.swingSide === "outward" ? "inward" : "outward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
+  swing.addEventListener("change", () => {
+    params.swingDirection = swing.value === "right" ? "right" : "left";
+    syncSwingControls();
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  props.row(section, "Otvaranie", swing);
+  swingSide.addEventListener("change", () => {
+    params.swingSide = swingSide.value === "outward" ? "outward" : "inward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
+  props.row(section, "Smer", swingSide);
+  syncSwingControls();
 
   const material = document.createElement("select");
   material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");

@@ -31,6 +31,7 @@ type PointerInputHandlersContext = Record<string, any> & {
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
 type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -381,6 +382,32 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return null;
   };
 
+  const pickWindowSwingControlAction = (): WindowSwingControlAction | null => {
+    const inst = ctx.windowInst;
+    if (!inst || ctx.selectedKind !== "window" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const action = hit.object.userData.windowSwingAction as WindowSwingControlAction | undefined;
+      if (action && hit.object.userData.kind === "windowSwingControl" && isVisibleThroughSelection(hit.object)) return action;
+    }
+    return null;
+  };
+
+  const applyWindowSwingControlAction = (action: WindowSwingControlAction) => {
+    const inst = ctx.windowInst;
+    if (!inst) return false;
+    if (action === "toggleHandedness") {
+      inst.params.swingDirection = inst.params.swingDirection === "right" ? "left" : "right";
+    } else {
+      inst.params.swingSide = inst.params.swingSide === "outward" ? "inward" : "outward";
+    }
+    ctx.updateWindowTransform(inst);
+    ctx.setSelectedWindow();
+    ctx.mountProps();
+    ctx.commitHistory(ctx.S);
+    return true;
+  };
+
   const pickDoorSwingControlAction = (): DoorSwingControlAction | null => {
     const inst = ctx.doorInst;
     if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
@@ -484,6 +511,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
     if (ctx.mode === "layout") {
       if (ev.button === 0) {
+        const windowSwingAction = pickWindowSwingControlAction();
+        if (windowSwingAction && applyWindowSwingControlAction(windowSwingAction)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
         const doorSwingAction = pickDoorSwingControlAction();
         if (doorSwingAction && applyDoorSwingControlAction(doorSwingAction)) {
           cancelPendingMarquee(ev.pointerId);

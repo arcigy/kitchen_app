@@ -45,6 +45,9 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     sashWidthMm: 48,
     sashProfileDepthMm: 56,
     frameProfileDepthMm: 72,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 90,
     materialId: getWindowMaterialOption(null).id
   });
 
@@ -122,6 +125,9 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     p.sashWidthMm = nonNegativeMm(p.sashWidthMm, 48);
     p.sashProfileDepthMm = positiveMm(p.sashProfileDepthMm, 56);
     p.frameProfileDepthMm = positiveMm(p.frameProfileDepthMm, 72);
+    p.swingDirection = p.swingDirection === "right" ? "right" : "left";
+    p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
+    p.swingAngleDeg = Math.max(1, Math.min(180, positiveMm(p.swingAngleDeg, 90)));
     p.materialId = getWindowMaterialOption(p.materialId).id;
     return p;
   };

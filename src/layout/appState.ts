@@ -10,6 +10,8 @@ export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "sec
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 export type WallId = "back" | "left" | "right";
+export type DoorSwingDirection = "left" | "right";
+export type DoorSwingSide = "inward" | "outward";
 
 export type WindowParams = {
   wall: WallId;
@@ -23,6 +25,9 @@ export type WindowParams = {
   sashWidthMm: number;
   sashProfileDepthMm: number;
   frameProfileDepthMm: number;
+  swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
+  swingAngleDeg: number;
   materialId: string;
 };
 

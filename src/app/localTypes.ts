@@ -14,6 +14,8 @@ export type LayoutInstance = {
 };
 
 export type WallId = "back" | "left" | "right";
+export type DoorSwingDirection = "left" | "right";
+export type DoorSwingSide = "inward" | "outward";
 
 export type WindowParams = {
   wall: WallId;
@@ -27,6 +29,9 @@ export type WindowParams = {
   sashWidthMm: number;
   sashProfileDepthMm: number;
   frameProfileDepthMm: number;
+  swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
+  swingAngleDeg: number;
   materialId: string;
 };
 
@@ -40,9 +45,6 @@ export type WindowInstance = {
   pick: THREE.Mesh;
   outline: THREE.Line;
 };
-
-export type DoorSwingDirection = "left" | "right";
-export type DoorSwingSide = "inward" | "outward";
 
 export type DoorParams = {
   wall: WallId;

@@ -52,6 +52,7 @@ type WallBasis = {
 };
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
+type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 const disposeObject = (object: THREE.Object3D) => {
   if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
@@ -176,6 +177,10 @@ const syncPlanSymbol = (
     wallThicknessM: number;
     yLocal: number;
     zCenter: number;
+    frameWidthM?: number;
+    swingDirection: WindowParams["swingDirection"];
+    swingSide: WindowParams["swingSide"];
+    swingAngleDeg: number;
     color: number;
     opacity: number;
     preview?: boolean;
@@ -184,10 +189,19 @@ const syncPlanSymbol = (
   resetFrame(group);
   const halfW = Math.max(0.001, args.widthM / 2);
   const halfT = Math.max(0.025, args.wallThicknessM / 2);
+  const frameW = Math.max(0.004, Math.min(args.frameWidthM ?? 0.07, halfW - 0.01));
   const glassOffset = Math.min(0.035, Math.max(0.012, halfT * 0.35));
   const y = args.yLocal;
   const z = args.zCenter;
-  const pts = [
+  const hingeX = args.swingDirection === "right" ? halfW - frameW : -halfW + frameW;
+  const freeClosedX = args.swingDirection === "right" ? -halfW + frameW : halfW - frameW;
+  const angle = THREE.MathUtils.degToRad(Math.max(1, Math.min(180, args.swingAngleDeg)));
+  const sideSign = args.swingSide === "outward" ? 1 : -1;
+  const arcStart = args.swingDirection === "right" ? Math.PI : 0;
+  const arcEnd = args.swingDirection === "right" ? Math.PI - sideSign * angle : sideSign * angle;
+  const leafRadius = Math.max(0.08, Math.abs(freeClosedX - hingeX));
+  const arcEndPoint = new THREE.Vector3(hingeX + Math.cos(arcEnd) * leafRadius, y, z + Math.sin(arcEnd) * leafRadius);
+  const pts: THREE.Vector3[] = [
     new THREE.Vector3(-halfW, y, z - halfT),
     new THREE.Vector3(-halfW, y, z + halfT),
     new THREE.Vector3(halfW, y, z - halfT),
@@ -195,8 +209,19 @@ const syncPlanSymbol = (
     new THREE.Vector3(-halfW, y, z - glassOffset),
     new THREE.Vector3(halfW, y, z - glassOffset),
     new THREE.Vector3(-halfW, y, z + glassOffset),
-    new THREE.Vector3(halfW, y, z + glassOffset)
+    new THREE.Vector3(halfW, y, z + glassOffset),
+    new THREE.Vector3(hingeX, y, z),
+    arcEndPoint
   ];
+  const arcSegments = 18;
+  for (let i = 0; i < arcSegments; i += 1) {
+    const a0 = arcStart + (arcEnd - arcStart) * (i / arcSegments);
+    const a1 = arcStart + (arcEnd - arcStart) * ((i + 1) / arcSegments);
+    pts.push(
+      new THREE.Vector3(hingeX + Math.cos(a0) * leafRadius, y, z + Math.sin(a0) * leafRadius),
+      new THREE.Vector3(hingeX + Math.cos(a1) * leafRadius, y, z + Math.sin(a1) * leafRadius)
+    );
+  }
   if (args.preview) {
     pts.push(
       new THREE.Vector3(-halfW, y, z - halfT),
@@ -273,6 +298,45 @@ const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) 
   sprite.renderOrder = 97;
   sprite.userData.kind = "windowDimensionEdit";
   sprite.userData.windowDimensionParam = param;
+  sprite.userData.viewDisplaySkipEdges = true;
+  return sprite;
+};
+
+const createWindowSwingControlSprite = (action: WindowSwingControlAction, rotationRad = 0) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const arrow = action === "toggleHandedness" ? String.fromCharCode(8596) : String.fromCharCode(8597);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.font = '800 84px "Arial Narrow", Arial, sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.lineWidth = 3;
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    context.strokeText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+    context.fillStyle = "#005cff";
+    context.fillText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      rotation: rotationRad
+    })
+  );
+  sprite.scale.set(0.145, 0.145, 1);
+  sprite.renderOrder = 98;
+  sprite.userData.kind = "windowSwingControl";
+  sprite.userData.windowSwingAction = action;
   sprite.userData.viewDisplaySkipEdges = true;
   return sprite;
 };
@@ -506,6 +570,19 @@ const rebuildWindowSelection = (
     sillLabel,
     labelRotationRad: planLabelRotationRad
   });
+  const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
+  const controlDepthOffset = halfT + 0.22;
+  const controlCenter = new THREE.Vector3(0, planY, args.planZCenter + controlDepthSide * controlDepthOffset);
+  const stackAxis = new THREE.Vector3(0, 0, 1)
+    .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
+    .normalize()
+    .multiplyScalar(0.085);
+  const handedness = createWindowSwingControlSprite("toggleHandedness", planLabelRotationRad);
+  handedness.position.copy(controlCenter).addScaledVector(stackAxis, -1);
+  planGroup.add(handedness);
+  const side = createWindowSwingControlSprite("toggleSwingSide", planLabelRotationRad);
+  side.position.copy(controlCenter).add(stackAxis);
+  planGroup.add(side);
   inst.selection.add(planGroup);
   inst.selection.visible = selected;
 };
@@ -534,6 +611,9 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     sashWidthMm: 48,
     sashProfileDepthMm: 56,
     frameProfileDepthMm: 72,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 90,
     materialId: getWindowMaterialOption(null).id
   });
 
@@ -583,6 +663,10 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
         wallThicknessM: planWallThicknessM,
         yLocal: planYLocal,
         zCenter: planZCenter,
+        frameWidthM: inst.params.frameWidthMm / 1000,
+        swingDirection: inst.params.swingDirection,
+        swingSide: inst.params.swingSide,
+        swingAngleDeg: inst.params.swingAngleDeg,
         color: 0x111827,
         opacity: 0.95
       });
@@ -616,6 +700,10 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
         wallThicknessM: planWallThicknessM,
         yLocal: planYLocal,
         zCenter: planZCenter,
+        frameWidthM: inst.params.frameWidthMm / 1000,
+        swingDirection: inst.params.swingDirection,
+        swingSide: inst.params.swingSide,
+        swingAngleDeg: inst.params.swingAngleDeg,
         color: 0x111827,
         opacity: 0.95
       });
@@ -719,6 +807,10 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
       wallThicknessM: basis.thicknessM,
       yLocal: 0.075,
       zCenter: 0,
+      frameWidthM: draft.frameWidthMm / 1000,
+      swingDirection: draft.swingDirection,
+      swingSide: draft.swingSide,
+      swingAngleDeg: draft.swingAngleDeg,
       color: valid ? 0x12b981 : 0xef4444,
       opacity: valid ? 0.95 : 0.78,
       preview: true
