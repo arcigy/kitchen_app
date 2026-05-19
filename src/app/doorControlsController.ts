@@ -169,17 +169,13 @@ const createDoorSwingControlSprite = (action: DoorSwingControlAction, rotationRa
   if (context) {
     const arrow = action === "toggleHandedness" ? String.fromCharCode(8596) : String.fromCharCode(8597);
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = "rgba(17, 24, 39, 0.92)";
-    context.strokeStyle = "rgba(255, 255, 255, 0.96)";
-    context.lineWidth = 7;
-    context.beginPath();
-    context.roundRect(9, 9, 110, 110, 18);
-    context.fill();
-    context.stroke();
-    context.font = '700 76px "Arial Narrow", Arial, sans-serif';
+    context.font = '800 84px "Arial Narrow", Arial, sans-serif';
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillStyle = "#ffffff";
+    context.lineWidth = 3;
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    context.strokeText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+    context.fillStyle = "#005cff";
     context.fillText(arrow, canvas.width / 2, canvas.height / 2 - 2);
   }
   const texture = new THREE.CanvasTexture(canvas);
@@ -543,19 +539,8 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       heightLabel,
       labelRotationRad: planLabelRotationRad
     });
-    const hingeX = inst.params.swingDirection === "right" ? halfW - frameW : -halfW + frameW;
-    const freeClosedX = inst.params.swingDirection === "right" ? -halfW + frameW : halfW - frameW;
-    const sideSign = inst.params.swingSide === "outward" ? 1 : -1;
-    const arcStart = inst.params.swingDirection === "right" ? Math.PI : 0;
-    const swingAngle = THREE.MathUtils.degToRad(inst.params.swingAngleDeg);
-    const arcEnd = inst.params.swingDirection === "right" ? Math.PI - sideSign * swingAngle : sideSign * swingAngle;
-    const arcMid = (arcStart + arcEnd) / 2;
-    const controlRadius = Math.min(Math.abs(freeClosedX - hingeX) * 0.42, 0.34);
-    const controlCenter = new THREE.Vector3(
-      hingeX + Math.cos(arcMid) * controlRadius,
-      planY,
-      args.planZCenter + Math.sin(arcMid) * controlRadius
-    );
+    const controlSide = inst.params.swingDirection === "right" ? -1 : 1;
+    const controlCenter = new THREE.Vector3(controlSide * Math.min(halfW * 0.34, 0.18), planY, args.planZCenter);
     const stackAxis = new THREE.Vector3(0, 0, 1)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
       .normalize()
