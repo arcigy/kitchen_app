@@ -530,17 +530,18 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     });
     const planLabelRotationRad = readablePlanLabelRotation(-inst.root.rotation.y);
     const halfT = Math.max(0.025, args.wallThicknessM / 2);
-    const z1 = args.planZCenter + halfT;
-    const dimZ = z1 + 0.5;
+    const dimSide = inst.params.swingSide === "outward" ? -1 : 1;
+    const z1 = args.planZCenter + dimSide * halfT;
+    const dimZ = z1 + dimSide * 0.5;
     addDoorDimensions(plan, {
       a: new THREE.Vector3(-halfW, planY, z1),
       b: new THREE.Vector3(halfW, planY, z1),
       dimA: new THREE.Vector3(-halfW, planY, dimZ),
       dimB: new THREE.Vector3(halfW, planY, dimZ),
-      widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.09),
-      heightTextPos: new THREE.Vector3(0, planY, dimZ + 0.09),
+      widthTextPos: new THREE.Vector3(0, planY, dimZ - dimSide * 0.09),
+      heightTextPos: new THREE.Vector3(0, planY, dimZ + dimSide * 0.09),
       tickAxisA: new THREE.Vector3(1, 0, 0),
-      tickAxisB: new THREE.Vector3(0, 0, 1),
+      tickAxisB: new THREE.Vector3(0, 0, dimSide),
       widthLabel,
       heightLabel,
       labelRotationRad: planLabelRotationRad
