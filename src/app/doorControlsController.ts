@@ -97,6 +97,46 @@ const addDoorBox = (
   return mesh;
 };
 
+const addDoorCylinder = (
+  parent: THREE.Group,
+  doorId: string,
+  name: string,
+  radius: number,
+  depth: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material,
+  axis: "x" | "y" | "z" = "z"
+) => {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, depth, 24), material.clone());
+  mesh.name = name;
+  if (axis === "x") mesh.rotation.z = Math.PI / 2;
+  if (axis === "z") mesh.rotation.x = Math.PI / 2;
+  mesh.position.set(position.x, position.y, position.z);
+  mesh.userData.kind = "door";
+  mesh.userData.doorId = doorId;
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
+const addDoorSphere = (
+  parent: THREE.Group,
+  doorId: string,
+  name: string,
+  radius: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material
+) => {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material.clone());
+  mesh.name = name;
+  mesh.position.set(position.x, position.y, position.z);
+  mesh.userData.kind = "door";
+  mesh.userData.doorId = doorId;
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
 const createLineSegments = (points: THREE.Vector3[], color: number, opacity = 0.98) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
@@ -206,11 +246,7 @@ const getDoorWallCenterOffset = (params: DoorParams, wallThicknessM: number, pan
   return params.swingSide === "outward" ? -inwardOffsetM : inwardOffsetM;
 };
 
-const getDoorHandleSide = (params: DoorParams) => {
-  if (params.handlePlacement === "left") return -1;
-  if (params.handlePlacement === "right") return 1;
-  return params.swingDirection === "right" ? -1 : 1;
-};
+const getDoorHandleSide = (params: DoorParams) => (params.swingDirection === "right" ? -1 : 1);
 
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
@@ -440,7 +476,8 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     swingSide: "inward",
     swingAngleDeg: 90,
     handleType: "lever",
-    handlePlacement: "auto",
+    handleOffsetMm: 85,
+    handleHeightMm: 1050,
     materialId: getDoorMaterialOption(null).id
   });
 
@@ -474,24 +511,28 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     addDoorBox(inst.frame, inst.id, "door-panel", { x: innerW, y: panelH, z: panelThicknessM }, { x: 0, y: -frameW / 2, z: 0 }, panelMat);
     if (inst.params.handleType !== "none") {
       const handleSide = getDoorHandleSide(inst.params);
-      const handleX = handleSide * Math.max(0.08, innerW / 2 - 0.08);
+      const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, 0.035, Math.max(0.035, innerW / 2 - 0.035));
+      const handleX = handleSide * Math.max(0.035, innerW / 2 - handleOffsetM);
       const handleMinY = -panelH / 2 + 0.18;
       const handleMaxY = panelH / 2 - 0.18;
-      const preferredHandleY = -heightM / 2 + Math.min(1.05, heightM * 0.58);
+      const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
       const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : -frameW / 2;
       const leverLength = Math.min(0.18, Math.max(0.12, innerW * 0.22));
       const barHeight = Math.min(0.42, Math.max(0.24, panelH * 0.24));
       for (const faceSign of [-1, 1] as const) {
         const faceName = faceSign > 0 ? "outer" : "inner";
-        const plateZ = faceSign * (panelThicknessM / 2 + 0.006);
-        const gripZ = faceSign * (panelThicknessM / 2 + 0.024);
-        addDoorBox(inst.frame, inst.id, `door-handle-plate-${faceName}`, { x: 0.055, y: 0.11, z: 0.012 }, { x: handleX, y: handleY, z: plateZ }, handleMat);
+        const rosetteZ = faceSign * (panelThicknessM / 2 + 0.008);
+        const gripZ = faceSign * (panelThicknessM / 2 + 0.034);
+        addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
         if (inst.params.handleType === "knob") {
-          addDoorBox(inst.frame, inst.id, `door-handle-knob-${faceName}`, { x: 0.058, y: 0.058, z: 0.046 }, { x: handleX, y: handleY, z: gripZ }, handleMat);
+          addDoorSphere(inst.frame, inst.id, `door-handle-knob-${faceName}`, 0.034, { x: handleX, y: handleY, z: gripZ + faceSign * 0.012 }, handleMat);
         } else if (inst.params.handleType === "bar") {
-          addDoorBox(inst.frame, inst.id, `door-handle-bar-${faceName}`, { x: 0.032, y: barHeight, z: 0.032 }, { x: handleX - handleSide * 0.02, y: handleY, z: gripZ }, handleMat);
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-top-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY + barHeight / 2 - 0.035, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-bottom-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY - barHeight / 2 + 0.035, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-grip-${faceName}`, 0.014, barHeight, { x: handleX, y: handleY, z: gripZ + faceSign * 0.016 }, handleMat, "y");
         } else {
-          addDoorBox(inst.frame, inst.id, `door-handle-lever-${faceName}`, { x: leverLength, y: 0.026, z: 0.026 }, { x: handleX - handleSide * leverLength / 2, y: handleY, z: gripZ }, handleMat);
+          addDoorCylinder(inst.frame, inst.id, `door-handle-neck-${faceName}`, 0.012, 0.04, { x: handleX, y: handleY, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-lever-${faceName}`, 0.012, leverLength, { x: handleX - handleSide * leverLength / 2, y: handleY, z: gripZ + faceSign * 0.018 }, handleMat, "x");
         }
       }
     }

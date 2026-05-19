@@ -103,11 +103,7 @@ const resetFrame = (frame: THREE.Group) => {
   }
 };
 
-const getWindowHandleSide = (params: WindowParams) => {
-  if (params.handlePlacement === "left") return -1;
-  if (params.handlePlacement === "right") return 1;
-  return params.swingDirection === "right" ? -1 : 1;
-};
+const getWindowHandleSide = (params: WindowParams) => (params.swingDirection === "right" ? -1 : 1);
 
 const addBox = (
   parent: THREE.Group,
@@ -118,6 +114,26 @@ const addBox = (
 ) => {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material.clone());
   mesh.name = name;
+  mesh.position.set(position.x, position.y, position.z);
+  mesh.userData.kind = "window";
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
+const addCylinder = (
+  parent: THREE.Group,
+  name: string,
+  radius: number,
+  depth: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material,
+  axis: "x" | "y" | "z" = "z"
+) => {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, depth, 18), material.clone());
+  mesh.name = name;
+  if (axis === "x") mesh.rotation.z = Math.PI / 2;
+  if (axis === "z") mesh.rotation.x = Math.PI / 2;
   mesh.position.set(position.x, position.y, position.z);
   mesh.userData.kind = "window";
   mesh.userData.viewDisplaySkipEdges = true;
@@ -178,19 +194,24 @@ const buildWindowFrame = (inst: WindowInstance) => {
   glass.userData.viewDisplaySkipMaterialRestore = true;
   if (inst.params.handleType !== "none") {
     const handleSide = getWindowHandleSide(inst.params);
-    const handleX = handleSide * Math.max(0.045, innerW / 2 - sashW * 1.25);
+    const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, 0.035, Math.max(0.035, innerW / 2 - 0.035));
+    const handleX = handleSide * Math.max(0.035, innerW / 2 - handleOffsetM);
+    const handleMinY = -innerH / 2 + sashW + 0.06;
+    const handleMaxY = innerH / 2 - sashW - 0.06;
+    const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
+    const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : 0;
     const gripH = Math.min(0.22, Math.max(0.15, innerH * 0.24));
     const barH = Math.min(0.34, Math.max(0.2, innerH * 0.34));
     for (const faceSign of [-1, 1] as const) {
       const faceName = faceSign > 0 ? "outer" : "inner";
       const handleZ = sashZ + faceSign * (sashDepth / 2 + 0.012);
-      addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.058, y: gripH * 0.82, z: 0.012 }, { x: handleX, y: 0, z: handleZ }, handleMat);
+      addCylinder(inst.frame, `window-handle-rosette-${faceName}`, 0.026, 0.012, { x: handleX, y: handleY, z: handleZ }, handleMat, "z");
       if (inst.params.handleType === "knob") {
-        addBox(inst.frame, `window-handle-knob-${faceName}`, { x: 0.052, y: 0.052, z: 0.04 }, { x: handleX, y: 0, z: handleZ + faceSign * 0.018 }, handleMat);
+        addBox(inst.frame, `window-handle-knob-${faceName}`, { x: 0.042, y: 0.042, z: 0.034 }, { x: handleX, y: handleY, z: handleZ + faceSign * 0.018 }, handleMat);
       } else if (inst.params.handleType === "bar") {
-        addBox(inst.frame, `window-handle-bar-${faceName}`, { x: 0.028, y: barH, z: 0.032 }, { x: handleX, y: 0, z: handleZ + faceSign * 0.018 }, handleMat);
+        addCylinder(inst.frame, `window-handle-bar-${faceName}`, 0.011, barH, { x: handleX, y: handleY, z: handleZ + faceSign * 0.02 }, handleMat, "y");
       } else {
-        addBox(inst.frame, `window-handle-grip-${faceName}`, { x: 0.028, y: gripH, z: 0.032 }, { x: handleX, y: -0.01, z: handleZ + faceSign * 0.018 }, handleMat);
+        addCylinder(inst.frame, `window-handle-grip-${faceName}`, 0.011, gripH, { x: handleX, y: handleY - 0.01, z: handleZ + faceSign * 0.02 }, handleMat, "y");
       }
     }
   }
@@ -422,6 +443,57 @@ const readablePlanLabelRotation = (rotationRad: number) => {
   return next;
 };
 
+const addWindowDimension = (
+  parent: THREE.Group,
+  args: {
+    a: THREE.Vector3;
+    b: THREE.Vector3;
+    dimA: THREE.Vector3;
+    dimB: THREE.Vector3;
+    textPos: THREE.Vector3;
+    tickAxisA: THREE.Vector3;
+    tickAxisB: THREE.Vector3;
+    label: string;
+    param: WindowDimensionParam;
+    extensionGapM?: number;
+    labelRotationRad?: number;
+  }
+) => {
+  const tick = 0.042;
+  const halfTickA = args.tickAxisA.clone().normalize().multiplyScalar(tick / 2);
+  const halfTickB = args.tickAxisB.clone().normalize().multiplyScalar(tick / 2);
+  const extensionStart = (objectPoint: THREE.Vector3, dimPoint: THREE.Vector3) => {
+    const delta = dimPoint.clone().sub(objectPoint);
+    const distance = delta.length();
+    if (distance < 0.001) return objectPoint.clone();
+    const gap = Math.min(args.extensionGapM ?? 0.045, distance * 0.6);
+    return objectPoint.clone().addScaledVector(delta.multiplyScalar(1 / distance), gap);
+  };
+  const extA = extensionStart(args.a, args.dimA);
+  const extB = extensionStart(args.b, args.dimB);
+  parent.add(
+    createDimensionLine([
+      args.dimA,
+      args.dimB,
+      extA,
+      args.dimA,
+      extB,
+      args.dimB,
+      args.dimA.clone().sub(halfTickA).sub(halfTickB),
+      args.dimA.clone().add(halfTickA).add(halfTickB),
+      args.dimB.clone().sub(halfTickA).sub(halfTickB),
+      args.dimB.clone().add(halfTickA).add(halfTickB)
+    ])
+  );
+  const labelRotationRad = args.labelRotationRad ?? 0;
+  const sprite = createDimensionSprite(args.label, args.param, labelRotationRad);
+  sprite.position.copy(args.textPos);
+  parent.add(sprite);
+  const hit = createDimensionHitSprite(args.param, labelRotationRad);
+  hit.position.copy(args.textPos);
+  parent.add(hit);
+};
+
 const addWidthDimension = (
   parent: THREE.Group,
   args: {
@@ -529,21 +601,46 @@ const rebuildWindowSelection = (
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, innerH / 2 - sashW, innerH / 2, zFront);
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, -innerH / 2, -innerH / 2 + sashW, zFront);
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, -glassH / 2, glassH / 2, zFront);
-  const modelDimY = -halfH - 0.46;
-  addWidthDimension(modelGroup, {
+  const widthDimY = -halfH - 0.28;
+  addWindowDimension(modelGroup, {
     a: new THREE.Vector3(-halfW, -halfH, zFront),
     b: new THREE.Vector3(halfW, -halfH, zFront),
-    dimA: new THREE.Vector3(-halfW, modelDimY, zFront),
-    dimB: new THREE.Vector3(halfW, modelDimY, zFront),
-    widthTextPos: new THREE.Vector3(0, modelDimY + 0.09, zFront),
-    heightTextPos: new THREE.Vector3(-0.16, modelDimY - 0.09, zFront),
-    sillTextPos: new THREE.Vector3(0.18, modelDimY - 0.09, zFront),
+    dimA: new THREE.Vector3(-halfW, widthDimY, zFront),
+    dimB: new THREE.Vector3(halfW, widthDimY, zFront),
+    textPos: new THREE.Vector3(0, widthDimY + 0.09, zFront),
     tickAxisA: new THREE.Vector3(1, 0, 0),
     tickAxisB: new THREE.Vector3(0, 1, 0),
-    widthLabel,
-    heightLabel,
-    sillLabel
+    label: widthLabel,
+    param: "widthMm"
   });
+  const heightDimX = halfW + 0.32;
+  addWindowDimension(modelGroup, {
+    a: new THREE.Vector3(halfW, -halfH, zFront),
+    b: new THREE.Vector3(halfW, halfH, zFront),
+    dimA: new THREE.Vector3(heightDimX, -halfH, zFront),
+    dimB: new THREE.Vector3(heightDimX, halfH, zFront),
+    textPos: new THREE.Vector3(heightDimX + 0.13, 0, zFront),
+    tickAxisA: new THREE.Vector3(0, 1, 0),
+    tickAxisB: new THREE.Vector3(1, 0, 0),
+    label: heightLabel,
+    param: "heightMm"
+  });
+  const sillM = Math.max(0, inst.params.sillHeightMm / 1000);
+  const floorY = -halfH - sillM;
+  if (sillM > 0.001) {
+    const sillDimX = -halfW - 0.32;
+    addWindowDimension(modelGroup, {
+      a: new THREE.Vector3(-halfW, floorY, zFront),
+      b: new THREE.Vector3(-halfW, -halfH, zFront),
+      dimA: new THREE.Vector3(sillDimX, floorY, zFront),
+      dimB: new THREE.Vector3(sillDimX, -halfH, zFront),
+      textPos: new THREE.Vector3(sillDimX - 0.13, floorY + sillM / 2, zFront),
+      tickAxisA: new THREE.Vector3(0, 1, 0),
+      tickAxisB: new THREE.Vector3(1, 0, 0),
+      label: sillLabel,
+      param: "sillHeightMm"
+    });
+  }
   const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
   const modelStackAxis = new THREE.Vector3(0, 0.17, 0);
   const modelHandedness = createWindowSwingControlSprite("toggleHandedness");
@@ -630,7 +727,8 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     swingSide: "inward",
     swingAngleDeg: 90,
     handleType: "lever",
-    handlePlacement: "auto",
+    handleOffsetMm: 70,
+    handleHeightMm: 450,
     materialId: getWindowMaterialOption(null).id
   });
 

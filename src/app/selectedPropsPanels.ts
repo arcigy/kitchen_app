@@ -15,7 +15,6 @@ import type {
   FloorInstance,
   FloorParams,
   LayoutInstance,
-  OpeningHandlePlacement,
   OpeningHandleType,
   SectionInstance,
   SectionParams,
@@ -609,7 +608,8 @@ function appendColumnParameterRows(
 
 type OpeningHandleEditableParams = {
   handleType: OpeningHandleType;
-  handlePlacement: OpeningHandlePlacement;
+  handleOffsetMm: number;
+  handleHeightMm: number;
 };
 
 const HANDLE_TYPE_OPTIONS: Array<{ value: OpeningHandleType; label: string }> = [
@@ -617,12 +617,6 @@ const HANDLE_TYPE_OPTIONS: Array<{ value: OpeningHandleType; label: string }> = 
   { value: "knob", label: "Gula" },
   { value: "bar", label: "Madlo" },
   { value: "none", label: "Bez klucky" }
-];
-
-const HANDLE_PLACEMENT_OPTIONS: Array<{ value: OpeningHandlePlacement; label: string }> = [
-  { value: "auto", label: "Automaticky" },
-  { value: "left", label: "Vlavo" },
-  { value: "right", label: "Vpravo" }
 ];
 
 function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
@@ -641,15 +635,31 @@ function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
   });
   props.row(section, "Typ klucky", typeSelect);
 
-  const placementSelect = document.createElement("select");
-  placementSelect.innerHTML = HANDLE_PLACEMENT_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
-  placementSelect.value = params.handlePlacement;
-  placementSelect.addEventListener("change", () => {
-    const next = HANDLE_PLACEMENT_OPTIONS.find((option) => option.value === placementSelect.value)?.value ?? "auto";
-    params.handlePlacement = next;
-    apply(true, { handlePlacement: next } as Partial<T>);
-  });
-  props.row(section, "Umiestnenie klucky", placementSelect);
+  const numberRow = (label: string, key: "handleOffsetMm" | "handleHeightMm") => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "1";
+    input.value = String(Math.round(Number(params[key] ?? 0)));
+    props.row(section, label, input);
+    const read = () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next)) return false;
+      params[key] = Math.max(0, Math.round(next));
+      return true;
+    };
+    input.addEventListener("input", () => {
+      if (read()) apply(false, { [key]: params[key] } as Partial<T>);
+    });
+    input.addEventListener("change", () => {
+      if (read()) apply(true, { [key]: params[key] } as Partial<T>);
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<T>);
+    });
+  };
+
+  numberRow("Vyska klucky (mm)", "handleHeightMm");
+  numberRow("Odsadenie klucky (mm)", "handleOffsetMm");
 }
 
 function appendWindowParameterRows(
