@@ -539,8 +539,9 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       heightLabel,
       labelRotationRad: planLabelRotationRad
     });
-    const controlSide = inst.params.swingDirection === "right" ? -1 : 1;
-    const controlCenter = new THREE.Vector3(controlSide * Math.min(halfW * 0.34, 0.18), planY, args.planZCenter);
+    const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
+    const controlDepthOffset = halfT + 0.22;
+    const controlCenter = new THREE.Vector3(0, planY, args.planZCenter + controlDepthSide * controlDepthOffset);
     const stackAxis = new THREE.Vector3(0, 0, 1)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
       .normalize()
