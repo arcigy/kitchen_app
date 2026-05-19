@@ -523,14 +523,15 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
         const faceName = faceSign > 0 ? "outer" : "inner";
         const rosetteZ = faceSign * (panelThicknessM / 2 + 0.008);
         const gripZ = faceSign * (panelThicknessM / 2 + 0.034);
-        addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
         if (inst.params.handleType === "knob") {
+          addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
           addDoorSphere(inst.frame, inst.id, `door-handle-knob-${faceName}`, 0.034, { x: handleX, y: handleY, z: gripZ + faceSign * 0.012 }, handleMat);
         } else if (inst.params.handleType === "bar") {
           addDoorCylinder(inst.frame, inst.id, `door-handle-bar-top-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY + barHeight / 2 - 0.035, z: gripZ }, handleMat, "z");
           addDoorCylinder(inst.frame, inst.id, `door-handle-bar-bottom-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY - barHeight / 2 + 0.035, z: gripZ }, handleMat, "z");
           addDoorCylinder(inst.frame, inst.id, `door-handle-bar-grip-${faceName}`, 0.014, barHeight, { x: handleX, y: handleY, z: gripZ + faceSign * 0.016 }, handleMat, "y");
         } else {
+          addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
           addDoorCylinder(inst.frame, inst.id, `door-handle-neck-${faceName}`, 0.012, 0.04, { x: handleX, y: handleY, z: gripZ }, handleMat, "z");
           addDoorCylinder(inst.frame, inst.id, `door-handle-lever-${faceName}`, 0.012, leverLength, { x: handleX - handleSide * leverLength / 2, y: handleY, z: gripZ + faceSign * 0.018 }, handleMat, "x");
         }

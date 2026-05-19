@@ -200,18 +200,35 @@ const buildWindowFrame = (inst: WindowInstance) => {
     const handleMaxY = innerH / 2 - sashW - 0.06;
     const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
     const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : 0;
-    const gripH = Math.min(0.22, Math.max(0.15, innerH * 0.24));
+    const leverH = Math.min(0.18, Math.max(0.12, innerH * 0.2));
     const barH = Math.min(0.34, Math.max(0.2, innerH * 0.34));
+    const plateH = Math.min(0.14, Math.max(0.105, innerH * 0.16));
     for (const faceSign of [-1, 1] as const) {
       const faceName = faceSign > 0 ? "outer" : "inner";
-      const handleZ = sashZ + faceSign * (sashDepth / 2 + 0.012);
-      addCylinder(inst.frame, `window-handle-rosette-${faceName}`, 0.026, 0.012, { x: handleX, y: handleY, z: handleZ }, handleMat, "z");
+      const faceZ = sashZ + faceSign * (sashDepth / 2);
+      const plateZ = faceZ + faceSign * 0.006;
+      const hubZ = faceZ + faceSign * 0.016;
+      const gripZ = faceZ + faceSign * 0.034;
+      const addBackplate = (height: number) => {
+        const half = height / 2;
+        addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.034, y: Math.max(0.02, height - 0.032), z: 0.012 }, { x: handleX, y: handleY, z: plateZ }, handleMat);
+        addCylinder(inst.frame, `window-handle-plate-top-${faceName}`, 0.017, 0.012, { x: handleX, y: handleY + half - 0.016, z: plateZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-plate-bottom-${faceName}`, 0.017, 0.012, { x: handleX, y: handleY - half + 0.016, z: plateZ }, handleMat, "z");
+      };
       if (inst.params.handleType === "knob") {
-        addBox(inst.frame, `window-handle-knob-${faceName}`, { x: 0.042, y: 0.042, z: 0.034 }, { x: handleX, y: handleY, z: handleZ + faceSign * 0.018 }, handleMat);
+        addBackplate(0.088);
+        addCylinder(inst.frame, `window-handle-neck-${faceName}`, 0.009, 0.034, { x: handleX, y: handleY, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-knob-${faceName}`, 0.023, 0.026, { x: handleX, y: handleY, z: gripZ }, handleMat, "z");
       } else if (inst.params.handleType === "bar") {
-        addCylinder(inst.frame, `window-handle-bar-${faceName}`, 0.011, barH, { x: handleX, y: handleY, z: handleZ + faceSign * 0.02 }, handleMat, "y");
+        addCylinder(inst.frame, `window-handle-bar-top-${faceName}`, 0.008, 0.03, { x: handleX, y: handleY + barH / 2 - 0.032, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-bar-bottom-${faceName}`, 0.008, 0.03, { x: handleX, y: handleY - barH / 2 + 0.032, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-bar-grip-${faceName}`, 0.01, barH, { x: handleX, y: handleY, z: gripZ }, handleMat, "y");
       } else {
-        addCylinder(inst.frame, `window-handle-grip-${faceName}`, 0.011, gripH, { x: handleX, y: handleY - 0.01, z: handleZ + faceSign * 0.02 }, handleMat, "y");
+        addBackplate(plateH);
+        addCylinder(inst.frame, `window-handle-hub-${faceName}`, 0.014, 0.018, { x: handleX, y: handleY, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-neck-${faceName}`, 0.008, 0.034, { x: handleX, y: handleY, z: gripZ - faceSign * 0.012 }, handleMat, "z");
+        addBox(inst.frame, `window-handle-lever-${faceName}`, { x: 0.026, y: leverH, z: 0.016 }, { x: handleX, y: handleY - leverH / 2 - 0.026, z: gripZ }, handleMat);
+        addCylinder(inst.frame, `window-handle-lever-end-${faceName}`, 0.013, 0.016, { x: handleX, y: handleY - leverH - 0.026, z: gripZ }, handleMat, "z");
       }
     }
   }
