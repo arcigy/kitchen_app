@@ -30,6 +30,7 @@ type PointerInputHandlersContext = Record<string, any> & {
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
+type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -380,6 +381,32 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return null;
   };
 
+  const pickDoorSwingControlAction = (): DoorSwingControlAction | null => {
+    const inst = ctx.doorInst;
+    if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const action = hit.object.userData.doorSwingAction as DoorSwingControlAction | undefined;
+      if (action && hit.object.userData.kind === "doorSwingControl" && isVisibleThroughDoorSelection(hit.object)) return action;
+    }
+    return null;
+  };
+
+  const applyDoorSwingControlAction = (action: DoorSwingControlAction) => {
+    const inst = ctx.doorInst;
+    if (!inst) return false;
+    if (action === "toggleHandedness") {
+      inst.params.swingDirection = inst.params.swingDirection === "right" ? "left" : "right";
+    } else {
+      inst.params.swingSide = inst.params.swingSide === "outward" ? "inward" : "outward";
+    }
+    ctx.updateDoorTransform(inst);
+    ctx.setSelectedDoor();
+    ctx.mountProps();
+    ctx.commitHistory(ctx.S);
+    return true;
+  };
+
   const beginWindowDimensionEdit = (param: WindowDimensionParam, ev: PointerEvent) => {
     const inst = ctx.windowInst;
     if (!inst) return false;
@@ -457,6 +484,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
     if (ctx.mode === "layout") {
       if (ev.button === 0) {
+        const doorSwingAction = pickDoorSwingControlAction();
+        if (doorSwingAction && applyDoorSwingControlAction(doorSwingAction)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
         const windowDimensionParam = pickWindowDimensionParam();
         if (windowDimensionParam && beginWindowDimensionEdit(windowDimensionParam, ev)) {
           cancelPendingMarquee(ev.pointerId);

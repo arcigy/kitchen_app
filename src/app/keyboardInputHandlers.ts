@@ -27,6 +27,12 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       ev.stopImmediatePropagation();
       return;
     }
+    if ((ev.key === " " || ev.code === "Space") && ev.shiftKey && ctx.isDoorPlacementActive?.() && ctx.flipDoorPlacementSwingSide?.()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      return;
+    }
     if ((ev.key === " " || ev.code === "Space") && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
       ev.preventDefault();
       ev.stopPropagation();

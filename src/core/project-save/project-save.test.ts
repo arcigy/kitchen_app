@@ -392,7 +392,7 @@ describe("project create/save/encryption", () => {
     const layoutState = {
       snapshot: { wallCounter: 1, walls: [], instanceCounter: 1, instances: [], pinnedWallIds: [], pinnedInstanceIds: [], underlayPinned: false, selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] } },
       windows: [{ id: "win7", params: { wall: "back", wallId: "wall1", widthMm: 900, heightMm: 1000, sillHeightMm: 850, centerMm: 1200, frameWidthMm: 70, offsetFromInteriorMm: 20, sashWidthMm: 48, sashProfileDepthMm: 56, frameProfileDepthMm: 72, materialId: "white" } }],
-      doors: [{ id: "door3", params: { wall: "back", wallId: "wall1", widthMm: 880, heightMm: 2100, centerMm: 2400, frameWidthMm: 70, offsetFromInteriorMm: 20, panelThicknessMm: 42, swingDirection: "right", swingAngleDeg: 92, materialId: "white" } }]
+      doors: [{ id: "door3", params: { wall: "back", wallId: "wall1", widthMm: 880, heightMm: 2100, centerMm: 2400, frameWidthMm: 70, offsetFromInteriorMm: 20, panelThicknessMm: 42, swingDirection: "right", swingSide: "outward", swingAngleDeg: 92, materialId: "white" } }]
     };
     const saveA = assembleProjectSaveFile({
       clientId: ctxA.clientId,

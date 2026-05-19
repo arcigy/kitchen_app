@@ -33,6 +33,7 @@ type WallBasis = {
 };
 
 type DoorDimensionParam = "widthMm" | "heightMm";
+type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 const disposeObject = (object: THREE.Object3D) => {
   if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
@@ -160,6 +161,49 @@ const createDimensionHitSprite = (param: DoorDimensionParam, rotationRad = 0) =>
   return sprite;
 };
 
+const createDoorSwingControlSprite = (action: DoorSwingControlAction, rotationRad = 0) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const arrow = action === "toggleHandedness" ? String.fromCharCode(8596) : String.fromCharCode(8597);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "rgba(17, 24, 39, 0.92)";
+    context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+    context.lineWidth = 7;
+    context.beginPath();
+    context.roundRect(9, 9, 110, 110, 18);
+    context.fill();
+    context.stroke();
+    context.font = '700 76px "Arial Narrow", Arial, sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = "#ffffff";
+    context.fillText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      rotation: rotationRad
+    })
+  );
+  sprite.scale.set(0.22, 0.22, 1);
+  sprite.renderOrder = 98;
+  sprite.userData.kind = "doorSwingControl";
+  sprite.userData.doorSwingAction = action;
+  sprite.userData.viewDisplaySkipEdges = true;
+  return sprite;
+};
+
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
@@ -256,6 +300,7 @@ const syncDoorPlanSymbol = (
     yLocal: number;
     zCenter: number;
     swingDirection: DoorParams["swingDirection"];
+    swingSide: DoorParams["swingSide"];
     swingAngleDeg: number;
     frameWidthM?: number;
     panelThicknessM?: number;
@@ -283,8 +328,9 @@ const syncDoorPlanSymbol = (
   const closedLeafInnerZ = Math.max(innerZ, Math.min(outerZ - 0.004, rawClosedLeafInnerZ));
   const closedLeafOuterZ = Math.min(outerZ, Math.max(innerZ + 0.004, rawClosedLeafOuterZ));
   const hingeZ = (closedLeafInnerZ + closedLeafOuterZ) / 2;
+  const sideSign = args.swingSide === "outward" ? 1 : -1;
   const arcStart = args.swingDirection === "right" ? Math.PI : 0;
-  const arcEnd = args.swingDirection === "right" ? Math.PI + angle : -angle;
+  const arcEnd = args.swingDirection === "right" ? Math.PI - sideSign * angle : sideSign * angle;
   const arcEndPoint = new THREE.Vector3(hingeX + Math.cos(arcEnd) * leafRadius, y, hingeZ + Math.sin(arcEnd) * leafRadius);
   const addPlanRect = (x0: number, z0: number, x1: number, z1: number) => [
     new THREE.Vector3(x0, y, z0),
@@ -383,6 +429,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     offsetFromInteriorMm: 20,
     panelThicknessMm: 42,
     swingDirection: "left",
+    swingSide: "inward",
     swingAngleDeg: 90,
     materialId: getDoorMaterialOption(null).id
   });
@@ -472,6 +519,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       yLocal: planY,
       zCenter: args.planZCenter,
       swingDirection: inst.params.swingDirection,
+      swingSide: inst.params.swingSide,
       swingAngleDeg: inst.params.swingAngleDeg,
       frameWidthM: frameW,
       panelThicknessM: Math.max(0.006, inst.params.panelThicknessMm / 1000),
@@ -495,6 +543,13 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       heightLabel,
       labelRotationRad: planLabelRotationRad
     });
+    const controlX = halfW + 0.34;
+    const handedness = createDoorSwingControlSprite("toggleHandedness", planLabelRotationRad);
+    handedness.position.set(controlX, planY, args.planZCenter - 0.16);
+    plan.add(handedness);
+    const side = createDoorSwingControlSprite("toggleSwingSide", planLabelRotationRad);
+    side.position.set(controlX, planY, args.planZCenter + 0.16);
+    plan.add(side);
     inst.selection.add(plan);
     inst.selection.visible = selected;
   };
@@ -537,6 +592,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       yLocal: planYLocal,
       zCenter: planZCenter,
       swingDirection: inst.params.swingDirection,
+      swingSide: inst.params.swingSide,
       swingAngleDeg: inst.params.swingAngleDeg,
       frameWidthM: frameW,
       panelThicknessM,
@@ -624,6 +680,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       yLocal: 0.078,
       zCenter: 0,
       swingDirection: draft.swingDirection,
+      swingSide: draft.swingSide,
       swingAngleDeg: draft.swingAngleDeg,
       frameWidthM: Math.max(0.004, draft.frameWidthMm / 1000),
       panelThicknessM: Math.max(0.006, draft.panelThicknessMm / 1000),
@@ -653,7 +710,20 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     });
     if (lastPreviewWallId && lastPreviewPointMm) updateDoorPlacementPreview(lastPreviewWallId, lastPreviewPointMm);
     ctx.mountProps();
-    ctx.setUnderlayStatus(`Door: otvaranie ${placementDraft.swingDirection === "right" ? "prave" : "lave"}. Space = otocit, Esc = ukoncit.`);
+    ctx.setUnderlayStatus(`Door: otvaranie ${placementDraft.swingDirection === "right" ? "prave" : "lave"}. Space = lave/prave, Shift+Space = dnu/von, Esc = ukoncit.`);
+    return true;
+  }
+
+  function flipDoorPlacementSwingSide() {
+    if (!placementActive) return false;
+    const draft = getPlacementDraft();
+    placementDraft = ctx.clampDoorParams({
+      ...draft,
+      swingSide: draft.swingSide === "outward" ? "inward" : "outward"
+    });
+    if (lastPreviewWallId && lastPreviewPointMm) updateDoorPlacementPreview(lastPreviewWallId, lastPreviewPointMm);
+    ctx.mountProps();
+    ctx.setUnderlayStatus(`Door: smer ${placementDraft.swingSide === "outward" ? "von" : "dovnutra"}. Shift+Space = dnu/von, Esc = ukoncit.`);
     return true;
   }
 
@@ -685,7 +755,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     ctx.setSelectedDoor();
     ctx.mountProps();
     ctx.commitHistory();
-    ctx.setUnderlayStatus("Door: klikni dalsie miesto na stene. Space = otocit, Esc = ukoncit.");
+    ctx.setUnderlayStatus("Door: klikni dalsie miesto na stene. Space = lave/prave, Shift+Space = dnu/von, Esc = ukoncit.");
     return true;
   }
 
@@ -700,7 +770,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     placementDraft = ctx.clampDoorParams(ctx.doorInst ? structuredClone(ctx.doorInst.params) : defaultDraftParams());
     placementActive = true;
     const selectedWallId = ctx.getSelectedWallId();
-    ctx.setUnderlayStatus(selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = otocit." : "Door: uprav parametre a klikni miesto na stene. Space = otocit.");
+    ctx.setUnderlayStatus(selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = lave/prave, Shift+Space = dnu/von." : "Door: uprav parametre a klikni miesto na stene. Space = lave/prave, Shift+Space = dnu/von.");
     ctx.mountProps();
   }
 
@@ -714,6 +784,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     getDoorPlacementParams: () => (placementActive ? getPlacementDraft() : null),
     updateDoorPlacementParams,
     rotateDoorPlacement,
+    flipDoorPlacementSwingSide,
     isDoorPlacementActive: () => placementActive,
     syncDoorSelectionVisuals
   };

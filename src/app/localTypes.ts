@@ -42,6 +42,7 @@ export type WindowInstance = {
 };
 
 export type DoorSwingDirection = "left" | "right";
+export type DoorSwingSide = "inward" | "outward";
 
 export type DoorParams = {
   wall: WallId;
@@ -53,6 +54,7 @@ export type DoorParams = {
   offsetFromInteriorMm: number;
   panelThicknessMm: number;
   swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
   swingAngleDeg: number;
   materialId: string;
 };

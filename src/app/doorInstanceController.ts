@@ -21,6 +21,7 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     offsetFromInteriorMm: 20,
     panelThicknessMm: 42,
     swingDirection: "left",
+    swingSide: "inward",
     swingAngleDeg: 90,
     materialId: getDoorMaterialOption(null).id
   });
@@ -95,6 +96,7 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     p.offsetFromInteriorMm = nonNegativeMm(p.offsetFromInteriorMm, 20);
     p.panelThicknessMm = positiveMm(p.panelThicknessMm, 42);
     p.swingDirection = p.swingDirection === "right" ? "right" : "left";
+    p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
     p.swingAngleDeg = Math.max(1, Math.min(180, Math.round(Number(p.swingAngleDeg) || 90)));
     p.materialId = getDoorMaterialOption(p.materialId).id;
     return p;

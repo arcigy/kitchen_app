@@ -1666,6 +1666,7 @@ export function startApp(initialArgs: AppArgs) {
   const getDoorPlacementParams = () => createDoorControlsControllerResult?.getDoorPlacementParams() ?? null;
   const updateDoorPlacementParams = (...args: Parameters<DoorControlsApi["updateDoorPlacementParams"]>) => requireDoorControls().updateDoorPlacementParams(...args);
   const rotateDoorPlacement = () => createDoorControlsControllerResult?.rotateDoorPlacement() ?? false;
+  const flipDoorPlacementSwingSide = () => createDoorControlsControllerResult?.flipDoorPlacementSwingSide() ?? false;
   const isDoorPlacementActive = () => createDoorControlsControllerResult?.isDoorPlacementActive() ?? false;
   const syncDoorSelectionVisuals = (...args: Parameters<DoorControlsApi["syncDoorSelectionVisuals"]>) => createDoorControlsControllerResult?.syncDoorSelectionVisuals(...args);
   const updateDoorTransform = (...args: Parameters<DoorControlsApi["updateDoorTransform"]>) => requireDoorControls().updateDoorTransform(...args);
@@ -2930,6 +2931,7 @@ export function startApp(initialArgs: AppArgs) {
     redo,
     renderFloorBoundaryEdit,
     rotateDoorPlacement,
+    flipDoorPlacementSwingSide,
     sectionDraw,
     sections,
     selectedInstanceId,
