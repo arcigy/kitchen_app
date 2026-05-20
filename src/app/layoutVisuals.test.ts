@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { createWallSnapMarkers } from "./layoutVisuals";
-import type { WallInstance } from "./localTypes";
+import { createSelectionHighlights, createWallSnapMarkers } from "./layoutVisuals";
+import type { FloorInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 const createWall = (): WallInstance =>
   ({
@@ -50,5 +50,47 @@ describe("createWallSnapMarkers", () => {
     expect(wallSnapMarkers.visible).toBe(true);
     expect(wallSnapMarkers.children).toHaveLength(3);
     expect(wallSnapMarkers.children.map((child) => child.userData.snapKind).sort()).toEqual(["axis", "endpoint", "endpoint"]);
+  });
+});
+
+describe("createSelectionHighlights", () => {
+  it("highlights selected walls as wall lines without drawing solved outline boxes", () => {
+    const layoutRoot = new THREE.Group();
+    const wall = createWall();
+    const selectedWallIds = new Set(["wall"]);
+    const solvedOutlines = new Map([
+      [
+        "wall",
+        [
+          { x: -0.075, z: 0 },
+          { x: 0.075, z: 0 },
+          { x: 0.075, z: 5 },
+          { x: 0.075, z: 5.03 },
+          { x: -0.075, z: 5.18 },
+          { x: -0.075, z: 5 }
+        ]
+      ]
+    ]);
+    const { selectionHighlights, updateSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getWalls: () => [wall],
+      getSelectedWallIds: () => selectedWallIds,
+      getSelectedInstanceIds: () => new Set<string>(),
+      getWallSolvedOutlines: () => solvedOutlines,
+      getSelectedKind: () => "wall",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => [] as LayoutInstance[],
+      getModuleLocalBackCenter: () => new THREE.Vector3()
+    });
+
+    updateSelectionHighlights();
+
+    expect(selectionHighlights.visible).toBe(true);
+    expect(selectionHighlights.children).toHaveLength(1);
+    const line = selectionHighlights.children[0] as THREE.Line;
+    const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+    expect(position.count).toBe(2);
   });
 });
