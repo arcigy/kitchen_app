@@ -184,10 +184,27 @@ export function createSelectionHighlights(args: {
     for (const id of args.getSelectedWallIds()) {
       const wall = args.getWalls().find((item) => item.id === id) ?? null;
       if (!wall) continue;
-      const pts = [
-        new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000),
-        new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000)
-      ];
+      const solvedOutline = args.getWallSolvedOutlines().get(id) ?? null;
+      let pts: THREE.Vector3[];
+      if (solvedOutline && solvedOutline.length >= 3) {
+        pts = solvedOutline.map((p) => new THREE.Vector3(p.x, 0.018, p.z));
+        pts.push(new THREE.Vector3(solvedOutline[0].x, 0.018, solvedOutline[0].z));
+      } else {
+        const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000);
+        const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000);
+        const d = b.clone().sub(a);
+        if (d.lengthSq() < 1e-10) continue;
+        d.normalize();
+        const n = new THREE.Vector3(-d.z, 0, d.x);
+        const half = Math.max(1, wall.params.thicknessMm / 2) / 1000;
+        pts = [
+          a.clone().addScaledVector(n, half),
+          a.clone().addScaledVector(n, -half),
+          b.clone().addScaledVector(n, -half),
+          b.clone().addScaledVector(n, half),
+          a.clone().addScaledVector(n, half)
+        ];
+      }
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(
         geom,

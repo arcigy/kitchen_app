@@ -54,7 +54,7 @@ describe("createWallSnapMarkers", () => {
 });
 
 describe("createSelectionHighlights", () => {
-  it("highlights selected walls as wall lines without drawing solved outline boxes", () => {
+  it("highlights selected walls with the wall outline, not a selection box", () => {
     const layoutRoot = new THREE.Group();
     const wall = createWall();
     const selectedWallIds = new Set(["wall"]);
@@ -91,6 +91,8 @@ describe("createSelectionHighlights", () => {
     expect(selectionHighlights.children).toHaveLength(1);
     const line = selectionHighlights.children[0] as THREE.Line;
     const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
-    expect(position.count).toBe(2);
+    expect(position.count).toBe(7);
+    expect(position.getX(0)).toBeCloseTo(-0.075);
+    expect(position.getZ(4)).toBeCloseTo(5.18);
   });
 });

@@ -209,9 +209,6 @@ export function createSelectionController(ctx: SelectionControllerContext) {
       return;
     }
 
-    ctx.selectedWallBox = new THREE.BoxHelper(wall.root, 0x3ddc97);
-    ctx.selectedWallBox.name = "wallSelectionBox";
-    ctx.scene.add(ctx.selectedWallBox);
     afterSelectionChanged({ wallSnapId: id });
   }
 
