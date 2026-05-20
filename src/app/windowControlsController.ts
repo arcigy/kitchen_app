@@ -300,42 +300,20 @@ const syncPlanSymbol = (
   group.add(line);
 };
 
-const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0, height = 0.2) => {
+const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0, height = 0.14) => {
   const canvas = document.createElement("canvas");
-  canvas.width = 448;
-  canvas.height = 160;
+  canvas.width = 360;
+  canvas.height = 96;
   const context = canvas.getContext("2d");
   if (context) {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.save();
     context.translate(canvas.width / 2, canvas.height / 2);
-    context.font = '700 72px ISOCPEUR, "Arial Narrow", Arial, sans-serif';
+    context.font = '400 54px ISOCPEUR, "Arial Narrow", Arial, sans-serif';
     context.textAlign = "center";
     context.textBaseline = "middle";
-    const metrics = context.measureText(text);
-    const boxW = Math.min(canvas.width - 24, Math.max(150, metrics.width + 64));
-    const boxH = 106;
-    const x = -boxW / 2;
-    const y = -boxH / 2;
-    const r = 18;
-    context.beginPath();
-    context.moveTo(x + r, y);
-    context.lineTo(x + boxW - r, y);
-    context.quadraticCurveTo(x + boxW, y, x + boxW, y + r);
-    context.lineTo(x + boxW, y + boxH - r);
-    context.quadraticCurveTo(x + boxW, y + boxH, x + boxW - r, y + boxH);
-    context.lineTo(x + r, y + boxH);
-    context.quadraticCurveTo(x, y + boxH, x, y + boxH - r);
-    context.lineTo(x, y + r);
-    context.quadraticCurveTo(x, y, x + r, y);
-    context.closePath();
-    context.fillStyle = "rgba(255, 255, 255, 0.94)";
-    context.fill();
-    context.lineWidth = 5;
-    context.strokeStyle = "rgba(47, 33, 0, 0.5)";
-    context.stroke();
-    context.lineWidth = 9;
-    context.strokeStyle = "rgba(255, 255, 255, 0.98)";
+    context.lineWidth = 6;
+    context.strokeStyle = "rgba(255, 255, 255, 0.96)";
     context.strokeText(text, 0, 0);
     context.fillStyle = "#111827";
     context.fillText(text, 0, 0);
@@ -357,7 +335,7 @@ const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotat
   return sprite;
 };
 
-const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0, height = 0.2) => {
+const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0, height = 0.14) => {
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       color: 0xffffff,
@@ -368,8 +346,8 @@ const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0, 
       rotation: rotationRad
     })
   );
-  const scale = height / 0.2;
-  sprite.scale.set(0.72 * scale, 0.3 * scale, 1);
+  const scale = height / 0.14;
+  sprite.scale.set(0.62 * scale, 0.22 * scale, 1);
   sprite.renderOrder = 113;
   sprite.userData.kind = "windowDimensionEdit";
   sprite.userData.windowDimensionParam = param;
@@ -613,7 +591,7 @@ const addWidthDimension = (
     ])
   );
   const labelRotationRad = args.labelRotationRad ?? 0;
-  const labelHeight = args.labelHeight ?? 0.2;
+  const labelHeight = args.labelHeight ?? 0.14;
   const addEditableLabel = (text: string, position: THREE.Vector3, param: WindowDimensionParam) => {
     const sprite = createDimensionSprite(text, param, labelRotationRad, labelHeight);
     sprite.position.copy(position);
@@ -746,16 +724,15 @@ const rebuildWindowSelection = (
     b: new THREE.Vector3(halfW, planY, z1),
     dimA: new THREE.Vector3(-halfW, planY, dimZ),
     dimB: new THREE.Vector3(halfW, planY, dimZ),
-    widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.18),
-    heightTextPos: new THREE.Vector3(-0.46, planY, dimZ + 0.18),
-    sillTextPos: new THREE.Vector3(0.46, planY, dimZ + 0.18),
+    widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.09),
+    heightTextPos: new THREE.Vector3(-0.16, planY, dimZ + 0.09),
+    sillTextPos: new THREE.Vector3(0.18, planY, dimZ + 0.09),
     tickAxisA: new THREE.Vector3(1, 0, 0),
     tickAxisB: new THREE.Vector3(0, 0, 1),
     widthLabel,
     heightLabel,
     sillLabel,
-    labelRotationRad: planLabelRotationRad,
-    labelHeight: 0.34
+    labelRotationRad: planLabelRotationRad
   });
   const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
   const controlDepthOffset = halfT + 0.22;
