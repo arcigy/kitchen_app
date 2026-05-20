@@ -1070,6 +1070,17 @@ export function createWallController(ctx: WallControllerContext) {
       return windowOpeningClips.some(isSegmentForClip);
     };
 
+    const pointsClose = (a: { x: number; z: number }, b: { x: number; z: number }, eps = 1e-5) =>
+      Math.hypot(a.x - b.x, a.z - b.z) <= eps;
+    const segmentsClose = (
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      c: { x: number; z: number },
+      d: { x: number; z: number }
+    ) => (pointsClose(a, c) && pointsClose(b, d)) || (pointsClose(a, d) && pointsClose(b, c));
+    const isInternalJoinBaseSegment = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+      solved.joinPolys.some((poly) => poly.length === 3 && segmentsClose(a, b, poly[0], poly[1]));
+
     const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02, opacity = 0.98) => {
       if (pts.length < 2) return null;
       const linePts: THREE.Vector3[] = [];
@@ -1077,7 +1088,7 @@ export function createWallController(ctx: WallControllerContext) {
       for (let i = 0; i < count; i += 1) {
         const a = pts[i];
         const b = pts[(i + 1) % pts.length];
-        if (!a || !b || isWindowOpeningOutlineSegment(a, b)) continue;
+        if (!a || !b || isWindowOpeningOutlineSegment(a, b) || isInternalJoinBaseSegment(a, b)) continue;
         linePts.push(new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z));
       }
       if (linePts.length < 2) return null;

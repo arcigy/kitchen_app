@@ -67,6 +67,21 @@ const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: 
     outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
   }) as any;
 
+const lineHasSegment = (
+  line: THREE.Line,
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  eps = 1e-5
+) => {
+  const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const close = (i: number, p: { x: number; z: number }) =>
+    Math.abs(position.getX(i) - p.x) <= eps && Math.abs(position.getZ(i) - p.z) <= eps;
+  for (let i = 0; i + 1 < position.count; i += 2) {
+    if ((close(i, a) && close(i + 1, b)) || (close(i, b) && close(i + 1, a))) return true;
+  }
+  return false;
+};
+
 describe("wall plan fill", () => {
   it("keeps shape geometry Z coordinates on the same floorplan side", () => {
     const point = new THREE.Vector3(1.25, 2.5, 0).applyEuler(new THREE.Euler(WALL_PLAN_FILL_ROTATION_X, 0, 0));
@@ -154,6 +169,22 @@ describe("wall plan fill", () => {
     expect(secondFaces).toBeTruthy();
     expect(firstFaces!.renderOrder).toBeLessThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
     expect((firstFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+  });
+
+  it("omits the capped wall end base line in angled floorplan joins", () => {
+    const ctx = createTestWallContext();
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    ctx.walls.push(vertical, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const hiddenBaseStart = { x: -0.075, z: 5 };
+    const hiddenBaseEnd = { x: 0.075, z: 5 };
+    for (const line of ctx.wallPlanMeshes.values()) {
+      expect(lineHasSegment(line, hiddenBaseStart, hiddenBaseEnd)).toBe(false);
+    }
   });
 
   it("butts branch wall meshes into the main wall face without openings", () => {

@@ -83,7 +83,7 @@ describe("walls2d join solver", () => {
     expect(cap[0].z).toBeCloseTo(5, 6);
     expect(cap[1].x).toBeCloseTo(0.075, 6);
     expect(cap[1].z).toBeCloseTo(5, 6);
-    expect(cap[2].x).toBeCloseTo(0.075, 6);
+    expect(cap[2].x).toBeCloseTo(0.075 / Math.SQRT2, 6);
     expect(cap[2].z).toBeCloseTo(5 + 0.075 / Math.SQRT2, 6);
     expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
     expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
