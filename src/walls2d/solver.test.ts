@@ -106,6 +106,25 @@ describe("walls2d join solver", () => {
     expect(min).toBeLessThanOrEqual(0.075);
   });
 
+  test("fills orthogonal side-butt caps so right-angle floorplans do not step", () => {
+    const top = wall("top", P(0, 5), P(5, 5), 150);
+    const right = wall("right", P(5, 5), P(5, 0), 150);
+    const bottom = wall("bottom", P(0, 0), P(5, 0), 150);
+    const res = solveWallNetwork([top, right, bottom], { nodeTolM: 1e-6 });
+
+    expect(res.joinPolys).toHaveLength(2);
+    expect(res.joinPolys[0]).toHaveLength(4);
+    expect(res.joinPolys[0][0]).toEqual({ x: 5, z: 5.075 });
+    expect(res.joinPolys[0][1]).toEqual({ x: 5.075, z: 5.075 });
+    expect(res.joinPolys[0][2]).toEqual({ x: 5.075, z: 4.925 });
+    expect(res.joinPolys[0][3]).toEqual({ x: 5, z: 4.925 });
+    expect(res.joinPolys[1]).toHaveLength(4);
+    expect(res.joinPolys[1][0]).toEqual({ x: 5.075, z: 0 });
+    expect(res.joinPolys[1][1]).toEqual({ x: 5.075, z: -0.075 });
+    expect(res.joinPolys[1][2]).toEqual({ x: 4.925, z: -0.075 });
+    expect(res.joinPolys[1][3]).toEqual({ x: 4.925, z: 0 });
+  });
+
   test("Case 6: T join (branch cut to main)", () => {
     // Main wall is split at node (0,0) so node degree becomes 3.
     const main0 = wall("m0", P(-5, 0), P(0, 0), 150);

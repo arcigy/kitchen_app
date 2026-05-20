@@ -147,7 +147,7 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
   }
 
   let joinPoly: Point[] | undefined;
-  if (best && Math.abs(dot(mainDir, branchDir)) > 0.15) {
+  if (best) {
     const leftProjection = dot(sub(best.left, mainNode), beyondMainEndDir);
     const rightProjection = dot(sub(best.right, mainNode), beyondMainEndDir);
     const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
