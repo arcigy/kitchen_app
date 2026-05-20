@@ -409,6 +409,32 @@ const createDimensionTube = (a: THREE.Vector3, b: THREE.Vector3, radius: number,
   return mesh;
 };
 
+const dimensionSegmentRotation = (delta: THREE.Vector3) =>
+  Math.abs(delta.y) >= Math.abs(delta.z)
+    ? Math.atan2(delta.y, delta.x)
+    : Math.atan2(delta.z, delta.x);
+
+const createDimensionRibbon = (a: THREE.Vector3, b: THREE.Vector3, thickness: number, color: number, renderOrder: number) => {
+  const delta = b.clone().sub(a);
+  const length = delta.length();
+  if (length < 0.0001) return null;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      color,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+      depthWrite: false,
+      rotation: dimensionSegmentRotation(delta)
+    })
+  );
+  sprite.position.copy(a).add(b).multiplyScalar(0.5);
+  sprite.scale.set(length, thickness, 1);
+  sprite.renderOrder = renderOrder;
+  sprite.userData.viewDisplaySkipEdges = true;
+  return sprite;
+};
+
 const createDimensionLine = (points: THREE.Vector3[], color = WINDOW_DIMENSION_COLOR) => {
   const group = new THREE.Group();
   group.renderOrder = 108;
@@ -421,8 +447,12 @@ const createDimensionLine = (points: THREE.Vector3[], color = WINDOW_DIMENSION_C
   line.userData.viewDisplaySkipEdges = true;
   group.add(line);
   for (let i = 0; i + 1 < points.length; i += 2) {
+    const ribbonHalo = createDimensionRibbon(points[i]!, points[i + 1]!, 0.022, WINDOW_DIMENSION_HALO_COLOR, 106);
+    const ribbonStroke = createDimensionRibbon(points[i]!, points[i + 1]!, 0.011, color, 111);
     const halo = createDimensionTube(points[i]!, points[i + 1]!, WINDOW_DIMENSION_HALO_RADIUS, WINDOW_DIMENSION_HALO_COLOR, 107);
     const stroke = createDimensionTube(points[i]!, points[i + 1]!, WINDOW_DIMENSION_LINE_RADIUS, color, 110);
+    if (ribbonHalo) group.add(ribbonHalo);
+    if (ribbonStroke) group.add(ribbonStroke);
     if (halo) group.add(halo);
     if (stroke) group.add(stroke);
   }
@@ -665,13 +695,13 @@ const rebuildWindowSelection = (
     label: widthLabel,
     param: "widthMm"
   });
-  const heightDimX = halfW + 0.32;
+  const heightDimX = -halfW - 0.32;
   addWindowDimension(modelGroup, {
-    a: new THREE.Vector3(halfW, -halfH, zFront),
-    b: new THREE.Vector3(halfW, halfH, zFront),
+    a: new THREE.Vector3(-halfW, -halfH, zFront),
+    b: new THREE.Vector3(-halfW, halfH, zFront),
     dimA: new THREE.Vector3(heightDimX, -halfH, zFront),
     dimB: new THREE.Vector3(heightDimX, halfH, zFront),
-    textPos: new THREE.Vector3(heightDimX + 0.13, 0, zFront),
+    textPos: new THREE.Vector3(heightDimX - 0.13, 0, zFront),
     tickAxisA: new THREE.Vector3(0, 1, 0),
     tickAxisB: new THREE.Vector3(1, 0, 0),
     label: heightLabel,
@@ -680,17 +710,18 @@ const rebuildWindowSelection = (
   const sillM = Math.max(0, inst.params.sillHeightMm / 1000);
   const floorY = -halfH - sillM;
   if (sillM > 0.001) {
-    const sillDimX = -halfW - 0.32;
+    const sillDimX = halfW + 0.24;
     addWindowDimension(modelGroup, {
-      a: new THREE.Vector3(-halfW, floorY, zFront),
-      b: new THREE.Vector3(-halfW, -halfH, zFront),
+      a: new THREE.Vector3(halfW, floorY, zFront),
+      b: new THREE.Vector3(halfW, -halfH, zFront),
       dimA: new THREE.Vector3(sillDimX, floorY, zFront),
       dimB: new THREE.Vector3(sillDimX, -halfH, zFront),
-      textPos: new THREE.Vector3(sillDimX - 0.13, floorY + sillM / 2, zFront),
+      textPos: new THREE.Vector3(sillDimX + 0.13, floorY + sillM / 2, zFront),
       tickAxisA: new THREE.Vector3(0, 1, 0),
       tickAxisB: new THREE.Vector3(1, 0, 0),
       label: sillLabel,
-      param: "sillHeightMm"
+      param: "sillHeightMm",
+      extensionGapM: 0
     });
   }
   const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
