@@ -1148,7 +1148,9 @@ export function createWallController(ctx: WallControllerContext) {
       wallPlanGroup.add(mesh);
     }
 
+    const selectedWallId = ctx.getSelectedKind() === "wall" ? ctx.getSelectedWallId() : null;
     for (const wall of solved.walls) {
+      if (wall.id !== selectedWallId) continue;
       const line = makePlanPolyline(wall.outline, 0x3f4652, 0.019, 0.72);
       if (!line) continue;
       line.name = `wallPlan_faces_${wall.id}`;

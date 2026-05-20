@@ -2337,6 +2337,7 @@ export function startApp(initialArgs: AppArgs) {
     layoutPanel,
     pinnedInstanceIds,
     pinnedWallIds,
+    rebuildWallPlanMesh,
     scene,
     selectedInstanceIds,
     selectedWallIds,

@@ -154,8 +154,12 @@ describe("wall plan fill", () => {
     expect(position.getZ(2)).toBeCloseTo(0.09);
   });
 
-  it("keeps individual wall face lines visible through joined floorplan walls", () => {
+  it("shows individual wall face lines only for the selected wall", () => {
     const ctx = createTestWallContext();
+    let selectedKind: string | null = null;
+    let selectedWallId: string | null = null;
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
     const first = createTestWallInstance("first", { x: -5000, z: 0 }, { x: 0, z: 0 });
     const second = createTestWallInstance("second", { x: 0, z: 0 }, { x: -4330, z: 2500 });
     ctx.walls.push(first, second);
@@ -163,12 +167,19 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_first")).toBeUndefined();
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_second")).toBeUndefined();
+
+    selectedKind = "wall";
+    selectedWallId = "second";
+    controller.rebuildWallPlanMesh();
+
     const firstFaces = ctx.wallPlanMeshes.get("wallPlan_faces_first");
     const secondFaces = ctx.wallPlanMeshes.get("wallPlan_faces_second");
-    expect(firstFaces).toBeTruthy();
+    expect(firstFaces).toBeUndefined();
     expect(secondFaces).toBeTruthy();
-    expect(firstFaces!.renderOrder).toBeLessThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
-    expect((firstFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+    expect(secondFaces!.renderOrder).toBeLessThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
+    expect((secondFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
   });
 
   it("omits the capped wall end base line in angled floorplan joins", () => {
