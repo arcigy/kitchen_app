@@ -1,4 +1,4 @@
-import { add, dist, intersectLines, mul, type Point } from "./geom";
+import { add, clamp, dist, intersectLines, mul, sub, type Point } from "./geom";
 import { rawEndCorners, sideLineAtNode, spineDir, type Wall } from "./model";
 
 export type WallEnd = "a" | "b";
@@ -20,7 +20,7 @@ export type WallSolved = {
 
 type Node = { id: string; p: Point; incident: Array<{ wall: Wall; end: WallEnd }> };
 
-export const DEFAULT_WALL_MITER_LIMIT = 0.75;
+export const DEFAULT_WALL_MITER_LIMIT = 1.25;
 
 function key(p: Point, tol = 1e-3) {
   // tol in meters -> quantize
@@ -73,10 +73,17 @@ function solveMiterAtNode(
   const da = spineDir(a, endA);
   const db = spineDir(b, endB);
 
-  const aLeftP = add(aLeft.p, mul(da, limA));
-  const aRightP = add(aRight.p, mul(da, limA));
-  const bLeftP = add(bLeft.p, mul(db, limB));
-  const bRightP = add(bRight.p, mul(db, limB));
+  const clampOn = (p0: Point, dir: Point, target: Point, maxLen: number) => {
+    const v = sub(target, p0);
+    const along = v.x * dir.x + v.z * dir.z;
+    const t = clamp(along, 0, maxLen);
+    return add(p0, mul(dir, t));
+  };
+
+  const aLeftP = clampOn(aLeft.p, da, iLeft.p, limA);
+  const aRightP = clampOn(aRight.p, da, iRight.p, limA);
+  const bLeftP = clampOn(bLeft.p, db, iLeft.p, limB);
+  const bRightP = clampOn(bRight.p, db, iRight.p, limB);
 
   const joinPoly: Point[] = [aLeftP, bLeftP, bRightP, aRightP];
 

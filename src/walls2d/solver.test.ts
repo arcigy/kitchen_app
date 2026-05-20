@@ -55,7 +55,7 @@ describe("walls2d join solver", () => {
     expect(solvedB.a.right).toEqual(solvedA.b.right);
   });
 
-  test("caps overlong miters with a bevel so shallow angles do not create long spikes", () => {
+  test("caps overlong miters with a bevel while keeping a short spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
@@ -65,8 +65,9 @@ describe("walls2d join solver", () => {
     expect(solvedA.b.join).toBe("bevel");
     expect(solvedB.a.join).toBe("bevel");
     expect(res.joinPolys).toHaveLength(1);
-    expect(solvedA.b.left.x).toBeCloseTo(-0.1125, 6);
-    expect(solvedA.b.right.x).toBeCloseTo(-0.1125, 6);
+    expect(solvedA.b.left.x).toBeCloseTo(-0.1875, 6);
+    expect(solvedA.b.right.x).toBeCloseTo(0, 6);
+    expect(solvedA.b.left.x).toBeLessThan(solvedA.b.right.x - 0.1);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {
