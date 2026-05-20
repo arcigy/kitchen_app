@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { solveWallNetwork } from "./solver";
 import type { Wall } from "./model";
-import { dist } from "./geom";
+import { cross, dist, sub } from "./geom";
 
 const P = (x: number, z: number) => ({ x, z });
 
@@ -66,7 +66,7 @@ describe("walls2d join solver", () => {
     expect(solvedB.a.join).toBe("butt");
     expect(res.joinPolys).toHaveLength(1);
     expect(res.joinPolys[0]).toHaveLength(4);
-    expect(Math.max(...res.joinPolys[0].map((point) => point.x))).toBeLessThanOrEqual(0.1875);
+    expect(Math.abs(cross(sub(res.joinPolys[0][2], res.joinPolys[0][1]), sub(solvedB.b.right, solvedB.a.right)))).toBeLessThan(1e-8);
     expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
     expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
   });
@@ -88,6 +88,7 @@ describe("walls2d join solver", () => {
     expect(cap[2].z).toBeCloseTo(5.031066017177982, 6);
     expect(cap[3].x).toBeCloseTo(0.075, 6);
     expect(cap[3].z).toBeCloseTo(5, 6);
+    expect(Math.abs(cross(sub(cap[2], cap[1]), sub(solvedBranch.b.left, solvedBranch.a.left)))).toBeLessThan(1e-8);
     expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
     expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
   });
