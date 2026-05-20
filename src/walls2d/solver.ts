@@ -153,7 +153,6 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
     const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
     const protrudingProjection = Math.max(leftProjection, rightProjection);
     if (protrudingProjection > 0.001) {
-      const capTip = rawBranch[protrudingSide];
       const protrudingPoint = protrudingSide === "left" ? best.left : best.right;
       const cutCorner = best.side === "left" ? rawMain.left : rawMain.right;
       const oppositeCorner = best.side === "left" ? rawMain.right : rawMain.left;
@@ -166,7 +165,7 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
         ? clamp(dot(sub(oppositeIntersect.p, mainNode), beyondMainEndDir), 0, maxCapProjection)
         : Math.min(maxCapProjection, Math.max(protrudingProjection, main.thicknessM));
       const extendedOppositeCorner = add(oppositeCorner, mul(beyondMainEndDir, oppositeProjection));
-      joinPoly = [oppositeCorner, extendedOppositeCorner, capTip, protrudingPoint, cutCorner];
+      joinPoly = [oppositeCorner, extendedOppositeCorner, protrudingPoint, cutCorner];
     }
   }
 
