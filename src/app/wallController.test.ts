@@ -139,6 +139,23 @@ describe("wall plan fill", () => {
     expect(position.getZ(2)).toBeCloseTo(0.09);
   });
 
+  it("keeps individual wall face lines visible through joined floorplan walls", () => {
+    const ctx = createTestWallContext();
+    const first = createTestWallInstance("first", { x: -5000, z: 0 }, { x: 0, z: 0 });
+    const second = createTestWallInstance("second", { x: 0, z: 0 }, { x: -4330, z: 2500 });
+    ctx.walls.push(first, second);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const firstFaces = ctx.wallPlanMeshes.get("wallPlan_faces_first");
+    const secondFaces = ctx.wallPlanMeshes.get("wallPlan_faces_second");
+    expect(firstFaces).toBeTruthy();
+    expect(secondFaces).toBeTruthy();
+    expect(firstFaces!.renderOrder).toBeLessThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
+    expect((firstFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+  });
+
   it("uses solved wall outlines for clean 3D corner joins without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });

@@ -1070,7 +1070,7 @@ export function createWallController(ctx: WallControllerContext) {
       return windowOpeningClips.some(isSegmentForClip);
     };
 
-    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02) => {
+    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02, opacity = 0.98) => {
       if (pts.length < 2) return null;
       const linePts: THREE.Vector3[] = [];
       const count = pts.length >= 3 ? pts.length : pts.length - 1;
@@ -1084,7 +1084,7 @@ export function createWallController(ctx: WallControllerContext) {
       const geom = new THREE.BufferGeometry().setFromPoints(linePts);
       return new THREE.LineSegments(
         geom,
-        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, depthWrite: false })
       );
     };
 
@@ -1131,6 +1131,17 @@ export function createWallController(ctx: WallControllerContext) {
       mesh.userData.viewDisplaySkipEdges = true;
       wallJoinMeshes.push(mesh);
       wallPlanGroup.add(mesh);
+    }
+
+    for (const wall of solved.walls) {
+      const line = makePlanPolyline(wall.outline, 0x3f4652, 0.019, 0.72);
+      if (!line) continue;
+      line.name = `wallPlan_faces_${wall.id}`;
+      line.userData.kind = "wallPlanWallFaces";
+      line.userData.wallId = wall.id;
+      line.renderOrder = 18;
+      wallPlanMeshes.set(line.name, line);
+      wallPlanGroup.add(line);
     }
 
     let unionLineIndex = 0;
