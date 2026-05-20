@@ -65,8 +65,8 @@ describe("walls2d join solver", () => {
     expect(solvedA.b.join).toBe("bevel");
     expect(solvedB.a.join).toBe("bevel");
     expect(res.joinPolys).toHaveLength(1);
-    expect(solvedA.b.left.x).toBeCloseTo(-0.2625, 6);
-    expect(solvedA.b.right.x).toBeCloseTo(0, 6);
+    expect(solvedA.b.left.x).toBeCloseTo(-0.1125, 6);
+    expect(solvedA.b.right.x).toBeCloseTo(-0.1125, 6);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {

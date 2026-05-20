@@ -752,7 +752,10 @@ export function createWallController(ctx: WallControllerContext) {
       const dz = point.z - origin.z;
       return new THREE.Vector2(dx * d.x + dz * d.z, dx * left.x + dz * left.z);
     });
+    return makeVerticalPrismGeometryFromContour(contour, heightM);
+  }
 
+  function makeVerticalPrismGeometryFromContour(contour: THREE.Vector2[], heightM: number) {
     const filtered: THREE.Vector2[] = [];
     for (const point of contour) {
       const prev = filtered[filtered.length - 1];
@@ -797,6 +800,17 @@ export function createWallController(ctx: WallControllerContext) {
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
     return geometry;
+  }
+
+  function makeWallJoinPrismFromOutline(outline: Array<{ x: number; z: number }>, heightM: number) {
+    if (outline.length < 3) return null;
+    const origin = new THREE.Vector3();
+    for (const point of outline) origin.add(new THREE.Vector3(point.x, 0, point.z));
+    origin.multiplyScalar(1 / outline.length);
+    const contour = outline.map((point) => new THREE.Vector2(point.x - origin.x, point.z - origin.z));
+    const geometry = makeVerticalPrismGeometryFromContour(contour, heightM);
+    if (!geometry) return null;
+    return { geometry, origin };
   }
 
   function removeWallCutoutReveal(mesh: THREE.Mesh) {
@@ -885,7 +899,7 @@ export function createWallController(ctx: WallControllerContext) {
     }
     wallPlanMeshes.clear();
     for (const m of wallJoinMeshes.splice(0, wallJoinMeshes.length)) {
-      wallPlanGroup.remove(m);
+      m.parent?.remove(m);
       m.geometry.dispose();
       if (Array.isArray(m.material)) {
         for (const material of m.material) material.dispose();
@@ -904,6 +918,22 @@ export function createWallController(ctx: WallControllerContext) {
     // Always keep per-wall solved outlines for hit-testing/export/debug.
     for (const w of solved.walls) wallSolvedOutlines.set(w.id, w.outline);
     if (ctx.getSelectedKind() === "wall" && ctx.getSelectedWallId()) showWallSnapMarkersFor(ctx.getSelectedWallId());
+
+    const joinHeightM = Math.max(0.001, ...walls.map((wall) => Math.max(1, wall.params.heightMm ?? wallDefault.heightMm) / 1000));
+    solved.joinPolys.forEach((poly, index) => {
+      const prism = makeWallJoinPrismFromOutline(poly, joinHeightM);
+      if (!prism) return;
+      const mesh = new THREE.Mesh(prism.geometry, createWallBodyMaterial());
+      mesh.name = index === 0 ? "wallJoin3d" : `wallJoin3d_${index}`;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.position.set(prism.origin.x, joinHeightM / 2, prism.origin.z);
+      mesh.visible = ctx.getViewMode() === "3d";
+      mesh.userData.kind = "wallJoin";
+      mesh.userData.viewDisplaySkipEdges = ctx.getViewMode() === "2d";
+      wallJoinMeshes.push(mesh);
+      layoutRoot.add(mesh);
+    });
 
     // Render as a single union polygon to automatically trim overlaps/spikes at joins (CAD-like).
     const toRing = (poly: Array<{ x: number; z: number }>) => {

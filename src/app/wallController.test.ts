@@ -184,4 +184,20 @@ describe("wall plan fill", () => {
     expect(branchMinZ).toBeCloseTo(-0.075, 5);
     expect(branch.mesh.userData.wallCutoutBounds).toHaveLength(1);
   });
+
+  it("adds a 3D bevel filler when a wall join miter is capped", () => {
+    const ctx = createTestWallContext();
+    const first = createTestWallInstance("first", { x: -5000, z: 0 }, { x: 0, z: 0 });
+    const second = createTestWallInstance("second", { x: 0, z: 0 }, { x: -4330, z: 2500 });
+    ctx.walls.push(first, second);
+
+    const controller = createWallController(ctx);
+    controller.rebuildWallPlanMesh();
+
+    const joinMesh = ctx.wallJoinMeshes.find((mesh) => mesh.name === "wallJoin3d");
+    expect(joinMesh).toBeTruthy();
+    expect(joinMesh!.parent).toBe(ctx.layoutRoot);
+    expect(joinMesh!.visible).toBe(true);
+    expect((joinMesh!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+  });
 });
