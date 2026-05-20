@@ -23,7 +23,7 @@ import type {
   WindowInstance,
   WindowParams
 } from "./localTypes";
-import { DOOR_MATERIAL_OPTIONS } from "./doorMaterials";
+import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { createWallMaterialPicker } from "./wallMaterialPicker";
 import { getWallMaterialOption } from "./wallMaterials";
@@ -948,9 +948,11 @@ function appendDoorParameterRows(
 
   const material = document.createElement("select");
   material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
+  params.materialId = getDoorMaterialOption(params.materialId).id;
   material.value = params.materialId;
   material.addEventListener("change", () => {
-    params.materialId = material.value;
+    params.materialId = getDoorMaterialOption(material.value).id;
+    material.value = params.materialId;
     apply(true, { materialId: material.value });
   });
   props.row(section, "Material", material);

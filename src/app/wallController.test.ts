@@ -89,6 +89,33 @@ describe("wall plan fill", () => {
     expect((body as THREE.MeshBasicMaterial).color.getHex()).toBe(getWallMaterialOption("wall.beige").color);
   });
 
+  it("uses the selected wall material color in floorplan fill", () => {
+    const ctx = createTestWallContext();
+    ctx.walls.push({
+      id: "w1",
+      params: {
+        thicknessMm: 180,
+        heightMm: 2600,
+        materialId: "wall.beige",
+        justification: "center",
+        exteriorSign: 1,
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 4000, z: 0 }
+      },
+      heightMm: 2600,
+      root: new THREE.Group(),
+      mesh: new THREE.Mesh(new THREE.BoxGeometry(4, 2.6, 0.18), new THREE.MeshBasicMaterial()),
+      outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
+    } as any);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const fill = ctx.wallJoinMeshes.find((mesh) => mesh.name === "wallPlanFill_w1");
+    expect(fill).toBeTruthy();
+    expect((fill!.material as THREE.MeshBasicMaterial).color.getHex()).toBe(getWallMaterialOption("wall.beige").color);
+  });
+
   it("keeps wall face lines through the window opening in floorplan", () => {
     const ctx = createTestWallContext();
     ctx.getWindowInst = () =>

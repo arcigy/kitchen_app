@@ -835,6 +835,7 @@ export function createWallController(ctx: WallControllerContext) {
         halfW: number;
         halfT: number;
         faceHalfT: number;
+        wallId: string;
         corners: Array<{ x: number; z: number }>;
       }> = [];
 
@@ -875,7 +876,7 @@ export function createWallController(ctx: WallControllerContext) {
           center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
         ].map((point) => ({ x: point.x, z: point.z }));
 
-        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
+        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, wallId, corners });
       };
 
       for (const windowInst of getWindowInsts()) {
@@ -964,7 +965,7 @@ export function createWallController(ctx: WallControllerContext) {
       );
     };
 
-    const makePlanFillMesh = (rings: Array<Array<[number, number]>>, y = 0.01) => {
+    const makePlanFillMesh = (rings: Array<Array<[number, number]>>, color: number, y = 0.01) => {
       if (!rings || rings.length === 0) return null;
 
       const toVec2Ring = (ring: Array<[number, number]>) => {
@@ -986,7 +987,7 @@ export function createWallController(ctx: WallControllerContext) {
       const mesh = new THREE.Mesh(
         geom,
         new THREE.MeshBasicMaterial({
-          color: 0xb8c0cb,
+          color,
           transparent: false,
           opacity: 1,
           depthTest: false,
@@ -1000,10 +1001,44 @@ export function createWallController(ctx: WallControllerContext) {
       return mesh;
     };
 
-    for (const rings of fillSource) {
-      const mesh = makePlanFillMesh(rings);
+    const getWallPlanColor = (wallId: string | null | undefined) => {
+      const wall = wallId ? walls.find((item) => item.id === wallId) ?? null : null;
+      return getWallMaterialOption(wall?.params.materialId).color;
+    };
+
+    for (const wall of solved.walls) {
+      if (wall.outline.length < 3) continue;
+      let wallFillSource: WallPlanMultiPolygon = [[toRing(wall.outline)]];
+      const wallOpeningPolys: WallPlanMultiPolygon[] = windowOpeningClips
+        .filter((clip) => clip.wallId === wall.id)
+        .map((clip) => [[toRing(clip.corners)]]);
+      if (wallOpeningPolys.length > 0) {
+        try {
+          wallFillSource = polygonClipper.difference(wallFillSource, ...wallOpeningPolys);
+        } catch {
+          wallFillSource = [[toRing(wall.outline)]];
+        }
+      }
+      const color = getWallPlanColor(wall.id);
+      for (const rings of wallFillSource) {
+        const mesh = makePlanFillMesh(rings, color);
+        if (!mesh) continue;
+        mesh.name = `wallPlanFill_${wall.id}`;
+        mesh.userData.kind = "wallPlanFill";
+        mesh.userData.wallId = wall.id;
+        mesh.userData.viewDisplaySkipEdges = true;
+        wallJoinMeshes.push(mesh);
+        wallPlanGroup.add(mesh);
+      }
+    }
+
+    const joinColor = getWallPlanColor(walls[0]?.id ?? null);
+    for (const poly of solved.joinPolys) {
+      if (poly.length < 3) continue;
+      const mesh = makePlanFillMesh([toRing(poly)], joinColor, 0.0105);
       if (!mesh) continue;
-      mesh.name = "wallPlanFill";
+      mesh.name = "wallPlanJoinFill";
+      mesh.userData.kind = "wallPlanJoinFill";
       mesh.userData.viewDisplaySkipEdges = true;
       wallJoinMeshes.push(mesh);
       wallPlanGroup.add(mesh);

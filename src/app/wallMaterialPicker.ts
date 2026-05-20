@@ -13,10 +13,12 @@ function colorToCss(color: number) {
 export function createWallMaterialPicker(options: WallMaterialPickerOptions) {
   const wrap = document.createElement("div");
   wrap.className = "wall-color-swatches";
-  wrap.style.display = "flex";
+  wrap.style.display = "grid";
+  wrap.style.gridTemplateColumns = "repeat(3, 22px)";
   wrap.style.alignItems = "center";
-  wrap.style.gap = "6px";
-  wrap.style.minHeight = "28px";
+  wrap.style.gap = "5px";
+  wrap.style.minHeight = "49px";
+  wrap.style.maxWidth = "76px";
 
   let selectedId = options.mixed ? "" : getWallMaterialOption(options.value).id;
   const buttons: HTMLButtonElement[] = [];
@@ -35,8 +37,8 @@ export function createWallMaterialPicker(options: WallMaterialPickerOptions) {
     button.title = option.name;
     button.setAttribute("aria-label", option.name);
     button.dataset.wallMaterialId = option.id;
-    button.style.width = "24px";
-    button.style.height = "24px";
+    button.style.width = "22px";
+    button.style.height = "22px";
     button.style.padding = "0";
     button.style.boxSizing = "border-box";
     button.style.borderRadius = "999px";

@@ -32,6 +32,19 @@ type WallBasis = {
   thicknessM: number;
 };
 
+const markIfcDoorPart = (object: THREE.Object3D, doorId: string, objectType: string) => {
+  object.userData.kind = "door";
+  object.userData.doorId = doorId;
+  object.userData.ifc = {
+    className: "IfcDoor",
+    predefinedType: "DOOR",
+    elementId: doorId,
+    objectType,
+    name: `Door ${doorId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "door", "ifc", "IfcDoor"]));
+};
+
 type DoorDimensionParam = "widthMm" | "heightMm";
 type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
@@ -90,8 +103,7 @@ const addDoorBox = (
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material.clone());
   mesh.name = name;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "door";
-  mesh.userData.doorId = doorId;
+  markIfcDoorPart(mesh, doorId, name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
@@ -112,8 +124,7 @@ const addDoorCylinder = (
   if (axis === "x") mesh.rotation.z = Math.PI / 2;
   if (axis === "z") mesh.rotation.x = Math.PI / 2;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "door";
-  mesh.userData.doorId = doorId;
+  markIfcDoorPart(mesh, doorId, name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
@@ -130,8 +141,7 @@ const addDoorSphere = (
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material.clone());
   mesh.name = name;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "door";
-  mesh.userData.doorId = doorId;
+  markIfcDoorPart(mesh, doorId, name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;

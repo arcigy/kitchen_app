@@ -105,6 +105,20 @@ const resetFrame = (frame: THREE.Group) => {
 
 const getWindowHandleSide = (params: WindowParams) => (params.swingDirection === "right" ? -1 : 1);
 
+const markIfcWindowPart = (object: THREE.Object3D, windowId: string | undefined, objectType: string) => {
+  if (!windowId) return;
+  object.userData.kind = "window";
+  object.userData.windowId = windowId;
+  object.userData.ifc = {
+    className: "IfcWindow",
+    predefinedType: "WINDOW",
+    elementId: windowId,
+    objectType,
+    name: `Window ${windowId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "window", "ifc", "IfcWindow"]));
+};
+
 const addBox = (
   parent: THREE.Group,
   name: string,
@@ -115,7 +129,7 @@ const addBox = (
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material.clone());
   mesh.name = name;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "window";
+  markIfcWindowPart(mesh, String(parent.userData.windowId ?? ""), name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
@@ -135,7 +149,7 @@ const addCylinder = (
   if (axis === "x") mesh.rotation.z = Math.PI / 2;
   if (axis === "z") mesh.rotation.x = Math.PI / 2;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "window";
+  markIfcWindowPart(mesh, String(parent.userData.windowId ?? ""), name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
