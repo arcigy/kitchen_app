@@ -1,5 +1,5 @@
 import { add, clamp, dist, dot, intersectLines, mul, sub, type Point } from "./geom";
-import { rawEndCorners, sideLineAtNode, spineDir, type Wall } from "./model";
+import { leftNormal, offsetsM, rawEndCorners, spineDir, type Wall } from "./model";
 
 export type WallEnd = "a" | "b";
 
@@ -50,22 +50,36 @@ function sortByJoinPriority<T extends { wall: Wall; end: WallEnd }>(items: T[]) 
     .map((entry) => entry.item);
 }
 
+function sideLineAtSolvedNode(w: Wall, end: WallEnd, side: "left" | "right", node: Point) {
+  const nL = leftNormal(w);
+  const offs = offsetsM(w);
+  const off = side === "left" ? offs.left : offs.right;
+  return { p: add(node, mul(nL, off)), d: spineDir(w, end) };
+}
+
+function rawEndCornersAtSolvedNode(w: Wall, node: Point): { left: Point; right: Point } {
+  const nL = leftNormal(w);
+  const offs = offsetsM(w);
+  return { left: add(node, mul(nL, offs.left)), right: add(node, mul(nL, offs.right)) };
+}
+
 function solveMiterAtNode(
   a: Wall,
   endA: WallEnd,
   b: Wall,
   endB: WallEnd,
+  node: Point,
   opts: { miterLimit: number }
 ): { aEnd: WallSolvedEnd; bEnd: WallSolvedEnd } {
-  const rawA = rawEndCorners(a, endA);
-  const rawB = rawEndCorners(b, endB);
+  const rawA = rawEndCornersAtSolvedNode(a, node);
+  const rawB = rawEndCornersAtSolvedNode(b, node);
 
   const limA = Math.max(0.001, a.thicknessM * opts.miterLimit);
   const limB = Math.max(0.001, b.thicknessM * opts.miterLimit);
-  const aLeft = sideLineAtNode(a, endA, "left");
-  const aRight = sideLineAtNode(a, endA, "right");
-  const bLeft = sideLineAtNode(b, endB, "left");
-  const bRight = sideLineAtNode(b, endB, "right");
+  const aLeft = sideLineAtSolvedNode(a, endA, "left", node);
+  const aRight = sideLineAtSolvedNode(a, endA, "right", node);
+  const bLeft = sideLineAtSolvedNode(b, endB, "left", node);
+  const bRight = sideLineAtSolvedNode(b, endB, "right", node);
   const iLeft = intersectLines(aLeft, bLeft);
   const iRight = intersectLines(aRight, bRight);
 
@@ -109,9 +123,9 @@ function solveMiterAtNode(
   return { aEnd, bEnd };
 }
 
-function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, branch: Wall, endB: WallEnd) {
+function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, branch: Wall, endB: WallEnd, node: Point) {
   // Keep main continuous; cut branch end to main boundaries (butt).
-  const rawB = rawEndCorners(branch, endB);
+  const rawB = rawEndCornersAtSolvedNode(branch, node);
   const sides: Array<"left" | "right"> = ["left", "right"];
 
   let best: { bOuter: "left" | "right"; mOuter: "left" | "right"; out: Point; inn: Point; cost: number } | null =
@@ -120,10 +134,10 @@ function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, br
     for (const mOuter of sides) {
       const bInner = bOuter === "left" ? "right" : "left";
       const mInner = mOuter === "left" ? "right" : "left";
-      const bOut = sideLineAtNode(branch, endB, bOuter);
-      const bIn = sideLineAtNode(branch, endB, bInner);
-      const mOut = sideLineAtNode(main0, end0, mOuter);
-      const mIn = sideLineAtNode(main0, end0, mInner);
+      const bOut = sideLineAtSolvedNode(branch, endB, bOuter, node);
+      const bIn = sideLineAtSolvedNode(branch, endB, bInner, node);
+      const mOut = sideLineAtSolvedNode(main0, end0, mOuter, node);
+      const mIn = sideLineAtSolvedNode(main0, end0, mInner, node);
       const iOut = intersectLines(bOut, mOut);
       const iIn = intersectLines(bIn, mIn);
       if (!iOut || !iIn) continue;
@@ -138,20 +152,19 @@ function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, br
   return { branchEnd };
 }
 
-function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, endBranch: WallEnd) {
-  const rawMain = rawEndCorners(main, endMain);
-  const rawBranch = rawEndCorners(branch, endBranch);
+function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, endBranch: WallEnd, node: Point) {
+  const rawMain = rawEndCornersAtSolvedNode(main, node);
+  const rawBranch = rawEndCornersAtSolvedNode(branch, node);
   const branchDir = spineDir(branch, endBranch);
   const mainDir = spineDir(main, endMain);
   const beyondMainEndDir = mul(mainDir, -1);
-  const mainNode = endMain === "a" ? main.a : main.b;
-  const branchLeft = sideLineAtNode(branch, endBranch, "left");
-  const branchRight = sideLineAtNode(branch, endBranch, "right");
+  const branchLeft = sideLineAtSolvedNode(branch, endBranch, "left", node);
+  const branchRight = sideLineAtSolvedNode(branch, endBranch, "right", node);
   const sides: Array<"left" | "right"> = ["left", "right"];
 
   let best: { side: "left" | "right"; left: Point; right: Point; cost: number } | null = null;
   for (const side of sides) {
-    const cutLine = sideLineAtNode(main, endMain, side);
+    const cutLine = sideLineAtSolvedNode(main, endMain, side, node);
     const iLeft = intersectLines(branchLeft, cutLine);
     const iRight = intersectLines(branchRight, cutLine);
     if (!iLeft || !iRight) continue;
@@ -168,7 +181,7 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
     const cutCorner = best.side === "left" ? rawMain.left : rawMain.right;
     const clampObliqueEnd = Math.abs(dot(mainDir, branchDir)) > 0.15;
     const clampPastEnd = (point: Point) => {
-      const projection = dot(sub(point, mainNode), beyondMainEndDir);
+      const projection = dot(sub(point, node), beyondMainEndDir);
       return clampObliqueEnd && projection > 0.001 ? cutCorner : point;
     };
     const left = clampPastEnd(best.left);
@@ -176,8 +189,8 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
     branchEnd = { left, right, join: "butt" as const };
 
     if (!clampObliqueEnd) {
-      const leftProjection = dot(sub(best.left, mainNode), beyondMainEndDir);
-      const rightProjection = dot(sub(best.right, mainNode), beyondMainEndDir);
+      const leftProjection = dot(sub(best.left, node), beyondMainEndDir);
+      const rightProjection = dot(sub(best.right, node), beyondMainEndDir);
       const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
       const protrudingProjection = Math.max(leftProjection, rightProjection);
       if (protrudingProjection > 0.001) {
@@ -233,13 +246,12 @@ export function solveWallNetwork(
   const nodeTolM = opts.nodeTolM ?? 0.02;
   const miterLimit = opts.miterLimit ?? DEFAULT_WALL_MITER_LIMIT;
 
-  const nodesMap = new Map<string, Node>();
+  const nodes: Node[] = [];
   const pushNode = (p: Point, wall: Wall, end: WallEnd) => {
-    const k = key(p, nodeTolM);
-    let n = nodesMap.get(k);
+    let n = nodes.find((candidate) => dist(candidate.p, p) <= nodeTolM);
     if (!n) {
-      n = { id: k, p, incident: [] };
-      nodesMap.set(k, n);
+      n = { id: key(p, nodeTolM), p, incident: [] };
+      nodes.push(n);
     }
     n.incident.push({ wall, end });
   };
@@ -260,7 +272,6 @@ export function solveWallNetwork(
 
   const joinPolys: Point[][] = [];
 
-  const nodes = Array.from(nodesMap.values());
   for (const node of nodes) {
     const inc = node.incident.filter(joinEnabled);
     if (inc.length < 2) continue;
@@ -273,11 +284,11 @@ export function solveWallNetwork(
       const sa = solvedEnds.get(A.wall.id)!;
       const sb = solvedEnds.get(B.wall.id)!;
       if (joinPriority(A) !== joinPriority(B)) {
-        const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
+        const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end, node.p);
         sa[A.end] = res.mainEnd;
         sb[B.end] = res.branchEnd;
       } else {
-        const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+        const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, node.p, { miterLimit });
         sa[A.end] = res.aEnd;
         sb[B.end] = res.bEnd;
         if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
@@ -298,7 +309,7 @@ export function solveWallNetwork(
         const k = [0, 1, 2].find((x) => x !== pair![0] && x !== pair![1])!;
         const [m0, m1] = sortByJoinPriority([inc[pair[0]], inc[pair[1]]]);
         const br = inc[k];
-        const res = solveTAtNode(m0.wall, m0.end, m1.wall, m1.end, br.wall, br.end);
+        const res = solveTAtNode(m0.wall, m0.end, m1.wall, m1.end, br.wall, br.end, node.p);
         const sbr = solvedEnds.get(br.wall.id)!;
         sbr[br.end] = res.branchEnd;
       }

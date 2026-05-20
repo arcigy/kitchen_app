@@ -131,6 +131,22 @@ describe("walls2d join solver", () => {
     expect(solvedLeft.a.right.z).toBeGreaterThan(0.09);
   });
 
+  test("nearby room-closing endpoints solve from one shared corner", () => {
+    const left = wall("left", P(0, 0), P(0, 5), 150);
+    const top = wall("top", P(0, 5), P(5, 4.2), 150);
+    const right = wall("right", P(5, 4.2), P(4.3, 2.2), 150);
+    const bottom = wall("bottom", P(4.3, 2.2), P(0.018, -0.012), 150);
+    const res = solveWallNetwork([left, top, right, bottom], { nodeTolM: 0.03 });
+    const solvedLeft = res.walls.find((w) => w.id === "left")!;
+    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+
+    expect(solvedLeft.a.join).toBe("miter");
+    expect(solvedBottom.b.join).toBe("miter");
+    expect(solvedLeft.a.left).toEqual(solvedBottom.b.left);
+    expect(solvedLeft.a.right).toEqual(solvedBottom.b.right);
+    expect(Math.max(dist(P(0, 0), solvedLeft.a.left), dist(P(0, 0), solvedLeft.a.right))).toBeLessThan(0.2);
+  });
+
   test("equal-priority closed angled outline keeps ordinary corner joins", () => {
     const left = wall("left", P(0, 0), P(0, 5), 150);
     const top = wall("top", P(0, 5), P(4, 5), 150);

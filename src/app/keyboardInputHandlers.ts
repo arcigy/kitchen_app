@@ -475,7 +475,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
             const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
             // close loop when near chain start
-            const closeTolM = 0.03;
+            const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
             const cs = ctx.wallDraw.chainStart;
             const closes =
               !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;

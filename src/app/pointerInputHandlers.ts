@@ -1191,16 +1191,19 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         const a = ctx.wallDraw.a;
         if (!a) return;
-        const b0 = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
-        const b = shouldAxisSnap ? ctx.snapAxisXZ(a, b0, true) : b0;
+        const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
+        const cs = ctx.wallDraw.chainStart;
+        const rawB = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
+        const closesRaw =
+          !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
+        const b0 = closesRaw && cs ? cs.clone() : rawB;
+        const b = shouldAxisSnap && !closesRaw ? ctx.snapAxisXZ(a, b0, true) : b0;
         const bMm = { x: Math.round(b.x * 1000), z: Math.round(b.z * 1000) };
         const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
         // Snap to chain start when closing loop.
-        const closeTolM = 0.03;
-        const cs = ctx.wallDraw.chainStart;
         const closes =
-          !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;
+          closesRaw || (!!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM);
         const end = closes && cs ? cs.clone() : bExact;
 
         // Finish wall
@@ -2234,8 +2237,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.hideHoverCursor();
       }
 
-      const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap;
-      const b0 = activeSnap ? activeSnap.point : hitPoint;
+      const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
+      const cs = ctx.wallDraw.chainStart;
+      const rawB = activeSnap ? activeSnap.point : hitPoint;
+      const closesRaw =
+        !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
+      const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap && !closesRaw;
+      const b0 = closesRaw && cs ? cs : rawB;
       const b = shouldAxisSnap ? ctx.snapAxisXZ(ctx.wallDraw.a, b0, true) : b0;
       ctx.wallDraw.hoverB = b.clone();
       ctx.updateWallMeshWithJustification(
