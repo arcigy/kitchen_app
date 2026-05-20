@@ -194,8 +194,11 @@ const buildWindowFrame = (inst: WindowInstance) => {
   glass.userData.viewDisplaySkipMaterialRestore = true;
   if (inst.params.handleType !== "none") {
     const handleSide = getWindowHandleSide(inst.params);
-    const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, 0.035, Math.max(0.035, innerW / 2 - 0.035));
-    const handleX = handleSide * Math.max(0.035, innerW / 2 - handleOffsetM);
+    const handleInsetM = inst.params.handleType === "bar" ? 0.012 : 0.019;
+    const minHandleOffsetM = Math.min(sashW / 2, handleInsetM);
+    const maxHandleOffsetM = Math.max(minHandleOffsetM, sashW - handleInsetM);
+    const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, minHandleOffsetM, maxHandleOffsetM);
+    const handleX = handleSide * (glassW / 2 + handleOffsetM);
     const handleMinY = -innerH / 2 + sashW + 0.06;
     const handleMaxY = innerH / 2 - sashW - 0.06;
     const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
@@ -744,7 +747,7 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     swingSide: "inward",
     swingAngleDeg: 90,
     handleType: "lever",
-    handleOffsetMm: 70,
+    handleOffsetMm: 24,
     handleHeightMm: 450,
     materialId: getWindowMaterialOption(null).id
   });

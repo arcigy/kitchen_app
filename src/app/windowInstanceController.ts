@@ -49,7 +49,7 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     swingSide: "inward",
     swingAngleDeg: 90,
     handleType: "lever",
-    handleOffsetMm: 70,
+    handleOffsetMm: 24,
     handleHeightMm: 450,
     materialId: getWindowMaterialOption(null).id
   });
@@ -132,7 +132,11 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
     p.swingAngleDeg = Math.max(1, Math.min(180, positiveMm(p.swingAngleDeg, 90)));
     p.handleType = p.handleType === "none" || p.handleType === "knob" || p.handleType === "bar" ? p.handleType : "lever";
-    p.handleOffsetMm = nonNegativeMm(p.handleOffsetMm, 70);
+    p.handleOffsetMm = nonNegativeMm(p.handleOffsetMm, 24);
+    const handleInsetMm = 20;
+    const minHandleOffsetMm = Math.min(Math.round(p.sashWidthMm / 2), handleInsetMm);
+    const maxHandleOffsetMm = Math.max(minHandleOffsetMm, p.sashWidthMm - handleInsetMm);
+    p.handleOffsetMm = Math.min(Math.max(p.handleOffsetMm, minHandleOffsetMm), maxHandleOffsetMm);
     p.handleHeightMm = nonNegativeMm(p.handleHeightMm, 450);
     p.materialId = getWindowMaterialOption(p.materialId).id;
     return p;
