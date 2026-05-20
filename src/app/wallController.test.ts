@@ -156,7 +156,7 @@ describe("wall plan fill", () => {
     expect((firstFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
   });
 
-  it("uses solved wall outlines for clean 3D corner joins without openings", () => {
+  it("butts branch wall meshes into the main wall face without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
     const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
@@ -168,11 +168,11 @@ describe("wall plan fill", () => {
 
     const branchVertices = getWorldVertices(branch.mesh);
     const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
-    const hasMiterLeft = branchVertices.some((point) => Math.abs(point.x + 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
-    const hasMiterRight = branchVertices.some((point) => Math.abs(point.x - 0.075) < 1e-5 && Math.abs(point.z + 0.075) < 1e-5);
-    expect(branchMinZ).toBeCloseTo(-0.075, 5);
-    expect(hasMiterLeft).toBe(true);
-    expect(hasMiterRight).toBe(true);
+    const hasButtLeft = branchVertices.some((point) => Math.abs(point.x + 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
+    const hasButtRight = branchVertices.some((point) => Math.abs(point.x - 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
+    expect(branchMinZ).toBeCloseTo(0.075, 5);
+    expect(hasButtLeft).toBe(true);
+    expect(hasButtRight).toBe(true);
   });
 
   it("keeps corner wall meshes with openings trimmed to the solved join", () => {
@@ -198,23 +198,23 @@ describe("wall plan fill", () => {
 
     const branchVertices = getWorldVertices(branch.mesh);
     const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
-    expect(branchMinZ).toBeCloseTo(-0.075, 5);
+    expect(branchMinZ).toBeCloseTo(0.075, 5);
     expect(branch.mesh.userData.wallCutoutBounds).toHaveLength(1);
   });
 
-  it("adds a 3D bevel filler when a wall join miter is capped", () => {
+  it("keeps angled branch start seams on the main wall face", () => {
     const ctx = createTestWallContext();
-    const first = createTestWallInstance("first", { x: -5000, z: 0 }, { x: 0, z: 0 });
-    const second = createTestWallInstance("second", { x: 0, z: 0 }, { x: -4330, z: 2500 });
-    ctx.walls.push(first, second);
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    ctx.walls.push(vertical, diagonal);
 
     const controller = createWallController(ctx);
-    controller.rebuildWallPlanMesh();
+    controller.rebuildWall(diagonal);
 
-    const joinMesh = ctx.wallJoinMeshes.find((mesh) => mesh.name === "wallJoin3d");
-    expect(joinMesh).toBeTruthy();
-    expect(joinMesh!.parent).toBe(ctx.layoutRoot);
-    expect(joinMesh!.visible).toBe(true);
-    expect((joinMesh!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+    const diagonalVertices = getWorldVertices(diagonal.mesh);
+    const seamVertices = diagonalVertices.filter((point) => Math.abs(point.x - 0.075) < 1e-5 && point.z > 4.7);
+    expect(seamVertices.length).toBeGreaterThan(0);
+    expect(Math.min(...seamVertices.map((point) => point.z))).toBeLessThan(4.85);
+    expect(Math.max(...seamVertices.map((point) => point.z))).toBeGreaterThan(5);
   });
 });

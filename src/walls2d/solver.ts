@@ -1,4 +1,4 @@
-import { add, clamp, dist, intersectLines, mul, sub, type Point } from "./geom";
+import { add, clamp, dist, dot, intersectLines, mul, sub, type Point } from "./geom";
 import { rawEndCorners, sideLineAtNode, spineDir, type Wall } from "./model";
 
 export type WallEnd = "a" | "b";
@@ -122,6 +122,33 @@ function solveTAtNode(main0: Wall, end0: WallEnd, main1: Wall, end1: WallEnd, br
   return { branchEnd };
 }
 
+function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, endBranch: WallEnd) {
+  const rawMain = rawEndCorners(main, endMain);
+  const rawBranch = rawEndCorners(branch, endBranch);
+  const branchDir = spineDir(branch, endBranch);
+  const branchLeft = sideLineAtNode(branch, endBranch, "left");
+  const branchRight = sideLineAtNode(branch, endBranch, "right");
+  const sides: Array<"left" | "right"> = ["left", "right"];
+
+  let best: { left: Point; right: Point; cost: number } | null = null;
+  for (const side of sides) {
+    const cutLine = sideLineAtNode(main, endMain, side);
+    const iLeft = intersectLines(branchLeft, cutLine);
+    const iRight = intersectLines(branchRight, cutLine);
+    if (!iLeft || !iRight) continue;
+    const leftAlong = dot(sub(iLeft.p, branchLeft.p), branchDir);
+    const rightAlong = dot(sub(iRight.p, branchRight.p), branchDir);
+    const behindPenalty = Math.max(0, -leftAlong) + Math.max(0, -rightAlong);
+    const cost = behindPenalty * 1000 + Math.abs(leftAlong) + Math.abs(rightAlong);
+    if (!best || cost < best.cost) best = { left: iLeft.p, right: iRight.p, cost };
+  }
+
+  return {
+    mainEnd: { ...rawMain, join: "butt" as const },
+    branchEnd: best ? { left: best.left, right: best.right, join: "butt" as const } : { ...rawBranch, join: "butt" as const }
+  };
+}
+
 export function solveWallNetwork(
   walls: Wall[],
   opts: { nodeTolM?: number; miterLimit?: number } = {}
@@ -161,18 +188,17 @@ export function solveWallNetwork(
     const inc = node.incident;
     if (inc.length < 2) continue;
 
-    // 2-wall corner: trim both wall faces to their face intersections.
-    // This gives a buildable continuous wall turn instead of order-dependent notches.
+    // 2-wall corner: keep the earlier/reference wall full and butt the next wall
+    // into that wall face. This keeps the visible corner seam on the face line
+    // instead of drawing a diagonal cut through both walls.
     if (inc.length === 2) {
       const A = inc[0];
       const B = inc[1];
-      const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+      const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
       const sa = solvedEnds.get(A.wall.id)!;
       const sb = solvedEnds.get(B.wall.id)!;
-      sa[A.end] = res.aEnd;
-      sb[B.end] = res.bEnd;
-      const bevelPoly = res.aEnd.bevelJoinPoly ?? res.bEnd.bevelJoinPoly;
-      if (bevelPoly && bevelPoly.length >= 3) joinPolys.push(bevelPoly);
+      sa[A.end] = res.mainEnd;
+      sb[B.end] = res.branchEnd;
       continue;
     }
 
