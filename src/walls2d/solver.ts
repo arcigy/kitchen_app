@@ -35,6 +35,21 @@ function collinear(u: Point, v: Point) {
   return d <= 1e-6;
 }
 
+function joinEnabled(item: { wall: Wall; end: WallEnd }) {
+  return item.wall.joinEnds?.[item.end]?.enabled !== false;
+}
+
+function joinPriority(item: { wall: Wall; end: WallEnd }) {
+  return item.wall.joinEnds?.[item.end]?.priority ?? 0;
+}
+
+function sortByJoinPriority<T extends { wall: Wall; end: WallEnd }>(items: T[]) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => joinPriority(b.item) - joinPriority(a.item) || a.index - b.index)
+    .map((entry) => entry.item);
+}
+
 function solveMiterAtNode(
   a: Wall,
   endA: WallEnd,
@@ -243,15 +258,14 @@ export function solveWallNetwork(
 
   const nodes = Array.from(nodesMap.values());
   for (const node of nodes) {
-    const inc = node.incident;
+    const inc = node.incident.filter(joinEnabled);
     if (inc.length < 2) continue;
 
-    // 2-wall corner: keep the earlier/reference wall full and butt the next wall
-    // into that wall face. This keeps the visible corner seam on the face line
-    // instead of drawing a diagonal cut through both walls.
+    // 2-wall corner: keep the higher-priority/reference wall full and butt the
+    // other wall into that wall face. This is the first Revit-like join-order
+    // rule: users can tell which wall continues at a corner.
     if (inc.length === 2) {
-      const A = inc[0];
-      const B = inc[1];
+      const [A, B] = sortByJoinPriority(inc);
       const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
       const sa = solvedEnds.get(A.wall.id)!;
       const sb = solvedEnds.get(B.wall.id)!;
@@ -271,8 +285,7 @@ export function solveWallNetwork(
       }
       if (pair) {
         const k = [0, 1, 2].find((x) => x !== pair![0] && x !== pair![1])!;
-        const m0 = inc[pair[0]];
-        const m1 = inc[pair[1]];
+        const [m0, m1] = sortByJoinPriority([inc[pair[0]], inc[pair[1]]]);
         const br = inc[k];
         const res = solveTAtNode(m0.wall, m0.end, m1.wall, m1.end, br.wall, br.end);
         const sbr = solvedEnds.get(br.wall.id)!;

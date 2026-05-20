@@ -132,6 +132,10 @@ export type WallParams = {
   materialId: string;
   justification?: "center" | "interior" | "exterior";
   exteriorSign?: 1 | -1;
+  joinEnds?: {
+    a?: { enabled?: boolean; priority?: number };
+    b?: { enabled?: boolean; priority?: number };
+  };
   aMm: { x: number; z: number };
   bMm: { x: number; z: number };
 };

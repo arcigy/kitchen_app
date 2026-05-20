@@ -1822,6 +1822,7 @@ export function startApp(initialArgs: AppArgs) {
     updateSelectionHighlights,
     updateUnderlayTransform,
     updateWallMeshWithJustification,
+    wallJoinTolMm,
     updateColumnPlacementParams,
     wallDefault,
     wallDraw,

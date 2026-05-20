@@ -123,7 +123,8 @@ export function createWallController(ctx: WallControllerContext) {
       b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
       thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
       justification: w.params.justification ?? "center",
-      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
+      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1,
+      joinEnds: w.params.joinEnds
     }));
 
   const solveWallsForRendering = () =>
@@ -381,8 +382,14 @@ export function createWallController(ctx: WallControllerContext) {
               if (!keepAway || !removeAway) continue;
               if (Math.abs(cross2(keepAway, removeAway)) > 0.001 || dot2(keepAway, removeAway) > -0.999) continue;
 
+              const keepJoinEnds = keep.params.joinEnds ? JSON.parse(JSON.stringify(keep.params.joinEnds)) : {};
+              const removeJoinEnds = remove.params.joinEnds ? JSON.parse(JSON.stringify(remove.params.joinEnds)) : {};
               keep.params.aMm = keepEnd === "b" ? { ...keep.params.aMm } : { ...removeOther };
               keep.params.bMm = keepEnd === "b" ? { ...removeOther } : { ...keep.params.bMm };
+              keep.params.joinEnds = {
+                a: keepEnd === "b" ? keepJoinEnds.a : removeJoinEnds[removeEnd === "a" ? "b" : "a"],
+                b: keepEnd === "b" ? removeJoinEnds[removeEnd === "a" ? "b" : "a"] : keepJoinEnds.b
+              };
               if (ctx.getSelectedWallId() === remove.id) ctx.setSelectedWallId(keep.id);
               const selectedWallIds = ctx.getSelectedWallIds?.();
               if (selectedWallIds?.delete(remove.id)) selectedWallIds.add(keep.id);
@@ -424,8 +431,8 @@ export function createWallController(ctx: WallControllerContext) {
     const a = fromMmPoint(w.params.aMm);
     const b = fromMmPoint(w.params.bMm);
     const mid = fromMmPoint(p);
-    const thickness = w.params.thicknessMm;
-    const materialId = w.params.materialId;
+    const originalParams = JSON.parse(JSON.stringify(w.params)) as WallParams;
+    const thickness = originalParams.thicknessMm;
 
     removeWall(w);
     const w1 = addWall(a, mid, thickness);
@@ -435,12 +442,25 @@ export function createWallController(ctx: WallControllerContext) {
       if (w1) removeWall(w1);
       if (w2) removeWall(w2);
       const w0 = addWall(a, b, thickness);
-      if (w0) w0.params.materialId = materialId;
+      if (w0) w0.params = JSON.parse(JSON.stringify(originalParams)) as WallParams;
+      if (w0) rebuildWall(w0);
       rebuildWallPlanMesh();
       return;
     }
-    if (w1) w1.params.materialId = materialId;
-    if (w2) w2.params.materialId = materialId;
+    w1.params = {
+      ...JSON.parse(JSON.stringify(originalParams)),
+      aMm: { ...originalParams.aMm },
+      bMm: toMmPoint(mid),
+      joinEnds: { a: originalParams.joinEnds?.a }
+    };
+    w2.params = {
+      ...JSON.parse(JSON.stringify(originalParams)),
+      aMm: toMmPoint(mid),
+      bMm: { ...originalParams.bMm },
+      joinEnds: { b: originalParams.joinEnds?.b }
+    };
+    rebuildWall(w1);
+    rebuildWall(w2);
     rebuildWallPlanMesh();
   }
 

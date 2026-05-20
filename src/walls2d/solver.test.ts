@@ -55,6 +55,33 @@ describe("walls2d join solver", () => {
     expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
   });
 
+  test("2-wall corner uses explicit join priority for the continuing wall", () => {
+    const lowerPriority = wall("lower", P(-5, 0), P(0, 0), 150);
+    const higherPriority = wall("higher", P(0, 0), P(-4, 4), 150);
+    higherPriority.joinEnds = { a: { priority: 10 } };
+    const res = solveWallNetwork([lowerPriority, higherPriority], { nodeTolM: 1e-6, miterLimit: 12 });
+    const solvedLower = res.walls.find((w) => w.id === "lower")!;
+    const solvedHigher = res.walls.find((w) => w.id === "higher")!;
+
+    expect(solvedHigher.a.ownedCapPoly).toBeTruthy();
+    expect(solvedHigher.outline.length).toBeGreaterThan(4);
+    expect(solvedLower.b.ownedCapPoly).toBeUndefined();
+  });
+
+  test("disabled wall end does not participate in a join", () => {
+    const main = wall("main", P(-5, 0), P(0, 0), 150);
+    const branch = wall("branch", P(0, 0), P(-4, 4), 150);
+    branch.joinEnds = { a: { enabled: false, priority: 10 } };
+    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
+    const solvedMain = res.walls.find((w) => w.id === "main")!;
+    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+
+    expect(solvedMain.outline).toHaveLength(4);
+    expect(solvedBranch.outline).toHaveLength(4);
+    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
+    expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
+  });
+
   test("shallow angled branch still butts to the main wall face instead of making a long spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);

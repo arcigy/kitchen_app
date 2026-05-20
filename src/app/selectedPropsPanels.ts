@@ -25,6 +25,7 @@ import type {
 } from "./localTypes";
 import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
+import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -43,6 +44,7 @@ type WallPropsContext = {
   props: PropertiesPanelApi;
   selectedWallIds: Set<string>;
   walls: WallInstance[];
+  wallJoinTolMm: number;
   showNoProps: () => void;
   commitHistory: CommitHistory;
   S: AppState;
@@ -206,7 +208,7 @@ type ModulePropsContext = {
 };
 
 export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
-  const { props, selectedWallIds, walls, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
+  const { props, selectedWallIds, walls, wallJoinTolMm, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
     const selectedWalls =
       selectedWallIds.size > 1
         ? [...selectedWallIds]
@@ -234,6 +236,33 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       rebuildWallPlanMesh();
       commitHistory(S);
       mountProps();
+    };
+
+    const rebuildJoinState = () => {
+      for (const wall of walls) rebuildWall(wall);
+      rebuildWallPlanMesh();
+      commitHistory(S);
+      mountProps();
+    };
+
+    const endpointPoint = (wall: WallInstance, end: "a" | "b") => (end === "a" ? wall.params.aMm : wall.params.bMm);
+    const connectedAtEnd = (wall: WallInstance, end: "a" | "b") => {
+      const p = endpointPoint(wall, end);
+      return walls
+        .filter((other) => other.id !== wall.id)
+        .map((other) => ({ wall: other, end: wallEndpointWhich(other, p, wallJoinTolMm) }))
+        .filter(
+          (item): item is { wall: WallInstance; end: "a" | "b" } =>
+            !!item.end && mmDist(endpointPoint(item.wall, item.end), p) <= wallJoinTolMm
+        );
+    };
+    const joinEnd = (wall: WallInstance, end: "a" | "b") => wall.params.joinEnds?.[end] ?? {};
+    const joinEnabled = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).enabled !== false;
+    const joinPriority = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).priority ?? 0;
+    const ensureJoinEnd = (wall: WallInstance, end: "a" | "b") => {
+      wall.params.joinEnds ??= {};
+      wall.params.joinEnds[end] ??= {};
+      return wall.params.joinEnds[end]!;
     };
 
     const thickness = multiVal(selectedWalls, "thicknessMm");
@@ -305,6 +334,70 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
         if (wall.id === firstWall.id) wall.params.exteriorSign = firstWall.params.exteriorSign;
       });
     });
+
+    const joinsLabel = document.createElement("div");
+    joinsLabel.className = "muted";
+    joinsLabel.textContent = "Spoje stien";
+    joinsLabel.style.marginTop = "10px";
+    s.appendChild(joinsLabel);
+
+    for (const end of ["a", "b"] as const) {
+      const connected = connectedAtEnd(firstWall, end);
+      const control = document.createElement("div");
+      control.style.display = "grid";
+      control.style.gap = "6px";
+
+      const status = document.createElement("div");
+      status.className = "muted";
+      const enabled = joinEnabled(firstWall, end);
+      const selectedPriority = joinPriority(firstWall, end);
+      const neighborMaxPriority = connected.length > 0 ? Math.max(...connected.map((item) => joinPriority(item.wall, item.end))) : 0;
+      const role =
+        connected.length === 0
+          ? "bez napojenia"
+          : !enabled
+            ? "spoj vypnuty"
+            : selectedPriority > neighborMaxPriority
+              ? "tato stena pokracuje"
+              : selectedPriority < neighborMaxPriority
+                ? "tato stena sa napaja"
+                : "auto poradie";
+      status.textContent = connected.length > 0 ? `${role} · ${connected.map((item) => item.wall.id).join(", ")}` : role;
+      control.appendChild(status);
+
+      const buttons = document.createElement("div");
+      buttons.style.display = "flex";
+      buttons.style.gap = "6px";
+      buttons.style.flexWrap = "wrap";
+
+      const makeMain = document.createElement("button");
+      makeMain.type = "button";
+      makeMain.textContent = "Tato stena pokracuje";
+      makeMain.disabled = connected.length === 0;
+      makeMain.addEventListener("click", () => {
+        const priorities = [joinPriority(firstWall, end), ...connected.map((item) => joinPriority(item.wall, item.end))];
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = true;
+        join.priority = Math.max(0, ...priorities) + 1;
+        rebuildJoinState();
+      });
+      buttons.appendChild(makeMain);
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = enabled ? "Vypnut spoj" : "Povolit spoj";
+      toggle.disabled = connected.length === 0;
+      toggle.addEventListener("click", () => {
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = !enabled;
+        rebuildJoinState();
+      });
+      buttons.appendChild(toggle);
+
+      control.appendChild(buttons);
+      props.row(s, `Spoj ${end.toUpperCase()}`, control);
+    }
+
     appendLinkedMeasureInputs(s, { kind: "wall", wallId: firstWall.id });
 
 }
