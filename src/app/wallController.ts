@@ -10,7 +10,7 @@ import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layou
 import { commitHistory } from "../layout/historyManager";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
-import type { WallJustification } from "../walls2d/model";
+import { spineDir, type WallJustification } from "../walls2d/model";
 import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 import {
   fromMmPoint,
@@ -1061,6 +1061,7 @@ export function createWallController(ctx: WallControllerContext) {
     mergeCollinearWallFragments();
 
     const solved = solveWallsForRendering();
+    const solverInputs = makeWallSolverInput();
     wallSolvedOutlines.clear();
     ctx.setWallSolvedJoinPolys(solved.joinPolys.map((poly) => poly.map((point) => ({ x: point.x, z: point.z }))));
     ctx.setWallUnionPolys(null);
@@ -1232,6 +1233,29 @@ export function createWallController(ctx: WallControllerContext) {
       solved.joinPolys.some((poly) => {
         if (poly.length === 3) return segmentsClose(a, b, poly[0], poly[1]);
         if (poly.length >= 4) return segmentsClose(a, b, poly[0], poly[poly.length - 1]);
+        return false;
+      }) ||
+      solved.walls.some((solvedWall) => {
+        const source = solverInputs.find((wall) => wall.id === solvedWall.id);
+        if (!source) return false;
+        for (const end of ["a", "b"] as const) {
+          const solvedEnd = solvedWall[end];
+          if (!segmentsClose(a, b, solvedEnd.left, solvedEnd.right)) continue;
+          const node = solved.debug.nodes.find((item) =>
+            item.incident.some((incident) => incident.wall.id === source.id && incident.end === end)
+          );
+          if (!node || node.incident.length < 2) continue;
+          const sourceDir = spineDir(source, end);
+          if (
+            node.incident.some((incident) => {
+              if (incident.wall.id === source.id && incident.end === end) return false;
+              const otherDir = spineDir(incident.wall, incident.end);
+              return Math.abs(sourceDir.x * otherDir.x + sourceDir.z * otherDir.z) > 0.15;
+            })
+          ) {
+            return true;
+          }
+        }
         return false;
       });
 
@@ -1637,12 +1661,11 @@ export function createWallController(ctx: WallControllerContext) {
     syncWallOutline(w);
   }
 
-  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
-    const id = ctx.nextWallId();
+  function createWallInstanceFromParams(id: string, params: WallParams) {
     const root = new THREE.Group();
     root.name = `wall_${id}`;
 
-    const mesh = createWallMesh(a, b, thicknessMm);
+    const mesh = createWallMesh(fromMmPoint(params.aMm), fromMmPoint(params.bMm), params.thicknessMm, params.heightMm);
     mesh.name = `wallMesh_${id}`;
     mesh.userData.kind = "wall";
     mesh.userData.wallId = id;
@@ -1651,8 +1674,23 @@ export function createWallController(ctx: WallControllerContext) {
     const outline = createWallOutline(mesh.geometry as THREE.BufferGeometry, id);
     mesh.add(outline);
 
-    const aMm = toMmPoint(a);
-    const bMm = toMmPoint(b);
+    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
+    layoutRoot.add(root);
+    walls.push(inst);
+    rebuildWall(inst);
+    rebuildWallPlanMesh();
+    return inst;
+  }
+
+  const discardWallInstance = (inst: WallInstance) => {
+    layoutRoot.remove(inst.root);
+    disposeObject3D(inst.root);
+    const idx = walls.findIndex((w) => w.id === inst.id);
+    if (idx >= 0) walls.splice(idx, 1);
+  };
+
+  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
+    const id = ctx.nextWallId();
     const params: WallParams = {
       typeId: resolveWallTypeId(wallDefault),
       thicknessMm: Math.max(10, Math.round(thicknessMm)),
@@ -1660,23 +1698,16 @@ export function createWallController(ctx: WallControllerContext) {
       materialId: wallDefault.materialId,
       justification: wallDefault.justification,
       exteriorSign: wallDefault.exteriorSign,
-      aMm,
-      bMm
+      aMm: toMmPoint(a),
+      bMm: toMmPoint(b)
     };
 
-    const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
-    layoutRoot.add(root);
-    walls.push(inst);
-    rebuildWall(inst);
-    rebuildWallPlanMesh();
+    const inst = createWallInstanceFromParams(id, params);
 
     // Disallow walls intersecting any module (prevents module-wall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
-      layoutRoot.remove(root);
-      disposeObject3D(root);
-      const idx = walls.findIndex((w) => w.id === id);
-      if (idx >= 0) walls.splice(idx, 1);
+      discardWallInstance(inst);
       rebuildWallPlanMesh();
       setUnderlayStatus("Wall blocked: would overlap a module.");
       return null;
@@ -1684,6 +1715,26 @@ export function createWallController(ctx: WallControllerContext) {
 
     commitHistory(S);
     return inst;
+  }
+
+  function duplicateWall(id: string, offsetMm = { x: 300, z: 300 }): WallInstance | null {
+    const source = walls.find((wall) => wall.id === id) ?? null;
+    if (!source || pinnedWallIds.has(source.id)) return null;
+
+    const params = JSON.parse(JSON.stringify(source.params)) as WallParams;
+    params.aMm = { x: params.aMm.x + offsetMm.x, z: params.aMm.z + offsetMm.z };
+    params.bMm = { x: params.bMm.x + offsetMm.x, z: params.bMm.z + offsetMm.z };
+    params.joinEnds = undefined;
+
+    const duplicate = createWallInstanceFromParams(ctx.nextWallId(), params);
+    if (instances.some((i) => moduleOverlapsWalls(i))) {
+      discardWallInstance(duplicate);
+      rebuildWallPlanMesh();
+      setUnderlayStatus("Wall duplicate blocked: would overlap a module.");
+      return null;
+    }
+
+    return duplicate;
   }
 
   return {
@@ -1713,6 +1764,7 @@ export function createWallController(ctx: WallControllerContext) {
     updateWallMeshWithJustification,
     makeWallPreviewMesh,
     rebuildWall,
-    addWall
+    addWall,
+    duplicateWall
   };
 }

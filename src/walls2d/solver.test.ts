@@ -64,8 +64,9 @@ describe("walls2d join solver", () => {
     const solvedLower = res.walls.find((w) => w.id === "lower")!;
     const solvedHigher = res.walls.find((w) => w.id === "higher")!;
 
-    expect(solvedHigher.a.ownedCapPoly).toBeTruthy();
-    expect(solvedHigher.outline.length).toBeGreaterThan(4);
+    expect(solvedHigher.a.join).toBe("butt");
+    expect(solvedHigher.a.ownedCapPoly).toBeUndefined();
+    expect(solvedHigher.outline.length).toBe(4);
     expect(solvedLower.b.ownedCapPoly).toBeUndefined();
   });
 
@@ -83,57 +84,50 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("shallow equal-priority corner bevels instead of making a long spike", () => {
+  test("shallow equal-priority corner side-butts instead of making a long spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("bevel");
-    expect(solvedB.a.join).toBe("bevel");
-    expect(res.joinPolys).toHaveLength(1);
+    expect(solvedA.b.join).toBe("butt");
+    expect(solvedB.a.join).toBe("butt");
+    expect(res.joinPolys).toHaveLength(0);
     expect(solvedA.outline).toHaveLength(4);
     expect(solvedB.outline).toHaveLength(4);
     expect(solvedA.b.ownedCapPoly).toBeUndefined();
     expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.25);
+    expect(Math.max(...solvedB.outline.map((point) => dist(P(0, 0), point)))).toBeLessThan(5.1);
+    expect(Math.max(dist(P(0, 0), solvedB.a.left), dist(P(0, 0), solvedB.a.right))).toBeLessThan(0.35);
   });
 
-  test("fills the main wall cap when an angled branch cuts past the end face", () => {
+  test("clamps an angled branch to the main wall end face", () => {
     const main = wall("main", P(0, 0), P(0, 5), 150);
     const branch = wall("branch", P(0, 5), P(5, 0), 150);
     main.joinEnds = { b: { priority: 10 } };
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
-    const cap = solvedMain.b.ownedCapPoly!;
 
     expect(res.joinPolys).toHaveLength(0);
-    expect(solvedMain.outline).toHaveLength(5);
-    expect(cap).toHaveLength(3);
-    expect(cap[0].x).toBeCloseTo(-0.075, 6);
-    expect(cap[0].z).toBeCloseTo(5, 6);
-    expect(cap[1].x).toBeCloseTo(0.075, 6);
-    expect(cap[1].z).toBeCloseTo(5.031066017177982, 6);
-    expect(cap[2].x).toBeCloseTo(0.075, 6);
-    expect(cap[2].z).toBeCloseTo(5, 6);
-    expect(cap[1]).toEqual(solvedBranch.a.left);
+    expect(solvedMain.outline).toHaveLength(4);
+    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
+    expect(Math.max(solvedBranch.a.left.z, solvedBranch.a.right.z)).toBeLessThanOrEqual(5 + 1e-9);
     expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
     expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
   });
 
-  test("explicit side-butt cap does not grow a diamond past the opposite wall face", () => {
+  test("explicit side-butt branch does not protrude past the opposite wall face", () => {
     const main = wall("main", P(0, 5), P(0, 0), 150);
     const branch = wall("branch", P(0, 0), P(5, 5), 150);
     main.joinEnds = { b: { priority: 10 } };
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
     const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const cap = solvedMain.b.ownedCapPoly!;
+    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
-    expect(cap).toHaveLength(3);
-    expect(Math.min(...cap.map((point) => point.z))).toBeGreaterThan(-0.04);
-    expect(cap[1]).toEqual(res.walls.find((w) => w.id === "branch")!.a.right);
+    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
+    expect(Math.min(solvedBranch.a.left.z, solvedBranch.a.right.z)).toBeGreaterThanOrEqual(-1e-9);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {

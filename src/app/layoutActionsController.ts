@@ -24,6 +24,7 @@ type LayoutActionsControllerContext = {
   setSelectedColumn: (id: string | null) => void;
   mountProps: () => void;
   duplicateInstance: (id: string) => void;
+  duplicateWall: (id: string) => { id: string } | null;
   deleteInstance: (id: string) => void;
   deleteWall: (id: string) => void;
   deleteSectionInstance: (id: string) => void;
@@ -55,11 +56,36 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
 
   const duplicateSelected = () => {
     ctx.ensureLayoutMode();
-    if (ctx.getSelectedKind() !== "module") return;
-    const selectedInstanceId = ctx.getSelectedInstanceId();
-    if (!selectedInstanceId) return;
-    ctx.duplicateInstance(selectedInstanceId);
+    const selectedKind = ctx.getSelectedKind();
+    if (selectedKind === "module") {
+      const selectedInstanceId = ctx.getSelectedInstanceId();
+      if (!selectedInstanceId) return;
+      ctx.duplicateInstance(selectedInstanceId);
+      ctx.commitHistory();
+      return;
+    }
+
+    const selectedWallIds = ctx.getSelectedWallIds();
+    const wallIds =
+      selectedWallIds.size > 0
+        ? Array.from(selectedWallIds)
+        : selectedKind === "wall" && ctx.getSelectedWallId()
+          ? [ctx.getSelectedWallId()!]
+          : [];
+    if (wallIds.length === 0) return;
+
+    const createdIds: string[] = [];
+    for (const id of [...new Set(wallIds)]) {
+      const duplicate = ctx.duplicateWall(id);
+      if (duplicate) createdIds.push(duplicate.id);
+    }
+    if (createdIds.length === 0) return;
+
+    ctx.setSelectedWall(createdIds[0]);
+    selectedWallIds.clear();
+    for (const id of createdIds) selectedWallIds.add(id);
     ctx.commitHistory();
+    ctx.mountProps();
   };
 
   const deleteSelected = () => {

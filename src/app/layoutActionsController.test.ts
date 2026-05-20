@@ -54,6 +54,7 @@ function makeController(overrides: Partial<Parameters<typeof createLayoutActions
     },
     mountProps: vi.fn(),
     duplicateInstance: vi.fn(),
+    duplicateWall: vi.fn((id: string) => ({ id: `${id}_copy` })),
     deleteInstance: vi.fn(),
     deleteWall: vi.fn(),
     deleteSectionInstance: vi.fn(),
@@ -95,6 +96,18 @@ function makeController(overrides: Partial<Parameters<typeof createLayoutActions
 }
 
 describe("layout delete action", () => {
+  it("duplicates selected walls from the shared edit action", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+
+    harness.controller.duplicateSelected();
+
+    expect(harness.ctx.duplicateWall).toHaveBeenCalledWith("w1");
+    expect(harness.selectedWallIds.has("w1_copy")).toBe(true);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
   it("deletes kitchen groups as one selected object", () => {
     const harness = makeController();
     harness.setSelection({ kind: "kitchenGroup", kitchenGroupId: "kg1" });

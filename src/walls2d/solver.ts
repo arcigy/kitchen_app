@@ -163,22 +163,34 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
   }
 
   let joinPoly: Point[] | undefined;
+  let branchEnd: WallSolvedEnd = { ...rawBranch, join: "butt" as const };
   if (best) {
-    const leftProjection = dot(sub(best.left, mainNode), beyondMainEndDir);
-    const rightProjection = dot(sub(best.right, mainNode), beyondMainEndDir);
-    const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
-    const protrudingProjection = Math.max(leftProjection, rightProjection);
-    if (protrudingProjection > 0.001) {
-      const protrudingPoint = protrudingSide === "left" ? best.left : best.right;
-      const cutCorner = best.side === "left" ? rawMain.left : rawMain.right;
-      const oppositeCorner = best.side === "left" ? rawMain.right : rawMain.left;
-      joinPoly = [oppositeCorner, protrudingPoint, cutCorner];
+    const cutCorner = best.side === "left" ? rawMain.left : rawMain.right;
+    const clampObliqueEnd = Math.abs(dot(mainDir, branchDir)) > 0.15;
+    const clampPastEnd = (point: Point) => {
+      const projection = dot(sub(point, mainNode), beyondMainEndDir);
+      return clampObliqueEnd && projection > 0.001 ? cutCorner : point;
+    };
+    const left = clampPastEnd(best.left);
+    const right = clampPastEnd(best.right);
+    branchEnd = { left, right, join: "butt" as const };
+
+    if (!clampObliqueEnd) {
+      const leftProjection = dot(sub(best.left, mainNode), beyondMainEndDir);
+      const rightProjection = dot(sub(best.right, mainNode), beyondMainEndDir);
+      const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
+      const protrudingProjection = Math.max(leftProjection, rightProjection);
+      if (protrudingProjection > 0.001) {
+        const protrudingPoint = protrudingSide === "left" ? best.left : best.right;
+        const oppositeCorner = best.side === "left" ? rawMain.right : rawMain.left;
+        joinPoly = [oppositeCorner, protrudingPoint, cutCorner];
+      }
     }
   }
 
   return {
     mainEnd: { ...rawMain, join: "butt" as const, ownedCapPoly: joinPoly },
-    branchEnd: best ? { left: best.left, right: best.right, join: "butt" as const } : { ...rawBranch, join: "butt" as const }
+    branchEnd
   };
 }
 
@@ -265,10 +277,17 @@ export function solveWallNetwork(
         sa[A.end] = res.mainEnd;
         sb[B.end] = res.branchEnd;
       } else {
-        const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
-        sa[A.end] = res.aEnd;
-        sb[B.end] = res.bEnd;
-        if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
+        const angleDot = Math.abs(dot(spineDir(A.wall, A.end), spineDir(B.wall, B.end)));
+        if (angleDot > 0.15) {
+          const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
+          sa[A.end] = res.mainEnd;
+          sb[B.end] = res.branchEnd;
+        } else {
+          const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+          sa[A.end] = res.aEnd;
+          sb[B.end] = res.bEnd;
+          if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
+        }
       }
       continue;
     }

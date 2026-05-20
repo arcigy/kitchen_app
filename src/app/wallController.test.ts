@@ -198,7 +198,7 @@ describe("wall plan fill", () => {
     }
   });
 
-  it("keeps angled corner caps inside the owning wall outline", () => {
+  it("keeps angled side-butt joins inside the main wall end face", () => {
     const ctx = createTestWallContext();
     const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
     const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
@@ -208,7 +208,8 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
-    expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(5);
+    expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(4);
+    expect(Math.max(...ctx.wallSolvedOutlines.get("diagonal")!.map((point) => point.z))).toBeLessThanOrEqual(5.1);
     expect(ctx.wallJoinMeshes.some((mesh) => mesh.name.startsWith("wallJoin3d"))).toBe(false);
   });
 
@@ -222,7 +223,7 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
-    expect(ctx.wallSolvedOutlines.get("diagonal")).toHaveLength(5);
+    expect(ctx.wallSolvedOutlines.get("diagonal")).toHaveLength(4);
     expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(4);
   });
 
@@ -296,6 +297,29 @@ describe("wall plan fill", () => {
     expect(diagonal.params.aMm).toEqual(intersection);
   });
 
+  it("duplicates a wall with its type parameters and clears old join priorities", () => {
+    const ctx = createTestWallContext();
+    let nextId = 1;
+    ctx.nextWallId = () => `copy${nextId++}`;
+    const source = createTestWallInstance("source", { x: 100, z: 200 }, { x: 1100, z: 200 });
+    source.params.typeId = "partition-150";
+    source.params.heightMm = 2800;
+    source.params.materialId = "mat";
+    source.params.joinEnds = { a: { priority: 5 } };
+    ctx.walls.push(source);
+    const controller = createWallController(ctx);
+
+    const duplicate = controller.duplicateWall("source", { x: 300, z: -100 });
+
+    expect(duplicate?.id).toBe("copy1");
+    expect(duplicate?.params.aMm).toEqual({ x: 400, z: 100 });
+    expect(duplicate?.params.bMm).toEqual({ x: 1400, z: 100 });
+    expect(duplicate?.params.typeId).toBe("partition-150");
+    expect(duplicate?.params.heightMm).toBe(2800);
+    expect(duplicate?.params.materialId).toBe("mat");
+    expect(duplicate?.params.joinEnds).toBeUndefined();
+  });
+
   it("butts branch wall meshes into the main wall face without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
@@ -358,6 +382,6 @@ describe("wall plan fill", () => {
     const seamVertices = diagonalVertices.filter((point) => Math.abs(point.x - 0.075) < 1e-5 && point.z > 4.7);
     expect(seamVertices.length).toBeGreaterThan(0);
     expect(Math.min(...seamVertices.map((point) => point.z))).toBeLessThan(4.85);
-    expect(Math.max(...seamVertices.map((point) => point.z))).toBeGreaterThan(5);
+    expect(Math.max(...seamVertices.map((point) => point.z))).toBeLessThanOrEqual(5.000001);
   });
 });

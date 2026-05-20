@@ -758,6 +758,7 @@ export function startApp(initialArgs: AppArgs) {
     return result;
   };
   const addWall = (...args: Parameters<ReturnType<typeof createWallController>["addWall"]>) => wallController.addWall(...args);
+  const duplicateWall = (...args: Parameters<ReturnType<typeof createWallController>["duplicateWall"]>) => wallController.duplicateWall(...args);
 
 
 
@@ -2068,6 +2069,7 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedColumn,
     mountProps,
     duplicateInstance,
+    duplicateWall,
     deleteInstance,
     deleteWall,
     deleteSectionInstance,
