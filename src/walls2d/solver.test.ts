@@ -84,24 +84,24 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("shallow equal-priority corner uses compact miter instead of making a long spike", () => {
+  test("shallow equal-priority corner bevels instead of making a long spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("miter");
-    expect(solvedB.a.join).toBe("miter");
-    expect(res.joinPolys).toHaveLength(0);
+    expect(solvedA.b.join).toBe("bevel");
+    expect(solvedB.a.join).toBe("bevel");
+    expect(res.joinPolys).toHaveLength(1);
     expect(solvedA.outline).toHaveLength(4);
     expect(solvedB.outline).toHaveLength(4);
     expect(solvedA.b.ownedCapPoly).toBeUndefined();
     expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(Math.max(dist(P(0, 0), solvedA.b.left), dist(P(0, 0), solvedA.b.right))).toBeLessThan(0.09);
+    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.25);
   });
 
-  test("equal-priority angled room ending avoids the lower wall tooth", () => {
+  test("equal-priority angled corner keeps same wall faces joined", () => {
     const vertical = wall("vertical", P(0, 5), P(0, 0), 150);
     const diagonal = wall("diagonal", P(0, 0), P(5, 5), 150);
     const res = solveWallNetwork([vertical, diagonal], { nodeTolM: 1e-6 });
@@ -110,9 +110,25 @@ describe("walls2d join solver", () => {
 
     expect(solvedVertical.b.join).toBe("miter");
     expect(solvedDiagonal.a.join).toBe("miter");
-    expect(solvedDiagonal.a.left).toEqual(solvedVertical.b.right);
-    expect(solvedDiagonal.a.right).toEqual(solvedVertical.b.left);
-    expect(Math.min(...[...solvedVertical.outline, ...solvedDiagonal.outline].map((point) => point.z))).toBeGreaterThan(-0.04);
+    expect(solvedDiagonal.a.left).toEqual(solvedVertical.b.left);
+    expect(solvedDiagonal.a.right).toEqual(solvedVertical.b.right);
+  });
+
+  test("closed room with diagonal wall uses ordinary miters at the room ending", () => {
+    const left = wall("left", P(0, 0), P(0, 5), 150);
+    const top = wall("top", P(0, 5), P(5, 5), 150);
+    const right = wall("right", P(5, 5), P(5, 2), 150);
+    const bottom = wall("bottom", P(5, 2), P(0, 0), 150);
+    const res = solveWallNetwork([left, top, right, bottom], { nodeTolM: 1e-6 });
+    const solvedLeft = res.walls.find((w) => w.id === "left")!;
+    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+
+    expect(solvedLeft.a.join).toBe("miter");
+    expect(solvedBottom.b.join).toBe("miter");
+    expect(solvedLeft.a.left).toEqual(solvedBottom.b.left);
+    expect(solvedLeft.a.right).toEqual(solvedBottom.b.right);
+    expect(solvedLeft.a.left.z).toBeLessThan(-0.09);
+    expect(solvedLeft.a.right.z).toBeGreaterThan(0.09);
   });
 
   test("equal-priority closed angled outline keeps ordinary corner joins", () => {
