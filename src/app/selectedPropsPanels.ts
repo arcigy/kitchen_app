@@ -25,6 +25,8 @@ import type {
 } from "./localTypes";
 import { DOOR_MATERIAL_OPTIONS } from "./doorMaterials";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
+import { createWallMaterialPicker } from "./wallMaterialPicker";
+import { getWallMaterialOption } from "./wallMaterials";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -286,6 +288,19 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       });
     });
 
+    const wallMaterial = multiVal(selectedWalls, "materialId");
+    const materialPicker = createWallMaterialPicker({
+      value: wallMaterial.value ? String(wallMaterial.value) : null,
+      mixed: wallMaterial.mixed,
+      onChange: (materialId) => {
+        const resolved = getWallMaterialOption(materialId).id;
+        applyToSelectedWalls((wall) => {
+          wall.params.materialId = resolved;
+        });
+      }
+    });
+    props.row(s, "Farba steny", materialPicker);
+
     if (isMulti) return;
 
     const flip = document.createElement("button");
@@ -293,10 +308,6 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     flip.textContent = "Flip exterior";
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
-    const mat = document.createElement("select");
-    mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = firstWall.params.materialId;
-    props.row(s, "Material", mat);
     const len = document.createElement("div");
     len.className = "muted";
     const dx = firstWall.params.bMm.x - firstWall.params.aMm.x;
@@ -309,11 +320,6 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
         if (wall.id === firstWall.id) wall.params.exteriorSign = firstWall.params.exteriorSign;
       });
     });
-    mat.addEventListener("change", () => {
-      firstWall.params.materialId = mat.value || "default";
-      commitHistory(S);
-    });
-
     appendLinkedMeasureInputs(s, { kind: "wall", wallId: firstWall.id });
 
 }

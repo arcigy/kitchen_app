@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
 import type { MeasureState } from "./measureTools";
+import { createWallMaterialPicker } from "./wallMaterialPicker";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -23,7 +24,9 @@ type WallToolPropsContext = {
     b: THREE.Vector3,
     thicknessMm: number,
     justification: NonNullable<WallParams["justification"]>,
-    exteriorSign: 1 | -1
+    exteriorSign: 1 | -1,
+    heightMm?: number,
+    materialId?: string
   ) => void;
   setUnderlayStatus: (text: string) => void;
 };
@@ -78,14 +81,6 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
     flip.textContent = "Flip exterior";
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
-    const mat = document.createElement("select");
-    mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = wallDefault.materialId;
-    props.row(s, "Material", mat);
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
-    s.appendChild(hint);
     const updatePreview = () => {
       if (!wallDraw.preview || !wallDraw.a) return;
       updateWallMeshWithJustification(
@@ -94,9 +89,23 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
         wallDraw.hoverB ?? wallDraw.a,
         wallDefault.thicknessMm,
         wallDefault.justification ?? "center",
-        wallDefault.exteriorSign ?? 1
+        wallDefault.exteriorSign ?? 1,
+        undefined,
+        wallDefault.materialId
       );
     };
+    const materialPicker = createWallMaterialPicker({
+      value: wallDefault.materialId,
+      onChange: (materialId) => {
+        wallDefault.materialId = materialId;
+        updatePreview();
+      }
+    });
+    props.row(s, "Farba steny", materialPicker);
+    const hint = document.createElement("div");
+    hint.className = "muted";
+    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
+    s.appendChild(hint);
     th.addEventListener("change", () => {
       wallDefault.thicknessMm = Math.max(10, Number(th.value) || wallDefault.thicknessMm);
       th.value = String(wallDefault.thicknessMm);
@@ -111,9 +120,6 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
       wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
       updatePreview();
       setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
-    });
-    mat.addEventListener("change", () => {
-      wallDefault.materialId = mat.value || "default";
     });
   
 }
