@@ -28,8 +28,8 @@ describe("walls2d join solver", () => {
       ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
     );
     expect(min).toBeLessThanOrEqual(0.075);
-    expect(res.walls[0].a.join).toBe("butt");
-    expect(res.walls[1].a.join).toBe("butt");
+    expect(res.walls[0].a.join).toBe("miter");
+    expect(res.walls[1].a.join).toBe("miter");
   });
 
   test("Case 2: 45° same thickness (no broken acute join)", () => {
@@ -40,9 +40,10 @@ describe("walls2d join solver", () => {
     expect(res.joinPolys.length).toBeGreaterThanOrEqual(0);
   });
 
-  test("angled corner butts the branch end into the main wall face", () => {
+  test("explicit join priority butts an angled branch end into the main wall face", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4, 4), 150);
+    w1.joinEnds = { b: { priority: 10 } };
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
@@ -82,26 +83,27 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("shallow angled branch still butts to the main wall face instead of making a long spike", () => {
+  test("shallow equal-priority corner bevels instead of making a long spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(res.joinPolys).toHaveLength(0);
-    expect(solvedA.outline).toHaveLength(6);
-    expect(solvedA.b.ownedCapPoly).toHaveLength(4);
-    expect(Math.abs(cross(sub(solvedA.outline[4], solvedA.outline[3]), sub(solvedB.b.right, solvedB.a.right)))).toBeLessThan(1e-8);
-    expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
+    expect(solvedA.b.join).toBe("bevel");
+    expect(solvedB.a.join).toBe("bevel");
+    expect(res.joinPolys).toHaveLength(1);
+    expect(solvedA.outline).toHaveLength(4);
+    expect(solvedB.outline).toHaveLength(4);
+    expect(solvedA.b.ownedCapPoly).toBeUndefined();
+    expect(solvedB.a.ownedCapPoly).toBeUndefined();
+    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.25);
   });
 
   test("fills the main wall cap when an angled branch cuts past the end face", () => {
     const main = wall("main", P(0, 0), P(0, 5), 150);
     const branch = wall("branch", P(0, 5), P(5, 0), 150);
+    main.joinEnds = { b: { priority: 10 } };
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
@@ -140,6 +142,8 @@ describe("walls2d join solver", () => {
     const top = wall("top", P(0, 5), P(5, 5), 150);
     const right = wall("right", P(5, 5), P(5, 0), 150);
     const bottom = wall("bottom", P(0, 0), P(5, 0), 150);
+    top.joinEnds = { b: { priority: 10 } };
+    right.joinEnds = { b: { priority: 10 } };
     const res = solveWallNetwork([top, right, bottom], { nodeTolM: 1e-6 });
     const solvedTop = res.walls.find((w) => w.id === "top")!;
     const solvedRight = res.walls.find((w) => w.id === "right")!;
@@ -170,6 +174,7 @@ describe("walls2d join solver", () => {
   test("2-wall corner keeps the main wall full and butts the branch into its face", () => {
     const main = wall("main", P(0, 0), P(5, 0), 150);
     const branch = wall("branch", P(0, 0), P(0, 5), 150);
+    main.joinEnds = { a: { priority: 10 } };
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
@@ -187,6 +192,7 @@ describe("walls2d join solver", () => {
   test("2-wall corner branch cut follows the main wall face with different thicknesses", () => {
     const main = wall("main", P(0, 0), P(5, 0), 150);
     const branch = wall("branch", P(0, 0), P(0, 5), 300);
+    main.joinEnds = { a: { priority: 10 } };
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;

@@ -261,16 +261,23 @@ export function solveWallNetwork(
     const inc = node.incident.filter(joinEnabled);
     if (inc.length < 2) continue;
 
-    // 2-wall corner: keep the higher-priority/reference wall full and butt the
-    // other wall into that wall face. This is the first Revit-like join-order
-    // rule: users can tell which wall continues at a corner.
+    // 2-wall corner: ordinary equal-priority corners miter cleanly. Explicit
+    // join priority switches to a Revit-like join order where one wall
+    // continues and the other butts into it.
     if (inc.length === 2) {
       const [A, B] = sortByJoinPriority(inc);
-      const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
       const sa = solvedEnds.get(A.wall.id)!;
       const sb = solvedEnds.get(B.wall.id)!;
-      sa[A.end] = res.mainEnd;
-      sb[B.end] = res.branchEnd;
+      if (joinPriority(A) !== joinPriority(B)) {
+        const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
+        sa[A.end] = res.mainEnd;
+        sb[B.end] = res.branchEnd;
+      } else {
+        const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+        sa[A.end] = res.aEnd;
+        sb[B.end] = res.bEnd;
+        if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
+      }
       continue;
     }
 

@@ -202,6 +202,7 @@ describe("wall plan fill", () => {
     const ctx = createTestWallContext();
     const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
     const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    vertical.params.joinEnds = { b: { priority: 10 } };
     ctx.walls.push(vertical, diagonal);
     const controller = createWallController(ctx);
 
@@ -299,6 +300,7 @@ describe("wall plan fill", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
     const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    main.params.joinEnds = { a: { priority: 10 } };
     ctx.walls.push(main, branch);
 
     const controller = createWallController(ctx);
@@ -318,6 +320,7 @@ describe("wall plan fill", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
     const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    main.params.joinEnds = { a: { priority: 10 } };
     ctx.walls.push(main, branch);
     ctx.getWindowInsts = () =>
       [
@@ -345,6 +348,7 @@ describe("wall plan fill", () => {
     const ctx = createTestWallContext();
     const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
     const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    vertical.params.joinEnds = { b: { priority: 10 } };
     ctx.walls.push(vertical, diagonal);
 
     const controller = createWallController(ctx);
