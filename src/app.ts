@@ -1425,6 +1425,7 @@ export function startApp(initialArgs: AppArgs) {
     getViewMode: () => viewMode,
     getSelectedKind: () => selectedKind,
     getSelectedWallId: () => selectedWallId,
+    getSelectedWallIds: () => selectedWallIds,
     setSelectedWallId: (next: string | null) => { selectedWallId = next; },
     getWallDebugEnabled: () => wallDebugEnabled,
     setWallSolvedJoinPolys: (next: Array<Array<{ x: number; z: number }>>) => { wallSolvedJoinPolys = next; },

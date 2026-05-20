@@ -81,6 +81,7 @@ export type WallControllerContext = {
   getViewMode: () => "2d" | "3d";
   getSelectedKind: () => string | null;
   getSelectedWallId: () => string | null;
+  getSelectedWallIds?: () => Set<string>;
   setSelectedWallId: (next: string | null) => void;
   getWallDebugEnabled: () => boolean;
   setWallSolvedJoinPolys: (next: WallPlanPoint[][]) => void;
@@ -304,6 +305,96 @@ export function createWallController(ctx: WallControllerContext) {
       for (const item of material) item.dispose();
     } else {
       material.dispose();
+    }
+  }
+
+  function mergeCollinearWallFragments() {
+    const maxPasses = Math.max(1, walls.length);
+    const attachedWallIds = new Set<string>();
+    for (const windowInst of getWindowInsts()) if (windowInst.params.wallId) attachedWallIds.add(windowInst.params.wallId);
+    for (const doorInst of getDoorInsts()) if (doorInst.params.wallId) attachedWallIds.add(doorInst.params.wallId);
+
+    const endpoint = (wall: WallInstance, which: "a" | "b") => (which === "a" ? wall.params.aMm : wall.params.bMm);
+    const otherEndpoint = (wall: WallInstance, which: "a" | "b") => (which === "a" ? wall.params.bMm : wall.params.aMm);
+    const normalize = (v: { x: number; z: number }) => {
+      const len = Math.hypot(v.x, v.z);
+      return len > 1e-6 ? { x: v.x / len, z: v.z / len } : null;
+    };
+    const cross2 = (a: { x: number; z: number }, b: { x: number; z: number }) => a.x * b.z - a.z * b.x;
+    const dot2 = (a: { x: number; z: number }, b: { x: number; z: number }) => a.x * b.x + a.z * b.z;
+    const exteriorNormal = (wall: WallInstance) => {
+      const dir = normalize({ x: wall.params.bMm.x - wall.params.aMm.x, z: wall.params.bMm.z - wall.params.aMm.z });
+      if (!dir) return null;
+      const sign = (wall.params.exteriorSign ?? 1) as 1 | -1;
+      return { x: -dir.z * sign, z: dir.x * sign };
+    };
+    const sameStyle = (a: WallInstance, b: WallInstance) =>
+      a.params.thicknessMm === b.params.thicknessMm &&
+      a.params.heightMm === b.params.heightMm &&
+      a.params.materialId === b.params.materialId &&
+      (a.params.justification ?? "center") === (b.params.justification ?? "center");
+    const incidentIdsAt = (point: { x: number; z: number }) => {
+      const ids = new Set<string>();
+      for (const wall of walls) {
+        if (wallEndpointWhich(wall, point, wallJoinTolMm)) {
+          ids.add(wall.id);
+          continue;
+        }
+        const hit = pointOnWallAxisMm(wall, point);
+        if (hit.distMm <= wallJoinTolMm && hit.t > 0.001 && hit.t < 0.999) ids.add(wall.id);
+      }
+      return ids;
+    };
+    const removeMergedWall = (wall: WallInstance) => {
+      layoutRoot.remove(wall.root);
+      disposeObject3D(wall.root);
+      const idx = walls.indexOf(wall);
+      if (idx >= 0) walls.splice(idx, 1);
+    };
+
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      let merged = false;
+      outer: for (let i = 0; i < walls.length; i += 1) {
+        for (let j = i + 1; j < walls.length; j += 1) {
+          const keep = walls[i];
+          const remove = walls[j];
+          if (!keep || !remove) continue;
+          if (pinnedWallIds.has(keep.id) || pinnedWallIds.has(remove.id)) continue;
+          if (attachedWallIds.has(keep.id) || attachedWallIds.has(remove.id)) continue;
+          if (!sameStyle(keep, remove)) continue;
+          const keepNormal = exteriorNormal(keep);
+          const removeNormal = exteriorNormal(remove);
+          if (!keepNormal || !removeNormal || dot2(keepNormal, removeNormal) < 0.999) continue;
+
+          for (const keepEnd of ["a", "b"] as const) {
+            for (const removeEnd of ["a", "b"] as const) {
+              const sharedA = endpoint(keep, keepEnd);
+              const sharedB = endpoint(remove, removeEnd);
+              if (mmDist(sharedA, sharedB) > wallJoinTolMm) continue;
+              const shared = { x: (sharedA.x + sharedB.x) / 2, z: (sharedA.z + sharedB.z) / 2 };
+              const incidents = incidentIdsAt(shared);
+              if (incidents.size !== 2 || !incidents.has(keep.id) || !incidents.has(remove.id)) continue;
+              const keepOther = otherEndpoint(keep, keepEnd);
+              const removeOther = otherEndpoint(remove, removeEnd);
+              const keepAway = normalize({ x: keepOther.x - shared.x, z: keepOther.z - shared.z });
+              const removeAway = normalize({ x: removeOther.x - shared.x, z: removeOther.z - shared.z });
+              if (!keepAway || !removeAway) continue;
+              if (Math.abs(cross2(keepAway, removeAway)) > 0.001 || dot2(keepAway, removeAway) > -0.999) continue;
+
+              keep.params.aMm = keepEnd === "b" ? { ...keep.params.aMm } : { ...removeOther };
+              keep.params.bMm = keepEnd === "b" ? { ...removeOther } : { ...keep.params.bMm };
+              if (ctx.getSelectedWallId() === remove.id) ctx.setSelectedWallId(keep.id);
+              const selectedWallIds = ctx.getSelectedWallIds?.();
+              if (selectedWallIds?.delete(remove.id)) selectedWallIds.add(keep.id);
+              removeMergedWall(remove);
+              rebuildWall(keep);
+              merged = true;
+              break outer;
+            }
+          }
+        }
+      }
+      if (!merged) break;
     }
   }
 
@@ -909,6 +1000,7 @@ export function createWallController(ctx: WallControllerContext) {
     }
 
     if (walls.length === 0) return;
+    mergeCollinearWallFragments();
 
     const solved = solveWallsForRendering();
     wallSolvedOutlines.clear();

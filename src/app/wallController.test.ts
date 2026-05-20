@@ -198,6 +198,58 @@ describe("wall plan fill", () => {
     }
   });
 
+  it("merges same-style collinear fragments without a real branch at the shared node", () => {
+    const ctx = createTestWallContext();
+    const lower = createTestWallInstance("lower", { x: 0, z: 0 }, { x: 0, z: 3000 });
+    const middle = createTestWallInstance("middle", { x: 0, z: 3000 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: -3000, z: 8000 });
+    ctx.walls.push(lower, middle, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.walls).toHaveLength(2);
+    expect(ctx.walls.some((wall) => wall.id === "middle")).toBe(false);
+    expect(ctx.walls.some((wall) => wall.id === "diagonal")).toBe(true);
+    expect(lower.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(lower.params.bMm).toEqual({ x: 0, z: 5000 });
+  });
+
+  it("does not merge collinear fragments across a real T branch", () => {
+    const ctx = createTestWallContext();
+    const lower = createTestWallInstance("lower", { x: 0, z: 0 }, { x: 0, z: 3000 });
+    const upper = createTestWallInstance("upper", { x: 0, z: 3000 }, { x: 0, z: 5000 });
+    const branch = createTestWallInstance("branch", { x: 0, z: 3000 }, { x: 3000, z: 3000 });
+    ctx.walls.push(lower, upper, branch);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.walls.map((wall) => wall.id).sort()).toEqual(["branch", "lower", "upper"]);
+  });
+
+  it("keeps wall selection when the selected fragment is merged away", () => {
+    const ctx = createTestWallContext();
+    let selectedWallId: string | null = "upper";
+    const selectedWallIds = new Set<string>(["upper"]);
+    ctx.getSelectedWallId = () => selectedWallId;
+    ctx.setSelectedWallId = (next) => {
+      selectedWallId = next;
+    };
+    ctx.getSelectedWallIds = () => selectedWallIds;
+    const lower = createTestWallInstance("lower", { x: 0, z: 0 }, { x: 0, z: 3000 });
+    const upper = createTestWallInstance("upper", { x: 0, z: 3000 }, { x: 0, z: 5000 });
+    ctx.walls.push(lower, upper);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.walls).toHaveLength(1);
+    expect(selectedWallId).toBe("lower");
+    expect(selectedWallIds.has("lower")).toBe(true);
+    expect(selectedWallIds.has("upper")).toBe(false);
+  });
+
   it("butts branch wall meshes into the main wall face without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
