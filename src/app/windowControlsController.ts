@@ -54,6 +54,11 @@ type WallBasis = {
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
+const WINDOW_DIMENSION_COLOR = 0xffb000;
+const WINDOW_DIMENSION_HALO_COLOR = 0x2f2100;
+const WINDOW_DIMENSION_LINE_RADIUS = 0.0045;
+const WINDOW_DIMENSION_HALO_RADIUS = 0.008;
+
 const disposeObject = (object: THREE.Object3D) => {
   if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
   if ("material" in object) {
@@ -295,20 +300,42 @@ const syncPlanSymbol = (
   group.add(line);
 };
 
-const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0) => {
+const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0, height = 0.2) => {
   const canvas = document.createElement("canvas");
-  canvas.width = 360;
-  canvas.height = 96;
+  canvas.width = 448;
+  canvas.height = 160;
   const context = canvas.getContext("2d");
   if (context) {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.save();
     context.translate(canvas.width / 2, canvas.height / 2);
-    context.font = '400 54px ISOCPEUR, "Arial Narrow", Arial, sans-serif';
+    context.font = '700 72px ISOCPEUR, "Arial Narrow", Arial, sans-serif';
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.lineWidth = 6;
-    context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+    const metrics = context.measureText(text);
+    const boxW = Math.min(canvas.width - 24, Math.max(150, metrics.width + 64));
+    const boxH = 106;
+    const x = -boxW / 2;
+    const y = -boxH / 2;
+    const r = 18;
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.lineTo(x + boxW - r, y);
+    context.quadraticCurveTo(x + boxW, y, x + boxW, y + r);
+    context.lineTo(x + boxW, y + boxH - r);
+    context.quadraticCurveTo(x + boxW, y + boxH, x + boxW - r, y + boxH);
+    context.lineTo(x + r, y + boxH);
+    context.quadraticCurveTo(x, y + boxH, x, y + boxH - r);
+    context.lineTo(x, y + r);
+    context.quadraticCurveTo(x, y, x + r, y);
+    context.closePath();
+    context.fillStyle = "rgba(255, 255, 255, 0.94)";
+    context.fill();
+    context.lineWidth = 5;
+    context.strokeStyle = "rgba(47, 33, 0, 0.5)";
+    context.stroke();
+    context.lineWidth = 9;
+    context.strokeStyle = "rgba(255, 255, 255, 0.98)";
     context.strokeText(text, 0, 0);
     context.fillStyle = "#111827";
     context.fillText(text, 0, 0);
@@ -320,9 +347,8 @@ const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotat
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, rotation: rotationRad }));
-  const height = 0.14;
   sprite.scale.set(height * (canvas.width / canvas.height), height, 1);
-  sprite.renderOrder = 96;
+  sprite.renderOrder = 112;
   sprite.userData.viewDisplaySkipEdges = true;
   if (param) {
     sprite.userData.kind = "windowDimensionEdit";
@@ -331,7 +357,7 @@ const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotat
   return sprite;
 };
 
-const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) => {
+const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0, height = 0.2) => {
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       color: 0xffffff,
@@ -342,8 +368,9 @@ const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) 
       rotation: rotationRad
     })
   );
-  sprite.scale.set(0.62, 0.22, 1);
-  sprite.renderOrder = 97;
+  const scale = height / 0.2;
+  sprite.scale.set(0.72 * scale, 0.3 * scale, 1);
+  sprite.renderOrder = 113;
   sprite.userData.kind = "windowDimensionEdit";
   sprite.userData.windowDimensionParam = param;
   sprite.userData.viewDisplaySkipEdges = true;
@@ -389,14 +416,39 @@ const createWindowSwingControlSprite = (action: WindowSwingControlAction, rotati
   return sprite;
 };
 
-const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
+const createDimensionTube = (a: THREE.Vector3, b: THREE.Vector3, radius: number, color: number, renderOrder: number) => {
+  const delta = b.clone().sub(a);
+  const length = delta.length();
+  if (length < 0.0001) return null;
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, length, 10),
+    new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })
+  );
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.multiplyScalar(1 / length));
+  mesh.renderOrder = renderOrder;
+  mesh.userData.viewDisplaySkipEdges = true;
+  return mesh;
+};
+
+const createDimensionLine = (points: THREE.Vector3[], color = WINDOW_DIMENSION_COLOR) => {
+  const group = new THREE.Group();
+  group.renderOrder = 108;
+  group.userData.viewDisplaySkipEdges = true;
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
     new THREE.LineBasicMaterial({ color, depthTest: false, depthWrite: false })
   );
-  line.renderOrder = 90;
+  line.renderOrder = 109;
   line.userData.viewDisplaySkipEdges = true;
-  return line;
+  group.add(line);
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    const halo = createDimensionTube(points[i]!, points[i + 1]!, WINDOW_DIMENSION_HALO_RADIUS, WINDOW_DIMENSION_HALO_COLOR, 107);
+    const stroke = createDimensionTube(points[i]!, points[i + 1]!, WINDOW_DIMENSION_LINE_RADIUS, color, 110);
+    if (halo) group.add(halo);
+    if (stroke) group.add(stroke);
+  }
+  return group;
 };
 
 const createSelectionLine = (points: THREE.Vector3[]) => {
@@ -531,6 +583,7 @@ const addWidthDimension = (
     sillLabel: string;
     extensionGapM?: number;
     labelRotationRad?: number;
+    labelHeight?: number;
   }
 ) => {
   const tick = 0.042;
@@ -560,20 +613,21 @@ const addWidthDimension = (
     ])
   );
   const labelRotationRad = args.labelRotationRad ?? 0;
+  const labelHeight = args.labelHeight ?? 0.2;
   const addEditableLabel = (text: string, position: THREE.Vector3, param: WindowDimensionParam) => {
-    const sprite = createDimensionSprite(text, param, labelRotationRad);
+    const sprite = createDimensionSprite(text, param, labelRotationRad, labelHeight);
     sprite.position.copy(position);
     parent.add(sprite);
 
-    const hit = createDimensionHitSprite(param, labelRotationRad);
+    const hit = createDimensionHitSprite(param, labelRotationRad, labelHeight);
     hit.position.copy(position);
     parent.add(hit);
   };
 
-  const widthSprite = createDimensionSprite(args.widthLabel, "widthMm", labelRotationRad);
+  const widthSprite = createDimensionSprite(args.widthLabel, "widthMm", labelRotationRad, labelHeight);
   widthSprite.position.copy(args.widthTextPos);
   parent.add(widthSprite);
-  const widthHit = createDimensionHitSprite("widthMm", labelRotationRad);
+  const widthHit = createDimensionHitSprite("widthMm", labelRotationRad, labelHeight);
   widthHit.position.copy(args.widthTextPos);
   parent.add(widthHit);
   addEditableLabel(args.heightLabel, args.heightTextPos, "heightMm");
@@ -692,15 +746,16 @@ const rebuildWindowSelection = (
     b: new THREE.Vector3(halfW, planY, z1),
     dimA: new THREE.Vector3(-halfW, planY, dimZ),
     dimB: new THREE.Vector3(halfW, planY, dimZ),
-    widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.09),
-    heightTextPos: new THREE.Vector3(-0.16, planY, dimZ + 0.09),
-    sillTextPos: new THREE.Vector3(0.18, planY, dimZ + 0.09),
+    widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.18),
+    heightTextPos: new THREE.Vector3(-0.46, planY, dimZ + 0.18),
+    sillTextPos: new THREE.Vector3(0.46, planY, dimZ + 0.18),
     tickAxisA: new THREE.Vector3(1, 0, 0),
     tickAxisB: new THREE.Vector3(0, 0, 1),
     widthLabel,
     heightLabel,
     sillLabel,
-    labelRotationRad: planLabelRotationRad
+    labelRotationRad: planLabelRotationRad,
+    labelHeight: 0.34
   });
   const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
   const controlDepthOffset = halfT + 0.22;
