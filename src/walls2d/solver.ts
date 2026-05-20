@@ -277,17 +277,10 @@ export function solveWallNetwork(
         sa[A.end] = res.mainEnd;
         sb[B.end] = res.branchEnd;
       } else {
-        const angleDot = Math.abs(dot(spineDir(A.wall, A.end), spineDir(B.wall, B.end)));
-        if (angleDot > 0.15) {
-          const res = solveSideButtCornerAtNode(A.wall, A.end, B.wall, B.end);
-          sa[A.end] = res.mainEnd;
-          sb[B.end] = res.branchEnd;
-        } else {
-          const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
-          sa[A.end] = res.aEnd;
-          sb[B.end] = res.bEnd;
-          if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
-        }
+        const res = solveMiterAtNode(A.wall, A.end, B.wall, B.end, { miterLimit });
+        sa[A.end] = res.aEnd;
+        sb[B.end] = res.bEnd;
+        if (res.aEnd.join === "bevel" && res.aEnd.bevelJoinPoly) joinPolys.push(res.aEnd.bevelJoinPoly);
       }
       continue;
     }

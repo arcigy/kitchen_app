@@ -84,22 +84,35 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("shallow equal-priority corner side-butts instead of making a long spike", () => {
+  test("shallow equal-priority corner bevels instead of making a long spike", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(res.joinPolys).toHaveLength(0);
+    expect(solvedA.b.join).toBe("bevel");
+    expect(solvedB.a.join).toBe("bevel");
+    expect(res.joinPolys).toHaveLength(1);
     expect(solvedA.outline).toHaveLength(4);
     expect(solvedB.outline).toHaveLength(4);
     expect(solvedA.b.ownedCapPoly).toBeUndefined();
     expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(Math.max(...solvedB.outline.map((point) => dist(P(0, 0), point)))).toBeLessThan(5.1);
-    expect(Math.max(dist(P(0, 0), solvedB.a.left), dist(P(0, 0), solvedB.a.right))).toBeLessThan(0.35);
+    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.25);
+  });
+
+  test("equal-priority closed angled outline keeps ordinary corner joins", () => {
+    const left = wall("left", P(0, 0), P(0, 5), 150);
+    const top = wall("top", P(0, 5), P(4, 5), 150);
+    const upperRight = wall("upperRight", P(4, 5), P(6, 2), 150);
+    const lowerRight = wall("lowerRight", P(6, 2), P(3, 0.5), 150);
+    const bottom = wall("bottom", P(3, 0.5), P(0, 0), 150);
+    const res = solveWallNetwork([left, top, upperRight, lowerRight, bottom], { nodeTolM: 1e-6 });
+
+    for (const solvedWall of res.walls) {
+      expect(solvedWall.a.join).not.toBe("butt");
+      expect(solvedWall.b.join).not.toBe("butt");
+    }
   });
 
   test("clamps an angled branch to the main wall end face", () => {
