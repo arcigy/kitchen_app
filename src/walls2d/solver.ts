@@ -20,6 +20,8 @@ export type WallSolved = {
 
 type Node = { id: string; p: Point; incident: Array<{ wall: Wall; end: WallEnd }> };
 
+export const DEFAULT_WALL_MITER_LIMIT = 1.75;
+
 function key(p: Point, tol = 1e-3) {
   // tol in meters -> quantize
   const qx = Math.round(p.x / tol);
@@ -125,7 +127,7 @@ export function solveWallNetwork(
   opts: { nodeTolM?: number; miterLimit?: number } = {}
 ): { walls: WallSolved[]; joinPolys: Point[][]; debug: { nodes: Node[] } } {
   const nodeTolM = opts.nodeTolM ?? 0.02;
-  const miterLimit = opts.miterLimit ?? 8;
+  const miterLimit = opts.miterLimit ?? DEFAULT_WALL_MITER_LIMIT;
 
   const nodesMap = new Map<string, Node>();
   const pushNode = (p: Point, wall: Wall, end: WallEnd) => {

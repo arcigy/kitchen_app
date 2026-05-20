@@ -8,7 +8,7 @@ import type { AlignPickedLine, DoorInstance, KitchenWorktopInstance, LayoutInsta
 import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import { commitHistory } from "../layout/historyManager";
-import { solveWallNetwork } from "../walls2d/solver";
+import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
 import type { WallJustification } from "../walls2d/model";
 import {
@@ -125,7 +125,8 @@ export function createWallController(ctx: WallControllerContext) {
       exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
     }));
 
-  const solveWallsForRendering = () => solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: 8 });
+  const solveWallsForRendering = () =>
+    solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: DEFAULT_WALL_MITER_LIMIT });
 
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     const candidates: AlignPickedLine[] = [];
