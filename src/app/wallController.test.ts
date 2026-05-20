@@ -39,6 +39,34 @@ const createTestWallContext = (): WallControllerContext => ({
   nextWallId: () => "w1"
 });
 
+const getWorldVertices = (mesh: THREE.Mesh) => {
+  mesh.updateMatrixWorld(true);
+  const position = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const vertices: THREE.Vector3[] = [];
+  for (let i = 0; i < position.count; i += 1) {
+    vertices.push(mesh.localToWorld(new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i))));
+  }
+  return vertices;
+};
+
+const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: { x: number; z: number }) =>
+  ({
+    id,
+    params: {
+      thicknessMm: 150,
+      heightMm: 2600,
+      materialId: "default",
+      justification: "center",
+      exteriorSign: 1,
+      aMm,
+      bMm
+    },
+    heightMm: 2600,
+    root: new THREE.Group(),
+    mesh: new THREE.Mesh(new THREE.BoxGeometry(1, 2.6, 0.15), new THREE.MeshBasicMaterial()),
+    outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
+  }) as any;
+
 describe("wall plan fill", () => {
   it("keeps shape geometry Z coordinates on the same floorplan side", () => {
     const point = new THREE.Vector3(1.25, 2.5, 0).applyEuler(new THREE.Euler(WALL_PLAN_FILL_ROTATION_X, 0, 0));
@@ -109,5 +137,47 @@ describe("wall plan fill", () => {
     expect(position.getX(1)).toBeCloseTo(2.45);
     expect(position.getZ(0)).toBeCloseTo(-0.09);
     expect(position.getZ(2)).toBeCloseTo(0.09);
+  });
+
+  it("uses solved wall outlines for clean 3D corner joins without openings", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    ctx.walls.push(main, branch);
+
+    const controller = createWallController(ctx);
+    controller.rebuildWall(main);
+    controller.rebuildWall(branch);
+
+    const branchVertices = getWorldVertices(branch.mesh);
+    const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
+    expect(branchMinZ).toBeCloseTo(0.075, 5);
+  });
+
+  it("keeps corner wall meshes with openings trimmed to the solved join", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    ctx.walls.push(main, branch);
+    ctx.getWindowInsts = () =>
+      [
+        {
+          params: {
+            wallId: "branch",
+            widthMm: 900,
+            heightMm: 900,
+            sillHeightMm: 900,
+            centerMm: 2500
+          }
+        }
+      ] as any;
+
+    const controller = createWallController(ctx);
+    controller.rebuildWall(branch);
+
+    const branchVertices = getWorldVertices(branch.mesh);
+    const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
+    expect(branchMinZ).toBeCloseTo(0.075, 5);
+    expect(branch.mesh.userData.wallCutoutBounds).toHaveLength(1);
   });
 });

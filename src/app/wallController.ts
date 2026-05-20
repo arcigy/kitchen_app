@@ -115,6 +115,18 @@ export function createWallController(ctx: WallControllerContext) {
   const getWindowInsts = () => ctx.getWindowInsts?.() ?? (ctx.getWindowInst?.() ? [ctx.getWindowInst()!] : []);
   const getDoorInsts = () => ctx.getDoorInsts?.() ?? (ctx.getDoorInst?.() ? [ctx.getDoorInst()!] : []);
 
+  const makeWallSolverInput = () =>
+    walls.map((w) => ({
+      id: w.id,
+      a: { x: w.params.aMm.x / 1000, z: w.params.aMm.z / 1000 },
+      b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
+      thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
+      justification: w.params.justification ?? "center",
+      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
+    }));
+
+  const solveWallsForRendering = () => solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: 8 });
+
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     const candidates: AlignPickedLine[] = [];
 
@@ -724,6 +736,68 @@ export function createWallController(ctx: WallControllerContext) {
     return geometry;
   }
 
+  function makeWallPrismGeometryFromOutline(
+    outline: Array<{ x: number; z: number }>,
+    origin: THREE.Vector3,
+    dir: THREE.Vector3,
+    heightM: number
+  ) {
+    const d = dir.clone();
+    if (d.lengthSq() < 1e-8 || outline.length < 3) return null;
+    d.normalize();
+    const left = new THREE.Vector3(-d.z, 0, d.x);
+    const contour = outline.map((point) => {
+      const dx = point.x - origin.x;
+      const dz = point.z - origin.z;
+      return new THREE.Vector2(dx * d.x + dz * d.z, dx * left.x + dz * left.z);
+    });
+
+    const filtered: THREE.Vector2[] = [];
+    for (const point of contour) {
+      const prev = filtered[filtered.length - 1];
+      if (prev && prev.distanceToSquared(point) < 1e-10) continue;
+      filtered.push(point);
+    }
+    if (filtered.length > 2 && filtered[0].distanceToSquared(filtered[filtered.length - 1]) < 1e-10) filtered.pop();
+    if (filtered.length < 3) return null;
+
+    let area = 0;
+    for (let i = 0; i < filtered.length; i += 1) {
+      const a = filtered[i];
+      const b = filtered[(i + 1) % filtered.length];
+      area += a.x * b.y - b.x * a.y;
+    }
+    if (area < 0) filtered.reverse();
+
+    const triangles = THREE.ShapeUtils.triangulateShape(filtered, []);
+    if (triangles.length === 0) return null;
+
+    const halfH = Math.max(0.001, heightM) / 2;
+    const vertices: number[] = [];
+    for (const point of filtered) vertices.push(point.x, -halfH, point.y);
+    for (const point of filtered) vertices.push(point.x, halfH, point.y);
+
+    const n = filtered.length;
+    const indices: number[] = [];
+    for (const tri of triangles) {
+      const [a, b, c] = tri;
+      indices.push(a, b, c);
+      indices.push(n + c, n + b, n + a);
+    }
+    for (let i = 0; i < n; i += 1) {
+      const j = (i + 1) % n;
+      indices.push(i, j, n + j, i, n + j, n + i);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
   function removeWallCutoutReveal(mesh: THREE.Mesh) {
     for (const child of [...mesh.children]) {
       if (child.name !== WALL_CUTOUT_REVEAL_NAME) continue;
@@ -772,6 +846,36 @@ export function createWallController(ctx: WallControllerContext) {
     mesh.userData.wallCutoutBounds = cutoutBounds.map((bounds) => ({ ...bounds }));
   }
 
+  function updateWallMeshFromSolvedOutline(
+    mesh: THREE.Mesh,
+    outline: Array<{ x: number; z: number }>,
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    heightMm = wallDefault.heightMm,
+    syncMaterials = false
+  ) {
+    const d = b.clone().sub(a);
+    if (d.lengthSq() < 1e-8) {
+      updateWallMesh(mesh, a, b, wallDefault.thicknessMm, heightMm, [], syncMaterials);
+      return false;
+    }
+
+    const h = Math.max(1, heightMm) / 1000;
+    const origin = a.clone().add(b).multiplyScalar(0.5);
+    const geometry = makeWallPrismGeometryFromOutline(outline, origin, d, h);
+    if (!geometry) return false;
+
+    removeWallCutoutReveal(mesh);
+    if (syncMaterials) syncWallMeshMaterials(mesh, false);
+    mesh.geometry.dispose();
+    mesh.geometry = geometry;
+    mesh.position.set(origin.x, h / 2, origin.z);
+    mesh.rotation.set(0, -Math.atan2(d.z, d.x), 0);
+    mesh.userData.viewDisplaySkipEdges = ctx.getViewMode() === "2d";
+    mesh.userData.wallCutoutBounds = [];
+    return true;
+  }
+
   function rebuildWallPlanMesh() {
     for (const [, line] of wallPlanMeshes) {
       wallPlanGroup.remove(line);
@@ -791,16 +895,7 @@ export function createWallController(ctx: WallControllerContext) {
 
     if (walls.length === 0) return;
 
-    const modelWalls = walls.map((w) => ({
-      id: w.id,
-      a: { x: w.params.aMm.x / 1000, z: w.params.aMm.z / 1000 },
-      b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
-      thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
-      justification: w.params.justification ?? "center",
-      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
-    }));
-
-    const solved = solveWallNetwork(modelWalls, { nodeTolM: wallJoinTolMm / 1000, miterLimit: 8 });
+    const solved = solveWallsForRendering();
     wallSolvedOutlines.clear();
     ctx.setWallSolvedJoinPolys(solved.joinPolys.map((poly) => poly.map((point) => ({ x: point.x, z: point.z }))));
     ctx.setWallUnionPolys(null);
@@ -1088,7 +1183,7 @@ export function createWallController(ctx: WallControllerContext) {
       };
 
       // centerlines + outlines
-      for (const w of modelWalls) {
+      for (const w of makeWallSolverInput()) {
         mkLine([w.a, w.b], 0xffd166, 0.031);
         const poly = wallSolvedOutlines.get(w.id);
         if (poly && poly.length >= 3) {
@@ -1214,7 +1309,9 @@ export function createWallController(ctx: WallControllerContext) {
     const just = w.params.justification ?? "center";
     const s = (w.params.exteriorSign ?? 1) as 1 | -1;
     const { a, b } = wallRefLineToCenterLine(refA, refB, w.params.thicknessMm, just, s);
-    // Revit-like join rendering in 3D: extend ends to form miter-like corner joins.
+    const solvedOutline = solveWallsForRendering().walls.find((wall) => wall.id === w.id)?.outline ?? null;
+    if (solvedOutline) wallSolvedOutlines.set(w.id, solvedOutline);
+    // Revit-like join rendering in 3D: use the solved wall footprint for clean corner joins.
     // This does not change stored axis endpoints (aMm/bMm); only the rendered mesh.
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-8) {
@@ -1271,11 +1368,29 @@ export function createWallController(ctx: WallControllerContext) {
       return Math.min(1.2, Math.max(0, ext));
     };
 
-    const extA = joinExtAt(aMmC, "a");
-    const extB = joinExtAt(bMmC, "b");
+    const renderSegmentFromSolvedOutline = () => {
+      if (!solvedOutline || solvedOutline.length < 3) return null;
+      const origin = a.clone().add(b).multiplyScalar(0.5);
+      const projected = solvedOutline.map((point) => {
+        const dx = point.x - origin.x;
+        const dz = point.z - origin.z;
+        return dx * d.x + dz * d.z;
+      });
+      const minX = Math.min(...projected);
+      const maxX = Math.max(...projected);
+      if (!isFinite(minX) || !isFinite(maxX) || maxX - minX < 0.001) return null;
+      return {
+        a: origin.clone().addScaledVector(d, minX),
+        b: origin.clone().addScaledVector(d, maxX)
+      };
+    };
 
-    const aExt = a.clone().addScaledVector(d, -extA);
-    const bExt = b.clone().addScaledVector(d, extB);
+    const solvedRenderSegment = renderSegmentFromSolvedOutline();
+    const extA = solvedRenderSegment ? 0 : joinExtAt(aMmC, "a");
+    const extB = solvedRenderSegment ? 0 : joinExtAt(bMmC, "b");
+    const aExt = solvedRenderSegment?.a ?? a.clone().addScaledVector(d, -extA);
+    const bExt = solvedRenderSegment?.b ?? b.clone().addScaledVector(d, extB);
+    const renderMid = aExt.clone().add(bExt).multiplyScalar(0.5);
     const wallWindows = getWindowInsts().filter((windowInst) => windowInst.params.wallId === w.id);
     const wallDoors = getDoorInsts().filter((doorInst) => doorInst.params.wallId === w.id);
     const cutouts: WallMeshCutout[] = [];
@@ -1283,10 +1398,9 @@ export function createWallController(ctx: WallControllerContext) {
       const widthM = Math.max(0.05, windowInst.params.widthMm / 1000);
       const heightM = Math.max(0.05, windowInst.params.heightMm / 1000);
       const sillM = Math.max(0, windowInst.params.sillHeightMm / 1000);
-      const centerFromExtendedStartM = extA + windowInst.params.centerMm / 1000;
-      const extendedLenM = aExt.distanceTo(bExt);
+      const centerWorld = a.clone().addScaledVector(d, windowInst.params.centerMm / 1000);
       cutouts.push({
-        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        centerLocalX: centerWorld.sub(renderMid).dot(d),
         widthM,
         sillM,
         heightM
@@ -1295,14 +1409,18 @@ export function createWallController(ctx: WallControllerContext) {
     for (const doorInst of wallDoors) {
       const widthM = Math.max(0.05, doorInst.params.widthMm / 1000);
       const heightM = Math.max(0.05, doorInst.params.heightMm / 1000);
-      const centerFromExtendedStartM = extA + doorInst.params.centerMm / 1000;
-      const extendedLenM = aExt.distanceTo(bExt);
+      const centerWorld = a.clone().addScaledVector(d, doorInst.params.centerMm / 1000);
       cutouts.push({
-        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        centerLocalX: centerWorld.sub(renderMid).dot(d),
         widthM,
         sillM: 0,
         heightM
       });
+    }
+
+    if (cutouts.length === 0 && solvedOutline && updateWallMeshFromSolvedOutline(w.mesh, solvedOutline, a, b, w.params.heightMm, true)) {
+      syncWallOutline(w);
+      return;
     }
 
     updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm, cutouts, true);
