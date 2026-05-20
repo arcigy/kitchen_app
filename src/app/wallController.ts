@@ -11,7 +11,6 @@ import { commitHistory } from "../layout/historyManager";
 import { solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
 import type { WallJustification } from "../walls2d/model";
-import { getWallMaterialOption } from "./wallMaterials";
 import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
@@ -503,8 +502,8 @@ export function createWallController(ctx: WallControllerContext) {
     return { outer: out, inner: inn };
   }
 
-  function configureWallBodyMaterial(material: THREE.MeshBasicMaterial, materialId = wallDefault.materialId) {
-    material.color.setHex(getWallMaterialOption(materialId).color);
+  function configureWallBodyMaterial(material: THREE.MeshBasicMaterial) {
+    material.color.setHex(0xb8c0cb);
     material.transparent = false;
     material.opacity = 1;
     material.depthWrite = true;
@@ -521,9 +520,9 @@ export function createWallController(ctx: WallControllerContext) {
     material.needsUpdate = true;
   }
 
-  function createWallBodyMaterial(materialId = wallDefault.materialId) {
+  function createWallBodyMaterial() {
     const material = new THREE.MeshBasicMaterial();
-    configureWallBodyMaterial(material, materialId);
+    configureWallBodyMaterial(material);
     return material;
   }
 
@@ -533,43 +532,43 @@ export function createWallController(ctx: WallControllerContext) {
     return material;
   }
 
-  function syncWallMeshMaterials(mesh: THREE.Mesh, hasCutoutReveal: boolean, materialId = wallDefault.materialId) {
+  function syncWallMeshMaterials(mesh: THREE.Mesh, hasCutoutReveal: boolean) {
     const current = mesh.material as THREE.Material | THREE.Material[];
     if (hasCutoutReveal) {
       if (Array.isArray(current)) {
-        const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial(materialId);
+        const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial();
         const reveal = current[1] instanceof THREE.MeshBasicMaterial ? current[1] : createWallRevealMaterial();
         if (current[0] && current[0] !== body) current[0].dispose();
         if (current[1] && current[1] !== reveal) current[1].dispose();
         for (const extra of current.slice(2)) extra.dispose();
-        configureWallBodyMaterial(body, materialId);
+        configureWallBodyMaterial(body);
         configureWallRevealMaterial(reveal);
         mesh.material = [body, reveal];
       } else {
-        const body = current instanceof THREE.MeshBasicMaterial ? current : createWallBodyMaterial(materialId);
+        const body = current instanceof THREE.MeshBasicMaterial ? current : createWallBodyMaterial();
         if (current !== body) current.dispose();
-        configureWallBodyMaterial(body, materialId);
+        configureWallBodyMaterial(body);
         mesh.material = [body, createWallRevealMaterial()];
       }
       return;
     }
 
     if (Array.isArray(current)) {
-      const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial(materialId);
+      const body = current[0] instanceof THREE.MeshBasicMaterial ? current[0] : createWallBodyMaterial();
       if (current[0] && current[0] !== body) current[0].dispose();
       for (const extra of current.slice(1)) extra.dispose();
-      configureWallBodyMaterial(body, materialId);
+      configureWallBodyMaterial(body);
       mesh.material = body;
       return;
     }
 
     if (current instanceof THREE.MeshBasicMaterial) {
-      configureWallBodyMaterial(current, materialId);
+      configureWallBodyMaterial(current);
       return;
     }
 
     current.dispose();
-    mesh.material = createWallBodyMaterial(materialId);
+    mesh.material = createWallBodyMaterial();
   }
 
   function getWallCutoutBounds(len: number, h: number, cutout: WallMeshCutout): WallCutoutBounds | null {
@@ -747,8 +746,7 @@ export function createWallController(ctx: WallControllerContext) {
     thicknessMm: number,
     heightMm = wallDefault.heightMm,
     cutouts: WallMeshCutout | WallMeshCutout[] = [],
-    syncMaterials = false,
-    materialId = wallDefault.materialId
+    syncMaterials = false
   ) {
     const aa = a ?? new THREE.Vector3(0, 0, 0);
     const bb = b ?? aa.clone();
@@ -765,7 +763,7 @@ export function createWallController(ctx: WallControllerContext) {
     const cutoutBounds = getWallCutoutBoundsList(len, h, cutoutList);
 
     removeWallCutoutReveal(mesh);
-    if (syncMaterials) syncWallMeshMaterials(mesh, cutoutBounds.length > 0, materialId);
+    if (syncMaterials) syncWallMeshMaterials(mesh, cutoutBounds.length > 0);
     mesh.geometry.dispose();
     mesh.geometry = makeWallBoxGeometry(len, h, thickM, cutoutList);
     mesh.position.set(midX, h / 2, midZ);
@@ -835,7 +833,6 @@ export function createWallController(ctx: WallControllerContext) {
         halfW: number;
         halfT: number;
         faceHalfT: number;
-        wallId: string;
         corners: Array<{ x: number; z: number }>;
       }> = [];
 
@@ -876,7 +873,7 @@ export function createWallController(ctx: WallControllerContext) {
           center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
         ].map((point) => ({ x: point.x, z: point.z }));
 
-        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, wallId, corners });
+        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
       };
 
       for (const windowInst of getWindowInsts()) {
@@ -965,7 +962,7 @@ export function createWallController(ctx: WallControllerContext) {
       );
     };
 
-    const makePlanFillMesh = (rings: Array<Array<[number, number]>>, color: number, y = 0.01) => {
+    const makePlanFillMesh = (rings: Array<Array<[number, number]>>, y = 0.01) => {
       if (!rings || rings.length === 0) return null;
 
       const toVec2Ring = (ring: Array<[number, number]>) => {
@@ -987,7 +984,7 @@ export function createWallController(ctx: WallControllerContext) {
       const mesh = new THREE.Mesh(
         geom,
         new THREE.MeshBasicMaterial({
-          color,
+          color: 0xb8c0cb,
           transparent: false,
           opacity: 1,
           depthTest: false,
@@ -1001,44 +998,10 @@ export function createWallController(ctx: WallControllerContext) {
       return mesh;
     };
 
-    const getWallPlanColor = (wallId: string | null | undefined) => {
-      const wall = wallId ? walls.find((item) => item.id === wallId) ?? null : null;
-      return getWallMaterialOption(wall?.params.materialId).color;
-    };
-
-    for (const wall of solved.walls) {
-      if (wall.outline.length < 3) continue;
-      let wallFillSource: WallPlanMultiPolygon = [[toRing(wall.outline)]];
-      const wallOpeningPolys: WallPlanMultiPolygon[] = windowOpeningClips
-        .filter((clip) => clip.wallId === wall.id)
-        .map((clip) => [[toRing(clip.corners)]]);
-      if (wallOpeningPolys.length > 0) {
-        try {
-          wallFillSource = polygonClipper.difference(wallFillSource, ...wallOpeningPolys);
-        } catch {
-          wallFillSource = [[toRing(wall.outline)]];
-        }
-      }
-      const color = getWallPlanColor(wall.id);
-      for (const rings of wallFillSource) {
-        const mesh = makePlanFillMesh(rings, color);
-        if (!mesh) continue;
-        mesh.name = `wallPlanFill_${wall.id}`;
-        mesh.userData.kind = "wallPlanFill";
-        mesh.userData.wallId = wall.id;
-        mesh.userData.viewDisplaySkipEdges = true;
-        wallJoinMeshes.push(mesh);
-        wallPlanGroup.add(mesh);
-      }
-    }
-
-    const joinColor = getWallPlanColor(walls[0]?.id ?? null);
-    for (const poly of solved.joinPolys) {
-      if (poly.length < 3) continue;
-      const mesh = makePlanFillMesh([toRing(poly)], joinColor, 0.0105);
+    for (const rings of fillSource) {
+      const mesh = makePlanFillMesh(rings);
       if (!mesh) continue;
-      mesh.name = "wallPlanJoinFill";
-      mesh.userData.kind = "wallPlanJoinFill";
+      mesh.name = "wallPlanFill";
       mesh.userData.viewDisplaySkipEdges = true;
       wallJoinMeshes.push(mesh);
       wallPlanGroup.add(mesh);
@@ -1146,7 +1109,7 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function createWallMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, heightMm = wallDefault.heightMm) {
-    const mat = createWallBodyMaterial(wallDefault.materialId);
+    const mat = createWallBodyMaterial();
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, Math.max(1, heightMm) / 1000, thicknessMm / 1000), mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -1226,13 +1189,12 @@ export function createWallController(ctx: WallControllerContext) {
     thicknessMm: number,
     justification: "center" | "interior" | "exterior",
     exteriorSign: 1 | -1,
-    heightMm = wallDefault.heightMm,
-    materialId?: string
+    heightMm = wallDefault.heightMm
   ) {
     const a = refA ?? new THREE.Vector3(0, 0, 0);
     const b = refB ?? a.clone();
     const center = wallRefLineToCenterLine(a, b, thicknessMm, justification, exteriorSign);
-    updateWallMesh(mesh, center.a, center.b, thicknessMm, heightMm, [], Boolean(materialId), materialId);
+    updateWallMesh(mesh, center.a, center.b, thicknessMm, heightMm);
   }
 
   function makeWallPreviewMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
@@ -1256,7 +1218,7 @@ export function createWallController(ctx: WallControllerContext) {
     // This does not change stored axis endpoints (aMm/bMm); only the rendered mesh.
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-8) {
-      updateWallMesh(w.mesh, a, b, w.params.thicknessMm, w.params.heightMm, [], true, w.params.materialId);
+      updateWallMesh(w.mesh, a, b, w.params.thicknessMm, w.params.heightMm, [], true);
       syncWallOutline(w);
       return;
     }
@@ -1343,7 +1305,7 @@ export function createWallController(ctx: WallControllerContext) {
       });
     }
 
-    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm, cutouts, true, w.params.materialId);
+    updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm, cutouts, true);
     syncWallOutline(w);
   }
 

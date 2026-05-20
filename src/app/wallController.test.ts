@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { createWallController, WALL_PLAN_FILL_ROTATION_X, type WallControllerContext } from "./wallController";
-import { getWallMaterialOption } from "./wallMaterials";
 import type { AppState } from "../layout/appState";
 
 const createTestWallContext = (): WallControllerContext => ({
@@ -68,52 +67,6 @@ describe("wall plan fill", () => {
     expect((materials[1] as THREE.MeshBasicMaterial).color.getHex()).toBe(0xffffff);
     expect(mesh.geometry.groups.some((group) => group.materialIndex === 1)).toBe(true);
     expect(mesh.children.some((child) => child.name === "wallWindowCutoutReveal")).toBe(false);
-  });
-
-  it("applies the selected wall material color to the wall body", () => {
-    const controller = createWallController(createTestWallContext());
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.18), new THREE.MeshBasicMaterial());
-
-    controller.updateWallMesh(
-      mesh,
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(4, 0, 0),
-      180,
-      2600,
-      [],
-      true,
-      "wall.beige"
-    );
-
-    const body = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    expect((body as THREE.MeshBasicMaterial).color.getHex()).toBe(getWallMaterialOption("wall.beige").color);
-  });
-
-  it("uses the selected wall material color in floorplan fill", () => {
-    const ctx = createTestWallContext();
-    ctx.walls.push({
-      id: "w1",
-      params: {
-        thicknessMm: 180,
-        heightMm: 2600,
-        materialId: "wall.beige",
-        justification: "center",
-        exteriorSign: 1,
-        aMm: { x: 0, z: 0 },
-        bMm: { x: 4000, z: 0 }
-      },
-      heightMm: 2600,
-      root: new THREE.Group(),
-      mesh: new THREE.Mesh(new THREE.BoxGeometry(4, 2.6, 0.18), new THREE.MeshBasicMaterial()),
-      outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
-    } as any);
-    const controller = createWallController(ctx);
-
-    controller.rebuildWallPlanMesh();
-
-    const fill = ctx.wallJoinMeshes.find((mesh) => mesh.name === "wallPlanFill_w1");
-    expect(fill).toBeTruthy();
-    expect((fill!.material as THREE.MeshBasicMaterial).color.getHex()).toBe(getWallMaterialOption("wall.beige").color);
   });
 
   it("keeps wall face lines through the window opening in floorplan", () => {

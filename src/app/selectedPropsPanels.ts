@@ -25,8 +25,6 @@ import type {
 } from "./localTypes";
 import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
-import { createWallMaterialPicker } from "./wallMaterialPicker";
-import { getWallMaterialOption } from "./wallMaterials";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -287,19 +285,6 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
           just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
       });
     });
-
-    const wallMaterial = multiVal(selectedWalls, "materialId");
-    const materialPicker = createWallMaterialPicker({
-      value: wallMaterial.value ? String(wallMaterial.value) : null,
-      mixed: wallMaterial.mixed,
-      onChange: (materialId) => {
-        const resolved = getWallMaterialOption(materialId).id;
-        applyToSelectedWalls((wall) => {
-          wall.params.materialId = resolved;
-        });
-      }
-    });
-    props.row(s, "Farba steny", materialPicker);
 
     if (isMulti) return;
 

@@ -2,7 +2,6 @@ import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
 import type { MeasureState } from "./measureTools";
-import { createWallMaterialPicker } from "./wallMaterialPicker";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -24,9 +23,7 @@ type WallToolPropsContext = {
     b: THREE.Vector3,
     thicknessMm: number,
     justification: NonNullable<WallParams["justification"]>,
-    exteriorSign: 1 | -1,
-    heightMm?: number,
-    materialId?: string
+    exteriorSign: 1 | -1
   ) => void;
   setUnderlayStatus: (text: string) => void;
 };
@@ -89,19 +86,9 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
         wallDraw.hoverB ?? wallDraw.a,
         wallDefault.thicknessMm,
         wallDefault.justification ?? "center",
-        wallDefault.exteriorSign ?? 1,
-        undefined,
-        wallDefault.materialId
+        wallDefault.exteriorSign ?? 1
       );
     };
-    const materialPicker = createWallMaterialPicker({
-      value: wallDefault.materialId,
-      onChange: (materialId) => {
-        wallDefault.materialId = materialId;
-        updatePreview();
-      }
-    });
-    props.row(s, "Farba steny", materialPicker);
     const hint = document.createElement("div");
     hint.className = "muted";
     hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";

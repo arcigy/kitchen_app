@@ -135,9 +135,7 @@ type PropertiesRouterContext = {
     b: THREE.Vector3,
     thicknessMm: number,
     justification: NonNullable<WallParams["justification"]>,
-    exteriorSign: 1 | -1,
-    heightMm?: number,
-    materialId?: string
+    exteriorSign: 1 | -1
   ) => void;
   setUnderlayStatus: (status: string) => void;
   clearAllMeasurements: () => void;
