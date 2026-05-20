@@ -83,14 +83,12 @@ export function createWallSnapMarkers(args: {
   wallSnapMarkers.visible = false;
   args.layoutRoot.add(wallSnapMarkers);
 
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapGeom = new THREE.CircleGeometry(0.035, 16);
 
-  const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
-    const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
+  const makeSnapDot = (kind: "axis" | "endpoint") => {
+    const mat = kind === "axis" ? snapMatAxis : snapMatEnd;
     const mesh = new THREE.Mesh(snapGeom, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.02;
@@ -142,31 +140,6 @@ export function createWallSnapMarkers(args: {
     dotM.position.x = mid.x;
     dotM.position.z = mid.z;
     wallSnapMarkers.add(dotM);
-
-    const poly = args.getWallSolvedOutlines().get(wallId) ?? null;
-    if (poly && poly.length >= 3) {
-      for (const p of poly) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    } else {
-      const n = new THREE.Vector3(-d.z, 0, d.x);
-      const h = Math.max(1, wall.params.thicknessMm / 2) / 1000;
-      const corners = [
-        a.clone().addScaledVector(n, h),
-        a.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, h)
-      ];
-      for (const p of corners) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    }
 
     wallSnapMarkers.visible = args.getMode() === "layout";
   };
