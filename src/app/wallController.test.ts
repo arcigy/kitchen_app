@@ -277,6 +277,24 @@ describe("wall plan fill", () => {
     expect(selectedWallIds.has("upper")).toBe(false);
   });
 
+  it("moves connected trim endpoints atomically to a shared intersection", () => {
+    const ctx = createTestWallContext();
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 4000, z: 1000 });
+    ctx.walls.push(vertical, diagonal);
+    const controller = createWallController(ctx);
+    const intersection = { x: 250, z: 4750 };
+
+    const moved = controller.setWallEndpointsAndConnectedMm([
+      { wall: vertical, which: "b", next: intersection },
+      { wall: diagonal, which: "a", next: intersection }
+    ]);
+
+    expect(moved).toBe(true);
+    expect(vertical.params.bMm).toEqual(intersection);
+    expect(diagonal.params.aMm).toEqual(intersection);
+  });
+
   it("butts branch wall meshes into the main wall face without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });

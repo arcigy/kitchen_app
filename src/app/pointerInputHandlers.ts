@@ -926,8 +926,24 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             const dx2 = iMm.x - old2.x;
             const dz2 = iMm.z - old2.z;
 
-            if (dx1 !== 0 || dz1 !== 0) ctx.moveWallEndpointAndConnected(w, end1, dx1, dz1);
-            if (dx2 !== 0 || dz2 !== 0) ctx.moveWallEndpointAndConnected(w2, end2, dx2, dz2);
+            if (dx1 === 0 && dz1 === 0 && dx2 === 0 && dz2 === 0) {
+              ctx.setUnderlayStatus("Trim: no change.");
+              ctx.trimState.step = "pickTarget";
+              ctx.trimState.targetWallId = null;
+              ctx.trimState.targetPick = null;
+              ctx.trimState.targetClick = null;
+              ctx.mountProps();
+              return;
+            }
+
+            const moved = ctx.setWallEndpointsAndConnectedMm([
+              { wall: w, which: end1, next: iMm },
+              { wall: w2, which: end2, next: iMm }
+            ]);
+            if (!moved) {
+              ctx.mountProps();
+              return;
+            }
             ctx.commitHistory(ctx.S);
 
             ctx.trimState.lastTarget = ctx.trimState.targetPick;
@@ -956,12 +972,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const I = ctx.lineLineIntersectionXZ(aW, dW, picked.p, dC);
         if (!I) {
           ctx.setUnderlayStatus("Trim: cutter must not be parallel.");
-          return;
-        }
-
-        const t = I.clone().sub(aW).dot(ab) / len2;
-        if (t < -1e-5 || t > 1 + 1e-5) {
-          ctx.setUnderlayStatus("Trim: cutter must cross the wall segment.");
           return;
         }
 
@@ -999,7 +1009,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
-        ctx.moveWallEndpointAndConnected(w, moveWhich, dxMm, dzMm);
+        const moved = ctx.setWallEndpointAndConnectedMm(w, moveWhich, iMm);
+        if (!moved) {
+          ctx.mountProps();
+          return;
+        }
         ctx.commitHistory(ctx.S);
 
         ctx.trimState.lastTarget = ctx.trimState.targetPick ?? picked;

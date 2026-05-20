@@ -84,7 +84,7 @@ type PropertiesRouterContext = {
   props: PropertiesPanelApi;
   floorEdit: FloorEditState;
   floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
-  wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
+  wallDefault: Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "justification" | "exteriorSign" | "materialId">;
   wallDraw: WallDrawState;
   kitchenWorktopDraw: KitchenWorktopDrawState;
   sectionDraw: SectionDrawState;

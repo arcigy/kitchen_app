@@ -109,6 +109,7 @@ export type LayoutSnapshot = {
 };
 
 export type WallParams = {
+  typeId?: string | null;
   thicknessMm: number;
   heightMm: number;
   materialId: string;

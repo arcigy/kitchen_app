@@ -127,6 +127,7 @@ export type SectionElevationKey = "north" | "east" | "south" | "west";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 
 export type WallParams = {
+  typeId?: string | null;
   thicknessMm: number;
   heightMm: number;
   materialId: string;

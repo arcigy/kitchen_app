@@ -194,6 +194,7 @@ import {
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 import { installKitchenDebugApi } from "./app/kitchenDebugApi";
 import { createWallController, type WallPlanMultiPolygon } from "./app/wallController";
+import { DEFAULT_WALL_TYPE_ID } from "./app/wallTypes";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
@@ -475,6 +476,7 @@ export function startApp(initialArgs: AppArgs) {
   let wallCounter = 1;
   const wallJoinTolMm = 25;
   const wallDefault = {
+    typeId: DEFAULT_WALL_TYPE_ID,
     thicknessMm: 150,
     heightMm: 2600,
     materialId: "default",
@@ -729,6 +731,8 @@ export function startApp(initialArgs: AppArgs) {
   const lineLineIntersectionXZ = (...args: Parameters<ReturnType<typeof createWallController>["lineLineIntersectionXZ"]>) => wallController.lineLineIntersectionXZ(...args);
   const translateWallAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["translateWallAndConnected"]>) => wallController.translateWallAndConnected(...args);
   const moveWallEndpointAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["moveWallEndpointAndConnected"]>) => wallController.moveWallEndpointAndConnected(...args);
+  const setWallEndpointAndConnectedMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointAndConnectedMm"]>) => wallController.setWallEndpointAndConnectedMm(...args);
+  const setWallEndpointsAndConnectedMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointsAndConnectedMm"]>) => wallController.setWallEndpointsAndConnectedMm(...args);
   const setWallEndpointMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointMm"]>) => wallController.setWallEndpointMm(...args);
   const wallDirOutFromNode = (...args: Parameters<ReturnType<typeof createWallController>["wallDirOutFromNode"]>) => wallController.wallDirOutFromNode(...args);
   const joinExtensionM = (...args: Parameters<ReturnType<typeof createWallController>["joinExtensionM"]>) => wallController.joinExtensionM(...args);
@@ -2536,7 +2540,7 @@ export function startApp(initialArgs: AppArgs) {
   const setView2d = (...args: Parameters<ReturnType<typeof createViewModeController>["setView2d"]>) => createViewModeControllerResult.setView2d(...args);
   const setMode = (...args: Parameters<ReturnType<typeof createViewModeController>["setMode"]>) => createViewModeControllerResult.setMode(...args);
 
-  const buildLayoutExportPayload = () => createLayoutExportPayload({ windowInst, windows, doorInst, doors, columns, floors, sections, instances });
+  const buildLayoutExportPayload = () => createLayoutExportPayload({ windowInst, windows, doorInst, doors, walls, columns, floors, sections, instances });
 
   const vectorSnapshot = (v: THREE.Vector3) => ({ x: v.x, y: v.y, z: v.z });
   const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -3086,6 +3090,8 @@ export function startApp(initialArgs: AppArgs) {
     moveFloorEditSegment,
     moveFloorEditVertex,
     moveWallEndpointAndConnected,
+    setWallEndpointAndConnectedMm,
+    setWallEndpointsAndConnectedMm,
     nudgePinnedModuleChain,
     pickAlignLineAt,
     pickFloorEditElement,

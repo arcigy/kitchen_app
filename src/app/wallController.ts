@@ -11,6 +11,7 @@ import { commitHistory } from "../layout/historyManager";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
 import type { WallJustification } from "../walls2d/model";
+import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
@@ -60,6 +61,7 @@ export type WallControllerContext = {
   wallDebugGroup: THREE.Group;
   wallSolvedOutlines: Map<string, WallPlanPoint[]>;
   wallDefault: {
+    typeId?: string | null;
     thicknessMm: number;
     heightMm: number;
     materialId: string;
@@ -115,6 +117,24 @@ export function createWallController(ctx: WallControllerContext) {
   const showWallSnapMarkersFor = ctx.showWallSnapMarkersFor;
   const getWindowInsts = () => ctx.getWindowInsts?.() ?? (ctx.getWindowInst?.() ? [ctx.getWindowInst()!] : []);
   const getDoorInsts = () => ctx.getDoorInsts?.() ?? (ctx.getDoorInst?.() ? [ctx.getDoorInst()!] : []);
+
+  const syncWallIfcMetadata = (w: WallInstance) => {
+    const typeId = resolveWallTypeId(w.params);
+    const preset = getWallTypePreset(typeId);
+    w.mesh.userData.kind = "wall";
+    w.mesh.userData.wallId = w.id;
+    w.mesh.userData.ifc = {
+      className: "IfcWall",
+      predefinedType: preset?.ifcPredefinedType ?? "STANDARD",
+      elementId: w.id,
+      objectType: preset?.name ?? getWallTypeName(typeId),
+      name: preset?.name ?? getWallTypeName(typeId)
+    };
+    const existingTags = Array.isArray(w.mesh.userData.tags)
+      ? w.mesh.userData.tags.filter((tag): tag is string => typeof tag === "string" && !tag.startsWith("wallType:"))
+      : [];
+    w.mesh.userData.tags = Array.from(new Set([...existingTags, "wall", "ifc", "IfcWall", `wallType:${typeId}`]));
+  };
 
   const makeWallSolverInput = () =>
     walls.map((w) => ({
@@ -247,25 +267,32 @@ export function createWallController(ctx: WallControllerContext) {
     }
   };
 
-  const moveWallEndpointAndConnected = (w: WallInstance, which: "a" | "b", dxMm: number, dzMm: number) => {
+  const setWallEndpointsAndConnectedMm = (
+    edits: Array<{ wall: WallInstance; which: "a" | "b"; next: { x: number; z: number } }>
+  ) => {
+    if (edits.length === 0) return false;
     const prev = new Map<string, WallParams>();
     for (const ww of walls) prev.set(ww.id, JSON.parse(JSON.stringify(ww.params)) as WallParams);
 
-    const oldP = which === "a" ? { x: w.params.aMm.x, z: w.params.aMm.z } : { x: w.params.bMm.x, z: w.params.bMm.z };
-    const nextP = { x: oldP.x + dxMm, z: oldP.z + dzMm };
+    const normalized = edits.map((edit) => {
+      const old = edit.which === "a" ? edit.wall.params.aMm : edit.wall.params.bMm;
+      return {
+        wall: edit.wall,
+        which: edit.which,
+        old: { x: old.x, z: old.z },
+        next: { x: Math.round(edit.next.x), z: Math.round(edit.next.z) }
+      };
+    });
 
     const touched = new Set<string>();
-    touched.add(w.id);
-    if (which === "a") w.params.aMm = nextP;
-    else w.params.bMm = nextP;
-
     for (const other of walls) {
-      if (other.id === w.id) continue;
-      if (pinnedWallIds.has(other.id)) continue;
-      const ww = wallEndpointWhich(other, oldP, wallJoinTolMm);
-      if (ww) {
-        if (ww === "a") other.params.aMm = nextP;
-        else other.params.bMm = nextP;
+      if (pinnedWallIds.has(other.id) && !normalized.some((edit) => edit.wall.id === other.id)) continue;
+      for (const end of ["a", "b"] as const) {
+        const current = end === "a" ? other.params.aMm : other.params.bMm;
+        const match = normalized.find((edit) => mmDist(current, edit.old) <= wallJoinTolMm);
+        if (!match) continue;
+        if (end === "a") other.params.aMm = { ...match.next };
+        else other.params.bMm = { ...match.next };
         touched.add(other.id);
       }
     }
@@ -284,7 +311,17 @@ export function createWallController(ctx: WallControllerContext) {
       }
       rebuildWallPlanMesh();
       setUnderlayStatus("Move blocked: wall would overlap a module.");
+      return false;
     }
+    return true;
+  };
+
+  const setWallEndpointAndConnectedMm = (w: WallInstance, which: "a" | "b", nextP: { x: number; z: number }) =>
+    setWallEndpointsAndConnectedMm([{ wall: w, which, next: nextP }]);
+
+  const moveWallEndpointAndConnected = (w: WallInstance, which: "a" | "b", dxMm: number, dzMm: number) => {
+    const oldP = which === "a" ? w.params.aMm : w.params.bMm;
+    return setWallEndpointAndConnectedMm(w, which, { x: oldP.x + dxMm, z: oldP.z + dzMm });
   };
 
   function setWallEndpointMm(w: WallInstance, which: "a" | "b", p: { x: number; z: number }) {
@@ -330,6 +367,7 @@ export function createWallController(ctx: WallControllerContext) {
       return { x: -dir.z * sign, z: dir.x * sign };
     };
     const sameStyle = (a: WallInstance, b: WallInstance) =>
+      resolveWallTypeId(a.params) === resolveWallTypeId(b.params) &&
       a.params.thicknessMm === b.params.thicknessMm &&
       a.params.heightMm === b.params.heightMm &&
       a.params.materialId === b.params.materialId &&
@@ -1474,6 +1512,7 @@ export function createWallController(ctx: WallControllerContext) {
   function rebuildWall(w: WallInstance) {
     w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
     w.heightMm = w.params.heightMm;
+    syncWallIfcMetadata(w);
 
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
@@ -1615,6 +1654,7 @@ export function createWallController(ctx: WallControllerContext) {
     const aMm = toMmPoint(a);
     const bMm = toMmPoint(b);
     const params: WallParams = {
+      typeId: resolveWallTypeId(wallDefault),
       thicknessMm: Math.max(10, Math.round(thicknessMm)),
       heightMm: wallDefault.heightMm,
       materialId: wallDefault.materialId,
@@ -1651,6 +1691,8 @@ export function createWallController(ctx: WallControllerContext) {
     lineLineIntersectionXZ,
     translateWallAndConnected,
     moveWallEndpointAndConnected,
+    setWallEndpointAndConnectedMm,
+    setWallEndpointsAndConnectedMm,
     setWallEndpointMm,
     wallDirOutFromNode,
     joinExtensionM,
