@@ -208,7 +208,7 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
-    expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(6);
+    expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(5);
     expect(ctx.wallJoinMeshes.some((mesh) => mesh.name.startsWith("wallJoin3d"))).toBe(false);
   });
 
@@ -222,7 +222,7 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
-    expect(ctx.wallSolvedOutlines.get("diagonal")).toHaveLength(6);
+    expect(ctx.wallSolvedOutlines.get("diagonal")).toHaveLength(5);
     expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(4);
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { solveWallNetwork } from "./solver";
 import type { Wall } from "./model";
-import { cross, dist, sub } from "./geom";
+import { dist } from "./geom";
 
 const P = (x: number, z: number) => ({ x, z });
 
@@ -110,19 +110,30 @@ describe("walls2d join solver", () => {
     const cap = solvedMain.b.ownedCapPoly!;
 
     expect(res.joinPolys).toHaveLength(0);
-    expect(solvedMain.outline).toHaveLength(6);
-    expect(cap).toHaveLength(4);
+    expect(solvedMain.outline).toHaveLength(5);
+    expect(cap).toHaveLength(3);
     expect(cap[0].x).toBeCloseTo(-0.075, 6);
     expect(cap[0].z).toBeCloseTo(5, 6);
-    expect(cap[1].x).toBeCloseTo(-0.075, 6);
-    expect(cap[1].z).toBeCloseTo(5 + 0.075 * (1 + Math.SQRT2), 6);
+    expect(cap[1].x).toBeCloseTo(0.075, 6);
+    expect(cap[1].z).toBeCloseTo(5.031066017177982, 6);
     expect(cap[2].x).toBeCloseTo(0.075, 6);
-    expect(cap[2].z).toBeCloseTo(5.031066017177982, 6);
-    expect(cap[3].x).toBeCloseTo(0.075, 6);
-    expect(cap[3].z).toBeCloseTo(5, 6);
-    expect(Math.abs(cross(sub(cap[2], cap[1]), sub(solvedBranch.b.left, solvedBranch.a.left)))).toBeLessThan(1e-8);
+    expect(cap[2].z).toBeCloseTo(5, 6);
+    expect(cap[1]).toEqual(solvedBranch.a.left);
     expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
     expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
+  });
+
+  test("explicit side-butt cap does not grow a diamond past the opposite wall face", () => {
+    const main = wall("main", P(0, 5), P(0, 0), 150);
+    const branch = wall("branch", P(0, 0), P(5, 5), 150);
+    main.joinEnds = { b: { priority: 10 } };
+    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
+    const solvedMain = res.walls.find((w) => w.id === "main")!;
+    const cap = solvedMain.b.ownedCapPoly!;
+
+    expect(cap).toHaveLength(3);
+    expect(Math.min(...cap.map((point) => point.z))).toBeGreaterThan(-0.04);
+    expect(cap[1]).toEqual(res.walls.find((w) => w.id === "branch")!.a.right);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {
@@ -149,18 +160,16 @@ describe("walls2d join solver", () => {
     const solvedRight = res.walls.find((w) => w.id === "right")!;
 
     expect(res.joinPolys).toHaveLength(0);
-    expect(solvedTop.b.ownedCapPoly).toHaveLength(4);
+    expect(solvedTop.b.ownedCapPoly).toHaveLength(3);
     expect(solvedTop.b.ownedCapPoly![0]).toEqual({ x: 5, z: 5.075 });
-    expect(solvedTop.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: 5.075 });
-    expect(solvedTop.b.ownedCapPoly![2]).toEqual({ x: 5.075, z: 4.925 });
-    expect(solvedTop.b.ownedCapPoly![3]).toEqual({ x: 5, z: 4.925 });
-    expect(solvedRight.b.ownedCapPoly).toHaveLength(4);
+    expect(solvedTop.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: 4.925 });
+    expect(solvedTop.b.ownedCapPoly![2]).toEqual({ x: 5, z: 4.925 });
+    expect(solvedRight.b.ownedCapPoly).toHaveLength(3);
     expect(solvedRight.b.ownedCapPoly![0]).toEqual({ x: 5.075, z: 0 });
-    expect(solvedRight.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: -0.075 });
-    expect(solvedRight.b.ownedCapPoly![2]).toEqual({ x: 4.925, z: -0.075 });
-    expect(solvedRight.b.ownedCapPoly![3]).toEqual({ x: 4.925, z: 0 });
-    expect(solvedTop.outline).toHaveLength(6);
-    expect(solvedRight.outline).toHaveLength(6);
+    expect(solvedRight.b.ownedCapPoly![1]).toEqual({ x: 4.925, z: -0.075 });
+    expect(solvedRight.b.ownedCapPoly![2]).toEqual({ x: 4.925, z: 0 });
+    expect(solvedTop.outline).toHaveLength(5);
+    expect(solvedRight.outline).toHaveLength(5);
   });
 
   test("Case 6: T join (branch cut to main)", () => {
