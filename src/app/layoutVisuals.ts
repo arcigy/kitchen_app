@@ -177,6 +177,7 @@ export function createWallSnapMarkers(args: {
 export function createSelectionHighlights(args: {
   layoutRoot: THREE.Group;
   getMode: () => string;
+  getWalls: () => WallInstance[];
   getSelectedWallIds: () => Set<string>;
   getSelectedInstanceIds: () => Set<string>;
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
@@ -208,6 +209,22 @@ export function createSelectionHighlights(args: {
     }
 
     for (const id of args.getSelectedWallIds()) {
+      const wall = args.getWalls().find((item) => item.id === id) ?? null;
+      if (wall) {
+        const pts = [
+          new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000),
+          new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000)
+        ];
+        const geom = new THREE.BufferGeometry().setFromPoints(pts);
+        const line = new THREE.Line(
+          geom,
+          new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+        );
+        line.renderOrder = 60;
+        selectionHighlights.add(line);
+        continue;
+      }
+
       const poly = args.getWallSolvedOutlines().get(id) ?? null;
       if (!poly || poly.length < 3) continue;
       const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));

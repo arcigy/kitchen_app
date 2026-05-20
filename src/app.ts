@@ -418,6 +418,7 @@ export function startApp(initialArgs: AppArgs) {
   const { updateSelectionHighlights } = createSelectionHighlights({
     layoutRoot,
     getMode: () => mode,
+    getWalls: () => walls,
     getSelectedWallIds: () => selectedWallIds,
     getSelectedInstanceIds: () => selectedInstanceIds,
     getWallSolvedOutlines: () => wallSolvedOutlines,
