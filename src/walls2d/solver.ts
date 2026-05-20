@@ -150,11 +150,17 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
   if (best && Math.abs(dot(mainDir, branchDir)) > 0.15) {
     const leftProjection = dot(sub(best.left, mainNode), beyondMainEndDir);
     const rightProjection = dot(sub(best.right, mainNode), beyondMainEndDir);
-    const protrudingPoint = leftProjection >= rightProjection ? best.left : best.right;
-    if (Math.max(leftProjection, rightProjection) > 0.001) {
+    const protrudingSide: "left" | "right" = leftProjection >= rightProjection ? "left" : "right";
+    const protrudingPoint = protrudingSide === "left" ? best.left : best.right;
+    const protrudingProjection = Math.max(leftProjection, rightProjection);
+    if (protrudingProjection > 0.001) {
+      const rawProtrudingPoint = rawBranch[protrudingSide];
+      const rawProjection = dot(sub(rawProtrudingPoint, mainNode), beyondMainEndDir);
+      const capProjection = Math.max(protrudingProjection, rawProjection);
+      const capTip = add(protrudingPoint, mul(beyondMainEndDir, capProjection - protrudingProjection));
       const cutCorner = best.side === "left" ? rawMain.left : rawMain.right;
       const oppositeCorner = best.side === "left" ? rawMain.right : rawMain.left;
-      joinPoly = [oppositeCorner, cutCorner, protrudingPoint];
+      joinPoly = [oppositeCorner, cutCorner, capTip];
     }
   }
 
