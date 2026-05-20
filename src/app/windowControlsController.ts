@@ -389,48 +389,14 @@ const createWindowSwingControlSprite = (action: WindowSwingControlAction, rotati
   return sprite;
 };
 
-const dimensionSegmentRotation = (delta: THREE.Vector3) =>
-  Math.abs(delta.y) >= Math.abs(delta.z)
-    ? Math.atan2(delta.y, delta.x)
-    : Math.atan2(delta.z, delta.x);
-
-const createDimensionRibbon = (a: THREE.Vector3, b: THREE.Vector3, thickness: number, color: number) => {
-  const delta = b.clone().sub(a);
-  const length = delta.length();
-  if (length < 0.0001) return null;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      color,
-      transparent: true,
-      opacity: 1,
-      depthTest: false,
-      depthWrite: false,
-      rotation: dimensionSegmentRotation(delta)
-    })
-  );
-  sprite.position.copy(a).add(b).multiplyScalar(0.5);
-  sprite.scale.set(length, thickness, 1);
-  sprite.renderOrder = 91;
-  sprite.userData.viewDisplaySkipEdges = true;
-  return sprite;
-};
-
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
-  const group = new THREE.Group();
-  group.renderOrder = 90;
-  group.userData.viewDisplaySkipEdges = true;
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
     new THREE.LineBasicMaterial({ color, depthTest: false, depthWrite: false })
   );
   line.renderOrder = 90;
   line.userData.viewDisplaySkipEdges = true;
-  group.add(line);
-  for (let i = 0; i + 1 < points.length; i += 2) {
-    const ribbon = createDimensionRibbon(points[i]!, points[i + 1]!, 0.005, color);
-    if (ribbon) group.add(ribbon);
-  }
-  return group;
+  return line;
 };
 
 const createSelectionLine = (points: THREE.Vector3[]) => {
