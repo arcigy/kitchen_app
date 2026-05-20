@@ -65,7 +65,8 @@ describe("walls2d join solver", () => {
     expect(solvedA.b.join).toBe("butt");
     expect(solvedB.a.join).toBe("butt");
     expect(res.joinPolys).toHaveLength(1);
-    expect(res.joinPolys[0]).toHaveLength(3);
+    expect(res.joinPolys[0]).toHaveLength(4);
+    expect(Math.max(...res.joinPolys[0].map((point) => point.x))).toBeLessThanOrEqual(0.1875);
     expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
     expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
   });
@@ -78,13 +79,15 @@ describe("walls2d join solver", () => {
     const cap = res.joinPolys[0];
 
     expect(res.joinPolys).toHaveLength(1);
-    expect(cap).toHaveLength(3);
+    expect(cap).toHaveLength(4);
     expect(cap[0].x).toBeCloseTo(-0.075, 6);
     expect(cap[0].z).toBeCloseTo(5, 6);
-    expect(cap[1].x).toBeCloseTo(0.075, 6);
-    expect(cap[1].z).toBeCloseTo(5, 6);
+    expect(cap[1].x).toBeCloseTo(-0.075, 6);
+    expect(cap[1].z).toBeCloseTo(5 + 0.075 * (1 + Math.SQRT2), 6);
     expect(cap[2].x).toBeCloseTo(0.075 / Math.SQRT2, 6);
     expect(cap[2].z).toBeCloseTo(5 + 0.075 / Math.SQRT2, 6);
+    expect(cap[3].x).toBeCloseTo(0.075, 6);
+    expect(cap[3].z).toBeCloseTo(5, 6);
     expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
     expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
   });

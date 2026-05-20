@@ -1079,7 +1079,11 @@ export function createWallController(ctx: WallControllerContext) {
       d: { x: number; z: number }
     ) => (pointsClose(a, c) && pointsClose(b, d)) || (pointsClose(a, d) && pointsClose(b, c));
     const isInternalJoinBaseSegment = (a: { x: number; z: number }, b: { x: number; z: number }) =>
-      solved.joinPolys.some((poly) => poly.length === 3 && segmentsClose(a, b, poly[0], poly[1]));
+      solved.joinPolys.some((poly) => {
+        if (poly.length === 3) return segmentsClose(a, b, poly[0], poly[1]);
+        if (poly.length >= 4) return segmentsClose(a, b, poly[0], poly[poly.length - 1]);
+        return false;
+      });
 
     const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02, opacity = 0.98) => {
       if (pts.length < 2) return null;
