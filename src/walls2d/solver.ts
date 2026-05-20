@@ -9,6 +9,7 @@ export type WallSolvedEnd = {
   join: "butt" | "miter" | "bevel";
   // when bevel happens we also return a join quad (exterior->exterior->interior->interior)
   bevelJoinPoly?: Point[];
+  ownedCapPoly?: Point[];
 };
 
 export type WallSolved = {
@@ -169,9 +170,41 @@ function solveSideButtCornerAtNode(main: Wall, endMain: WallEnd, branch: Wall, e
   }
 
   return {
-    mainEnd: { ...rawMain, join: "butt" as const, bevelJoinPoly: joinPoly },
-    branchEnd: best ? { left: best.left, right: best.right, join: "butt" as const, bevelJoinPoly: joinPoly } : { ...rawBranch, join: "butt" as const }
+    mainEnd: { ...rawMain, join: "butt" as const, ownedCapPoly: joinPoly },
+    branchEnd: best ? { left: best.left, right: best.right, join: "butt" as const } : { ...rawBranch, join: "butt" as const }
   };
+}
+
+function samePoint(a: Point, b: Point) {
+  return dist(a, b) <= 1e-6;
+}
+
+function endPath(start: Point, end: Point, cap?: Point[]) {
+  if (cap && cap.length >= 3) {
+    const first = cap[0];
+    const last = cap[cap.length - 1];
+    if (samePoint(first, start) && samePoint(last, end)) return cap;
+    if (samePoint(first, end) && samePoint(last, start)) return [...cap].reverse();
+  }
+  return [start, end];
+}
+
+function dedupeLoop(points: Point[]) {
+  const out: Point[] = [];
+  for (const point of points) {
+    const prev = out[out.length - 1];
+    if (prev && samePoint(prev, point)) continue;
+    out.push(point);
+  }
+  if (out.length > 2 && samePoint(out[0], out[out.length - 1])) out.pop();
+  return out;
+}
+
+function solvedOutline(a: WallSolvedEnd, b: WallSolvedEnd) {
+  return dedupeLoop([
+    ...endPath(a.left, a.right, a.ownedCapPoly),
+    ...endPath(b.right, b.left, b.ownedCapPoly)
+  ]);
 }
 
 export function solveWallNetwork(
@@ -224,8 +257,6 @@ export function solveWallNetwork(
       const sb = solvedEnds.get(B.wall.id)!;
       sa[A.end] = res.mainEnd;
       sb[B.end] = res.branchEnd;
-      const capPoly = res.mainEnd.bevelJoinPoly ?? res.branchEnd.bevelJoinPoly;
-      if (capPoly && capPoly.length >= 3) joinPolys.push(capPoly);
       continue;
     }
 
@@ -255,8 +286,8 @@ export function solveWallNetwork(
     const se = solvedEnds.get(w.id)!;
     const a = se.a;
     const b = se.b;
-    // Build polygon with consistent winding: [a.left, a.right, b.right, b.left]
-    const outline = [a.left, a.right, b.right, b.left];
+    // Build polygon with consistent winding and fold owned corner caps into the wall itself.
+    const outline = solvedOutline(a, b);
     solved.push({ id: w.id, a, b, outline });
   }
 

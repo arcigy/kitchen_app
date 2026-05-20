@@ -64,9 +64,10 @@ describe("walls2d join solver", () => {
 
     expect(solvedA.b.join).toBe("butt");
     expect(solvedB.a.join).toBe("butt");
-    expect(res.joinPolys).toHaveLength(1);
-    expect(res.joinPolys[0]).toHaveLength(4);
-    expect(Math.abs(cross(sub(res.joinPolys[0][2], res.joinPolys[0][1]), sub(solvedB.b.right, solvedB.a.right)))).toBeLessThan(1e-8);
+    expect(res.joinPolys).toHaveLength(0);
+    expect(solvedA.outline).toHaveLength(6);
+    expect(solvedA.b.ownedCapPoly).toHaveLength(4);
+    expect(Math.abs(cross(sub(solvedA.outline[4], solvedA.outline[3]), sub(solvedB.b.right, solvedB.a.right)))).toBeLessThan(1e-8);
     expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
     expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
   });
@@ -75,10 +76,12 @@ describe("walls2d join solver", () => {
     const main = wall("main", P(0, 0), P(0, 5), 150);
     const branch = wall("branch", P(0, 5), P(5, 0), 150);
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
+    const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
-    const cap = res.joinPolys[0];
+    const cap = solvedMain.b.ownedCapPoly!;
 
-    expect(res.joinPolys).toHaveLength(1);
+    expect(res.joinPolys).toHaveLength(0);
+    expect(solvedMain.outline).toHaveLength(6);
     expect(cap).toHaveLength(4);
     expect(cap[0].x).toBeCloseTo(-0.075, 6);
     expect(cap[0].z).toBeCloseTo(5, 6);
@@ -111,18 +114,22 @@ describe("walls2d join solver", () => {
     const right = wall("right", P(5, 5), P(5, 0), 150);
     const bottom = wall("bottom", P(0, 0), P(5, 0), 150);
     const res = solveWallNetwork([top, right, bottom], { nodeTolM: 1e-6 });
+    const solvedTop = res.walls.find((w) => w.id === "top")!;
+    const solvedRight = res.walls.find((w) => w.id === "right")!;
 
-    expect(res.joinPolys).toHaveLength(2);
-    expect(res.joinPolys[0]).toHaveLength(4);
-    expect(res.joinPolys[0][0]).toEqual({ x: 5, z: 5.075 });
-    expect(res.joinPolys[0][1]).toEqual({ x: 5.075, z: 5.075 });
-    expect(res.joinPolys[0][2]).toEqual({ x: 5.075, z: 4.925 });
-    expect(res.joinPolys[0][3]).toEqual({ x: 5, z: 4.925 });
-    expect(res.joinPolys[1]).toHaveLength(4);
-    expect(res.joinPolys[1][0]).toEqual({ x: 5.075, z: 0 });
-    expect(res.joinPolys[1][1]).toEqual({ x: 5.075, z: -0.075 });
-    expect(res.joinPolys[1][2]).toEqual({ x: 4.925, z: -0.075 });
-    expect(res.joinPolys[1][3]).toEqual({ x: 4.925, z: 0 });
+    expect(res.joinPolys).toHaveLength(0);
+    expect(solvedTop.b.ownedCapPoly).toHaveLength(4);
+    expect(solvedTop.b.ownedCapPoly![0]).toEqual({ x: 5, z: 5.075 });
+    expect(solvedTop.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: 5.075 });
+    expect(solvedTop.b.ownedCapPoly![2]).toEqual({ x: 5.075, z: 4.925 });
+    expect(solvedTop.b.ownedCapPoly![3]).toEqual({ x: 5, z: 4.925 });
+    expect(solvedRight.b.ownedCapPoly).toHaveLength(4);
+    expect(solvedRight.b.ownedCapPoly![0]).toEqual({ x: 5.075, z: 0 });
+    expect(solvedRight.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: -0.075 });
+    expect(solvedRight.b.ownedCapPoly![2]).toEqual({ x: 4.925, z: -0.075 });
+    expect(solvedRight.b.ownedCapPoly![3]).toEqual({ x: 4.925, z: 0 });
+    expect(solvedTop.outline).toHaveLength(6);
+    expect(solvedRight.outline).toHaveLength(6);
   });
 
   test("Case 6: T join (branch cut to main)", () => {

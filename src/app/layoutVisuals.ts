@@ -222,7 +222,6 @@ export function createSelectionHighlights(args: {
         );
         line.renderOrder = 60;
         selectionHighlights.add(line);
-        continue;
       }
 
       const poly = args.getWallSolvedOutlines().get(id) ?? null;

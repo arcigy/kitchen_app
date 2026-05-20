@@ -198,6 +198,19 @@ describe("wall plan fill", () => {
     }
   });
 
+  it("keeps angled corner caps inside the owning wall outline", () => {
+    const ctx = createTestWallContext();
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    ctx.walls.push(vertical, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(6);
+    expect(ctx.wallJoinMeshes.some((mesh) => mesh.name.startsWith("wallJoin3d"))).toBe(false);
+  });
+
   it("merges same-style collinear fragments without a real branch at the shared node", () => {
     const ctx = createTestWallContext();
     const lower = createTestWallInstance("lower", { x: 0, z: 0 }, { x: 0, z: 3000 });
