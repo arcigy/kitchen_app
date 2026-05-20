@@ -64,9 +64,29 @@ describe("walls2d join solver", () => {
 
     expect(solvedA.b.join).toBe("butt");
     expect(solvedB.a.join).toBe("butt");
-    expect(res.joinPolys).toHaveLength(0);
+    expect(res.joinPolys).toHaveLength(1);
+    expect(res.joinPolys[0]).toHaveLength(3);
     expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
     expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
+  });
+
+  test("fills the main wall cap when an angled branch cuts past the end face", () => {
+    const main = wall("main", P(0, 0), P(0, 5), 150);
+    const branch = wall("branch", P(0, 5), P(5, 0), 150);
+    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
+    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+    const cap = res.joinPolys[0];
+
+    expect(res.joinPolys).toHaveLength(1);
+    expect(cap).toHaveLength(3);
+    expect(cap[0].x).toBeCloseTo(-0.075, 6);
+    expect(cap[0].z).toBeCloseTo(5, 6);
+    expect(cap[1].x).toBeCloseTo(0.075, 6);
+    expect(cap[1].z).toBeCloseTo(5, 6);
+    expect(cap[2].x).toBeCloseTo(0.075, 6);
+    expect(cap[2].z).toBeGreaterThan(5);
+    expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {
