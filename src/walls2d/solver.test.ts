@@ -28,8 +28,8 @@ describe("walls2d join solver", () => {
       ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
     );
     expect(min).toBeLessThanOrEqual(0.075);
-    expect(res.walls[0].a.join).toBe("butt");
-    expect(res.walls[1].a.join).toBe("butt");
+    expect(res.walls[0].a.join).toBe("miter");
+    expect(res.walls[1].a.join).toBe("miter");
   });
 
   test("Case 2: 45° same thickness (no broken acute join)", () => {
@@ -38,6 +38,21 @@ describe("walls2d join solver", () => {
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(2);
     expect(res.joinPolys.length).toBeGreaterThanOrEqual(0);
+  });
+
+  test("obtuse angled chain keeps the exterior miter instead of cutting an inside notch", () => {
+    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
+    const w2 = wall("b", P(0, 0), P(-4, 4), 150);
+    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
+    const solvedA = res.walls.find((w) => w.id === "a")!;
+    const solvedB = res.walls.find((w) => w.id === "b")!;
+
+    expect(solvedA.b.join).toBe("miter");
+    expect(solvedB.a.join).toBe("miter");
+    expect(solvedA.b.left.x).toBeLessThan(-0.15);
+    expect(solvedA.b.right.x).toBeGreaterThan(0.15);
+    expect(solvedB.a.left).toEqual(solvedA.b.left);
+    expect(solvedB.a.right).toEqual(solvedA.b.right);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {
@@ -61,7 +76,7 @@ describe("walls2d join solver", () => {
     const res = solveWallNetwork([main0, main1, branch], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(3);
   });
-  test("2-wall corner dominant wall owns the full branch thickness", () => {
+  test("2-wall corner trims both wall faces to one clean miter", () => {
     const main = wall("main", P(0, 0), P(5, 0), 150);
     const branch = wall("branch", P(0, 0), P(0, 5), 150);
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
@@ -69,12 +84,16 @@ describe("walls2d join solver", () => {
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
     expect(solvedMain.a.left.x).toBeCloseTo(-0.075, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(-0.075, 6);
+    expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(0.075, 6);
+    expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
+    expect(solvedBranch.a.left.x).toBeCloseTo(-0.075, 6);
     expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.z).toBeCloseTo(-0.075, 6);
   });
 
-  test("2-wall corner dominant wall extension follows branch thickness", () => {
+  test("2-wall corner miter follows the larger branch thickness", () => {
     const main = wall("main", P(0, 0), P(5, 0), 150);
     const branch = wall("branch", P(0, 0), P(0, 5), 300);
     const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
@@ -82,9 +101,13 @@ describe("walls2d join solver", () => {
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
     expect(solvedMain.a.left.x).toBeCloseTo(-0.15, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(-0.15, 6);
+    expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(0.15, 6);
+    expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
+    expect(solvedBranch.a.left.x).toBeCloseTo(-0.15, 6);
     expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
+    expect(solvedBranch.a.right.x).toBeCloseTo(0.15, 6);
+    expect(solvedBranch.a.right.z).toBeCloseTo(-0.075, 6);
   });
 });
 

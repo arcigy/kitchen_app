@@ -151,7 +151,11 @@ describe("wall plan fill", () => {
 
     const branchVertices = getWorldVertices(branch.mesh);
     const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
-    expect(branchMinZ).toBeCloseTo(0.075, 5);
+    const hasMiterLeft = branchVertices.some((point) => Math.abs(point.x + 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
+    const hasMiterRight = branchVertices.some((point) => Math.abs(point.x - 0.075) < 1e-5 && Math.abs(point.z + 0.075) < 1e-5);
+    expect(branchMinZ).toBeCloseTo(-0.075, 5);
+    expect(hasMiterLeft).toBe(true);
+    expect(hasMiterRight).toBe(true);
   });
 
   it("keeps corner wall meshes with openings trimmed to the solved join", () => {
@@ -177,7 +181,7 @@ describe("wall plan fill", () => {
 
     const branchVertices = getWorldVertices(branch.mesh);
     const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
-    expect(branchMinZ).toBeCloseTo(0.075, 5);
+    expect(branchMinZ).toBeCloseTo(-0.075, 5);
     expect(branch.mesh.userData.wallCutoutBounds).toHaveLength(1);
   });
 });
