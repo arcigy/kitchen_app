@@ -66,23 +66,42 @@ function solveMiterAtNode(
   const aRight = sideLineAtNode(a, endA, "right");
   const bLeft = sideLineAtNode(b, endB, "left");
   const bRight = sideLineAtNode(b, endB, "right");
-  const iLeft = intersectLines(aLeft, bLeft);
-  const iRight = intersectLines(aRight, bRight);
+  const iLeftLeft = intersectLines(aLeft, bLeft);
+  const iRightRight = intersectLines(aRight, bRight);
+  const iLeftRight = intersectLines(aLeft, bRight);
+  const iRightLeft = intersectLines(aRight, bLeft);
 
-  if (!iLeft || !iRight) {
+  if (!iLeftLeft || !iRightRight || !iLeftRight || !iRightLeft) {
     return { aEnd: { ...rawA, join: "butt" }, bEnd: { ...rawB, join: "butt" } };
   }
 
+  const sameCost =
+    dist(aLeft.p, iLeftLeft.p) +
+    dist(bLeft.p, iLeftLeft.p) +
+    dist(aRight.p, iRightRight.p) +
+    dist(bRight.p, iRightRight.p);
+  const crossCost =
+    dist(aLeft.p, iLeftRight.p) +
+    dist(bRight.p, iLeftRight.p) +
+    dist(aRight.p, iRightLeft.p) +
+    dist(bLeft.p, iRightLeft.p);
+  const useCross = crossCost + 1e-9 < sameCost;
+
+  const aLeftPoint = useCross ? iLeftRight.p : iLeftLeft.p;
+  const aRightPoint = useCross ? iRightLeft.p : iRightRight.p;
+  const bLeftPoint = useCross ? iRightLeft.p : iLeftLeft.p;
+  const bRightPoint = useCross ? iLeftRight.p : iRightRight.p;
+
   const tooLong =
-    dist(aLeft.p, iLeft.p) > limA ||
-    dist(aRight.p, iRight.p) > limA ||
-    dist(bLeft.p, iLeft.p) > limB ||
-    dist(bRight.p, iRight.p) > limB;
+    dist(aLeft.p, aLeftPoint) > limA ||
+    dist(aRight.p, aRightPoint) > limA ||
+    dist(bLeft.p, bLeftPoint) > limB ||
+    dist(bRight.p, bRightPoint) > limB;
 
   if (!tooLong) {
     return {
-      aEnd: { left: iLeft.p, right: iRight.p, join: "miter" },
-      bEnd: { left: iLeft.p, right: iRight.p, join: "miter" }
+      aEnd: { left: aLeftPoint, right: aRightPoint, join: "miter" },
+      bEnd: { left: bLeftPoint, right: bRightPoint, join: "miter" }
     };
   }
 
@@ -96,10 +115,10 @@ function solveMiterAtNode(
     return add(p0, mul(dir, t));
   };
 
-  const aLeftP = clampOn(aLeft.p, da, iLeft.p, limA);
-  const aRightP = clampOn(aRight.p, da, iRight.p, limA);
-  const bLeftP = clampOn(bLeft.p, db, iLeft.p, limB);
-  const bRightP = clampOn(bRight.p, db, iRight.p, limB);
+  const aLeftP = clampOn(aLeft.p, da, aLeftPoint, limA);
+  const aRightP = clampOn(aRight.p, da, aRightPoint, limA);
+  const bLeftP = clampOn(bLeft.p, db, bLeftPoint, limB);
+  const bRightP = clampOn(bRight.p, db, bRightPoint, limB);
 
   const joinPoly: Point[] = [aLeftP, bLeftP, bRightP, aRightP];
 
