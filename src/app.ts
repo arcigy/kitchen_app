@@ -747,7 +747,11 @@ export function startApp(initialArgs: AppArgs) {
   const wallRefLineToCenterLine = (...args: Parameters<ReturnType<typeof createWallController>["wallRefLineToCenterLine"]>) => wallController.wallRefLineToCenterLine(...args);
   const updateWallMeshWithJustification = (...args: Parameters<ReturnType<typeof createWallController>["updateWallMeshWithJustification"]>) => wallController.updateWallMeshWithJustification(...args);
   const makeWallPreviewMesh = (...args: Parameters<ReturnType<typeof createWallController>["makeWallPreviewMesh"]>) => wallController.makeWallPreviewMesh(...args);
-  const rebuildWall = (...args: Parameters<ReturnType<typeof createWallController>["rebuildWall"]>) => wallController.rebuildWall(...args);
+  const rebuildWall = (...args: Parameters<ReturnType<typeof createWallController>["rebuildWall"]>) => {
+    const result = wallController.rebuildWall(...args);
+    syncDetailClippingAndMaterials();
+    return result;
+  };
   const addWall = (...args: Parameters<ReturnType<typeof createWallController>["addWall"]>) => wallController.addWall(...args);
 
 

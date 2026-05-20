@@ -392,9 +392,9 @@ const createWindowSwingControlSprite = (action: WindowSwingControlAction, rotati
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color, depthTest: false, depthWrite: false })
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
   );
-  line.renderOrder = 90;
+  line.renderOrder = 110;
   line.userData.viewDisplaySkipEdges = true;
   return line;
 };
