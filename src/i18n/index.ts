@@ -25,7 +25,6 @@ const EXACT_SK_TEXT: Record<string, string> = {
   Output: "V\u00fdstup",
   Align: "Zarovnať",
   Trim: "Orezať",
-  "Trim / Extend": "Orezať/Predĺžiť",
   Dimension: "K\u00f3ta",
   Section: "Rez",
   Measure: "Merať",

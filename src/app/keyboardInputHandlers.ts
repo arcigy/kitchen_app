@@ -131,66 +131,10 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           return;
         }
 
-        const isNumericInput = ev.key.length === 1 && ((ev.key >= "0" && ev.key <= "9") || ev.key === "." || ev.key === ",");
-
-        if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget") {
-          if (isNumericInput) {
-            const next = `${ctx.transformState.typed}${ev.key}`.replace(/,/g, ".");
-            if (/^\d*\.?\d*$/.test(next)) {
-              ctx.transformState.typed = next.slice(0, 8);
-              ctx.setUnderlayStatus(`Move: ${ctx.transformState.typed} mm (Enter)`);
-            }
-            ev.preventDefault();
-            return;
-          }
-          if (ev.key === "Backspace") {
-            ctx.transformState.typed = ctx.transformState.typed.slice(0, -1);
-            ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Move: ${ctx.transformState.typed} mm (Enter)` : "Move: click target point, or move mouse for direction and type distance.");
-            ev.preventDefault();
-            return;
-          }
-          if (ev.key === "Enter") {
-            const typed = ctx.transformState.typed.trim();
-            const direction = ctx.transformState.lastValidDelta.clone();
-            if (typed.length > 0) {
-              const distanceMm = Number(typed.replace(",", "."));
-              if (!Number.isFinite(distanceMm) || distanceMm <= 0) {
-                ctx.transformState.typed = "";
-                ctx.setUnderlayStatus("Move: type a positive distance in mm.");
-                ev.preventDefault();
-                return;
-              }
-              if (direction.lengthSq() < 1e-10) {
-                ctx.setUnderlayStatus("Move: move mouse for direction, then type distance.");
-                ev.preventDefault();
-                return;
-              }
-              const delta = direction.normalize().multiplyScalar(distanceMm / 1000);
-              ctx.applyMoveDelta(delta);
-              if (ctx.transformState.lastValidDelta.distanceTo(delta) > 1e-6) {
-                ctx.clearTransform({ restore: true, status: "Move: blocked." });
-                ctx.mountProps();
-                ev.preventDefault();
-                return;
-              }
-            } else if (direction.lengthSq() < 1e-10) {
-              ctx.setUnderlayStatus("Move: click target point, or move mouse for direction and type distance.");
-              ev.preventDefault();
-              return;
-            }
-
-            ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Move: done." });
-            ctx.mountProps();
-            ev.preventDefault();
-            return;
-          }
-        }
-
         if (ctx.transformState.kind === "rotate" && ctx.transformState.step === "rotating") {
-          if (isNumericInput) {
-            const next = `${ctx.transformState.typed}${ev.key}`.replace(/,/g, ".");
-            if (/^\d*\.?\d*$/.test(next)) ctx.transformState.typed = next.slice(0, 6);
+          const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
+          if (isDigit) {
+            ctx.transformState.typed = `${ctx.transformState.typed}${ev.key}`.slice(0, 6);
             ctx.setUnderlayStatus(`Rotate: ${ctx.transformState.typed} deg (Enter)`);
             ev.preventDefault();
             return;
@@ -201,37 +145,15 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
             ev.preventDefault();
             return;
           }
-          if (ev.key === "Enter") {
-            const typed = ctx.transformState.typed.trim();
-            let attemptedAngle: number | null = null;
-            if (typed.length > 0) {
-              const n = Number(typed.replace(",", "."));
-              if (!Number.isFinite(n) || n === 0) {
-                ctx.transformState.typed = "";
-                ctx.setUnderlayStatus("Rotate: type a non-zero angle.");
-                ev.preventDefault();
-                return;
-              }
+          if (ev.key === "Enter" && ctx.transformState.typed.trim().length > 0) {
+            const n = Number(ctx.transformState.typed.trim().replace(",", "."));
+            if (Number.isFinite(n) && n !== 0) {
               const sign = ctx.transformState.lastAngleSign || 1;
               const ang = (Math.abs(n) * Math.PI) / 180 * sign;
               ctx.applyRotateAngle(ang);
-              attemptedAngle = ang;
-            } else if (Math.abs(ctx.transformState.lastValidAngle) < 1e-10) {
-              ctx.setUnderlayStatus("Rotate: move mouse to rotate, or type degrees + Enter.");
-              ev.preventDefault();
-              return;
+              ctx.setUnderlayStatus(`Rotate: ${sign < 0 ? "CW" : "CCW"} ${Math.abs(Math.round(n))} deg (click to finish)`);
             }
-
-            if (attemptedAngle !== null && Math.abs(ctx.transformState.lastValidAngle - attemptedAngle) > 1e-6) {
-              ctx.clearTransform({ restore: true, status: "Rotate: blocked." });
-              ctx.mountProps();
-              ev.preventDefault();
-              return;
-            }
-
-            ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Rotate: done." });
-            ctx.mountProps();
+            ctx.transformState.typed = "";
             ev.preventDefault();
             return;
           }

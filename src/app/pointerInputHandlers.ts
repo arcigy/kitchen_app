@@ -40,14 +40,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
-  const wallReferenceLine = (wall: WallInstance) => {
-    const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
-    const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
-    const dir = b.clone().sub(a);
-    if (dir.lengthSq() < 1e-10) return null;
-    dir.normalize();
-    return { p: a, dir, a, b };
-  };
   const windowPlacementWallSnapPx = 34;
   const windowSelectionSnapPx = 20;
   const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
@@ -910,14 +902,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (picked.wallId !== w.id && ctx.trimState.targetPick && ctx.trimState.targetClick) {
           const w2 = ctx.walls.find((x) => x.id === picked.wallId) ?? null;
           if (w2 && !ctx.pinnedWallIds.has(w2.id)) {
-            const line1 = wallReferenceLine(w);
-            const line2 = wallReferenceLine(w2);
-            if (!line1 || !line2) {
-              ctx.setUnderlayStatus("Trim: wall too small.");
-              return;
-            }
-
-            const I = ctx.lineLineIntersectionXZ(line1.p, line1.dir, line2.p, line2.dir);
+            const I = ctx.lineLineIntersectionXZ(ctx.trimState.targetPick.p, ctx.trimState.targetPick.dir, picked.p, picked.dir);
             if (!I) {
               ctx.setUnderlayStatus("Trim: walls must not be parallel.");
               return;
@@ -974,37 +959,27 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
         }
 
-        const targetLine = wallReferenceLine(w);
-        if (!targetLine) {
+        const aW = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
+        const bW = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
+        const ab = bW.clone().sub(aW);
+        const len2 = ab.lengthSq();
+        if (len2 < 1e-10) {
           ctx.setUnderlayStatus("Trim: wall too small.");
           return;
         }
-
-        const aW = targetLine.a;
-        const bW = targetLine.b;
-        const dW = targetLine.dir;
-        let cutterPoint = picked.p;
-        let cutterDir = picked.dir.clone().normalize();
-        if (picked.wallId) {
-          const cutterWall = ctx.walls.find((x) => x.id === picked.wallId) ?? null;
-          const cutterLine = cutterWall ? wallReferenceLine(cutterWall) : null;
-          if (cutterLine) {
-            cutterPoint = cutterLine.p;
-            cutterDir = cutterLine.dir;
-          }
-        }
-
-        const I = ctx.lineLineIntersectionXZ(aW, dW, cutterPoint, cutterDir);
+        const dW = ab.clone().normalize();
+        const dC = picked.dir.clone().normalize();
+        const I = ctx.lineLineIntersectionXZ(aW, dW, picked.p, dC);
         if (!I) {
           ctx.setUnderlayStatus("Trim: cutter must not be parallel.");
           return;
         }
 
-        const nC = new THREE.Vector3(-cutterDir.z, 0, cutterDir.x);
+        const nC = new THREE.Vector3(-dC.z, 0, dC.x);
         const sign = (v: number) => (v > 1e-7 ? 1 : v < -1e-7 ? -1 : 0);
-        let sClick = sign(nC.dot(hitPoint.clone().sub(cutterPoint)));
-        const sA = sign(nC.dot(aW.clone().sub(cutterPoint)));
-        const sB = sign(nC.dot(bW.clone().sub(cutterPoint)));
+        let sClick = sign(nC.dot(hitPoint.clone().sub(picked.p)));
+        const sA = sign(nC.dot(aW.clone().sub(picked.p)));
+        const sB = sign(nC.dot(bW.clone().sub(picked.p)));
         if (sClick === 0) sClick = sA !== 0 ? sA : sB;
 
         let moveWhich: "a" | "b" = "a";

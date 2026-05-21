@@ -122,34 +122,16 @@ describe("layout delete action", () => {
     modules.setSelection({ kind: "module", instanceId: "m1" });
     expect(modules.controller.deleteSelected()).toBe(true);
     expect(modules.ctx.deleteInstance).toHaveBeenCalledWith("m1");
-    expect(modules.ctx.commitHistory).toHaveBeenCalledTimes(1);
-    expect(modules.ctx.mountProps).toHaveBeenCalledTimes(1);
 
     const walls = makeController();
     walls.setSelection({ kind: "wall", wallId: "w1" });
     expect(walls.controller.deleteSelected()).toBe(true);
-    expect(walls.ctx.deleteWall).toHaveBeenCalledWith("w1", { skipHistory: true });
-    expect(walls.ctx.commitHistory).toHaveBeenCalledTimes(1);
-    expect(walls.ctx.mountProps).toHaveBeenCalledTimes(1);
+    expect(walls.ctx.deleteWall).toHaveBeenCalledWith("w1");
 
     const columns = makeController();
     columns.setSelection({ kind: "column", columnId: "c1" });
     expect(columns.controller.deleteSelected()).toBe(true);
     expect(columns.ctx.deleteColumn).toHaveBeenCalledWith("c1");
-  });
-
-  it("deletes multi-selected walls as one undoable edit action", () => {
-    const harness = makeController();
-    harness.setSelection({ kind: "wall", wallId: "w1" });
-    harness.selectedWallIds.add("w1");
-    harness.selectedWallIds.add("w2");
-
-    expect(harness.controller.deleteSelected()).toBe(true);
-
-    expect(harness.ctx.deleteWall).toHaveBeenCalledWith("w1", { skipHistory: true });
-    expect(harness.ctx.deleteWall).toHaveBeenCalledWith("w2", { skipHistory: true });
-    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
-    expect(harness.selectedWallIds.size).toBe(0);
   });
 
   it("routes window, door, underlay, and wardrobe deletion through the shared action", () => {
@@ -171,6 +153,5 @@ describe("layout delete action", () => {
     const wardrobeHarness = makeController({ deleteWardrobeSelection: vi.fn(() => true) });
     expect(wardrobeHarness.controller.deleteSelected()).toBe(true);
     expect(wardrobeHarness.ctx.deleteWardrobeSelection).toHaveBeenCalledTimes(1);
-    expect(wardrobeHarness.ctx.commitHistory).toHaveBeenCalledTimes(1);
   });
 });
