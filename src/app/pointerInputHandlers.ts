@@ -20,6 +20,7 @@ type PointerInputHandlersContext = Record<string, any> & {
   instances: LayoutInstance[];
   floors: FloorInstance[];
   getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
+  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => boolean;
   S: {
     activeKitchenGroupId: string | null;
     kitchenCtx: KitchenContext;

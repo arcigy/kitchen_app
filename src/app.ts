@@ -3165,6 +3165,7 @@ export function startApp(initialArgs: AppArgs) {
     technicalDimensions,
     toFreePlanBinding,
     toMmPoint,
+    startTransformFromSelection,
     transformState,
     trimState,
     underlayCal,
