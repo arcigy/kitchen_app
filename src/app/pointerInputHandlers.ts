@@ -40,6 +40,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const continueMoveAfterSelection = () => {
+    if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+      ctx.startTransformFromSelection("move");
+      return true;
+    }
+    return false;
+  };
   const constrainMoveDelta = (delta: THREE.Vector3) => {
     if (delta.lengthSq() < 1e-10) return delta.clone();
     const firstWallId = ctx.transformState.selectedWallIds[0] as string | undefined;
@@ -1313,6 +1320,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.windowInst = pickedWindow;
           ctx.setSelectedWindow();
+          if (continueMoveAfterSelection()) return;
           return;
         }
 
@@ -1326,6 +1334,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.doorInst = pickedDoor;
           ctx.setSelectedDoor();
+          if (continueMoveAfterSelection()) return;
           return;
         }
 
@@ -1415,6 +1424,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(bestPoly.id);
+          if (continueMoveAfterSelection()) return;
           return;
         }
 
@@ -1437,6 +1447,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(best.id);
+          if (continueMoveAfterSelection()) return;
           return;
         }
       }
@@ -1472,6 +1483,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedWindow();
+        if (continueMoveAfterSelection()) return;
 
         ctx.windowDragState.active = true;
         const customWallId = ctx.windowInst.params.wallId ?? null;
@@ -1508,6 +1520,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedDoor();
+        if (continueMoveAfterSelection()) return;
 
         ctx.doorDragState.active = true;
         const customWallId = ctx.doorInst.params.wallId ?? null;

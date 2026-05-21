@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { LayoutInstance, SectionInstance, WallInstance, WallParams } from "./localTypes";
+import type { DoorParams, LayoutInstance, SectionInstance, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 
 type TransformControllerContext = Record<string, any> & {
@@ -34,6 +34,18 @@ export function createTransformController(ctx: TransformControllerContext) {
         section.params = ctx.cloneSectionParams(s);
         ctx.updateSectionVisual(section);
       }
+      for (const window of ctx.windows ?? []) {
+        const s = ctx.transformState.startWindows.get(window.id);
+        if (!s) continue;
+        window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
+        ctx.updateWindowTransform(window);
+      }
+      for (const door of ctx.doors ?? []) {
+        const s = ctx.transformState.startDoors.get(door.id);
+        if (!s) continue;
+        door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
+        ctx.updateDoorTransform(door);
+      }
       ctx.updateLayoutPanel();
       ctx.updateSelectionHighlights();
       ctx.mountProps();
@@ -48,10 +60,14 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.selectedWallIds = [];
     ctx.transformState.selectedInstanceIds = [];
     ctx.transformState.selectedSectionIds = [];
+    ctx.transformState.selectedWindowIds = [];
+    ctx.transformState.selectedDoorIds = [];
     ctx.transformState.startWalls.clear();
     ctx.transformState.startInstances.clear();
     ctx.transformState.startInstanceAdjacency.clear();
     ctx.transformState.startSections.clear();
+    ctx.transformState.startWindows.clear();
+    ctx.transformState.startDoors.clear();
     ctx.transformState.startPointerAngle = 0;
     ctx.transformState.lastValidDelta.set(0, 0, 0);
     ctx.transformState.lastValidAngle = 0;
@@ -72,8 +88,10 @@ export function createTransformController(ctx: TransformControllerContext) {
           ? [ctx.selectedInstanceId]
           : [];
     const sectionIds = ctx.selectedKind === "section" && ctx.selectedSectionId ? [ctx.selectedSectionId] : [];
+    const windowIds = kind === "move" && ctx.selectedKind === "window" && ctx.windowInst ? [ctx.windowInst.id] : [];
+    const doorIds = kind === "move" && ctx.selectedKind === "door" && ctx.doorInst ? [ctx.doorInst.id] : [];
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
-    if (wallIds.length + instIds.length + sectionIds.length === 0) {
+    if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
       if (kind !== "move") return false;
       clearTransform();
       ctx.transformState.kind = "move";
@@ -89,6 +107,8 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.selectedWallIds = wallIds;
     ctx.transformState.selectedInstanceIds = instIds;
     ctx.transformState.selectedSectionIds = sectionIds;
+    ctx.transformState.selectedWindowIds = windowIds;
+    ctx.transformState.selectedDoorIds = doorIds;
 
     // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
     for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
@@ -109,6 +129,8 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
     }
     for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
+    for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
+    for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
 
     ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
     ctx.mountProps();
@@ -134,6 +156,18 @@ export function createTransformController(ctx: TransformControllerContext) {
       if (!s) continue;
       section.params = ctx.cloneSectionParams(s);
       ctx.updateSectionVisual(section);
+    }
+    for (const window of ctx.windows ?? []) {
+      const s = ctx.transformState.startWindows.get(window.id);
+      if (!s) continue;
+      window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
+      ctx.updateWindowTransform(window);
+    }
+    for (const door of ctx.doors ?? []) {
+      const s = ctx.transformState.startDoors.get(door.id);
+      if (!s) continue;
+      door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
+      ctx.updateDoorTransform(door);
     }
   };
 
@@ -176,6 +210,39 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     if (dxMm !== 0 || dzMm !== 0) {
       translateWallsByAnchors(dxMm, dzMm);
+    }
+
+    const moveOpeningAlongHostWall = (params: WindowParams | DoorParams, start: WindowParams | DoorParams) => {
+      if (!start.wallId) return false;
+      const wall = ctx.walls.find((item: WallInstance) => item.id === start.wallId) ?? null;
+      if (!wall) return false;
+      const ax = wall.params.aMm.x;
+      const az = wall.params.aMm.z;
+      const bx = wall.params.bMm.x;
+      const bz = wall.params.bMm.z;
+      const lengthMm = Math.hypot(bx - ax, bz - az);
+      if (lengthMm < 1) return false;
+      const dirX = (bx - ax) / lengthMm;
+      const dirZ = (bz - az) / lengthMm;
+      const alongMm = Math.round(delta.x * dirX * 1000 + delta.z * dirZ * 1000);
+      params.centerMm = start.centerMm + alongMm;
+      return true;
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds) {
+      const window = (ctx.windows ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startWindows.get(id);
+      if (!window || !start) continue;
+      window.params = JSON.parse(JSON.stringify(start)) as WindowParams;
+      if (moveOpeningAlongHostWall(window.params, start)) ctx.updateWindowTransform(window);
+    }
+
+    for (const id of ctx.transformState.selectedDoorIds) {
+      const door = (ctx.doors ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startDoors.get(id);
+      if (!door || !start) continue;
+      door.params = JSON.parse(JSON.stringify(start)) as DoorParams;
+      if (moveOpeningAlongHostWall(door.params, start)) ctx.updateDoorTransform(door);
     }
 
     for (const id of ctx.transformState.selectedSectionIds) {
