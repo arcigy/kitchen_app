@@ -49,6 +49,26 @@ export function pointOnWallAxisMm(wall: WallInstance, point: MmPoint) {
   return { t: tt, closest: { x: Math.round(cx), z: Math.round(cz) }, distMm };
 }
 
+export function wallEndpointToTrimForKeepClick(wall: WallInstance, keepClick: THREE.Vector3, intersection: THREE.Vector3): "a" | "b" {
+  const a = fromMmPoint(wall.params.aMm);
+  const b = fromMmPoint(wall.params.bMm);
+  const axis = b.clone().sub(a).setY(0);
+  const lengthM = axis.length();
+  if (lengthM < 1e-9) return "a";
+
+  const dir = axis.multiplyScalar(1 / lengthM);
+  const tIntersection = intersection.clone().sub(a).setY(0).dot(dir);
+  if (tIntersection <= 0) return "a";
+  if (tIntersection >= lengthM) return "b";
+
+  const tKeep = keepClick.clone().sub(a).setY(0).dot(dir);
+  if (Math.abs(tKeep - tIntersection) < 1e-6) {
+    return keepClick.distanceTo(a) <= keepClick.distanceTo(b) ? "b" : "a";
+  }
+
+  return tKeep < tIntersection ? "b" : "a";
+}
+
 export function wallDirOutFromNode(wall: WallInstance, node: MmPoint, tolMm: number) {
   const a = wall.params.aMm;
   const b = wall.params.bMm;

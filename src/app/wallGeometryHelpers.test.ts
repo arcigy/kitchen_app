@@ -9,6 +9,7 @@ import {
   toMmPoint,
   wallDirOutFromNode,
   wallEndpointWhich,
+  wallEndpointToTrimForKeepClick,
   wallExteriorSign
 } from "./wallGeometryHelpers";
 import type { WallInstance } from "./localTypes";
@@ -56,6 +57,15 @@ describe("wallGeometryHelpers", () => {
     expect(wallDirOutFromNode(item, { x: 0, z: 0 }, 25).toArray()).toEqual([1000, 0, 0]);
     expect(wallDirOutFromNode(item, { x: 1000, z: 0 }, 25).toArray()).toEqual([-1000, 0, 0]);
     expect(wallExteriorSign(item)).toBe(1);
+  });
+
+  it("chooses the trim endpoint from the side that should be discarded", () => {
+    const item = wall("w1", { x: 0, z: 0 }, { x: 4000, z: 0 });
+
+    expect(wallEndpointToTrimForKeepClick(item, new THREE.Vector3(1, 0, 0), new THREE.Vector3(2, 0, 0))).toBe("b");
+    expect(wallEndpointToTrimForKeepClick(item, new THREE.Vector3(3, 0, 0), new THREE.Vector3(2, 0, 0))).toBe("a");
+    expect(wallEndpointToTrimForKeepClick(item, new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0))).toBe("a");
+    expect(wallEndpointToTrimForKeepClick(item, new THREE.Vector3(3, 0, 0), new THREE.Vector3(5, 0, 0))).toBe("b");
   });
 
   it("computes miter-like join extension for angled walls", () => {

@@ -8,6 +8,7 @@ import type {
   WindowInstance
 } from "./localTypes";
 import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
+import { wallEndpointToTrimForKeepClick } from "./wallGeometryHelpers";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { MeasureState } from "./measureTools";
 
@@ -1296,15 +1297,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
               return;
             }
 
-            const chooseEnd = (wall: WallInstance, click: THREE.Vector3) => {
-              const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
-              const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
-              return click.distanceTo(a) <= click.distanceTo(b) ? ("a" as const) : ("b" as const);
-            };
-
             const iMm = ctx.toMmPoint(I);
-            const end1 = chooseEnd(w, ctx.trimState.targetClick);
-            const end2 = chooseEnd(w2, cutterClick);
+            const end1 = wallEndpointToTrimForKeepClick(w, ctx.trimState.targetClick, I);
+            const end2 = wallEndpointToTrimForKeepClick(w2, cutterClick, I);
 
             const old1 = end1 === "a" ? w.params.aMm : w.params.bMm;
             const old2 = end2 === "a" ? w2.params.aMm : w2.params.bMm;
@@ -1363,26 +1358,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
-        const nC = new THREE.Vector3(-dC.z, 0, dC.x);
-        const sign = (v: number) => (v > 1e-7 ? 1 : v < -1e-7 ? -1 : 0);
-        let sClick = sign(nC.dot(hitPoint.clone().sub(picked.p)));
-        const sA = sign(nC.dot(aW.clone().sub(picked.p)));
-        const sB = sign(nC.dot(bW.clone().sub(picked.p)));
-        if (sClick === 0) sClick = sA !== 0 ? sA : sB;
-
-        let moveWhich: "a" | "b" = "a";
-        if (sClick !== 0) {
-          if (sA === sClick && sB !== sClick) moveWhich = "a";
-          else if (sB === sClick && sA !== sClick) moveWhich = "b";
-          else {
-            // ambiguous: choose closer endpoint to the click point
-            moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
-          }
-        } else {
-          moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
-        }
-
         const iMm = ctx.toMmPoint(I);
+        const moveWhich = wallEndpointToTrimForKeepClick(w, ctx.trimState.targetClick ?? hitPoint, I);
         const old = moveWhich === "a" ? w.params.aMm : w.params.bMm;
         const dxMm = iMm.x - old.x;
         const dzMm = iMm.z - old.z;
