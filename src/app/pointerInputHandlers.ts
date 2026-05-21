@@ -40,19 +40,36 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
+    if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
+    ctx.transformState.base = basePoint.clone();
+    ctx.transformState.step = "pickTarget";
+    ctx.transformState.typed = "";
+    ctx.transformState.lastValidDelta.set(0, 0, 0);
+    ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
+  };
   const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
     if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
-      if (!ctx.startTransformFromSelection("move")) return true;
-      if (basePoint && ctx.transformState.step === "pickBase") {
-        ctx.transformState.base = basePoint.clone();
-        ctx.transformState.step = "pickTarget";
-        ctx.transformState.typed = "";
-        ctx.transformState.lastValidDelta.set(0, 0, 0);
-        ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
-      }
+      if (!ctx.startTransformFromSelection("move", { sticky: true })) return true;
+      armMoveTargetFromBase(basePoint);
       return true;
     }
     return false;
+  };
+  const hasMoveSelection = () =>
+    (ctx.selectedWallIds?.size ?? 0) > 0 ||
+    (ctx.selectedInstanceIds?.size ?? 0) > 0 ||
+    (ctx.selectedKind === "wall" && !!ctx.selectedWallId) ||
+    (ctx.selectedKind === "module" && !!ctx.selectedInstanceId) ||
+    (ctx.selectedKind === "section" && !!ctx.selectedSectionId) ||
+    (ctx.selectedKind === "window" && !!ctx.windowInst) ||
+    (ctx.selectedKind === "door" && !!ctx.doorInst);
+  const continueMoveWithCurrentSelection = (basePoint?: THREE.Vector3) => {
+    if (ctx.transformState.kind !== "move" || ctx.transformState.step !== "selectElements" || !ctx.transformState.stickyMove) return false;
+    if (!hasMoveSelection()) return false;
+    if (!ctx.startTransformFromSelection("move", { sticky: true })) return false;
+    armMoveTargetFromBase(basePoint);
+    return true;
   };
   const constrainMoveDelta = (delta: THREE.Vector3) => {
     if (delta.lengthSq() < 1e-10) return delta.clone();
@@ -1662,6 +1679,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           // don't clear selection yet; if it becomes a drag we want marquee selection
           return;
         }
+        const currentMoveBasePoint = new THREE.Vector3();
+        if (ctx.raycaster.ray.intersectPlane(ctx.groundPlane, currentMoveBasePoint) && continueMoveWithCurrentSelection(currentMoveBasePoint)) return;
         ctx.setSelectedFloor(null);
         ctx.setSelectedWall(null);
         ctx.setSelectedModule(null);
