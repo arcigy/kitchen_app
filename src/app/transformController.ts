@@ -73,7 +73,15 @@ export function createTransformController(ctx: TransformControllerContext) {
           : [];
     const sectionIds = ctx.selectedKind === "section" && ctx.selectedSectionId ? [ctx.selectedSectionId] : [];
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
-    if (wallIds.length + instIds.length + sectionIds.length === 0) return false;
+    if (wallIds.length + instIds.length + sectionIds.length === 0) {
+      if (kind !== "move") return false;
+      clearTransform();
+      ctx.transformState.kind = "move";
+      ctx.transformState.step = "selectElements";
+      ctx.setUnderlayStatus("Move (M): select elements, then press Enter.");
+      ctx.mountProps();
+      return true;
+    }
 
     clearTransform();
     ctx.transformState.kind = kind;

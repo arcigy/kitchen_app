@@ -6,7 +6,7 @@ import type { SelectedKind, WallInstance, WallParams } from "./localTypes";
 function makeTransformState() {
   return {
     kind: null as null | "move" | "rotate",
-    step: null as null | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",
@@ -26,6 +26,41 @@ function makeTransformState() {
 }
 
 describe("transform move tool", () => {
+  it("enters Revit-style selection step when Move starts with no selection", () => {
+    const transformState = makeTransformState();
+    const controller = createTransformController({
+      S: { kitchenCtx: {} as any, kitchenGroups: [] },
+      get mode() { return "layout"; },
+      get viewMode() { return "2d"; },
+      get layoutTool() { return "select"; },
+      measureState: { enabled: false },
+      dragState: { active: false },
+      windowDragState: { active: false },
+      doorDragState: { active: false },
+      wallEditHud: { drag: null },
+      marquee: { active: false },
+      underlayCal: { active: false },
+      selectedWallIds: new Set<string>(),
+      selectedInstanceIds: new Set<string>(),
+      selectedKind: null,
+      selectedWallId: null,
+      selectedInstanceId: null,
+      selectedSectionId: null,
+      walls: [],
+      instances: [],
+      sections: [],
+      transformState,
+      setUnderlayStatus: vi.fn(),
+      mountProps: vi.fn(),
+      instanceWorldBox: vi.fn(),
+      detectModuleAdjacency: vi.fn()
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    expect(transformState.kind).toBe("move");
+    expect(transformState.step).toBe("selectElements");
+  });
+
   it("starts from a single wall selected after controller creation", () => {
     let selectedKind: SelectedKind = null;
     let selectedWallId: string | null = null;

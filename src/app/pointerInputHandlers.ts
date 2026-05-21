@@ -40,6 +40,22 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const constrainMoveDelta = (delta: THREE.Vector3) => {
+    if (delta.lengthSq() < 1e-10) return delta.clone();
+    const firstWallId = ctx.transformState.selectedWallIds[0] as string | undefined;
+    const firstWall = firstWallId ? ctx.transformState.startWalls.get(firstWallId) : null;
+    if (firstWall) {
+      const wallDir = new THREE.Vector3(firstWall.bMm.x - firstWall.aMm.x, 0, firstWall.bMm.z - firstWall.aMm.z);
+      if (wallDir.lengthSq() > 1e-10) {
+        wallDir.normalize();
+        const wallPerp = new THREE.Vector3(-wallDir.z, 0, wallDir.x);
+        const along = delta.dot(wallDir);
+        const across = delta.dot(wallPerp);
+        return Math.abs(along) >= Math.abs(across) ? wallDir.multiplyScalar(along) : wallPerp.multiplyScalar(across);
+      }
+    }
+    return Math.abs(delta.x) >= Math.abs(delta.z) ? new THREE.Vector3(delta.x, 0, 0) : new THREE.Vector3(0, 0, delta.z);
+  };
   const windowPlacementWallSnapPx = 34;
   const windowSelectionSnapPx = 20;
   const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
@@ -714,12 +730,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           if (ctx.transformState.step === "pickBase") {
             ctx.transformState.base = p.clone();
             ctx.transformState.step = "pickTarget";
+            ctx.transformState.typed = "";
             ctx.transformState.lastValidDelta.set(0, 0, 0);
-            ctx.setUnderlayStatus("Move: click target point...");
+            ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
             return;
           }
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-            const delta = p.clone().sub(ctx.transformState.base);
+            const rawDelta = p.clone().sub(ctx.transformState.base);
+            const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
             ctx.clearTransform({ status: "Move: done." });
@@ -1905,9 +1923,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
 
       if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-        const delta = p.clone().sub(ctx.transformState.base);
+        const rawDelta = p.clone().sub(ctx.transformState.base);
+        const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
         ctx.applyMoveDelta(delta);
-        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click to finish)`);
+        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance)`);
         return;
       }
 

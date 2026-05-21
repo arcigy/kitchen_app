@@ -679,7 +679,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const transformState = {
     kind: null as null | "move" | "rotate",
-    step: null as null | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",

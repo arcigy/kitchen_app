@@ -131,6 +131,61 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           return;
         }
 
+        if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ev.key === "Enter") {
+            ctx.startTransformFromSelection("move");
+            ev.preventDefault();
+            return;
+          }
+        }
+
+        if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget") {
+          const isNumberChar = ev.key.length === 1 && ((ev.key >= "0" && ev.key <= "9") || ev.key === "," || ev.key === ".");
+          if (isNumberChar) {
+            const next = `${ctx.transformState.typed}${ev.key}`.replace(/,/g, ".");
+            if (/^\d*\.?\d*$/.test(next)) {
+              ctx.transformState.typed = next.slice(0, 8);
+              ctx.setUnderlayStatus(`Move: ${ctx.transformState.typed} mm (Enter)`);
+            }
+            ev.preventDefault();
+            return;
+          }
+          if (ev.key === "Backspace") {
+            ctx.transformState.typed = ctx.transformState.typed.slice(0, -1);
+            ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Move: ${ctx.transformState.typed} mm (Enter)` : "Move: click target point, or move mouse for direction and type distance.");
+            ev.preventDefault();
+            return;
+          }
+          if (ev.key === "Enter" && ctx.transformState.typed.trim().length > 0) {
+            const distanceMm = Number(ctx.transformState.typed.trim().replace(",", "."));
+            const direction = ctx.transformState.lastValidDelta.clone();
+            if (!Number.isFinite(distanceMm) || distanceMm <= 0) {
+              ctx.transformState.typed = "";
+              ctx.setUnderlayStatus("Move: type a positive distance in mm.");
+              ev.preventDefault();
+              return;
+            }
+            if (direction.lengthSq() < 1e-10) {
+              ctx.setUnderlayStatus("Move: move mouse for direction, then type distance.");
+              ev.preventDefault();
+              return;
+            }
+            const requestedDelta = direction.normalize().multiplyScalar(distanceMm / 1000);
+            ctx.applyMoveDelta(requestedDelta);
+            if (ctx.transformState.lastValidDelta.distanceTo(requestedDelta) > 1e-6) {
+              ctx.clearTransform({ restore: true, status: "Move: blocked." });
+              ctx.mountProps();
+              ev.preventDefault();
+              return;
+            }
+            ctx.commitHistory(ctx.S);
+            ctx.clearTransform({ status: "Move: done." });
+            ctx.mountProps();
+            ev.preventDefault();
+            return;
+          }
+        }
+
         if (ctx.transformState.kind === "rotate" && ctx.transformState.step === "rotating") {
           const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
           if (isDigit) {
