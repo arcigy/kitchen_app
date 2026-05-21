@@ -139,7 +139,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           if (ctx.hudHoverLine) ctx.hudHoverLine.visible = false;
           ctx.setUnderlayStatus(
             ctx.transformState.moveSnapDisabled
-              ? "Move: free movement. Snapping off. N = snapping on."
+              ? "Move: free movement in 1 mm steps. Snapping off. N = snapping on."
               : ctx.transformState.step === "pickTarget"
                 ? "Move: snapping on. Click target point, or move mouse and type distance. N = free movement."
                 : "Move: snapping on. N = free movement."

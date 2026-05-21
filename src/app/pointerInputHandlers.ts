@@ -355,7 +355,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   };
   const resolveMoveDeltaWithObjectSnap = (delta: THREE.Vector3, rect: DOMRect) => {
     const objectSnap = resolveMoveObjectSnap(delta, rect);
-    return objectSnap ? { delta: objectSnap.delta, objectSnap } : { delta, objectSnap: null };
+    if (!objectSnap) return { delta: prepareMoveDelta(delta), objectSnap: null };
+    const snappedDelta = prepareMoveDelta(objectSnap.delta);
+    return { delta: snappedDelta, objectSnap: { ...objectSnap, delta: snappedDelta } };
   };
   const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
     if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
@@ -404,6 +406,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
     return Math.abs(delta.x) >= Math.abs(delta.z) ? new THREE.Vector3(delta.x, 0, 0) : new THREE.Vector3(0, 0, delta.z);
   };
+  const roundMoveDeltaToMillimeters = (delta: THREE.Vector3) =>
+    new THREE.Vector3(Math.round(delta.x * 1000) / 1000, delta.y, Math.round(delta.z * 1000) / 1000);
+  const prepareMoveDelta = (delta: THREE.Vector3) =>
+    ctx.transformState.moveSnapDisabled ? roundMoveDeltaToMillimeters(delta) : delta;
   const windowPlacementWallSnapPx = 34;
   const windowSelectionSnapPx = 20;
   const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
@@ -1093,7 +1099,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
             const rawDelta = p.clone().sub(ctx.transformState.base);
             const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
-            const { delta } = resolveMoveDeltaWithObjectSnap(constrainedDelta, rect);
+            const { delta } = resolveMoveDeltaWithObjectSnap(prepareMoveDelta(constrainedDelta), rect);
             const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
@@ -2332,11 +2338,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
         const rawDelta = p.clone().sub(ctx.transformState.base);
         const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
-        const { delta, objectSnap } = resolveMoveDeltaWithObjectSnap(constrainedDelta, rect);
+        const { delta, objectSnap } = resolveMoveDeltaWithObjectSnap(prepareMoveDelta(constrainedDelta), rect);
         ctx.applyMoveDelta(delta);
         if (objectSnap) updateMoveSnapFeedback(objectSnap.snap, objectSnap.target, rect);
         ctx.setUnderlayStatus(
-          `Move${ctx.transformState.moveSnapDisabled ? " free" : ""}${objectSnap ? " smart snap" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
+          `Move${ctx.transformState.moveSnapDisabled ? " free 1 mm" : ""}${objectSnap ? " smart snap" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
             ctx.transformState.moveSnapDisabled ? "snapping" : "free movement"
           })`
         );
