@@ -40,9 +40,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
-  const continueMoveAfterSelection = () => {
+  const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
     if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
-      ctx.startTransformFromSelection("move");
+      if (!ctx.startTransformFromSelection("move")) return true;
+      if (basePoint && ctx.transformState.step === "pickBase") {
+        ctx.transformState.base = basePoint.clone();
+        ctx.transformState.step = "pickTarget";
+        ctx.transformState.typed = "";
+        ctx.transformState.lastValidDelta.set(0, 0, 0);
+        ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
+      }
       return true;
     }
     return false;
@@ -1320,7 +1327,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.windowInst = pickedWindow;
           ctx.setSelectedWindow();
-          if (continueMoveAfterSelection()) return;
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1334,7 +1341,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.doorInst = pickedDoor;
           ctx.setSelectedDoor();
-          if (continueMoveAfterSelection()) return;
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1367,9 +1374,29 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
         const moduleId = ctx.getInstanceIdFromObject(moduleHit);
         const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
+        if (selectableModuleId && ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.setSelectedModule(selectableModuleId);
+          if (continueMoveAfterSelection(hitPoint)) return;
+        }
         if (selectableModuleId && ctx.beginModuleSelection(selectableModuleId, ev)) return;
 
         const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect2);
+        if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.setSelectedModule(fallbackModuleId);
+          if (continueMoveAfterSelection(hitPoint)) return;
+        }
         if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.beginModuleSelection(fallbackModuleId, ev)) return;
 
         const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
@@ -1424,7 +1451,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(bestPoly.id);
-          if (continueMoveAfterSelection()) return;
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1447,7 +1474,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(best.id);
-          if (continueMoveAfterSelection()) return;
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
       }
@@ -1483,7 +1510,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedWindow();
-        if (continueMoveAfterSelection()) return;
+        if (continueMoveAfterSelection(firstHit?.point)) return;
 
         ctx.windowDragState.active = true;
         const customWallId = ctx.windowInst.params.wallId ?? null;
@@ -1520,7 +1547,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedDoor();
-        if (continueMoveAfterSelection()) return;
+        if (continueMoveAfterSelection(firstHit?.point)) return;
 
         ctx.doorDragState.active = true;
         const customWallId = ctx.doorInst.params.wallId ?? null;
@@ -1601,6 +1628,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedWall(wallId);
+        if (continueMoveAfterSelection(firstHit?.point)) return;
         return;
       }
 
@@ -1645,6 +1673,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.doorInst = null;
         ctx.clearWindowLightIfMissing();
         return;
+      }
+
+      if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+        ctx.setSelectedModule(selectableId);
+        if (continueMoveAfterSelection(firstHit?.point)) return;
       }
 
       ctx.beginModuleSelection(selectableId, ev);
