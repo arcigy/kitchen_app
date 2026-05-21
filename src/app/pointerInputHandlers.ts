@@ -36,6 +36,32 @@ type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 const MOVE_SNAP_PRIORITY = ["endpoint", "midpoint", "corner", "perpendicular", "edge", "axis"] satisfies Array<
   Exclude<PlanSnapResult["kind"], "none">
 >;
+const MOVE_OBJECT_POINT_SNAP_PRIORITY = ["endpoint", "corner", "midpoint", "perpendicular"] satisfies Array<
+  Exclude<PlanSnapResult["kind"], "none">
+>;
+const MOVE_OBJECT_LINE_SNAP_PRIORITY = ["edge", "axis"] satisfies Array<Exclude<PlanSnapResult["kind"], "none">>;
+const MOVE_OBJECT_KIND_SCORE: Partial<Record<Exclude<PlanSnapResult["kind"], "none">, number>> = {
+  endpoint: 0.42,
+  corner: 0.48,
+  midpoint: 0.7,
+  perpendicular: 0.82,
+  edge: 1,
+  axis: 1.08
+};
+
+type MoveKeyPoint = {
+  point: THREE.Vector3;
+  label: string;
+  axis?: THREE.Vector3 | null;
+};
+
+type MoveObjectSnap = {
+  delta: THREE.Vector3;
+  snap: PlanSnapResult;
+  source: THREE.Vector3;
+  target: THREE.Vector3;
+  label: string;
+};
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -53,10 +79,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 28, {
       perpendicularFrom: perpendicularFrom ?? null,
       kindPriority: MOVE_SNAP_PRIORITY,
-      sticky: ctx.selectPlanSnap
+      sticky: ctx.selectPlanSnap,
+      ignoreBinding: isIgnoredMoveSnapBinding
     });
+    const stickySnap = ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 30);
     const activeSnap =
-      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 30);
+      snapped.kind !== "none"
+        ? snapped
+        : stickySnap && !isIgnoredMoveSnapBinding(stickySnap.binding)
+          ? stickySnap
+          : null;
     ctx.selectPlanSnap = activeSnap;
     return activeSnap;
   };
@@ -74,6 +106,152 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     ctx.hideHoverCursor();
     ctx.drawSnapOverlay.hide();
     ctx.hudHoverLine.visible = false;
+  };
+  const isIgnoredMoveSnapBinding = (binding: PlanSnapBinding | null | undefined) => {
+    if (!binding) return false;
+    if ((binding.type === "wallEndpoint" || binding.type === "wallCenterline") && ctx.transformState.selectedWallIds.includes(binding.wallId)) {
+      return true;
+    }
+    if ((binding.type === "moduleVertex" || binding.type === "moduleEdge") && ctx.transformState.selectedInstanceIds.includes(binding.instanceId)) {
+      return true;
+    }
+    return false;
+  };
+  const worldFromMm = (point: { x: number; z: number }) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
+  const pointOnWallCenterline = (wall: WallInstance, distanceM: number) => {
+    const a = worldFromMm(wall.params.aMm);
+    const b = worldFromMm(wall.params.bMm);
+    const dir = b.clone().sub(a).setY(0);
+    if (dir.lengthSq() < 1e-10) return null;
+    dir.normalize();
+    return { point: a.addScaledVector(dir, distanceM), dir };
+  };
+  const collectOpeningMoveKeypoints = (
+    keypoints: MoveKeyPoint[],
+    params: { wallId?: string | null; centerMm: number; widthMm: number },
+    delta: THREE.Vector3,
+    label: string
+  ) => {
+    if (!params.wallId) return;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    if (!wall) return;
+    const a = worldFromMm(wall.params.aMm);
+    const b = worldFromMm(wall.params.bMm);
+    const dir = b.clone().sub(a).setY(0);
+    if (dir.lengthSq() < 1e-10) return;
+    dir.normalize();
+    const centerM = params.centerMm / 1000 + delta.dot(dir);
+    const halfWidthM = params.widthMm / 2000;
+    const left = pointOnWallCenterline(wall, centerM - halfWidthM);
+    const center = pointOnWallCenterline(wall, centerM);
+    const right = pointOnWallCenterline(wall, centerM + halfWidthM);
+    if (left) keypoints.push({ point: left.point, axis: dir.clone(), label: `${label} left end` });
+    if (center) keypoints.push({ point: center.point, axis: dir.clone(), label: `${label} center` });
+    if (right) keypoints.push({ point: right.point, axis: dir.clone(), label: `${label} right end` });
+  };
+  const collectMoveKeypoints = (delta: THREE.Vector3) => {
+    const keypoints: MoveKeyPoint[] = [];
+
+    for (const id of ctx.transformState.selectedWallIds as string[]) {
+      const start = ctx.transformState.startWalls.get(id);
+      if (!start) continue;
+      const a = worldFromMm(start.aMm).add(delta);
+      const b = worldFromMm(start.bMm).add(delta);
+      keypoints.push({ point: a, label: `wall ${id} start` });
+      keypoints.push({ point: b, label: `wall ${id} end` });
+      keypoints.push({ point: a.clone().lerp(b, 0.5), label: `wall ${id} middle` });
+    }
+
+    for (const id of ctx.transformState.selectedInstanceIds as string[]) {
+      const inst = ctx.findInstance?.(id) ?? ctx.instances.find((item) => item.id === id) ?? null;
+      const start = ctx.transformState.startInstances.get(id);
+      if (!inst || !start) continue;
+      const box = inst.localBox;
+      const center = box.getCenter(new THREE.Vector3());
+      const localPoints = [
+        new THREE.Vector3(box.min.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, box.max.z),
+        new THREE.Vector3(box.min.x, 0, box.max.z),
+        new THREE.Vector3(center.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, center.z),
+        new THREE.Vector3(center.x, 0, box.max.z),
+        new THREE.Vector3(box.min.x, 0, center.z),
+        new THREE.Vector3(center.x, 0, center.z)
+      ];
+      for (let index = 0; index < localPoints.length; index += 1) {
+        const point = localPoints[index]!.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), start.rotY).add(start.pos).add(delta);
+        point.y = 0;
+        keypoints.push({ point, label: `module ${id} point ${index + 1}` });
+      }
+    }
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `window ${id}`);
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `door ${id}`);
+    }
+    for (const id of ctx.transformState.selectedSectionIds as string[]) {
+      const start = ctx.transformState.startSections.get(id);
+      if (!start) continue;
+      const a = worldFromMm(start.aMm).add(delta);
+      const b = worldFromMm(start.bMm).add(delta);
+      keypoints.push({ point: a, label: `section ${id} start` });
+      keypoints.push({ point: b, label: `section ${id} end` });
+      keypoints.push({ point: a.clone().lerp(b, 0.5), label: `section ${id} middle` });
+    }
+
+    return keypoints;
+  };
+  const resolveMoveObjectSnap = (delta: THREE.Vector3, rect: DOMRect): MoveObjectSnap | null => {
+    const keypoints = collectMoveKeypoints(delta);
+    if (keypoints.length === 0) return null;
+    const maxPx = ctx.transformState.moveSnapDisabled ? 18 : 26;
+    let best: { snap: MoveObjectSnap; score: number } | null = null;
+    const priorityGroups = [MOVE_OBJECT_POINT_SNAP_PRIORITY, MOVE_OBJECT_LINE_SNAP_PRIORITY];
+
+    for (const keypoint of keypoints) {
+      for (const kindPriority of priorityGroups) {
+        const snap = ctx.snapPoint2D(keypoint.point, rect, ctx.cam(), maxPx, {
+          kindPriority,
+          ignoreBinding: isIgnoredMoveSnapBinding
+        });
+        if (snap.kind === "none") continue;
+
+        let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
+        const axis = keypoint.axis?.clone().setY(0) ?? null;
+        if (axis && axis.lengthSq() > 1e-10) {
+          axis.normalize();
+          adjustment = axis.multiplyScalar(adjustment.dot(axis));
+        }
+        if (adjustment.lengthSq() < 1e-8) continue;
+
+        const target = keypoint.point.clone().add(adjustment);
+        const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
+        const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
+        const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
+        if (distancePx > maxPx) continue;
+
+        const score = distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1);
+        const candidate = {
+          delta: delta.clone().add(adjustment),
+          snap,
+          source: keypoint.point.clone(),
+          target,
+          label: keypoint.label
+        };
+        if (!best || score < best.score) best = { snap: candidate, score };
+      }
+    }
+
+    return best?.snap ?? null;
+  };
+  const resolveMoveDeltaWithObjectSnap = (delta: THREE.Vector3, rect: DOMRect) => {
+    const objectSnap = resolveMoveObjectSnap(delta, rect);
+    return objectSnap ? { delta: objectSnap.delta, objectSnap } : { delta, objectSnap: null };
   };
   const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
     if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
@@ -810,7 +988,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
             const rawDelta = p.clone().sub(ctx.transformState.base);
-            const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+            const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+            const { delta } = resolveMoveDeltaWithObjectSnap(constrainedDelta, rect);
             const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
@@ -2048,10 +2227,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
         const rawDelta = p.clone().sub(ctx.transformState.base);
-        const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+        const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+        const { delta, objectSnap } = resolveMoveDeltaWithObjectSnap(constrainedDelta, rect);
         ctx.applyMoveDelta(delta);
+        if (objectSnap) updateMoveSnapFeedback(objectSnap.snap, objectSnap.target, rect);
         ctx.setUnderlayStatus(
-          `Move${ctx.transformState.moveSnapDisabled ? " free" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
+          `Move${ctx.transformState.moveSnapDisabled ? " free" : ""}${objectSnap ? " smart snap" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
             ctx.transformState.moveSnapDisabled ? "snapping" : "free movement"
           })`
         );

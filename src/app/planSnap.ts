@@ -87,6 +87,7 @@ type PlanSnapOptions = {
   stickyThresholdPx?: number;
   preferNearest?: boolean;
   cycleIndex?: number;
+  ignoreBinding?: (binding: PlanSnapBinding | null | undefined, owner?: PlanSnapOwner) => boolean;
 };
 
 type LoopBindingFactory = {
@@ -600,8 +601,10 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
     addGuideIntersections(candidates, guides, segments);
 
     const rawScreen = worldToScreen(raw, camera, rect);
+    const isIgnored = (candidate: PlanSnapCandidate) => !!options?.ignoreBinding?.(candidate.binding ?? null, candidate.owner);
     const bestByKind = new Map<Exclude<PlanSnapKind, "none">, { candidate: PlanSnapCandidate; d2: number }>();
     for (const candidate of candidates) {
+      if (isIgnored(candidate)) continue;
       const screen = worldToScreen(candidate.p, camera, rect);
       const d2 = dist2(rawScreen, screen);
       const prev = bestByKind.get(candidate.kind);
@@ -627,7 +630,7 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
 
     const sticky = options?.sticky ?? null;
     const stickyThresholdPx = options?.stickyThresholdPx ?? Math.max(16, maxPx + 6);
-    if (sticky && sticky.kind !== "none") {
+    if (sticky && sticky.kind !== "none" && !options?.ignoreBinding?.(sticky.binding ?? null, sticky.owner)) {
       const stickyScreen = worldToScreen(sticky.point, camera, rect);
       if (dist2(rawScreen, stickyScreen) <= stickyThresholdPx * stickyThresholdPx) {
         return {
@@ -643,6 +646,7 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
 
     const validHits = candidates
       .map((candidate) => {
+        if (isIgnored(candidate)) return null;
         const kind = candidate.kind;
         const rank = order.indexOf(kind);
         if (rank < 0) return null;
