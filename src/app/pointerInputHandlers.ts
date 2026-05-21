@@ -7,7 +7,7 @@ import type {
   WallInstance,
   WindowInstance
 } from "./localTypes";
-import type { PlanSnapBinding } from "./planSnap";
+import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { MeasureState } from "./measureTools";
 
@@ -33,6 +33,9 @@ type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
 type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+const MOVE_SNAP_PRIORITY = ["endpoint", "midpoint", "corner", "perpendicular", "edge", "axis"] satisfies Array<
+  Exclude<PlanSnapResult["kind"], "none">
+>;
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -41,6 +44,32 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const resolveMoveSnap = (raw: THREE.Vector3, rect: DOMRect, perpendicularFrom?: THREE.Vector3 | null) => {
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 28, {
+      perpendicularFrom: perpendicularFrom ?? null,
+      kindPriority: MOVE_SNAP_PRIORITY,
+      sticky: ctx.selectPlanSnap
+    });
+    const activeSnap =
+      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 30);
+    ctx.selectPlanSnap = activeSnap;
+    return activeSnap;
+  };
+  const updateMoveSnapFeedback = (snap: PlanSnapResult | null, point: THREE.Vector3, rect: DOMRect) => {
+    if (snap?.kind && snap.kind !== "none") {
+      ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), snap.kind);
+      ctx.drawSnapOverlay.showWorld(point, ctx.cam(), rect, snap.kind);
+      if (snap.a && snap.b && ["edge", "axis", "midpoint", "perpendicular"].includes(snap.kind)) {
+        ctx.updateHudLine(ctx.hudHoverLine, snap.a, snap.b, ctx.hudLineThicknessM(rect) * 1.75);
+      } else {
+        ctx.hudHoverLine.visible = false;
+      }
+      return;
+    }
+    ctx.hideHoverCursor();
+    ctx.drawSnapOverlay.hide();
+    ctx.hudHoverLine.visible = false;
+  };
   const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
     if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
     ctx.transformState.base = basePoint.clone();
@@ -755,7 +784,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
         if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
+        const moveSnap =
+          ctx.transformState.kind === "move"
+            ? resolveMoveSnap(hitPoint, rect, ctx.transformState.step === "pickTarget" ? ctx.transformState.base : null)
+            : null;
+        const snapped =
+          ctx.transformState.kind === "move"
+            ? (moveSnap ?? ({ point: hitPoint, kind: "none" } satisfies PlanSnapResult))
+            : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
         const p = snapped.kind !== "none" ? snapped.point : hitPoint;
 
         if (ctx.transformState.kind === "move") {
@@ -773,6 +809,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
+            ctx.selectPlanSnap = null;
+            ctx.drawSnapOverlay.hide();
+            ctx.hideHoverCursor();
+            ctx.hudHoverLine.visible = false;
             ctx.clearTransform({
               continueMove,
               status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
@@ -1981,12 +2021,21 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       const hitPoint = new THREE.Vector3();
       if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
 
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
-        sticky: ctx.selectPlanSnap
-      });
-      ctx.selectPlanSnap = snapped.kind !== "none" ? snapped : null;
+      const moveSnap =
+        ctx.transformState.kind === "move"
+          ? resolveMoveSnap(hitPoint, rect, ctx.transformState.step === "pickTarget" ? ctx.transformState.base : null)
+          : null;
+      const snapped =
+        ctx.transformState.kind === "move"
+          ? (moveSnap ?? ({ point: hitPoint, kind: "none" } satisfies PlanSnapResult))
+          : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
+              sticky: ctx.selectPlanSnap
+            });
+      if (ctx.transformState.kind !== "move") ctx.selectPlanSnap = snapped.kind !== "none" ? snapped : null;
       const p = snapped.kind !== "none" ? snapped.point : hitPoint;
-      if (snapped.kind !== "none") {
+      if (ctx.transformState.kind === "move") {
+        updateMoveSnapFeedback(moveSnap, p, rect);
+      } else if (snapped.kind !== "none") {
         ctx.updateHoverCursor(ctx.worldToScreen(p, ctx.cam(), rect), snapped.kind);
       } else {
         ctx.hideHoverCursor();
