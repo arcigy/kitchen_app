@@ -119,6 +119,48 @@ describe("transform move tool", () => {
     expect(transformState.stickyMove).toBe(false);
   });
 
+  it("can toggle sticky move off outside the floorplan view", () => {
+    const transformState = makeTransformState();
+    transformState.kind = "move";
+    transformState.step = "selectElements";
+    transformState.stickyMove = true;
+    const controller = createTransformController({
+      S: { kitchenCtx: {} as any, kitchenGroups: [] },
+      get mode() { return "layout"; },
+      get viewMode() { return "3d"; },
+      get layoutTool() { return "select"; },
+      measureState: { enabled: false },
+      dragState: { active: false },
+      windowDragState: { active: false },
+      doorDragState: { active: false },
+      wallEditHud: { drag: null },
+      marquee: { active: false },
+      underlayCal: { active: false },
+      selectedWallIds: new Set<string>(),
+      selectedInstanceIds: new Set<string>(),
+      selectedKind: null,
+      selectedWallId: null,
+      selectedInstanceId: null,
+      selectedSectionId: null,
+      walls: [],
+      windows: [],
+      doors: [],
+      instances: [],
+      sections: [],
+      transformState,
+      setUnderlayStatus: vi.fn(),
+      mountProps: vi.fn(),
+      instanceWorldBox: vi.fn(),
+      detectModuleAdjacency: vi.fn(),
+      updateWindowTransform: vi.fn(),
+      updateDoorTransform: vi.fn()
+    });
+
+    expect(controller.startTransformFromSelection("move", { sticky: true, toggle: true })).toBe(true);
+    expect(transformState.kind).toBeNull();
+    expect(transformState.stickyMove).toBe(false);
+  });
+
   it("starts from a single wall selected after controller creation", () => {
     let selectedKind: SelectedKind = null;
     let selectedWallId: string | null = null;

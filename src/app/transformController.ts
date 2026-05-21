@@ -95,17 +95,17 @@ export function createTransformController(ctx: TransformControllerContext) {
   };
 
   const startTransformFromSelection = (kind: "move" | "rotate", opts: StartTransformOptions = {}) => {
-    if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
-    if (ctx.measureState.enabled) return false;
-    if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
-    if (ctx.underlayCal.active) return false;
-
     if (kind === "move" && opts.toggle && ctx.transformState.kind === "move" && ctx.transformState.stickyMove) {
       const restore = ctx.transformState.step === "pickTarget" && !!ctx.transformState.base;
       clearTransform({ restore, status: "Move: off." });
       ctx.mountProps();
       return true;
     }
+
+    if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
+    if (ctx.measureState.enabled) return false;
+    if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
+    if (ctx.underlayCal.active) return false;
 
     const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
 
