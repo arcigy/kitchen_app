@@ -2374,7 +2374,7 @@ export function startApp(initialArgs: AppArgs) {
     get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
     get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; }
   });
-  function deleteWall(id: string) {
+  function deleteWall(id: string, opts?: { skipHistory?: boolean }) {
     const idx = walls.findIndex((x) => x.id === id);
     if (idx < 0) return;
     const w = walls[idx];
@@ -2386,7 +2386,7 @@ export function startApp(initialArgs: AppArgs) {
 
     // keep properties in sync
     mountProps();
-    commitHistory(S);
+    if (!opts?.skipHistory) commitHistory(S);
   }
 
   const windowInstanceController = createWindowInstanceController({

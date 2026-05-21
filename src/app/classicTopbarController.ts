@@ -196,7 +196,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move") });
     addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => ctx.startTransformFromSelection("rotate") });
     addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
-    addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
+    addButton(edit, { title: "Trim / Extend", label: "Trim / Extend", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
     addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => ctx.setToolDimension() });
     addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: ctx.duplicateSelected });
     hideBtn = ctx.tb.toolButton(edit, {

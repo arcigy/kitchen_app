@@ -26,7 +26,7 @@ type LayoutActionsControllerContext = {
   duplicateInstance: (id: string) => void;
   duplicateWall: (id: string) => { id: string } | null;
   deleteInstance: (id: string) => void;
-  deleteWall: (id: string) => void;
+  deleteWall: (id: string, opts?: { skipHistory?: boolean }) => void;
   deleteSectionInstance: (id: string) => void;
   deleteFloor: (id: string) => void;
   deleteColumn: (id: string) => boolean;
@@ -93,6 +93,7 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
     ctx.cancelPlacementIfActive();
 
     if (ctx.deleteWardrobeSelection()) {
+      ctx.commitHistory();
       ctx.mountProps();
       return true;
     }
@@ -121,6 +122,7 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
       if (!selectedFloorId) return false;
       ctx.deleteFloor(selectedFloorId);
       ctx.setSelectedFloor(null);
+      ctx.mountProps();
       return true;
     }
     if (selectedKind === "column") {
@@ -166,6 +168,7 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
       ctx.setSelectedModule(null);
       selectedInstanceIds.clear();
       ctx.commitHistory();
+      ctx.mountProps();
       return true;
     }
     const selectedWallIds = ctx.getSelectedWallIds();
@@ -177,9 +180,11 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
           : [];
     if (wallIds.length > 0) {
       const ids = [...new Set(wallIds)];
-      for (const id of ids) ctx.deleteWall(id);
+      for (const id of ids) ctx.deleteWall(id, { skipHistory: true });
       ctx.setSelectedWall(null);
       selectedWallIds.clear();
+      ctx.commitHistory();
+      ctx.mountProps();
       return true;
     }
     return false;
