@@ -124,13 +124,64 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return null;
   };
   const worldFromMm = (point: { x: number; z: number }) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
-  const pointOnWallCenterline = (wall: WallInstance, distanceM: number) => {
+  const getWallAxisInfo = (wall: WallInstance) => {
     const a = worldFromMm(wall.params.aMm);
     const b = worldFromMm(wall.params.bMm);
     const dir = b.clone().sub(a).setY(0);
     if (dir.lengthSq() < 1e-10) return null;
+    const lengthM = dir.length();
     dir.normalize();
-    return { point: a.addScaledVector(dir, distanceM), dir };
+    return { a, b, dir, lengthM, lengthMm: lengthM * 1000 };
+  };
+  const pointOnWallCenterline = (wall: WallInstance, distanceM: number) => {
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return null;
+    return { point: axis.a.clone().addScaledVector(axis.dir, distanceM), dir: axis.dir.clone() };
+  };
+  const openingSmartSnapRevealMm = (params: { widthMm: number; frameWidthMm?: number }) => {
+    const frameMm = Number(params.frameWidthMm);
+    if (Number.isFinite(frameMm) && frameMm > 0) return Math.max(50, Math.min(140, Math.round(frameMm)));
+    return Math.max(50, Math.min(140, Math.round(params.widthMm * 0.06)));
+  };
+  const openingMoveBounds = (
+    params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number },
+    delta: THREE.Vector3
+  ) => {
+    if (!params.wallId) return null;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    if (!wall) return null;
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return null;
+    const alongMm = Math.round(delta.dot(axis.dir) * 1000);
+    const centerMm = params.centerMm + alongMm;
+    const halfWidthMm = params.widthMm / 2;
+    return {
+      centerMm,
+      leftMm: centerMm - halfWidthMm,
+      rightMm: centerMm + halfWidthMm,
+      lengthMm: axis.lengthMm,
+      revealMm: openingSmartSnapRevealMm(params)
+    };
+  };
+  const isOpeningSmartSnapDeltaValid = (delta: THREE.Vector3) => {
+    const checkOpening = (params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number }) => {
+      const bounds = openingMoveBounds(params, delta);
+      if (!bounds) return true;
+      if (params.widthMm >= bounds.lengthMm) return false;
+      const availableRevealMm = Math.max(0, (bounds.lengthMm - params.widthMm) / 2);
+      const revealMm = Math.min(bounds.revealMm, availableRevealMm);
+      return bounds.leftMm >= revealMm - 1 && bounds.rightMm <= bounds.lengthMm - revealMm + 1;
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    return true;
   };
   const collectOpeningMoveKeypoints = (
     keypoints: MoveKeyPoint[],
@@ -141,11 +192,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     if (!params.wallId) return;
     const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
     if (!wall) return;
-    const a = worldFromMm(wall.params.aMm);
-    const b = worldFromMm(wall.params.bMm);
-    const dir = b.clone().sub(a).setY(0);
-    if (dir.lengthSq() < 1e-10) return;
-    dir.normalize();
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return;
+    const dir = axis.dir;
     const centerM = params.centerMm / 1000 + delta.dot(dir);
     const halfWidthM = params.widthMm / 2000;
     const left = pointOnWallCenterline(wall, centerM - halfWidthM);
@@ -257,6 +306,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           target,
           label: keypoint.label
         };
+        if (!isOpeningSmartSnapDeltaValid(candidate.delta)) continue;
         if (!best || score < best.score) best = { snap: candidate, score };
       }
     }

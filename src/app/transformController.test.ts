@@ -305,6 +305,87 @@ describe("transform move tool", () => {
     expect(updateWindowTransform).toHaveBeenCalledWith(window);
   });
 
+  it("keeps selected window openings inside their host wall while moving", () => {
+    let selectedKind: SelectedKind = "window";
+    const wall = {
+      id: "w1",
+      params: {
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 1000, z: 0 },
+        thicknessMm: 150,
+        heightMm: 2600,
+        materialId: "wall"
+      }
+    } as WallInstance;
+    const window = {
+      id: "win1",
+      params: {
+        wall: "back",
+        wallId: "w1",
+        widthMm: 600,
+        heightMm: 900,
+        sillHeightMm: 900,
+        centerMm: 500,
+        frameWidthMm: 70,
+        offsetFromInteriorMm: 0,
+        sashWidthMm: 50,
+        sashProfileDepthMm: 50,
+        frameProfileDepthMm: 70,
+        swingDirection: "right",
+        swingSide: "inward",
+        swingAngleDeg: 90,
+        handleType: "lever",
+        handleOffsetMm: 70,
+        handleHeightMm: 450,
+        materialId: "window"
+      }
+    };
+    const transformState = makeTransformState();
+    const controller = createTransformController({
+      S: { kitchenCtx: {} as any, kitchenGroups: [] },
+      get mode() { return "layout"; },
+      get viewMode() { return "2d"; },
+      get layoutTool() { return "select"; },
+      measureState: { enabled: false },
+      dragState: { active: false },
+      windowDragState: { active: false },
+      doorDragState: { active: false },
+      wallEditHud: { drag: null },
+      marquee: { active: false },
+      underlayCal: { active: false },
+      selectedWallIds: new Set<string>(),
+      selectedInstanceIds: new Set<string>(),
+      get selectedKind() { return selectedKind; },
+      selectedWallId: null,
+      get windowInst() { return window; },
+      doorInst: null,
+      selectedInstanceId: null,
+      selectedSectionId: null,
+      walls: [wall],
+      windows: [window],
+      doors: [],
+      instances: [],
+      sections: [],
+      transformState,
+      setUnderlayStatus: vi.fn(),
+      mountProps: vi.fn(),
+      instanceWorldBox: vi.fn(),
+      detectModuleAdjacency: vi.fn(),
+      updateWindowTransform: vi.fn(),
+      updateDoorTransform: vi.fn(),
+      rebuildWall: vi.fn(),
+      rebuildWallPlanMesh: vi.fn(),
+      updateLayoutPanel: vi.fn()
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    controller.applyMoveDelta(new THREE.Vector3(-1, 0, 0));
+    expect(window.params.centerMm).toBe(300);
+
+    controller.applyMoveDelta(new THREE.Vector3(1, 0, 0));
+    expect(window.params.centerMm).toBe(700);
+  });
+
   it("moves selected door openings along their host wall", () => {
     const wall = {
       id: "w1",

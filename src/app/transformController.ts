@@ -266,7 +266,14 @@ export function createTransformController(ctx: TransformControllerContext) {
       const dirX = (bx - ax) / lengthMm;
       const dirZ = (bz - az) / lengthMm;
       const alongMm = Math.round(delta.x * dirX * 1000 + delta.z * dirZ * 1000);
-      params.centerMm = start.centerMm + alongMm;
+      const unclampedCenterMm = start.centerMm + alongMm;
+      const halfWidthMm = Math.max(0, start.widthMm / 2);
+      const minCenterMm = halfWidthMm;
+      const maxCenterMm = lengthMm - halfWidthMm;
+      params.centerMm =
+        maxCenterMm >= minCenterMm
+          ? Math.round(Math.min(maxCenterMm, Math.max(minCenterMm, unclampedCenterMm)))
+          : Math.round(lengthMm / 2);
       return true;
     };
 
