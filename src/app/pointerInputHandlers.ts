@@ -53,6 +53,7 @@ type MoveKeyPoint = {
   point: THREE.Vector3;
   label: string;
   axis?: THREE.Vector3 | null;
+  hostWallId?: string | null;
 };
 
 type MoveObjectSnap = {
@@ -117,6 +118,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
     return false;
   };
+  const getSnapBindingWallId = (binding: PlanSnapBinding | null | undefined) => {
+    if (!binding) return null;
+    if (binding.type === "wallEndpoint" || binding.type === "wallCenterline") return binding.wallId;
+    return null;
+  };
   const worldFromMm = (point: { x: number; z: number }) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
   const pointOnWallCenterline = (wall: WallInstance, distanceM: number) => {
     const a = worldFromMm(wall.params.aMm);
@@ -145,9 +151,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     const left = pointOnWallCenterline(wall, centerM - halfWidthM);
     const center = pointOnWallCenterline(wall, centerM);
     const right = pointOnWallCenterline(wall, centerM + halfWidthM);
-    if (left) keypoints.push({ point: left.point, axis: dir.clone(), label: `${label} left end` });
-    if (center) keypoints.push({ point: center.point, axis: dir.clone(), label: `${label} center` });
-    if (right) keypoints.push({ point: right.point, axis: dir.clone(), label: `${label} right end` });
+    if (left) keypoints.push({ point: left.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} left end` });
+    if (center) keypoints.push({ point: center.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} center` });
+    if (right) keypoints.push({ point: right.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} right end` });
   };
   const collectMoveKeypoints = (delta: THREE.Vector3) => {
     const keypoints: MoveKeyPoint[] = [];
@@ -215,15 +221,17 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
     for (const keypoint of keypoints) {
       for (const kindPriority of priorityGroups) {
-        const snap = ctx.snapPoint2D(keypoint.point, rect, ctx.cam(), maxPx, {
+        const axis = keypoint.axis?.clone().setY(0) ?? null;
+        const axisSnap = !!axis && axis.lengthSq() > 1e-10;
+        const searchPx = axisSnap ? Math.max(maxPx * 2.25, maxPx + 24) : maxPx;
+        const snap = ctx.snapPoint2D(keypoint.point, rect, ctx.cam(), searchPx, {
           kindPriority,
           ignoreBinding: isIgnoredMoveSnapBinding
         });
         if (snap.kind === "none") continue;
 
         let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
-        const axis = keypoint.axis?.clone().setY(0) ?? null;
-        if (axis && axis.lengthSq() > 1e-10) {
+        if (axisSnap && axis) {
           axis.normalize();
           adjustment = axis.multiplyScalar(adjustment.dot(axis));
         }
@@ -232,10 +240,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const target = keypoint.point.clone().add(adjustment);
         const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
         const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
+        const snapScreen = ctx.worldToScreen(snap.point, ctx.cam(), rect);
         const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
         if (distancePx > maxPx) continue;
 
-        const score = distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1);
+        const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
+        const sameHostWall = !!keypoint.hostWallId && getSnapBindingWallId(snap.binding) === keypoint.hostWallId;
+        const score =
+          distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
+          (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
+          (keypoint.hostWallId && !sameHostWall ? 2 : 0);
         const candidate = {
           delta: delta.clone().add(adjustment),
           snap,
