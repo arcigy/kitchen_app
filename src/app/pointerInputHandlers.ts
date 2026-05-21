@@ -183,6 +183,48 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
     return true;
   };
+  const moveObjectSnapKey = (snap: PlanSnapResult) =>
+    [
+      snap.kind,
+      Math.round(snap.point.x * 1000),
+      Math.round(snap.point.z * 1000),
+      snap.owner ?? "",
+      JSON.stringify(snap.binding ?? null)
+    ].join("|");
+  const collectMoveObjectSnapResults = (
+    point: THREE.Vector3,
+    rect: DOMRect,
+    searchPx: number,
+    kindPriority: Array<Exclude<PlanSnapResult["kind"], "none">>
+  ) => {
+    const first = ctx.snapPoint2D(point, rect, ctx.cam(), searchPx, {
+      kindPriority,
+      ignoreBinding: isIgnoredMoveSnapBinding
+    }) as PlanSnapResult;
+    if (first.kind === "none") return [];
+
+    const results: PlanSnapResult[] = [];
+    const seen = new Set<string>();
+    const add = (snap: PlanSnapResult) => {
+      if (snap.kind === "none") return;
+      const key = moveObjectSnapKey(snap);
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(snap);
+    };
+
+    add(first);
+    const cycleCount = Math.min(Math.max(first.cycleCount ?? 1, 1), 16);
+    for (let index = 0; index < cycleCount; index += 1) {
+      const snap = ctx.snapPoint2D(point, rect, ctx.cam(), searchPx, {
+        kindPriority,
+        cycleIndex: index,
+        ignoreBinding: isIgnoredMoveSnapBinding
+      }) as PlanSnapResult;
+      add(snap);
+    }
+    return results;
+  };
   const collectOpeningMoveKeypoints = (
     keypoints: MoveKeyPoint[],
     params: { wallId?: string | null; centerMm: number; widthMm: number },
@@ -273,41 +315,39 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const axis = keypoint.axis?.clone().setY(0) ?? null;
         const axisSnap = !!axis && axis.lengthSq() > 1e-10;
         const searchPx = axisSnap ? Math.max(maxPx * 2.25, maxPx + 24) : maxPx;
-        const snap = ctx.snapPoint2D(keypoint.point, rect, ctx.cam(), searchPx, {
-          kindPriority,
-          ignoreBinding: isIgnoredMoveSnapBinding
-        });
-        if (snap.kind === "none") continue;
+        const snaps = collectMoveObjectSnapResults(keypoint.point, rect, searchPx, kindPriority);
 
-        let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
-        if (axisSnap && axis) {
-          axis.normalize();
-          adjustment = axis.multiplyScalar(adjustment.dot(axis));
+        for (const snap of snaps) {
+          let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
+          if (axisSnap && axis) {
+            const normalizedAxis = axis.clone().normalize();
+            adjustment = normalizedAxis.multiplyScalar(adjustment.dot(normalizedAxis));
+          }
+          if (adjustment.lengthSq() < 1e-8) continue;
+
+          const target = keypoint.point.clone().add(adjustment);
+          const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
+          const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
+          const snapScreen = ctx.worldToScreen(snap.point, ctx.cam(), rect);
+          const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
+          if (distancePx > maxPx) continue;
+
+          const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
+          const sameHostWall = !!keypoint.hostWallId && getSnapBindingWallId(snap.binding) === keypoint.hostWallId;
+          const score =
+            distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
+            (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
+            (keypoint.hostWallId && !sameHostWall ? 2 : 0);
+          const candidate = {
+            delta: delta.clone().add(adjustment),
+            snap,
+            source: keypoint.point.clone(),
+            target,
+            label: keypoint.label
+          };
+          if (!isOpeningSmartSnapDeltaValid(candidate.delta)) continue;
+          if (!best || score < best.score) best = { snap: candidate, score };
         }
-        if (adjustment.lengthSq() < 1e-8) continue;
-
-        const target = keypoint.point.clone().add(adjustment);
-        const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
-        const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
-        const snapScreen = ctx.worldToScreen(snap.point, ctx.cam(), rect);
-        const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
-        if (distancePx > maxPx) continue;
-
-        const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
-        const sameHostWall = !!keypoint.hostWallId && getSnapBindingWallId(snap.binding) === keypoint.hostWallId;
-        const score =
-          distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
-          (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
-          (keypoint.hostWallId && !sameHostWall ? 2 : 0);
-        const candidate = {
-          delta: delta.clone().add(adjustment),
-          snap,
-          source: keypoint.point.clone(),
-          target,
-          label: keypoint.label
-        };
-        if (!isOpeningSmartSnapDeltaValid(candidate.delta)) continue;
-        if (!best || score < best.score) best = { snap: candidate, score };
       }
     }
 
