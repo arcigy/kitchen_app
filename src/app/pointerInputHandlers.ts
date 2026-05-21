@@ -752,9 +752,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
             const rawDelta = p.clone().sub(ctx.transformState.base);
             const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+            const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Move: done." });
+            ctx.clearTransform({
+              continueMove,
+              status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
+            });
             ctx.mountProps();
             return;
           }

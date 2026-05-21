@@ -7,6 +7,7 @@ function makeTransformState() {
   return {
     kind: null as null | "move" | "rotate",
     step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    stickyMove: false,
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",
@@ -67,6 +68,55 @@ describe("transform move tool", () => {
     expect(controller.startTransformFromSelection("move")).toBe(true);
     expect(transformState.kind).toBe("move");
     expect(transformState.step).toBe("selectElements");
+  });
+
+  it("keeps sticky move active after a completed move until toggled off", () => {
+    const transformState = makeTransformState();
+    const controller = createTransformController({
+      S: { kitchenCtx: {} as any, kitchenGroups: [] },
+      get mode() { return "layout"; },
+      get viewMode() { return "2d"; },
+      get layoutTool() { return "select"; },
+      measureState: { enabled: false },
+      dragState: { active: false },
+      windowDragState: { active: false },
+      doorDragState: { active: false },
+      wallEditHud: { drag: null },
+      marquee: { active: false },
+      underlayCal: { active: false },
+      selectedWallIds: new Set<string>(),
+      selectedInstanceIds: new Set<string>(),
+      selectedKind: null,
+      selectedWallId: null,
+      selectedInstanceId: null,
+      selectedSectionId: null,
+      walls: [],
+      windows: [],
+      doors: [],
+      instances: [],
+      sections: [],
+      transformState,
+      setUnderlayStatus: vi.fn(),
+      mountProps: vi.fn(),
+      instanceWorldBox: vi.fn(),
+      detectModuleAdjacency: vi.fn(),
+      updateWindowTransform: vi.fn(),
+      updateDoorTransform: vi.fn()
+    });
+
+    expect(controller.startTransformFromSelection("move", { sticky: true, toggle: true })).toBe(true);
+    expect(transformState.kind).toBe("move");
+    expect(transformState.step).toBe("selectElements");
+    expect(transformState.stickyMove).toBe(true);
+
+    controller.clearTransform({ continueMove: true, status: "Move: done." });
+    expect(transformState.kind).toBe("move");
+    expect(transformState.step).toBe("selectElements");
+    expect(transformState.stickyMove).toBe(true);
+
+    expect(controller.startTransformFromSelection("move", { sticky: true, toggle: true })).toBe(true);
+    expect(transformState.kind).toBeNull();
+    expect(transformState.stickyMove).toBe(false);
   });
 
   it("starts from a single wall selected after controller creation", () => {

@@ -171,15 +171,23 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
               return;
             }
             const requestedDelta = direction.normalize().multiplyScalar(distanceMm / 1000);
+            const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(requestedDelta);
             if (ctx.transformState.lastValidDelta.distanceTo(requestedDelta) > 1e-6) {
-              ctx.clearTransform({ restore: true, status: "Move: blocked." });
+              ctx.clearTransform({
+                restore: true,
+                continueMove,
+                status: continueMove ? "Move: blocked. Select next element, or click Move again to exit." : "Move: blocked."
+              });
               ctx.mountProps();
               ev.preventDefault();
               return;
             }
             ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Move: done." });
+            ctx.clearTransform({
+              continueMove,
+              status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
+            });
             ctx.mountProps();
             ev.preventDefault();
             return;
@@ -421,7 +429,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       }
 
       if ((ev.key === "m" || ev.key === "M") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        if (ctx.startTransformFromSelection("move")) {
+        if (ctx.startTransformFromSelection("move", { sticky: true, toggle: true })) {
           ev.preventDefault();
           return;
         }

@@ -680,6 +680,7 @@ export function startApp(initialArgs: AppArgs) {
   const transformState = {
     kind: null as null | "move" | "rotate",
     step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    stickyMove: false,
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",
@@ -1112,6 +1113,7 @@ export function startApp(initialArgs: AppArgs) {
     clearAllMeasurements: () => clearAllMeasurements(),
     clearPreview: () => clearPreview(),
     clearToolHud,
+    clearTransform,
     dimensionState,
     get drawSnapOverlay() { return drawSnapOverlay; },
     ensureLayoutMode: () => ensureLayoutMode(),
@@ -1133,6 +1135,7 @@ export function startApp(initialArgs: AppArgs) {
     showWallSnapMarkersFor,
     syncSelectionState,
     technicalDimensions,
+    transformState,
     trimState,
     updateAllSectionVisuals: () => updateAllSectionVisuals(),
     updateSectionDrawPreview,
@@ -2166,6 +2169,7 @@ export function startApp(initialArgs: AppArgs) {
     subscribeInstallState,
     tb,
     toggle2dView,
+    transformState,
     undo,
     updateUndoRedoUi,
     visibility: {

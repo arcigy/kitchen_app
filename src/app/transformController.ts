@@ -12,8 +12,19 @@ type TransformControllerContext = Record<string, any> & {
   };
 };
 
+type ClearTransformOptions = {
+  restore?: boolean;
+  status?: string | null;
+  continueMove?: boolean;
+};
+
+type StartTransformOptions = {
+  sticky?: boolean;
+  toggle?: boolean;
+};
+
 export function createTransformController(ctx: TransformControllerContext) {
-  const clearTransform = (opts?: { restore?: boolean; status?: string | null }) => {
+  const clearTransform = (opts?: ClearTransformOptions) => {
     if (opts?.restore) {
       for (const w of ctx.walls) {
         const p = ctx.transformState.startWalls.get(w.id);
@@ -53,6 +64,7 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     ctx.transformState.kind = null;
     ctx.transformState.step = null;
+    ctx.transformState.stickyMove = false;
     ctx.transformState.base = null;
     ctx.transformState.pivot = null;
     ctx.transformState.typed = "";
@@ -71,14 +83,31 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.startPointerAngle = 0;
     ctx.transformState.lastValidDelta.set(0, 0, 0);
     ctx.transformState.lastValidAngle = 0;
-    if (opts?.status) ctx.setUnderlayStatus(opts.status);
+
+    if (opts?.continueMove) {
+      ctx.transformState.kind = "move";
+      ctx.transformState.step = "selectElements";
+      ctx.transformState.stickyMove = true;
+    }
+
+    const status = opts?.status ?? (opts?.continueMove ? "Move: select next element. Click Move again to exit." : null);
+    if (status) ctx.setUnderlayStatus(status);
   };
 
-  const startTransformFromSelection = (kind: "move" | "rotate") => {
+  const startTransformFromSelection = (kind: "move" | "rotate", opts: StartTransformOptions = {}) => {
     if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
     if (ctx.measureState.enabled) return false;
     if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
     if (ctx.underlayCal.active) return false;
+
+    if (kind === "move" && opts.toggle && ctx.transformState.kind === "move" && ctx.transformState.stickyMove) {
+      const restore = ctx.transformState.step === "pickTarget" && !!ctx.transformState.base;
+      clearTransform({ restore, status: "Move: off." });
+      ctx.mountProps();
+      return true;
+    }
+
+    const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
 
     const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];
     const instIds =
@@ -96,7 +125,8 @@ export function createTransformController(ctx: TransformControllerContext) {
       clearTransform();
       ctx.transformState.kind = "move";
       ctx.transformState.step = "selectElements";
-      ctx.setUnderlayStatus("Move (M): select elements, then press Enter.");
+      ctx.transformState.stickyMove = stickyMove;
+      ctx.setUnderlayStatus(stickyMove ? "Move: select element to move. Click Move again to exit." : "Move (M): select elements, then press Enter.");
       ctx.mountProps();
       return true;
     }
@@ -104,6 +134,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     clearTransform();
     ctx.transformState.kind = kind;
     ctx.transformState.step = kind === "move" ? "pickBase" : "pickPivot";
+    ctx.transformState.stickyMove = stickyMove;
     ctx.transformState.selectedWallIds = wallIds;
     ctx.transformState.selectedInstanceIds = instIds;
     ctx.transformState.selectedSectionIds = sectionIds;

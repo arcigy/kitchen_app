@@ -76,10 +76,11 @@ type ClassicTopbarControllerContext = {
   setToolSelect: () => void;
   setToolTrim: () => void;
   setToolWall: () => void;
-  startTransformFromSelection: (kind: "move" | "rotate") => void;
+  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => void;
   subscribeInstallState: (listener: (state: AppInstallState) => void) => () => void;
   tb: ReturnType<typeof createTopbar>;
   toggle2dView: () => void;
+  transformState: { kind: null | "move" | "rotate"; stickyMove?: boolean };
   undo: (S: AppState, helpers: HistoryHelpers) => void;
   updateUndoRedoUi: (S: AppState) => void;
   visibility: {
@@ -100,6 +101,7 @@ const TOPBAR_TABS: TopbarTab[] = ["architecture", "kitchen", "livingWall", "room
 export function createClassicTopbarController(ctx: ClassicTopbarControllerContext) {
   let hideBtn: HTMLButtonElement | null = null;
   let isolateBtn: HTMLButtonElement | null = null;
+  let moveBtn: HTMLButtonElement | null = null;
   let unhideAllBtn: HTMLButtonElement | null = null;
   let activeTab: TopbarTab = "architecture";
   let tabHandlersInstalled = false;
@@ -138,6 +140,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       unhideAllBtn.style.display = visible ? "" : "none";
       unhideAllBtn.disabled = !visible;
     }
+    moveBtn?.classList.toggle("active", ctx.transformState.kind === "move" && !!ctx.transformState.stickyMove);
   };
 
   const syncTopbarTabs = () => {
@@ -193,7 +196,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     const edit = ctx.tb.addGroup("Edit", { row });
     ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
     ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
-    addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move") });
+    moveBtn = addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move", { sticky: true, toggle: true }) });
     addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => ctx.startTransformFromSelection("rotate") });
     addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
     addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
@@ -273,6 +276,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     ctx.S.redoBtnEl = null;
     hideBtn = null;
     isolateBtn = null;
+    moveBtn = null;
     unhideAllBtn = null;
 
     const row = ctx.tb.addRow({ className: "topbar-classic-ribbon" });
