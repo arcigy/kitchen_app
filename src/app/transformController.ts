@@ -25,6 +25,9 @@ type StartTransformOptions = {
 
 export function createTransformController(ctx: TransformControllerContext) {
   const clearTransform = (opts?: ClearTransformOptions) => {
+    const preserveMoveSnapDisabled =
+      !!opts?.continueMove && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
+
     if (opts?.restore) {
       for (const w of ctx.walls) {
         const p = ctx.transformState.startWalls.get(w.id);
@@ -65,6 +68,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.kind = null;
     ctx.transformState.step = null;
     ctx.transformState.stickyMove = false;
+    ctx.transformState.moveSnapDisabled = false;
     ctx.transformState.base = null;
     ctx.transformState.pivot = null;
     ctx.transformState.typed = "";
@@ -88,6 +92,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.kind = "move";
       ctx.transformState.step = "selectElements";
       ctx.transformState.stickyMove = true;
+      ctx.transformState.moveSnapDisabled = preserveMoveSnapDisabled;
     }
 
     const status = opts?.status ?? (opts?.continueMove ? "Move: select next element. Click Move again to exit." : null);
@@ -108,6 +113,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     if (ctx.underlayCal.active) return false;
 
     const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
+    const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
     const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];
     const instIds =
@@ -126,7 +132,10 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.kind = "move";
       ctx.transformState.step = "selectElements";
       ctx.transformState.stickyMove = stickyMove;
-      ctx.setUnderlayStatus(stickyMove ? "Move: select element to move. Click Move again to exit." : "Move (M): select elements, then press Enter.");
+      ctx.transformState.moveSnapDisabled = moveSnapDisabled;
+      ctx.setUnderlayStatus(
+        stickyMove ? "Move: select element to move. Click Move again to exit. N = free movement." : "Move (M): select elements, then press Enter. N = free movement."
+      );
       ctx.mountProps();
       return true;
     }
@@ -135,6 +144,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.kind = kind;
     ctx.transformState.step = kind === "move" ? "pickBase" : "pickPivot";
     ctx.transformState.stickyMove = stickyMove;
+    ctx.transformState.moveSnapDisabled = moveSnapDisabled;
     ctx.transformState.selectedWallIds = wallIds;
     ctx.transformState.selectedInstanceIds = instIds;
     ctx.transformState.selectedSectionIds = sectionIds;
@@ -163,7 +173,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
     for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
 
-    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
+    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
     ctx.mountProps();
     return true;
   };

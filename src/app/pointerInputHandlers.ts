@@ -44,7 +44,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const makeNoSnapResult = (point: THREE.Vector3) => ({ point, kind: "none" } satisfies PlanSnapResult);
   const resolveMoveSnap = (raw: THREE.Vector3, rect: DOMRect, perpendicularFrom?: THREE.Vector3 | null) => {
+    if (ctx.transformState.moveSnapDisabled) {
+      ctx.selectPlanSnap = null;
+      return makeNoSnapResult(raw);
+    }
     const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 28, {
       perpendicularFrom: perpendicularFrom ?? null,
       kindPriority: MOVE_SNAP_PRIORITY,
@@ -76,7 +81,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     ctx.transformState.step = "pickTarget";
     ctx.transformState.typed = "";
     ctx.transformState.lastValidDelta.set(0, 0, 0);
-    ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
+    ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
   };
   const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
     if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
@@ -790,7 +795,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             : null;
         const snapped =
           ctx.transformState.kind === "move"
-            ? (moveSnap ?? ({ point: hitPoint, kind: "none" } satisfies PlanSnapResult))
+            ? (moveSnap ?? makeNoSnapResult(hitPoint))
             : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
         const p = snapped.kind !== "none" ? snapped.point : hitPoint;
 
@@ -800,7 +805,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.transformState.step = "pickTarget";
             ctx.transformState.typed = "";
             ctx.transformState.lastValidDelta.set(0, 0, 0);
-            ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain.");
+            ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
             return;
           }
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
@@ -2027,7 +2032,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           : null;
       const snapped =
         ctx.transformState.kind === "move"
-          ? (moveSnap ?? ({ point: hitPoint, kind: "none" } satisfies PlanSnapResult))
+          ? (moveSnap ?? makeNoSnapResult(hitPoint))
           : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
               sticky: ctx.selectPlanSnap
             });
@@ -2045,7 +2050,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const rawDelta = p.clone().sub(ctx.transformState.base);
         const delta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
         ctx.applyMoveDelta(delta);
-        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance)`);
+        ctx.setUnderlayStatus(
+          `Move${ctx.transformState.moveSnapDisabled ? " free" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
+            ctx.transformState.moveSnapDisabled ? "snapping" : "free movement"
+          })`
+        );
         return;
       }
 

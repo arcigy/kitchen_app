@@ -131,6 +131,23 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           return;
         }
 
+        if (ctx.transformState.kind === "move" && (ev.key === "n" || ev.key === "N") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+          ctx.transformState.moveSnapDisabled = !ctx.transformState.moveSnapDisabled;
+          ctx.selectPlanSnap = null;
+          ctx.drawSnapOverlay?.hide?.();
+          ctx.hideHoverCursor?.();
+          if (ctx.hudHoverLine) ctx.hudHoverLine.visible = false;
+          ctx.setUnderlayStatus(
+            ctx.transformState.moveSnapDisabled
+              ? "Move: free movement. Snapping off. N = snapping on."
+              : ctx.transformState.step === "pickTarget"
+                ? "Move: snapping on. Click target point, or move mouse and type distance. N = free movement."
+                : "Move: snapping on. N = free movement."
+          );
+          ev.preventDefault();
+          return;
+        }
+
         if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
           if (ev.key === "Enter") {
             ctx.startTransformFromSelection("move");

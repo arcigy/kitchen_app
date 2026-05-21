@@ -8,6 +8,7 @@ function makeTransformState() {
     kind: null as null | "move" | "rotate",
     step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
     stickyMove: false,
+    moveSnapDisabled: false,
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",
@@ -109,14 +110,17 @@ describe("transform move tool", () => {
     expect(transformState.step).toBe("selectElements");
     expect(transformState.stickyMove).toBe(true);
 
+    transformState.moveSnapDisabled = true;
     controller.clearTransform({ continueMove: true, status: "Move: done." });
     expect(transformState.kind).toBe("move");
     expect(transformState.step).toBe("selectElements");
     expect(transformState.stickyMove).toBe(true);
+    expect(transformState.moveSnapDisabled).toBe(true);
 
     expect(controller.startTransformFromSelection("move", { sticky: true, toggle: true })).toBe(true);
     expect(transformState.kind).toBeNull();
     expect(transformState.stickyMove).toBe(false);
+    expect(transformState.moveSnapDisabled).toBe(false);
   });
 
   it("can toggle sticky move off outside the floorplan view", () => {
