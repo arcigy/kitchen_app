@@ -151,7 +151,9 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     if (ctx.layoutTool === "align") {
       if (ctx.alignState.ref) {
         ctx.alignState.ref = null;
+        ctx.clearToolHud();
         ctx.setUnderlayStatus("Align: click reference line...");
+        ctx.mountProps();
       } else {
         setToolSelect();
       }
