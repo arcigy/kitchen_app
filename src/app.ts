@@ -826,16 +826,16 @@ export function startApp(initialArgs: AppArgs) {
       } else {
         translateWallAndConnected(w, dxMm, dzMm);
       }
-      return { ok: true, reason: "Align: done. Click reference line..." };
+      return { ok: true, reason: "Align: done. Click another parallel line, or Esc for a new reference." };
     }
 
     if (picked.targetKind === "module") {
       const aligned = !!(picked.instanceId && translateModuleByMeasure(picked.instanceId, dxMm, dzMm));
-      return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: module move blocked." };
+      return { ok: aligned, reason: aligned ? "Align: done. Click another parallel line, or Esc for a new reference." : "Align: module move blocked." };
     }
 
     const aligned = alignKitchenWorktopLine(picked, dxMm, dzMm);
-    return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: worktop move blocked." };
+    return { ok: aligned, reason: aligned ? "Align: done. Click another parallel line, or Esc for a new reference." : "Align: worktop move blocked." };
   };
 
   const getKitchenWorktopBackGuidePath = (

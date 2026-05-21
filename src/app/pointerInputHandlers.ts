@@ -1202,7 +1202,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
         if (!picked) {
-          ctx.setUnderlayStatus("Align: click a wall/module/worktop line.");
+          ctx.setUnderlayStatus(ctx.alignState.ref ? "Align: click a parallel line to align, or Esc for a new reference." : "Align: click reference line.");
           return;
         }
 
@@ -1211,7 +1211,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.alignState.lastA = null;
           ctx.alignState.lastB = null;
           ctx.alignState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Align: click second parallel line...");
+          ctx.setUnderlayStatus("Align: click one or more parallel lines to align. Esc = new reference.");
           ctx.mountProps();
           return;
         }
@@ -1220,7 +1220,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const result = ctx.applyAlignBetweenPickedLines(ref, picked);
         if (!result.ok) {
           ctx.setUnderlayStatus(result.reason);
-          ctx.alignState.ref = null;
           ctx.mountProps();
           return;
         }
@@ -1230,7 +1229,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.alignState.lastA = ref;
         ctx.alignState.lastB = picked;
         ctx.alignState.lastUntilMs = performance.now() + 2500;
-        ctx.alignState.ref = null;
         ctx.setUnderlayStatus(result.reason);
         ctx.mountProps();
         return;
@@ -1247,7 +1245,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
         const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
         if (!picked) {
-          ctx.setUnderlayStatus(ctx.trimState.step === "pickTarget" ? "Trim: click target wall line." : "Trim: click cutter line.");
+          ctx.setUnderlayStatus(ctx.trimState.step === "pickTarget" ? "Trim: click first wall side to keep." : "Trim: click second wall/boundary side to keep.");
           return;
         }
 
@@ -1260,7 +1258,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.trimState.lastTarget = null;
           ctx.trimState.lastCutter = null;
           ctx.trimState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Trim: click cutter line...");
+          ctx.setUnderlayStatus("Trim: click second wall/boundary side to keep...");
           ctx.mountProps();
           return;
         }
@@ -1273,7 +1271,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.trimState.step = "pickTarget";
           ctx.trimState.targetWallId = null;
           ctx.trimState.targetPick = null;
-          ctx.setUnderlayStatus("Trim: target missing. Click target wall...");
+          ctx.setUnderlayStatus("Trim: target missing. Click first wall side to keep...");
           ctx.mountProps();
           return;
         }
@@ -1336,7 +1334,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.trimState.targetWallId = null;
             ctx.trimState.targetPick = null;
             ctx.trimState.targetClick = null;
-            ctx.setUnderlayStatus("Trim: corner done. Click target wall...");
+            ctx.setUnderlayStatus("Trim: corner done. Click first wall side to keep...");
             ctx.mountProps();
             return;
           }
@@ -1388,7 +1386,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.trimState.targetWallId = null;
         ctx.trimState.targetPick = null;
         ctx.trimState.targetClick = null;
-        ctx.setUnderlayStatus("Trim: done. Click target wall...");
+        ctx.setUnderlayStatus("Trim: done. Click first wall side to keep...");
         ctx.mountProps();
         return;
       }

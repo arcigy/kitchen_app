@@ -151,7 +151,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     if (ctx.layoutTool === "align") {
       if (ctx.alignState.ref) {
         ctx.alignState.ref = null;
-        ctx.setUnderlayStatus("Align: canceled. Click reference line...");
+        ctx.setUnderlayStatus("Align: click reference line...");
       } else {
         setToolSelect();
       }
@@ -163,7 +163,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
       if (ctx.trimState.step !== "pickTarget") {
         resetTrimState();
         ctx.clearToolHud();
-        ctx.setUnderlayStatus("Trim: click target wall...");
+        ctx.setUnderlayStatus("Trim: click first wall side to keep...");
         ctx.mountProps();
       } else {
         setToolSelect();
@@ -344,7 +344,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     enterTool("trim");
     resetTrimState();
     ctx.ensureFloorplanViewerTab();
-    ctx.setUnderlayStatus("Trim: click target wall...");
+    ctx.setUnderlayStatus("Trim: click first wall side to keep...");
     ctx.mountProps();
   };
 

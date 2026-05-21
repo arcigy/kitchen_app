@@ -201,7 +201,7 @@ export function mountAlignToolPropsPanel(ctx: AlignToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Click the reference line, then the second parallel line (the wall moves or its end is adjusted). Esc = cancel.";
+    hint.textContent = "Click the reference line, then click one or more parallel lines to align. Esc = new reference, Esc again = exit.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
@@ -217,7 +217,7 @@ export function mountTrimToolPropsPanel(ctx: TrimToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Click the side of the wall you want to keep, then click the boundary wall or line. Esc = back.";
+    hint.textContent = "Click the side of the first wall to keep, then click the second wall or boundary side to keep. Esc = back.";
     s.appendChild(hint);
 
     const step = document.createElement("div");
