@@ -576,6 +576,61 @@ export function createWallController(ctx: WallControllerContext) {
     }
   }
 
+  function cleanupWallTopology() {
+    const attachedWallIds = new Set<string>();
+    for (const windowInst of getWindowInsts()) if (windowInst.params.wallId) attachedWallIds.add(windowInst.params.wallId);
+    for (const doorInst of getDoorInsts()) if (doorInst.params.wallId) attachedWallIds.add(doorInst.params.wallId);
+
+    const selectedWallIds = ctx.getSelectedWallIds?.();
+    const endpoint = (wall: WallInstance, which: "a" | "b") => (which === "a" ? wall.params.aMm : wall.params.bMm);
+    const topologyConnectionIds = (wall: WallInstance, point: { x: number; z: number }) => {
+      const ids = new Set<string>();
+      for (const other of walls) {
+        if (other.id === wall.id) continue;
+        if (wallEndpointWhich(other, point, wallJoinTolMm)) {
+          ids.add(other.id);
+          continue;
+        }
+        const hit = pointOnWallAxisMm(other, point);
+        if (hit.distMm <= wallJoinTolMm && hit.t > 0.001 && hit.t < 0.999) ids.add(other.id);
+      }
+      return ids;
+    };
+    const hasTopologyConnection = (wall: WallInstance, point: { x: number; z: number }) =>
+      topologyConnectionIds(wall, point).size > 0;
+    const removeTopologyWall = (wall: WallInstance) => {
+      layoutRoot.remove(wall.root);
+      disposeObject3D(wall.root);
+      const idx = walls.indexOf(wall);
+      if (idx >= 0) walls.splice(idx, 1);
+      selectedWallIds?.delete(wall.id);
+      if (ctx.getSelectedWallId() === wall.id) ctx.setSelectedWallId(null);
+      wallSolvedOutlines.delete(wall.id);
+    };
+
+    for (const wall of [...walls]) {
+      if (pinnedWallIds.has(wall.id) || attachedWallIds.has(wall.id)) continue;
+      const lenMm = mmDist(wall.params.aMm, wall.params.bMm);
+      const microLimitMm = Math.max(wallJoinTolMm, Math.max(1, wall.params.thicknessMm));
+      if (lenMm > microLimitMm) continue;
+      const connectedIds = new Set<string>([
+        ...topologyConnectionIds(wall, wall.params.aMm),
+        ...topologyConnectionIds(wall, wall.params.bMm)
+      ]);
+      if (connectedIds.size < 2) removeTopologyWall(wall);
+    }
+
+    for (const wall of walls) {
+      const joinEnds = wall.params.joinEnds;
+      if (!joinEnds) continue;
+      for (const end of ["a", "b"] as const) {
+        if (hasTopologyConnection(wall, endpoint(wall, end))) continue;
+        delete joinEnds[end];
+      }
+      if (!joinEnds.a && !joinEnds.b) wall.params.joinEnds = undefined;
+    }
+  }
+
   function mergeCollinearWallFragments() {
     const maxPasses = Math.max(1, walls.length);
     const attachedWallIds = new Set<string>();
@@ -682,6 +737,8 @@ export function createWallController(ctx: WallControllerContext) {
     const idx = walls.indexOf(w);
     if (idx >= 0) walls.splice(idx, 1);
     if (ctx.getSelectedWallId() === w.id) ctx.setSelectedWallId(null);
+    cleanupWallTopology();
+    for (const wall of walls) rebuildWall(wall);
     rebuildWallPlanMesh();
   }
 
@@ -1287,6 +1344,8 @@ export function createWallController(ctx: WallControllerContext) {
       }
     }
 
+    if (walls.length === 0) return;
+    cleanupWallTopology();
     if (walls.length === 0) return;
     mergeCollinearWallFragments();
 

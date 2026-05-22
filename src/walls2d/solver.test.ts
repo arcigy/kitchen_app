@@ -84,10 +84,10 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("shallow equal-priority corner bevels instead of making a long spike", () => {
+  test("finite miter limit can still bevel unusually shallow equal-priority corners", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
-    const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
+    const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
+    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 2.5 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
@@ -98,7 +98,35 @@ describe("walls2d join solver", () => {
     expect(solvedB.outline).toHaveLength(4);
     expect(solvedA.b.ownedCapPoly).toBeUndefined();
     expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.25);
+    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.45);
+  });
+
+  test("default equal-priority corner keeps a pointed miter even at a very sharp angle", () => {
+    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
+    const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
+    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
+    const solvedA = res.walls.find((w) => w.id === "a")!;
+    const solvedB = res.walls.find((w) => w.id === "b")!;
+
+    expect(solvedA.b.join).toBe("miter");
+    expect(solvedB.a.join).toBe("miter");
+    expect(solvedA.b.left).toEqual(solvedB.a.left);
+    expect(solvedA.b.right).toEqual(solvedB.a.right);
+    expect(res.joinPolys).toHaveLength(0);
+  });
+
+  test("moderately angled equal-priority corner keeps a pointed miter", () => {
+    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
+    const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
+    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
+    const solvedA = res.walls.find((w) => w.id === "a")!;
+    const solvedB = res.walls.find((w) => w.id === "b")!;
+
+    expect(solvedA.b.join).toBe("miter");
+    expect(solvedB.a.join).toBe("miter");
+    expect(solvedA.b.left).toEqual(solvedB.a.left);
+    expect(solvedA.b.right).toEqual(solvedB.a.right);
+    expect(res.joinPolys).toHaveLength(0);
   });
 
   test("equal-priority angled corner keeps same wall faces joined", () => {

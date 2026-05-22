@@ -21,7 +21,7 @@ export type WallSolved = {
 
 type Node = { id: string; p: Point; incident: Array<{ wall: Wall; end: WallEnd }> };
 
-export const DEFAULT_WALL_MITER_LIMIT = 1.25;
+export const DEFAULT_WALL_MITER_LIMIT = Number.POSITIVE_INFINITY;
 
 function key(p: Point, tol = 1e-3) {
   // tol in meters -> quantize

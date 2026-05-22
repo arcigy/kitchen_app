@@ -496,4 +496,50 @@ describe("wall plan fill", () => {
     expect(Math.min(...seamVertices.map((point) => point.z))).toBeLessThan(4.85);
     expect(Math.max(...seamVertices.map((point) => point.z))).toBeLessThanOrEqual(5.000001);
   });
+
+  it("rebuilds remaining wall meshes after deleting a joined wall", () => {
+    const ctx = createTestWallContext();
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    ctx.walls.push(vertical, diagonal);
+    const controller = createWallController(ctx);
+    controller.rebuildWall(vertical);
+    controller.rebuildWall(diagonal);
+
+    controller.removeWall(diagonal);
+
+    const vertices = getWorldVertices(vertical.mesh);
+    const topVertices = vertices.filter((point) => Math.abs(point.z - 5) < 1e-5);
+    expect(ctx.walls.map((wall) => wall.id)).toEqual(["vertical"]);
+    expect(topVertices.some((point) => Math.abs(point.x + 0.075) < 1e-5)).toBe(true);
+    expect(topVertices.some((point) => Math.abs(point.x - 0.075) < 1e-5)).toBe(true);
+    expect(Math.max(...vertices.map((point) => point.z))).toBeCloseTo(5, 5);
+    expect(Math.min(...vertices.map((point) => point.x))).toBeCloseTo(-0.075, 5);
+    expect(Math.max(...vertices.map((point) => point.x))).toBeCloseTo(0.075, 5);
+  });
+
+  it("drops orphan micro wall remnants during wall plan rebuilds", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    const remnant = createTestWallInstance("remnant", { x: 1200, z: 0 }, { x: 1260, z: 0 });
+    ctx.walls.push(main, remnant);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.walls.map((wall) => wall.id)).toEqual(["main"]);
+    expect(ctx.layoutRoot.children.includes(remnant.root)).toBe(false);
+  });
+
+  it("clears orphan explicit join metadata after the neighbor wall is gone", () => {
+    const ctx = createTestWallContext();
+    const wall = createTestWallInstance("wall", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    wall.params.joinEnds = { b: { priority: 10 } };
+    ctx.walls.push(wall);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(wall.params.joinEnds).toBeUndefined();
+  });
 });
