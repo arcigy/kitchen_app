@@ -83,6 +83,13 @@ export type SceneExportV1 = {
       receive: boolean;
     };
     tags: string[];
+    ifc?: {
+      className: string;
+      predefinedType?: string;
+      elementId?: string;
+      objectType?: string;
+      name?: string;
+    };
   }>;
 };
 
@@ -159,6 +166,25 @@ const inferTags = (name: string, userTags: unknown): string[] => {
   if (n.includes("glass")) tags.push("glass");
   if (n.includes("metal")) tags.push("metal");
   return Array.from(new Set(tags));
+};
+
+const extractIfcMetadata = (userData: Record<string, unknown> | undefined) => {
+  const raw = userData?.ifc;
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const className = typeof record.className === "string" ? record.className.trim() : "";
+  if (!className) return undefined;
+  const predefinedType = typeof record.predefinedType === "string" && record.predefinedType.trim() ? record.predefinedType.trim() : undefined;
+  const elementId = typeof record.elementId === "string" && record.elementId.trim() ? record.elementId.trim() : undefined;
+  const objectType = typeof record.objectType === "string" && record.objectType.trim() ? record.objectType.trim() : undefined;
+  const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : undefined;
+  return {
+    className,
+    ...(predefinedType ? { predefinedType } : {}),
+    ...(elementId ? { elementId } : {}),
+    ...(objectType ? { objectType } : {}),
+    ...(name ? { name } : {})
+  };
 };
 
 const extractPbr = (material: THREE.Material | null | undefined, tags: string[]) => {
@@ -360,7 +386,10 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
     const kind: SceneExportV1["objects"][number]["geometry"]["kind"] =
       geo.type === "BoxGeometry" ? "box" : geo.type === "PlaneGeometry" ? "plane" : "bufferGeometry";
 
-    const tags = inferTags(mesh.name || "Mesh", (mesh.userData as any)?.tags);
+    const userData = mesh.userData as Record<string, unknown>;
+    const ifc = extractIfcMetadata(userData);
+    const tags = inferTags(mesh.name || "Mesh", userData?.tags);
+    if (ifc?.className) tags.push(ifc.className, `ifc:${ifc.className}`);
     const mat = Array.isArray(mesh.material) ? (mesh.material[0] ?? null) : mesh.material;
     const material = extractPbr(mat, tags);
 
@@ -379,7 +408,8 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
       transform,
       material,
       shadow: { cast: !!mesh.castShadow, receive: !!mesh.receiveShadow },
-      tags
+      tags: Array.from(new Set(tags)),
+      ...(ifc ? { ifc } : {})
     });
   });
 

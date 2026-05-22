@@ -2,6 +2,13 @@ import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
 import type { MeasureState } from "./measureTools";
+import {
+  applyWallTypeToParams,
+  CUSTOM_WALL_TYPE_ID,
+  getWallTypeName,
+  resolveWallTypeId,
+  WALL_TYPE_PRESETS
+} from "./wallTypes";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -11,7 +18,7 @@ export type PropertiesPanelApi = {
 
 type WallToolPropsContext = {
   props: PropertiesPanelApi;
-  wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
+  wallDefault: Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "justification" | "exteriorSign" | "materialId">;
   wallDraw: {
     preview: THREE.Mesh | null;
     a: THREE.Vector3 | null;
@@ -60,11 +67,23 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
   const { props, wallDefault, wallDraw, updateWallMeshWithJustification, setUnderlayStatus } = ctx;
     props.setTitle("Wall");
     const s = props.section();
+    const typeSelect = document.createElement("select");
+    typeSelect.innerHTML = [
+      `<option value="${CUSTOM_WALL_TYPE_ID}">Vlastna</option>`,
+      ...WALL_TYPE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.name}</option>`)
+    ].join("");
+    typeSelect.value = resolveWallTypeId(wallDefault);
+    props.row(s, "Typ steny", typeSelect);
     const th = document.createElement("input");
     th.type = "number";
     th.step = "1";
     th.value = String(wallDefault.thicknessMm);
     props.row(s, "Thickness (mm)", th);
+    const height = document.createElement("input");
+    height.type = "number";
+    height.step = "1";
+    height.value = String(wallDefault.heightMm);
+    props.row(s, "Height (mm)", height);
     const just = document.createElement("select");
     just.innerHTML = `
       <option value="center">Center</option>
@@ -78,14 +97,6 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
     flip.textContent = "Flip exterior";
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
-    const mat = document.createElement("select");
-    mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = wallDefault.materialId;
-    props.row(s, "Material", mat);
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
-    s.appendChild(hint);
     const updatePreview = () => {
       if (!wallDraw.preview || !wallDraw.a) return;
       updateWallMeshWithJustification(
@@ -97,23 +108,45 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
         wallDefault.exteriorSign ?? 1
       );
     };
-    th.addEventListener("change", () => {
-      wallDefault.thicknessMm = Math.max(10, Number(th.value) || wallDefault.thicknessMm);
+    const hint = document.createElement("div");
+    hint.className = "muted";
+    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
+    s.appendChild(hint);
+    typeSelect.addEventListener("change", () => {
+      const preset = applyWallTypeToParams(wallDefault, typeSelect.value);
       th.value = String(wallDefault.thicknessMm);
+      height.value = String(wallDefault.heightMm);
+      just.value = wallDefault.justification ?? "center";
+      updatePreview();
+      setUnderlayStatus(`Wall type: ${preset?.name ?? getWallTypeName(typeSelect.value)}.`);
+    });
+    th.addEventListener("change", () => {
+      wallDefault.thicknessMm = Math.max(10, Math.round(Number(th.value) || wallDefault.thicknessMm));
+      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
+      th.value = String(wallDefault.thicknessMm);
+      typeSelect.value = CUSTOM_WALL_TYPE_ID;
+      updatePreview();
+    });
+    height.addEventListener("change", () => {
+      wallDefault.heightMm = Math.max(1, Math.round(Number(height.value) || wallDefault.heightMm));
+      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
+      height.value = String(wallDefault.heightMm);
+      typeSelect.value = CUSTOM_WALL_TYPE_ID;
       updatePreview();
     });
     just.addEventListener("change", () => {
       wallDefault.justification =
         just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
+      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
+      typeSelect.value = CUSTOM_WALL_TYPE_ID;
       updatePreview();
     });
     flip.addEventListener("click", () => {
       wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
+      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
+      typeSelect.value = CUSTOM_WALL_TYPE_ID;
       updatePreview();
       setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
-    });
-    mat.addEventListener("change", () => {
-      wallDefault.materialId = mat.value || "default";
     });
   
 }
@@ -168,7 +201,7 @@ export function mountAlignToolPropsPanel(ctx: AlignToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Click the reference line, then the second parallel line (the wall moves or its end is adjusted). Esc = cancel.";
+    hint.textContent = "Click the reference line, then click one or more parallel lines to align. Esc = new reference, Esc again = exit.";
     s.appendChild(hint);
     const cur = document.createElement("div");
     cur.className = "muted";
@@ -180,11 +213,11 @@ export function mountAlignToolPropsPanel(ctx: AlignToolPropsContext) {
 
 export function mountTrimToolPropsPanel(ctx: TrimToolPropsContext) {
   const { props, trimState } = ctx;
-    props.setTitle("Trim");
+    props.setTitle("Trim / Extend");
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Click the target wall, then click the cutting line. Esc = back.";
+    hint.textContent = "Click the target wall, then click the boundary wall or line. The nearest end trims or extends to the intersection. Esc = back.";
     s.appendChild(hint);
 
     const step = document.createElement("div");

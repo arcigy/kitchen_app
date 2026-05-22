@@ -8,9 +8,10 @@ import type { AlignPickedLine, DoorInstance, KitchenWorktopInstance, LayoutInsta
 import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import { commitHistory } from "../layout/historyManager";
-import { solveWallNetwork } from "../walls2d/solver";
+import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
-import type { WallJustification } from "../walls2d/model";
+import { spineDir, type WallJustification } from "../walls2d/model";
+import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
@@ -38,6 +39,18 @@ type WallMeshCutout = {
   heightM: number;
 };
 
+type WallOpeningClip = {
+  kind: "window" | "door";
+  wallId: string;
+  center: THREE.Vector3;
+  dir: THREE.Vector3;
+  normal: THREE.Vector3;
+  halfW: number;
+  halfT: number;
+  faceHalfT: number;
+  corners: Array<{ x: number; z: number }>;
+};
+
 const polygonClipper = polygonClipping as PolygonClipper;
 export const WALL_PLAN_FILL_ROTATION_X = Math.PI / 2;
 const WALL_CUTOUT_REVEAL_NAME = "wallWindowCutoutReveal";
@@ -60,6 +73,7 @@ export type WallControllerContext = {
   wallDebugGroup: THREE.Group;
   wallSolvedOutlines: Map<string, WallPlanPoint[]>;
   wallDefault: {
+    typeId?: string | null;
     thicknessMm: number;
     heightMm: number;
     materialId: string;
@@ -81,6 +95,7 @@ export type WallControllerContext = {
   getViewMode: () => "2d" | "3d";
   getSelectedKind: () => string | null;
   getSelectedWallId: () => string | null;
+  getSelectedWallIds?: () => Set<string>;
   setSelectedWallId: (next: string | null) => void;
   getWallDebugEnabled: () => boolean;
   setWallSolvedJoinPolys: (next: WallPlanPoint[][]) => void;
@@ -115,7 +130,92 @@ export function createWallController(ctx: WallControllerContext) {
   const getWindowInsts = () => ctx.getWindowInsts?.() ?? (ctx.getWindowInst?.() ? [ctx.getWindowInst()!] : []);
   const getDoorInsts = () => ctx.getDoorInsts?.() ?? (ctx.getDoorInst?.() ? [ctx.getDoorInst()!] : []);
 
-  const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+  const syncWallIfcMetadata = (w: WallInstance) => {
+    const typeId = resolveWallTypeId(w.params);
+    const preset = getWallTypePreset(typeId);
+    w.mesh.userData.kind = "wall";
+    w.mesh.userData.wallId = w.id;
+    w.mesh.userData.ifc = {
+      className: "IfcWall",
+      predefinedType: preset?.ifcPredefinedType ?? "STANDARD",
+      elementId: w.id,
+      objectType: preset?.name ?? getWallTypeName(typeId),
+      name: preset?.name ?? getWallTypeName(typeId)
+    };
+    const existingTags = Array.isArray(w.mesh.userData.tags)
+      ? w.mesh.userData.tags.filter((tag): tag is string => typeof tag === "string" && !tag.startsWith("wallType:"))
+      : [];
+    w.mesh.userData.tags = Array.from(new Set([...existingTags, "wall", "ifc", "IfcWall", `wallType:${typeId}`]));
+  };
+
+  const makeWallSolverInput = () =>
+    walls.map((w) => ({
+      id: w.id,
+      a: { x: w.params.aMm.x / 1000, z: w.params.aMm.z / 1000 },
+      b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
+      thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
+      justification: w.params.justification ?? "center",
+      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1,
+      joinEnds: w.params.joinEnds
+    }));
+
+  const solveWallsForRendering = () =>
+    solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: DEFAULT_WALL_MITER_LIMIT });
+
+  const makeWallOpeningClips = () => {
+    const clips: WallOpeningClip[] = [];
+
+    const addClip = (kind: "window" | "door", wallId: string | null, centerMm: number, widthMm: number) => {
+      if (!wallId) return;
+      const wall = walls.find((item) => item.id === wallId) ?? null;
+      if (!wall) return;
+
+      const refA = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+      const refB = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+      const dir = refB.clone().sub(refA);
+      const lengthM = dir.length();
+      if (lengthM < 0.001) return;
+      dir.multiplyScalar(1 / lengthM);
+
+      const leftNormal = new THREE.Vector3(-dir.z, 0, dir.x);
+      const exteriorSign = (wall.params.exteriorSign ?? 1) as 1 | -1;
+      const thicknessM = Math.max(0.01, wall.params.thicknessMm / 1000);
+      const half = thicknessM / 2;
+      const justification = wall.params.justification ?? "center";
+      const centerOffset =
+        justification === "center"
+          ? 0
+          : justification === "exterior"
+            ? -exteriorSign * half
+            : exteriorSign * half;
+
+      const center = refA
+        .clone()
+        .addScaledVector(leftNormal, centerOffset)
+        .addScaledVector(dir, centerMm / 1000);
+      const halfW = Math.max(0.001, widthMm / 2000);
+      const halfT = half + 0.006;
+      const corners = [
+        center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, -halfT),
+        center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, -halfT),
+        center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, halfT),
+        center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
+      ].map((point) => ({ x: point.x, z: point.z }));
+
+      clips.push({ kind, wallId, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
+    };
+
+    for (const windowInst of getWindowInsts()) {
+      addClip("window", windowInst.params.wallId ?? null, windowInst.params.centerMm, windowInst.params.widthMm);
+    }
+    for (const doorInst of getDoorInsts()) {
+      addClip("door", doorInst.params.wallId ?? null, doorInst.params.centerMm, doorInst.params.widthMm);
+    }
+
+    return clips;
+  };
+
+  const buildAlignLineCandidates = () => {
     const candidates: AlignPickedLine[] = [];
 
     for (const w of walls) {
@@ -169,7 +269,172 @@ export function createWallController(ctx: WallControllerContext) {
       );
     }
 
-    return pickBestAlignLine(mousePx, rect, cam(), candidates, 12);
+    return candidates;
+  };
+
+  const buildSolvedWallOutlineCandidates = (wall: WallInstance, outline: WallPlanPoint[]) => {
+    const candidates: AlignPickedLine[] = [];
+    const first = outline[0];
+    const last = outline[outline.length - 1];
+    const closed =
+      !!first &&
+      !!last &&
+      outline.length > 1 &&
+      Math.hypot(first.x - last.x, first.z - last.z) < 1e-6;
+    const pts = closed ? outline.slice(0, -1) : outline;
+    if (pts.length < 2) return candidates;
+
+    for (let index = 0; index < pts.length; index += 1) {
+      const a = pts[index]!;
+      const b = pts[(index + 1) % pts.length]!;
+      const segA = new THREE.Vector3(a.x, 0, a.z);
+      const segB = new THREE.Vector3(b.x, 0, b.z);
+      const dir = segB.clone().sub(segA).setY(0);
+      if (dir.lengthSq() < 1e-8) continue;
+      dir.normalize();
+      candidates.push({
+        p: segA.clone(),
+        dir,
+        segA,
+        segB,
+        label: `Wall ${wall.id}: outline edge ${index + 1}`,
+        targetKind: "wall",
+        lineRole: "edge",
+        wallId: wall.id,
+        segmentIndex: index
+      });
+    }
+
+    return candidates;
+  };
+
+  const makeDimensionLineCandidate = (args: {
+    a: THREE.Vector3;
+    b: THREE.Vector3;
+    label: string;
+    lineRole?: AlignPickedLine["lineRole"];
+    wallId?: string | null;
+    segmentIndex: number;
+  }): AlignPickedLine | null => {
+    const dir = args.b.clone().sub(args.a).setY(0);
+    if (dir.lengthSq() < 1e-8) return null;
+    dir.normalize();
+    return {
+      p: args.a.clone(),
+      dir,
+      segA: args.a.clone(),
+      segB: args.b.clone(),
+      label: args.label,
+      targetKind: "wall" as const,
+      lineRole: args.lineRole ?? "edge",
+      wallId: args.wallId ?? undefined,
+      segmentIndex: args.segmentIndex
+    } satisfies AlignPickedLine;
+  };
+
+  const buildEndpointReferenceCandidates = (edge: AlignPickedLine, baseIndex: number) => {
+    const segment = edge.segB.clone().sub(edge.segA).setY(0);
+    const segmentLen = segment.length();
+    if (segmentLen < 1e-6) return [] as AlignPickedLine[];
+    const dir = segment.multiplyScalar(1 / segmentLen);
+    const normal = new THREE.Vector3(-dir.z, 0, dir.x);
+    const half = Math.max(0.18, Math.min(0.85, segmentLen * 0.35));
+    const make = (point: THREE.Vector3, role: "endA" | "endB", index: number) =>
+      makeDimensionLineCandidate({
+        a: point.clone().addScaledVector(normal, -half),
+        b: point.clone().addScaledVector(normal, half),
+        label: `${edge.label}: ${role === "endA" ? "start reference" : "end reference"}`,
+        lineRole: role,
+        wallId: edge.wallId ?? null,
+        segmentIndex: baseIndex + index
+      });
+    return [make(edge.segA, "endA", 0), make(edge.segB, "endB", 1)].filter(
+      (candidate): candidate is AlignPickedLine => !!candidate
+    );
+  };
+
+  const buildWallPlanVisibleDimensionCandidates = () => {
+    const candidates: AlignPickedLine[] = [];
+    const edges: AlignPickedLine[] = [];
+    let segmentIndex = 200000;
+
+    for (const line of wallPlanMeshes.values()) {
+      const kind = line.userData?.kind;
+      if (kind !== "wallPlanUnion" && kind !== "wallPlanWindowParapet" && kind !== "wallPlanWallFaces") continue;
+      if (line.visible === false) continue;
+      const position = line.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+      if (!position || position.count < 2) continue;
+      line.updateMatrixWorld(true);
+
+      for (let i = 0; i + 1 < position.count; i += 2) {
+        const a = line.localToWorld(new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i)));
+        const b = line.localToWorld(new THREE.Vector3(position.getX(i + 1), position.getY(i + 1), position.getZ(i + 1)));
+        const edge = makeDimensionLineCandidate({
+          a,
+          b,
+          label: `${line.name || "Wall plan"}: segment ${i / 2 + 1}`,
+          wallId: typeof line.userData?.wallId === "string" ? line.userData.wallId : null,
+          segmentIndex: segmentIndex++
+        });
+        if (!edge) continue;
+        edges.push(edge);
+        candidates.push(...buildEndpointReferenceCandidates(edge, segmentIndex));
+        segmentIndex += 2;
+      }
+    }
+
+    candidates.push(...edges);
+    return candidates;
+  };
+
+  const buildOpeningDimensionCandidates = () => {
+    const candidates: AlignPickedLine[] = [];
+    let segmentIndex = 300000;
+    const add = (clip: WallOpeningClip, a: THREE.Vector3, b: THREE.Vector3, label: string) => {
+      const candidate = makeDimensionLineCandidate({
+        a,
+        b,
+        label,
+        wallId: clip.wallId,
+        segmentIndex: segmentIndex++
+      });
+      if (candidate) candidates.push(candidate);
+    };
+
+    for (const clip of makeWallOpeningClips()) {
+      const faceHalfT = clip.faceHalfT;
+      const startInner = clip.center.clone().addScaledVector(clip.dir, -clip.halfW).addScaledVector(clip.normal, -faceHalfT);
+      const endInner = clip.center.clone().addScaledVector(clip.dir, clip.halfW).addScaledVector(clip.normal, -faceHalfT);
+      const startOuter = clip.center.clone().addScaledVector(clip.dir, -clip.halfW).addScaledVector(clip.normal, faceHalfT);
+      const endOuter = clip.center.clone().addScaledVector(clip.dir, clip.halfW).addScaledVector(clip.normal, faceHalfT);
+      const label = clip.kind === "door" ? "Door opening" : "Window opening";
+
+      add(clip, startInner, startOuter, `${label}: left jamb`);
+      add(clip, endInner, endOuter, `${label}: right jamb`);
+      add(clip, startInner, endInner, `${label}: inner edge`);
+      add(clip, startOuter, endOuter, `${label}: outer edge`);
+    }
+
+    return candidates;
+  };
+
+  const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+    void hitPoint;
+    return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), 12);
+  };
+
+  const pickDimensionLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+    void hitPoint;
+    const candidates = [
+      ...buildWallPlanVisibleDimensionCandidates(),
+      ...buildOpeningDimensionCandidates(),
+      ...buildAlignLineCandidates()
+    ];
+    for (const w of walls) {
+      const outline = wallSolvedOutlines.get(w.id) ?? null;
+      if (outline && outline.length >= 3) candidates.push(...buildSolvedWallOutlineCandidates(w, outline));
+    }
+    return pickBestAlignLine(mousePx, rect, cam(), candidates, 24);
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -232,25 +497,32 @@ export function createWallController(ctx: WallControllerContext) {
     }
   };
 
-  const moveWallEndpointAndConnected = (w: WallInstance, which: "a" | "b", dxMm: number, dzMm: number) => {
+  const setWallEndpointsAndConnectedMm = (
+    edits: Array<{ wall: WallInstance; which: "a" | "b"; next: { x: number; z: number } }>
+  ) => {
+    if (edits.length === 0) return false;
     const prev = new Map<string, WallParams>();
     for (const ww of walls) prev.set(ww.id, JSON.parse(JSON.stringify(ww.params)) as WallParams);
 
-    const oldP = which === "a" ? { x: w.params.aMm.x, z: w.params.aMm.z } : { x: w.params.bMm.x, z: w.params.bMm.z };
-    const nextP = { x: oldP.x + dxMm, z: oldP.z + dzMm };
+    const normalized = edits.map((edit) => {
+      const old = edit.which === "a" ? edit.wall.params.aMm : edit.wall.params.bMm;
+      return {
+        wall: edit.wall,
+        which: edit.which,
+        old: { x: old.x, z: old.z },
+        next: { x: Math.round(edit.next.x), z: Math.round(edit.next.z) }
+      };
+    });
 
     const touched = new Set<string>();
-    touched.add(w.id);
-    if (which === "a") w.params.aMm = nextP;
-    else w.params.bMm = nextP;
-
     for (const other of walls) {
-      if (other.id === w.id) continue;
-      if (pinnedWallIds.has(other.id)) continue;
-      const ww = wallEndpointWhich(other, oldP, wallJoinTolMm);
-      if (ww) {
-        if (ww === "a") other.params.aMm = nextP;
-        else other.params.bMm = nextP;
+      if (pinnedWallIds.has(other.id) && !normalized.some((edit) => edit.wall.id === other.id)) continue;
+      for (const end of ["a", "b"] as const) {
+        const current = end === "a" ? other.params.aMm : other.params.bMm;
+        const match = normalized.find((edit) => mmDist(current, edit.old) <= wallJoinTolMm);
+        if (!match) continue;
+        if (end === "a") other.params.aMm = { ...match.next };
+        else other.params.bMm = { ...match.next };
         touched.add(other.id);
       }
     }
@@ -269,7 +541,17 @@ export function createWallController(ctx: WallControllerContext) {
       }
       rebuildWallPlanMesh();
       setUnderlayStatus("Move blocked: wall would overlap a module.");
+      return false;
     }
+    return true;
+  };
+
+  const setWallEndpointAndConnectedMm = (w: WallInstance, which: "a" | "b", nextP: { x: number; z: number }) =>
+    setWallEndpointsAndConnectedMm([{ wall: w, which, next: nextP }]);
+
+  const moveWallEndpointAndConnected = (w: WallInstance, which: "a" | "b", dxMm: number, dzMm: number) => {
+    const oldP = which === "a" ? w.params.aMm : w.params.bMm;
+    return setWallEndpointAndConnectedMm(w, which, { x: oldP.x + dxMm, z: oldP.z + dzMm });
   };
 
   function setWallEndpointMm(w: WallInstance, which: "a" | "b", p: { x: number; z: number }) {
@@ -291,6 +573,103 @@ export function createWallController(ctx: WallControllerContext) {
       for (const item of material) item.dispose();
     } else {
       material.dispose();
+    }
+  }
+
+  function mergeCollinearWallFragments() {
+    const maxPasses = Math.max(1, walls.length);
+    const attachedWallIds = new Set<string>();
+    for (const windowInst of getWindowInsts()) if (windowInst.params.wallId) attachedWallIds.add(windowInst.params.wallId);
+    for (const doorInst of getDoorInsts()) if (doorInst.params.wallId) attachedWallIds.add(doorInst.params.wallId);
+
+    const endpoint = (wall: WallInstance, which: "a" | "b") => (which === "a" ? wall.params.aMm : wall.params.bMm);
+    const otherEndpoint = (wall: WallInstance, which: "a" | "b") => (which === "a" ? wall.params.bMm : wall.params.aMm);
+    const normalize = (v: { x: number; z: number }) => {
+      const len = Math.hypot(v.x, v.z);
+      return len > 1e-6 ? { x: v.x / len, z: v.z / len } : null;
+    };
+    const cross2 = (a: { x: number; z: number }, b: { x: number; z: number }) => a.x * b.z - a.z * b.x;
+    const dot2 = (a: { x: number; z: number }, b: { x: number; z: number }) => a.x * b.x + a.z * b.z;
+    const exteriorNormal = (wall: WallInstance) => {
+      const dir = normalize({ x: wall.params.bMm.x - wall.params.aMm.x, z: wall.params.bMm.z - wall.params.aMm.z });
+      if (!dir) return null;
+      const sign = (wall.params.exteriorSign ?? 1) as 1 | -1;
+      return { x: -dir.z * sign, z: dir.x * sign };
+    };
+    const sameStyle = (a: WallInstance, b: WallInstance) =>
+      resolveWallTypeId(a.params) === resolveWallTypeId(b.params) &&
+      a.params.thicknessMm === b.params.thicknessMm &&
+      a.params.heightMm === b.params.heightMm &&
+      a.params.materialId === b.params.materialId &&
+      (a.params.justification ?? "center") === (b.params.justification ?? "center");
+    const incidentIdsAt = (point: { x: number; z: number }) => {
+      const ids = new Set<string>();
+      for (const wall of walls) {
+        if (wallEndpointWhich(wall, point, wallJoinTolMm)) {
+          ids.add(wall.id);
+          continue;
+        }
+        const hit = pointOnWallAxisMm(wall, point);
+        if (hit.distMm <= wallJoinTolMm && hit.t > 0.001 && hit.t < 0.999) ids.add(wall.id);
+      }
+      return ids;
+    };
+    const removeMergedWall = (wall: WallInstance) => {
+      layoutRoot.remove(wall.root);
+      disposeObject3D(wall.root);
+      const idx = walls.indexOf(wall);
+      if (idx >= 0) walls.splice(idx, 1);
+    };
+
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      let merged = false;
+      outer: for (let i = 0; i < walls.length; i += 1) {
+        for (let j = i + 1; j < walls.length; j += 1) {
+          const keep = walls[i];
+          const remove = walls[j];
+          if (!keep || !remove) continue;
+          if (pinnedWallIds.has(keep.id) || pinnedWallIds.has(remove.id)) continue;
+          if (attachedWallIds.has(keep.id) || attachedWallIds.has(remove.id)) continue;
+          if (!sameStyle(keep, remove)) continue;
+          const keepNormal = exteriorNormal(keep);
+          const removeNormal = exteriorNormal(remove);
+          if (!keepNormal || !removeNormal || dot2(keepNormal, removeNormal) < 0.999) continue;
+
+          for (const keepEnd of ["a", "b"] as const) {
+            for (const removeEnd of ["a", "b"] as const) {
+              const sharedA = endpoint(keep, keepEnd);
+              const sharedB = endpoint(remove, removeEnd);
+              if (mmDist(sharedA, sharedB) > wallJoinTolMm) continue;
+              const shared = { x: (sharedA.x + sharedB.x) / 2, z: (sharedA.z + sharedB.z) / 2 };
+              const incidents = incidentIdsAt(shared);
+              if (incidents.size !== 2 || !incidents.has(keep.id) || !incidents.has(remove.id)) continue;
+              const keepOther = otherEndpoint(keep, keepEnd);
+              const removeOther = otherEndpoint(remove, removeEnd);
+              const keepAway = normalize({ x: keepOther.x - shared.x, z: keepOther.z - shared.z });
+              const removeAway = normalize({ x: removeOther.x - shared.x, z: removeOther.z - shared.z });
+              if (!keepAway || !removeAway) continue;
+              if (Math.abs(cross2(keepAway, removeAway)) > 0.001 || dot2(keepAway, removeAway) > -0.999) continue;
+
+              const keepJoinEnds = keep.params.joinEnds ? JSON.parse(JSON.stringify(keep.params.joinEnds)) : {};
+              const removeJoinEnds = remove.params.joinEnds ? JSON.parse(JSON.stringify(remove.params.joinEnds)) : {};
+              keep.params.aMm = keepEnd === "b" ? { ...keep.params.aMm } : { ...removeOther };
+              keep.params.bMm = keepEnd === "b" ? { ...removeOther } : { ...keep.params.bMm };
+              keep.params.joinEnds = {
+                a: keepEnd === "b" ? keepJoinEnds.a : removeJoinEnds[removeEnd === "a" ? "b" : "a"],
+                b: keepEnd === "b" ? removeJoinEnds[removeEnd === "a" ? "b" : "a"] : keepJoinEnds.b
+              };
+              if (ctx.getSelectedWallId() === remove.id) ctx.setSelectedWallId(keep.id);
+              const selectedWallIds = ctx.getSelectedWallIds?.();
+              if (selectedWallIds?.delete(remove.id)) selectedWallIds.add(keep.id);
+              removeMergedWall(remove);
+              rebuildWall(keep);
+              merged = true;
+              break outer;
+            }
+          }
+        }
+      }
+      if (!merged) break;
     }
   }
 
@@ -320,8 +699,8 @@ export function createWallController(ctx: WallControllerContext) {
     const a = fromMmPoint(w.params.aMm);
     const b = fromMmPoint(w.params.bMm);
     const mid = fromMmPoint(p);
-    const thickness = w.params.thicknessMm;
-    const materialId = w.params.materialId;
+    const originalParams = JSON.parse(JSON.stringify(w.params)) as WallParams;
+    const thickness = originalParams.thicknessMm;
 
     removeWall(w);
     const w1 = addWall(a, mid, thickness);
@@ -331,12 +710,25 @@ export function createWallController(ctx: WallControllerContext) {
       if (w1) removeWall(w1);
       if (w2) removeWall(w2);
       const w0 = addWall(a, b, thickness);
-      if (w0) w0.params.materialId = materialId;
+      if (w0) w0.params = JSON.parse(JSON.stringify(originalParams)) as WallParams;
+      if (w0) rebuildWall(w0);
       rebuildWallPlanMesh();
       return;
     }
-    if (w1) w1.params.materialId = materialId;
-    if (w2) w2.params.materialId = materialId;
+    w1.params = {
+      ...JSON.parse(JSON.stringify(originalParams)),
+      aMm: { ...originalParams.aMm },
+      bMm: toMmPoint(mid),
+      joinEnds: { a: originalParams.joinEnds?.a }
+    };
+    w2.params = {
+      ...JSON.parse(JSON.stringify(originalParams)),
+      aMm: toMmPoint(mid),
+      bMm: { ...originalParams.bMm },
+      joinEnds: { b: originalParams.joinEnds?.b }
+    };
+    rebuildWall(w1);
+    rebuildWall(w2);
     rebuildWallPlanMesh();
   }
 
@@ -724,6 +1116,82 @@ export function createWallController(ctx: WallControllerContext) {
     return geometry;
   }
 
+  function makeWallPrismGeometryFromOutline(
+    outline: Array<{ x: number; z: number }>,
+    origin: THREE.Vector3,
+    dir: THREE.Vector3,
+    heightM: number
+  ) {
+    const d = dir.clone();
+    if (d.lengthSq() < 1e-8 || outline.length < 3) return null;
+    d.normalize();
+    const left = new THREE.Vector3(-d.z, 0, d.x);
+    const contour = outline.map((point) => {
+      const dx = point.x - origin.x;
+      const dz = point.z - origin.z;
+      return new THREE.Vector2(dx * d.x + dz * d.z, dx * left.x + dz * left.z);
+    });
+    return makeVerticalPrismGeometryFromContour(contour, heightM);
+  }
+
+  function makeVerticalPrismGeometryFromContour(contour: THREE.Vector2[], heightM: number) {
+    const filtered: THREE.Vector2[] = [];
+    for (const point of contour) {
+      const prev = filtered[filtered.length - 1];
+      if (prev && prev.distanceToSquared(point) < 1e-10) continue;
+      filtered.push(point);
+    }
+    if (filtered.length > 2 && filtered[0].distanceToSquared(filtered[filtered.length - 1]) < 1e-10) filtered.pop();
+    if (filtered.length < 3) return null;
+
+    let area = 0;
+    for (let i = 0; i < filtered.length; i += 1) {
+      const a = filtered[i];
+      const b = filtered[(i + 1) % filtered.length];
+      area += a.x * b.y - b.x * a.y;
+    }
+    if (area < 0) filtered.reverse();
+
+    const triangles = THREE.ShapeUtils.triangulateShape(filtered, []);
+    if (triangles.length === 0) return null;
+
+    const halfH = Math.max(0.001, heightM) / 2;
+    const vertices: number[] = [];
+    for (const point of filtered) vertices.push(point.x, -halfH, point.y);
+    for (const point of filtered) vertices.push(point.x, halfH, point.y);
+
+    const n = filtered.length;
+    const indices: number[] = [];
+    for (const tri of triangles) {
+      const [a, b, c] = tri;
+      indices.push(a, b, c);
+      indices.push(n + c, n + b, n + a);
+    }
+    for (let i = 0; i < n; i += 1) {
+      const j = (i + 1) % n;
+      indices.push(i, j, n + j, i, n + j, n + i);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  function makeWallJoinPrismFromOutline(outline: Array<{ x: number; z: number }>, heightM: number) {
+    if (outline.length < 3) return null;
+    const origin = new THREE.Vector3();
+    for (const point of outline) origin.add(new THREE.Vector3(point.x, 0, point.z));
+    origin.multiplyScalar(1 / outline.length);
+    const contour = outline.map((point) => new THREE.Vector2(point.x - origin.x, point.z - origin.z));
+    const geometry = makeVerticalPrismGeometryFromContour(contour, heightM);
+    if (!geometry) return null;
+    return { geometry, origin };
+  }
+
   function removeWallCutoutReveal(mesh: THREE.Mesh) {
     for (const child of [...mesh.children]) {
       if (child.name !== WALL_CUTOUT_REVEAL_NAME) continue;
@@ -772,6 +1240,36 @@ export function createWallController(ctx: WallControllerContext) {
     mesh.userData.wallCutoutBounds = cutoutBounds.map((bounds) => ({ ...bounds }));
   }
 
+  function updateWallMeshFromSolvedOutline(
+    mesh: THREE.Mesh,
+    outline: Array<{ x: number; z: number }>,
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    heightMm = wallDefault.heightMm,
+    syncMaterials = false
+  ) {
+    const d = b.clone().sub(a);
+    if (d.lengthSq() < 1e-8) {
+      updateWallMesh(mesh, a, b, wallDefault.thicknessMm, heightMm, [], syncMaterials);
+      return false;
+    }
+
+    const h = Math.max(1, heightMm) / 1000;
+    const origin = a.clone().add(b).multiplyScalar(0.5);
+    const geometry = makeWallPrismGeometryFromOutline(outline, origin, d, h);
+    if (!geometry) return false;
+
+    removeWallCutoutReveal(mesh);
+    if (syncMaterials) syncWallMeshMaterials(mesh, false);
+    mesh.geometry.dispose();
+    mesh.geometry = geometry;
+    mesh.position.set(origin.x, h / 2, origin.z);
+    mesh.rotation.set(0, -Math.atan2(d.z, d.x), 0);
+    mesh.userData.viewDisplaySkipEdges = ctx.getViewMode() === "2d";
+    mesh.userData.wallCutoutBounds = [];
+    return true;
+  }
+
   function rebuildWallPlanMesh() {
     for (const [, line] of wallPlanMeshes) {
       wallPlanGroup.remove(line);
@@ -780,7 +1278,7 @@ export function createWallController(ctx: WallControllerContext) {
     }
     wallPlanMeshes.clear();
     for (const m of wallJoinMeshes.splice(0, wallJoinMeshes.length)) {
-      wallPlanGroup.remove(m);
+      m.parent?.remove(m);
       m.geometry.dispose();
       if (Array.isArray(m.material)) {
         for (const material of m.material) material.dispose();
@@ -790,17 +1288,10 @@ export function createWallController(ctx: WallControllerContext) {
     }
 
     if (walls.length === 0) return;
+    mergeCollinearWallFragments();
 
-    const modelWalls = walls.map((w) => ({
-      id: w.id,
-      a: { x: w.params.aMm.x / 1000, z: w.params.aMm.z / 1000 },
-      b: { x: w.params.bMm.x / 1000, z: w.params.bMm.z / 1000 },
-      thicknessM: Math.max(0.001, w.params.thicknessMm / 1000),
-      justification: w.params.justification ?? "center",
-      exteriorSign: ((w.params.exteriorSign ?? 1) as 1 | -1) ?? 1
-    }));
-
-    const solved = solveWallNetwork(modelWalls, { nodeTolM: wallJoinTolMm / 1000, miterLimit: 8 });
+    const solved = solveWallsForRendering();
+    const solverInputs = makeWallSolverInput();
     wallSolvedOutlines.clear();
     ctx.setWallSolvedJoinPolys(solved.joinPolys.map((poly) => poly.map((point) => ({ x: point.x, z: point.z }))));
     ctx.setWallUnionPolys(null);
@@ -808,6 +1299,22 @@ export function createWallController(ctx: WallControllerContext) {
     // Always keep per-wall solved outlines for hit-testing/export/debug.
     for (const w of solved.walls) wallSolvedOutlines.set(w.id, w.outline);
     if (ctx.getSelectedKind() === "wall" && ctx.getSelectedWallId()) showWallSnapMarkersFor(ctx.getSelectedWallId());
+
+    const joinHeightM = Math.max(0.001, ...walls.map((wall) => Math.max(1, wall.params.heightMm ?? wallDefault.heightMm) / 1000));
+    solved.joinPolys.forEach((poly, index) => {
+      const prism = makeWallJoinPrismFromOutline(poly, joinHeightM);
+      if (!prism) return;
+      const mesh = new THREE.Mesh(prism.geometry, createWallBodyMaterial());
+      mesh.name = index === 0 ? "wallJoin3d" : `wallJoin3d_${index}`;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.position.set(prism.origin.x, joinHeightM / 2, prism.origin.z);
+      mesh.visible = ctx.getViewMode() === "3d";
+      mesh.userData.kind = "wallJoin";
+      mesh.userData.viewDisplaySkipEdges = ctx.getViewMode() === "2d";
+      wallJoinMeshes.push(mesh);
+      layoutRoot.add(mesh);
+    });
 
     // Render as a single union polygon to automatically trim overlaps/spikes at joins (CAD-like).
     const toRing = (poly: Array<{ x: number; z: number }>) => {
@@ -822,68 +1329,6 @@ export function createWallController(ctx: WallControllerContext) {
       }
       if (area < 0) ring.reverse();
       return ring;
-    };
-
-    const makeWallOpeningClips = () => {
-      const clips: Array<{
-        kind: "window" | "door";
-        center: THREE.Vector3;
-        dir: THREE.Vector3;
-        normal: THREE.Vector3;
-        halfW: number;
-        halfT: number;
-        faceHalfT: number;
-        corners: Array<{ x: number; z: number }>;
-      }> = [];
-
-      const addClip = (kind: "window" | "door", wallId: string | null, centerMm: number, widthMm: number) => {
-        if (!wallId) return;
-        const wall = walls.find((item) => item.id === wallId) ?? null;
-        if (!wall) return;
-
-        const refA = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
-        const refB = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
-        const dir = refB.clone().sub(refA);
-        const lengthM = dir.length();
-        if (lengthM < 0.001) return;
-        dir.multiplyScalar(1 / lengthM);
-
-        const leftNormal = new THREE.Vector3(-dir.z, 0, dir.x);
-        const exteriorSign = (wall.params.exteriorSign ?? 1) as 1 | -1;
-        const thicknessM = Math.max(0.01, wall.params.thicknessMm / 1000);
-        const half = thicknessM / 2;
-        const justification = wall.params.justification ?? "center";
-        const centerOffset =
-          justification === "center"
-            ? 0
-            : justification === "exterior"
-              ? -exteriorSign * half
-              : exteriorSign * half;
-
-        const center = refA
-          .clone()
-          .addScaledVector(leftNormal, centerOffset)
-          .addScaledVector(dir, centerMm / 1000);
-        const halfW = Math.max(0.001, widthMm / 2000);
-        const halfT = half + 0.006;
-        const corners = [
-          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, -halfT),
-          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, -halfT),
-          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, halfT),
-          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
-        ].map((point) => ({ x: point.x, z: point.z }));
-
-        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
-      };
-
-      for (const windowInst of getWindowInsts()) {
-        addClip("window", windowInst.params.wallId ?? null, windowInst.params.centerMm, windowInst.params.widthMm);
-      }
-      for (const doorInst of getDoorInsts()) {
-        addClip("door", doorInst.params.wallId ?? null, doorInst.params.centerMm, doorInst.params.widthMm);
-      }
-
-      return clips;
     };
 
     const polys: WallPlanMultiPolygon[] = [];
@@ -944,21 +1389,59 @@ export function createWallController(ctx: WallControllerContext) {
       return windowOpeningClips.some(isSegmentForClip);
     };
 
-    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02) => {
+    const pointsClose = (a: { x: number; z: number }, b: { x: number; z: number }, eps = 1e-5) =>
+      Math.hypot(a.x - b.x, a.z - b.z) <= eps;
+    const segmentsClose = (
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      c: { x: number; z: number },
+      d: { x: number; z: number }
+    ) => (pointsClose(a, c) && pointsClose(b, d)) || (pointsClose(a, d) && pointsClose(b, c));
+    const isInternalJoinBaseSegment = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+      solved.joinPolys.some((poly) => {
+        if (poly.length === 3) return segmentsClose(a, b, poly[0], poly[1]);
+        if (poly.length >= 4) return segmentsClose(a, b, poly[0], poly[poly.length - 1]);
+        return false;
+      }) ||
+      solved.walls.some((solvedWall) => {
+        const source = solverInputs.find((wall) => wall.id === solvedWall.id);
+        if (!source) return false;
+        for (const end of ["a", "b"] as const) {
+          const solvedEnd = solvedWall[end];
+          if (!segmentsClose(a, b, solvedEnd.left, solvedEnd.right)) continue;
+          const node = solved.debug.nodes.find((item) =>
+            item.incident.some((incident) => incident.wall.id === source.id && incident.end === end)
+          );
+          if (!node || node.incident.length < 2) continue;
+          const sourceDir = spineDir(source, end);
+          if (
+            node.incident.some((incident) => {
+              if (incident.wall.id === source.id && incident.end === end) return false;
+              const otherDir = spineDir(incident.wall, incident.end);
+              return Math.abs(sourceDir.x * otherDir.x + sourceDir.z * otherDir.z) > 0.15;
+            })
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02, opacity = 0.98) => {
       if (pts.length < 2) return null;
       const linePts: THREE.Vector3[] = [];
       const count = pts.length >= 3 ? pts.length : pts.length - 1;
       for (let i = 0; i < count; i += 1) {
         const a = pts[i];
         const b = pts[(i + 1) % pts.length];
-        if (!a || !b || isWindowOpeningOutlineSegment(a, b)) continue;
+        if (!a || !b || isWindowOpeningOutlineSegment(a, b) || isInternalJoinBaseSegment(a, b)) continue;
         linePts.push(new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z));
       }
       if (linePts.length < 2) return null;
       const geom = new THREE.BufferGeometry().setFromPoints(linePts);
       return new THREE.LineSegments(
         geom,
-        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, depthWrite: false })
       );
     };
 
@@ -1005,6 +1488,19 @@ export function createWallController(ctx: WallControllerContext) {
       mesh.userData.viewDisplaySkipEdges = true;
       wallJoinMeshes.push(mesh);
       wallPlanGroup.add(mesh);
+    }
+
+    const selectedWallId = ctx.getSelectedKind() === "wall" ? ctx.getSelectedWallId() : null;
+    for (const wall of solved.walls) {
+      if (wall.id !== selectedWallId) continue;
+      const line = makePlanPolyline(wall.outline, 0x3f4652, 0.019, 0.72);
+      if (!line) continue;
+      line.name = `wallPlan_faces_${wall.id}`;
+      line.userData.kind = "wallPlanWallFaces";
+      line.userData.wallId = wall.id;
+      line.renderOrder = 18;
+      wallPlanMeshes.set(line.name, line);
+      wallPlanGroup.add(line);
     }
 
     let unionLineIndex = 0;
@@ -1088,7 +1584,7 @@ export function createWallController(ctx: WallControllerContext) {
       };
 
       // centerlines + outlines
-      for (const w of modelWalls) {
+      for (const w of makeWallSolverInput()) {
         mkLine([w.a, w.b], 0xffd166, 0.031);
         const poly = wallSolvedOutlines.get(w.id);
         if (poly && poly.length >= 3) {
@@ -1208,13 +1704,16 @@ export function createWallController(ctx: WallControllerContext) {
   function rebuildWall(w: WallInstance) {
     w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
     w.heightMm = w.params.heightMm;
+    syncWallIfcMetadata(w);
 
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
     const just = w.params.justification ?? "center";
     const s = (w.params.exteriorSign ?? 1) as 1 | -1;
     const { a, b } = wallRefLineToCenterLine(refA, refB, w.params.thicknessMm, just, s);
-    // Revit-like join rendering in 3D: extend ends to form miter-like corner joins.
+    const solvedOutline = solveWallsForRendering().walls.find((wall) => wall.id === w.id)?.outline ?? null;
+    if (solvedOutline) wallSolvedOutlines.set(w.id, solvedOutline);
+    // Revit-like join rendering in 3D: use the solved wall footprint for clean corner joins.
     // This does not change stored axis endpoints (aMm/bMm); only the rendered mesh.
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-8) {
@@ -1271,11 +1770,29 @@ export function createWallController(ctx: WallControllerContext) {
       return Math.min(1.2, Math.max(0, ext));
     };
 
-    const extA = joinExtAt(aMmC, "a");
-    const extB = joinExtAt(bMmC, "b");
+    const renderSegmentFromSolvedOutline = () => {
+      if (!solvedOutline || solvedOutline.length < 3) return null;
+      const origin = a.clone().add(b).multiplyScalar(0.5);
+      const projected = solvedOutline.map((point) => {
+        const dx = point.x - origin.x;
+        const dz = point.z - origin.z;
+        return dx * d.x + dz * d.z;
+      });
+      const minX = Math.min(...projected);
+      const maxX = Math.max(...projected);
+      if (!isFinite(minX) || !isFinite(maxX) || maxX - minX < 0.001) return null;
+      return {
+        a: origin.clone().addScaledVector(d, minX),
+        b: origin.clone().addScaledVector(d, maxX)
+      };
+    };
 
-    const aExt = a.clone().addScaledVector(d, -extA);
-    const bExt = b.clone().addScaledVector(d, extB);
+    const solvedRenderSegment = renderSegmentFromSolvedOutline();
+    const extA = solvedRenderSegment ? 0 : joinExtAt(aMmC, "a");
+    const extB = solvedRenderSegment ? 0 : joinExtAt(bMmC, "b");
+    const aExt = solvedRenderSegment?.a ?? a.clone().addScaledVector(d, -extA);
+    const bExt = solvedRenderSegment?.b ?? b.clone().addScaledVector(d, extB);
+    const renderMid = aExt.clone().add(bExt).multiplyScalar(0.5);
     const wallWindows = getWindowInsts().filter((windowInst) => windowInst.params.wallId === w.id);
     const wallDoors = getDoorInsts().filter((doorInst) => doorInst.params.wallId === w.id);
     const cutouts: WallMeshCutout[] = [];
@@ -1283,10 +1800,9 @@ export function createWallController(ctx: WallControllerContext) {
       const widthM = Math.max(0.05, windowInst.params.widthMm / 1000);
       const heightM = Math.max(0.05, windowInst.params.heightMm / 1000);
       const sillM = Math.max(0, windowInst.params.sillHeightMm / 1000);
-      const centerFromExtendedStartM = extA + windowInst.params.centerMm / 1000;
-      const extendedLenM = aExt.distanceTo(bExt);
+      const centerWorld = a.clone().addScaledVector(d, windowInst.params.centerMm / 1000);
       cutouts.push({
-        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        centerLocalX: centerWorld.sub(renderMid).dot(d),
         widthM,
         sillM,
         heightM
@@ -1295,26 +1811,29 @@ export function createWallController(ctx: WallControllerContext) {
     for (const doorInst of wallDoors) {
       const widthM = Math.max(0.05, doorInst.params.widthMm / 1000);
       const heightM = Math.max(0.05, doorInst.params.heightMm / 1000);
-      const centerFromExtendedStartM = extA + doorInst.params.centerMm / 1000;
-      const extendedLenM = aExt.distanceTo(bExt);
+      const centerWorld = a.clone().addScaledVector(d, doorInst.params.centerMm / 1000);
       cutouts.push({
-        centerLocalX: centerFromExtendedStartM - extendedLenM / 2,
+        centerLocalX: centerWorld.sub(renderMid).dot(d),
         widthM,
         sillM: 0,
         heightM
       });
     }
 
+    if (cutouts.length === 0 && solvedOutline && updateWallMeshFromSolvedOutline(w.mesh, solvedOutline, a, b, w.params.heightMm, true)) {
+      syncWallOutline(w);
+      return;
+    }
+
     updateWallMesh(w.mesh, aExt, bExt, w.params.thicknessMm, w.params.heightMm, cutouts, true);
     syncWallOutline(w);
   }
 
-  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
-    const id = ctx.nextWallId();
+  function createWallInstanceFromParams(id: string, params: WallParams) {
     const root = new THREE.Group();
     root.name = `wall_${id}`;
 
-    const mesh = createWallMesh(a, b, thicknessMm);
+    const mesh = createWallMesh(fromMmPoint(params.aMm), fromMmPoint(params.bMm), params.thicknessMm, params.heightMm);
     mesh.name = `wallMesh_${id}`;
     mesh.userData.kind = "wall";
     mesh.userData.wallId = id;
@@ -1323,31 +1842,40 @@ export function createWallController(ctx: WallControllerContext) {
     const outline = createWallOutline(mesh.geometry as THREE.BufferGeometry, id);
     mesh.add(outline);
 
-    const aMm = toMmPoint(a);
-    const bMm = toMmPoint(b);
-    const params: WallParams = {
-      thicknessMm: Math.max(10, Math.round(thicknessMm)),
-      heightMm: wallDefault.heightMm,
-      materialId: wallDefault.materialId,
-      justification: wallDefault.justification,
-      exteriorSign: wallDefault.exteriorSign,
-      aMm,
-      bMm
-    };
-
     const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
     layoutRoot.add(root);
     walls.push(inst);
     rebuildWall(inst);
     rebuildWallPlanMesh();
+    return inst;
+  }
+
+  const discardWallInstance = (inst: WallInstance) => {
+    layoutRoot.remove(inst.root);
+    disposeObject3D(inst.root);
+    const idx = walls.findIndex((w) => w.id === inst.id);
+    if (idx >= 0) walls.splice(idx, 1);
+  };
+
+  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
+    const id = ctx.nextWallId();
+    const params: WallParams = {
+      typeId: resolveWallTypeId(wallDefault),
+      thicknessMm: Math.max(10, Math.round(thicknessMm)),
+      heightMm: wallDefault.heightMm,
+      materialId: wallDefault.materialId,
+      justification: wallDefault.justification,
+      exteriorSign: wallDefault.exteriorSign,
+      aMm: toMmPoint(a),
+      bMm: toMmPoint(b)
+    };
+
+    const inst = createWallInstanceFromParams(id, params);
 
     // Disallow walls intersecting any module (prevents module-wall overlap states).
     if (instances.some((i) => moduleOverlapsWalls(i))) {
       // rollback
-      layoutRoot.remove(root);
-      disposeObject3D(root);
-      const idx = walls.findIndex((w) => w.id === id);
-      if (idx >= 0) walls.splice(idx, 1);
+      discardWallInstance(inst);
       rebuildWallPlanMesh();
       setUnderlayStatus("Wall blocked: would overlap a module.");
       return null;
@@ -1357,11 +1885,34 @@ export function createWallController(ctx: WallControllerContext) {
     return inst;
   }
 
+  function duplicateWall(id: string, offsetMm = { x: 300, z: 300 }): WallInstance | null {
+    const source = walls.find((wall) => wall.id === id) ?? null;
+    if (!source || pinnedWallIds.has(source.id)) return null;
+
+    const params = JSON.parse(JSON.stringify(source.params)) as WallParams;
+    params.aMm = { x: params.aMm.x + offsetMm.x, z: params.aMm.z + offsetMm.z };
+    params.bMm = { x: params.bMm.x + offsetMm.x, z: params.bMm.z + offsetMm.z };
+    params.joinEnds = undefined;
+
+    const duplicate = createWallInstanceFromParams(ctx.nextWallId(), params);
+    if (instances.some((i) => moduleOverlapsWalls(i))) {
+      discardWallInstance(duplicate);
+      rebuildWallPlanMesh();
+      setUnderlayStatus("Wall duplicate blocked: would overlap a module.");
+      return null;
+    }
+
+    return duplicate;
+  }
+
   return {
     pickAlignLineAt,
+    pickDimensionLineAt,
     lineLineIntersectionXZ,
     translateWallAndConnected,
     moveWallEndpointAndConnected,
+    setWallEndpointAndConnectedMm,
+    setWallEndpointsAndConnectedMm,
     setWallEndpointMm,
     wallDirOutFromNode,
     joinExtensionM,
@@ -1382,6 +1933,7 @@ export function createWallController(ctx: WallControllerContext) {
     updateWallMeshWithJustification,
     makeWallPreviewMesh,
     rebuildWall,
-    addWall
+    addWall,
+    duplicateWall
   };
 }

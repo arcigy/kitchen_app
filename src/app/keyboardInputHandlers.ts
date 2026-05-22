@@ -27,6 +27,12 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       ev.stopImmediatePropagation();
       return;
     }
+    if ((ev.key === " " || ev.code === "Space") && ev.shiftKey && ctx.isDoorPlacementActive?.() && ctx.flipDoorPlacementSwingSide?.()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      return;
+    }
     if ((ev.key === " " || ev.code === "Space") && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -123,6 +129,86 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           ctx.clearTransform({ restore: true, status: "Canceled." });
           ev.preventDefault();
           return;
+        }
+
+        if (ctx.transformState.kind === "move" && (ev.key === "n" || ev.key === "N") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+          ctx.transformState.moveSnapDisabled = !ctx.transformState.moveSnapDisabled;
+          ctx.selectPlanSnap = null;
+          ctx.drawSnapOverlay?.hide?.();
+          ctx.hideHoverCursor?.();
+          if (ctx.hudHoverLine) ctx.hudHoverLine.visible = false;
+          ctx.setUnderlayStatus(
+            ctx.transformState.moveSnapDisabled
+              ? "Move: free movement in 1 mm steps. Snapping off. N = snapping on."
+              : ctx.transformState.step === "pickTarget"
+                ? "Move: snapping on. Click target point, or move mouse and type distance. N = free movement."
+                : "Move: snapping on. N = free movement."
+          );
+          ev.preventDefault();
+          return;
+        }
+
+        if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ev.key === "Enter") {
+            ctx.startTransformFromSelection("move");
+            ev.preventDefault();
+            return;
+          }
+        }
+
+        if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget") {
+          const isNumberChar = ev.key.length === 1 && ((ev.key >= "0" && ev.key <= "9") || ev.key === "," || ev.key === ".");
+          if (isNumberChar) {
+            const next = `${ctx.transformState.typed}${ev.key}`.replace(/,/g, ".");
+            if (/^\d*\.?\d*$/.test(next)) {
+              ctx.transformState.typed = next.slice(0, 8);
+              ctx.setUnderlayStatus(`Move: ${ctx.transformState.typed} mm (Enter)`);
+            }
+            ev.preventDefault();
+            return;
+          }
+          if (ev.key === "Backspace") {
+            ctx.transformState.typed = ctx.transformState.typed.slice(0, -1);
+            ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Move: ${ctx.transformState.typed} mm (Enter)` : "Move: click target point, or move mouse for direction and type distance.");
+            ev.preventDefault();
+            return;
+          }
+          if (ev.key === "Enter" && ctx.transformState.typed.trim().length > 0) {
+            const distanceMm = Number(ctx.transformState.typed.trim().replace(",", "."));
+            const direction = ctx.transformState.lastValidDelta.clone();
+            if (!Number.isFinite(distanceMm) || distanceMm <= 0) {
+              ctx.transformState.typed = "";
+              ctx.setUnderlayStatus("Move: type a positive distance in mm.");
+              ev.preventDefault();
+              return;
+            }
+            if (direction.lengthSq() < 1e-10) {
+              ctx.setUnderlayStatus("Move: move mouse for direction, then type distance.");
+              ev.preventDefault();
+              return;
+            }
+            const requestedDelta = direction.normalize().multiplyScalar(distanceMm / 1000);
+            const continueMove = !!ctx.transformState.stickyMove;
+            ctx.applyMoveDelta(requestedDelta);
+            if (ctx.transformState.lastValidDelta.distanceTo(requestedDelta) > 1e-6) {
+              ctx.clearTransform({
+                restore: true,
+                continueMove,
+                status: continueMove ? "Move: blocked. Select next element, or click Move again to exit." : "Move: blocked."
+              });
+              ctx.mountProps();
+              ev.preventDefault();
+              return;
+            }
+            ctx.commitHistory(ctx.S);
+            ctx.clearTransform({
+              continueMove,
+              status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
+            });
+            ctx.mountProps();
+            ev.preventDefault();
+            return;
+          }
         }
 
         if (ctx.transformState.kind === "rotate" && ctx.transformState.step === "rotating") {
@@ -360,7 +446,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
       }
 
       if ((ev.key === "m" || ev.key === "M") && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-        if (ctx.startTransformFromSelection("move")) {
+        if (ctx.startTransformFromSelection("move", { sticky: true, toggle: true })) {
           ev.preventDefault();
           return;
         }
@@ -469,7 +555,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
             const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
             // close loop when near chain start
-            const closeTolM = 0.03;
+            const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
             const cs = ctx.wallDraw.chainStart;
             const closes =
               !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;

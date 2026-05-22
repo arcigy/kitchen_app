@@ -11,6 +11,7 @@ type SelectionControllerContext = {
   mountProps: () => void;
   pinnedInstanceIds: Set<string>;
   pinnedWallIds: Set<string>;
+  rebuildWallPlanMesh: () => void;
   scene: THREE.Scene;
   selectedColumnId: string | null;
   selectedFloorId: string | null;
@@ -66,6 +67,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     ctx.syncDoorSelectionVisuals(ctx.selectedKind === "door");
     ctx.syncColumnSelectionVisuals();
     ctx.syncSelectionState();
+    ctx.rebuildWallPlanMesh();
     if (opts?.highlights !== false) ctx.updateSelectionHighlights();
     ctx.updateAllSectionVisuals();
     ctx.mountProps();
@@ -207,9 +209,6 @@ export function createSelectionController(ctx: SelectionControllerContext) {
       return;
     }
 
-    ctx.selectedWallBox = new THREE.BoxHelper(wall.root, 0x3ddc97);
-    ctx.selectedWallBox.name = "wallSelectionBox";
-    ctx.scene.add(ctx.selectedWallBox);
     afterSelectionChanged({ wallSnapId: id });
   }
 

@@ -52,6 +52,7 @@ type WallBasis = {
 };
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
+type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 const disposeObject = (object: THREE.Object3D) => {
   if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
@@ -102,6 +103,22 @@ const resetFrame = (frame: THREE.Group) => {
   }
 };
 
+const getWindowHandleSide = (params: WindowParams) => (params.swingDirection === "right" ? -1 : 1);
+
+const markIfcWindowPart = (object: THREE.Object3D, windowId: string | undefined, objectType: string) => {
+  if (!windowId) return;
+  object.userData.kind = "window";
+  object.userData.windowId = windowId;
+  object.userData.ifc = {
+    className: "IfcWindow",
+    predefinedType: "WINDOW",
+    elementId: windowId,
+    objectType,
+    name: `Window ${windowId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "window", "ifc", "IfcWindow"]));
+};
+
 const addBox = (
   parent: THREE.Group,
   name: string,
@@ -112,7 +129,27 @@ const addBox = (
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material.clone());
   mesh.name = name;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "window";
+  markIfcWindowPart(mesh, String(parent.userData.windowId ?? ""), name);
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
+const addCylinder = (
+  parent: THREE.Group,
+  name: string,
+  radius: number,
+  depth: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material,
+  axis: "x" | "y" | "z" = "z"
+) => {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, depth, 18), material.clone());
+  mesh.name = name;
+  if (axis === "x") mesh.rotation.z = Math.PI / 2;
+  if (axis === "z") mesh.rotation.x = Math.PI / 2;
+  mesh.position.set(position.x, position.y, position.z);
+  markIfcWindowPart(mesh, String(parent.userData.windowId ?? ""), name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
@@ -150,6 +187,12 @@ const buildWindowFrame = (inst: WindowInstance) => {
     depthWrite: false,
     side: THREE.DoubleSide
   });
+  const handleMat = new THREE.MeshBasicMaterial({
+    color: 0x2f343b,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false
+  });
 
   addBox(inst.frame, "window-frame-left", { x: frameW, y: heightM, z: frameDepth }, { x: -widthM / 2 + frameW / 2, y: 0, z: 0 }, frameMat);
   addBox(inst.frame, "window-frame-right", { x: frameW, y: heightM, z: frameDepth }, { x: widthM / 2 - frameW / 2, y: 0, z: 0 }, frameMat);
@@ -163,10 +206,54 @@ const buildWindowFrame = (inst: WindowInstance) => {
   addBox(inst.frame, "window-sash-bottom", { x: glassW, y: sashW, z: sashDepth }, { x: 0, y: -innerH / 2 + sashW / 2, z: sashZ }, sashMat);
   const glass = addBox(inst.frame, "window-glass", { x: glassW, y: glassH, z: 0.006 }, { x: 0, y: 0, z: sashZ }, glassMat);
   glass.userData.viewDisplaySkipMaterialRestore = true;
+  if (inst.params.handleType !== "none") {
+    const handleSide = getWindowHandleSide(inst.params);
+    const handleInsetM = inst.params.handleType === "bar" ? 0.012 : 0.019;
+    const minHandleOffsetM = Math.min(sashW / 2, handleInsetM);
+    const maxHandleOffsetM = Math.max(minHandleOffsetM, sashW - handleInsetM);
+    const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, minHandleOffsetM, maxHandleOffsetM);
+    const handleX = handleSide * (glassW / 2 + handleOffsetM);
+    const handleMinY = -innerH / 2 + sashW + 0.06;
+    const handleMaxY = innerH / 2 - sashW - 0.06;
+    const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
+    const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : 0;
+    const leverH = Math.min(0.18, Math.max(0.12, innerH * 0.2));
+    const barH = Math.min(0.34, Math.max(0.2, innerH * 0.34));
+    const plateH = Math.min(0.14, Math.max(0.105, innerH * 0.16));
+    for (const faceSign of [-1, 1] as const) {
+      const faceName = faceSign > 0 ? "outer" : "inner";
+      const faceZ = sashZ + faceSign * (sashDepth / 2);
+      const plateZ = faceZ + faceSign * 0.006;
+      const hubZ = faceZ + faceSign * 0.016;
+      const gripZ = faceZ + faceSign * 0.034;
+      const addBackplate = (height: number) => {
+        const half = height / 2;
+        addBox(inst.frame, `window-handle-plate-${faceName}`, { x: 0.034, y: Math.max(0.02, height - 0.032), z: 0.012 }, { x: handleX, y: handleY, z: plateZ }, handleMat);
+        addCylinder(inst.frame, `window-handle-plate-top-${faceName}`, 0.017, 0.012, { x: handleX, y: handleY + half - 0.016, z: plateZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-plate-bottom-${faceName}`, 0.017, 0.012, { x: handleX, y: handleY - half + 0.016, z: plateZ }, handleMat, "z");
+      };
+      if (inst.params.handleType === "knob") {
+        addBackplate(0.088);
+        addCylinder(inst.frame, `window-handle-neck-${faceName}`, 0.009, 0.034, { x: handleX, y: handleY, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-knob-${faceName}`, 0.023, 0.026, { x: handleX, y: handleY, z: gripZ }, handleMat, "z");
+      } else if (inst.params.handleType === "bar") {
+        addCylinder(inst.frame, `window-handle-bar-top-${faceName}`, 0.008, 0.03, { x: handleX, y: handleY + barH / 2 - 0.032, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-bar-bottom-${faceName}`, 0.008, 0.03, { x: handleX, y: handleY - barH / 2 + 0.032, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-bar-grip-${faceName}`, 0.01, barH, { x: handleX, y: handleY, z: gripZ }, handleMat, "y");
+      } else {
+        addBackplate(plateH);
+        addCylinder(inst.frame, `window-handle-hub-${faceName}`, 0.014, 0.018, { x: handleX, y: handleY, z: hubZ }, handleMat, "z");
+        addCylinder(inst.frame, `window-handle-neck-${faceName}`, 0.008, 0.034, { x: handleX, y: handleY, z: gripZ - faceSign * 0.012 }, handleMat, "z");
+        addBox(inst.frame, `window-handle-lever-${faceName}`, { x: 0.026, y: leverH, z: 0.016 }, { x: handleX, y: handleY - leverH / 2 - 0.026, z: gripZ }, handleMat);
+        addCylinder(inst.frame, `window-handle-lever-end-${faceName}`, 0.013, 0.016, { x: handleX, y: handleY - leverH - 0.026, z: gripZ }, handleMat, "z");
+      }
+    }
+  }
 
   frameMat.dispose();
   sashMat.dispose();
   glassMat.dispose();
+  handleMat.dispose();
 };
 
 const syncPlanSymbol = (
@@ -187,7 +274,7 @@ const syncPlanSymbol = (
   const glassOffset = Math.min(0.035, Math.max(0.012, halfT * 0.35));
   const y = args.yLocal;
   const z = args.zCenter;
-  const pts = [
+  const pts: THREE.Vector3[] = [
     new THREE.Vector3(-halfW, y, z - halfT),
     new THREE.Vector3(-halfW, y, z + halfT),
     new THREE.Vector3(halfW, y, z - halfT),
@@ -222,7 +309,7 @@ const syncPlanSymbol = (
   group.add(line);
 };
 
-const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0) => {
+const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotationRad = 0, height = 0.14) => {
   const canvas = document.createElement("canvas");
   canvas.width = 360;
   canvas.height = 96;
@@ -247,7 +334,6 @@ const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotat
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, rotation: rotationRad }));
-  const height = 0.14;
   sprite.scale.set(height * (canvas.width / canvas.height), height, 1);
   sprite.renderOrder = 96;
   sprite.userData.viewDisplaySkipEdges = true;
@@ -258,7 +344,7 @@ const createDimensionSprite = (text: string, param?: WindowDimensionParam, rotat
   return sprite;
 };
 
-const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) => {
+const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0, height = 0.14) => {
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       color: 0xffffff,
@@ -269,7 +355,8 @@ const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) 
       rotation: rotationRad
     })
   );
-  sprite.scale.set(0.62, 0.22, 1);
+  const scale = height / 0.14;
+  sprite.scale.set(0.62 * scale, 0.22 * scale, 1);
   sprite.renderOrder = 97;
   sprite.userData.kind = "windowDimensionEdit";
   sprite.userData.windowDimensionParam = param;
@@ -277,12 +364,51 @@ const createDimensionHitSprite = (param: WindowDimensionParam, rotationRad = 0) 
   return sprite;
 };
 
+const createWindowSwingControlSprite = (action: WindowSwingControlAction, rotationRad = 0) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const arrow = action === "toggleHandedness" ? String.fromCharCode(8596) : String.fromCharCode(8597);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.font = '800 84px "Arial Narrow", Arial, sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.lineWidth = 3;
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    context.strokeText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+    context.fillStyle = "#005cff";
+    context.fillText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      rotation: rotationRad
+    })
+  );
+  sprite.scale.set(0.145, 0.145, 1);
+  sprite.renderOrder = 98;
+  sprite.userData.kind = "windowSwingControl";
+  sprite.userData.windowSwingAction = action;
+  sprite.userData.viewDisplaySkipEdges = true;
+  return sprite;
+};
+
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color, depthTest: false, depthWrite: false })
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
   );
-  line.renderOrder = 90;
+  line.renderOrder = 110;
   line.userData.viewDisplaySkipEdges = true;
   return line;
 };
@@ -351,21 +477,18 @@ const readablePlanLabelRotation = (rotationRad: number) => {
   return next;
 };
 
-const addWidthDimension = (
+const addWindowDimension = (
   parent: THREE.Group,
   args: {
     a: THREE.Vector3;
     b: THREE.Vector3;
     dimA: THREE.Vector3;
     dimB: THREE.Vector3;
-    widthTextPos: THREE.Vector3;
-    heightTextPos: THREE.Vector3;
-    sillTextPos: THREE.Vector3;
+    textPos: THREE.Vector3;
     tickAxisA: THREE.Vector3;
     tickAxisB: THREE.Vector3;
-    widthLabel: string;
-    heightLabel: string;
-    sillLabel: string;
+    label: string;
+    param: WindowDimensionParam;
     extensionGapM?: number;
     labelRotationRad?: number;
   }
@@ -397,20 +520,76 @@ const addWidthDimension = (
     ])
   );
   const labelRotationRad = args.labelRotationRad ?? 0;
+  const sprite = createDimensionSprite(args.label, args.param, labelRotationRad);
+  sprite.position.copy(args.textPos);
+  parent.add(sprite);
+  const hit = createDimensionHitSprite(args.param, labelRotationRad);
+  hit.position.copy(args.textPos);
+  parent.add(hit);
+};
+
+const addWidthDimension = (
+  parent: THREE.Group,
+  args: {
+    a: THREE.Vector3;
+    b: THREE.Vector3;
+    dimA: THREE.Vector3;
+    dimB: THREE.Vector3;
+    widthTextPos: THREE.Vector3;
+    heightTextPos: THREE.Vector3;
+    sillTextPos: THREE.Vector3;
+    tickAxisA: THREE.Vector3;
+    tickAxisB: THREE.Vector3;
+    widthLabel: string;
+    heightLabel: string;
+    sillLabel: string;
+    extensionGapM?: number;
+    labelRotationRad?: number;
+    labelHeight?: number;
+  }
+) => {
+  const tick = 0.042;
+  const halfTickA = args.tickAxisA.clone().normalize().multiplyScalar(tick / 2);
+  const halfTickB = args.tickAxisB.clone().normalize().multiplyScalar(tick / 2);
+  const extensionStart = (objectPoint: THREE.Vector3, dimPoint: THREE.Vector3) => {
+    const delta = dimPoint.clone().sub(objectPoint);
+    const distance = delta.length();
+    if (distance < 0.001) return objectPoint.clone();
+    const gap = Math.min(args.extensionGapM ?? 0.045, distance * 0.6);
+    return objectPoint.clone().addScaledVector(delta.multiplyScalar(1 / distance), gap);
+  };
+  const extA = extensionStart(args.a, args.dimA);
+  const extB = extensionStart(args.b, args.dimB);
+  parent.add(
+    createDimensionLine([
+      args.dimA,
+      args.dimB,
+      extA,
+      args.dimA,
+      extB,
+      args.dimB,
+      args.dimA.clone().sub(halfTickA).sub(halfTickB),
+      args.dimA.clone().add(halfTickA).add(halfTickB),
+      args.dimB.clone().sub(halfTickA).sub(halfTickB),
+      args.dimB.clone().add(halfTickA).add(halfTickB)
+    ])
+  );
+  const labelRotationRad = args.labelRotationRad ?? 0;
+  const labelHeight = args.labelHeight ?? 0.14;
   const addEditableLabel = (text: string, position: THREE.Vector3, param: WindowDimensionParam) => {
-    const sprite = createDimensionSprite(text, param, labelRotationRad);
+    const sprite = createDimensionSprite(text, param, labelRotationRad, labelHeight);
     sprite.position.copy(position);
     parent.add(sprite);
 
-    const hit = createDimensionHitSprite(param, labelRotationRad);
+    const hit = createDimensionHitSprite(param, labelRotationRad, labelHeight);
     hit.position.copy(position);
     parent.add(hit);
   };
 
-  const widthSprite = createDimensionSprite(args.widthLabel, "widthMm", labelRotationRad);
+  const widthSprite = createDimensionSprite(args.widthLabel, "widthMm", labelRotationRad, labelHeight);
   widthSprite.position.copy(args.widthTextPos);
   parent.add(widthSprite);
-  const widthHit = createDimensionHitSprite("widthMm", labelRotationRad);
+  const widthHit = createDimensionHitSprite("widthMm", labelRotationRad, labelHeight);
   widthHit.position.copy(args.widthTextPos);
   parent.add(widthHit);
   addEditableLabel(args.heightLabel, args.heightTextPos, "heightMm");
@@ -458,21 +637,38 @@ const rebuildWindowSelection = (
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, innerH / 2 - sashW, innerH / 2, zFront);
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, -innerH / 2, -innerH / 2 + sashW, zFront);
   addRectSelection(modelGroup, -glassW / 2, glassW / 2, -glassH / 2, glassH / 2, zFront);
-  const modelDimY = -halfH - 0.46;
-  addWidthDimension(modelGroup, {
+  const widthDimY = -halfH - 0.28;
+  addWindowDimension(modelGroup, {
     a: new THREE.Vector3(-halfW, -halfH, zFront),
     b: new THREE.Vector3(halfW, -halfH, zFront),
-    dimA: new THREE.Vector3(-halfW, modelDimY, zFront),
-    dimB: new THREE.Vector3(halfW, modelDimY, zFront),
-    widthTextPos: new THREE.Vector3(0, modelDimY + 0.09, zFront),
-    heightTextPos: new THREE.Vector3(-0.16, modelDimY - 0.09, zFront),
-    sillTextPos: new THREE.Vector3(0.18, modelDimY - 0.09, zFront),
+    dimA: new THREE.Vector3(-halfW, widthDimY, zFront),
+    dimB: new THREE.Vector3(halfW, widthDimY, zFront),
+    textPos: new THREE.Vector3(0, widthDimY + 0.09, zFront),
     tickAxisA: new THREE.Vector3(1, 0, 0),
     tickAxisB: new THREE.Vector3(0, 1, 0),
-    widthLabel,
-    heightLabel,
-    sillLabel
+    label: widthLabel,
+    param: "widthMm"
   });
+  const heightDimX = halfW + 0.32;
+  addWindowDimension(modelGroup, {
+    a: new THREE.Vector3(halfW, -halfH, zFront),
+    b: new THREE.Vector3(halfW, halfH, zFront),
+    dimA: new THREE.Vector3(heightDimX, -halfH, zFront),
+    dimB: new THREE.Vector3(heightDimX, halfH, zFront),
+    textPos: new THREE.Vector3(heightDimX + 0.13, 0, zFront),
+    tickAxisA: new THREE.Vector3(0, 1, 0),
+    tickAxisB: new THREE.Vector3(1, 0, 0),
+    label: heightLabel,
+    param: "heightMm"
+  });
+  const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
+  const modelStackAxis = new THREE.Vector3(0, 0.17, 0);
+  const modelHandedness = createWindowSwingControlSprite("toggleHandedness");
+  modelHandedness.position.copy(modelControlCenter).add(modelStackAxis);
+  modelGroup.add(modelHandedness);
+  const modelSide = createWindowSwingControlSprite("toggleSwingSide");
+  modelSide.position.copy(modelControlCenter).addScaledVector(modelStackAxis, -1);
+  modelGroup.add(modelSide);
   inst.selection.add(modelGroup);
 
   const planGroup = new THREE.Group();
@@ -506,6 +702,19 @@ const rebuildWindowSelection = (
     sillLabel,
     labelRotationRad: planLabelRotationRad
   });
+  const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
+  const controlDepthOffset = halfT + 0.22;
+  const controlCenter = new THREE.Vector3(0, planY, args.planZCenter + controlDepthSide * controlDepthOffset);
+  const stackAxis = new THREE.Vector3(0, 0, 1)
+    .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
+    .normalize()
+    .multiplyScalar(0.085);
+  const handedness = createWindowSwingControlSprite("toggleHandedness", planLabelRotationRad);
+  handedness.position.copy(controlCenter).addScaledVector(stackAxis, -1);
+  planGroup.add(handedness);
+  const side = createWindowSwingControlSprite("toggleSwingSide", planLabelRotationRad);
+  side.position.copy(controlCenter).add(stackAxis);
+  planGroup.add(side);
   inst.selection.add(planGroup);
   inst.selection.visible = selected;
 };
@@ -534,6 +743,12 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     sashWidthMm: 48,
     sashProfileDepthMm: 56,
     frameProfileDepthMm: 72,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 90,
+    handleType: "lever",
+    handleOffsetMm: 24,
+    handleHeightMm: 450,
     materialId: getWindowMaterialOption(null).id
   });
 

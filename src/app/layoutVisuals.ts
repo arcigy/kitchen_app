@@ -83,14 +83,12 @@ export function createWallSnapMarkers(args: {
   wallSnapMarkers.visible = false;
   args.layoutRoot.add(wallSnapMarkers);
 
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapGeom = new THREE.CircleGeometry(0.035, 16);
 
-  const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
-    const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
+  const makeSnapDot = (kind: "axis" | "endpoint") => {
+    const mat = kind === "axis" ? snapMatAxis : snapMatEnd;
     const mesh = new THREE.Mesh(snapGeom, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.02;
@@ -143,31 +141,6 @@ export function createWallSnapMarkers(args: {
     dotM.position.z = mid.z;
     wallSnapMarkers.add(dotM);
 
-    const poly = args.getWallSolvedOutlines().get(wallId) ?? null;
-    if (poly && poly.length >= 3) {
-      for (const p of poly) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    } else {
-      const n = new THREE.Vector3(-d.z, 0, d.x);
-      const h = Math.max(1, wall.params.thicknessMm / 2) / 1000;
-      const corners = [
-        a.clone().addScaledVector(n, h),
-        a.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, h)
-      ];
-      for (const p of corners) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    }
-
     wallSnapMarkers.visible = args.getMode() === "layout";
   };
 
@@ -177,6 +150,7 @@ export function createWallSnapMarkers(args: {
 export function createSelectionHighlights(args: {
   layoutRoot: THREE.Group;
   getMode: () => string;
+  getWalls: () => WallInstance[];
   getSelectedWallIds: () => Set<string>;
   getSelectedInstanceIds: () => Set<string>;
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
@@ -208,10 +182,29 @@ export function createSelectionHighlights(args: {
     }
 
     for (const id of args.getSelectedWallIds()) {
-      const poly = args.getWallSolvedOutlines().get(id) ?? null;
-      if (!poly || poly.length < 3) continue;
-      const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));
-      pts.push(new THREE.Vector3(poly[0].x, 0.012, poly[0].z));
+      const wall = args.getWalls().find((item) => item.id === id) ?? null;
+      if (!wall) continue;
+      const solvedOutline = args.getWallSolvedOutlines().get(id) ?? null;
+      let pts: THREE.Vector3[];
+      if (solvedOutline && solvedOutline.length >= 3) {
+        pts = solvedOutline.map((p) => new THREE.Vector3(p.x, 0.018, p.z));
+        pts.push(new THREE.Vector3(solvedOutline[0].x, 0.018, solvedOutline[0].z));
+      } else {
+        const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000);
+        const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000);
+        const d = b.clone().sub(a);
+        if (d.lengthSq() < 1e-10) continue;
+        d.normalize();
+        const n = new THREE.Vector3(-d.z, 0, d.x);
+        const half = Math.max(1, wall.params.thicknessMm / 2) / 1000;
+        pts = [
+          a.clone().addScaledVector(n, half),
+          a.clone().addScaledVector(n, -half),
+          b.clone().addScaledVector(n, -half),
+          b.clone().addScaledVector(n, half),
+          a.clone().addScaledVector(n, half)
+        ];
+      }
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(
         geom,

@@ -32,7 +32,21 @@ type WallBasis = {
   thicknessM: number;
 };
 
+const markIfcDoorPart = (object: THREE.Object3D, doorId: string, objectType: string) => {
+  object.userData.kind = "door";
+  object.userData.doorId = doorId;
+  object.userData.ifc = {
+    className: "IfcDoor",
+    predefinedType: "DOOR",
+    elementId: doorId,
+    objectType,
+    name: `Door ${doorId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "door", "ifc", "IfcDoor"]));
+};
+
 type DoorDimensionParam = "widthMm" | "heightMm";
+type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 
 const disposeObject = (object: THREE.Object3D) => {
   if ("geometry" in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
@@ -89,8 +103,45 @@ const addDoorBox = (
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material.clone());
   mesh.name = name;
   mesh.position.set(position.x, position.y, position.z);
-  mesh.userData.kind = "door";
-  mesh.userData.doorId = doorId;
+  markIfcDoorPart(mesh, doorId, name);
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
+const addDoorCylinder = (
+  parent: THREE.Group,
+  doorId: string,
+  name: string,
+  radius: number,
+  depth: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material,
+  axis: "x" | "y" | "z" = "z"
+) => {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, depth, 24), material.clone());
+  mesh.name = name;
+  if (axis === "x") mesh.rotation.z = Math.PI / 2;
+  if (axis === "z") mesh.rotation.x = Math.PI / 2;
+  mesh.position.set(position.x, position.y, position.z);
+  markIfcDoorPart(mesh, doorId, name);
+  mesh.userData.viewDisplaySkipEdges = true;
+  parent.add(mesh);
+  return mesh;
+};
+
+const addDoorSphere = (
+  parent: THREE.Group,
+  doorId: string,
+  name: string,
+  radius: number,
+  position: { x: number; y: number; z: number },
+  material: THREE.Material
+) => {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material.clone());
+  mesh.name = name;
+  mesh.position.set(position.x, position.y, position.z);
+  markIfcDoorPart(mesh, doorId, name);
   mesh.userData.viewDisplaySkipEdges = true;
   parent.add(mesh);
   return mesh;
@@ -159,6 +210,53 @@ const createDimensionHitSprite = (param: DoorDimensionParam, rotationRad = 0) =>
   sprite.userData.viewDisplaySkipEdges = true;
   return sprite;
 };
+
+const createDoorSwingControlSprite = (action: DoorSwingControlAction, rotationRad = 0) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const arrow = action === "toggleHandedness" ? String.fromCharCode(8596) : String.fromCharCode(8597);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.font = '800 84px "Arial Narrow", Arial, sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.lineWidth = 3;
+    context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    context.strokeText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+    context.fillStyle = "#005cff";
+    context.fillText(arrow, canvas.width / 2, canvas.height / 2 - 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      rotation: rotationRad
+    })
+  );
+  sprite.scale.set(0.145, 0.145, 1);
+  sprite.renderOrder = 98;
+  sprite.userData.kind = "doorSwingControl";
+  sprite.userData.doorSwingAction = action;
+  sprite.userData.viewDisplaySkipEdges = true;
+  return sprite;
+};
+
+const getDoorWallCenterOffset = (params: DoorParams, wallThicknessM: number, panelThicknessM: number) => {
+  const leafCenterFromFaceM = params.offsetFromInteriorMm / 1000 + panelThicknessM / 2;
+  const inwardOffsetM = -wallThicknessM / 2 + leafCenterFromFaceM;
+  return params.swingSide === "outward" ? -inwardOffsetM : inwardOffsetM;
+};
+
+const getDoorHandleSide = (params: DoorParams) => (params.swingDirection === "right" ? -1 : 1);
 
 const createDimensionLine = (points: THREE.Vector3[], color = 0xc98d00) => {
   const line = new THREE.LineSegments(
@@ -256,6 +354,7 @@ const syncDoorPlanSymbol = (
     yLocal: number;
     zCenter: number;
     swingDirection: DoorParams["swingDirection"];
+    swingSide: DoorParams["swingSide"];
     swingAngleDeg: number;
     frameWidthM?: number;
     panelThicknessM?: number;
@@ -283,8 +382,9 @@ const syncDoorPlanSymbol = (
   const closedLeafInnerZ = Math.max(innerZ, Math.min(outerZ - 0.004, rawClosedLeafInnerZ));
   const closedLeafOuterZ = Math.min(outerZ, Math.max(innerZ + 0.004, rawClosedLeafOuterZ));
   const hingeZ = (closedLeafInnerZ + closedLeafOuterZ) / 2;
+  const sideSign = args.swingSide === "outward" ? 1 : -1;
   const arcStart = args.swingDirection === "right" ? Math.PI : 0;
-  const arcEnd = args.swingDirection === "right" ? Math.PI + angle : -angle;
+  const arcEnd = args.swingDirection === "right" ? Math.PI - sideSign * angle : sideSign * angle;
   const arcEndPoint = new THREE.Vector3(hingeX + Math.cos(arcEnd) * leafRadius, y, hingeZ + Math.sin(arcEnd) * leafRadius);
   const addPlanRect = (x0: number, z0: number, x1: number, z1: number) => [
     new THREE.Vector3(x0, y, z0),
@@ -383,7 +483,11 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     offsetFromInteriorMm: 20,
     panelThicknessMm: 42,
     swingDirection: "left",
+    swingSide: "inward",
     swingAngleDeg: 90,
+    handleType: "lever",
+    handleOffsetMm: 85,
+    handleHeightMm: 1050,
     materialId: getDoorMaterialOption(null).id
   });
 
@@ -409,14 +513,44 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const material = getDoorMaterialOption(inst.params.materialId);
     const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(material.color).multiplyScalar(0.82) });
     const panelMat = new THREE.MeshBasicMaterial({ color: material.color, transparent: true, opacity: 0.94 });
+    const handleMat = new THREE.MeshBasicMaterial({ color: 0x2f343b });
 
     addDoorBox(inst.frame, inst.id, "door-frame-left", { x: frameW, y: heightM, z: frameDepth }, { x: -widthM / 2 + frameW / 2, y: 0, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-frame-right", { x: frameW, y: heightM, z: frameDepth }, { x: widthM / 2 - frameW / 2, y: 0, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-frame-top", { x: innerW, y: frameW, z: frameDepth }, { x: 0, y: heightM / 2 - frameW / 2, z: planZCenter }, frameMat);
     addDoorBox(inst.frame, inst.id, "door-panel", { x: innerW, y: panelH, z: panelThicknessM }, { x: 0, y: -frameW / 2, z: 0 }, panelMat);
+    if (inst.params.handleType !== "none") {
+      const handleSide = getDoorHandleSide(inst.params);
+      const handleOffsetM = THREE.MathUtils.clamp(inst.params.handleOffsetMm / 1000, 0.035, Math.max(0.035, innerW / 2 - 0.035));
+      const handleX = handleSide * Math.max(0.035, innerW / 2 - handleOffsetM);
+      const handleMinY = -panelH / 2 + 0.18;
+      const handleMaxY = panelH / 2 - 0.18;
+      const preferredHandleY = -heightM / 2 + inst.params.handleHeightMm / 1000;
+      const handleY = handleMinY <= handleMaxY ? THREE.MathUtils.clamp(preferredHandleY, handleMinY, handleMaxY) : -frameW / 2;
+      const leverLength = Math.min(0.18, Math.max(0.12, innerW * 0.22));
+      const barHeight = Math.min(0.42, Math.max(0.24, panelH * 0.24));
+      for (const faceSign of [-1, 1] as const) {
+        const faceName = faceSign > 0 ? "outer" : "inner";
+        const rosetteZ = faceSign * (panelThicknessM / 2 + 0.008);
+        const gripZ = faceSign * (panelThicknessM / 2 + 0.034);
+        if (inst.params.handleType === "knob") {
+          addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
+          addDoorSphere(inst.frame, inst.id, `door-handle-knob-${faceName}`, 0.034, { x: handleX, y: handleY, z: gripZ + faceSign * 0.012 }, handleMat);
+        } else if (inst.params.handleType === "bar") {
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-top-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY + barHeight / 2 - 0.035, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-bottom-${faceName}`, 0.012, 0.038, { x: handleX, y: handleY - barHeight / 2 + 0.035, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-bar-grip-${faceName}`, 0.014, barHeight, { x: handleX, y: handleY, z: gripZ + faceSign * 0.016 }, handleMat, "y");
+        } else {
+          addDoorCylinder(inst.frame, inst.id, `door-handle-rosette-${faceName}`, 0.035, 0.014, { x: handleX, y: handleY, z: rosetteZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-neck-${faceName}`, 0.012, 0.04, { x: handleX, y: handleY, z: gripZ }, handleMat, "z");
+          addDoorCylinder(inst.frame, inst.id, `door-handle-lever-${faceName}`, 0.012, leverLength, { x: handleX - handleSide * leverLength / 2, y: handleY, z: gripZ + faceSign * 0.018 }, handleMat, "x");
+        }
+      }
+    }
 
     frameMat.dispose();
     panelMat.dispose();
+    handleMat.dispose();
   };
 
   const rebuildDoorSelection = (
@@ -460,6 +594,14 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       widthLabel,
       heightLabel
     });
+    const modelControlCenter = new THREE.Vector3(0, 0, zFront + 0.018);
+    const modelStackAxis = new THREE.Vector3(0, 0.17, 0);
+    const modelHandedness = createDoorSwingControlSprite("toggleHandedness");
+    modelHandedness.position.copy(modelControlCenter).add(modelStackAxis);
+    model.add(modelHandedness);
+    const modelSide = createDoorSwingControlSprite("toggleSwingSide");
+    modelSide.position.copy(modelControlCenter).addScaledVector(modelStackAxis, -1);
+    model.add(modelSide);
     inst.selection.add(model);
 
     const plan = new THREE.Group();
@@ -472,6 +614,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       yLocal: planY,
       zCenter: args.planZCenter,
       swingDirection: inst.params.swingDirection,
+      swingSide: inst.params.swingSide,
       swingAngleDeg: inst.params.swingAngleDeg,
       frameWidthM: frameW,
       panelThicknessM: Math.max(0.006, inst.params.panelThicknessMm / 1000),
@@ -480,21 +623,35 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     });
     const planLabelRotationRad = readablePlanLabelRotation(-inst.root.rotation.y);
     const halfT = Math.max(0.025, args.wallThicknessM / 2);
-    const z1 = args.planZCenter + halfT;
-    const dimZ = z1 + 0.5;
+    const dimSide = inst.params.swingSide === "outward" ? -1 : 1;
+    const z1 = args.planZCenter + dimSide * halfT;
+    const dimZ = z1 + dimSide * 0.5;
     addDoorDimensions(plan, {
       a: new THREE.Vector3(-halfW, planY, z1),
       b: new THREE.Vector3(halfW, planY, z1),
       dimA: new THREE.Vector3(-halfW, planY, dimZ),
       dimB: new THREE.Vector3(halfW, planY, dimZ),
-      widthTextPos: new THREE.Vector3(0, planY, dimZ - 0.09),
-      heightTextPos: new THREE.Vector3(0, planY, dimZ + 0.09),
+      widthTextPos: new THREE.Vector3(0, planY, dimZ - dimSide * 0.09),
+      heightTextPos: new THREE.Vector3(0, planY, dimZ + dimSide * 0.09),
       tickAxisA: new THREE.Vector3(1, 0, 0),
-      tickAxisB: new THREE.Vector3(0, 0, 1),
+      tickAxisB: new THREE.Vector3(0, 0, dimSide),
       widthLabel,
       heightLabel,
       labelRotationRad: planLabelRotationRad
     });
+    const controlDepthSide = inst.params.swingSide === "outward" ? 1 : -1;
+    const controlDepthOffset = halfT + 0.22;
+    const controlCenter = new THREE.Vector3(0, planY, args.planZCenter + controlDepthSide * controlDepthOffset);
+    const stackAxis = new THREE.Vector3(0, 0, 1)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), -inst.root.rotation.y)
+      .normalize()
+      .multiplyScalar(0.085);
+    const handedness = createDoorSwingControlSprite("toggleHandedness", planLabelRotationRad);
+    handedness.position.copy(controlCenter).addScaledVector(stackAxis, -1);
+    plan.add(handedness);
+    const side = createDoorSwingControlSprite("toggleSwingSide", planLabelRotationRad);
+    side.position.copy(controlCenter).add(stackAxis);
+    plan.add(side);
     inst.selection.add(plan);
     inst.selection.visible = selected;
   };
@@ -521,8 +678,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const heightM = inst.params.heightMm / 1000;
     const panelThicknessM = Math.max(0.006, inst.params.panelThicknessMm / 1000);
     const frameW = Math.max(0.002, inst.params.frameWidthMm / 1000);
-    const depthCenterM = inst.params.offsetFromInteriorMm / 1000 + panelThicknessM / 2;
-    const wallCenterOffsetM = -basis.thicknessM / 2 + depthCenterM;
+    const wallCenterOffsetM = getDoorWallCenterOffset(inst.params, basis.thicknessM, panelThicknessM);
     const center = basis.centerA.clone().addScaledVector(basis.dir, inst.params.centerMm / 1000);
     center.addScaledVector(basis.exteriorNormal, wallCenterOffsetM);
     center.y = heightM / 2;
@@ -537,6 +693,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
       yLocal: planYLocal,
       zCenter: planZCenter,
       swingDirection: inst.params.swingDirection,
+      swingSide: inst.params.swingSide,
       swingAngleDeg: inst.params.swingAngleDeg,
       frameWidthM: frameW,
       panelThicknessM,
@@ -615,18 +772,22 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
     const widthMm = Math.max(1, Math.round(draft.widthMm));
     const valid = isPlacementPointValid(lengthMm, centerMm, widthMm);
+    const panelThicknessM = Math.max(0.006, draft.panelThicknessMm / 1000);
+    const wallCenterOffsetM = getDoorWallCenterOffset(draft, basis.thicknessM, panelThicknessM);
     const center = basis.centerA.clone().addScaledVector(basis.dir, centerMm / 1000);
+    center.addScaledVector(basis.exteriorNormal, wallCenterOffsetM);
     placementPreview.position.set(center.x, 0, center.z);
     placementPreview.rotation.set(0, -Math.atan2(basis.dir.z, basis.dir.x), 0);
     syncDoorPlanSymbol(placementPreview, {
       widthM: widthMm / 1000,
       wallThicknessM: basis.thicknessM,
       yLocal: 0.078,
-      zCenter: 0,
+      zCenter: -wallCenterOffsetM,
       swingDirection: draft.swingDirection,
+      swingSide: draft.swingSide,
       swingAngleDeg: draft.swingAngleDeg,
       frameWidthM: Math.max(0.004, draft.frameWidthMm / 1000),
-      panelThicknessM: Math.max(0.006, draft.panelThicknessMm / 1000),
+      panelThicknessM,
       color: valid ? 0x12b981 : 0xef4444,
       opacity: valid ? 0.95 : 0.78,
       preview: true
@@ -653,7 +814,20 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     });
     if (lastPreviewWallId && lastPreviewPointMm) updateDoorPlacementPreview(lastPreviewWallId, lastPreviewPointMm);
     ctx.mountProps();
-    ctx.setUnderlayStatus(`Door: otvaranie ${placementDraft.swingDirection === "right" ? "prave" : "lave"}. Space = otocit, Esc = ukoncit.`);
+    ctx.setUnderlayStatus(`Door: otvaranie ${placementDraft.swingDirection === "right" ? "prave" : "lave"}. Space = lave/prave, Shift+Space = dnu/von, Esc = ukoncit.`);
+    return true;
+  }
+
+  function flipDoorPlacementSwingSide() {
+    if (!placementActive) return false;
+    const draft = getPlacementDraft();
+    placementDraft = ctx.clampDoorParams({
+      ...draft,
+      swingSide: draft.swingSide === "outward" ? "inward" : "outward"
+    });
+    if (lastPreviewWallId && lastPreviewPointMm) updateDoorPlacementPreview(lastPreviewWallId, lastPreviewPointMm);
+    ctx.mountProps();
+    ctx.setUnderlayStatus(`Door: smer ${placementDraft.swingSide === "outward" ? "von" : "dovnutra"}. Shift+Space = dnu/von, Esc = ukoncit.`);
     return true;
   }
 
@@ -685,7 +859,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     ctx.setSelectedDoor();
     ctx.mountProps();
     ctx.commitHistory();
-    ctx.setUnderlayStatus("Door: klikni dalsie miesto na stene. Space = otocit, Esc = ukoncit.");
+    ctx.setUnderlayStatus("Door: klikni dalsie miesto na stene. Space = lave/prave, Shift+Space = dnu/von, Esc = ukoncit.");
     return true;
   }
 
@@ -700,7 +874,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     placementDraft = ctx.clampDoorParams(ctx.doorInst ? structuredClone(ctx.doorInst.params) : defaultDraftParams());
     placementActive = true;
     const selectedWallId = ctx.getSelectedWallId();
-    ctx.setUnderlayStatus(selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = otocit." : "Door: uprav parametre a klikni miesto na stene. Space = otocit.");
+    ctx.setUnderlayStatus(selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = lave/prave, Shift+Space = dnu/von." : "Door: uprav parametre a klikni miesto na stene. Space = lave/prave, Shift+Space = dnu/von.");
     ctx.mountProps();
   }
 
@@ -714,6 +888,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     getDoorPlacementParams: () => (placementActive ? getPlacementDraft() : null),
     updateDoorPlacementParams,
     rotateDoorPlacement,
+    flipDoorPlacementSwingSide,
     isDoorPlacementActive: () => placementActive,
     syncDoorSelectionVisuals
   };

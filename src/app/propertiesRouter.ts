@@ -84,7 +84,7 @@ type PropertiesRouterContext = {
   props: PropertiesPanelApi;
   floorEdit: FloorEditState;
   floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
-  wallDefault: Pick<WallParams, "thicknessMm" | "justification" | "exteriorSign" | "materialId">;
+  wallDefault: Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "justification" | "exteriorSign" | "materialId">;
   wallDraw: WallDrawState;
   kitchenWorktopDraw: KitchenWorktopDrawState;
   sectionDraw: SectionDrawState;
@@ -104,6 +104,7 @@ type PropertiesRouterContext = {
   selectedWallIds: Set<string>;
   selectedInstanceIds: Set<string>;
   pinnedInstanceIds: Set<string>;
+  wallJoinTolMm: number;
   walls: WallInstance[];
   columns: ColumnInstance[];
   columnPlacementParams: ColumnParams | null;
@@ -196,7 +197,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountAlignToolProps = () => mountAlignToolPropsPanel({ props: ctx.props, alignState: ctx.alignState });
   const mountTrimToolProps = () => mountTrimToolPropsPanel({ props: ctx.props, trimState: ctx.trimState });
   const mountMeasureToolProps = () => mountMeasureToolPropsPanel({ props: ctx.props, measureState: ctx.measureState, args: ctx.args, formatMm, clearAllMeasurements: ctx.clearAllMeasurements, setUnderlayStatus: ctx.setUnderlayStatus, mountProps });
-  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
+  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, wallJoinTolMm: ctx.wallJoinTolMm, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
   const mountColumnProps = () => mountColumnPropsPanel({ props: ctx.props, column: ctx.columns.find((x) => x.id === ctx.selectedColumnId) ?? null, showNoProps: ctx.showNoProps, rebuildColumn: ctx.rebuildColumn, commitHistory: ctx.commitHistory, S: ctx.S, mountProps });
   const mountColumnPlacementProps = () => {
     if (!ctx.columnPlacementParams) return ctx.showNoProps();

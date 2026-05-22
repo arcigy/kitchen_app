@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { LayoutInstance, SectionInstance, WallInstance, WallParams } from "./localTypes";
+import type { DoorParams, LayoutInstance, SectionInstance, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 
 type TransformControllerContext = Record<string, any> & {
@@ -12,8 +12,22 @@ type TransformControllerContext = Record<string, any> & {
   };
 };
 
+type ClearTransformOptions = {
+  restore?: boolean;
+  status?: string | null;
+  continueMove?: boolean;
+};
+
+type StartTransformOptions = {
+  sticky?: boolean;
+  toggle?: boolean;
+};
+
 export function createTransformController(ctx: TransformControllerContext) {
-  const clearTransform = (opts?: { restore?: boolean; status?: string | null }) => {
+  const clearTransform = (opts?: ClearTransformOptions) => {
+    const preserveMoveSnapDisabled =
+      !!opts?.continueMove && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
+
     if (opts?.restore) {
       for (const w of ctx.walls) {
         const p = ctx.transformState.startWalls.get(w.id);
@@ -34,6 +48,18 @@ export function createTransformController(ctx: TransformControllerContext) {
         section.params = ctx.cloneSectionParams(s);
         ctx.updateSectionVisual(section);
       }
+      for (const window of ctx.windows ?? []) {
+        const s = ctx.transformState.startWindows.get(window.id);
+        if (!s) continue;
+        window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
+        ctx.updateWindowTransform(window);
+      }
+      for (const door of ctx.doors ?? []) {
+        const s = ctx.transformState.startDoors.get(door.id);
+        if (!s) continue;
+        door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
+        ctx.updateDoorTransform(door);
+      }
       ctx.updateLayoutPanel();
       ctx.updateSelectionHighlights();
       ctx.mountProps();
@@ -41,6 +67,8 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     ctx.transformState.kind = null;
     ctx.transformState.step = null;
+    ctx.transformState.stickyMove = false;
+    ctx.transformState.moveSnapDisabled = false;
     ctx.transformState.base = null;
     ctx.transformState.pivot = null;
     ctx.transformState.typed = "";
@@ -48,21 +76,44 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.selectedWallIds = [];
     ctx.transformState.selectedInstanceIds = [];
     ctx.transformState.selectedSectionIds = [];
+    ctx.transformState.selectedWindowIds = [];
+    ctx.transformState.selectedDoorIds = [];
     ctx.transformState.startWalls.clear();
     ctx.transformState.startInstances.clear();
     ctx.transformState.startInstanceAdjacency.clear();
     ctx.transformState.startSections.clear();
+    ctx.transformState.startWindows.clear();
+    ctx.transformState.startDoors.clear();
     ctx.transformState.startPointerAngle = 0;
     ctx.transformState.lastValidDelta.set(0, 0, 0);
     ctx.transformState.lastValidAngle = 0;
-    if (opts?.status) ctx.setUnderlayStatus(opts.status);
+
+    if (opts?.continueMove) {
+      ctx.transformState.kind = "move";
+      ctx.transformState.step = "selectElements";
+      ctx.transformState.stickyMove = true;
+      ctx.transformState.moveSnapDisabled = preserveMoveSnapDisabled;
+    }
+
+    const status = opts?.status ?? (opts?.continueMove ? "Move: select next element. Click Move again to exit." : null);
+    if (status) ctx.setUnderlayStatus(status);
   };
 
-  const startTransformFromSelection = (kind: "move" | "rotate") => {
+  const startTransformFromSelection = (kind: "move" | "rotate", opts: StartTransformOptions = {}) => {
+    if (kind === "move" && opts.toggle && ctx.transformState.kind === "move" && ctx.transformState.stickyMove) {
+      const restore = ctx.transformState.step === "pickTarget" && !!ctx.transformState.base;
+      clearTransform({ restore, status: "Move: off." });
+      ctx.mountProps();
+      return true;
+    }
+
     if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
     if (ctx.measureState.enabled) return false;
     if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
     if (ctx.underlayCal.active) return false;
+
+    const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
+    const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
     const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];
     const instIds =
@@ -72,15 +123,33 @@ export function createTransformController(ctx: TransformControllerContext) {
           ? [ctx.selectedInstanceId]
           : [];
     const sectionIds = ctx.selectedKind === "section" && ctx.selectedSectionId ? [ctx.selectedSectionId] : [];
+    const windowIds = kind === "move" && ctx.selectedKind === "window" && ctx.windowInst ? [ctx.windowInst.id] : [];
+    const doorIds = kind === "move" && ctx.selectedKind === "door" && ctx.doorInst ? [ctx.doorInst.id] : [];
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
-    if (wallIds.length + instIds.length + sectionIds.length === 0) return false;
+    if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
+      if (kind !== "move") return false;
+      clearTransform();
+      ctx.transformState.kind = "move";
+      ctx.transformState.step = "selectElements";
+      ctx.transformState.stickyMove = stickyMove;
+      ctx.transformState.moveSnapDisabled = moveSnapDisabled;
+      ctx.setUnderlayStatus(
+        stickyMove ? "Move: select element to move. Click Move again to exit. N = free movement." : "Move (M): select elements, then press Enter. N = free movement."
+      );
+      ctx.mountProps();
+      return true;
+    }
 
     clearTransform();
     ctx.transformState.kind = kind;
     ctx.transformState.step = kind === "move" ? "pickBase" : "pickPivot";
+    ctx.transformState.stickyMove = stickyMove;
+    ctx.transformState.moveSnapDisabled = moveSnapDisabled;
     ctx.transformState.selectedWallIds = wallIds;
     ctx.transformState.selectedInstanceIds = instIds;
     ctx.transformState.selectedSectionIds = sectionIds;
+    ctx.transformState.selectedWindowIds = windowIds;
+    ctx.transformState.selectedDoorIds = doorIds;
 
     // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
     for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
@@ -101,8 +170,10 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
     }
     for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
+    for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
+    for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
 
-    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
+    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
     ctx.mountProps();
     return true;
   };
@@ -126,6 +197,18 @@ export function createTransformController(ctx: TransformControllerContext) {
       if (!s) continue;
       section.params = ctx.cloneSectionParams(s);
       ctx.updateSectionVisual(section);
+    }
+    for (const window of ctx.windows ?? []) {
+      const s = ctx.transformState.startWindows.get(window.id);
+      if (!s) continue;
+      window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
+      ctx.updateWindowTransform(window);
+    }
+    for (const door of ctx.doors ?? []) {
+      const s = ctx.transformState.startDoors.get(door.id);
+      if (!s) continue;
+      door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
+      ctx.updateDoorTransform(door);
     }
   };
 
@@ -168,6 +251,46 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     if (dxMm !== 0 || dzMm !== 0) {
       translateWallsByAnchors(dxMm, dzMm);
+    }
+
+    const moveOpeningAlongHostWall = (params: WindowParams | DoorParams, start: WindowParams | DoorParams) => {
+      if (!start.wallId) return false;
+      const wall = ctx.walls.find((item: WallInstance) => item.id === start.wallId) ?? null;
+      if (!wall) return false;
+      const ax = wall.params.aMm.x;
+      const az = wall.params.aMm.z;
+      const bx = wall.params.bMm.x;
+      const bz = wall.params.bMm.z;
+      const lengthMm = Math.hypot(bx - ax, bz - az);
+      if (lengthMm < 1) return false;
+      const dirX = (bx - ax) / lengthMm;
+      const dirZ = (bz - az) / lengthMm;
+      const alongMm = Math.round(delta.x * dirX * 1000 + delta.z * dirZ * 1000);
+      const unclampedCenterMm = start.centerMm + alongMm;
+      const halfWidthMm = Math.max(0, start.widthMm / 2);
+      const minCenterMm = halfWidthMm;
+      const maxCenterMm = lengthMm - halfWidthMm;
+      params.centerMm =
+        maxCenterMm >= minCenterMm
+          ? Math.round(Math.min(maxCenterMm, Math.max(minCenterMm, unclampedCenterMm)))
+          : Math.round(lengthMm / 2);
+      return true;
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds) {
+      const window = (ctx.windows ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startWindows.get(id);
+      if (!window || !start) continue;
+      window.params = JSON.parse(JSON.stringify(start)) as WindowParams;
+      if (moveOpeningAlongHostWall(window.params, start)) ctx.updateWindowTransform(window);
+    }
+
+    for (const id of ctx.transformState.selectedDoorIds) {
+      const door = (ctx.doors ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startDoors.get(id);
+      if (!door || !start) continue;
+      door.params = JSON.parse(JSON.stringify(start)) as DoorParams;
+      if (moveOpeningAlongHostWall(door.params, start)) ctx.updateDoorTransform(door);
     }
 
     for (const id of ctx.transformState.selectedSectionIds) {

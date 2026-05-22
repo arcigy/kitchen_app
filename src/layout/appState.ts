@@ -10,6 +10,9 @@ export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "sec
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 export type WallId = "back" | "left" | "right";
+export type DoorSwingDirection = "left" | "right";
+export type DoorSwingSide = "inward" | "outward";
+export type OpeningHandleType = "lever" | "knob" | "bar" | "none";
 
 export type WindowParams = {
   wall: WallId;
@@ -23,6 +26,12 @@ export type WindowParams = {
   sashWidthMm: number;
   sashProfileDepthMm: number;
   frameProfileDepthMm: number;
+  swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
+  swingAngleDeg: number;
+  handleType: OpeningHandleType;
+  handleOffsetMm: number;
+  handleHeightMm: number;
   materialId: string;
 };
 
@@ -100,11 +109,16 @@ export type LayoutSnapshot = {
 };
 
 export type WallParams = {
+  typeId?: string | null;
   thicknessMm: number;
   heightMm: number;
   materialId: string;
   justification?: "center" | "interior" | "exterior";
   exteriorSign?: 1 | -1;
+  joinEnds?: {
+    a?: { enabled?: boolean; priority?: number };
+    b?: { enabled?: boolean; priority?: number };
+  };
   aMm: { x: number; z: number };
   bMm: { x: number; z: number };
 };

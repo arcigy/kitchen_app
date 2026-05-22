@@ -194,6 +194,7 @@ import {
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 import { installKitchenDebugApi } from "./app/kitchenDebugApi";
 import { createWallController, type WallPlanMultiPolygon } from "./app/wallController";
+import { DEFAULT_WALL_TYPE_ID } from "./app/wallTypes";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
@@ -418,6 +419,7 @@ export function startApp(initialArgs: AppArgs) {
   const { updateSelectionHighlights } = createSelectionHighlights({
     layoutRoot,
     getMode: () => mode,
+    getWalls: () => walls,
     getSelectedWallIds: () => selectedWallIds,
     getSelectedInstanceIds: () => selectedInstanceIds,
     getWallSolvedOutlines: () => wallSolvedOutlines,
@@ -474,6 +476,7 @@ export function startApp(initialArgs: AppArgs) {
   let wallCounter = 1;
   const wallJoinTolMm = 25;
   const wallDefault = {
+    typeId: DEFAULT_WALL_TYPE_ID,
     thicknessMm: 150,
     heightMm: 2600,
     materialId: "default",
@@ -676,7 +679,9 @@ export function startApp(initialArgs: AppArgs) {
 
   const transformState = {
     kind: null as null | "move" | "rotate",
-    step: null as null | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
+    stickyMove: false,
+    moveSnapDisabled: false,
     base: null as THREE.Vector3 | null,
     pivot: null as THREE.Vector3 | null,
     typed: "",
@@ -685,10 +690,14 @@ export function startApp(initialArgs: AppArgs) {
     selectedWallIds: [] as string[],
     selectedInstanceIds: [] as string[],
     selectedSectionIds: [] as string[],
+    selectedWindowIds: [] as string[],
+    selectedDoorIds: [] as string[],
     startWalls: new Map<string, WallParams>(),
     startInstances: new Map<string, { pos: THREE.Vector3; rotY: number }>(),
     startInstanceAdjacency: new Map<string, string | null>(),
     startSections: new Map<string, SectionParams>(),
+    startWindows: new Map<string, WindowParams>(),
+    startDoors: new Map<string, DoorParams>(),
     startPointerAngle: 0,
     lastValidDelta: new THREE.Vector3(0, 0, 0),
     lastValidAngle: 0
@@ -725,9 +734,12 @@ export function startApp(initialArgs: AppArgs) {
 
   let wallController!: ReturnType<typeof createWallController>;
   const pickAlignLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickAlignLineAt"]>) => wallController.pickAlignLineAt(...args);
+  const pickDimensionLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickDimensionLineAt"]>) => wallController.pickDimensionLineAt(...args);
   const lineLineIntersectionXZ = (...args: Parameters<ReturnType<typeof createWallController>["lineLineIntersectionXZ"]>) => wallController.lineLineIntersectionXZ(...args);
   const translateWallAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["translateWallAndConnected"]>) => wallController.translateWallAndConnected(...args);
   const moveWallEndpointAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["moveWallEndpointAndConnected"]>) => wallController.moveWallEndpointAndConnected(...args);
+  const setWallEndpointAndConnectedMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointAndConnectedMm"]>) => wallController.setWallEndpointAndConnectedMm(...args);
+  const setWallEndpointsAndConnectedMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointsAndConnectedMm"]>) => wallController.setWallEndpointsAndConnectedMm(...args);
   const setWallEndpointMm = (...args: Parameters<ReturnType<typeof createWallController>["setWallEndpointMm"]>) => wallController.setWallEndpointMm(...args);
   const wallDirOutFromNode = (...args: Parameters<ReturnType<typeof createWallController>["wallDirOutFromNode"]>) => wallController.wallDirOutFromNode(...args);
   const joinExtensionM = (...args: Parameters<ReturnType<typeof createWallController>["joinExtensionM"]>) => wallController.joinExtensionM(...args);
@@ -747,8 +759,13 @@ export function startApp(initialArgs: AppArgs) {
   const wallRefLineToCenterLine = (...args: Parameters<ReturnType<typeof createWallController>["wallRefLineToCenterLine"]>) => wallController.wallRefLineToCenterLine(...args);
   const updateWallMeshWithJustification = (...args: Parameters<ReturnType<typeof createWallController>["updateWallMeshWithJustification"]>) => wallController.updateWallMeshWithJustification(...args);
   const makeWallPreviewMesh = (...args: Parameters<ReturnType<typeof createWallController>["makeWallPreviewMesh"]>) => wallController.makeWallPreviewMesh(...args);
-  const rebuildWall = (...args: Parameters<ReturnType<typeof createWallController>["rebuildWall"]>) => wallController.rebuildWall(...args);
+  const rebuildWall = (...args: Parameters<ReturnType<typeof createWallController>["rebuildWall"]>) => {
+    const result = wallController.rebuildWall(...args);
+    syncDetailClippingAndMaterials();
+    return result;
+  };
   const addWall = (...args: Parameters<ReturnType<typeof createWallController>["addWall"]>) => wallController.addWall(...args);
+  const duplicateWall = (...args: Parameters<ReturnType<typeof createWallController>["duplicateWall"]>) => wallController.duplicateWall(...args);
 
 
 
@@ -810,16 +827,16 @@ export function startApp(initialArgs: AppArgs) {
       } else {
         translateWallAndConnected(w, dxMm, dzMm);
       }
-      return { ok: true, reason: "Align: done. Click reference line..." };
+      return { ok: true, reason: "Align: done. Click another parallel line, or Esc for a new reference." };
     }
 
     if (picked.targetKind === "module") {
       const aligned = !!(picked.instanceId && translateModuleByMeasure(picked.instanceId, dxMm, dzMm));
-      return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: module move blocked." };
+      return { ok: aligned, reason: aligned ? "Align: done. Click another parallel line, or Esc for a new reference." : "Align: module move blocked." };
     }
 
     const aligned = alignKitchenWorktopLine(picked, dxMm, dzMm);
-    return { ok: aligned, reason: aligned ? "Align: done. Click reference line..." : "Align: worktop move blocked." };
+    return { ok: aligned, reason: aligned ? "Align: done. Click another parallel line, or Esc for a new reference." : "Align: worktop move blocked." };
   };
 
   const getKitchenWorktopBackGuidePath = (
@@ -1098,6 +1115,7 @@ export function startApp(initialArgs: AppArgs) {
     clearAllMeasurements: () => clearAllMeasurements(),
     clearPreview: () => clearPreview(),
     clearToolHud,
+    clearTransform,
     dimensionState,
     get drawSnapOverlay() { return drawSnapOverlay; },
     ensureLayoutMode: () => ensureLayoutMode(),
@@ -1119,6 +1137,7 @@ export function startApp(initialArgs: AppArgs) {
     showWallSnapMarkersFor,
     syncSelectionState,
     technicalDimensions,
+    transformState,
     trimState,
     updateAllSectionVisuals: () => updateAllSectionVisuals(),
     updateSectionDrawPreview,
@@ -1420,6 +1439,7 @@ export function startApp(initialArgs: AppArgs) {
     getViewMode: () => viewMode,
     getSelectedKind: () => selectedKind,
     getSelectedWallId: () => selectedWallId,
+    getSelectedWallIds: () => selectedWallIds,
     setSelectedWallId: (next: string | null) => { selectedWallId = next; },
     getWallDebugEnabled: () => wallDebugEnabled,
     setWallSolvedJoinPolys: (next: Array<Array<{ x: number; z: number }>>) => { wallSolvedJoinPolys = next; },
@@ -1666,6 +1686,7 @@ export function startApp(initialArgs: AppArgs) {
   const getDoorPlacementParams = () => createDoorControlsControllerResult?.getDoorPlacementParams() ?? null;
   const updateDoorPlacementParams = (...args: Parameters<DoorControlsApi["updateDoorPlacementParams"]>) => requireDoorControls().updateDoorPlacementParams(...args);
   const rotateDoorPlacement = () => createDoorControlsControllerResult?.rotateDoorPlacement() ?? false;
+  const flipDoorPlacementSwingSide = () => createDoorControlsControllerResult?.flipDoorPlacementSwingSide() ?? false;
   const isDoorPlacementActive = () => createDoorControlsControllerResult?.isDoorPlacementActive() ?? false;
   const syncDoorSelectionVisuals = (...args: Parameters<DoorControlsApi["syncDoorSelectionVisuals"]>) => createDoorControlsControllerResult?.syncDoorSelectionVisuals(...args);
   const updateDoorTransform = (...args: Parameters<DoorControlsApi["updateDoorTransform"]>) => requireDoorControls().updateDoorTransform(...args);
@@ -1815,6 +1836,7 @@ export function startApp(initialArgs: AppArgs) {
     updateSelectionHighlights,
     updateUnderlayTransform,
     updateWallMeshWithJustification,
+    wallJoinTolMm,
     updateColumnPlacementParams,
     wallDefault,
     wallDraw,
@@ -2056,6 +2078,7 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedColumn,
     mountProps,
     duplicateInstance,
+    duplicateWall,
     deleteInstance,
     deleteWall,
     deleteSectionInstance,
@@ -2148,6 +2171,7 @@ export function startApp(initialArgs: AppArgs) {
     subscribeInstallState,
     tb,
     toggle2dView,
+    transformState,
     undo,
     updateUndoRedoUi,
     visibility: {
@@ -2331,6 +2355,7 @@ export function startApp(initialArgs: AppArgs) {
     layoutPanel,
     pinnedInstanceIds,
     pinnedWallIds,
+    rebuildWallPlanMesh,
     scene,
     selectedInstanceIds,
     selectedWallIds,
@@ -2527,7 +2552,7 @@ export function startApp(initialArgs: AppArgs) {
   const setView2d = (...args: Parameters<ReturnType<typeof createViewModeController>["setView2d"]>) => createViewModeControllerResult.setView2d(...args);
   const setMode = (...args: Parameters<ReturnType<typeof createViewModeController>["setMode"]>) => createViewModeControllerResult.setMode(...args);
 
-  const buildLayoutExportPayload = () => createLayoutExportPayload({ windowInst, windows, doorInst, doors, columns, floors, sections, instances });
+  const buildLayoutExportPayload = () => createLayoutExportPayload({ windowInst, windows, doorInst, doors, walls, columns, floors, sections, instances });
 
   const vectorSnapshot = (v: THREE.Vector3) => ({ x: v.x, y: v.y, z: v.z });
   const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -2809,11 +2834,13 @@ export function startApp(initialArgs: AppArgs) {
     instanceFitsRoom,
     instanceWorldBox,
     instances,
-    layoutTool,
+    windows,
+    doors,
+    get layoutTool() { return layoutTool; },
     marquee,
     measureState,
     mmDist,
-    mode,
+    get mode() { return mode; },
     moduleOverlapsKitchenWorktops,
     moduleOverlapsWalls,
     mountProps,
@@ -2822,11 +2849,13 @@ export function startApp(initialArgs: AppArgs) {
     rebuildWall,
     rebuildWallPlanMesh,
     sections,
-    selectedInstanceId,
+    get selectedInstanceId() { return selectedInstanceId; },
     selectedInstanceIds,
-    selectedKind,
-    selectedSectionId,
-    selectedWallId,
+    get selectedKind() { return selectedKind; },
+    get selectedSectionId() { return selectedSectionId; },
+    get selectedWallId() { return selectedWallId; },
+    get windowInst() { return windowInst; },
+    get doorInst() { return doorInst; },
     selectedWallIds,
     setUnderlayStatus,
     snapPositionDetailed,
@@ -2834,9 +2863,11 @@ export function startApp(initialArgs: AppArgs) {
     transformState,
     underlayCal,
     updateLayoutPanel,
+    updateWindowTransform,
+    updateDoorTransform,
     updateSectionVisual,
     updateSelectionHighlights,
-    viewMode,
+    get viewMode() { return viewMode; },
     wallEditHud,
     wallJoinTolMm,
     walls,
@@ -2902,9 +2933,11 @@ export function startApp(initialArgs: AppArgs) {
     dragState,
     doorDragState,
     findInstance,
+    drawSnapOverlay,
     floorEdit,
     getKitchenPlacementConstraint,
     handleLayoutEscape,
+    hideHoverCursor,
     helpers,
     inferKitchenPlacementBinding,
     instanceFitsRoom,
@@ -2930,6 +2963,7 @@ export function startApp(initialArgs: AppArgs) {
     redo,
     renderFloorBoundaryEdit,
     rotateDoorPlacement,
+    flipDoorPlacementSwingSide,
     sectionDraw,
     sections,
     selectedInstanceId,
@@ -2945,6 +2979,7 @@ export function startApp(initialArgs: AppArgs) {
     setToolTrim,
     setToolWall,
     setUnderlayStatus,
+    get selectPlanSnap() { return selectPlanSnap; }, set selectPlanSnap(next) { selectPlanSnap = next; },
     snapPositionDetailed,
     startTransformFromSelection,
     transformState,
@@ -2958,6 +2993,7 @@ export function startApp(initialArgs: AppArgs) {
     wallDefault,
     wallDraw,
     wallEditHud,
+    hudHoverLine,
     wallEndpointWhich,
     wallJoinTolMm,
     wallTypedHud,
@@ -3076,8 +3112,11 @@ export function startApp(initialArgs: AppArgs) {
     moveFloorEditSegment,
     moveFloorEditVertex,
     moveWallEndpointAndConnected,
+    setWallEndpointAndConnectedMm,
+    setWallEndpointsAndConnectedMm,
     nudgePinnedModuleChain,
     pickAlignLineAt,
+    pickDimensionLineAt,
     pickFloorEditElement,
     pickSurfacePoint,
     pickWallLine2D,
@@ -3133,6 +3172,7 @@ export function startApp(initialArgs: AppArgs) {
     technicalDimensions,
     toFreePlanBinding,
     toMmPoint,
+    startTransformFromSelection,
     transformState,
     trimState,
     underlayCal,

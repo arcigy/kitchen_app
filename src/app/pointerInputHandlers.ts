@@ -7,7 +7,7 @@ import type {
   WallInstance,
   WindowInstance
 } from "./localTypes";
-import type { PlanSnapBinding } from "./planSnap";
+import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { MeasureState } from "./measureTools";
 
@@ -20,6 +20,7 @@ type PointerInputHandlersContext = Record<string, any> & {
   instances: LayoutInstance[];
   floors: FloorInstance[];
   getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
+  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => boolean;
   S: {
     activeKitchenGroupId: string | null;
     kitchenCtx: KitchenContext;
@@ -30,6 +31,38 @@ type PointerInputHandlersContext = Record<string, any> & {
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
+type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+const MOVE_SNAP_PRIORITY = ["endpoint", "midpoint", "corner", "perpendicular", "edge", "axis"] satisfies Array<
+  Exclude<PlanSnapResult["kind"], "none">
+>;
+const MOVE_OBJECT_POINT_SNAP_PRIORITY = ["endpoint", "corner", "midpoint", "perpendicular"] satisfies Array<
+  Exclude<PlanSnapResult["kind"], "none">
+>;
+const MOVE_OBJECT_LINE_SNAP_PRIORITY = ["edge", "axis"] satisfies Array<Exclude<PlanSnapResult["kind"], "none">>;
+const MOVE_OBJECT_KIND_SCORE: Partial<Record<Exclude<PlanSnapResult["kind"], "none">, number>> = {
+  endpoint: 0.42,
+  corner: 0.48,
+  midpoint: 0.7,
+  perpendicular: 0.82,
+  edge: 1,
+  axis: 1.08
+};
+
+type MoveKeyPoint = {
+  point: THREE.Vector3;
+  label: string;
+  axis?: THREE.Vector3 | null;
+  hostWallId?: string | null;
+};
+
+type MoveObjectSnap = {
+  delta: THREE.Vector3;
+  snap: PlanSnapResult;
+  source: THREE.Vector3;
+  target: THREE.Vector3;
+  label: string;
+};
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -38,6 +71,345 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const makeNoSnapResult = (point: THREE.Vector3) => ({ point, kind: "none" } satisfies PlanSnapResult);
+  const resolveMoveSnap = (raw: THREE.Vector3, rect: DOMRect, perpendicularFrom?: THREE.Vector3 | null) => {
+    if (ctx.transformState.moveSnapDisabled) {
+      ctx.selectPlanSnap = null;
+      return makeNoSnapResult(raw);
+    }
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 28, {
+      perpendicularFrom: perpendicularFrom ?? null,
+      kindPriority: MOVE_SNAP_PRIORITY,
+      sticky: ctx.selectPlanSnap,
+      ignoreBinding: isIgnoredMoveSnapBinding
+    });
+    const stickySnap = ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 30);
+    const activeSnap =
+      snapped.kind !== "none"
+        ? snapped
+        : stickySnap && !isIgnoredMoveSnapBinding(stickySnap.binding)
+          ? stickySnap
+          : null;
+    ctx.selectPlanSnap = activeSnap;
+    return activeSnap;
+  };
+  const updateMoveSnapFeedback = (snap: PlanSnapResult | null, point: THREE.Vector3, rect: DOMRect) => {
+    if (snap?.kind && snap.kind !== "none") {
+      ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), snap.kind);
+      ctx.drawSnapOverlay.showWorld(point, ctx.cam(), rect, snap.kind);
+      if (snap.a && snap.b && ["edge", "axis", "midpoint", "perpendicular"].includes(snap.kind)) {
+        ctx.updateHudLine(ctx.hudHoverLine, snap.a, snap.b, ctx.hudLineThicknessM(rect) * 1.75);
+      } else {
+        ctx.hudHoverLine.visible = false;
+      }
+      return;
+    }
+    ctx.hideHoverCursor();
+    ctx.drawSnapOverlay.hide();
+    ctx.hudHoverLine.visible = false;
+  };
+  const isIgnoredMoveSnapBinding = (binding: PlanSnapBinding | null | undefined) => {
+    if (!binding) return false;
+    if ((binding.type === "wallEndpoint" || binding.type === "wallCenterline") && ctx.transformState.selectedWallIds.includes(binding.wallId)) {
+      return true;
+    }
+    if ((binding.type === "moduleVertex" || binding.type === "moduleEdge") && ctx.transformState.selectedInstanceIds.includes(binding.instanceId)) {
+      return true;
+    }
+    return false;
+  };
+  const getSnapBindingWallId = (binding: PlanSnapBinding | null | undefined) => {
+    if (!binding) return null;
+    if (binding.type === "wallEndpoint" || binding.type === "wallCenterline") return binding.wallId;
+    return null;
+  };
+  const worldFromMm = (point: { x: number; z: number }) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
+  const getWallAxisInfo = (wall: WallInstance) => {
+    const a = worldFromMm(wall.params.aMm);
+    const b = worldFromMm(wall.params.bMm);
+    const dir = b.clone().sub(a).setY(0);
+    if (dir.lengthSq() < 1e-10) return null;
+    const lengthM = dir.length();
+    dir.normalize();
+    return { a, b, dir, lengthM, lengthMm: lengthM * 1000 };
+  };
+  const pointOnWallCenterline = (wall: WallInstance, distanceM: number) => {
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return null;
+    return { point: axis.a.clone().addScaledVector(axis.dir, distanceM), dir: axis.dir.clone() };
+  };
+  const openingSmartSnapRevealMm = (params: { widthMm: number; frameWidthMm?: number }) => {
+    const frameMm = Number(params.frameWidthMm);
+    if (Number.isFinite(frameMm) && frameMm > 0) return Math.max(50, Math.min(140, Math.round(frameMm)));
+    return Math.max(50, Math.min(140, Math.round(params.widthMm * 0.06)));
+  };
+  const openingMoveBounds = (
+    params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number },
+    delta: THREE.Vector3
+  ) => {
+    if (!params.wallId) return null;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    if (!wall) return null;
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return null;
+    const alongMm = Math.round(delta.dot(axis.dir) * 1000);
+    const centerMm = params.centerMm + alongMm;
+    const halfWidthMm = params.widthMm / 2;
+    return {
+      centerMm,
+      leftMm: centerMm - halfWidthMm,
+      rightMm: centerMm + halfWidthMm,
+      lengthMm: axis.lengthMm,
+      revealMm: openingSmartSnapRevealMm(params)
+    };
+  };
+  const isOpeningSmartSnapDeltaValid = (delta: THREE.Vector3) => {
+    const checkOpening = (params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number }) => {
+      const bounds = openingMoveBounds(params, delta);
+      if (!bounds) return true;
+      if (params.widthMm >= bounds.lengthMm) return false;
+      const availableRevealMm = Math.max(0, (bounds.lengthMm - params.widthMm) / 2);
+      const revealMm = Math.min(bounds.revealMm, availableRevealMm);
+      return bounds.leftMm >= revealMm - 1 && bounds.rightMm <= bounds.lengthMm - revealMm + 1;
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    return true;
+  };
+  const moveObjectSnapKey = (snap: PlanSnapResult) =>
+    [
+      snap.kind,
+      Math.round(snap.point.x * 1000),
+      Math.round(snap.point.z * 1000),
+      snap.owner ?? "",
+      JSON.stringify(snap.binding ?? null)
+    ].join("|");
+  const collectMoveObjectSnapResults = (
+    point: THREE.Vector3,
+    rect: DOMRect,
+    searchPx: number,
+    kindPriority: Array<Exclude<PlanSnapResult["kind"], "none">>
+  ) => {
+    const first = ctx.snapPoint2D(point, rect, ctx.cam(), searchPx, {
+      kindPriority,
+      ignoreBinding: isIgnoredMoveSnapBinding
+    }) as PlanSnapResult;
+    if (first.kind === "none") return [];
+
+    const results: PlanSnapResult[] = [];
+    const seen = new Set<string>();
+    const add = (snap: PlanSnapResult) => {
+      if (snap.kind === "none") return;
+      const key = moveObjectSnapKey(snap);
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(snap);
+    };
+
+    add(first);
+    const cycleCount = Math.min(Math.max(first.cycleCount ?? 1, 1), 16);
+    for (let index = 0; index < cycleCount; index += 1) {
+      const snap = ctx.snapPoint2D(point, rect, ctx.cam(), searchPx, {
+        kindPriority,
+        cycleIndex: index,
+        ignoreBinding: isIgnoredMoveSnapBinding
+      }) as PlanSnapResult;
+      add(snap);
+    }
+    return results;
+  };
+  const collectOpeningMoveKeypoints = (
+    keypoints: MoveKeyPoint[],
+    params: { wallId?: string | null; centerMm: number; widthMm: number },
+    delta: THREE.Vector3,
+    label: string
+  ) => {
+    if (!params.wallId) return;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    if (!wall) return;
+    const axis = getWallAxisInfo(wall);
+    if (!axis) return;
+    const dir = axis.dir;
+    const centerM = params.centerMm / 1000 + delta.dot(dir);
+    const halfWidthM = params.widthMm / 2000;
+    const left = pointOnWallCenterline(wall, centerM - halfWidthM);
+    const center = pointOnWallCenterline(wall, centerM);
+    const right = pointOnWallCenterline(wall, centerM + halfWidthM);
+    if (left) keypoints.push({ point: left.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} left end` });
+    if (center) keypoints.push({ point: center.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} center` });
+    if (right) keypoints.push({ point: right.point, axis: dir.clone(), hostWallId: params.wallId, label: `${label} right end` });
+  };
+  const collectMoveKeypoints = (delta: THREE.Vector3) => {
+    const keypoints: MoveKeyPoint[] = [];
+
+    for (const id of ctx.transformState.selectedWallIds as string[]) {
+      const start = ctx.transformState.startWalls.get(id);
+      if (!start) continue;
+      const a = worldFromMm(start.aMm).add(delta);
+      const b = worldFromMm(start.bMm).add(delta);
+      keypoints.push({ point: a, label: `wall ${id} start` });
+      keypoints.push({ point: b, label: `wall ${id} end` });
+      keypoints.push({ point: a.clone().lerp(b, 0.5), label: `wall ${id} middle` });
+    }
+
+    for (const id of ctx.transformState.selectedInstanceIds as string[]) {
+      const inst = ctx.findInstance?.(id) ?? ctx.instances.find((item) => item.id === id) ?? null;
+      const start = ctx.transformState.startInstances.get(id);
+      if (!inst || !start) continue;
+      const box = inst.localBox;
+      const center = box.getCenter(new THREE.Vector3());
+      const localPoints = [
+        new THREE.Vector3(box.min.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, box.max.z),
+        new THREE.Vector3(box.min.x, 0, box.max.z),
+        new THREE.Vector3(center.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, center.z),
+        new THREE.Vector3(center.x, 0, box.max.z),
+        new THREE.Vector3(box.min.x, 0, center.z),
+        new THREE.Vector3(center.x, 0, center.z)
+      ];
+      for (let index = 0; index < localPoints.length; index += 1) {
+        const point = localPoints[index]!.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), start.rotY).add(start.pos).add(delta);
+        point.y = 0;
+        keypoints.push({ point, label: `module ${id} point ${index + 1}` });
+      }
+    }
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `window ${id}`);
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `door ${id}`);
+    }
+    for (const id of ctx.transformState.selectedSectionIds as string[]) {
+      const start = ctx.transformState.startSections.get(id);
+      if (!start) continue;
+      const a = worldFromMm(start.aMm).add(delta);
+      const b = worldFromMm(start.bMm).add(delta);
+      keypoints.push({ point: a, label: `section ${id} start` });
+      keypoints.push({ point: b, label: `section ${id} end` });
+      keypoints.push({ point: a.clone().lerp(b, 0.5), label: `section ${id} middle` });
+    }
+
+    return keypoints;
+  };
+  const resolveMoveObjectSnap = (delta: THREE.Vector3, rect: DOMRect): MoveObjectSnap | null => {
+    const keypoints = collectMoveKeypoints(delta);
+    if (keypoints.length === 0) return null;
+    const maxPx = ctx.transformState.moveSnapDisabled ? 18 : 26;
+    let best: { snap: MoveObjectSnap; score: number } | null = null;
+    const priorityGroups = [MOVE_OBJECT_POINT_SNAP_PRIORITY, MOVE_OBJECT_LINE_SNAP_PRIORITY];
+
+    for (const keypoint of keypoints) {
+      for (const kindPriority of priorityGroups) {
+        const axis = keypoint.axis?.clone().setY(0) ?? null;
+        const axisSnap = !!axis && axis.lengthSq() > 1e-10;
+        const searchPx = axisSnap ? Math.max(maxPx * 2.25, maxPx + 24) : maxPx;
+        const snaps = collectMoveObjectSnapResults(keypoint.point, rect, searchPx, kindPriority);
+
+        for (const snap of snaps) {
+          let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
+          if (axisSnap && axis) {
+            const normalizedAxis = axis.clone().normalize();
+            adjustment = normalizedAxis.multiplyScalar(adjustment.dot(normalizedAxis));
+          }
+          if (adjustment.lengthSq() < 1e-8) continue;
+
+          const target = keypoint.point.clone().add(adjustment);
+          const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
+          const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
+          const snapScreen = ctx.worldToScreen(snap.point, ctx.cam(), rect);
+          const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
+          if (distancePx > maxPx) continue;
+
+          const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
+          const sameHostWall = !!keypoint.hostWallId && getSnapBindingWallId(snap.binding) === keypoint.hostWallId;
+          const score =
+            distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
+            (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
+            (keypoint.hostWallId && !sameHostWall ? 2 : 0);
+          const candidate = {
+            delta: delta.clone().add(adjustment),
+            snap,
+            source: keypoint.point.clone(),
+            target,
+            label: keypoint.label
+          };
+          if (!isOpeningSmartSnapDeltaValid(candidate.delta)) continue;
+          if (!best || score < best.score) best = { snap: candidate, score };
+        }
+      }
+    }
+
+    return best?.snap ?? null;
+  };
+  const resolveMoveDeltaWithObjectSnap = (delta: THREE.Vector3, rect: DOMRect) => {
+    const objectSnap = resolveMoveObjectSnap(delta, rect);
+    if (!objectSnap) return { delta: prepareMoveDelta(delta), objectSnap: null };
+    const snappedDelta = prepareMoveDelta(objectSnap.delta);
+    return { delta: snappedDelta, objectSnap: { ...objectSnap, delta: snappedDelta } };
+  };
+  const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
+    if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
+    ctx.transformState.base = basePoint.clone();
+    ctx.transformState.step = "pickTarget";
+    ctx.transformState.typed = "";
+    ctx.transformState.lastValidDelta.set(0, 0, 0);
+    ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
+  };
+  const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
+    if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+      if (!ctx.startTransformFromSelection("move", { sticky: true })) return true;
+      armMoveTargetFromBase(basePoint);
+      return true;
+    }
+    return false;
+  };
+  const hasMoveSelection = () =>
+    (ctx.selectedWallIds?.size ?? 0) > 0 ||
+    (ctx.selectedInstanceIds?.size ?? 0) > 0 ||
+    (ctx.selectedKind === "wall" && !!ctx.selectedWallId) ||
+    (ctx.selectedKind === "module" && !!ctx.selectedInstanceId) ||
+    (ctx.selectedKind === "section" && !!ctx.selectedSectionId) ||
+    (ctx.selectedKind === "window" && !!ctx.windowInst) ||
+    (ctx.selectedKind === "door" && !!ctx.doorInst);
+  const continueMoveWithCurrentSelection = (basePoint?: THREE.Vector3) => {
+    if (ctx.transformState.kind !== "move" || ctx.transformState.step !== "selectElements" || !ctx.transformState.stickyMove) return false;
+    if (!hasMoveSelection()) return false;
+    if (!ctx.startTransformFromSelection("move", { sticky: true })) return false;
+    armMoveTargetFromBase(basePoint);
+    return true;
+  };
+  const constrainMoveDelta = (delta: THREE.Vector3) => {
+    if (delta.lengthSq() < 1e-10) return delta.clone();
+    const firstWallId = ctx.transformState.selectedWallIds[0] as string | undefined;
+    const firstWall = firstWallId ? ctx.transformState.startWalls.get(firstWallId) : null;
+    if (firstWall) {
+      const wallDir = new THREE.Vector3(firstWall.bMm.x - firstWall.aMm.x, 0, firstWall.bMm.z - firstWall.aMm.z);
+      if (wallDir.lengthSq() > 1e-10) {
+        wallDir.normalize();
+        const wallPerp = new THREE.Vector3(-wallDir.z, 0, wallDir.x);
+        const along = delta.dot(wallDir);
+        const across = delta.dot(wallPerp);
+        return Math.abs(along) >= Math.abs(across) ? wallDir.multiplyScalar(along) : wallPerp.multiplyScalar(across);
+      }
+    }
+    return Math.abs(delta.x) >= Math.abs(delta.z) ? new THREE.Vector3(delta.x, 0, 0) : new THREE.Vector3(0, 0, delta.z);
+  };
+  const roundMoveDeltaToMillimeters = (delta: THREE.Vector3) =>
+    new THREE.Vector3(Math.round(delta.x * 1000) / 1000, delta.y, Math.round(delta.z * 1000) / 1000);
+  const prepareMoveDelta = (delta: THREE.Vector3) =>
+    ctx.transformState.moveSnapDisabled ? roundMoveDeltaToMillimeters(delta) : delta;
   const windowPlacementWallSnapPx = 34;
   const windowSelectionSnapPx = 20;
   const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
@@ -380,6 +752,58 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return null;
   };
 
+  const pickWindowSwingControlAction = (): WindowSwingControlAction | null => {
+    const inst = ctx.windowInst;
+    if (!inst || ctx.selectedKind !== "window" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const action = hit.object.userData.windowSwingAction as WindowSwingControlAction | undefined;
+      if (action && hit.object.userData.kind === "windowSwingControl" && isVisibleThroughSelection(hit.object)) return action;
+    }
+    return null;
+  };
+
+  const applyWindowSwingControlAction = (action: WindowSwingControlAction) => {
+    const inst = ctx.windowInst;
+    if (!inst) return false;
+    if (action === "toggleHandedness") {
+      inst.params.swingDirection = inst.params.swingDirection === "right" ? "left" : "right";
+    } else {
+      inst.params.swingSide = inst.params.swingSide === "outward" ? "inward" : "outward";
+    }
+    ctx.updateWindowTransform(inst);
+    ctx.setSelectedWindow();
+    ctx.mountProps();
+    ctx.commitHistory(ctx.S);
+    return true;
+  };
+
+  const pickDoorSwingControlAction = (): DoorSwingControlAction | null => {
+    const inst = ctx.doorInst;
+    if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    for (const hit of hits) {
+      const action = hit.object.userData.doorSwingAction as DoorSwingControlAction | undefined;
+      if (action && hit.object.userData.kind === "doorSwingControl" && isVisibleThroughDoorSelection(hit.object)) return action;
+    }
+    return null;
+  };
+
+  const applyDoorSwingControlAction = (action: DoorSwingControlAction) => {
+    const inst = ctx.doorInst;
+    if (!inst) return false;
+    if (action === "toggleHandedness") {
+      inst.params.swingDirection = inst.params.swingDirection === "right" ? "left" : "right";
+    } else {
+      inst.params.swingSide = inst.params.swingSide === "outward" ? "inward" : "outward";
+    }
+    ctx.updateDoorTransform(inst);
+    ctx.setSelectedDoor();
+    ctx.mountProps();
+    ctx.commitHistory(ctx.S);
+    return true;
+  };
+
   const beginWindowDimensionEdit = (param: WindowDimensionParam, ev: PointerEvent) => {
     const inst = ctx.windowInst;
     if (!inst) return false;
@@ -457,6 +881,20 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
     if (ctx.mode === "layout") {
       if (ev.button === 0) {
+        const windowSwingAction = pickWindowSwingControlAction();
+        if (windowSwingAction && applyWindowSwingControlAction(windowSwingAction)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        const doorSwingAction = pickDoorSwingControlAction();
+        if (doorSwingAction && applyDoorSwingControlAction(doorSwingAction)) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
         const windowDimensionParam = pickWindowDimensionParam();
         if (windowDimensionParam && beginWindowDimensionEdit(windowDimensionParam, ev)) {
           cancelPendingMarquee(ev.pointerId);
@@ -639,22 +1077,40 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (ev.button !== 0) return;
         const hitPoint = new THREE.Vector3();
         if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
+        const moveSnap =
+          ctx.transformState.kind === "move"
+            ? resolveMoveSnap(hitPoint, rect, ctx.transformState.step === "pickTarget" ? ctx.transformState.base : null)
+            : null;
+        const snapped =
+          ctx.transformState.kind === "move"
+            ? (moveSnap ?? makeNoSnapResult(hitPoint))
+            : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
         const p = snapped.kind !== "none" ? snapped.point : hitPoint;
 
         if (ctx.transformState.kind === "move") {
           if (ctx.transformState.step === "pickBase") {
             ctx.transformState.base = p.clone();
             ctx.transformState.step = "pickTarget";
+            ctx.transformState.typed = "";
             ctx.transformState.lastValidDelta.set(0, 0, 0);
-            ctx.setUnderlayStatus("Move: click target point...");
+            ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
             return;
           }
           if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-            const delta = p.clone().sub(ctx.transformState.base);
+            const rawDelta = p.clone().sub(ctx.transformState.base);
+            const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+            const { delta } = resolveMoveDeltaWithObjectSnap(prepareMoveDelta(constrainedDelta), rect);
+            const continueMove = !!ctx.transformState.stickyMove;
             ctx.applyMoveDelta(delta);
             ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Move: done." });
+            ctx.selectPlanSnap = null;
+            ctx.drawSnapOverlay.hide();
+            ctx.hideHoverCursor();
+            ctx.hudHoverLine.visible = false;
+            ctx.clearTransform({
+              continueMove,
+              status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
+            });
             ctx.mountProps();
             return;
           }
@@ -688,7 +1144,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
+        const picked = ctx.pickDimensionLineAt?.(hitPoint, mouse, rect2) ?? ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
         if (picked) {
           if (ctx.dimensionState.picked.length > 0 && !ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked)) {
@@ -745,7 +1201,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
         if (!picked) {
-          ctx.setUnderlayStatus("Align: click a wall/module/worktop line.");
+          ctx.setUnderlayStatus(ctx.alignState.ref ? "Align: click a parallel line to align, or Esc for a new reference." : "Align: click reference line.");
           return;
         }
 
@@ -754,7 +1210,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.alignState.lastA = null;
           ctx.alignState.lastB = null;
           ctx.alignState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Align: click second parallel line...");
+          ctx.setUnderlayStatus("Align: click one or more parallel lines to align. Esc = new reference.");
           ctx.mountProps();
           return;
         }
@@ -763,7 +1219,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const result = ctx.applyAlignBetweenPickedLines(ref, picked);
         if (!result.ok) {
           ctx.setUnderlayStatus(result.reason);
-          ctx.alignState.ref = null;
           ctx.mountProps();
           return;
         }
@@ -773,7 +1228,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.alignState.lastA = ref;
         ctx.alignState.lastB = picked;
         ctx.alignState.lastUntilMs = performance.now() + 2500;
-        ctx.alignState.ref = null;
         ctx.setUnderlayStatus(result.reason);
         ctx.mountProps();
         return;
@@ -858,8 +1312,24 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             const dx2 = iMm.x - old2.x;
             const dz2 = iMm.z - old2.z;
 
-            if (dx1 !== 0 || dz1 !== 0) ctx.moveWallEndpointAndConnected(w, end1, dx1, dz1);
-            if (dx2 !== 0 || dz2 !== 0) ctx.moveWallEndpointAndConnected(w2, end2, dx2, dz2);
+            if (dx1 === 0 && dz1 === 0 && dx2 === 0 && dz2 === 0) {
+              ctx.setUnderlayStatus("Trim: no change.");
+              ctx.trimState.step = "pickTarget";
+              ctx.trimState.targetWallId = null;
+              ctx.trimState.targetPick = null;
+              ctx.trimState.targetClick = null;
+              ctx.mountProps();
+              return;
+            }
+
+            const moved = ctx.setWallEndpointsAndConnectedMm([
+              { wall: w, which: end1, next: iMm },
+              { wall: w2, which: end2, next: iMm }
+            ]);
+            if (!moved) {
+              ctx.mountProps();
+              return;
+            }
             ctx.commitHistory(ctx.S);
 
             ctx.trimState.lastTarget = ctx.trimState.targetPick;
@@ -891,12 +1361,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
-        const t = I.clone().sub(aW).dot(ab) / len2;
-        if (t < -1e-5 || t > 1 + 1e-5) {
-          ctx.setUnderlayStatus("Trim: cutter must cross the wall segment.");
-          return;
-        }
-
         const nC = new THREE.Vector3(-dC.z, 0, dC.x);
         const sign = (v: number) => (v > 1e-7 ? 1 : v < -1e-7 ? -1 : 0);
         let sClick = sign(nC.dot(hitPoint.clone().sub(picked.p)));
@@ -909,7 +1373,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           if (sA === sClick && sB !== sClick) moveWhich = "a";
           else if (sB === sClick && sA !== sClick) moveWhich = "b";
           else {
-            // ambiguous: choose closer endpoint to the click point
             moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
           }
         } else {
@@ -931,7 +1394,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
-        ctx.moveWallEndpointAndConnected(w, moveWhich, dxMm, dzMm);
+        const moved = ctx.setWallEndpointAndConnectedMm(w, moveWhich, iMm);
+        if (!moved) {
+          ctx.mountProps();
+          return;
+        }
         ctx.commitHistory(ctx.S);
 
         ctx.trimState.lastTarget = ctx.trimState.targetPick ?? picked;
@@ -1109,16 +1576,19 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         const a = ctx.wallDraw.a;
         if (!a) return;
-        const b0 = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
-        const b = shouldAxisSnap ? ctx.snapAxisXZ(a, b0, true) : b0;
+        const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
+        const cs = ctx.wallDraw.chainStart;
+        const rawB = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
+        const closesRaw =
+          !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
+        const b0 = closesRaw && cs ? cs.clone() : rawB;
+        const b = shouldAxisSnap && !closesRaw ? ctx.snapAxisXZ(a, b0, true) : b0;
         const bMm = { x: Math.round(b.x * 1000), z: Math.round(b.z * 1000) };
         const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
         // Snap to chain start when closing loop.
-        const closeTolM = 0.03;
-        const cs = ctx.wallDraw.chainStart;
         const closes =
-          !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;
+          closesRaw || (!!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM);
         const end = closes && cs ? cs.clone() : bExact;
 
         // Finish wall
@@ -1210,6 +1680,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.windowInst = pickedWindow;
           ctx.setSelectedWindow();
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1223,6 +1694,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           }
           ctx.doorInst = pickedDoor;
           ctx.setSelectedDoor();
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1255,9 +1727,29 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
         const moduleId = ctx.getInstanceIdFromObject(moduleHit);
         const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
+        if (selectableModuleId && ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.setSelectedModule(selectableModuleId);
+          if (continueMoveAfterSelection(hitPoint)) return;
+        }
         if (selectableModuleId && ctx.beginModuleSelection(selectableModuleId, ev)) return;
 
         const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect2);
+        if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
+            ctx.marquee.hitSomething = true;
+            ctx.marquee.pending = false;
+            ctx.marquee.active = false;
+            ctx.marqueeEl.style.display = "none";
+          }
+          ctx.setSelectedModule(fallbackModuleId);
+          if (continueMoveAfterSelection(hitPoint)) return;
+        }
         if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.beginModuleSelection(fallbackModuleId, ev)) return;
 
         const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
@@ -1312,6 +1804,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(bestPoly.id);
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
 
@@ -1334,6 +1827,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.marqueeEl.style.display = "none";
           }
           ctx.setSelectedWall(best.id);
+          if (continueMoveAfterSelection(hitPoint)) return;
           return;
         }
       }
@@ -1369,6 +1863,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedWindow();
+        if (continueMoveAfterSelection(firstHit?.point)) return;
 
         ctx.windowDragState.active = true;
         const customWallId = ctx.windowInst.params.wallId ?? null;
@@ -1405,6 +1900,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedDoor();
+        if (continueMoveAfterSelection(firstHit?.point)) return;
 
         ctx.doorDragState.active = true;
         const customWallId = ctx.doorInst.params.wallId ?? null;
@@ -1485,6 +1981,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.marqueeEl.style.display = "none";
         }
         ctx.setSelectedWall(wallId);
+        if (continueMoveAfterSelection(firstHit?.point)) return;
         return;
       }
 
@@ -1514,6 +2011,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           // don't clear selection yet; if it becomes a drag we want marquee selection
           return;
         }
+        const currentMoveBasePoint = new THREE.Vector3();
+        if (ctx.raycaster.ray.intersectPlane(ctx.groundPlane, currentMoveBasePoint) && continueMoveWithCurrentSelection(currentMoveBasePoint)) return;
         ctx.setSelectedFloor(null);
         ctx.setSelectedWall(null);
         ctx.setSelectedModule(null);
@@ -1529,6 +2028,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.doorInst = null;
         ctx.clearWindowLightIfMissing();
         return;
+      }
+
+      if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
+        ctx.setSelectedModule(selectableId);
+        if (continueMoveAfterSelection(firstHit?.point)) return;
       }
 
       ctx.beginModuleSelection(selectableId, ev);
@@ -1808,21 +2312,37 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       const hitPoint = new THREE.Vector3();
       if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
 
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
-        sticky: ctx.selectPlanSnap
-      });
-      ctx.selectPlanSnap = snapped.kind !== "none" ? snapped : null;
+      const moveSnap =
+        ctx.transformState.kind === "move"
+          ? resolveMoveSnap(hitPoint, rect, ctx.transformState.step === "pickTarget" ? ctx.transformState.base : null)
+          : null;
+      const snapped =
+        ctx.transformState.kind === "move"
+          ? (moveSnap ?? makeNoSnapResult(hitPoint))
+          : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
+              sticky: ctx.selectPlanSnap
+            });
+      if (ctx.transformState.kind !== "move") ctx.selectPlanSnap = snapped.kind !== "none" ? snapped : null;
       const p = snapped.kind !== "none" ? snapped.point : hitPoint;
-      if (snapped.kind !== "none") {
+      if (ctx.transformState.kind === "move") {
+        updateMoveSnapFeedback(moveSnap, p, rect);
+      } else if (snapped.kind !== "none") {
         ctx.updateHoverCursor(ctx.worldToScreen(p, ctx.cam(), rect), snapped.kind);
       } else {
         ctx.hideHoverCursor();
       }
 
       if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-        const delta = p.clone().sub(ctx.transformState.base);
+        const rawDelta = p.clone().sub(ctx.transformState.base);
+        const constrainedDelta = ev.shiftKey ? constrainMoveDelta(rawDelta) : rawDelta;
+        const { delta, objectSnap } = resolveMoveDeltaWithObjectSnap(prepareMoveDelta(constrainedDelta), rect);
         ctx.applyMoveDelta(delta);
-        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click to finish)`);
+        if (objectSnap) updateMoveSnapFeedback(objectSnap.snap, objectSnap.target, rect);
+        ctx.setUnderlayStatus(
+          `Move${ctx.transformState.moveSnapDisabled ? " free 1 mm" : ""}${objectSnap ? " smart snap" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
+            ctx.transformState.moveSnapDisabled ? "snapping" : "free movement"
+          })`
+        );
         return;
       }
 
@@ -1914,7 +2434,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.clearToolHud();
       } else {
         const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
+        const picked = ctx.pickDimensionLineAt?.(hitPoint, mouse, rect) ?? ctx.pickAlignLineAt(hitPoint, mouse, rect);
         const canPick = !picked || ctx.dimensionState.picked.length === 0 || ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked);
         const thick = ctx.hudLineThicknessM(rect);
         ctx.dimensionState.hover = canPick ? picked : null;
@@ -2152,8 +2672,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.hideHoverCursor();
       }
 
-      const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap;
-      const b0 = activeSnap ? activeSnap.point : hitPoint;
+      const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
+      const cs = ctx.wallDraw.chainStart;
+      const rawB = activeSnap ? activeSnap.point : hitPoint;
+      const closesRaw =
+        !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
+      const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap && !closesRaw;
+      const b0 = closesRaw && cs ? cs : rawB;
       const b = shouldAxisSnap ? ctx.snapAxisXZ(ctx.wallDraw.a, b0, true) : b0;
       ctx.wallDraw.hoverB = b.clone();
       ctx.updateWallMeshWithJustification(

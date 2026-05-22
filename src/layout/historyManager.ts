@@ -41,7 +41,7 @@ export interface HistoryHelpers {
 export const snapshotSignature = (s: LayoutSnapshot) => {
   // Compact-ish signature to skip duplicates
   const w = s.walls
-    .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.thicknessMm}:${(x.params as any).justification ?? "center"}:${x.params.exteriorSign ?? 1}`)
+    .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.typeId ?? ""}:${x.params.thicknessMm}:${x.params.heightMm}:${x.params.materialId ?? ""}:${(x.params as any).justification ?? "center"}:${x.params.exteriorSign ?? 1}:${JSON.stringify(x.params.joinEnds ?? {})}`)
     .join("|");
   const mods = (s.instances ?? [])
     .map(

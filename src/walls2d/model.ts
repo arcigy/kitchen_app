@@ -10,6 +10,10 @@ export type Wall = {
   justification: WallJustification;
   // +1 => exterior is left of A->B, -1 => exterior is right of A->B
   exteriorSign: 1 | -1;
+  joinEnds?: {
+    a?: { enabled?: boolean; priority?: number };
+    b?: { enabled?: boolean; priority?: number };
+  };
 };
 
 export function baseDir(w: Wall): Point {

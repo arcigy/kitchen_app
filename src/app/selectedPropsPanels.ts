@@ -15,6 +15,7 @@ import type {
   FloorInstance,
   FloorParams,
   LayoutInstance,
+  OpeningHandleType,
   SectionInstance,
   SectionParams,
   WallInstance,
@@ -22,8 +23,15 @@ import type {
   WindowInstance,
   WindowParams
 } from "./localTypes";
-import { DOOR_MATERIAL_OPTIONS } from "./doorMaterials";
+import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
+import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
+import {
+  applyWallTypeToParams,
+  CUSTOM_WALL_TYPE_ID,
+  resolveWallTypeId,
+  WALL_TYPE_PRESETS
+} from "./wallTypes";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -42,6 +50,7 @@ type WallPropsContext = {
   props: PropertiesPanelApi;
   selectedWallIds: Set<string>;
   walls: WallInstance[];
+  wallJoinTolMm: number;
   showNoProps: () => void;
   commitHistory: CommitHistory;
   S: AppState;
@@ -205,7 +214,7 @@ type ModulePropsContext = {
 };
 
 export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
-  const { props, selectedWallIds, walls, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
+  const { props, selectedWallIds, walls, wallJoinTolMm, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
     const selectedWalls =
       selectedWallIds.size > 1
         ? [...selectedWallIds]
@@ -235,6 +244,44 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       mountProps();
     };
 
+    const rebuildJoinState = () => {
+      for (const wall of walls) rebuildWall(wall);
+      rebuildWallPlanMesh();
+      commitHistory(S);
+      mountProps();
+    };
+
+    const endpointPoint = (wall: WallInstance, end: "a" | "b") => (end === "a" ? wall.params.aMm : wall.params.bMm);
+    const connectedAtEnd = (wall: WallInstance, end: "a" | "b") => {
+      const p = endpointPoint(wall, end);
+      return walls
+        .filter((other) => other.id !== wall.id)
+        .map((other) => ({ wall: other, end: wallEndpointWhich(other, p, wallJoinTolMm) }))
+        .filter(
+          (item): item is { wall: WallInstance; end: "a" | "b" } =>
+            !!item.end && mmDist(endpointPoint(item.wall, item.end), p) <= wallJoinTolMm
+        );
+    };
+    const joinEnd = (wall: WallInstance, end: "a" | "b") => wall.params.joinEnds?.[end] ?? {};
+    const joinEnabled = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).enabled !== false;
+    const joinPriority = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).priority ?? 0;
+    const ensureJoinEnd = (wall: WallInstance, end: "a" | "b") => {
+      wall.params.joinEnds ??= {};
+      wall.params.joinEnds[end] ??= {};
+      return wall.params.joinEnds[end]!;
+    };
+
+    const resolvedTypeIds = selectedWalls.map((wall) => resolveWallTypeId(wall.params));
+    const wallTypeMixed = resolvedTypeIds.some((typeId) => typeId !== resolvedTypeIds[0]);
+    const typeSelect = document.createElement("select");
+    typeSelect.innerHTML = [
+      ...(wallTypeMixed ? [`<option value="">(rozne)</option>`] : []),
+      `<option value="${CUSTOM_WALL_TYPE_ID}">Vlastna</option>`,
+      ...WALL_TYPE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.name}</option>`)
+    ].join("");
+    typeSelect.value = wallTypeMixed ? "" : resolvedTypeIds[0];
+    props.row(s, "Typ steny", typeSelect);
+
     const thickness = multiVal(selectedWalls, "thicknessMm");
     const th = document.createElement("input");
     th.type = "number";
@@ -262,11 +309,19 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     just.value = justification.mixed ? "" : String(justification.value ?? "center");
     props.row(s, "Justification", just);
 
+    typeSelect.addEventListener("change", () => {
+      if (!typeSelect.value) return;
+      applyToSelectedWalls((wall) => {
+        const preset = applyWallTypeToParams(wall.params, typeSelect.value);
+        if (preset) wall.heightMm = wall.params.heightMm;
+      });
+    });
     th.addEventListener("change", () => {
       const next = Number(th.value);
       if (!Number.isFinite(next)) return;
       applyToSelectedWalls((wall) => {
         wall.params.thicknessMm = Math.max(10, Math.round(next));
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
       });
     });
     heightInput.addEventListener("change", () => {
@@ -274,6 +329,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       if (!Number.isFinite(next)) return;
       applyToSelectedWalls((wall) => {
         wall.params.heightMm = Math.max(1, Math.round(next));
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
         wall.heightMm = wall.params.heightMm;
       });
     });
@@ -282,6 +338,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       applyToSelectedWalls((wall) => {
         wall.params.justification =
           just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
       });
     });
 
@@ -292,10 +349,6 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     flip.textContent = "Flip exterior";
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
-    const mat = document.createElement("select");
-    mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = firstWall.params.materialId;
-    props.row(s, "Material", mat);
     const len = document.createElement("div");
     len.className = "muted";
     const dx = firstWall.params.bMm.x - firstWall.params.aMm.x;
@@ -305,13 +358,75 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     flip.addEventListener("click", () => {
       firstWall.params.exteriorSign = (firstWall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
       applyToSelectedWalls((wall) => {
-        if (wall.id === firstWall.id) wall.params.exteriorSign = firstWall.params.exteriorSign;
+        if (wall.id === firstWall.id) {
+          wall.params.exteriorSign = firstWall.params.exteriorSign;
+          wall.params.typeId = CUSTOM_WALL_TYPE_ID;
+        }
       });
     });
-    mat.addEventListener("change", () => {
-      firstWall.params.materialId = mat.value || "default";
-      commitHistory(S);
-    });
+
+    const joinsLabel = document.createElement("div");
+    joinsLabel.className = "muted";
+    joinsLabel.textContent = "Spoje stien";
+    joinsLabel.style.marginTop = "10px";
+    s.appendChild(joinsLabel);
+
+    for (const end of ["a", "b"] as const) {
+      const connected = connectedAtEnd(firstWall, end);
+      const control = document.createElement("div");
+      control.style.display = "grid";
+      control.style.gap = "6px";
+
+      const status = document.createElement("div");
+      status.className = "muted";
+      const enabled = joinEnabled(firstWall, end);
+      const selectedPriority = joinPriority(firstWall, end);
+      const neighborMaxPriority = connected.length > 0 ? Math.max(...connected.map((item) => joinPriority(item.wall, item.end))) : 0;
+      const role =
+        connected.length === 0
+          ? "bez napojenia"
+          : !enabled
+            ? "spoj vypnuty"
+            : selectedPriority > neighborMaxPriority
+              ? "tato stena pokracuje"
+              : selectedPriority < neighborMaxPriority
+                ? "tato stena sa napaja"
+                : "auto poradie";
+      status.textContent = connected.length > 0 ? `${role} · ${connected.map((item) => item.wall.id).join(", ")}` : role;
+      control.appendChild(status);
+
+      const buttons = document.createElement("div");
+      buttons.style.display = "flex";
+      buttons.style.gap = "6px";
+      buttons.style.flexWrap = "wrap";
+
+      const makeMain = document.createElement("button");
+      makeMain.type = "button";
+      makeMain.textContent = "Tato stena pokracuje";
+      makeMain.disabled = connected.length === 0;
+      makeMain.addEventListener("click", () => {
+        const priorities = [joinPriority(firstWall, end), ...connected.map((item) => joinPriority(item.wall, item.end))];
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = true;
+        join.priority = Math.max(0, ...priorities) + 1;
+        rebuildJoinState();
+      });
+      buttons.appendChild(makeMain);
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = enabled ? "Vypnut spoj" : "Povolit spoj";
+      toggle.disabled = connected.length === 0;
+      toggle.addEventListener("click", () => {
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = !enabled;
+        rebuildJoinState();
+      });
+      buttons.appendChild(toggle);
+
+      control.appendChild(buttons);
+      props.row(s, `Spoj ${end.toUpperCase()}`, control);
+    }
 
     appendLinkedMeasureInputs(s, { kind: "wall", wallId: firstWall.id });
 
@@ -605,6 +720,62 @@ function appendColumnParameterRows(
   });
 }
 
+type OpeningHandleEditableParams = {
+  handleType: OpeningHandleType;
+  handleOffsetMm: number;
+  handleHeightMm: number;
+};
+
+const HANDLE_TYPE_OPTIONS: Array<{ value: OpeningHandleType; label: string }> = [
+  { value: "lever", label: "Paka" },
+  { value: "knob", label: "Gula" },
+  { value: "bar", label: "Madlo" },
+  { value: "none", label: "Bez klucky" }
+];
+
+function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
+  props: PropertiesPanelApi,
+  section: HTMLElement,
+  params: T,
+  apply: (commit: boolean, patch: Partial<T>) => void
+) {
+  const typeSelect = document.createElement("select");
+  typeSelect.innerHTML = HANDLE_TYPE_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+  typeSelect.value = params.handleType;
+  typeSelect.addEventListener("change", () => {
+    const next = HANDLE_TYPE_OPTIONS.find((option) => option.value === typeSelect.value)?.value ?? "lever";
+    params.handleType = next;
+    apply(true, { handleType: next } as Partial<T>);
+  });
+  props.row(section, "Typ klucky", typeSelect);
+
+  const numberRow = (label: string, key: "handleOffsetMm" | "handleHeightMm") => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "1";
+    input.value = String(Math.round(Number(params[key] ?? 0)));
+    props.row(section, label, input);
+    const read = () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next)) return false;
+      params[key] = Math.max(0, Math.round(next));
+      return true;
+    };
+    input.addEventListener("input", () => {
+      if (read()) apply(false, { [key]: params[key] } as Partial<T>);
+    });
+    input.addEventListener("change", () => {
+      if (read()) apply(true, { [key]: params[key] } as Partial<T>);
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<T>);
+    });
+  };
+
+  numberRow("Vyska klucky (mm)", "handleHeightMm");
+  numberRow("Odsadenie klucky (mm)", "handleOffsetMm");
+}
+
 function appendWindowParameterRows(
   props: PropertiesPanelApi,
   section: HTMLElement,
@@ -658,6 +829,65 @@ function appendWindowParameterRows(
   numberRow("Sirka kridla (mm)", "sashWidthMm");
   numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
   numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
+
+  const swingControls = document.createElement("div");
+  swingControls.className = "door-swing-controls";
+  const makeSwingButton = (html: string, title: string) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "door-swing-button";
+    button.innerHTML = html;
+    button.title = title;
+    return button;
+  };
+  const handednessButton = makeSwingButton("&#8596;", "Prehodit lave/prave okno");
+  const sideButton = makeSwingButton("&#8597;", "Prehodit otvaranie dovnutra/von");
+  swingControls.append(handednessButton, sideButton);
+  props.row(section, "Sipky", swingControls);
+
+  const swing = document.createElement("select");
+  swing.innerHTML = `
+    <option value="left">Lave</option>
+    <option value="right">Prave</option>
+  `;
+  swing.value = params.swingDirection;
+  const swingSide = document.createElement("select");
+  swingSide.innerHTML = `
+    <option value="inward">Dovnutra</option>
+    <option value="outward">Von</option>
+  `;
+  swingSide.value = params.swingSide;
+  const syncSwingControls = () => {
+    swing.value = params.swingDirection;
+    swingSide.value = params.swingSide;
+    handednessButton.title = params.swingDirection === "right" ? "Prehodit na lave okno" : "Prehodit na prave okno";
+    sideButton.title = params.swingSide === "outward" ? "Prehodit otvaranie dovnutra" : "Prehodit otvaranie von";
+  };
+  handednessButton.addEventListener("click", () => {
+    params.swingDirection = params.swingDirection === "right" ? "left" : "right";
+    syncSwingControls();
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  sideButton.addEventListener("click", () => {
+    params.swingSide = params.swingSide === "outward" ? "inward" : "outward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
+  swing.addEventListener("change", () => {
+    params.swingDirection = swing.value === "right" ? "right" : "left";
+    syncSwingControls();
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  props.row(section, "Otvaranie", swing);
+  swingSide.addEventListener("change", () => {
+    params.swingSide = swingSide.value === "outward" ? "outward" : "inward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
+  props.row(section, "Smer", swingSide);
+  syncSwingControls();
+
+  appendOpeningHandleRows(props, section, params, apply);
 
   const material = document.createElement("select");
   material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
@@ -757,9 +987,25 @@ function appendDoorParameterRows(
   numberRow("Vyska (mm)", "heightMm");
   if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
   numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
+  numberRow("Odsadenie kridla (mm)", "offsetFromInteriorMm");
   numberRow("Hrubka kridla (mm)", "panelThicknessMm");
   numberRow("Uhol otvorenia", "swingAngleDeg");
+
+  const swingControls = document.createElement("div");
+  swingControls.className = "door-swing-controls";
+  const makeSwingButton = (html: string, label: string) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "door-swing-button";
+    button.innerHTML = html;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    return button;
+  };
+  const handednessButton = makeSwingButton("&#8596;", "Prehodit lave/prave dvere");
+  const sideButton = makeSwingButton("&#8597;", "Prehodit otvaranie dovnutra/von");
+  swingControls.append(handednessButton, sideButton);
+  props.row(section, "Sipky", swingControls);
 
   const swing = document.createElement("select");
   swing.innerHTML = `
@@ -767,17 +1013,54 @@ function appendDoorParameterRows(
     <option value="right">Prave</option>
   `;
   swing.value = params.swingDirection;
+
+  const swingSide = document.createElement("select");
+  swingSide.innerHTML = `
+    <option value="inward">Dovnutra</option>
+    <option value="outward">Von</option>
+  `;
+  swingSide.value = params.swingSide;
+
+  const syncSwingControls = () => {
+    swing.value = params.swingDirection;
+    swingSide.value = params.swingSide;
+    handednessButton.title = params.swingDirection === "right" ? "Prehodit na lave dvere" : "Prehodit na prave dvere";
+    sideButton.title = params.swingSide === "outward" ? "Prehodit otvaranie dovnutra" : "Prehodit otvaranie von";
+  };
+
+  handednessButton.addEventListener("click", () => {
+    params.swingDirection = params.swingDirection === "right" ? "left" : "right";
+    syncSwingControls();
+    apply(true, { swingDirection: params.swingDirection });
+  });
+  sideButton.addEventListener("click", () => {
+    params.swingSide = params.swingSide === "outward" ? "inward" : "outward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
   swing.addEventListener("change", () => {
     params.swingDirection = swing.value === "right" ? "right" : "left";
+    syncSwingControls();
     apply(true, { swingDirection: params.swingDirection });
   });
   props.row(section, "Otvaranie", swing);
+  swingSide.addEventListener("change", () => {
+    params.swingSide = swingSide.value === "outward" ? "outward" : "inward";
+    syncSwingControls();
+    apply(true, { swingSide: params.swingSide });
+  });
+  props.row(section, "Smer", swingSide);
+  syncSwingControls();
+
+  appendOpeningHandleRows(props, section, params, apply);
 
   const material = document.createElement("select");
   material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
+  params.materialId = getDoorMaterialOption(params.materialId).id;
   material.value = params.materialId;
   material.addEventListener("change", () => {
-    params.materialId = material.value;
+    params.materialId = getDoorMaterialOption(material.value).id;
+    material.value = params.materialId;
     apply(true, { materialId: material.value });
   });
   props.row(section, "Material", material);
@@ -789,7 +1072,7 @@ export function mountDoorPlacementPropsPanel(ctx: DoorPlacementPropsContext) {
   const s = props.section();
   const info = document.createElement("div");
   info.className = "muted";
-  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space otaca dvere.";
+  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space lave/prave, Shift+Space dnu/von.";
   s.appendChild(info);
   appendDoorParameterRows(
     props,

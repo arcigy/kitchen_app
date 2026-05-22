@@ -67,6 +67,7 @@ type ToolModeControllerContext = {
   clearAllMeasurements: () => void;
   clearPreview: () => void;
   clearToolHud: () => void;
+  clearTransform: (opts?: { restore?: boolean; status?: string | null; continueMove?: boolean }) => void;
   dimensionState: { picked: unknown[] };
   drawSnapOverlay: { hide: () => void };
   ensureFloorplanViewerTab: () => void;
@@ -101,6 +102,7 @@ type ToolModeControllerContext = {
   showWallSnapMarkersFor: (wallId: string | null) => void;
   syncSelectionState: () => void;
   technicalDimensions: { resetDraft: () => void };
+  transformState: { kind: null | "move" | "rotate"; step: null | string };
   trimState: TrimState;
   updateAllSectionVisuals: () => void;
   updateSectionDrawPreview: () => void;
@@ -149,7 +151,9 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     if (ctx.layoutTool === "align") {
       if (ctx.alignState.ref) {
         ctx.alignState.ref = null;
-        ctx.setUnderlayStatus("Align: canceled. Click reference line...");
+        ctx.clearToolHud();
+        ctx.setUnderlayStatus("Align: click reference line...");
+        ctx.mountProps();
       } else {
         setToolSelect();
       }
@@ -258,6 +262,10 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     ctx.ensureLayoutMode();
     if (ctx.placement.active) ctx.cancelPlacement(ctx.S, ctx.placementHelpers);
     ctx.cancelColumnPlacement?.({ silent: true });
+    ctx.clearTransform({
+      restore: !!ctx.transformState.kind && (ctx.transformState.step === "pickTarget" || ctx.transformState.step === "rotating"),
+      status: null
+    });
     ctx.layoutTool = tool;
     deactivateMeasureTool();
     ctx.technicalDimensions.resetDraft();
