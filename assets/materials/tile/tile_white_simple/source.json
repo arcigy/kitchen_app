@@ -1,0 +1,21 @@
+{
+  "id": "tile_white_simple",
+  "source": "ambientCG",
+  "assetId": "Tiles107",
+  "requestedAssetId": "Tiles107",
+  "matchedAssetId": "Tiles107",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Tiles107_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": true,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

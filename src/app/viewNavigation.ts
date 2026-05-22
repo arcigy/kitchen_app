@@ -103,24 +103,31 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     const { viewMode, activeViewerTab } = args.getState();
     const controls = getControls();
     const isFloorplanView = viewMode === "2d" && activeViewerTab === "floorplan";
+    const isCameraView = viewMode === "3d" && activeViewerTab.startsWith("camera:");
 
     if (viewMode === "3d") {
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
       controls.screenSpacePanning = false;
       controls.enableRotate = true;
-      controls.enablePan = true;
-      controls.enableZoom = true;
+      controls.enablePan = !isCameraView;
+      controls.enableZoom = !isCameraView;
       controls.rotateSpeed = 0.85;
       controls.panSpeed = 0.9;
       controls.zoomSpeed = 0.95;
       (controls as OrbitControls & { zoomToCursor?: boolean }).zoomToCursor = false;
       (controls as OrbitControls & { minTargetRadius?: number }).minTargetRadius = 0;
       (controls as OrbitControls & { maxTargetRadius?: number }).maxTargetRadius = Infinity;
-      controls.mouseButtons = {
-        MIDDLE: THREE.MOUSE.ROTATE
-      } as typeof controls.mouseButtons;
-      stabilize3dCamera();
+      controls.mouseButtons = isCameraView
+        ? ({
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.ROTATE,
+            RIGHT: THREE.MOUSE.ROTATE
+          } as typeof controls.mouseButtons)
+        : ({
+            MIDDLE: THREE.MOUSE.ROTATE
+          } as typeof controls.mouseButtons);
+      if (!isCameraView) stabilize3dCamera();
       controls.update();
       return;
     }
@@ -301,6 +308,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     if (!shouldAcceptKeyboardNav()) return;
 
     const state = args.getState();
+    if (state.viewMode === "3d" && state.activeViewerTab.startsWith("camera:")) return;
     const shift = navKeys.has("ShiftLeft") || navKeys.has("ShiftRight");
     const space = navKeys.has("Space");
     let speedMult = 1;

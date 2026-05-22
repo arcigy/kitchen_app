@@ -2,7 +2,13 @@ node_modules/
 dist/
 .vite/
 tmp/
+storage/
+outputs/
 exports/
+public/debug-pdf/
+**/__pycache__/
+*.pyc
+*.blend1
 *.log
 dev.err
 dev.out

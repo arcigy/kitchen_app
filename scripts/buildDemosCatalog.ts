@@ -34,6 +34,7 @@ type DemosCatalogGeneratedData = {
 const DEFAULT_BOARDS_CSV = "C:/Users/laube/Documents/New project 7/data/demos-categorized/plosne_materialy_categorized.csv";
 const DEFAULT_COMPONENTS_CSV = "C:/Users/laube/Documents/New project 7/data/demos-categorized/komponenty_categorized.csv";
 const OUTPUT_PATH = path.join(process.cwd(), "src/system/catalog-templates/demosCatalog.generated.ts");
+const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(process.cwd(), "backend/materials/demos_preview_color_cache.json");
 
 const COMPONENT_GEOMETRY: Record<ComponentType, { id: string; displayName: string; archetype: ComponentGeometryArchetype }> = {
   runner: { id: "geo.demos.runner.generic", displayName: "Démos výsuv / zásuvkový systém", archetype: "runner_pair" },
@@ -110,7 +111,8 @@ function numberValue(value: string | undefined): number | null {
 }
 
 function text(record: CsvRecord, key: string): string {
-  return (record[key] ?? "").trim();
+  const value = (record[key] ?? "").trim();
+  return /^(none|null|nan|undefined)$/i.test(value) ? "" : value;
 }
 
 function safeId(prefix: string, record: CsvRecord, used: Set<string>): string {
@@ -133,6 +135,86 @@ function hashText(value: string): string {
 function colorHexFromText(value: string): string {
   const hash = hashText(value);
   return `#${hash.slice(0, 6)}`;
+}
+
+type PreviewColorCache = Record<string, { hex: string; samples?: string[]; updatedAt?: string }>;
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+async function readPreviewColorCache(): Promise<PreviewColorCache> {
+  try {
+    const parsed = JSON.parse(await readFile(DEMOS_PREVIEW_COLOR_CACHE_PATH, "utf-8")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(([, value]) => {
+        return !!value && typeof value === "object" && !Array.isArray(value) && HEX_RE.test(String((value as Record<string, unknown>).hex ?? ""));
+      })
+    ) as PreviewColorCache;
+  } catch {
+    return {};
+  }
+}
+
+function normalizedWords(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function hasWord(value: string, words: string[]): boolean {
+  return words.some((word) => new RegExp(`(^|\\s)${word}(\\s|$)`).test(value));
+}
+
+function extractDecorName(name: string): string {
+  const withoutDimensions = name.replace(/\b\d{3,4}\s*[x/]\s*\d{3,4}(?:\s*[x/]\s*\d{1,3})?\b/gi, " ");
+  const tokens = withoutDimensions
+    .split(/\s+/)
+    .filter((token) => {
+      const plain = normalizedWords(token);
+      if (!plain) return false;
+      if (/^\d+(?:[.,]\d+)?$/.test(plain)) return false;
+      if (/^[a-z]\d{2,}[a-z0-9]*$/.test(plain)) return false;
+      if (/^\d{2,}[a-z]*$/.test(plain)) return false;
+      return !["dtdl", "dtddl", "dtdu", "dtd", "mdf", "hdf", "buk", "bu", "bs", "su", "hu", "rw", "ad", "pn", "sn", "pe", "sm", "st", "pa", "um", "ln", "mp", "pw", "pg", "kg", "mm"].includes(plain);
+    });
+  return tokens.join(" ").trim() || name;
+}
+
+function estimateBoardColor(value: string): { label: string; hex: string } {
+  const textValue = normalizedWords(value);
+  const rules: Array<{ label: string; hex: string; words: string[] }> = [
+    { label: "White", hex: "#f2f0e8", words: ["white", "biela", "bily", "bila", "sneh", "alpine"] },
+    { label: "Black", hex: "#1f2020", words: ["black", "cierna", "cerny", "cerna", "noir", "onyx"] },
+    { label: "Anthracite", hex: "#34373a", words: ["anthracite", "antracit", "graphite", "grafit", "charcoal", "basalt"] },
+    { label: "Grey", hex: "#8f9496", words: ["grey", "gray", "siva", "sedy", "seda", "silver", "strieb", "mouse", "platinum", "platinium", "aluminium"] },
+    { label: "Blue", hex: "#2f6fae", words: ["blue", "modra", "modry", "azure", "navy", "indigo"] },
+    { label: "Green", hex: "#5f7f62", words: ["green", "zelena", "zeleny", "olive", "emerald", "khaki", "sage"] },
+    { label: "Red", hex: "#9b3a32", words: ["red", "cervena", "cerveny", "burgundy", "spice"] },
+    { label: "Pink", hex: "#c48c92", words: ["pink", "ruzova", "ruzovy", "rose"] },
+    { label: "Yellow", hex: "#d7b54b", words: ["yellow", "zlta", "zlty", "gold", "honey", "amber"] },
+    { label: "Orange", hex: "#b8743e", words: ["orange", "oranzova", "oranzovy", "copper", "terracotta"] },
+    { label: "Purple", hex: "#6f557f", words: ["purple", "violet", "fialova", "fialovy", "lila"] },
+    { label: "Beige", hex: "#cfc0a7", words: ["beige", "bezova", "bezovy", "cashmere", "kasmirova", "kasmirovy", "sand", "cream", "ivory", "biscotti", "vanilla"] },
+    { label: "Concrete", hex: "#9a9690", words: ["concrete", "beton", "cement"] },
+    { label: "Stone", hex: "#8e8780", words: ["stone", "kamen", "marble", "mramor", "travertin", "slate"] },
+    { label: "Walnut", hex: "#765036", words: ["walnut", "orech", "noce"] },
+    { label: "Oak", hex: "#b98a55", words: ["oak", "dub", "baroque", "hudson", "sonoma", "artisan", "arvadonna"] },
+    { label: "Beech", hex: "#d7b98a", words: ["beech", "buk"] },
+    { label: "Cherry", hex: "#9f5a3d", words: ["cherry", "ceresna", "tresen"] },
+    { label: "Maple", hex: "#d8c8a5", words: ["maple", "javor"] },
+    { label: "Birch", hex: "#d7c49c", words: ["birch", "breza"] },
+    { label: "Ash", hex: "#c7b89d", words: ["ash", "jasan"] },
+    { label: "Chestnut", hex: "#8b5a3d", words: ["chestnut", "gastan"] },
+    { label: "Wenge", hex: "#3b2820", words: ["wenge"] },
+    { label: "Pine", hex: "#d0b37c", words: ["pine", "borovica"] },
+    { label: "Elm", hex: "#a77b54", words: ["elm", "brest"] }
+  ];
+  const matched = rules.find((rule) => hasWord(textValue, rule.words));
+  if (matched) return { label: matched.label, hex: matched.hex };
+  return { label: "Mixed decor", hex: "#a8835a" };
 }
 
 function materialBase(record: CsvRecord): MaterialBase {
@@ -182,7 +264,7 @@ function parseBoardPrice(record: CsvRecord, lengthMm: number, widthMm: number): 
   return raw;
 }
 
-function createMaterial(record: CsvRecord, usedIds: Set<string>): MaterialDefinition {
+function createMaterial(record: CsvRecord, usedIds: Set<string>, previewColorCache: PreviewColorCache): MaterialDefinition {
   const id = safeId("mat.demos", record, usedIds);
   const thickness = numberValue(text(record, "thickness_mm")) ?? numberValue(text(record, "param:Hrúbka materiálu (mm)")) ?? 18;
   const lengthMm = numberValue(text(record, "length_mm")) ?? 0;
@@ -191,8 +273,20 @@ function createMaterial(record: CsvRecord, usedIds: Set<string>): MaterialDefini
   const family = boardFamily(record, base, thickness);
   const price = parseBoardPrice(record, lengthMm, widthMm);
   const active = price > 0 && ["body", "front", "back", "drawer_bottom", "worktop"].includes(family);
-  const decor = text(record, "param:Názov dekoru") || text(record, "name");
+  const decor = text(record, "param:Názov dekoru") || extractDecorName(text(record, "name"));
   const finish = text(record, "param:Štruktúra materiálu") || text(record, "param:Povrch") || text(record, "usage_subcategory");
+  const estimatedColor = estimateBoardColor(
+    [
+      text(record, "param:Farebný odtieň"),
+      text(record, "param:Farba"),
+      decor,
+      text(record, "name"),
+      text(record, "usage_subcategory")
+    ].join(" ")
+  );
+  const imageUrl = text(record, "texture_image_url");
+  const cachedPreviewColor = imageUrl ? previewColorCache[imageUrl]?.hex : undefined;
+  const previewColorHex = cachedPreviewColor && HEX_RE.test(cachedPreviewColor) ? cachedPreviewColor : "#a8835a";
   return {
     id,
     entityType: "material",
@@ -202,7 +296,7 @@ function createMaterial(record: CsvRecord, usedIds: Set<string>): MaterialDefini
     category: materialCategory(family),
     baseMaterial: base,
     decor,
-    color: text(record, "param:Farebný odtieň") || decor,
+    color: estimatedColor.label,
     finish,
     pricingBasis: "sheet_area",
     pricingUnit: "m2",
@@ -217,7 +311,7 @@ function createMaterial(record: CsvRecord, usedIds: Set<string>): MaterialDefini
       text(record, "usage_subcategory"),
       text(record, "brand")
     ].filter(Boolean),
-    preview: { colorHex: colorHexFromText(`${decor} ${finish}`), roughness: 0.58, metalness: 0 },
+    preview: { colorHex: previewColorHex, roughness: 0.58, metalness: 0 },
     boardFamily: family,
     recommendedUse: text(record, "usage_subcategory"),
     grainDirectionRelevant: true,
@@ -225,7 +319,7 @@ function createMaterial(record: CsvRecord, usedIds: Set<string>): MaterialDefini
       supplier: "demos-sk",
       supplierProductId: text(record, "sortiment_code"),
       url: text(record, "url"),
-      imageUrl: text(record, "texture_image_url"),
+      imageUrl,
       usageCategory: text(record, "usage_category"),
       usageSubcategory: text(record, "usage_subcategory"),
       sourceCategory: text(record, "source_category"),
@@ -335,12 +429,16 @@ function chooseDefaultSorted<T extends { id: string; isActive: boolean }>(
 async function main() {
   const boardsCsv = process.env.DEMOS_BOARDS_CSV || DEFAULT_BOARDS_CSV;
   const componentsCsv = process.env.DEMOS_COMPONENTS_CSV || DEFAULT_COMPONENTS_CSV;
-  const [boardRows, componentRows] = await Promise.all([readCsv(boardsCsv), readCsv(componentsCsv)]);
+  const [boardRows, componentRows, previewColorCache] = await Promise.all([
+    readCsv(boardsCsv),
+    readCsv(componentsCsv),
+    readPreviewColorCache()
+  ]);
   const materialIds = new Set<string>();
   const componentIds = new Set<string>();
   const prices: Record<string, number> = {};
   const materials = boardRows.map((record) => {
-    const material = createMaterial(record, materialIds);
+    const material = createMaterial(record, materialIds, previewColorCache);
     prices[material.id] = parseBoardPrice(
       record,
       numberValue(text(record, "length_mm")) ?? 0,

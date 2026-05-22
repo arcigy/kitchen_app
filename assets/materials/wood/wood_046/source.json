@@ -1,0 +1,23 @@
+﻿{
+    "id":  "wood_046",
+    "source":  "ambientCG",
+    "assetId":  "Wood046",
+    "requestedAssetId":  "Wood046",
+    "matchedAssetId":  "Wood046",
+    "downloadProfile":  "2K",
+    "license":  "CC0",
+    "originalMatchedPath":  "C:\\Users\\laube\\Downloads\\Wood046_2K-JPG.zip",
+    "normalConvention":  "GL",
+    "mapsFound":  {
+                      "basecolor":  true,
+                      "roughness":  true,
+                      "normal":  true,
+                      "ao":  false,
+                      "displacement":  true,
+                      "metallic":  false,
+                      "opacity":  false
+                  },
+    "notes":  [
+
+              ]
+}

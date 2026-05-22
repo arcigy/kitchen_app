@@ -1,0 +1,21 @@
+{
+  "id": "metal_copper_brass",
+  "source": "ambientCG",
+  "assetId": "Metal035",
+  "requestedAssetId": "Metal035",
+  "matchedAssetId": "Metal035",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Metal035_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": false,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": true,
+    "opacity": false
+  },
+  "notes": []
+}

@@ -1,0 +1,21 @@
+{
+  "id": "wood_dark_espresso",
+  "source": "ambientCG",
+  "assetId": "Wood051",
+  "requestedAssetId": "Wood051",
+  "matchedAssetId": "Wood051",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood051_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

@@ -29,6 +29,7 @@ type FileMenuActions = {
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
   exportSceneJson: () => void | Promise<void>;
+  exportBlenderPreview: () => void | Promise<void>;
   exportPng: () => void | Promise<void>;
   copyJson: () => void | Promise<void>;
   onLanguageChange?: (language: AppLanguage) => void;
@@ -95,6 +96,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
     { label: t("Export Layout JSON…"), onSelect: actions.exportLayoutJson },
     { label: t("Export Scene JSON…"), onSelect: actions.exportSceneJson },
     { label: t("Export PNG Snapshot…"), onSelect: actions.exportPng },
+    { label: t("Export Blender Material Preview..."), onSelect: actions.exportBlenderPreview },
     { label: t("Copy JSON to Clipboard"), onSelect: actions.copyJson },
     {
       type: "submenu",

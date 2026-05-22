@@ -41,6 +41,19 @@ type DetailViewControllerContext = {
   getMode: () => "build" | "layout";
   getViewMode: () => "2d" | "3d";
   getActiveViewerTab: () => string;
+  getRenderCameras?: () => Array<{
+    id: string;
+    params: {
+      name: string;
+      xMm: number;
+      zMm: number;
+      heightMm: number;
+      fovDeg: number;
+      rotationDeg: number;
+      pitchDeg: number;
+    };
+  }>;
+  onRenderCameraSelected?: (id: string) => void;
   setActiveViewerTab: (next: string) => void;
 };
 
@@ -196,6 +209,45 @@ export function createDetailViewController(ctx: DetailViewControllerContext) {
     controls.update();
   };
 
+  const applyRenderCameraView = (cameraId: string) => {
+    const item = (ctx.getRenderCameras?.() ?? []).find((camera) => camera.id === cameraId) ?? null;
+    if (!item) return false;
+    ctx.onRenderCameraSelected?.(cameraId);
+    ctx.view2d.checked = false;
+    ctx.setView2d(false);
+    ctx.setActiveViewerTab(`camera:${cameraId}`);
+    ctx.viewNavigation.detailViewPanOffset.set(0, 0, 0);
+    activeDetailClipPlanes = [];
+    syncDetailClippingAndMaterials();
+    updateDetailSliceOverlay();
+
+    const activeCam = ctx.getCamera();
+    if (!(activeCam instanceof THREE.PerspectiveCamera)) {
+      ctx.syncViewerTabs(ctx.getActiveViewerTab());
+      return true;
+    }
+
+    const p = item.params;
+    const position = new THREE.Vector3(p.xMm / 1000, Math.max(0.1, p.heightMm / 1000), p.zMm / 1000);
+    const yaw = THREE.MathUtils.degToRad(p.rotationDeg);
+    const pitch = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(p.pitchDeg, -80, 80));
+    const cp = Math.cos(pitch);
+    const direction = new THREE.Vector3(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp).normalize();
+    const target = position.clone().addScaledVector(direction, 2.4);
+    activeCam.position.copy(position);
+    activeCam.fov = THREE.MathUtils.clamp(p.fovDeg, 20, 120);
+    activeCam.near = 0.01;
+    activeCam.far = Math.max(activeCam.far, 120);
+    activeCam.lookAt(target);
+    activeCam.updateProjectionMatrix();
+    const controls = ctx.getControls();
+    controls.target.copy(target);
+    controls.update();
+    activeCam.userData.renderCameraId = cameraId;
+    ctx.syncViewerTabs(ctx.getActiveViewerTab());
+    return true;
+  };
+
   const updateDetailSliceOverlay = () => {
     for (const child of [...ctx.detailSliceGroup.children]) {
       ctx.detailSliceGroup.remove(child);
@@ -245,6 +297,14 @@ export function createDetailViewController(ctx: DetailViewControllerContext) {
       return;
     }
 
+    if (key.startsWith("camera:")) {
+      if (ctx.getActiveViewerTab() === "floorplan" && ctx.getViewMode() === "2d") {
+        ctx.viewNavigation.captureFloorplanView();
+      }
+      applyRenderCameraView(key.slice("camera:".length));
+      return;
+    }
+
     ctx.setActiveViewerTab(key);
     ctx.view2d.checked = true;
     ctx.setView2d(true);
@@ -283,7 +343,12 @@ export function createDetailViewController(ctx: DetailViewControllerContext) {
       label: item.label,
       onClick: () => activateViewerTab(item.key)
     }));
-    ctx.setExtraTabs([...sectionTabs, ...elevationTabs]);
+    const cameraTabs = (ctx.getRenderCameras?.() ?? []).map((camera) => ({
+      key: `camera:${camera.id}`,
+      label: camera.params.name || "Camera",
+      onClick: () => activateViewerTab(`camera:${camera.id}`)
+    }));
+    ctx.setExtraTabs([...sectionTabs, ...elevationTabs, ...cameraTabs]);
     ctx.syncViewerTabs(ctx.getActiveViewerTab());
   };
 
@@ -312,6 +377,8 @@ export function createDetailViewController(ctx: DetailViewControllerContext) {
     if (activeViewerTab.startsWith("elevation:")) {
       const direction = activeViewerTab.slice("elevation:".length) as SectionElevationKey;
       applyOrthoViewConfig(computeElevationViewConfig(direction, bounds));
+    } else if (activeViewerTab.startsWith("camera:")) {
+      applyRenderCameraView(activeViewerTab.slice("camera:".length));
     }
     updateDetailSliceOverlay();
   };

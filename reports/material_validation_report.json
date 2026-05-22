@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "errors": [],
+  "warnings": [],
+  "materialsChecked": 40,
+  "frontendCatalogChecked": 43,
+  "vendorRecordsChecked": 30,
+  "demosMappingsChecked": 11,
+  "demoObjectsChecked": 10
+}

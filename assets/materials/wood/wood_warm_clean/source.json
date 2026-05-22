@@ -1,0 +1,21 @@
+{
+  "id": "wood_warm_clean",
+  "source": "ambientCG",
+  "assetId": "Wood092",
+  "requestedAssetId": "Wood092",
+  "matchedAssetId": "Wood092",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood092_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

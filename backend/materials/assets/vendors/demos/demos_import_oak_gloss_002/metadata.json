@@ -1,0 +1,14 @@
+{
+  "width": null,
+  "height": null,
+  "mode": null,
+  "format": null,
+  "sourcePath": "assets/materials/wood/wood_warm_clean/maps/basecolor.jpg",
+  "importedAt": "2026-05-20T16:11:49.839466+00:00",
+  "hasNormal": false,
+  "hasRoughness": true,
+  "normalMeta": {},
+  "roughnessMeta": {
+    "sourcePath": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\assets\\materials\\wood\\wood_warm_clean\\maps\\roughness.jpg"
+  }
+}

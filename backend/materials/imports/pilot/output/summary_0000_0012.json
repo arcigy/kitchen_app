@@ -1,0 +1,97 @@
+{
+  "input": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\demos_mapping_master_sample.csv",
+  "offset": 0,
+  "limit": 12,
+  "rowsProcessed": 12,
+  "mapped": 11,
+  "needs_review": 1,
+  "unmapped": 0,
+  "locked": 11,
+  "unlocked": 1,
+  "ruleInferred": 1,
+  "readyForImport": 11,
+  "needsHumanReview": 1,
+  "invalid": 0,
+  "productionSafe": 11,
+  "usesExternalVendorTexture": 0,
+  "forbiddenAssetFieldsFound": 0,
+  "reviewBatchCount": 1,
+  "outputs": {
+    "masterCsv": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_0000_0012.csv",
+    "draftCsv": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+    "auditJson": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_audit.json",
+    "auditCsv": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_audit.csv",
+    "reviewBatchesDir": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\review_batches"
+  },
+  "commands": [
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/prepare_demos_mapping_master_csv.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_raw_pilot_0000_0012.csv",
+        "--output",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_0000_0012.csv"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"rows\": 12,\n  \"hadVendorDecorId\": 12,\n  \"generatedVendorDecorId\": 0,\n  \"needs_review\": 1,\n  \"mapped\": 11,\n  \"locked\": 11,\n  \"output\": \"C:\\\\Users\\\\laube\\\\Documents\\\\GitHub\\\\kitchen_app\\\\backend\\\\materials\\\\imports\\\\pilot\\\\output\\\\demos_mapping_master_pilot_0000_0012.csv\"\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/generate_demos_mapping_draft.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_0000_0012.csv",
+        "--output",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+        "--preserve-locked",
+        "--only-empty",
+        "--report",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_draft_report.json"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"dryRun\": false,\n  \"rowsProcessed\": 12,\n  \"rowsChanged\": 1,\n  \"rowsPreservedLocked\": 11,\n  \"rowsWithSuggestedTargetInternalMaterialId\": 9,\n  \"rowsWithSuggestedColor\": 12,\n  \"rowsStillMissingRequiredFields\": 0,\n  \"needs_review\": 1,\n  \"mapped\": 11,\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/audit_demos_mapping_master_csv.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+        "--output-json",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_audit.json",
+        "--output-csv",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_audit.csv"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"rows\": 12,\n  \"mapped\": 11,\n  \"needs_review\": 1,\n  \"unmapped\": 0,\n  \"locked\": 11,\n  \"unlocked\": 1,\n  \"mappedButUnlocked\": 0,\n  \"mappedLowConfidence\": 0,\n  \"mappedMissingBaseColorHex\": 0,\n  \"mappedMissingGrainPatternId\": 0,\n  \"mappedMissingTargetInternalMaterialId\": 0,\n  \"mappedMissingSurfaceProfile\": 0,\n  \"duplicateVendorDecorId\": 0,\n  \"forbiddenAssetFields\": 0,\n  \"readyForImport\": 11,\n  \"needsHumanReview\": 1,\n  \"invalid\": 0,\n  \"productionSafe\": 11\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/export_demos_mapping_review_batches.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+        "--batch-size",
+        "6",
+        "--output-dir",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\review_batches"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"inputRows\": 12,\n  \"reviewRows\": 1,\n  \"batchSize\": 6,\n  \"batchFiles\": [\n    \"C:\\\\Users\\\\laube\\\\Documents\\\\GitHub\\\\kitchen_app\\\\backend\\\\materials\\\\imports\\\\pilot\\\\output\\\\review_batches\\\\demos_review_batch_0000_0005.csv\"\n  ]\n}\n",
+      "stderr": ""
+    }
+  ],
+  "dryRun": false
+}

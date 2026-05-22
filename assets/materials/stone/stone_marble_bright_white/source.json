@@ -1,0 +1,21 @@
+{
+  "id": "stone_marble_bright_white",
+  "source": "ambientCG",
+  "assetId": "Marble021",
+  "requestedAssetId": "Marble021",
+  "matchedAssetId": "Marble021",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Marble021_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

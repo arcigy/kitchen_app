@@ -1,0 +1,301 @@
+{
+  "summary": {
+    "total": 32,
+    "ready": 32,
+    "fallback_asset": 0,
+    "missing_asset": 0
+  },
+  "readyAssets": [
+    {
+      "materialId": "wood_oak_natural",
+      "name": "Natural Oak",
+      "category": "wood",
+      "assetId": "Wood049",
+      "baseColorAsset": "assets/materials/wood/wood_oak_natural/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_dark_espresso",
+      "name": "Dark Espresso Wood",
+      "category": "wood",
+      "assetId": "Wood051",
+      "baseColorAsset": "assets/materials/wood/wood_dark_espresso/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_warm_clean",
+      "name": "Warm Clean Wood",
+      "category": "wood",
+      "assetId": "Wood092",
+      "baseColorAsset": "assets/materials/wood/wood_warm_clean/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_light_plain",
+      "name": "Light Plain Wood",
+      "category": "wood",
+      "assetId": "Wood048",
+      "baseColorAsset": "assets/materials/wood/wood_light_plain/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_dark_smooth",
+      "name": "Dark Smooth Wood",
+      "category": "wood",
+      "assetId": "Wood067",
+      "baseColorAsset": "assets/materials/wood/wood_dark_smooth/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_dark_rough",
+      "name": "Dark Rough Wood",
+      "category": "wood",
+      "assetId": "Wood076",
+      "baseColorAsset": "assets/materials/wood/wood_dark_rough/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_varnished_satin",
+      "name": "Varnished Satin Wood",
+      "category": "wood",
+      "assetId": "Wood050",
+      "baseColorAsset": "assets/materials/wood/wood_varnished_satin/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "lacquer_base_white",
+      "name": "Base White Lacquer",
+      "category": "lacquer",
+      "assetId": "Plastic013A",
+      "baseColorAsset": "assets/materials/lacquer/lacquer_base_white/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_marble_white_grey",
+      "name": "White Grey Marble",
+      "category": "stone",
+      "assetId": "Marble012",
+      "baseColorAsset": "assets/materials/stone/stone_marble_white_grey/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_marble_bright_white",
+      "name": "Bright White Marble",
+      "category": "stone",
+      "assetId": "Marble021",
+      "baseColorAsset": "assets/materials/stone/stone_marble_bright_white/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_marble_black",
+      "name": "Black Marble",
+      "category": "stone",
+      "assetId": "Marble016",
+      "baseColorAsset": "assets/materials/stone/stone_marble_black/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_concrete_smooth",
+      "name": "Smooth Concrete",
+      "category": "stone",
+      "assetId": "Concrete034",
+      "baseColorAsset": "assets/materials/stone/stone_concrete_smooth/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_concrete_plain_wall",
+      "name": "Plain Concrete Wall",
+      "category": "stone",
+      "assetId": "Concrete046",
+      "baseColorAsset": "assets/materials/stone/stone_concrete_plain_wall/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "stone_concrete_rough",
+      "name": "Rough Concrete",
+      "category": "stone",
+      "assetId": "Concrete047A",
+      "baseColorAsset": "assets/materials/stone/stone_concrete_rough/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "metal_smooth_grey",
+      "name": "Smooth Grey Metal",
+      "category": "metal",
+      "assetId": "Metal032",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#8A8A8A",
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "metal_brushed_steel",
+      "name": "Brushed Steel",
+      "category": "metal",
+      "assetId": "Metal009",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#B8B8B8",
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "metal_black_dark",
+      "name": "Dark Black Metal",
+      "category": "metal",
+      "assetId": "Metal046B",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#050505",
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "metal_copper_brass",
+      "name": "Copper Brass Metal",
+      "category": "metal",
+      "assetId": "Metal035",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#B87333",
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wall_painted_white",
+      "name": "Painted White Wall",
+      "category": "wall",
+      "assetId": "PaintedPlaster017",
+      "baseColorAsset": "assets/materials/wall/wall_painted_white/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wall_beige_matte",
+      "name": "Beige Matte Wall",
+      "category": "wall",
+      "assetId": "beige_wall_001",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#D8C7AA",
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "tile_white_simple",
+      "name": "Simple White Tile",
+      "category": "tile",
+      "assetId": "Tiles107",
+      "baseColorAsset": "assets/materials/tile/tile_white_simple/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "tile_black_stone_square",
+      "name": "Black Stone Square Tile",
+      "category": "tile",
+      "assetId": "Tiles138",
+      "baseColorAsset": "assets/materials/tile/tile_black_stone_square/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "overlay_fingerprints",
+      "name": "Fingerprints Overlay",
+      "category": "overlays",
+      "assetId": "Fingerprints001",
+      "baseColorAsset": "assets/materials/overlays/overlay_fingerprints/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "overlay_scratches",
+      "name": "Scratches Overlay",
+      "category": "overlays",
+      "assetId": "Scratches005",
+      "baseColorAsset": "assets/materials/overlays/overlay_scratches/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "overlay_mug_stains",
+      "name": "Mug Stains Overlay",
+      "category": "overlays",
+      "assetId": "SurfaceImperfections007",
+      "baseColorAsset": "assets/materials/overlays/overlay_mug_stains/maps/basecolor.jpg",
+      "fallbackBaseColor": null,
+      "allowVendorMapping": false
+    },
+    {
+      "materialId": "wood_oak_neutral_template",
+      "name": "Wood Oak Neutral Template",
+      "category": "wood",
+      "assetId": "wood_oak_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#b98a55",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "wood_walnut_neutral_template",
+      "name": "Wood Walnut Neutral Template",
+      "category": "wood",
+      "assetId": "wood_walnut_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#6b4028",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "wood_fine_grain_neutral_template",
+      "name": "Wood Fine Grain Neutral Template",
+      "category": "wood",
+      "assetId": "wood_fine_grain_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#caa06a",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "wood_deep_grain_neutral_template",
+      "name": "Wood Deep Grain Neutral Template",
+      "category": "wood",
+      "assetId": "wood_deep_grain_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#8a5735",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "wood_subtle_grain_neutral_template",
+      "name": "Wood Subtle Grain Neutral Template",
+      "category": "wood",
+      "assetId": "wood_subtle_grain_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#d7c3a2",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "solid_color_neutral_template",
+      "name": "Solid Color Neutral Template",
+      "category": "solid",
+      "assetId": "solid_color_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#f0ece4",
+      "allowVendorMapping": true
+    },
+    {
+      "materialId": "generic_neutral_template",
+      "name": "Generic Neutral Template",
+      "category": "generic",
+      "assetId": "generic_neutral",
+      "baseColorAsset": null,
+      "fallbackBaseColor": "#c8c2b8",
+      "allowVendorMapping": true
+    }
+  ],
+  "fallbackAssets": [],
+  "missingAssets": [],
+  "warnings": []
+}

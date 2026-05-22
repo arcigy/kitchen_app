@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kitchen material request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "materialId"
+  ],
+  "properties": {
+    "materialId": {
+      "type": "string",
+      "enum": [
+        "wood_oak_natural",
+        "wood_dark_espresso",
+        "wood_warm_clean",
+        "wood_light_plain",
+        "wood_dark_smooth",
+        "wood_dark_rough",
+        "wood_varnished_satin",
+        "lacquer_base_white",
+        "stone_marble_white_grey",
+        "stone_marble_bright_white",
+        "stone_marble_black",
+        "stone_concrete_smooth",
+        "stone_concrete_plain_wall",
+        "stone_concrete_rough",
+        "metal_smooth_grey",
+        "metal_brushed_steel",
+        "metal_black_dark",
+        "metal_copper_brass",
+        "wall_painted_white",
+        "wall_beige_matte",
+        "tile_white_simple",
+        "tile_black_stone_square",
+        "overlay_fingerprints",
+        "overlay_scratches",
+        "overlay_mug_stains",
+        "wood_floor_051",
+        "wood_030",
+        "wood_034",
+        "wood_046",
+        "wood_floor_054",
+        "wood_floor_053",
+        "wood_floor_052"
+      ]
+    },
+    "baseColor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "surfaceProfile": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "generic_matte",
+            "glass_clear",
+            "glass_dark_smoked",
+            "glass_frosted",
+            "lacquer_gloss",
+            "lacquer_matte",
+            "lacquer_satin",
+            "lacquer_supermat",
+            "metal_brushed",
+            "metal_matte",
+            "metal_matte_black",
+            "metal_polished",
+            "metal_satin",
+            "overlay_map",
+            "stone_matte",
+            "stone_polished",
+            "stone_satin",
+            "stone_textured",
+            "tile_satin",
+            "wall_matte",
+            "wood_gloss_laminate",
+            "wood_raw_matte",
+            "wood_satin_lacquer",
+            "wood_soft_touch_supermat",
+            "wood_standard_matte"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "uvScale": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 10
+    },
+    "tileSizeMeters": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 10
+    },
+    "rotation": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 360
+    },
+    "textureStrength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reflectivity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "grainDirection": {
+      "type": "string",
+      "enum": [
+        "vertical",
+        "horizontal",
+        "lengthwise",
+        "none"
+      ]
+    }
+  }
+}

@@ -1,0 +1,927 @@
+{
+  "wood_oak_natural": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_dark_espresso": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_warm_clean": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_light_plain": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_dark_smooth": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_dark_rough": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wood_varnished_satin": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "lacquer_base_white": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_marble_white_grey": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_marble_bright_white": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_marble_black": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_concrete_smooth": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_concrete_plain_wall": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "stone_concrete_rough": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "metal_smooth_grey": {
+    "basecolor": {
+      "found": false,
+      "status": "missing_with_explicit_fallback",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "metal_brushed_steel": {
+    "basecolor": {
+      "found": false,
+      "status": "missing_with_explicit_fallback",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "metal_black_dark": {
+    "basecolor": {
+      "found": false,
+      "status": "missing_with_explicit_fallback",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "metal_copper_brass": {
+    "basecolor": {
+      "found": false,
+      "status": "missing_with_explicit_fallback",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wall_painted_white": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "wall_beige_matte": {
+    "basecolor": {
+      "found": false,
+      "status": "missing_with_explicit_fallback",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "tile_white_simple": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "tile_black_stone_square": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    }
+  },
+  "overlay_fingerprints": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    }
+  },
+  "overlay_scratches": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    }
+  },
+  "overlay_mug_stains": {
+    "basecolor": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "roughness": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "normal": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    },
+    "ao": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "displacement": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "metallic": {
+      "found": false,
+      "status": "missing_ok",
+      "severity": "ok"
+    },
+    "opacity": {
+      "found": true,
+      "status": "found",
+      "severity": "ok"
+    }
+  }
+}

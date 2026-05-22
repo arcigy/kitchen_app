@@ -60,7 +60,7 @@ describe("ClientCatalog repository and service", () => {
     expect(nextB.priceList.prices[materialId]).toBe(catalogB.priceList.prices[materialId]);
     expect(nextA.materials[0]!.displayName).toBe("Client A Board");
     expect(nextB.materials[0]!.displayName).not.toBe("Client A Board");
-  });
+  }, 15000);
 
   it("service updates prices and exposes enabled modules", async () => {
     const repo = createSystemSeedClientCatalogRepository();

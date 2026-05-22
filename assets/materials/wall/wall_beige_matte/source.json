@@ -1,0 +1,21 @@
+{
+  "id": "wall_beige_matte",
+  "source": "Poly Haven",
+  "assetId": "beige_wall_001",
+  "requestedAssetId": "beige_wall_001",
+  "matchedAssetId": "beige_wall_001",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\beige_wall_001_2k.blend.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": false,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

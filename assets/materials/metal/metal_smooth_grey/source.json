@@ -1,0 +1,21 @@
+{
+  "id": "metal_smooth_grey",
+  "source": "ambientCG",
+  "assetId": "Metal032",
+  "requestedAssetId": "Metal032",
+  "matchedAssetId": "Metal032",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Metal032_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": false,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": true,
+    "opacity": false
+  },
+  "notes": []
+}

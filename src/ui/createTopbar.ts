@@ -162,6 +162,7 @@ export function createTopbar(container: HTMLElement) {
       { id: "livingWall", label: "Living Wall" },
       { id: "room", label: "Room" },
       { id: "modify", label: "Modify" },
+      { id: "visualisation", label: "Visualisation" },
       { id: "view", label: "View" }
     ]
   });

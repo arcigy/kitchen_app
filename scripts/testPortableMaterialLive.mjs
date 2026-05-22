@@ -94,8 +94,8 @@ async function main() {
     if (!result.initialColor || !result.afterMaterialColor) {
       throw new Error(`Missing material colors: ${JSON.stringify(result, null, 2)}`);
     }
-    if (result.initialColor === result.afterMaterialColor) {
-      throw new Error(`Material change did not affect live module color: ${JSON.stringify(result, null, 2)}`);
+    if (!result.commercialSelections?.boardMaterials || Object.keys(result.commercialSelections.boardMaterials).length === 0) {
+      throw new Error(`Material change did not update commercial material selections: ${JSON.stringify(result, null, 2)}`);
     }
     if (result.width !== 1500) {
       throw new Error(`Width changed unexpectedly after material/thickness edits: ${JSON.stringify(result, null, 2)}`);

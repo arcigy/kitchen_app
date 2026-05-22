@@ -237,6 +237,9 @@ import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
 import { createColumnController } from "./app/columnController";
 import { createKitchenWorktopSelectionController } from "./app/kitchenWorktopSelectionController";
+import { createMaterialModifyController } from "./app/materialModifyController";
+import { createDemosLivePreviewColorController } from "./app/demosLivePreviewColor";
+import { createCameraPlacementController } from "./app/cameraPlacementController";
 import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
@@ -325,6 +328,7 @@ export function startApp(initialArgs: AppArgs) {
   let layoutTool: LayoutTool = "select";
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewController!: ReturnType<typeof createDetailViewController>;
+  let cameraPlacementController!: ReturnType<typeof createCameraPlacementController>;
   const getNavigationSceneBounds = () => detailViewController.getNavigationSceneBounds();
   const syncDetailClippingAndMaterials = () => detailViewController.syncDetailClippingAndMaterials();
   const updateDetailSliceOverlay = () => detailViewController.updateDetailSliceOverlay();
@@ -366,6 +370,7 @@ export function startApp(initialArgs: AppArgs) {
   layoutRoot.name = "layoutRoot";
   layoutRoot.visible = false;
   scene.add(layoutRoot);
+  const demosLivePreviewColor = createDemosLivePreviewColorController(layoutRoot);
   const moduleAdjacencyGroup = new THREE.Group();
   moduleAdjacencyGroup.name = "moduleAdjacencyGroup";
   layoutRoot.add(moduleAdjacencyGroup);
@@ -1333,6 +1338,8 @@ export function startApp(initialArgs: AppArgs) {
     getMode: () => mode,
     getViewMode: () => viewMode,
     getActiveViewerTab: () => activeViewerTab,
+    getRenderCameras: () => cameraPlacementController?.getCameras() ?? [],
+    onRenderCameraSelected: (id) => cameraPlacementController?.selectCamera(id),
     setActiveViewerTab: (next) => { activeViewerTab = next; }
   });
 
@@ -1415,6 +1422,25 @@ export function startApp(initialArgs: AppArgs) {
   const setUnderlayStatus = (text: string) => {
     if (underlayStatusEl) underlayStatusEl.textContent = text;
   };
+  const materialModifyController = createMaterialModifyController({
+    scene,
+    renderer,
+    raycaster,
+    getCamera: cam,
+    catalog: clientCatalog,
+    setStatus: setUnderlayStatus,
+    commitHistory: () => commitHistory(S)
+  });
+  cameraPlacementController = createCameraPlacementController({
+    renderer,
+    layoutRoot,
+    getCamera: cam,
+    propertiesEl: args.propertiesEl,
+    ensureFloorplanView: () => ensureFloorplanViewerTab(),
+    onCamerasChanged: () => refreshViewerTabs(),
+    setStatus: setUnderlayStatus,
+    commitHistory: () => commitHistory(S)
+  });
 
   wallController = createWallController({
     walls,
@@ -1548,6 +1574,7 @@ export function startApp(initialArgs: AppArgs) {
       { id: "livingWall", label: "Living Wall" },
       { id: "room", label: "Room" },
       { id: "modify", label: "Modify" },
+      { id: "visualisation", label: "Visualisation" },
       { id: "view", label: "View" }
     ]
   });
@@ -2167,6 +2194,8 @@ export function startApp(initialArgs: AppArgs) {
     setToolSelect,
     setToolTrim,
     setToolWall,
+    startCameraPlacement: () => cameraPlacementController.activate(),
+    startMaterialModify: () => materialModifyController.activate(),
     startTransformFromSelection,
     subscribeInstallState,
     tb,
@@ -3610,6 +3639,8 @@ export function startApp(initialArgs: AppArgs) {
     visibilityController.sync();
     syncClassicTopbarVisibility();
     syncViewerDownbar();
+    demosLivePreviewColor.sync();
+    cameraPlacementController.syncActiveCameraView(activeViewerTab, cam(), ctl());
     renderAppFrame(frameRendererContext, dt);
     requestAnimationFrame(tick);
   };

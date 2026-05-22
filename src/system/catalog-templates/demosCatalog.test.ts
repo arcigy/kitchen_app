@@ -57,4 +57,18 @@ describe("Démos SK system catalog", () => {
     expect(demosCatalogData.summary.components["Démos komponenty: kľučky a úchytky"]).toBeGreaterThan(0);
     expect(demosCatalogData.summary.components["Démos komponenty: ostatné nepoužívané"]).toBeGreaterThan(0);
   });
+
+  it("keeps Demos board colors neutral until image sampling supplies the preview color", () => {
+    const seed = createSystemCatalogSeed();
+    const byId = new Map(seed.materials.map((material) => [material.id, material]));
+
+    expect(byId.get("mat.demos.495386")?.color).toBe("Beech");
+    expect(byId.get("mat.demos.495386")?.preview.colorHex).toBe("#a8835a");
+    expect(byId.get("mat.demos.495009")?.color).toBe("Green");
+    expect(byId.get("mat.demos.495009")?.preview.colorHex).toBe("#a8835a");
+    expect(byId.get("mat.demos.495008")?.color).toBe("Blue");
+    expect(byId.get("mat.demos.495008")?.preview.colorHex).toBe("#a8835a");
+    expect(byId.get("mat.demos.495388")?.color).toBe("Walnut");
+    expect(byId.get("mat.demos.495017")?.color).toBe("Anthracite");
+  });
 });

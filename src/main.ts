@@ -17,6 +17,13 @@ async function start(): Promise<void> {
   const { createClientService } = await import("./core/client/client-service");
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
+
+  if (window.location.pathname === "/material-proof") {
+    const { startMaterialProofMode } = await import("./app/materialProofMode");
+    await startMaterialProofMode(appRoot);
+    return;
+  }
+
   const { loadClientCatalogForApp, loadClientModulePackagesForApp } = await import("./app/catalogLoader");
   const clientCatalog = await loadClientCatalogForApp();
   const modulePackages = await loadClientModulePackagesForApp();
