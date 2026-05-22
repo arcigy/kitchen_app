@@ -165,7 +165,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
       if (ctx.trimState.step !== "pickTarget") {
         resetTrimState();
         ctx.clearToolHud();
-        ctx.setUnderlayStatus("Trim: click first wall side to keep...");
+        ctx.setUnderlayStatus("Trim: click target wall...");
         ctx.mountProps();
       } else {
         setToolSelect();
@@ -346,7 +346,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     enterTool("trim");
     resetTrimState();
     ctx.ensureFloorplanViewerTab();
-    ctx.setUnderlayStatus("Trim: click first wall side to keep...");
+    ctx.setUnderlayStatus("Trim: click target wall...");
     ctx.mountProps();
   };
 

@@ -734,6 +734,7 @@ export function startApp(initialArgs: AppArgs) {
 
   let wallController!: ReturnType<typeof createWallController>;
   const pickAlignLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickAlignLineAt"]>) => wallController.pickAlignLineAt(...args);
+  const pickDimensionLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickDimensionLineAt"]>) => wallController.pickDimensionLineAt(...args);
   const lineLineIntersectionXZ = (...args: Parameters<ReturnType<typeof createWallController>["lineLineIntersectionXZ"]>) => wallController.lineLineIntersectionXZ(...args);
   const translateWallAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["translateWallAndConnected"]>) => wallController.translateWallAndConnected(...args);
   const moveWallEndpointAndConnected = (...args: Parameters<ReturnType<typeof createWallController>["moveWallEndpointAndConnected"]>) => wallController.moveWallEndpointAndConnected(...args);
@@ -3115,6 +3116,7 @@ export function startApp(initialArgs: AppArgs) {
     setWallEndpointsAndConnectedMm,
     nudgePinnedModuleChain,
     pickAlignLineAt,
+    pickDimensionLineAt,
     pickFloorEditElement,
     pickSurfacePoint,
     pickWallLine2D,

@@ -217,7 +217,7 @@ export function mountTrimToolPropsPanel(ctx: TrimToolPropsContext) {
     const s = props.section();
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Click the side of the first wall to keep, then click the second wall or boundary side to keep. Esc = back.";
+    hint.textContent = "Click the target wall, then click the boundary wall or line. The nearest end trims or extends to the intersection. Esc = back.";
     s.appendChild(hint);
 
     const step = document.createElement("div");

@@ -150,7 +150,7 @@ export function createWallController(ctx: WallControllerContext) {
   const solveWallsForRendering = () =>
     solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: DEFAULT_WALL_MITER_LIMIT });
 
-  const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+  const buildAlignLineCandidates = () => {
     const candidates: AlignPickedLine[] = [];
 
     for (const w of walls) {
@@ -204,7 +204,58 @@ export function createWallController(ctx: WallControllerContext) {
       );
     }
 
-    return pickBestAlignLine(mousePx, rect, cam(), candidates, 12);
+    return candidates;
+  };
+
+  const buildSolvedWallOutlineCandidates = (wall: WallInstance, outline: WallPlanPoint[]) => {
+    const candidates: AlignPickedLine[] = [];
+    const first = outline[0];
+    const last = outline[outline.length - 1];
+    const closed =
+      !!first &&
+      !!last &&
+      outline.length > 1 &&
+      Math.hypot(first.x - last.x, first.z - last.z) < 1e-6;
+    const pts = closed ? outline.slice(0, -1) : outline;
+    if (pts.length < 2) return candidates;
+
+    for (let index = 0; index < pts.length; index += 1) {
+      const a = pts[index]!;
+      const b = pts[(index + 1) % pts.length]!;
+      const segA = new THREE.Vector3(a.x, 0, a.z);
+      const segB = new THREE.Vector3(b.x, 0, b.z);
+      const dir = segB.clone().sub(segA).setY(0);
+      if (dir.lengthSq() < 1e-8) continue;
+      dir.normalize();
+      candidates.push({
+        p: segA.clone(),
+        dir,
+        segA,
+        segB,
+        label: `Wall ${wall.id}: outline edge ${index + 1}`,
+        targetKind: "wall",
+        lineRole: "edge",
+        wallId: wall.id,
+        segmentIndex: index
+      });
+    }
+
+    return candidates;
+  };
+
+  const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+    void hitPoint;
+    return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), 12);
+  };
+
+  const pickDimensionLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+    void hitPoint;
+    const candidates = buildAlignLineCandidates();
+    for (const w of walls) {
+      const outline = wallSolvedOutlines.get(w.id) ?? null;
+      if (outline && outline.length >= 3) candidates.push(...buildSolvedWallOutlineCandidates(w, outline));
+    }
+    return pickBestAlignLine(mousePx, rect, cam(), candidates, 18);
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -1739,6 +1790,7 @@ export function createWallController(ctx: WallControllerContext) {
 
   return {
     pickAlignLineAt,
+    pickDimensionLineAt,
     lineLineIntersectionXZ,
     translateWallAndConnected,
     moveWallEndpointAndConnected,

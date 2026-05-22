@@ -8,7 +8,6 @@ import type {
   WindowInstance
 } from "./localTypes";
 import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
-import { wallEndpointToTrimForKeepClick } from "./wallGeometryHelpers";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { MeasureState } from "./measureTools";
 
@@ -1145,7 +1144,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
+        const picked = ctx.pickDimensionLineAt?.(hitPoint, mouse, rect2) ?? ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
         if (picked) {
           if (ctx.dimensionState.picked.length > 0 && !ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked)) {
@@ -1245,7 +1244,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
         const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
         if (!picked) {
-          ctx.setUnderlayStatus(ctx.trimState.step === "pickTarget" ? "Trim: click first wall side to keep." : "Trim: click second wall/boundary side to keep.");
+          ctx.setUnderlayStatus(ctx.trimState.step === "pickTarget" ? "Trim: click target wall line." : "Trim: click cutter line.");
           return;
         }
 
@@ -1258,7 +1257,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.trimState.lastTarget = null;
           ctx.trimState.lastCutter = null;
           ctx.trimState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Trim: click second wall/boundary side to keep...");
+          ctx.setUnderlayStatus("Trim: click cutter line...");
           ctx.mountProps();
           return;
         }
@@ -1271,7 +1270,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.trimState.step = "pickTarget";
           ctx.trimState.targetWallId = null;
           ctx.trimState.targetPick = null;
-          ctx.setUnderlayStatus("Trim: target missing. Click first wall side to keep...");
+          ctx.setUnderlayStatus("Trim: target missing. Click target wall...");
           ctx.mountProps();
           return;
         }
@@ -1295,9 +1294,15 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
               return;
             }
 
+            const chooseEnd = (wall: WallInstance, click: THREE.Vector3) => {
+              const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+              const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+              return click.distanceTo(a) <= click.distanceTo(b) ? ("a" as const) : ("b" as const);
+            };
+
             const iMm = ctx.toMmPoint(I);
-            const end1 = wallEndpointToTrimForKeepClick(w, ctx.trimState.targetClick, I);
-            const end2 = wallEndpointToTrimForKeepClick(w2, cutterClick, I);
+            const end1 = chooseEnd(w, ctx.trimState.targetClick);
+            const end2 = chooseEnd(w2, cutterClick);
 
             const old1 = end1 === "a" ? w.params.aMm : w.params.bMm;
             const old2 = end2 === "a" ? w2.params.aMm : w2.params.bMm;
@@ -1334,7 +1339,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
             ctx.trimState.targetWallId = null;
             ctx.trimState.targetPick = null;
             ctx.trimState.targetClick = null;
-            ctx.setUnderlayStatus("Trim: corner done. Click first wall side to keep...");
+            ctx.setUnderlayStatus("Trim: corner done. Click target wall...");
             ctx.mountProps();
             return;
           }
@@ -1356,8 +1361,25 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           return;
         }
 
+        const nC = new THREE.Vector3(-dC.z, 0, dC.x);
+        const sign = (v: number) => (v > 1e-7 ? 1 : v < -1e-7 ? -1 : 0);
+        let sClick = sign(nC.dot(hitPoint.clone().sub(picked.p)));
+        const sA = sign(nC.dot(aW.clone().sub(picked.p)));
+        const sB = sign(nC.dot(bW.clone().sub(picked.p)));
+        if (sClick === 0) sClick = sA !== 0 ? sA : sB;
+
+        let moveWhich: "a" | "b" = "a";
+        if (sClick !== 0) {
+          if (sA === sClick && sB !== sClick) moveWhich = "a";
+          else if (sB === sClick && sA !== sClick) moveWhich = "b";
+          else {
+            moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
+          }
+        } else {
+          moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
+        }
+
         const iMm = ctx.toMmPoint(I);
-        const moveWhich = wallEndpointToTrimForKeepClick(w, ctx.trimState.targetClick ?? hitPoint, I);
         const old = moveWhich === "a" ? w.params.aMm : w.params.bMm;
         const dxMm = iMm.x - old.x;
         const dzMm = iMm.z - old.z;
@@ -1386,7 +1408,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.trimState.targetWallId = null;
         ctx.trimState.targetPick = null;
         ctx.trimState.targetClick = null;
-        ctx.setUnderlayStatus("Trim: done. Click first wall side to keep...");
+        ctx.setUnderlayStatus("Trim: done. Click target wall...");
         ctx.mountProps();
         return;
       }
@@ -2412,7 +2434,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ctx.clearToolHud();
       } else {
         const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
+        const picked = ctx.pickDimensionLineAt?.(hitPoint, mouse, rect) ?? ctx.pickAlignLineAt(hitPoint, mouse, rect);
         const canPick = !picked || ctx.dimensionState.picked.length === 0 || ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked);
         const thick = ctx.hudLineThicknessM(rect);
         ctx.dimensionState.hover = canPick ? picked : null;

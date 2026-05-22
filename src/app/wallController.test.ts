@@ -67,6 +67,18 @@ const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: 
     outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
   }) as any;
 
+const createPlanCamera = () => {
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+  camera.position.set(0, 10, 0);
+  camera.up.set(0, 0, -1);
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  return camera;
+};
+
+const testRect = { width: 1000, height: 1000 } as DOMRect;
+
 const lineHasSegment = (
   line: THREE.Line,
   a: { x: number; z: number },
@@ -225,6 +237,33 @@ describe("wall plan fill", () => {
 
     expect(ctx.wallSolvedOutlines.get("diagonal")).toHaveLength(4);
     expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(4);
+  });
+
+  it("lets dimensions pick solved outline edges on angled wall shapes", () => {
+    const ctx = createTestWallContext();
+    const camera = createPlanCamera();
+    ctx.cam = () => camera;
+    const wall = createTestWallInstance("angled", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    ctx.walls.push(wall);
+    ctx.wallSolvedOutlines.set("angled", [
+      { x: 1, z: 0.5 },
+      { x: 2, z: 1.5 },
+      { x: 2.2, z: 1.7 },
+      { x: 1.2, z: 0.7 }
+    ]);
+    const controller = createWallController(ctx);
+    const world = new THREE.Vector3(1.5, 0, 1);
+    const mouse = { x: 650, y: 600 };
+
+    expect(controller.pickAlignLineAt(world, mouse, testRect)?.lineRole).not.toBe("edge");
+    const picked = controller.pickDimensionLineAt(world, mouse, testRect);
+
+    expect(picked).toMatchObject({
+      targetKind: "wall",
+      lineRole: "edge",
+      wallId: "angled",
+      segmentIndex: 0
+    });
   });
 
   it("merges same-style collinear fragments without a real branch at the shared node", () => {
