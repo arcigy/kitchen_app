@@ -39,6 +39,18 @@ type WallMeshCutout = {
   heightM: number;
 };
 
+type WallOpeningClip = {
+  kind: "window" | "door";
+  wallId: string;
+  center: THREE.Vector3;
+  dir: THREE.Vector3;
+  normal: THREE.Vector3;
+  halfW: number;
+  halfT: number;
+  faceHalfT: number;
+  corners: Array<{ x: number; z: number }>;
+};
+
 const polygonClipper = polygonClipping as PolygonClipper;
 export const WALL_PLAN_FILL_ROTATION_X = Math.PI / 2;
 const WALL_CUTOUT_REVEAL_NAME = "wallWindowCutoutReveal";
@@ -150,6 +162,59 @@ export function createWallController(ctx: WallControllerContext) {
   const solveWallsForRendering = () =>
     solveWallNetwork(makeWallSolverInput(), { nodeTolM: wallJoinTolMm / 1000, miterLimit: DEFAULT_WALL_MITER_LIMIT });
 
+  const makeWallOpeningClips = () => {
+    const clips: WallOpeningClip[] = [];
+
+    const addClip = (kind: "window" | "door", wallId: string | null, centerMm: number, widthMm: number) => {
+      if (!wallId) return;
+      const wall = walls.find((item) => item.id === wallId) ?? null;
+      if (!wall) return;
+
+      const refA = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+      const refB = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+      const dir = refB.clone().sub(refA);
+      const lengthM = dir.length();
+      if (lengthM < 0.001) return;
+      dir.multiplyScalar(1 / lengthM);
+
+      const leftNormal = new THREE.Vector3(-dir.z, 0, dir.x);
+      const exteriorSign = (wall.params.exteriorSign ?? 1) as 1 | -1;
+      const thicknessM = Math.max(0.01, wall.params.thicknessMm / 1000);
+      const half = thicknessM / 2;
+      const justification = wall.params.justification ?? "center";
+      const centerOffset =
+        justification === "center"
+          ? 0
+          : justification === "exterior"
+            ? -exteriorSign * half
+            : exteriorSign * half;
+
+      const center = refA
+        .clone()
+        .addScaledVector(leftNormal, centerOffset)
+        .addScaledVector(dir, centerMm / 1000);
+      const halfW = Math.max(0.001, widthMm / 2000);
+      const halfT = half + 0.006;
+      const corners = [
+        center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, -halfT),
+        center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, -halfT),
+        center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, halfT),
+        center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
+      ].map((point) => ({ x: point.x, z: point.z }));
+
+      clips.push({ kind, wallId, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
+    };
+
+    for (const windowInst of getWindowInsts()) {
+      addClip("window", windowInst.params.wallId ?? null, windowInst.params.centerMm, windowInst.params.widthMm);
+    }
+    for (const doorInst of getDoorInsts()) {
+      addClip("door", doorInst.params.wallId ?? null, doorInst.params.centerMm, doorInst.params.widthMm);
+    }
+
+    return clips;
+  };
+
   const buildAlignLineCandidates = () => {
     const candidates: AlignPickedLine[] = [];
 
@@ -243,6 +308,116 @@ export function createWallController(ctx: WallControllerContext) {
     return candidates;
   };
 
+  const makeDimensionLineCandidate = (args: {
+    a: THREE.Vector3;
+    b: THREE.Vector3;
+    label: string;
+    lineRole?: AlignPickedLine["lineRole"];
+    wallId?: string | null;
+    segmentIndex: number;
+  }): AlignPickedLine | null => {
+    const dir = args.b.clone().sub(args.a).setY(0);
+    if (dir.lengthSq() < 1e-8) return null;
+    dir.normalize();
+    return {
+      p: args.a.clone(),
+      dir,
+      segA: args.a.clone(),
+      segB: args.b.clone(),
+      label: args.label,
+      targetKind: "wall" as const,
+      lineRole: args.lineRole ?? "edge",
+      wallId: args.wallId ?? undefined,
+      segmentIndex: args.segmentIndex
+    } satisfies AlignPickedLine;
+  };
+
+  const buildEndpointReferenceCandidates = (edge: AlignPickedLine, baseIndex: number) => {
+    const segment = edge.segB.clone().sub(edge.segA).setY(0);
+    const segmentLen = segment.length();
+    if (segmentLen < 1e-6) return [] as AlignPickedLine[];
+    const dir = segment.multiplyScalar(1 / segmentLen);
+    const normal = new THREE.Vector3(-dir.z, 0, dir.x);
+    const half = Math.max(0.18, Math.min(0.85, segmentLen * 0.35));
+    const make = (point: THREE.Vector3, role: "endA" | "endB", index: number) =>
+      makeDimensionLineCandidate({
+        a: point.clone().addScaledVector(normal, -half),
+        b: point.clone().addScaledVector(normal, half),
+        label: `${edge.label}: ${role === "endA" ? "start reference" : "end reference"}`,
+        lineRole: role,
+        wallId: edge.wallId ?? null,
+        segmentIndex: baseIndex + index
+      });
+    return [make(edge.segA, "endA", 0), make(edge.segB, "endB", 1)].filter(
+      (candidate): candidate is AlignPickedLine => !!candidate
+    );
+  };
+
+  const buildWallPlanVisibleDimensionCandidates = () => {
+    const candidates: AlignPickedLine[] = [];
+    const edges: AlignPickedLine[] = [];
+    let segmentIndex = 200000;
+
+    for (const line of wallPlanMeshes.values()) {
+      const kind = line.userData?.kind;
+      if (kind !== "wallPlanUnion" && kind !== "wallPlanWindowParapet" && kind !== "wallPlanWallFaces") continue;
+      if (line.visible === false) continue;
+      const position = line.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+      if (!position || position.count < 2) continue;
+      line.updateMatrixWorld(true);
+
+      for (let i = 0; i + 1 < position.count; i += 2) {
+        const a = line.localToWorld(new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i)));
+        const b = line.localToWorld(new THREE.Vector3(position.getX(i + 1), position.getY(i + 1), position.getZ(i + 1)));
+        const edge = makeDimensionLineCandidate({
+          a,
+          b,
+          label: `${line.name || "Wall plan"}: segment ${i / 2 + 1}`,
+          wallId: typeof line.userData?.wallId === "string" ? line.userData.wallId : null,
+          segmentIndex: segmentIndex++
+        });
+        if (!edge) continue;
+        edges.push(edge);
+        candidates.push(...buildEndpointReferenceCandidates(edge, segmentIndex));
+        segmentIndex += 2;
+      }
+    }
+
+    candidates.push(...edges);
+    return candidates;
+  };
+
+  const buildOpeningDimensionCandidates = () => {
+    const candidates: AlignPickedLine[] = [];
+    let segmentIndex = 300000;
+    const add = (clip: WallOpeningClip, a: THREE.Vector3, b: THREE.Vector3, label: string) => {
+      const candidate = makeDimensionLineCandidate({
+        a,
+        b,
+        label,
+        wallId: clip.wallId,
+        segmentIndex: segmentIndex++
+      });
+      if (candidate) candidates.push(candidate);
+    };
+
+    for (const clip of makeWallOpeningClips()) {
+      const faceHalfT = clip.faceHalfT;
+      const startInner = clip.center.clone().addScaledVector(clip.dir, -clip.halfW).addScaledVector(clip.normal, -faceHalfT);
+      const endInner = clip.center.clone().addScaledVector(clip.dir, clip.halfW).addScaledVector(clip.normal, -faceHalfT);
+      const startOuter = clip.center.clone().addScaledVector(clip.dir, -clip.halfW).addScaledVector(clip.normal, faceHalfT);
+      const endOuter = clip.center.clone().addScaledVector(clip.dir, clip.halfW).addScaledVector(clip.normal, faceHalfT);
+      const label = clip.kind === "door" ? "Door opening" : "Window opening";
+
+      add(clip, startInner, startOuter, `${label}: left jamb`);
+      add(clip, endInner, endOuter, `${label}: right jamb`);
+      add(clip, startInner, endInner, `${label}: inner edge`);
+      add(clip, startOuter, endOuter, `${label}: outer edge`);
+    }
+
+    return candidates;
+  };
+
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     void hitPoint;
     return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), 12);
@@ -250,12 +425,16 @@ export function createWallController(ctx: WallControllerContext) {
 
   const pickDimensionLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     void hitPoint;
-    const candidates = buildAlignLineCandidates();
+    const candidates = [
+      ...buildWallPlanVisibleDimensionCandidates(),
+      ...buildOpeningDimensionCandidates(),
+      ...buildAlignLineCandidates()
+    ];
     for (const w of walls) {
       const outline = wallSolvedOutlines.get(w.id) ?? null;
       if (outline && outline.length >= 3) candidates.push(...buildSolvedWallOutlineCandidates(w, outline));
     }
-    return pickBestAlignLine(mousePx, rect, cam(), candidates, 18);
+    return pickBestAlignLine(mousePx, rect, cam(), candidates, 24);
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -1150,68 +1329,6 @@ export function createWallController(ctx: WallControllerContext) {
       }
       if (area < 0) ring.reverse();
       return ring;
-    };
-
-    const makeWallOpeningClips = () => {
-      const clips: Array<{
-        kind: "window" | "door";
-        center: THREE.Vector3;
-        dir: THREE.Vector3;
-        normal: THREE.Vector3;
-        halfW: number;
-        halfT: number;
-        faceHalfT: number;
-        corners: Array<{ x: number; z: number }>;
-      }> = [];
-
-      const addClip = (kind: "window" | "door", wallId: string | null, centerMm: number, widthMm: number) => {
-        if (!wallId) return;
-        const wall = walls.find((item) => item.id === wallId) ?? null;
-        if (!wall) return;
-
-        const refA = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
-        const refB = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
-        const dir = refB.clone().sub(refA);
-        const lengthM = dir.length();
-        if (lengthM < 0.001) return;
-        dir.multiplyScalar(1 / lengthM);
-
-        const leftNormal = new THREE.Vector3(-dir.z, 0, dir.x);
-        const exteriorSign = (wall.params.exteriorSign ?? 1) as 1 | -1;
-        const thicknessM = Math.max(0.01, wall.params.thicknessMm / 1000);
-        const half = thicknessM / 2;
-        const justification = wall.params.justification ?? "center";
-        const centerOffset =
-          justification === "center"
-            ? 0
-            : justification === "exterior"
-              ? -exteriorSign * half
-              : exteriorSign * half;
-
-        const center = refA
-          .clone()
-          .addScaledVector(leftNormal, centerOffset)
-          .addScaledVector(dir, centerMm / 1000);
-        const halfW = Math.max(0.001, widthMm / 2000);
-        const halfT = half + 0.006;
-        const corners = [
-          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, -halfT),
-          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, -halfT),
-          center.clone().addScaledVector(dir, halfW).addScaledVector(leftNormal, halfT),
-          center.clone().addScaledVector(dir, -halfW).addScaledVector(leftNormal, halfT)
-        ].map((point) => ({ x: point.x, z: point.z }));
-
-        clips.push({ kind, center, dir, normal: leftNormal, halfW, halfT, faceHalfT: half, corners });
-      };
-
-      for (const windowInst of getWindowInsts()) {
-        addClip("window", windowInst.params.wallId ?? null, windowInst.params.centerMm, windowInst.params.widthMm);
-      }
-      for (const doorInst of getDoorInsts()) {
-        addClip("door", doorInst.params.wallId ?? null, doorInst.params.centerMm, doorInst.params.widthMm);
-      }
-
-      return clips;
     };
 
     const polys: WallPlanMultiPolygon[] = [];

@@ -266,6 +266,79 @@ describe("wall plan fill", () => {
     });
   });
 
+  it("lets dimensions pick visible wall-plan segments and their endpoint references", () => {
+    const ctx = createTestWallContext();
+    const camera = createPlanCamera();
+    ctx.cam = () => camera;
+    const line = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0.02, 0),
+        new THREE.Vector3(4, 0.02, 0)
+      ]),
+      new THREE.LineBasicMaterial()
+    );
+    line.name = "wallPlan_union_0";
+    line.userData.kind = "wallPlanUnion";
+    ctx.wallPlanMeshes.set(line.name, line);
+    const controller = createWallController(ctx);
+
+    const edge = controller.pickDimensionLineAt(new THREE.Vector3(2, 0, 0), { x: 700, y: 500 }, testRect);
+    const endpoint = controller.pickDimensionLineAt(new THREE.Vector3(0, 0, 0), { x: 500, y: 500 }, testRect);
+
+    expect(edge).toMatchObject({
+      targetKind: "wall",
+      lineRole: "edge",
+      segmentIndex: 200000
+    });
+    expect(endpoint).toMatchObject({
+      targetKind: "wall",
+      lineRole: "endA",
+      segmentIndex: 200001
+    });
+  });
+
+  it("lets dimensions pick wall opening jambs as references", () => {
+    const ctx = createTestWallContext();
+    const camera = createPlanCamera();
+    ctx.cam = () => camera;
+    const wall = createTestWallInstance("with-door", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    ctx.walls.push(wall);
+    ctx.getDoorInsts = () =>
+      [
+        {
+          id: "door1",
+          params: {
+            wall: "back",
+            wallId: "with-door",
+            widthMm: 900,
+            heightMm: 2100,
+            centerMm: 1000,
+            frameWidthMm: 70,
+            offsetFromInteriorMm: 0,
+            panelThicknessMm: 40,
+            swingDirection: "left",
+            swingSide: "inward",
+            swingAngleDeg: 90,
+            handleType: "lever",
+            handleOffsetMm: 80,
+            handleHeightMm: 1000,
+            materialId: "default"
+          }
+        }
+      ] as any;
+    const controller = createWallController(ctx);
+
+    const picked = controller.pickDimensionLineAt(new THREE.Vector3(0.55, 0, 0), { x: 555, y: 500 }, testRect);
+
+    expect(picked?.label).toBe("Door opening: left jamb");
+    expect(picked).toMatchObject({
+      targetKind: "wall",
+      lineRole: "edge",
+      wallId: "with-door",
+      segmentIndex: 300000
+    });
+  });
+
   it("merges same-style collinear fragments without a real branch at the shared node", () => {
     const ctx = createTestWallContext();
     const lower = createTestWallInstance("lower", { x: 0, z: 0 }, { x: 0, z: 3000 });
