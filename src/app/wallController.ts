@@ -10,7 +10,7 @@ import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layou
 import { commitHistory } from "../layout/historyManager";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
-import { spineDir, type WallJustification } from "../walls2d/model";
+import { rawEndCorners, spineDir, type WallJustification } from "../walls2d/model";
 import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 import {
   fromMmPoint,
@@ -100,6 +100,7 @@ export type WallControllerContext = {
   getWallDebugEnabled: () => boolean;
   setWallSolvedJoinPolys: (next: WallPlanPoint[][]) => void;
   setWallUnionPolys: (next: WallPlanMultiPolygon | null) => void;
+  updateSelectionHighlights?: () => void;
   getWindowInst?: () => WindowInstance | null;
   getWindowInsts?: () => WindowInstance[];
   getDoorInst?: () => DoorInstance | null;
@@ -1473,6 +1474,12 @@ export function createWallController(ctx: WallControllerContext) {
           );
           if (!node || node.incident.length < 2) continue;
           const sourceDir = spineDir(source, end);
+          const beyondEndDir = { x: -sourceDir.x, z: -sourceDir.z };
+          const rawEnd = rawEndCorners(source, end);
+          const leftProjection = (solvedEnd.left.x - rawEnd.left.x) * beyondEndDir.x + (solvedEnd.left.z - rawEnd.left.z) * beyondEndDir.z;
+          const rightProjection =
+            (solvedEnd.right.x - rawEnd.right.x) * beyondEndDir.x + (solvedEnd.right.z - rawEnd.right.z) * beyondEndDir.z;
+          if (leftProjection > 0.001 || rightProjection > 0.001) continue;
           if (
             node.incident.some((incident) => {
               if (incident.wall.id === source.id && incident.end === end) return false;
@@ -1486,14 +1493,20 @@ export function createWallController(ctx: WallControllerContext) {
         return false;
       });
 
-    const makePlanPolyline = (pts: Array<{ x: number; z: number }>, color: number, y = 0.02, opacity = 0.98) => {
+    const makePlanPolyline = (
+      pts: Array<{ x: number; z: number }>,
+      color: number,
+      y = 0.02,
+      opacity = 0.98,
+      showInternalJoinSegments = false
+    ) => {
       if (pts.length < 2) return null;
       const linePts: THREE.Vector3[] = [];
       const count = pts.length >= 3 ? pts.length : pts.length - 1;
       for (let i = 0; i < count; i += 1) {
         const a = pts[i];
         const b = pts[(i + 1) % pts.length];
-        if (!a || !b || isWindowOpeningOutlineSegment(a, b) || isInternalJoinBaseSegment(a, b)) continue;
+        if (!a || !b || isWindowOpeningOutlineSegment(a, b) || (!showInternalJoinSegments && isInternalJoinBaseSegment(a, b))) continue;
         linePts.push(new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z));
       }
       if (linePts.length < 2) return null;
@@ -1552,7 +1565,7 @@ export function createWallController(ctx: WallControllerContext) {
     const selectedWallId = ctx.getSelectedKind() === "wall" ? ctx.getSelectedWallId() : null;
     for (const wall of solved.walls) {
       if (wall.id !== selectedWallId) continue;
-      const line = makePlanPolyline(wall.outline, 0x3f4652, 0.019, 0.72);
+      const line = makePlanPolyline(wall.outline, 0x3f4652, 0.019, 0.72, true);
       if (!line) continue;
       line.name = `wallPlan_faces_${wall.id}`;
       line.userData.kind = "wallPlanWallFaces";
@@ -1620,6 +1633,8 @@ export function createWallController(ctx: WallControllerContext) {
       wallPlanMeshes.set(line.name, line);
       wallPlanGroup.add(line);
     }
+
+    ctx.updateSelectionHighlights?.();
 
     // Debug overlays
     wallDebugGroup.visible = ctx.getWallDebugEnabled();

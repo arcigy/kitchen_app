@@ -210,6 +210,53 @@ describe("wall plan fill", () => {
     }
   });
 
+  it("shows wall join lines only on the selected wall overlay", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = null;
+    let selectedWallId: string | null = null;
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
+    ctx.walls.push(vertical, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const joinStart = ctx.wallSolvedOutlines.get("vertical")![1];
+    const joinEnd = ctx.wallSolvedOutlines.get("vertical")![2];
+    for (const line of ctx.wallPlanMeshes.values()) {
+      expect(lineHasSegment(line, joinStart, joinEnd)).toBe(false);
+    }
+
+    selectedKind = "wall";
+    selectedWallId = "vertical";
+    controller.rebuildWallPlanMesh();
+
+    expect(lineHasSegment(ctx.wallPlanMeshes.get("wallPlan_faces_vertical")!, joinStart, joinEnd)).toBe(true);
+    for (const [name, line] of ctx.wallPlanMeshes.entries()) {
+      if (name === "wallPlan_faces_vertical") continue;
+      expect(lineHasSegment(line, joinStart, joinEnd)).toBe(false);
+    }
+  });
+
+  it("keeps the exterior pointed wall closure visible in the union outline", () => {
+    const ctx = createTestWallContext();
+    const top = createTestWallInstance("top", { x: 0, z: 5000 }, { x: 5000, z: 5000 });
+    const diagonal = createTestWallInstance("diagonal", { x: 5000, z: 5000 }, { x: 2000, z: 0 });
+    ctx.walls.push(top, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const topOutline = ctx.wallSolvedOutlines.get("top")!;
+    const closure = topOutline
+      .map((point, index) => [point, topOutline[(index + 1) % topOutline.length]] as const)
+      .find(([a, b]) => a.x > 5 && b.x > 5)!;
+    const [closureStart, closureEnd] = closure;
+    expect([...ctx.wallPlanMeshes.values()].some((line) => lineHasSegment(line, closureStart, closureEnd))).toBe(true);
+  });
+
   it("keeps angled side-butt joins inside the main wall end face", () => {
     const ctx = createTestWallContext();
     const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
@@ -432,7 +479,7 @@ describe("wall plan fill", () => {
     expect(duplicate?.params.joinEnds).toBeUndefined();
   });
 
-  it("butts branch wall meshes into the main wall face without openings", () => {
+  it("keeps branch wall meshes full thickness at two-wall corners without openings", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
     const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
@@ -445,14 +492,15 @@ describe("wall plan fill", () => {
 
     const branchVertices = getWorldVertices(branch.mesh);
     const branchMinZ = Math.min(...branchVertices.map((point) => point.z));
-    const hasButtLeft = branchVertices.some((point) => Math.abs(point.x + 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
-    const hasButtRight = branchVertices.some((point) => Math.abs(point.x - 0.075) < 1e-5 && Math.abs(point.z - 0.075) < 1e-5);
+    const branchMaxZ = Math.max(...branchVertices.map((point) => point.z));
+    const branchMinX = Math.min(...branchVertices.map((point) => point.x));
+    const branchMaxX = Math.max(...branchVertices.map((point) => point.x));
     expect(branchMinZ).toBeCloseTo(0.075, 5);
-    expect(hasButtLeft).toBe(true);
-    expect(hasButtRight).toBe(true);
+    expect(branchMaxZ).toBeCloseTo(5, 5);
+    expect(branchMaxX - branchMinX).toBeCloseTo(0.15, 5);
   });
 
-  it("keeps corner wall meshes with openings trimmed to the solved join", () => {
+  it("keeps corner wall meshes with openings full thickness", () => {
     const ctx = createTestWallContext();
     const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 5000, z: 0 });
     const branch = createTestWallInstance("branch", { x: 0, z: 0 }, { x: 0, z: 5000 });
@@ -480,7 +528,7 @@ describe("wall plan fill", () => {
     expect(branch.mesh.userData.wallCutoutBounds).toHaveLength(1);
   });
 
-  it("keeps angled branch start seams on the main wall face", () => {
+  it("keeps angled branch starts full thickness at two-wall corners", () => {
     const ctx = createTestWallContext();
     const vertical = createTestWallInstance("vertical", { x: 0, z: 0 }, { x: 0, z: 5000 });
     const diagonal = createTestWallInstance("diagonal", { x: 0, z: 5000 }, { x: 5000, z: 0 });
@@ -491,10 +539,9 @@ describe("wall plan fill", () => {
     controller.rebuildWall(diagonal);
 
     const diagonalVertices = getWorldVertices(diagonal.mesh);
-    const seamVertices = diagonalVertices.filter((point) => Math.abs(point.x - 0.075) < 1e-5 && point.z > 4.7);
-    expect(seamVertices.length).toBeGreaterThan(0);
-    expect(Math.min(...seamVertices.map((point) => point.z))).toBeLessThan(4.85);
-    expect(Math.max(...seamVertices.map((point) => point.z))).toBeLessThanOrEqual(5.000001);
+    const zValuesNearStart = diagonalVertices.map((point) => point.z).filter((z) => z > 4.8);
+    expect(zValuesNearStart.length).toBeGreaterThan(1);
+    expect(Math.max(...zValuesNearStart) - Math.min(...zValuesNearStart)).toBeGreaterThan(0.09);
   });
 
   it("rebuilds remaining wall meshes after deleting a joined wall", () => {
@@ -541,5 +588,30 @@ describe("wall plan fill", () => {
     controller.rebuildWallPlanMesh();
 
     expect(wall.params.joinEnds).toBeUndefined();
+  });
+
+  it("refreshes selected wall highlights after solved joins are rebuilt", () => {
+    const ctx = createTestWallContext();
+    const selectedWallIds = new Set<string>(["left"]);
+    let refreshCount = 0;
+    ctx.getViewMode = () => "2d";
+    ctx.getSelectedKind = () => "wall";
+    ctx.getSelectedWallId = () => "left";
+    ctx.getSelectedWallIds = () => selectedWallIds;
+    ctx.updateSelectionHighlights = () => {
+      refreshCount += 1;
+    };
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 5000 }),
+      createTestWallInstance("top", { x: 0, z: 5000 }, { x: 5000, z: 5000 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(refreshCount).toBe(1);
+    const solved = ctx.wallSolvedOutlines.get("left");
+    expect(solved).toBeDefined();
+    expect(solved?.some((point) => point.x !== 0 && point.z > 4.9)).toBe(true);
   });
 });

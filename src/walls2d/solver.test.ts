@@ -16,20 +16,17 @@ function wall(
 }
 
 describe("walls2d join solver", () => {
-  test("Case 1: 90° same thickness (clean miter)", () => {
+  test("Case 1: 90° same thickness (clean butt join)", () => {
     const w1 = wall("a", P(0, 0), P(5, 0), 150);
     const w2 = wall("b", P(0, 0), P(0, 5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(2);
-    // At the shared node, at least one corner point must coincide between the two walls (no gap).
-    const a0 = res.walls[0].outline;
-    const b0 = res.walls[1].outline;
-    const min = Math.min(
-      ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
-    );
-    expect(min).toBeLessThanOrEqual(0.075);
-    expect(res.walls[0].a.join).toBe("miter");
-    expect(res.walls[1].a.join).toBe("miter");
+    expect(res.walls[0].a.join).toBe("butt");
+    expect(res.walls[1].a.join).toBe("butt");
+    expect(res.walls[0].outline).toHaveLength(4);
+    expect(res.walls[1].outline).toHaveLength(4);
+    expect(res.walls[0].a.ownedCapPoly).toBeUndefined();
+    expect(res.walls[1].a.ownedCapPoly).toBeUndefined();
   });
 
   test("Case 2: 45° same thickness (no broken acute join)", () => {
@@ -38,6 +35,40 @@ describe("walls2d join solver", () => {
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(2);
     expect(res.joinPolys.length).toBeGreaterThanOrEqual(0);
+  });
+
+  test("right-angle equal-priority corner keeps the shorter connector wall continuous", () => {
+    const short = wall("short", P(0, 0), P(0, 2), 150);
+    const long = wall("long", P(0, 0), P(5, 0), 150);
+    const res = solveWallNetwork([short, long], { nodeTolM: 1e-6 });
+    const solvedShort = res.walls.find((w) => w.id === "short")!;
+    const solvedLong = res.walls.find((w) => w.id === "long")!;
+
+    expect(solvedShort.a.ownedCapPoly).toBeUndefined();
+    expect(solvedLong.a.ownedCapPoly).toBeUndefined();
+    expect(solvedShort.a.left.z).toBeCloseTo(-0.075, 6);
+    expect(solvedShort.a.right.z).toBeCloseTo(-0.075, 6);
+    expect(solvedLong.a.left.x).toBeCloseTo(0.075, 6);
+    expect(solvedLong.a.right.x).toBeCloseTo(0.075, 6);
+  });
+
+  test("short wall between angled neighbors keeps rectangular ends", () => {
+    const top = wall("top", P(-4, 4), P(0, 3), 150);
+    const connector = wall("connector", P(0, 3), P(0, 0), 150);
+    const bottom = wall("bottom", P(-4, -1), P(0, 0), 150);
+    const res = solveWallNetwork([top, connector, bottom], { nodeTolM: 1e-6 });
+    const solvedConnector = res.walls.find((w) => w.id === "connector")!;
+    const solvedTop = res.walls.find((w) => w.id === "top")!;
+    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+
+    expect(solvedConnector.a.join).toBe("butt");
+    expect(solvedConnector.b.join).toBe("butt");
+    expect(dist(solvedConnector.a.left, solvedConnector.a.right)).toBeGreaterThan(0.14);
+    expect(dist(solvedConnector.b.left, solvedConnector.b.right)).toBeGreaterThan(0.14);
+    expect(solvedTop.b.join).toBe("butt");
+    expect(solvedBottom.b.join).toBe("butt");
+    expect(dist(solvedTop.b.left, solvedTop.b.right)).toBeGreaterThan(0.14);
+    expect(dist(solvedBottom.b.left, solvedBottom.b.right)).toBeGreaterThan(0.14);
   });
 
   test("explicit join priority butts an angled branch end into the main wall face", () => {
@@ -52,8 +83,7 @@ describe("walls2d join solver", () => {
     expect(solvedB.a.join).toBe("butt");
     expect(solvedA.b.left.z).toBeCloseTo(0.075, 6);
     expect(solvedA.b.right.z).toBeCloseTo(-0.075, 6);
-    expect(solvedB.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedB.a.right.z).toBeCloseTo(0.075, 6);
+    expect(dist(solvedB.a.left, solvedB.a.right)).toBeGreaterThan(0.14);
   });
 
   test("2-wall corner uses explicit join priority for the continuing wall", () => {
@@ -84,65 +114,65 @@ describe("walls2d join solver", () => {
     expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
   });
 
-  test("finite miter limit can still bevel unusually shallow equal-priority corners", () => {
+  test("finite miter limit does not introduce automatic bevels on equal-priority corners", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 2.5 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("bevel");
-    expect(solvedB.a.join).toBe("bevel");
-    expect(res.joinPolys).toHaveLength(1);
+    expect(solvedA.b.join).toBe("butt");
+    expect(solvedB.a.join).toBe("butt");
+    expect(res.joinPolys).toHaveLength(0);
     expect(solvedA.outline).toHaveLength(4);
     expect(solvedB.outline).toHaveLength(4);
     expect(solvedA.b.ownedCapPoly).toBeUndefined();
     expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(Math.max(...res.joinPolys[0].map((point) => dist(P(0, 0), point)))).toBeLessThan(0.45);
   });
 
-  test("default equal-priority corner keeps a pointed miter even at a very sharp angle", () => {
+  test("default equal-priority sharp corner uses a butt join instead of a pointed miter", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("miter");
-    expect(solvedB.a.join).toBe("miter");
-    expect(solvedA.b.left).toEqual(solvedB.a.left);
-    expect(solvedA.b.right).toEqual(solvedB.a.right);
+    expect(solvedA.b.join).toBe("butt");
+    expect(solvedB.a.join).toBe("butt");
+    expect(solvedA.b.ownedCapPoly).toBeUndefined();
+    expect(solvedB.a.ownedCapPoly).toBeUndefined();
     expect(res.joinPolys).toHaveLength(0);
   });
 
-  test("moderately angled equal-priority corner keeps a pointed miter", () => {
+  test("moderately angled equal-priority corner uses a butt join", () => {
     const w1 = wall("a", P(-5, 0), P(0, 0), 150);
     const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
     const solvedA = res.walls.find((w) => w.id === "a")!;
     const solvedB = res.walls.find((w) => w.id === "b")!;
 
-    expect(solvedA.b.join).toBe("miter");
-    expect(solvedB.a.join).toBe("miter");
-    expect(solvedA.b.left).toEqual(solvedB.a.left);
-    expect(solvedA.b.right).toEqual(solvedB.a.right);
+    expect(solvedA.b.join).toBe("butt");
+    expect(solvedB.a.join).toBe("butt");
+    expect(solvedA.b.ownedCapPoly).toBeUndefined();
+    expect(solvedB.a.ownedCapPoly).toBeUndefined();
     expect(res.joinPolys).toHaveLength(0);
   });
 
-  test("equal-priority angled corner keeps same wall faces joined", () => {
+  test("equal-priority angled corner butts the second wall into the first wall", () => {
     const vertical = wall("vertical", P(0, 5), P(0, 0), 150);
     const diagonal = wall("diagonal", P(0, 0), P(5, 5), 150);
     const res = solveWallNetwork([vertical, diagonal], { nodeTolM: 1e-6 });
     const solvedVertical = res.walls.find((w) => w.id === "vertical")!;
     const solvedDiagonal = res.walls.find((w) => w.id === "diagonal")!;
 
-    expect(solvedVertical.b.join).toBe("miter");
-    expect(solvedDiagonal.a.join).toBe("miter");
-    expect(solvedDiagonal.a.left).toEqual(solvedVertical.b.left);
-    expect(solvedDiagonal.a.right).toEqual(solvedVertical.b.right);
+    expect(solvedVertical.b.join).toBe("butt");
+    expect(solvedDiagonal.a.join).toBe("butt");
+    expect(solvedVertical.b.left.x).toBeCloseTo(0.075, 6);
+    expect(solvedVertical.b.right.x).toBeCloseTo(-0.075, 6);
+    expect(dist(solvedDiagonal.a.left, solvedDiagonal.a.right)).toBeGreaterThan(0.14);
   });
 
-  test("closed room with diagonal wall uses ordinary miters at the room ending", () => {
+  test("closed room with diagonal wall uses butt joins at the room ending", () => {
     const left = wall("left", P(0, 0), P(0, 5), 150);
     const top = wall("top", P(0, 5), P(5, 5), 150);
     const right = wall("right", P(5, 5), P(5, 2), 150);
@@ -151,12 +181,10 @@ describe("walls2d join solver", () => {
     const solvedLeft = res.walls.find((w) => w.id === "left")!;
     const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
 
-    expect(solvedLeft.a.join).toBe("miter");
-    expect(solvedBottom.b.join).toBe("miter");
-    expect(solvedLeft.a.left).toEqual(solvedBottom.b.left);
-    expect(solvedLeft.a.right).toEqual(solvedBottom.b.right);
-    expect(solvedLeft.a.left.z).toBeLessThan(-0.09);
-    expect(solvedLeft.a.right.z).toBeGreaterThan(0.09);
+    expect(solvedLeft.a.join).toBe("butt");
+    expect(solvedBottom.b.join).toBe("butt");
+    expect(solvedLeft.a.ownedCapPoly).toBeUndefined();
+    expect(solvedBottom.b.ownedCapPoly).toBeUndefined();
   });
 
   test("nearby room-closing endpoints solve from one shared corner", () => {
@@ -168,14 +196,13 @@ describe("walls2d join solver", () => {
     const solvedLeft = res.walls.find((w) => w.id === "left")!;
     const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
 
-    expect(solvedLeft.a.join).toBe("miter");
-    expect(solvedBottom.b.join).toBe("miter");
-    expect(solvedLeft.a.left).toEqual(solvedBottom.b.left);
-    expect(solvedLeft.a.right).toEqual(solvedBottom.b.right);
-    expect(Math.max(dist(P(0, 0), solvedLeft.a.left), dist(P(0, 0), solvedLeft.a.right))).toBeLessThan(0.2);
+    expect(solvedLeft.a.join).toBe("butt");
+    expect(solvedBottom.b.join).toBe("butt");
+    expect(solvedLeft.a.ownedCapPoly).toBeUndefined();
+    expect(solvedBottom.b.ownedCapPoly).toBeUndefined();
   });
 
-  test("equal-priority closed angled outline keeps ordinary corner joins", () => {
+  test("equal-priority closed angled outline uses side-butts at all 2-wall corners", () => {
     const left = wall("left", P(0, 0), P(0, 5), 150);
     const top = wall("top", P(0, 5), P(4, 5), 150);
     const upperRight = wall("upperRight", P(4, 5), P(6, 2), 150);
@@ -183,10 +210,18 @@ describe("walls2d join solver", () => {
     const bottom = wall("bottom", P(3, 0.5), P(0, 0), 150);
     const res = solveWallNetwork([left, top, upperRight, lowerRight, bottom], { nodeTolM: 1e-6 });
 
-    for (const solvedWall of res.walls) {
-      expect(solvedWall.a.join).not.toBe("butt");
-      expect(solvedWall.b.join).not.toBe("butt");
-    }
+    const solvedLeft = res.walls.find((w) => w.id === "left")!;
+    const solvedTop = res.walls.find((w) => w.id === "top")!;
+    const solvedUpperRight = res.walls.find((w) => w.id === "upperRight")!;
+    const solvedLowerRight = res.walls.find((w) => w.id === "lowerRight")!;
+    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+
+    expect(solvedLeft.b.join).toBe("butt");
+    expect(solvedTop.a.join).toBe("butt");
+    expect(solvedUpperRight.b.join).toBe("butt");
+    expect(solvedLowerRight.a.join).toBe("butt");
+    expect(solvedBottom.a.join).toBe("butt");
+    expect(solvedBottom.b.join).toBe("butt");
   });
 
   test("clamps an angled branch to the main wall end face", () => {
@@ -200,9 +235,7 @@ describe("walls2d join solver", () => {
     expect(res.joinPolys).toHaveLength(0);
     expect(solvedMain.outline).toHaveLength(4);
     expect(solvedMain.b.ownedCapPoly).toBeUndefined();
-    expect(Math.max(solvedBranch.a.left.z, solvedBranch.a.right.z)).toBeLessThanOrEqual(5 + 1e-9);
-    expect(solvedBranch.a.left.x).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
+    expect(dist(solvedBranch.a.left, solvedBranch.a.right)).toBeGreaterThan(0.14);
   });
 
   test("explicit side-butt branch does not protrude past the opposite wall face", () => {
@@ -214,7 +247,7 @@ describe("walls2d join solver", () => {
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
     expect(solvedMain.b.ownedCapPoly).toBeUndefined();
-    expect(Math.min(solvedBranch.a.left.z, solvedBranch.a.right.z)).toBeGreaterThanOrEqual(-1e-9);
+    expect(dist(solvedBranch.a.left, solvedBranch.a.right)).toBeGreaterThan(0.14);
   });
 
   test("Case 4: 90° different thickness (still joins)", () => {
@@ -222,15 +255,11 @@ describe("walls2d join solver", () => {
     const w2 = wall("b", P(0, 0), P(0, 5), 150);
     const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
     expect(res.walls.length).toBe(2);
-    const a0 = res.walls[0].outline;
-    const b0 = res.walls[1].outline;
-    const min = Math.min(
-      ...a0.flatMap((pa) => b0.map((pb) => dist(pa, pb)))
-    );
-    expect(min).toBeLessThanOrEqual(0.075);
+    expect(res.walls[0].outline).toHaveLength(4);
+    expect(res.walls[1].outline).toHaveLength(4);
   });
 
-  test("fills orthogonal side-butt caps so right-angle floorplans do not step", () => {
+  test("keeps orthogonal side-butt main walls straight without hidden cap triangles", () => {
     const top = wall("top", P(0, 5), P(5, 5), 150);
     const right = wall("right", P(5, 5), P(5, 0), 150);
     const bottom = wall("bottom", P(0, 0), P(5, 0), 150);
@@ -241,16 +270,14 @@ describe("walls2d join solver", () => {
     const solvedRight = res.walls.find((w) => w.id === "right")!;
 
     expect(res.joinPolys).toHaveLength(0);
-    expect(solvedTop.b.ownedCapPoly).toHaveLength(3);
-    expect(solvedTop.b.ownedCapPoly![0]).toEqual({ x: 5, z: 5.075 });
-    expect(solvedTop.b.ownedCapPoly![1]).toEqual({ x: 5.075, z: 4.925 });
-    expect(solvedTop.b.ownedCapPoly![2]).toEqual({ x: 5, z: 4.925 });
-    expect(solvedRight.b.ownedCapPoly).toHaveLength(3);
-    expect(solvedRight.b.ownedCapPoly![0]).toEqual({ x: 5.075, z: 0 });
-    expect(solvedRight.b.ownedCapPoly![1]).toEqual({ x: 4.925, z: -0.075 });
-    expect(solvedRight.b.ownedCapPoly![2]).toEqual({ x: 4.925, z: 0 });
-    expect(solvedTop.outline).toHaveLength(5);
-    expect(solvedRight.outline).toHaveLength(5);
+    expect(solvedTop.b.ownedCapPoly).toBeUndefined();
+    expect(solvedRight.b.ownedCapPoly).toBeUndefined();
+    expect(solvedTop.outline).toHaveLength(4);
+    expect(solvedRight.outline).toHaveLength(4);
+    expect(solvedTop.b.left.x).toBeCloseTo(5.075, 6);
+    expect(solvedTop.b.right.x).toBeCloseTo(5.075, 6);
+    expect(solvedRight.b.left.z).toBeCloseTo(-0.075, 6);
+    expect(solvedRight.b.right.z).toBeCloseTo(-0.075, 6);
   });
 
   test("Case 6: T join (branch cut to main)", () => {
@@ -269,9 +296,9 @@ describe("walls2d join solver", () => {
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
-    expect(solvedMain.a.left.x).toBeCloseTo(0, 6);
+    expect(solvedMain.a.left.x).toBeCloseTo(-0.075, 6);
     expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(0, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(-0.075, 6);
     expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
     expect(solvedBranch.a.left.x).toBeCloseTo(-0.075, 6);
     expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
@@ -287,9 +314,9 @@ describe("walls2d join solver", () => {
     const solvedMain = res.walls.find((w) => w.id === "main")!;
     const solvedBranch = res.walls.find((w) => w.id === "branch")!;
 
-    expect(solvedMain.a.left.x).toBeCloseTo(0, 6);
+    expect(solvedMain.a.left.x).toBeCloseTo(-0.15, 6);
     expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(0, 6);
+    expect(solvedMain.a.right.x).toBeCloseTo(-0.15, 6);
     expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
     expect(solvedBranch.a.left.x).toBeCloseTo(-0.15, 6);
     expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);

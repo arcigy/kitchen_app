@@ -1444,6 +1444,7 @@ export function startApp(initialArgs: AppArgs) {
     getWallDebugEnabled: () => wallDebugEnabled,
     setWallSolvedJoinPolys: (next: Array<Array<{ x: number; z: number }>>) => { wallSolvedJoinPolys = next; },
     setWallUnionPolys: (next: WallPlanMultiPolygon | null) => { wallUnionPolys = next; },
+    updateSelectionHighlights,
     getWindowInst: () => windowInst,
     getWindowInsts: () => windows,
     getDoorInst: () => doorInst,
