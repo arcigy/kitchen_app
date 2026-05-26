@@ -406,6 +406,127 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return wall ? { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } } : null;
   };
 
+  const debugClearWalls = () => {
+    for (let index = walls.length - 1; index >= 0; index -= 1) {
+      const wall = walls[index];
+      if (!wall) continue;
+      wall.root?.parent?.remove(wall.root);
+      walls.splice(index, 1);
+    }
+    rebuildWallPlanMesh();
+  };
+
+  const debugSetWallDebug = (enabled = true) => {
+    ctx.setWallDebugEnabled?.(!!enabled);
+    return debugViewState();
+  };
+
+  const debugSetWallDebugLayers = (layers: Record<string, boolean>) => {
+    ctx.setWallDebugLayers?.(layers);
+    return debugViewState();
+  };
+
+  const debugCreateWallCornerDemo = () => {
+    debugClearWalls();
+    const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
+      debugCreateWall({ aMm, bMm, thicknessMm });
+
+    // Basic 90 degree L-corner
+    addDemoWall({ x: -5200, z: -3000 }, { x: -4100, z: -3000 });
+    addDemoWall({ x: -5200, z: -3000 }, { x: -5200, z: -2100 });
+
+    // Problematic bottom-left corner: L-corner plus an angled wall from the same node
+    addDemoWall({ x: -3300, z: -3000 }, { x: -2200, z: -3000 });
+    addDemoWall({ x: -3300, z: -3000 }, { x: -3300, z: -2100 });
+    addDemoWall({ x: -3300, z: -3000 }, { x: -2300, z: -2350 });
+
+    // Right-top multi-wall join: horizontal, vertical and two angled incident walls
+    addDemoWall({ x: -1200, z: -3000 }, { x: 0, z: -3000 });
+    addDemoWall({ x: 0, z: -3000 }, { x: 0, z: -2100 });
+    addDemoWall({ x: -1100, z: -2100 }, { x: 0, z: -3000 });
+    addDemoWall({ x: 0, z: -3000 }, { x: 1200, z: -3500 });
+
+    // 3-wall same-endpoint join
+    addDemoWall({ x: -5200, z: -900 }, { x: -4100, z: -900 });
+    addDemoWall({ x: -5200, z: -900 }, { x: -5200, z: 0 });
+    addDemoWall({ x: -5200, z: -900 }, { x: -4100, z: -250 });
+
+    // 4-wall star join
+    addDemoWall({ x: -2600, z: -400 }, { x: -1500, z: -400 });
+    addDemoWall({ x: -2600, z: -400 }, { x: -2600, z: 500 });
+    addDemoWall({ x: -2600, z: -400 }, { x: -3700, z: -400 });
+    addDemoWall({ x: -2600, z: -400 }, { x: -2600, z: -1300 });
+
+    // Angled wall into a corner
+    addDemoWall({ x: 300, z: -700 }, { x: 1500, z: -700 });
+    addDemoWall({ x: 1500, z: -700 }, { x: 1500, z: 150 });
+    addDemoWall({ x: 300, z: 150 }, { x: 1500, z: -700 });
+
+    // T-join: branch ends on host wall body
+    addDemoWall({ x: -5200, z: 1900 }, { x: -3700, z: 1900 });
+    addDemoWall({ x: -4450, z: 2800 }, { x: -4450, z: 1900 });
+
+    // Different thickness join
+    addDemoWall({ x: -2500, z: 1900 }, { x: -1300, z: 1900 }, 300);
+    addDemoWall({ x: -2500, z: 1900 }, { x: -2500, z: 2900 }, 100);
+
+    ctx.setWallDebugEnabled?.(true);
+    rebuildWallPlanMesh();
+    return debugViewState();
+  };
+
+  const debugCreateWallNetworkOverlapDemo = () => {
+    debugClearWalls();
+    const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
+      debugCreateWall({ aMm, bMm, thicknessMm });
+
+    // Rectangular wall loop plus a diagonal wall that terminates on visible wall faces.
+    // The diagonal endpoints intentionally sit on face boundaries instead of centerlines
+    // so the wall-network solver has to resolve body joins, caps and boundary edges.
+    addDemoWall({ x: 0, z: 0 }, { x: 0, z: 3000 });
+    addDemoWall({ x: 0, z: 3000 }, { x: 5000, z: 3000 });
+    addDemoWall({ x: 5000, z: 3000 }, { x: 5000, z: 0 });
+    addDemoWall({ x: 5000, z: 0 }, { x: 0, z: 0 });
+    addDemoWall({ x: 75, z: 75 }, { x: 4925, z: 2925 });
+
+    ctx.setWallDebugEnabled?.(true);
+    rebuildWallPlanMesh();
+    return debugViewState();
+  };
+
+  const debugCreateFailingWallNetworkCase01 = () => {
+    debugClearWalls();
+    const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
+      debugCreateWall({ aMm, bMm, thicknessMm });
+
+    addDemoWall({ x: 0, z: 0 }, { x: 0, z: 3000 });
+    addDemoWall({ x: 0, z: 3000 }, { x: 5000, z: 3000 });
+    addDemoWall({ x: 5000, z: 3000 }, { x: 5000, z: 0 });
+    addDemoWall({ x: 5000, z: 0 }, { x: 0, z: 0 });
+    const diagonal = addDemoWall({ x: 75, z: 75 }, { x: 4925, z: 2925 });
+    addDemoWall({ x: 5000, z: 0 }, { x: 6200, z: 775 });
+
+    if (diagonal?.id) setSelectedWall(diagonal.id);
+    ctx.setWallDebugEnabled?.(true);
+    rebuildWallPlanMesh();
+    return { ...debugViewState(), selectedDiagonalId: diagonal?.id ?? null };
+  };
+
+  const debugCreateBasicRectangularWallLoopDemo = () => {
+    debugClearWalls();
+    const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
+      debugCreateWall({ aMm, bMm, thicknessMm });
+
+    addDemoWall({ x: 0, z: 0 }, { x: 0, z: 3000 });
+    addDemoWall({ x: 0, z: 3000 }, { x: 5000, z: 3000 });
+    addDemoWall({ x: 5000, z: 3000 }, { x: 5000, z: 0 });
+    addDemoWall({ x: 5000, z: 0 }, { x: 0, z: 0 });
+
+    ctx.setWallDebugEnabled?.(true);
+    rebuildWallPlanMesh();
+    return debugViewState();
+  };
+
   const debugMoveWall = (wallId: string, shiftMm: { x: number; z: number }) => {
     const wall = walls.find((item: any) => item.id === wallId) ?? null;
     if (!wall) throw new Error(`Wall ${wallId} not found.`);
@@ -702,6 +823,13 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,
+    clearWalls: debugClearWalls,
+    setWallDebug: debugSetWallDebug,
+    setWallDebugLayers: debugSetWallDebugLayers,
+    createWallCornerDemo: debugCreateWallCornerDemo,
+    createWallNetworkOverlapDemo: debugCreateWallNetworkOverlapDemo,
+    createFailingWallNetworkCase01: debugCreateFailingWallNetworkCase01,
+    createBasicRectangularWallLoopDemo: debugCreateBasicRectangularWallLoopDemo,
     createFloor: debugCreateFloor,
     moveWall: debugMoveWall,
     createMeasure: debugCreateMeasure,

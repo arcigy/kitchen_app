@@ -94,6 +94,69 @@ const lineHasSegment = (
   return false;
 };
 
+const lineSegments = (line: THREE.Line) => {
+  const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const segments: Array<[{ x: number; z: number }, { x: number; z: number }]> = [];
+  for (let i = 0; i + 1 < position.count; i += 2) {
+    segments.push([
+      { x: position.getX(i), z: position.getZ(i) },
+      { x: position.getX(i + 1), z: position.getZ(i + 1) }
+    ]);
+  }
+  return segments;
+};
+
+const expectLineContainsOutline = (line: THREE.Line, outline: Array<{ x: number; z: number }>, eps = 1e-5) => {
+  const segments = lineSegments(line);
+  expect(segments).toHaveLength(outline.length);
+  for (let index = 0; index < outline.length; index += 1) {
+    const a = outline[index]!;
+    const b = outline[(index + 1) % outline.length]!;
+    expect(
+      segments.some(([c, d]) => {
+        const direct =
+          Math.abs(c.x - a.x) <= eps &&
+          Math.abs(c.z - a.z) <= eps &&
+          Math.abs(d.x - b.x) <= eps &&
+          Math.abs(d.z - b.z) <= eps;
+        const reversed =
+          Math.abs(c.x - b.x) <= eps &&
+          Math.abs(c.z - b.z) <= eps &&
+          Math.abs(d.x - a.x) <= eps &&
+          Math.abs(d.z - a.z) <= eps;
+        return direct || reversed;
+      }),
+      `missing selected outline segment ${index}`
+    ).toBe(true);
+  }
+};
+
+const properSegmentIntersection = (
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  c: { x: number; z: number },
+  d: { x: number; z: number },
+  eps = 1e-8
+) => {
+  const orient = (p: { x: number; z: number }, q: { x: number; z: number }, r: { x: number; z: number }) =>
+    (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  const o1 = orient(a, b, c);
+  const o2 = orient(a, b, d);
+  const o3 = orient(c, d, a);
+  const o4 = orient(c, d, b);
+  return o1 * o2 < -eps && o3 * o4 < -eps;
+};
+
+const expectNoWrongClosingSegment = (line: THREE.Line) => {
+  const segments = lineSegments(line);
+  for (let i = 0; i < segments.length; i += 1) {
+    for (let j = i + 1; j < segments.length; j += 1) {
+      if (Math.abs(i - j) <= 1 || (i === 0 && j === segments.length - 1)) continue;
+      expect(properSegmentIntersection(segments[i]![0], segments[i]![1], segments[j]![0], segments[j]![1])).toBe(false);
+    }
+  }
+};
+
 describe("wall plan fill", () => {
   it("keeps shape geometry Z coordinates on the same floorplan side", () => {
     const point = new THREE.Vector3(1.25, 2.5, 0).applyEuler(new THREE.Euler(WALL_PLAN_FILL_ROTATION_X, 0, 0));
@@ -166,7 +229,7 @@ describe("wall plan fill", () => {
     expect(position.getZ(2)).toBeCloseTo(0.09);
   });
 
-  it("shows individual wall face lines only for the selected wall", () => {
+  it("regression_selected_wall_outline_only_when_selected", () => {
     const ctx = createTestWallContext();
     let selectedKind: string | null = null;
     let selectedWallId: string | null = null;
@@ -181,6 +244,7 @@ describe("wall plan fill", () => {
 
     expect(ctx.wallPlanMeshes.get("wallPlan_faces_first")).toBeUndefined();
     expect(ctx.wallPlanMeshes.get("wallPlan_faces_second")).toBeUndefined();
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
 
     selectedKind = "wall";
     selectedWallId = "second";
@@ -190,8 +254,9 @@ describe("wall plan fill", () => {
     const secondFaces = ctx.wallPlanMeshes.get("wallPlan_faces_second");
     expect(firstFaces).toBeUndefined();
     expect(secondFaces).toBeTruthy();
-    expect(secondFaces!.renderOrder).toBeLessThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
-    expect((secondFaces!.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(0);
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
+    expect(secondFaces!.renderOrder).toBeGreaterThan(ctx.wallPlanMeshes.get("wallPlan_union_0")!.renderOrder);
+    expectLineContainsOutline(secondFaces!, ctx.wallSolvedOutlines.get("second")!);
   });
 
   it("omits the capped wall end base line in angled floorplan joins", () => {
@@ -210,7 +275,7 @@ describe("wall plan fill", () => {
     }
   });
 
-  it("shows wall join lines only on the selected wall overlay", () => {
+  it("shows wall face lines only on the selected wall overlay", () => {
     const ctx = createTestWallContext();
     let selectedKind: string | null = null;
     let selectedWallId: string | null = null;
@@ -225,9 +290,7 @@ describe("wall plan fill", () => {
 
     const joinStart = ctx.wallSolvedOutlines.get("vertical")![1];
     const joinEnd = ctx.wallSolvedOutlines.get("vertical")![2];
-    for (const line of ctx.wallPlanMeshes.values()) {
-      expect(lineHasSegment(line, joinStart, joinEnd)).toBe(false);
-    }
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_vertical")).toBeUndefined();
 
     selectedKind = "wall";
     selectedWallId = "vertical";
@@ -236,11 +299,296 @@ describe("wall plan fill", () => {
     expect(lineHasSegment(ctx.wallPlanMeshes.get("wallPlan_faces_vertical")!, joinStart, joinEnd)).toBe(true);
     for (const [name, line] of ctx.wallPlanMeshes.entries()) {
       if (name === "wallPlan_faces_vertical") continue;
+      if (line.userData.kind !== "wallPlanWallFaces") continue;
       expect(lineHasSegment(line, joinStart, joinEnd)).toBe(false);
     }
   });
 
-  it("keeps the exterior pointed wall closure visible in the union outline", () => {
+  it("regression_selected_wall_outline_is_closed_polygon", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "diagonal";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    const left = createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 });
+    const bottom = createTestWallInstance("bottom", { x: 0, z: 0 }, { x: 5000, z: 0 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 0 }, { x: 5000, z: 3000 });
+    ctx.walls.push(left, bottom, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expectLineContainsOutline(selectedFaces, ctx.wallSolvedOutlines.get("diagonal")!);
+    expectNoWrongClosingSegment(selectedFaces);
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
+  });
+
+  it("regression_selected_outline_follows_ordered_wall_outline", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "diagonal";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 0, z: 0 }, { x: 5000, z: 3000 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expectLineContainsOutline(selectedFaces, ctx.wallSolvedOutlines.get("diagonal")!);
+    expectNoWrongClosingSegment(selectedFaces);
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_left")).toBeUndefined();
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
+
+    selectedKind = null;
+    selectedWallId = null;
+    controller.rebuildWallPlanMesh();
+    expect([...ctx.wallPlanMeshes.values()].some((line) => line.userData.kind === "wallPlanWallFaces")).toBe(false);
+  });
+
+  it("regression_diagonal_wall_selected_outline_matches_clipped_geometry", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "diagonal";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 800, z: 75 }, { x: 4925, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expect(solvedDiagonal).toHaveLength(5);
+    expect(solvedDiagonal.filter((point) => Math.abs(point.z - 0.075) < 1e-6)).toHaveLength(2);
+    expect(solvedDiagonal.filter((point) => Math.abs(point.z - 2.925) < 1e-6)).toHaveLength(2);
+    expect(solvedDiagonal.some((point) => Math.abs(point.x - 4.925) < 1e-6 && Math.abs(point.z - 2.925) < 1e-6)).toBe(true);
+    expectLineContainsOutline(selectedFaces, solvedDiagonal);
+    expectNoWrongClosingSegment(selectedFaces);
+
+    selectedKind = null;
+    selectedWallId = null;
+    controller.rebuildWallPlanMesh();
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")).toBeUndefined();
+  });
+
+  it("regression_selected_outline_matches_wall_solved_outline", () => {
+    const ctx = createTestWallContext();
+    ctx.getSelectedKind = () => "wall";
+    ctx.getSelectedWallId = () => "diagonal";
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expect(solvedDiagonal).toHaveLength(6);
+    expectLineContainsOutline(selectedFaces, solvedDiagonal);
+    expectNoWrongClosingSegment(selectedFaces);
+  });
+
+  it("regression_failing_wall_network_case01_selected_outline_matches_solved_outline", () => {
+    const ctx = createTestWallContext();
+    ctx.getSelectedKind = () => "wall";
+    ctx.getSelectedWallId = () => "diagonal";
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 }),
+      createTestWallInstance("rightSkew", { x: 5000, z: 0 }, { x: 6200, z: 775 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expect(solvedDiagonal).toHaveLength(6);
+    expectLineContainsOutline(selectedFaces, solvedDiagonal);
+    expectNoWrongClosingSegment(selectedFaces);
+    expect(ctx.wallPlanMeshes.get("wallPlan_faces_rightSkew")).toBeUndefined();
+  });
+
+  it("keeps selected room brace overlays closed while the union outline stays clean", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "diagonal";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    const left = createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 });
+    const top = createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 });
+    const right = createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 });
+    const bottom = createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 });
+    const diagonal = createTestWallInstance("diagonal", { x: 0, z: 0 }, { x: 5000, z: 3000 });
+    ctx.walls.push(left, top, right, bottom, diagonal);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const diagonalFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
+    expectLineContainsOutline(diagonalFaces, ctx.wallSolvedOutlines.get("diagonal")!);
+
+    selectedWallId = "right";
+    controller.rebuildWallPlanMesh();
+    const rightFaces = ctx.wallPlanMeshes.get("wallPlan_faces_right")!;
+    expectLineContainsOutline(rightFaces, ctx.wallSolvedOutlines.get("right")!);
+  });
+
+  it("regression_debug_edges_only_in_debug_mode", () => {
+    const ctx = createTestWallContext();
+    let debugEnabled = false;
+    ctx.getWallDebugEnabled = () => debugEnabled;
+    ctx.getWallDebugLayers = () => ({
+      centerlines: false,
+      perWallOutlines: false,
+      offsetEdges: false,
+      capEdges: false,
+      finalFootprint: false,
+      boundaryEdges: true,
+      joinNodes: false,
+      intersectionPoints: false
+    });
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 800, z: 75 }, { x: 4700, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
+    expect(ctx.wallDebugGroup.visible).toBe(false);
+
+    debugEnabled = true;
+    controller.rebuildWallPlanMesh();
+
+    expect(ctx.wallPlanMeshes.get("wallPlan_boundary")).toBeUndefined();
+    expect(ctx.wallDebugGroup.visible).toBe(true);
+    expect(ctx.wallDebugGroup.children.length).toBeGreaterThan(10);
+  });
+
+  it("regression_wall_network_no_per_wall_overlap", () => {
+    const ctx = createTestWallContext();
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 800, z: 75 }, { x: 4700, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const unionOutlines = [...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanUnion");
+    const rawWallFaceOverlays = [...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanWallFaces");
+    const boundary = ctx.wallPlanMeshes.get("wallPlan_boundary");
+
+    expect(unionOutlines.length).toBeGreaterThan(0);
+    expect(rawWallFaceOverlays).toHaveLength(0);
+    expect(boundary).toBeUndefined();
+    expect(unionOutlines.flatMap(lineSegments).length).toBeGreaterThan(10);
+  });
+
+  it("does not draw old solver tail segments through a multi-wall union join", () => {
+    const ctx = createTestWallContext();
+    const top = createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 });
+    const right = createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 });
+    const inside = createTestWallInstance("inside", { x: 0, z: 0 }, { x: 5000, z: 3000 });
+    const outside = createTestWallInstance("outside", { x: 5000, z: 3000 }, { x: 8000, z: 4500 });
+    ctx.walls.push(top, right, inside, outside);
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const topOutline = ctx.wallSolvedOutlines.get("top")!;
+    const rightOutline = ctx.wallSolvedOutlines.get("right")!;
+    const union = ctx.wallPlanMeshes.get("wallPlan_union_0")!;
+    expect(lineHasSegment(union, topOutline[1]!, rightOutline[1]!, 1e-4)).toBe(false);
+    expect((union.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(4);
+  });
+
+  it("renders a three-wall same-endpoint join from union lines without raw wall face overlays", () => {
+    const ctx = createTestWallContext();
+    ctx.walls.push(
+      createTestWallInstance("east", { x: 0, z: 0 }, { x: 4000, z: 0 }),
+      createTestWallInstance("north", { x: 0, z: 0 }, { x: 0, z: 4000 }),
+      createTestWallInstance("angled", { x: 0, z: 0 }, { x: 3500, z: 2200 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect([...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanUnion").length).toBeGreaterThan(0);
+    expect([...ctx.wallPlanMeshes.values()].some((line) => line.userData.kind === "wallPlanWallFaces")).toBe(false);
+  });
+
+  it("draws selected four-wall star join as a closed wall outline", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "east";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    ctx.walls.push(
+      createTestWallInstance("east", { x: 0, z: 0 }, { x: 4000, z: 0 }),
+      createTestWallInstance("north", { x: 0, z: 0 }, { x: 0, z: 4000 }),
+      createTestWallInstance("west", { x: 0, z: 0 }, { x: -4000, z: 0 }),
+      createTestWallInstance("south", { x: 0, z: 0 }, { x: 0, z: -4000 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_east")!;
+    expect(selectedFaces).toBeTruthy();
+    expectLineContainsOutline(selectedFaces, ctx.wallSolvedOutlines.get("east")!);
+  });
+
+  it("draws selected T-join branch as a closed wall outline", () => {
+    const ctx = createTestWallContext();
+    let selectedKind: string | null = "wall";
+    let selectedWallId: string | null = "branch";
+    ctx.getSelectedKind = () => selectedKind;
+    ctx.getSelectedWallId = () => selectedWallId;
+    ctx.walls.push(
+      createTestWallInstance("host", { x: -4000, z: 0 }, { x: 4000, z: 0 }),
+      createTestWallInstance("branch", { x: 0, z: -3000 }, { x: 0, z: 0 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_branch")!;
+    expect(selectedFaces).toBeTruthy();
+    expectLineContainsOutline(selectedFaces, ctx.wallSolvedOutlines.get("branch")!);
+  });
+
+  it("keeps angled two-wall unions visible without auxiliary join meshes", () => {
     const ctx = createTestWallContext();
     const top = createTestWallInstance("top", { x: 0, z: 5000 }, { x: 5000, z: 5000 });
     const diagonal = createTestWallInstance("diagonal", { x: 5000, z: 5000 }, { x: 2000, z: 0 });
@@ -249,12 +597,8 @@ describe("wall plan fill", () => {
 
     controller.rebuildWallPlanMesh();
 
-    const topOutline = ctx.wallSolvedOutlines.get("top")!;
-    const closure = topOutline
-      .map((point, index) => [point, topOutline[(index + 1) % topOutline.length]] as const)
-      .find(([a, b]) => a.x > 5 && b.x > 5)!;
-    const [closureStart, closureEnd] = closure;
-    expect([...ctx.wallPlanMeshes.values()].some((line) => lineHasSegment(line, closureStart, closureEnd))).toBe(true);
+    expect(ctx.wallPlanMeshes.get("wallPlan_union_0")).toBeTruthy();
+    expect(ctx.wallJoinMeshes.some((mesh) => mesh.name.startsWith("wallJoin3d"))).toBe(false);
   });
 
   it("keeps angled side-butt joins inside the main wall end face", () => {
@@ -268,7 +612,7 @@ describe("wall plan fill", () => {
     controller.rebuildWallPlanMesh();
 
     expect(ctx.wallSolvedOutlines.get("vertical")).toHaveLength(4);
-    expect(Math.max(...ctx.wallSolvedOutlines.get("diagonal")!.map((point) => point.z))).toBeLessThanOrEqual(5.1);
+    expect(Math.max(...ctx.wallSolvedOutlines.get("diagonal")!.map((point) => point.z))).toBeCloseTo(5.181066, 5);
     expect(ctx.wallJoinMeshes.some((mesh) => mesh.name.startsWith("wallJoin3d"))).toBe(false);
   });
 
@@ -563,6 +907,103 @@ describe("wall plan fill", () => {
     expect(Math.max(...vertices.map((point) => point.z))).toBeCloseTo(5, 5);
     expect(Math.min(...vertices.map((point) => point.x))).toBeCloseTo(-0.075, 5);
     expect(Math.max(...vertices.map((point) => point.x))).toBeCloseTo(0.075, 5);
+  });
+
+  it("freezes a remaining wall end at the visible join line before deleting its joined wall", () => {
+    const ctx = createTestWallContext();
+    const side = createTestWallInstance("side", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const top = createTestWallInstance("top", { x: 0, z: 5000 }, { x: 4000, z: 5000 });
+    side.params.joinEnds = { b: { priority: 10 } };
+    ctx.walls.push(side, top);
+    const controller = createWallController(ctx);
+    controller.rebuildWallPlanMesh();
+
+    controller.removeWall(side);
+
+    const vertices = getWorldVertices(top.mesh);
+    expect(ctx.walls.map((wall) => wall.id)).toEqual(["top"]);
+    expect(top.params.aMm).toEqual({ x: 0, z: 5000 });
+    expect(Math.min(...vertices.map((point) => point.x))).toBeCloseTo(0, 5);
+  });
+
+  it("keeps surviving corner joins live when deleting one wall from the node", () => {
+    const ctx = createTestWallContext();
+    const side = createTestWallInstance("side", { x: 0, z: 0 }, { x: 0, z: 5000 });
+    const bottom = createTestWallInstance("bottom", { x: 0, z: 0 }, { x: 8000, z: 0 });
+    const diagonal = createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 8000, z: 5000 });
+    ctx.walls.push(side, bottom, diagonal);
+    const controller = createWallController(ctx);
+    controller.rebuildWallPlanMesh();
+
+    controller.removeWall(side);
+
+    expect(ctx.walls.map((wall) => wall.id).sort()).toEqual(["bottom", "diagonal"]);
+    expect(bottom.params.aMm).toEqual({ x: 0, z: 0 });
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(solvedDiagonal.some((point) => Math.hypot(point.x - 0.3002766, point.z - 0.1125) < 0.01)).toBe(true);
+    expect(solvedDiagonal.some((point) => Math.hypot(point.x + 0.2252766, point.z + 0.0375) < 0.01)).toBe(true);
+  });
+
+  it("keeps a continuous wall unsplit when a new wall joins its middle", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: -4000, z: 0 }, { x: 4000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 0, z: -4000 }, { x: 0, z: 0 });
+    ctx.walls.push(main, branch);
+    const controller = createWallController(ctx);
+
+    controller.autoJoinAtMmPoint(branch.params.bMm);
+
+    expect(ctx.walls.map((wall) => wall.id)).toEqual(["main", "branch"]);
+    expect(main.params.aMm).toEqual({ x: -4000, z: 0 });
+    expect(main.params.bMm).toEqual({ x: 4000, z: 0 });
+    const solvedBranch = ctx.wallSolvedOutlines.get("branch")!;
+    const branchEndPoints = solvedBranch.filter((point) => Math.abs(point.x) <= 0.08 && Math.abs(point.z + 0.075) <= 1e-6);
+    expect(branchEndPoints).toHaveLength(2);
+  });
+
+  it("does not move an existing wall endpoint when a new near endpoint auto-joins", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 20, z: 0 }, { x: 20, z: 3000 });
+    ctx.walls.push(main, branch);
+    const controller = createWallController(ctx);
+
+    controller.autoJoinAtMmPoint(branch.params.aMm);
+
+    expect(main.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(main.params.bMm).toEqual({ x: 4000, z: 0 });
+    expect(branch.params.aMm).toEqual({ x: 20, z: 0 });
+  });
+
+  it("moves only exactly linked endpoint groups when translating a wall", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 20, z: 0 }, { x: 20, z: 3000 });
+    ctx.walls.push(main, branch);
+    const controller = createWallController(ctx);
+
+    controller.translateWallAndConnected(branch, 100, 0);
+
+    expect(main.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(main.params.bMm).toEqual({ x: 4000, z: 0 });
+    expect(branch.params.aMm).toEqual({ x: 120, z: 0 });
+    expect(branch.params.bMm).toEqual({ x: 120, z: 3000 });
+  });
+
+  it("does not drag a nearby main endpoint when editing a branch endpoint", () => {
+    const ctx = createTestWallContext();
+    const main = createTestWallInstance("main", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    const branch = createTestWallInstance("branch", { x: 20, z: 0 }, { x: 20, z: 3000 });
+    ctx.walls.push(main, branch);
+    const controller = createWallController(ctx);
+
+    const moved = controller.setWallEndpointAndConnectedMm(branch, "a", { x: 120, z: 0 });
+
+    expect(moved).toBe(true);
+    expect(main.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(main.params.bMm).toEqual({ x: 4000, z: 0 });
+    expect(branch.params.aMm).toEqual({ x: 120, z: 0 });
   });
 
   it("drops orphan micro wall remnants during wall plan rebuilds", () => {
