@@ -789,6 +789,7 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const candidates: Array<{
       host: Wall;
       projection: Point;
+      projectionT: number;
       distance: number;
       alignment: number;
       cut: { side: "left" | "right"; line: Line; score: number };
@@ -811,7 +812,7 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
         .sort((a, b) => b.score - a.score || a.side.localeCompare(b.side));
       const cut = hostSides[0];
       if (!cut) continue;
-      candidates.push({ host, projection: projection.point, distance: projection.distance, alignment, cut });
+      candidates.push({ host, projection: projection.point, projectionT: projection.t, distance: projection.distance, alignment, cut });
     }
     if (candidates.length === 0) continue;
     candidates.sort(
@@ -825,7 +826,7 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const best = candidates[0]!;
     const sameDistanceTol = Math.max(nodeTolM, 1e-6);
     const nearbyCandidates = candidates.filter((candidate) => Math.abs(candidate.distance - best.distance) <= sameDistanceTol);
-    const activeCandidates = nearbyCandidates.length > 1 ? nearbyCandidates : [best];
+    const activeCandidates = [best];
     const chooseSideHit = (side: "left" | "right") => {
       const branchLine = sideLineForSideAtNode(endpoint.wall, endpoint.end, endpoint.point, side).line;
       const hits = activeCandidates
@@ -850,12 +851,31 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const rightHit = chooseSideHit("right");
     if (!leftHit || !rightHit) continue;
 
+    let leftPoint = leftHit.hit.p;
+    let rightPoint = rightHit.hit.p;
+    const hostDir = baseDir(best.host);
+    for (const candidate of nearbyCandidates) {
+      if (candidate === best) continue;
+      const corner = intersectLines(best.cut.line, candidate.cut.line);
+      if (!corner) continue;
+      const sideLimit = best.projectionT <= 0.5 ? 1 : -1;
+      const param = (point: Point) => dot(sub(point, corner.p), hostDir);
+      const leftParam = param(leftPoint);
+      const rightParam = param(rightPoint);
+      const violation =
+        sideLimit > 0 ? Math.min(leftParam, rightParam, 0) : Math.max(leftParam, rightParam, 0);
+      if (Math.abs(violation) <= 1e-8) continue;
+      const shift = sideLimit > 0 ? -violation : -violation;
+      leftPoint = add(leftPoint, mul(hostDir, shift));
+      rightPoint = add(rightPoint, mul(hostDir, shift));
+    }
+
     const ends = solvedEnds.get(endpoint.wall.id);
     if (!ends) continue;
     const draft = cloneEndDraft(rawEndCornersAtNode(endpoint.wall, endpoint.point));
     draft.source = "bodyJoin";
-    setDraftSide(draft, "left", leftHit.hit.p);
-    setDraftSide(draft, "right", rightHit.hit.p);
+    setDraftSide(draft, "left", leftPoint);
+    setDraftSide(draft, "right", rightPoint);
     if (leftHit.candidate !== rightHit.candidate || leftHit.candidate.cut.side !== rightHit.candidate.cut.side) {
       const corner = intersectLines(leftHit.candidate.cut.line, rightHit.candidate.cut.line);
       if (corner && dist(corner.p, draft.left) > 1e-8 && dist(corner.p, draft.right) > 1e-8) {

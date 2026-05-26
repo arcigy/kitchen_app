@@ -475,8 +475,10 @@ describe("wall join regression coverage", () => {
     expect(diagonal.b.source).toBe("bodyJoin");
     expect(outlineHasPoint(diagonal.outline, P(0.075, 0.075))).toBe(true);
     expect(outlineHasPoint(diagonal.outline, P(4.925, 2.925))).toBe(true);
-    expect(diagonal.outline.filter((point) => Math.abs(point.x - 0.075) < 1e-6)).toHaveLength(2);
+    expect(diagonal.outline).toHaveLength(4);
     expect(diagonal.outline.filter((point) => Math.abs(point.z - 0.075) < 1e-6)).toHaveLength(2);
+    expect(diagonal.outline.filter((point) => Math.abs(point.z - 2.925) < 1e-6)).toHaveLength(2);
+    expect(diagonal.outline.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
   });
 
   test("regression_wall_outline_has_no_false_closing_segment", () => {
@@ -494,16 +496,14 @@ describe("wall join regression coverage", () => {
     const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
     const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
 
-    expect(diagonal.outline).toHaveLength(6);
+    expect(diagonal.outline).toHaveLength(4);
     expect(outlineHasProperSelfIntersection(diagonal.outline)).toBe(false);
     expect(outlineArea(diagonal.outline)).toBeGreaterThan(0.5);
     expect(diagonal.outline.map((point) => `${point.x.toFixed(3)},${point.z.toFixed(3)}`)).toEqual([
-      "0.075,0.162",
       "0.075,0.075",
-      "0.223,0.075",
-      "4.925,2.838",
+      "0.371,0.075",
       "4.925,2.925",
-      "4.777,2.925"
+      "4.629,2.925"
     ]);
   });
 
@@ -528,10 +528,9 @@ describe("wall join regression coverage", () => {
 
     expectSimpleSolvedOutlines(res);
     expectNoWallOutlineOverlap(res);
-    expect(outlineSegments(diagonal.outline).some(([a, b]) => Math.abs(a.x - 0.075) < 1e-6 && Math.abs(b.x - 0.075) < 1e-6)).toBe(true);
     expect(outlineSegments(diagonal.outline).some(([a, b]) => Math.abs(a.z - 0.075) < 1e-6 && Math.abs(b.z - 0.075) < 1e-6)).toBe(true);
-    expect(outlineSegments(diagonal.outline).some(([a, b]) => Math.abs(a.x - 4.925) < 1e-6 && Math.abs(b.x - 4.925) < 1e-6)).toBe(true);
     expect(outlineSegments(diagonal.outline).some(([a, b]) => Math.abs(a.z - 2.925) < 1e-6 && Math.abs(b.z - 2.925) < 1e-6)).toBe(true);
+    expect(diagonal.outline.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
   });
 
   test("regression_recompute_after_snap_keeps_closed_geometry", () => {

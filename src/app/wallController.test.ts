@@ -372,7 +372,7 @@ describe("wall plan fill", () => {
 
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
-    expect(solvedDiagonal).toHaveLength(5);
+    expect(solvedDiagonal).toHaveLength(4);
     expect(solvedDiagonal.filter((point) => Math.abs(point.z - 0.075) < 1e-6)).toHaveLength(2);
     expect(solvedDiagonal.filter((point) => Math.abs(point.z - 2.925) < 1e-6)).toHaveLength(2);
     expect(solvedDiagonal.some((point) => Math.abs(point.x - 4.925) < 1e-6 && Math.abs(point.z - 2.925) < 1e-6)).toBe(true);
@@ -402,7 +402,8 @@ describe("wall plan fill", () => {
 
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
-    expect(solvedDiagonal).toHaveLength(6);
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(solvedDiagonal.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
   });
@@ -424,7 +425,8 @@ describe("wall plan fill", () => {
 
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
-    expect(solvedDiagonal).toHaveLength(6);
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(solvedDiagonal.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
     expect([...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanWallFaces")).toHaveLength(1);
