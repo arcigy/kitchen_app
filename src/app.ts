@@ -395,6 +395,7 @@ export function startApp(initialArgs: AppArgs) {
   wallDebugGroup.visible = false;
   wallPlanGroup.add(wallDebugGroup);
   let wallDebugEnabled = false;
+  let wallDebugLayers: Record<string, boolean> = {};
   const wallSolvedOutlines = new Map<string, Array<{ x: number; z: number }>>();
   let wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>> = [];
   let wallUnionPolys: any | null = null;
@@ -411,7 +412,17 @@ export function startApp(initialArgs: AppArgs) {
   floorBoundaryGroup.visible = false;
   layoutRoot.add(floorBoundaryGroup);
 
-  const { toolHud, clearToolHud, hudHoverLine, hudLineThicknessM, hudPickLine1, hudPickLine2, updateHudLine } = createToolHud({
+  const {
+    toolHud,
+    clearToolHud,
+    hudHoverLine,
+    hudWallEndAlignmentGuide,
+    hudLineThicknessM,
+    hudPickLine1,
+    hudPickLine2,
+    updateHudDashedLine,
+    updateHudLine
+  } = createToolHud({
     layoutRoot,
     getCamera: cam
   });
@@ -423,6 +434,7 @@ export function startApp(initialArgs: AppArgs) {
     getSelectedWallIds: () => selectedWallIds,
     getSelectedInstanceIds: () => selectedInstanceIds,
     getWallSolvedOutlines: () => wallSolvedOutlines,
+    getWallUnionPolys: () => wallUnionPolys,
     getSelectedKind: () => selectedKind,
     getSelectedFloorId: () => selectedFloorId,
     getFloors: () => floors,
@@ -646,7 +658,8 @@ export function startApp(initialArgs: AppArgs) {
     preview: null as THREE.Mesh | null,
     hoverB: null as THREE.Vector3 | null,
     typedMm: "", // numeric buffer while drawing (e.g. "2500")
-    lastPointerPx: { x: 0, y: 0 }
+    lastPointerPx: { x: 0, y: 0 },
+    freeMm: false
   };
 
   const kitchenWorktopDraw = {
@@ -1442,6 +1455,7 @@ export function startApp(initialArgs: AppArgs) {
     getSelectedWallIds: () => selectedWallIds,
     setSelectedWallId: (next: string | null) => { selectedWallId = next; },
     getWallDebugEnabled: () => wallDebugEnabled,
+    getWallDebugLayers: () => wallDebugLayers,
     setWallSolvedJoinPolys: (next: Array<Array<{ x: number; z: number }>>) => { wallSolvedJoinPolys = next; },
     setWallUnionPolys: (next: WallPlanMultiPolygon | null) => { wallUnionPolys = next; },
     updateSelectionHighlights,
@@ -1451,6 +1465,103 @@ export function startApp(initialArgs: AppArgs) {
     getDoorInsts: () => doors,
     nextWallId: () => `w${wallCounter++}`
   });
+
+  const installEarlyWallDebugApi = () => {
+    const win = window as typeof window & { __kitchenDebug?: Record<string, unknown> };
+    const createDebugWall = (params: { aMm: { x: number; z: number }; bMm: { x: number; z: number }; thicknessMm?: number }) => {
+      const wall = addWall(
+        new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000),
+        new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000),
+        params.thicknessMm ?? wallDefault.thicknessMm
+      );
+      return wall ? { id: wall.id, aMm: { ...wall.params.aMm }, bMm: { ...wall.params.bMm } } : null;
+    };
+    const clearDebugWalls = () => {
+      for (let index = walls.length - 1; index >= 0; index -= 1) {
+        const wall = walls[index];
+        if (!wall) continue;
+        wall.root?.parent?.remove(wall.root);
+        walls.splice(index, 1);
+      }
+      selectedWallId = null;
+      selectedWallIds.clear();
+      if (selectedKind === "wall") selectedKind = null;
+      rebuildWallPlanMesh();
+    };
+    const selectDebugWall = (wallId: string | null) => {
+      selectedWallId = wallId;
+      selectedWallIds.clear();
+      if (wallId) selectedWallIds.add(wallId);
+      selectedKind = wallId ? "wall" : null;
+      rebuildWallPlanMesh();
+      return { selectedWallId };
+    };
+    const createFailingWallNetworkCase01 = () => {
+      clearDebugWalls();
+      const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
+        createDebugWall({ aMm, bMm, thicknessMm });
+      addDemoWall({ x: 0, z: 0 }, { x: 0, z: 3000 });
+      addDemoWall({ x: 0, z: 3000 }, { x: 5000, z: 3000 });
+      addDemoWall({ x: 5000, z: 3000 }, { x: 5000, z: 0 });
+      addDemoWall({ x: 5000, z: 0 }, { x: 0, z: 0 });
+      const diagonal = addDemoWall({ x: 75, z: 75 }, { x: 4925, z: 2925 });
+      selectDebugWall(diagonal?.id ?? null);
+      wallDebugEnabled = true;
+      wallDebugGroup.visible = true;
+      rebuildWallPlanMesh();
+      return {
+        wallCount: walls.length,
+        selectedDiagonalId: diagonal?.id ?? null,
+        hasRenderDebug: !!(globalThis as typeof globalThis & { __kitchenWallNetworkRenderDebug?: unknown }).__kitchenWallNetworkRenderDebug
+      };
+    };
+    win.__kitchenDebug = {
+      ...(win.__kitchenDebug ?? {}),
+      createWall: createDebugWall,
+      clearWalls: clearDebugWalls,
+      createFailingWallNetworkCase01,
+      selectWall: selectDebugWall,
+      setWallDebug: (enabled = true) => {
+        wallDebugEnabled = !!enabled;
+        wallDebugGroup.visible = !!enabled;
+        rebuildWallPlanMesh();
+        return { wallDebugEnabled };
+      }
+    };
+    const debugUrlParams = new URLSearchParams(window.location.search);
+    if (debugUrlParams.get("wallCase01") === "1") {
+      window.setTimeout(() => {
+        try {
+          const result = createFailingWallNetworkCase01();
+          if (debugUrlParams.get("select") === "0") selectDebugWall(null);
+          if (debugUrlParams.get("wallDebug") === "0") {
+            wallDebugEnabled = false;
+            wallDebugGroup.visible = false;
+            rebuildWallPlanMesh();
+          }
+          const renderDebug = (globalThis as typeof globalThis & { __kitchenWallNetworkRenderDebug?: unknown }).__kitchenWallNetworkRenderDebug as
+            | { normalRenderGeometry?: string; solvedWalls?: Array<{ id: string; outline: Array<{ x: number; z: number }>; a?: unknown; b?: unknown }> }
+            | undefined;
+          const selectedDebug = (globalThis as typeof globalThis & { __kitchenSelectedWallOutlineDebug?: unknown }).__kitchenSelectedWallOutlineDebug as
+            | { selectedWallId?: string | null; solvedOutline?: Array<{ x: number; z: number }>; renderedSegments?: unknown[] }
+            | undefined;
+          const selectedWall = renderDebug?.solvedWalls?.find((wall) => wall.id === result.selectedDiagonalId);
+          document.body.dataset.wallCase01 = "created";
+          document.body.dataset.wallCase01Count = String(result.wallCount);
+          document.body.dataset.wallCase01RenderGeometry = renderDebug?.normalRenderGeometry ?? "";
+          document.body.dataset.wallCase01SelectedWallId = selectedDebug?.selectedWallId ?? result.selectedDiagonalId ?? "";
+          document.body.dataset.wallCase01SelectedOutline = JSON.stringify(selectedDebug?.solvedOutline ?? selectedWall?.outline ?? []);
+          document.body.dataset.wallCase01SelectedSegments = JSON.stringify(selectedDebug?.renderedSegments ?? []);
+          document.body.dataset.wallCase01SelectedCaps = JSON.stringify(selectedWall ? { a: selectedWall.a, b: selectedWall.b } : null);
+        } catch (error) {
+          document.body.dataset.wallCase01 = "error";
+          document.body.dataset.wallCase01Error = error instanceof Error ? error.message : String(error);
+          console.error("[wall-case01-debug]", error);
+        }
+      }, 0);
+    }
+  };
+  installEarlyWallDebugApi();
 
   const editHudController = createEditHudController({
     S,
@@ -2385,6 +2496,7 @@ export function startApp(initialArgs: AppArgs) {
     get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
     get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; }
   });
+
   function deleteWall(id: string) {
     const idx = walls.findIndex((x) => x.id === id);
     if (idx < 0) return;
@@ -2995,6 +3107,7 @@ export function startApp(initialArgs: AppArgs) {
     wallDraw,
     wallEditHud,
     hudHoverLine,
+    hudWallEndAlignmentGuide,
     wallEndpointWhich,
     wallJoinTolMm,
     wallTypedHud,
@@ -3186,6 +3299,8 @@ export function startApp(initialArgs: AppArgs) {
     underlayState,
     updateAllSectionVisuals,
     updateHoverCursor,
+    hudWallEndAlignmentGuide,
+    updateHudDashedLine,
     updateHudLine,
     updateLayoutPanel,
     updateMeasureHoverFromPlanPoint,
@@ -3557,6 +3672,15 @@ export function startApp(initialArgs: AppArgs) {
     getLayoutTool: () => layoutTool,
     getViewMode: () => viewMode,
     getLastRebuildDebug: () => lastRebuildDebug,
+    setWallDebugEnabled: (enabled: boolean) => {
+      wallDebugEnabled = enabled;
+      wallDebugGroup.visible = enabled;
+      rebuildWallPlanMesh();
+    },
+    setWallDebugLayers: (layers: Record<string, boolean>) => {
+      wallDebugLayers = { ...wallDebugLayers, ...layers };
+      rebuildWallPlanMesh();
+    },
     catalog: clientCatalog
   });
 

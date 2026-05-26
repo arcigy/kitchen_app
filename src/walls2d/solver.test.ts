@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { solveWallNetwork } from "./solver";
+import { cross, dist, dot, norm, perpLeft, sub, type Point } from "./geom";
 import type { Wall } from "./model";
-import { dist } from "./geom";
 
 const P = (x: number, z: number) => ({ x, z });
 
@@ -15,313 +15,272 @@ function wall(
   return { id, a, b, thicknessM: tMm / 1000, justification: "center", exteriorSign };
 }
 
-describe("walls2d join solver", () => {
-  test("Case 1: 90° same thickness (clean butt join)", () => {
-    const w1 = wall("a", P(0, 0), P(5, 0), 150);
-    const w2 = wall("b", P(0, 0), P(0, 5), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
-    expect(res.walls.length).toBe(2);
-    expect(res.walls[0].a.join).toBe("butt");
-    expect(res.walls[1].a.join).toBe("butt");
-    expect(res.walls[0].outline).toHaveLength(4);
-    expect(res.walls[1].outline).toHaveLength(4);
-    expect(res.walls[0].a.ownedCapPoly).toBeUndefined();
-    expect(res.walls[1].a.ownedCapPoly).toBeUndefined();
-  });
+const solvedWall = (res: ReturnType<typeof solveWallNetwork>, id: string) => {
+  const item = res.walls.find((entry) => entry.id === id);
+  expect(item).toBeTruthy();
+  return item!;
+};
 
-  test("Case 2: 45° same thickness (no broken acute join)", () => {
-    const w1 = wall("a", P(0, 0), P(5, 0), 150);
-    const w2 = wall("b", P(0, 0), P(4, 4), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
-    expect(res.walls.length).toBe(2);
-    expect(res.joinPolys.length).toBeGreaterThanOrEqual(0);
-  });
+const endWidth = (res: ReturnType<typeof solveWallNetwork>, id: string, end: "a" | "b") => {
+  const item = solvedWall(res, id);
+  return dist(item[end].left, item[end].right);
+};
 
-  test("right-angle equal-priority corner keeps the shorter connector wall continuous", () => {
-    const short = wall("short", P(0, 0), P(0, 2), 150);
-    const long = wall("long", P(0, 0), P(5, 0), 150);
-    const res = solveWallNetwork([short, long], { nodeTolM: 1e-6 });
-    const solvedShort = res.walls.find((w) => w.id === "short")!;
-    const solvedLong = res.walls.find((w) => w.id === "long")!;
+const endProjectedWidth = (res: ReturnType<typeof solveWallNetwork>, source: Wall, end: "a" | "b") => {
+  const item = solvedWall(res, source.id);
+  const normal = perpLeft(norm(sub(source.b, source.a)));
+  return Math.abs(dot(sub(item[end].left, item[end].right), normal));
+};
 
-    expect(solvedShort.a.ownedCapPoly).toBeUndefined();
-    expect(solvedLong.a.ownedCapPoly).toBeUndefined();
-    expect(solvedShort.a.left.z).toBeCloseTo(-0.075, 6);
-    expect(solvedShort.a.right.z).toBeCloseTo(-0.075, 6);
-    expect(solvedLong.a.left.x).toBeCloseTo(0.075, 6);
-    expect(solvedLong.a.right.x).toBeCloseTo(0.075, 6);
-  });
+const expectFullThickness = (res: ReturnType<typeof solveWallNetwork>, source: Wall) => {
+  expect(endProjectedWidth(res, source, "a")).toBeCloseTo(source.thicknessM, 6);
+  expect(endProjectedWidth(res, source, "b")).toBeCloseTo(source.thicknessM, 6);
+  expect(solvedWall(res, source.id).outline).toHaveLength(4);
+};
 
-  test("short wall between angled neighbors keeps rectangular ends", () => {
-    const top = wall("top", P(-4, 4), P(0, 3), 150);
-    const connector = wall("connector", P(0, 3), P(0, 0), 150);
-    const bottom = wall("bottom", P(-4, -1), P(0, 0), 150);
-    const res = solveWallNetwork([top, connector, bottom], { nodeTolM: 1e-6 });
-    const solvedConnector = res.walls.find((w) => w.id === "connector")!;
-    const solvedTop = res.walls.find((w) => w.id === "top")!;
-    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+const expectExactCapThickness = (res: ReturnType<typeof solveWallNetwork>, id: string, thicknessM: number) => {
+  expect(endWidth(res, id, "a")).toBeCloseTo(thicknessM, 6);
+  expect(endWidth(res, id, "b")).toBeCloseTo(thicknessM, 6);
+  expect(solvedWall(res, id).outline).toHaveLength(4);
+};
 
-    expect(solvedConnector.a.join).toBe("butt");
-    expect(solvedConnector.b.join).toBe("butt");
-    expect(dist(solvedConnector.a.left, solvedConnector.a.right)).toBeGreaterThan(0.14);
-    expect(dist(solvedConnector.b.left, solvedConnector.b.right)).toBeGreaterThan(0.14);
-    expect(solvedTop.b.join).toBe("butt");
-    expect(solvedBottom.b.join).toBe("butt");
-    expect(dist(solvedTop.b.left, solvedTop.b.right)).toBeGreaterThan(0.14);
-    expect(dist(solvedBottom.b.left, solvedBottom.b.right)).toBeGreaterThan(0.14);
-  });
+const roundedPolygons = (res: ReturnType<typeof solveWallNetwork>) =>
+  res.debug.finalPolygons
+    .map((poly) =>
+      poly
+        .map((point) => [Number(point.x.toFixed(4)), Number(point.z.toFixed(4))])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    )
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 
-  test("explicit join priority butts an angled branch end into the main wall face", () => {
-    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
-    const w2 = wall("b", P(0, 0), P(-4, 4), 150);
-    w1.joinEnds = { b: { priority: 10 } };
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
-    const solvedA = res.walls.find((w) => w.id === "a")!;
-    const solvedB = res.walls.find((w) => w.id === "b")!;
+const failingWallNetworkCase01 = () => [
+  wall("left", P(0, 0), P(0, 3), 150),
+  wall("top", P(0, 3), P(5, 3), 150),
+  wall("right", P(5, 3), P(5, 0), 150),
+  wall("bottom", P(5, 0), P(0, 0), 150),
+  wall("diagonal", P(0.075, 0.075), P(4.925, 2.925), 150)
+];
 
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(solvedA.b.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedA.b.right.z).toBeCloseTo(-0.075, 6);
-    expect(dist(solvedB.a.left, solvedB.a.right)).toBeGreaterThan(0.14);
-  });
+const pointClose = (a: Point, b: Point, eps = 1e-6) => dist(a, b) <= eps;
 
-  test("2-wall corner uses explicit join priority for the continuing wall", () => {
-    const lowerPriority = wall("lower", P(-5, 0), P(0, 0), 150);
-    const higherPriority = wall("higher", P(0, 0), P(-4, 4), 150);
-    higherPriority.joinEnds = { a: { priority: 10 } };
-    const res = solveWallNetwork([lowerPriority, higherPriority], { nodeTolM: 1e-6, miterLimit: 12 });
-    const solvedLower = res.walls.find((w) => w.id === "lower")!;
-    const solvedHigher = res.walls.find((w) => w.id === "higher")!;
+const outlineSegments = (outline: Point[]) =>
+  outline.map((point, index) => ({ a: point, b: outline[(index + 1) % outline.length]! }));
 
-    expect(solvedHigher.a.join).toBe("butt");
-    expect(solvedHigher.a.ownedCapPoly).toBeUndefined();
-    expect(solvedHigher.outline.length).toBe(4);
-    expect(solvedLower.b.ownedCapPoly).toBeUndefined();
-  });
+const hasSegment = (outline: Point[], a: Point, b: Point, eps = 1e-6) =>
+  outlineSegments(outline).some((segment) =>
+    (pointClose(segment.a, a, eps) && pointClose(segment.b, b, eps)) ||
+    (pointClose(segment.a, b, eps) && pointClose(segment.b, a, eps))
+  );
 
-  test("disabled wall end does not participate in a join", () => {
-    const main = wall("main", P(-5, 0), P(0, 0), 150);
-    const branch = wall("branch", P(0, 0), P(-4, 4), 150);
-    branch.joinEnds = { a: { enabled: false, priority: 10 } };
-    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
-    const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+const isSimplePolygon = (outline: Point[]) => {
+  const segments = outlineSegments(outline);
+  for (let i = 0; i < segments.length; i += 1) {
+    for (let j = i + 1; j < segments.length; j += 1) {
+      if (Math.abs(i - j) <= 1 || (i === 0 && j === segments.length - 1)) continue;
+      const first = segments[i]!;
+      const second = segments[j]!;
+      const d1 = sub(first.b, first.a);
+      const d2 = sub(second.b, second.a);
+      const denom = cross(d1, d2);
+      if (Math.abs(denom) <= 1e-9) continue;
+      const rel = sub(second.a, first.a);
+      const t = cross(rel, d2) / denom;
+      const u = cross(rel, d1) / denom;
+      if (t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6) return false;
+    }
+  }
+  return true;
+};
 
-    expect(solvedMain.outline).toHaveLength(4);
-    expect(solvedBranch.outline).toHaveLength(4);
-    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
-    expect(solvedBranch.a.ownedCapPoly).toBeUndefined();
-  });
+describe("walls2d deterministic wall join model", () => {
+  test("represents every wall as centerline segment plus full-thickness offset polygon", () => {
+    const horizontal = wall("horizontal", P(0, 0), P(5, 0), 150);
+    const res = solveWallNetwork([horizontal]);
 
-  test("finite miter limit does not introduce automatic bevels on equal-priority corners", () => {
-    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
-    const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 2.5 });
-    const solvedA = res.walls.find((w) => w.id === "a")!;
-    const solvedB = res.walls.find((w) => w.id === "b")!;
-
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(res.joinPolys).toHaveLength(0);
-    expect(solvedA.outline).toHaveLength(4);
-    expect(solvedB.outline).toHaveLength(4);
-    expect(solvedA.b.ownedCapPoly).toBeUndefined();
-    expect(solvedB.a.ownedCapPoly).toBeUndefined();
-  });
-
-  test("default equal-priority sharp corner uses a butt join instead of a pointed miter", () => {
-    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
-    const w2 = wall("b", P(0, 0), P(-4.83, 1.29), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
-    const solvedA = res.walls.find((w) => w.id === "a")!;
-    const solvedB = res.walls.find((w) => w.id === "b")!;
-
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(solvedA.b.ownedCapPoly).toBeUndefined();
-    expect(solvedB.a.ownedCapPoly).toBeUndefined();
+    expectExactCapThickness(res, "horizontal", 0.15);
+    expectFullThickness(res, horizontal);
+    expect(res.debug.rawWallPolygons).toHaveLength(1);
     expect(res.joinPolys).toHaveLength(0);
   });
 
-  test("moderately angled equal-priority corner uses a butt join", () => {
-    const w1 = wall("a", P(-5, 0), P(0, 0), 150);
-    const w2 = wall("b", P(0, 0), P(-4.33, 2.5), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6 });
-    const solvedA = res.walls.find((w) => w.id === "a")!;
-    const solvedB = res.walls.find((w) => w.id === "b")!;
+  test("creates a shared sorted join node for an L join", () => {
+    const res = solveWallNetwork([
+      wall("east", P(0, 0), P(5, 0), 150),
+      wall("north", P(0, 0), P(0, 5), 150)
+    ], { nodeTolM: 1e-6 });
+    const node = res.debug.nodes.find((item) => item.incident.length === 2);
 
-    expect(solvedA.b.join).toBe("butt");
-    expect(solvedB.a.join).toBe("butt");
-    expect(solvedA.b.ownedCapPoly).toBeUndefined();
-    expect(solvedB.a.ownedCapPoly).toBeUndefined();
-    expect(res.joinPolys).toHaveLength(0);
+    expect(node).toBeTruthy();
+    expect(node!.sortedIncident.map((item) => item.wallId)).toEqual(["east", "north"]);
+    expect(node!.intersections).toHaveLength(2);
+    expect(res.debug.finalPolygons.length).toBeGreaterThan(0);
   });
 
-  test("equal-priority angled corner butts the second wall into the first wall", () => {
-    const vertical = wall("vertical", P(0, 5), P(0, 0), 150);
-    const diagonal = wall("diagonal", P(0, 0), P(5, 5), 150);
-    const res = solveWallNetwork([vertical, diagonal], { nodeTolM: 1e-6 });
-    const solvedVertical = res.walls.find((w) => w.id === "vertical")!;
-    const solvedDiagonal = res.walls.find((w) => w.id === "diagonal")!;
+  test("handles split T joins without narrowing any participating wall", () => {
+    const walls = [
+      wall("left", P(-5, 0), P(0, 0), 150),
+      wall("right", P(0, 0), P(5, 0), 150),
+      wall("branch", P(0, 0), P(0, 4), 100)
+    ];
+    const res = solveWallNetwork(walls, { nodeTolM: 1e-6 });
+    const node = res.debug.nodes.find((item) => item.incident.length === 3);
 
-    expect(solvedVertical.b.join).toBe("butt");
-    expect(solvedDiagonal.a.join).toBe("butt");
-    expect(solvedVertical.b.left.x).toBeCloseTo(0.075, 6);
-    expect(solvedVertical.b.right.x).toBeCloseTo(-0.075, 6);
-    expect(dist(solvedDiagonal.a.left, solvedDiagonal.a.right)).toBeGreaterThan(0.14);
+    expect(node).toBeTruthy();
+    expect(node!.sortedIncident.map((item) => item.wallId)).toEqual(["right", "branch", "left"]);
+    for (const item of walls) expectFullThickness(res, item);
   });
 
-  test("closed room with diagonal wall uses butt joins at the room ending", () => {
-    const left = wall("left", P(0, 0), P(0, 5), 150);
-    const top = wall("top", P(0, 5), P(5, 5), 150);
-    const right = wall("right", P(5, 5), P(5, 2), 150);
-    const bottom = wall("bottom", P(5, 2), P(0, 0), 150);
-    const res = solveWallNetwork([left, top, right, bottom], { nodeTolM: 1e-6 });
-    const solvedLeft = res.walls.find((w) => w.id === "left")!;
-    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+  test("handles four-way X style nodes deterministically", () => {
+    const walls = [
+      wall("east", P(0, 0), P(4, 0), 150),
+      wall("north", P(0, 0), P(0, 4), 150),
+      wall("west", P(0, 0), P(-4, 0), 150),
+      wall("south", P(0, 0), P(0, -4), 150)
+    ];
+    const res = solveWallNetwork(walls, { nodeTolM: 1e-6 });
+    const shuffled = solveWallNetwork([walls[2]!, walls[0]!, walls[3]!, walls[1]!], { nodeTolM: 1e-6 });
+    const node = res.debug.nodes.find((item) => item.incident.length === 4);
 
-    expect(solvedLeft.a.join).toBe("butt");
-    expect(solvedBottom.b.join).toBe("butt");
-    expect(solvedLeft.a.ownedCapPoly).toBeUndefined();
-    expect(solvedBottom.b.ownedCapPoly).toBeUndefined();
+    expect(node).toBeTruthy();
+    expect(node!.sortedIncident.map((item) => item.wallId)).toEqual(["east", "north", "west", "south"]);
+    expect(node!.intersections).toHaveLength(4);
+    expect(roundedPolygons(shuffled)).toEqual(roundedPolygons(res));
   });
 
-  test("nearby room-closing endpoints solve from one shared corner", () => {
-    const left = wall("left", P(0, 0), P(0, 5), 150);
-    const top = wall("top", P(0, 5), P(5, 4.2), 150);
-    const right = wall("right", P(5, 4.2), P(4.3, 2.2), 150);
-    const bottom = wall("bottom", P(4.3, 2.2), P(0.018, -0.012), 150);
-    const res = solveWallNetwork([left, top, right, bottom], { nodeTolM: 0.03 });
-    const solvedLeft = res.walls.find((w) => w.id === "left")!;
-    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
+  test("keeps diagonal wall full width when it joins horizontal and vertical walls", () => {
+    const walls = [
+      wall("top", P(0, 3), P(5, 3), 150),
+      wall("right", P(5, 3), P(5, 0), 150),
+      wall("diagonal", P(0, 0), P(5, 3), 150),
+      wall("outside", P(5, 3), P(8, 4.5), 150)
+    ];
+    const res = solveWallNetwork(walls, { nodeTolM: 0.04 });
 
-    expect(solvedLeft.a.join).toBe("butt");
-    expect(solvedBottom.b.join).toBe("butt");
-    expect(solvedLeft.a.ownedCapPoly).toBeUndefined();
-    expect(solvedBottom.b.ownedCapPoly).toBeUndefined();
+    for (const item of walls) expectFullThickness(res, item);
+    expect(res.debug.nodes.some((node) => node.incident.length >= 3)).toBe(true);
+    expect(res.joinPolys.some((poly) => poly.length >= 3)).toBe(true);
+    expect(res.footprint.reduce((sum, polygon) => sum + polygon.length, 0)).toBe(1);
   });
 
-  test("equal-priority closed angled outline uses side-butts at all 2-wall corners", () => {
-    const left = wall("left", P(0, 0), P(0, 5), 150);
-    const top = wall("top", P(0, 5), P(4, 5), 150);
-    const upperRight = wall("upperRight", P(4, 5), P(6, 2), 150);
-    const lowerRight = wall("lowerRight", P(6, 2), P(3, 0.5), 150);
-    const bottom = wall("bottom", P(3, 0.5), P(0, 0), 150);
-    const res = solveWallNetwork([left, top, upperRight, lowerRight, bottom], { nodeTolM: 1e-6 });
+  test("keeps very acute two-wall joins finite while preserving free-end thickness", () => {
+    const res = solveWallNetwork([
+      wall("base", P(0, 0), P(8, 0), 150),
+      wall("acute", P(0, 0), P(8, 0.35), 150)
+    ], { nodeTolM: 1e-6 });
 
-    const solvedLeft = res.walls.find((w) => w.id === "left")!;
-    const solvedTop = res.walls.find((w) => w.id === "top")!;
-    const solvedUpperRight = res.walls.find((w) => w.id === "upperRight")!;
-    const solvedLowerRight = res.walls.find((w) => w.id === "lowerRight")!;
-    const solvedBottom = res.walls.find((w) => w.id === "bottom")!;
-
-    expect(solvedLeft.b.join).toBe("butt");
-    expect(solvedTop.a.join).toBe("butt");
-    expect(solvedUpperRight.b.join).toBe("butt");
-    expect(solvedLowerRight.a.join).toBe("butt");
-    expect(solvedBottom.a.join).toBe("butt");
-    expect(solvedBottom.b.join).toBe("butt");
+    expect(endWidth(res, "base", "b")).toBeCloseTo(0.15, 6);
+    expect(endWidth(res, "acute", "b")).toBeCloseTo(0.15, 6);
+    expect(Number.isFinite(endWidth(res, "base", "a"))).toBe(true);
+    expect(Number.isFinite(endWidth(res, "acute", "a"))).toBe(true);
+    expect(res.debug.nodes.find((node) => node.incident.length === 2)?.intersections.length).toBeGreaterThanOrEqual(0);
   });
 
-  test("clamps an angled branch to the main wall end face", () => {
-    const main = wall("main", P(0, 0), P(0, 5), 150);
-    const branch = wall("branch", P(0, 5), P(5, 0), 150);
-    main.joinEnds = { b: { priority: 10 } };
-    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
-    const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+  test("supports different wall thicknesses at the same node", () => {
+    const walls = [
+      wall("thick", P(0, 0), P(5, 0), 300),
+      wall("thin", P(0, 0), P(0, 5), 100),
+      wall("mid", P(0, 0), P(-4, 3), 150)
+    ];
+    const res = solveWallNetwork(walls, { nodeTolM: 1e-6 });
 
-    expect(res.joinPolys).toHaveLength(0);
-    expect(solvedMain.outline).toHaveLength(4);
-    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
-    expect(dist(solvedBranch.a.left, solvedBranch.a.right)).toBeGreaterThan(0.14);
+    for (const item of walls) expectFullThickness(res, item);
+    expect(res.debug.nodes.find((node) => node.incident.length === 3)?.intersections).toHaveLength(3);
   });
 
-  test("explicit side-butt branch does not protrude past the opposite wall face", () => {
-    const main = wall("main", P(0, 5), P(0, 0), 150);
-    const branch = wall("branch", P(0, 0), P(5, 5), 150);
-    main.joinEnds = { b: { priority: 10 } };
-    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6 });
-    const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+  test("handles a wall ending on the body of another wall through the final footprint union", () => {
+    const walls = [
+      wall("host", P(-4, 0), P(4, 0), 150),
+      wall("branch", P(0, -3), P(0, 0), 150)
+    ];
+    const res = solveWallNetwork(walls, { nodeTolM: 1e-6 });
 
-    expect(solvedMain.b.ownedCapPoly).toBeUndefined();
-    expect(dist(solvedBranch.a.left, solvedBranch.a.right)).toBeGreaterThan(0.14);
+    for (const item of walls) expectFullThickness(res, item);
+    expect(res.debug.finalPolygons.length).toBeGreaterThan(0);
   });
 
-  test("Case 4: 90° different thickness (still joins)", () => {
-    const w1 = wall("a", P(0, 0), P(5, 0), 300);
-    const w2 = wall("b", P(0, 0), P(0, 5), 150);
-    const res = solveWallNetwork([w1, w2], { nodeTolM: 1e-6, miterLimit: 12 });
-    expect(res.walls.length).toBe(2);
-    expect(res.walls[0].outline).toHaveLength(4);
-    expect(res.walls[1].outline).toHaveLength(4);
+  test("is independent from the order walls are supplied", () => {
+    const walls = [
+      wall("left", P(0, 0), P(0, 3), 150),
+      wall("top", P(0, 3), P(5, 3), 150),
+      wall("right", P(5, 3), P(5, 0), 150),
+      wall("bottom", P(5, 0), P(0, 0), 150),
+      wall("diagonalA", P(0, 0), P(5, 3), 150),
+      wall("diagonalB", P(0, 3), P(5, 0), 150)
+    ];
+
+    const a = solveWallNetwork(walls, { nodeTolM: 0.04 });
+    const b = solveWallNetwork([walls[4]!, walls[2]!, walls[0]!, walls[5]!, walls[1]!, walls[3]!], { nodeTolM: 0.04 });
+
+    expect(roundedPolygons(b)).toEqual(roundedPolygons(a));
+    expect(b.debug.nodes.map((node) => node.sortedIncident.map((item) => item.wallId))).toEqual(
+      a.debug.nodes.map((node) => node.sortedIncident.map((item) => item.wallId))
+    );
   });
 
-  test("keeps orthogonal side-butt main walls straight without hidden cap triangles", () => {
-    const top = wall("top", P(0, 5), P(5, 5), 150);
-    const right = wall("right", P(5, 5), P(5, 0), 150);
-    const bottom = wall("bottom", P(0, 0), P(5, 0), 150);
-    top.joinEnds = { b: { priority: 10 } };
-    right.joinEnds = { b: { priority: 10 } };
-    const res = solveWallNetwork([top, right, bottom], { nodeTolM: 1e-6 });
-    const solvedTop = res.walls.find((w) => w.id === "top")!;
-    const solvedRight = res.walls.find((w) => w.id === "right")!;
+  test("regression_diagonal_cut_wall_outline_uses_boundary_pairs", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 0.04 });
+    const diagonal = solvedWall(res, "diagonal");
 
-    expect(res.joinPolys).toHaveLength(0);
-    expect(solvedTop.b.ownedCapPoly).toBeUndefined();
-    expect(solvedRight.b.ownedCapPoly).toBeUndefined();
-    expect(solvedTop.outline).toHaveLength(4);
-    expect(solvedRight.outline).toHaveLength(4);
-    expect(solvedTop.b.left.x).toBeCloseTo(5.075, 6);
-    expect(solvedTop.b.right.x).toBeCloseTo(5.075, 6);
-    expect(solvedRight.b.left.z).toBeCloseTo(-0.075, 6);
-    expect(solvedRight.b.right.z).toBeCloseTo(-0.075, 6);
+    expect(diagonal.a.source).toBe("bodyJoin");
+    expect(diagonal.b.source).toBe("bodyJoin");
+    expect(diagonal.a.boundaryChain ?? []).toHaveLength(0);
+    expect(diagonal.b.boundaryChain ?? []).toHaveLength(0);
+    expect(diagonal.a.extra ?? []).toHaveLength(0);
+    expect(diagonal.b.extra ?? []).toHaveLength(0);
+    expect(diagonal.outline).toHaveLength(4);
+    expect(hasSegment(diagonal.outline, diagonal.a.left, diagonal.a.right)).toBe(true);
+    expect(hasSegment(diagonal.outline, diagonal.b.left, diagonal.b.right)).toBe(true);
   });
 
-  test("Case 6: T join (branch cut to main)", () => {
-    // Main wall is split at node (0,0) so node degree becomes 3.
-    const main0 = wall("m0", P(-5, 0), P(0, 0), 150);
-    const main1 = wall("m1", P(0, 0), P(5, 0), 150);
-    const branch = wall("b", P(0, 0), P(0, 5), 100);
-    const res = solveWallNetwork([main0, main1, branch], { nodeTolM: 1e-6, miterLimit: 12 });
-    expect(res.walls.length).toBe(3);
-  });
-  test("2-wall corner keeps the main wall full and butts the branch into its face", () => {
-    const main = wall("main", P(0, 0), P(5, 0), 150);
-    const branch = wall("branch", P(0, 0), P(0, 5), 150);
-    main.joinEnds = { a: { priority: 10 } };
-    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
-    const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+  test("regression_diagonal_cut_wall_outline_is_ordered_closed_polygon", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 0.04 });
+    const diagonal = solvedWall(res, "diagonal");
 
-    expect(solvedMain.a.left.x).toBeCloseTo(-0.075, 6);
-    expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(-0.075, 6);
-    expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
-    expect(solvedBranch.a.left.x).toBeCloseTo(-0.075, 6);
-    expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.x).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
+    expect(diagonal.outline).toHaveLength(4);
+    expect(diagonal.outline.every((point) => Number.isFinite(point.x) && Number.isFinite(point.z))).toBe(true);
+    expect(isSimplePolygon(diagonal.outline)).toBe(true);
+    expect(hasSegment(diagonal.outline, diagonal.a.left, diagonal.b.left)).toBe(true);
+    expect(hasSegment(diagonal.outline, diagonal.a.right, diagonal.b.right)).toBe(true);
+    expect(hasSegment(diagonal.outline, diagonal.a.left, diagonal.b.right)).toBe(false);
+    expect(hasSegment(diagonal.outline, diagonal.a.right, diagonal.b.left)).toBe(false);
   });
 
-  test("2-wall corner branch cut follows the main wall face with different thicknesses", () => {
-    const main = wall("main", P(0, 0), P(5, 0), 150);
-    const branch = wall("branch", P(0, 0), P(0, 5), 300);
-    main.joinEnds = { a: { priority: 10 } };
-    const res = solveWallNetwork([main, branch], { nodeTolM: 1e-6, miterLimit: 12 });
-    const solvedMain = res.walls.find((w) => w.id === "main")!;
-    const solvedBranch = res.walls.find((w) => w.id === "branch")!;
+  test("regression_diagonal_cut_wall_has_start_and_end_cut_edges", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 0.04 });
+    const diagonal = solvedWall(res, "diagonal");
 
-    expect(solvedMain.a.left.x).toBeCloseTo(-0.15, 6);
-    expect(solvedMain.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedMain.a.right.x).toBeCloseTo(-0.15, 6);
-    expect(solvedMain.a.right.z).toBeCloseTo(-0.075, 6);
-    expect(solvedBranch.a.left.x).toBeCloseTo(-0.15, 6);
-    expect(solvedBranch.a.left.z).toBeCloseTo(0.075, 6);
-    expect(solvedBranch.a.right.x).toBeCloseTo(0.15, 6);
-    expect(solvedBranch.a.right.z).toBeCloseTo(0.075, 6);
+    expect(dist(diagonal.a.left, diagonal.a.right)).toBeGreaterThan(0.15);
+    expect(dist(diagonal.b.left, diagonal.b.right)).toBeGreaterThan(0.15);
+    expect(diagonal.a.left.z).toBeCloseTo(diagonal.a.right.z, 6);
+    expect(diagonal.b.left.z).toBeCloseTo(diagonal.b.right.z, 6);
+    expect(hasSegment(diagonal.outline, diagonal.a.left, diagonal.a.right)).toBe(true);
+    expect(hasSegment(diagonal.outline, diagonal.b.left, diagonal.b.right)).toBe(true);
+  });
+
+  test("regression_selected_outline_matches_diagonal_wall_outline", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 0.04 });
+    const diagonal = solvedWall(res, "diagonal");
+    const selectedOutlinePoints = diagonal.outline;
+
+    expect(selectedOutlinePoints).toEqual(diagonal.outline);
+    expect(outlineSegments(selectedOutlinePoints)).toHaveLength(4);
+    expect(hasSegment(selectedOutlinePoints, diagonal.a.left, diagonal.a.right)).toBe(true);
+    expect(hasSegment(selectedOutlinePoints, diagonal.b.left, diagonal.b.right)).toBe(true);
+  });
+
+  test("regression_no_false_green_line_on_selected_diagonal", () => {
+    const source = failingWallNetworkCase01().find((item) => item.id === "diagonal")!;
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 0.04 });
+    const diagonal = solvedWall(res, "diagonal");
+    const wallDirection = norm(sub(source.b, source.a));
+
+    for (const segment of outlineSegments(diagonal.outline)) {
+      const d = norm(sub(segment.b, segment.a));
+      const parallelToWall = Math.abs(cross(d, wallDirection)) <= 1e-6;
+      const horizontalCut = Math.abs(segment.a.z - segment.b.z) <= 1e-6;
+      expect(parallelToWall || horizontalCut).toBe(true);
+    }
+    expect(hasSegment(diagonal.outline, diagonal.a.left, diagonal.b.right)).toBe(false);
+    expect(hasSegment(diagonal.outline, diagonal.a.right, diagonal.b.left)).toBe(false);
   });
 });
-

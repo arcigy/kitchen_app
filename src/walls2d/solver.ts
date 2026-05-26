@@ -9,9 +9,11 @@ export type WallSolvedEnd = {
   right: Point;
   join: "butt" | "miter" | "bevel";
   source: "free" | "join" | "bodyJoin" | "fallback";
+  boundaryChain?: Point[];
   bevelJoinPoly?: Point[];
   ownedCapPoly?: Point[];
   fillPoly?: Point[];
+  /** @deprecated Use boundaryChain. Kept only for older debug consumers. */
   extra?: Point[];
 };
 
@@ -36,6 +38,7 @@ export type WallJoinDebugCap = {
   source: "free" | "join" | "bodyJoin" | "fallback";
   left: Point;
   right: Point;
+  boundaryChain?: Point[];
 };
 
 export type WallJoinDebugIntersection = {
@@ -86,7 +89,7 @@ type EndpointRef = { wall: Wall; end: WallEnd; point: Point };
 type NodeDraft = { id: string; p: Point; incident: Array<{ wall: Wall; end: WallEnd }> };
 type SortedIncident = { item: { wall: Wall; end: WallEnd }; index: number; angle: number };
 type SolvedEndSource = WallJoinDebugCap["source"];
-type SolvedEndDraft = { left: Point; right: Point; source: SolvedEndSource; extra?: Point[] };
+type SolvedEndDraft = { left: Point; right: Point; source: SolvedEndSource; boundaryChain?: Point[]; extra?: Point[] };
 
 const polygonClipper = polygonClipping as PolygonClipper;
 export const DEFAULT_WALL_MITER_LIMIT = Number.POSITIVE_INFINITY;
@@ -153,8 +156,14 @@ function wallRawPolygon(wall: Wall) {
   return orderLoopAroundCentroid([a.left, a.right, b.right, b.left]);
 }
 
+function endBoundaryChain(end: SolvedEndDraft) {
+  return end.boundaryChain ?? end.extra ?? [];
+}
+
 function wallSolvedPolygon(a: SolvedEndDraft, b: SolvedEndDraft) {
-  return ensureCcw(dedupeLoop([a.left, ...(a.extra ?? []), a.right, b.right, ...(b.extra ?? []), b.left]));
+  const aChain = endBoundaryChain(a);
+  const bChain = endBoundaryChain(b);
+  return ensureCcw(dedupeLoop([a.left, b.left, ...bChain, b.right, a.right, ...[...aChain].reverse()]));
 }
 
 function rawEndCornersAtNode(wall: Wall, node: Point): SolvedEndDraft {
@@ -578,6 +587,7 @@ function cloneEndDraft(end: SolvedEndDraft): SolvedEndDraft {
     left: { ...end.left },
     right: { ...end.right },
     source: end.source,
+    boundaryChain: end.boundaryChain?.map((point) => ({ ...point })),
     extra: end.extra?.map((point) => ({ ...point }))
   };
 }
@@ -894,7 +904,11 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const best = candidates[0]!;
     const sameDistanceTol = Math.max(nodeTolM, 1e-6);
     const nearbyCandidates = candidates.filter((candidate) => Math.abs(candidate.distance - best.distance) <= sameDistanceTol);
-    const activeCandidates = nearbyCandidates.length > 1 ? nearbyCandidates : [best];
+    // A body join needs one resolved host face per endpoint. Combining equally close corner
+    // hosts produced an L-shaped "extra" point, which made the wall outline close through
+    // the wrong boundary. Keep the highest-ranked host deterministic here; multi-host corner
+    // fills are handled by the final network footprint, not by a single wall outline.
+    const activeCandidates = [best];
     const chooseSideHit = (side: "left" | "right") => {
       const branchLine = sideLineForSideAtNode(endpoint.wall, endpoint.end, endpoint.point, side).line;
       const hits = activeCandidates
@@ -922,7 +936,7 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     let leftPoint = leftHit.hit.p;
     let rightPoint = rightHit.hit.p;
     const isCornerCap = leftHit.candidate !== rightHit.candidate || leftHit.candidate.cut.side !== rightHit.candidate.cut.side;
-    if (!isCornerCap) {
+    if (!isCornerCap && activeCandidates.length > 1) {
       const hostDir = baseDir(best.host);
       for (const candidate of nearbyCandidates) {
         if (candidate === best) continue;
@@ -949,6 +963,7 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     if (isCornerCap) {
       const corner = intersectLines(leftHit.candidate.cut.line, rightHit.candidate.cut.line);
       if (corner && dist(corner.p, draft.left) > 1e-8 && dist(corner.p, draft.right) > 1e-8) {
+        draft.boundaryChain = [corner.p];
         draft.extra = [corner.p];
       }
     }
@@ -1002,7 +1017,8 @@ function solvedCapDebug(wallId: string, end: WallEnd, draft: SolvedEndDraft): Wa
     end,
     source: draft.source,
     left: draft.left,
-    right: draft.right
+    right: draft.right,
+    boundaryChain: draft.boundaryChain?.map((point) => ({ ...point }))
   };
 }
 
