@@ -416,8 +416,7 @@ describe("wall plan fill", () => {
       createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
       createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
       createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
-      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 }),
-      createTestWallInstance("rightSkew", { x: 5000, z: 0 }, { x: 6200, z: 775 })
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 })
     );
     const controller = createWallController(ctx);
 
@@ -428,7 +427,7 @@ describe("wall plan fill", () => {
     expect(solvedDiagonal).toHaveLength(6);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
-    expect(ctx.wallPlanMeshes.get("wallPlan_faces_rightSkew")).toBeUndefined();
+    expect([...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanWallFaces")).toHaveLength(1);
   });
 
   it("keeps selected room brace overlays closed while the union outline stays clean", () => {

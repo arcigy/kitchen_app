@@ -499,12 +499,13 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const addDemoWall = (aMm: { x: number; z: number }, bMm: { x: number; z: number }, thicknessMm = 150) =>
       debugCreateWall({ aMm, bMm, thicknessMm });
 
+    // Minimal failing wall-network case: one rectangular loop and one diagonal.
+    // Keep this intentionally small so wall join regressions are easy to inspect.
     addDemoWall({ x: 0, z: 0 }, { x: 0, z: 3000 });
     addDemoWall({ x: 0, z: 3000 }, { x: 5000, z: 3000 });
     addDemoWall({ x: 5000, z: 3000 }, { x: 5000, z: 0 });
     addDemoWall({ x: 5000, z: 0 }, { x: 0, z: 0 });
     const diagonal = addDemoWall({ x: 75, z: 75 }, { x: 4925, z: 2925 });
-    addDemoWall({ x: 5000, z: 0 }, { x: 6200, z: 775 });
 
     if (diagonal?.id) setSelectedWall(diagonal.id);
     ctx.setWallDebugEnabled?.(true);

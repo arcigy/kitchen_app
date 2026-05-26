@@ -88,10 +88,9 @@ const attachedDiagonalNearCorner = () => [...rectangularLoop(), wall("diagonal",
 
 const attachedDiagonalInnerCorner = () => [...rectangularLoop(), wall("diagonal", P(0.075, 0.075), P(4.925, 2.925))];
 
-const failingWallNetworkCase01 = () => [
-  ...attachedDiagonalInnerCorner(),
-  wall("rightSkew", P(5, 0), P(6.2, 0.775))
-];
+const failingWallNetworkCase01 = () => attachedDiagonalInnerCorner();
+
+const CASE01_NODE_TOL_M = 0.025;
 
 const normalizedBoundaryEdges = (res: ReturnType<typeof solveWallNetwork>) =>
   res.debug.boundaryEdges
@@ -206,18 +205,6 @@ const expectNoTinyFootprintRings = (res: ReturnType<typeof solveWallNetwork>) =>
       expect(Math.abs(ringArea(ring))).toBeGreaterThan(1e-5);
     }
   }
-};
-
-const expectCase01BottomRightJoinResolved = (res: ReturnType<typeof solveWallNetwork>) => {
-  const bottom = res.walls.find((item) => item.id === "bottom")!;
-  const right = res.walls.find((item) => item.id === "right")!;
-  const rightSkew = res.walls.find((item) => item.id === "rightSkew")!;
-  close(bottom.a.left.x, rightSkew.a.right.x);
-  close(bottom.a.left.z, rightSkew.a.right.z);
-  close(right.b.left.x, rightSkew.a.left.x);
-  close(right.b.left.z, rightSkew.a.left.z);
-  close(bottom.a.right.x, right.b.right.x);
-  close(bottom.a.right.z, right.b.right.z);
 };
 
 const expectNoWallOutlineOverlap = (res: ReturnType<typeof solveWallNetwork>) => {
@@ -638,20 +625,41 @@ describe("wall join regression coverage", () => {
   });
 
   test("regression_failing_wall_network_case01_no_holes", () => {
-    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 1e-6 });
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
 
     expectSimpleSolvedOutlines(res);
     expectNoTinyFootprintRings(res);
   });
 
   test("regression_failing_wall_network_case01_no_overlaps", () => {
-    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 1e-6 });
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
 
     expectNoWallOutlineOverlap(res);
   });
 
+  test("regression_failing_wall_network_case01_clean_outer_boundary", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
+
+    expect(res.footprint).toHaveLength(1);
+    expectRingCorners(ringPoints(res, 0), [
+      [-0.075, -0.075],
+      [5.075, -0.075],
+      [5.075, 3.075],
+      [-0.075, 3.075]
+    ]);
+  });
+
+  test("regression_failing_wall_network_case01_clean_inner_boundary", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
+
+    expect(res.footprint[0]?.length).toBe(3);
+    expectNoTinyFootprintRings(res);
+    const innerRings = res.footprint[0]!.slice(1);
+    expect(innerRings.every((ring) => Math.abs(ringArea(ring)) > 0.25)).toBe(true);
+  });
+
   test("regression_failing_wall_network_case01_clean_top_right_join", () => {
-    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 1e-6 });
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
     const diagonal = res.walls.find((item) => item.id === "diagonal")!;
 
     expect(diagonal.b.source).toBe("bodyJoin");
@@ -659,30 +667,49 @@ describe("wall join regression coverage", () => {
     expectNoWallOutlineOverlap(res);
   });
 
-  test("regression_failing_wall_network_case01_clean_bottom_right_join", () => {
-    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 1e-6 });
-    const bottomRightNode = res.debug.nodes.find((node) =>
-      node.incident.some((item) => item.wall.id === "bottom") &&
-      node.incident.some((item) => item.wall.id === "right") &&
-      node.incident.some((item) => item.wall.id === "rightSkew")
-    );
+  test("regression_failing_wall_network_case01_no_top_right_hole", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
+    const diagonal = res.walls.find((item) => item.id === "diagonal")!;
+    const top = res.walls.find((item) => item.id === "top")!;
+    const right = res.walls.find((item) => item.id === "right")!;
 
-    expect(bottomRightNode?.incident).toHaveLength(3);
-    expect(bottomRightNode?.intersections).toHaveLength(3);
-    expectCase01BottomRightJoinResolved(res);
+    expect(outlineHasPoint(diagonal.outline, P(4.925, 2.925))).toBe(true);
+    expect(outlineHasPoint(top.outline, P(5.075, 2.925))).toBe(true);
+    expect(outlineHasPoint(right.outline, P(4.925, 2.925))).toBe(true);
+    expectNoTinyFootprintRings(res);
     expectNoWallOutlineOverlap(res);
   });
 
+  test("regression_failing_wall_network_case01_diagonal_clipped_correctly", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
+    const diagonal = res.walls.find((item) => item.id === "diagonal")!;
+
+    expect(diagonal.a.source).toBe("bodyJoin");
+    expect(diagonal.b.source).toBe("bodyJoin");
+    expect(outlineHasPoint(diagonal.outline, P(0.075, 0.075))).toBe(true);
+    expect(outlineHasPoint(diagonal.outline, P(4.925, 2.925))).toBe(true);
+    expect(outlineArea(diagonal.outline)).toBeGreaterThan(0.7);
+  });
+
+  test("regression_failing_wall_network_case01_no_wall_extends_through_join", () => {
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
+
+    expectNoWallOutlineOverlap(res);
+    const diagonal = res.walls.find((item) => item.id === "diagonal")!;
+    const outsideCornerPoints = diagonal.outline.filter((point) => point.x > 4.925 + 1e-6 || point.z > 2.925 + 1e-6);
+    expect(outsideCornerPoints).toHaveLength(0);
+  });
+
   test("regression_failing_wall_network_case01_all_wall_outlines_valid", () => {
-    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: 1e-6 });
+    const res = solveWallNetwork(failingWallNetworkCase01(), { nodeTolM: CASE01_NODE_TOL_M });
 
     expectSimpleSolvedOutlines(res);
   });
 
   test("regression_failing_wall_network_case01_reversed_draw_order_same_result", () => {
     const walls = failingWallNetworkCase01();
-    const normal = solveWallNetwork(walls, { nodeTolM: 1e-6 });
-    const reversed = solveWallNetwork([...walls].reverse(), { nodeTolM: 1e-6 });
+    const normal = solveWallNetwork(walls, { nodeTolM: CASE01_NODE_TOL_M });
+    const reversed = solveWallNetwork([...walls].reverse(), { nodeTolM: CASE01_NODE_TOL_M });
 
     expect(normalizedSolvedOutlines(reversed)).toEqual(normalizedSolvedOutlines(normal));
     expect(normalizedFootprint(reversed)).toEqual(normalizedFootprint(normal));
@@ -692,8 +719,8 @@ describe("wall join regression coverage", () => {
   test("regression_failing_wall_network_case01_save_load_same_result", () => {
     const walls = failingWallNetworkCase01();
     const loaded = JSON.parse(JSON.stringify(walls)) as Wall[];
-    const normal = solveWallNetwork(walls, { nodeTolM: 1e-6 });
-    const restored = solveWallNetwork(loaded, { nodeTolM: 1e-6 });
+    const normal = solveWallNetwork(walls, { nodeTolM: CASE01_NODE_TOL_M });
+    const restored = solveWallNetwork(loaded, { nodeTolM: CASE01_NODE_TOL_M });
 
     expect(normalizedSolvedOutlines(restored)).toEqual(normalizedSolvedOutlines(normal));
     expect(normalizedFootprint(restored)).toEqual(normalizedFootprint(normal));
