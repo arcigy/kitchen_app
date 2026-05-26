@@ -656,6 +656,73 @@ function solvePerpendicularButtJoinNode(node: NodeDraft, solvedEnds: Map<string,
   return true;
 }
 
+function areOppositeDirections(a: Point, b: Point, eps = 1e-5) {
+  return Math.abs(cross(a, b)) <= eps && dot(a, b) < -1 + eps;
+}
+
+function chooseCollinearThroughPair(sorted: SortedIncident[]) {
+  if (sorted.length !== 3) return null as { first: SortedIncident; second: SortedIncident; branch: SortedIncident } | null;
+  const candidates: Array<{ first: SortedIncident; second: SortedIncident; branch: SortedIncident; score: number }> = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    for (let j = i + 1; j < sorted.length; j += 1) {
+      const first = sorted[i]!;
+      const second = sorted[j]!;
+      const firstOut = spineDir(first.item.wall, first.item.end);
+      const secondOut = spineDir(second.item.wall, second.item.end);
+      if (!areOppositeDirections(firstOut, secondOut)) continue;
+      const branch = sorted.find((entry) => entry !== first && entry !== second);
+      if (!branch) continue;
+      const branchOut = spineDir(branch.item.wall, branch.item.end);
+      if (Math.abs(cross(firstOut, branchOut)) <= 1e-5) continue;
+      candidates.push({
+        first,
+        second,
+        branch,
+        score: Math.abs(dot(firstOut, secondOut) + 1) + Math.abs(cross(firstOut, secondOut))
+      });
+    }
+  }
+  return candidates.sort((a, b) => a.score - b.score || a.first.item.wall.id.localeCompare(b.first.item.wall.id))[0] ?? null;
+}
+
+function solveCollinearTJoinNode(node: NodeDraft, solvedEnds: Map<string, { a: SolvedEndDraft; b: SolvedEndDraft }>, sorted: SortedIncident[]) {
+  const match = chooseCollinearThroughPair(sorted);
+  if (!match) return false;
+
+  const throughItems = [match.first.item, match.second.item];
+  for (const through of throughItems) {
+    const ends = solvedEnds.get(through.wall.id);
+    if (!ends) return false;
+    const draft = rawEndCornersAtNode(through.wall, node.p);
+    draft.source = "join";
+    ends[through.end] = draft;
+  }
+
+  const branch = match.branch.item;
+  const branchOut = spineDir(branch.wall, branch.end);
+  const through = match.first.item;
+  const cut = (["left", "right"] as const)
+    .map((side) => {
+      const entry = sideLineForSideAtNode(through.wall, through.end, node.p, side);
+      return { ...entry, score: dot(sub(entry.line.p, node.p), branchOut) };
+    })
+    .sort((a, b) => b.score - a.score || a.side.localeCompare(b.side))[0];
+  if (!cut) return false;
+
+  const branchLeftLine = sideLineForSideAtNode(branch.wall, branch.end, node.p, "left");
+  const branchRightLine = sideLineForSideAtNode(branch.wall, branch.end, node.p, "right");
+  const leftHit = intersectLines(branchLeftLine.line, cut.line);
+  const rightHit = intersectLines(branchRightLine.line, cut.line);
+  const branchEnds = solvedEnds.get(branch.wall.id);
+  if (!leftHit || !rightHit || !branchEnds) return false;
+  branchEnds[branch.end] = {
+    left: leftHit.p,
+    right: rightHit.p,
+    source: "join"
+  };
+  return true;
+}
+
 function incidentKey(item: { wall: Wall; end: WallEnd }) {
   return `${item.wall.id}:${item.end}`;
 }
@@ -731,6 +798,7 @@ function genericJoinDrafts(node: NodeDraft, sorted: SortedIncident[]) {
 function solveEndpointJoinNode(node: NodeDraft, solvedEnds: Map<string, { a: SolvedEndDraft; b: SolvedEndDraft }>) {
   const sorted = sortedIncidentAtNode(node);
   if (sorted.length < 2) return;
+  if (sorted.length === 3 && solveCollinearTJoinNode(node, solvedEnds, sorted)) return;
   if (sorted.length === 2 && solvePerpendicularButtJoinNode(node, solvedEnds, sorted[0]!, sorted[1]!)) return;
 
   const drafts = genericJoinDrafts(node, sorted);

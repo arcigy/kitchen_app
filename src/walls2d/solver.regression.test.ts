@@ -88,6 +88,12 @@ const attachedDiagonalNearCorner = () => [...rectangularLoop(), wall("diagonal",
 
 const attachedDiagonalInnerCorner = () => [...rectangularLoop(), wall("diagonal", P(0.075, 0.075), P(4.925, 2.925))];
 
+const splitTJoin = () => [
+  wall("leftBase", P(0, 0), P(2.5, 0)),
+  wall("rightBase", P(2.5, 0), P(5, 0)),
+  wall("branch", P(2.5, 0), P(2.5, 3))
+];
+
 const failingWallNetworkCase01 = () => attachedDiagonalInnerCorner();
 
 const CASE01_NODE_TOL_M = 0.025;
@@ -424,6 +430,25 @@ describe("wall join regression coverage", () => {
     expect(res.debug.boundaryEdges.some((edge) => edge.kind === "wallFace" && edge.wallId === "left")).toBe(true);
   });
 
+  test("regression_two_wall_l_corner_footprint_is_closed", () => {
+    const res = solveWallNetwork([wall("left", P(0, 0), P(0, 3)), wall("top", P(0, 3), P(5, 3))], {
+      nodeTolM: 1e-6
+    });
+
+    expectSimpleSolvedOutlines(res);
+    expectNoWallOutlineOverlap(res);
+    expect(res.footprint).toHaveLength(1);
+    expect(res.footprint[0]).toHaveLength(1);
+    expectRingCorners(ringPoints(res, 0), [
+      [-0.075, 0],
+      [0.075, 0],
+      [0.075, 2.925],
+      [5, 2.925],
+      [5, 3.075],
+      [-0.075, 3.075]
+    ]);
+  });
+
   test("regression_bottom_left_diagonal_connection_has_boundary", () => {
     const res = solveWallNetwork(networkCase(), { nodeTolM: 1e-6 });
 
@@ -566,6 +591,43 @@ describe("wall join regression coverage", () => {
     expect(outlineHasSegment(diagonal.outline, diagonal.a.extra![0]!, diagonal.a.right)).toBe(true);
     expect(outlineHasSegment(diagonal.outline, diagonal.b.right, diagonal.b.extra![0]!)).toBe(true);
     expect(outlineHasSegment(diagonal.outline, diagonal.b.extra![0]!, diagonal.b.left)).toBe(true);
+  });
+
+  test("regression_split_t_join_has_no_empty_v_notch", () => {
+    const res = solveWallNetwork(splitTJoin(), { nodeTolM: 1e-6 });
+    const leftBase = res.walls.find((entry) => entry.id === "leftBase")!;
+    const rightBase = res.walls.find((entry) => entry.id === "rightBase")!;
+    const branch = res.walls.find((entry) => entry.id === "branch")!;
+
+    expectSimpleSolvedOutlines(res);
+    expectNoWallOutlineOverlap(res);
+    expect(res.footprint).toHaveLength(1);
+    expect(res.footprint[0]).toHaveLength(1);
+    expect(leftBase.b.left).toEqual(P(2.5, 0.075));
+    expect(leftBase.b.right).toEqual(P(2.5, -0.075));
+    expect(rightBase.a.left).toEqual(P(2.5, 0.075));
+    expect(rightBase.a.right).toEqual(P(2.5, -0.075));
+    expect(branch.a.left).toEqual(P(2.425, 0.075));
+    expect(branch.a.right).toEqual(P(2.575, 0.075));
+    expect(ringPoints(res, 0)).toEqual([
+      [0, -0.075],
+      [0, 0.075],
+      [2.425, 0.075],
+      [2.425, 3],
+      [2.575, 0.075],
+      [2.575, 3],
+      [5, -0.075],
+      [5, 0.075]
+    ]);
+  });
+
+  test("regression_split_t_join_reversed_draw_order_same_geometry", () => {
+    const normal = solveWallNetwork(splitTJoin(), { nodeTolM: 1e-6 });
+    const reversed = solveWallNetwork([...splitTJoin()].reverse(), { nodeTolM: 1e-6 });
+
+    expect(normalizedSolvedOutlines(reversed)).toEqual(normalizedSolvedOutlines(normal));
+    expect(normalizedFootprint(reversed)).toEqual(normalizedFootprint(normal));
+    expect(normalizedBoundaryEdges(reversed)).toEqual(normalizedBoundaryEdges(normal));
   });
 
   test("regression_no_open_wall_polygons", () => {
