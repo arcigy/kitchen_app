@@ -258,6 +258,21 @@ const expectSimpleSolvedOutlines = (res: ReturnType<typeof solveWallNetwork>) =>
 const outlineHasPoint = (outline: Array<{ x: number; z: number }>, expected: { x: number; z: number }, eps = 1e-6) =>
   outline.some((point) => Math.abs(point.x - expected.x) <= eps && Math.abs(point.z - expected.z) <= eps);
 
+const sameOutlinePoint = (a: { x: number; z: number }, b: { x: number; z: number }, eps = 1e-6) =>
+  Math.abs(a.x - b.x) <= eps && Math.abs(a.z - b.z) <= eps;
+
+const outlineHasSegment = (
+  outline: Array<{ x: number; z: number }>,
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  eps = 1e-6
+) =>
+  outlineSegments(outline).some(
+    ([start, end]) =>
+      (sameOutlinePoint(start, a, eps) && sameOutlinePoint(end, b, eps)) ||
+      (sameOutlinePoint(start, b, eps) && sameOutlinePoint(end, a, eps))
+  );
+
 const edgesFor = (res: ReturnType<typeof solveWallNetwork>, wallId: string, kind?: string) =>
   res.debug.boundaryEdges.filter((edge) => edge.wallId === wallId && (!kind || edge.kind === kind));
 
@@ -475,7 +490,7 @@ describe("wall join regression coverage", () => {
     expect(diagonal.b.source).toBe("bodyJoin");
     expect(outlineHasPoint(diagonal.outline, P(0.075, 0.075))).toBe(true);
     expect(outlineHasPoint(diagonal.outline, P(4.925, 2.925))).toBe(true);
-    expect(diagonal.outline).toHaveLength(4);
+    expect(diagonal.outline).toHaveLength(6);
     expect(diagonal.outline.filter((point) => Math.abs(point.z - 0.075) < 1e-6)).toHaveLength(2);
     expect(diagonal.outline.filter((point) => Math.abs(point.z - 2.925) < 1e-6)).toHaveLength(2);
     expect(diagonal.outline.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
@@ -496,15 +511,61 @@ describe("wall join regression coverage", () => {
     const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
     const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
 
-    expect(diagonal.outline).toHaveLength(4);
+    expect(diagonal.outline).toHaveLength(6);
     expect(outlineHasProperSelfIntersection(diagonal.outline)).toBe(false);
     expect(outlineArea(diagonal.outline)).toBeGreaterThan(0.5);
     expect(diagonal.outline.map((point) => `${point.x.toFixed(3)},${point.z.toFixed(3)}`)).toEqual([
+      "0.075,0.162",
       "0.075,0.075",
-      "0.371,0.075",
+      "0.223,0.075",
+      "4.925,2.838",
       "4.925,2.925",
-      "4.629,2.925"
+      "4.777,2.925"
     ]);
+  });
+
+  test("regression_diagonal_wall_has_bottom_cut_cap_boundary", () => {
+    const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
+    const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
+
+    expect(diagonal.a.source).toBe("bodyJoin");
+    expect(diagonal.a.extra).toHaveLength(1);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.left, diagonal.a.extra![0]!)).toBe(true);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.extra![0]!, diagonal.a.right)).toBe(true);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.left, diagonal.a.right)).toBe(false);
+  });
+
+  test("regression_selected_outline_no_false_diagonal_closing_segment", () => {
+    const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
+    const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
+
+    expect(outlineHasProperSelfIntersection(diagonal.outline)).toBe(false);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.left, diagonal.a.right)).toBe(false);
+    expect(outlineHasSegment(diagonal.outline, diagonal.b.left, diagonal.b.right)).toBe(false);
+    expect(outlineHasSegment(diagonal.outline, diagonal.b.left, diagonal.outline[0]!)).toBe(true);
+  });
+
+  test("regression_wall_outline_points_are_ordered_around_polygon", () => {
+    const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
+    const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
+    const segments = outlineSegments(diagonal.outline);
+
+    expect(segments).toHaveLength(diagonal.outline.length);
+    expect(outlineHasProperSelfIntersection(diagonal.outline)).toBe(false);
+    expect(outlineArea(diagonal.outline)).toBeGreaterThan(0.5);
+    expect(segments.every(([a, b]) => segmentLength({ a, b }) > 1e-8)).toBe(true);
+  });
+
+  test("regression_no_open_diagonal_wall_end", () => {
+    const res = solveWallNetwork(attachedDiagonalInnerCorner(), { nodeTolM: 1e-6 });
+    const diagonal = res.walls.find((entry) => entry.id === "diagonal")!;
+
+    expect(diagonal.a.extra).toHaveLength(1);
+    expect(diagonal.b.extra).toHaveLength(1);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.left, diagonal.a.extra![0]!)).toBe(true);
+    expect(outlineHasSegment(diagonal.outline, diagonal.a.extra![0]!, diagonal.a.right)).toBe(true);
+    expect(outlineHasSegment(diagonal.outline, diagonal.b.right, diagonal.b.extra![0]!)).toBe(true);
+    expect(outlineHasSegment(diagonal.outline, diagonal.b.extra![0]!, diagonal.b.left)).toBe(true);
   });
 
   test("regression_no_open_wall_polygons", () => {
