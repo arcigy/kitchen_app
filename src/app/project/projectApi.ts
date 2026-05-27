@@ -1,4 +1,4 @@
-import type { ProjectMetadata } from "../../core/project/project-types";
+import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { toSafeProjectFileName } from "../../core/project-save/project-save-file";
 
@@ -39,18 +39,38 @@ export async function listProjects(): Promise<ProjectMetadata[]> {
   return data.projects;
 }
 
-export async function saveProject(projectId: string, appState: ProjectSaveFile["appState"]): Promise<ProjectSaveFile> {
+export async function saveProject(projectId: string, appState: ProjectSaveFile["appState"], editingSessionId?: string): Promise<ProjectSaveFile> {
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/save`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ appState, appVersion: import.meta.env?.VITE_APP_VERSION })
+    body: JSON.stringify({ appState, editingSessionId, appVersion: import.meta.env?.VITE_APP_VERSION })
   }));
   return data.save;
 }
 
 export async function loadProject(projectId: string): Promise<ProjectSaveFile> {
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/load`, { credentials: "include" }));
+  return data.save;
+}
+
+export async function listProjectVersions(projectId: string): Promise<ProjectVersionMetadata[]> {
+  const data = await readJson<{ versions: ProjectVersionMetadata[] }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions`, { credentials: "include" }));
+  return data.versions;
+}
+
+export async function loadProjectVersion(projectId: string, versionNumber: number): Promise<ProjectSaveFile> {
+  const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions/${versionNumber}/load`, { credentials: "include" }));
+  return data.save;
+}
+
+export async function restoreProjectVersion(projectId: string, versionNumber: number): Promise<ProjectSaveFile> {
+  const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions/${versionNumber}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({})
+  }));
   return data.save;
 }
 

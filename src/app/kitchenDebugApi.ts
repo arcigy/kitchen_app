@@ -15,7 +15,7 @@ import { findModulePackageForParams } from "../core/module-package/runtime/modul
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
-import type { FloorBoundaryPoint, FloorParams, KitchenWorktopInstance, KitchenWorktopJustification, LayoutInstance, WallInstance } from "./localTypes";
+import type { ColumnParams, FloorBoundaryPoint, FloorParams, KitchenWorktopInstance, KitchenWorktopJustification, LayoutInstance, SectionParams, WallInstance } from "./localTypes";
 
 export type KitchenDebugApiContext = Record<string, any>;
 
@@ -76,6 +76,8 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     bindingFromPlanSnap,
     addMeasurement,
     createFloor,
+    createColumn,
+    createSectionInstance,
     cloneFloorParams,
     setSelectedFloor,
     setSelectedWall,
@@ -470,6 +472,16 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return { id: floor.id, boundary: structuredClone(floor.params.boundary) };
   };
 
+  const debugCreateColumn = (params: Partial<ColumnParams>) => {
+    const column = createColumn(params, { skipHistory: true });
+    return { id: column.id, params: structuredClone(column.params) };
+  };
+
+  const debugCreateSection = (params: SectionParams) => {
+    const section = createSectionInstance(params, { skipHistory: true });
+    return { id: section.id, params: structuredClone(section.params) };
+  };
+
   const debugSelectFloor = (floorId: string) => {
     setSelectedFloor(floorId);
     return { selectedKind: ctx.getSelectedKind(), selectedFloorId: ctx.getSelectedFloorId() };
@@ -687,6 +699,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         id: wall.id,
         meshVisible: wall.mesh.visible,
         outlineVisible: wall.outline.visible,
+        cutoutCount: Array.isArray(wall.mesh.userData.wallCutoutBounds) ? wall.mesh.userData.wallCutoutBounds.length : 0,
         aMm: { ...wall.params.aMm },
         bMm: { ...wall.params.bMm }
       }))
@@ -703,6 +716,8 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,
     createFloor: debugCreateFloor,
+    createColumn: debugCreateColumn,
+    createSection: debugCreateSection,
     moveWall: debugMoveWall,
     createMeasure: debugCreateMeasure,
     selectWall: debugSelectWall,

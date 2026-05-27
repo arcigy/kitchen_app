@@ -6,8 +6,30 @@ export const seedAuthUsers: readonly AuthUser[] = [
   {
     userId: "user_arcigy_owner",
     username: "arcigy",
-    displayName: "Arcigy",
+    displayName: "Branislav",
     passwordHash: "scrypt$v1$arcigy-demo-user-v1$8njWgz7dBVvOZjK3cVRe55r00Z7FWwuazch_8kKcHiX2umbC1lsHDTsagCc6FKbsnD75F6y6CpN9k-rmEnBkVw",
+    clientId: "client_arcigy_demo",
+    role: "owner",
+    isActive: true,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    userId: "user_arcigy_owner",
+    username: "branislav",
+    displayName: "Branislav",
+    passwordHash: "scrypt$v1$arcigy-branislav-v1$aznlvrD7jfACWGm_7BPjvR3MSsqm5XMj02N6dnvcZBp4eB16FfYVxArHi8GSFziL8v1p_4-jNTvnap5Krhu5Mg",
+    clientId: "client_arcigy_demo",
+    role: "owner",
+    isActive: true,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    userId: "user_andrej",
+    username: "andrej",
+    displayName: "Andrej",
+    passwordHash: "scrypt$v1$arcigy-andrej-v1$rWGv-on9xwMalvviwsGE-HM2omuoERWOpiK7tH0tWAN6-GbBeztqrf9RBEnzAufO5bfLbox3r97rXb0ornZKeA",
     clientId: "client_arcigy_demo",
     role: "owner",
     isActive: true,

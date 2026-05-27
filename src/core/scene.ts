@@ -35,6 +35,9 @@ export function createScene(container: HTMLElement) {
 
   const camera3d = new THREE.PerspectiveCamera(50, 1, 0.001, 200);
   camera3d.position.set(1.4, 1.0, 1.6);
+  const camera3dOrtho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.001, 200);
+  camera3dOrtho.position.copy(camera3d.position);
+  camera3dOrtho.quaternion.copy(camera3d.quaternion);
 
   // Orthographic top-down for 2D layout
   const camera2d = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 200);
@@ -43,6 +46,8 @@ export function createScene(container: HTMLElement) {
   camera2d.lookAt(0, 0, 0);
 
   let activeCamera: THREE.Camera = camera3d;
+  let projection3d: "perspective" | "axonometric" = "perspective";
+  let camera3dOrthoViewHeight = 4;
   let controls = new OrbitControls(activeCamera, renderer.domElement);
   const savedView = {
     target3d: new THREE.Vector3(0, 0.6, 0),
@@ -82,6 +87,36 @@ export function createScene(container: HTMLElement) {
     }
 
     controls.update();
+  };
+  const getActive3dCamera = () => (projection3d === "axonometric" ? camera3dOrtho : camera3d);
+  const copyCameraPose = (from: THREE.Camera, to: THREE.Camera) => {
+    to.position.copy(from.position);
+    to.quaternion.copy(from.quaternion);
+    to.up.copy(from.up);
+    if (
+      (from instanceof THREE.PerspectiveCamera || from instanceof THREE.OrthographicCamera) &&
+      (to instanceof THREE.PerspectiveCamera || to instanceof THREE.OrthographicCamera)
+    ) {
+      to.near = from.near;
+      to.far = from.far;
+    }
+    if (to instanceof THREE.PerspectiveCamera || to instanceof THREE.OrthographicCamera) {
+      to.updateProjectionMatrix();
+    }
+  };
+  const updateOrtho3dFrustum = (aspect: number) => {
+    const height = Math.max(0.05, camera3dOrthoViewHeight);
+    const width = height * Math.max(0.01, aspect);
+    camera3dOrtho.left = -width / 2;
+    camera3dOrtho.right = width / 2;
+    camera3dOrtho.top = height / 2;
+    camera3dOrtho.bottom = -height / 2;
+    camera3dOrtho.updateProjectionMatrix();
+  };
+  const calibrateOrtho3dFromPerspective = () => {
+    const distance = Math.max(0.2, camera3d.position.distanceTo(controls.target));
+    camera3dOrthoViewHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera3d.fov) / 2);
+    updateOrtho3dFrustum(camera3d.aspect || 1);
   };
   configureControls("3d");
   controls.target.copy(savedView.target3d);
@@ -644,6 +679,7 @@ export function createScene(container: HTMLElement) {
 
     camera3d.aspect = w / h;
     camera3d.updateProjectionMatrix();
+    updateOrtho3dFrustum(w / h);
 
     // Keep a stable 2D "meter-per-screen" scale via zoom.
     // 1 unit = 1m, target ~8m visible on the shortest axis.
@@ -667,7 +703,7 @@ export function createScene(container: HTMLElement) {
       savedView.zoom2d = camera2d.zoom;
     } else {
       savedView.target3d.copy(prevTarget);
-      savedView.cam3dPos.copy(camera3d.position);
+      savedView.cam3dPos.copy(activeCamera.position);
       if (mode === "2d") {
         savedView.target2d.set(prevTarget.x, 0, prevTarget.z);
       }
@@ -675,7 +711,7 @@ export function createScene(container: HTMLElement) {
 
     controls.dispose();
 
-    activeCamera = mode === "2d" ? camera2d : camera3d;
+    activeCamera = mode === "2d" ? camera2d : getActive3dCamera();
     controls = new OrbitControls(activeCamera, renderer.domElement);
     configureControls(mode);
 
@@ -699,12 +735,42 @@ export function createScene(container: HTMLElement) {
       planOverlay.visible = false;
       planAmbient.visible = false;
       controls.target.copy(savedView.target3d);
-      camera3d.position.copy(savedView.cam3dPos);
-      camera3d.updateProjectionMatrix();
+      activeCamera.position.copy(savedView.cam3dPos);
+      if (activeCamera instanceof THREE.PerspectiveCamera || activeCamera instanceof THREE.OrthographicCamera) {
+        activeCamera.updateProjectionMatrix();
+      }
       scene.background = new THREE.Color(0xf3f3f3);
       renderer.setClearColor(0xf3f3f3, 1);
       updateLighting();
     }
+  };
+
+  const set3dProjection = (projection: "perspective" | "axonometric") => {
+    if (projection3d === projection) return;
+    const prevCamera = activeCamera;
+    const prevTarget = controls.target.clone();
+    projection3d = projection;
+    if (prevCamera === camera2d) return;
+
+    if (projection === "axonometric") {
+      if (prevCamera instanceof THREE.PerspectiveCamera) {
+        copyCameraPose(prevCamera, camera3dOrtho);
+        calibrateOrtho3dFromPerspective();
+      }
+      activeCamera = camera3dOrtho;
+    } else {
+      if (prevCamera instanceof THREE.OrthographicCamera && prevCamera !== camera2d) {
+        copyCameraPose(prevCamera, camera3d);
+      }
+      activeCamera = camera3d;
+    }
+
+    if (prevCamera === camera2d) return;
+    controls.dispose();
+    controls = new OrbitControls(activeCamera, renderer.domElement);
+    controls.target.copy(prevTarget);
+    configureControls("3d");
+    controls.update();
   };
 
   const setPlanPresentation = (enabled: boolean) => {
@@ -720,6 +786,8 @@ export function createScene(container: HTMLElement) {
     renderer,
     setSize,
     setViewMode,
+    set3dProjection,
+    get3dProjection: () => projection3d,
     setPlanPresentation,
     setHdri,
     setPresentationMode,
@@ -753,6 +821,7 @@ export function createScene(container: HTMLElement) {
       planOverlayVisible: planOverlay.visible,
       planAmbientVisible: planAmbient.visible,
       activeCameraType: activeCamera.type,
+      projection3d,
       activeCameraPosition: activeCamera.position.clone(),
       activeCameraUp: activeCamera.up.clone(),
       controlsTarget: controls.target.clone()

@@ -158,6 +158,7 @@ import { createKitchenEditMode } from "./layout/kitchenEditMode";
 import { createWardrobeEditMode } from "./layout/wardrobeEditMode";
 import {
   updateUndoRedoUi,
+  snapshotSignature,
   commitHistory,
   undo,
   redo,
@@ -181,6 +182,8 @@ import {
 import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
+import { createProjectAutosaveController } from "./app/project/projectAutosave";
+import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { renderAppFrame } from "./app/frameRenderer";
@@ -221,6 +224,7 @@ import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createDoorControlsController } from "./app/doorControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
+import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
@@ -242,7 +246,10 @@ import { createDemosLivePreviewColorController } from "./app/demosLivePreviewCol
 import { createCameraPlacementController } from "./app/cameraPlacementController";
 import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
+import { createRecentActivityController } from "./app/recentActivityController";
+import { setupMagneticButtons } from "./app/magneticButtons";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
+import { organizationUserName } from "./core/client/organization-users";
 import {
   createDefaultModulePackageParameters,
   resolveModulePackageComponentAssignments,
@@ -252,6 +259,7 @@ import { createModulePackageControls, findModulePackageForParams } from "./core/
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
+  setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
 
@@ -292,6 +300,8 @@ export function startApp(initialArgs: AppArgs) {
     renderer,
     setSize,
     setViewMode,
+    set3dProjection,
+    get3dProjection,
     setPlanPresentation,
     getCamera,
     getControls,
@@ -320,9 +330,73 @@ export function startApp(initialArgs: AppArgs) {
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
-  const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs } = createViewerTabs(args.viewerEl);
+  const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs: syncViewerTabsBase } = createViewerTabs(args.viewerEl);
   const viewDisplay = createViewDisplayController(scene);
   let activeViewerTab = "3d";
+  const syncBottomViewList = (activeKey: string) => {
+    document.querySelectorAll<HTMLButtonElement>("[data-bottom-view-key]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.bottomViewKey === activeKey);
+    });
+  };
+  const syncViewerTabs = (activeKey: string) => {
+    syncViewerTabsBase(activeKey);
+    syncBottomViewList(activeKey);
+  };
+  type ViewerToolMode = "select" | "pan" | "zoom-in" | "zoom-out" | "orbit" | "fit";
+  let viewerToolMode: ViewerToolMode = "select";
+  let viewerPanActive = false;
+  const makeSvgCursor = (svg: string, hotX: number, hotY: number, fallback: string) =>
+    `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotX} ${hotY}, ${fallback}`;
+  const viewerCursors = {
+    select: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M8.7 5.4 23.9 19.8l-8.4.6-3.8 7.2Z" fill="white" stroke="#111827" stroke-width="2.3" stroke-linejoin="round"/><path d="m17.4 19.7 5.2 7" fill="none" stroke="#111827" stroke-width="2.3" stroke-linecap="round"/></svg>`,
+      8,
+      5,
+      "default"
+    ),
+    insert: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 5v22M5 16h22" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"/><path d="M16 5v22M5 16h22" fill="none" stroke="#111827" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="3.1" fill="#6655ff" stroke="white" stroke-width="1.4"/></svg>`,
+      16,
+      16,
+      "crosshair"
+    ),
+    pan: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M11.2 15.3V8.4a2.1 2.1 0 0 1 4.2 0v5.7M15.4 14.2V6.9a2.1 2.1 0 0 1 4.2 0v7.9M19.6 15V9.1a2.1 2.1 0 0 1 4.1 0v9.8M11.2 15.4 9.3 13.5a2.15 2.15 0 0 0-3.1 3l6.5 7.6a7.1 7.1 0 0 0 5.4 2.5h.9a6.7 6.7 0 0 0 6.7-6.7v-4.2" fill="white" stroke="#111827" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+      13,
+      10,
+      "grab"
+    ),
+    panGrab: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M10.8 14.7V9.5a2.1 2.1 0 0 1 4.2 0v4.3M15 13.8V8a2.1 2.1 0 0 1 4.2 0v6.1M19.2 14.2v-4a2.1 2.1 0 0 1 4.1 0v8.2M10.9 14.9l-1.7-1.4a2.2 2.2 0 0 0-3.1 3.1l5.9 6.9a7 7 0 0 0 5.4 2.5h.7a6.4 6.4 0 0 0 6.4-6.4v-3.8" fill="white" stroke="#111827" stroke-width="2.45" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.4 18.7h10.8" stroke="#111827" stroke-width="2.1" stroke-linecap="round"/></svg>`,
+      13,
+      12,
+      "grabbing"
+    ),
+    zoomIn: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="13.7" cy="13.7" r="8.1" fill="white" stroke="#111827" stroke-width="2.4"/><path d="M19.7 19.7 26.6 26.6M9.4 13.7H18M13.7 9.4V18" fill="none" stroke="#111827" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+      13,
+      13,
+      "zoom-in"
+    ),
+    zoomOut: makeSvgCursor(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="13.7" cy="13.7" r="8.1" fill="white" stroke="#111827" stroke-width="2.4"/><path d="M19.7 19.7 26.6 26.6M9.4 13.7H18" fill="none" stroke="#111827" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+      13,
+      13,
+      "zoom-out"
+    )
+  };
+  const syncViewerToolButtons = () => {
+    document.querySelectorAll<HTMLButtonElement>("[data-viewer-tool]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.viewerTool === viewerToolMode);
+    });
+  };
+  const cancelViewerToolMode = () => {
+    if (viewerToolMode === "select" && !viewerPanActive) return;
+    viewerToolMode = "select";
+    viewerPanActive = false;
+    syncViewerToolButtons();
+    syncViewerCursor();
+  };
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
@@ -349,6 +423,7 @@ export function startApp(initialArgs: AppArgs) {
 
   let cabinetGroup: THREE.Group | null = null;
   const hiddenParts = new Set<string>();
+  let recordRecentActivity = (_label: string) => {};
 
   const setViewerDisplayMode = (displayMode: ReturnType<typeof viewDisplay.getMode>) => {
     viewDisplay.setMode(displayMode);
@@ -364,6 +439,7 @@ export function startApp(initialArgs: AppArgs) {
       photoLastLightingRevision = -1;
     }
     syncViewerDownbar();
+    recordRecentActivity(`Visualisation set to ${displayMode}`);
   };
 
   const layoutRoot = new THREE.Group();
@@ -539,6 +615,7 @@ export function startApp(initialArgs: AppArgs) {
   const visibilityController = createVisibilityController({
     getAllTargets: getVisibilityTargets,
     getSelectedTargetKeys: getSelectedVisibilityTargetKeys,
+    recordActivity: (label) => recordRecentActivity(label),
     onChanged: () => {
       args.viewerEl.classList.toggle("viewer-show-hidden", visibilityController.showHidden && visibilityController.hasHiddenObjects());
       viewDisplay.sync();
@@ -549,6 +626,13 @@ export function startApp(initialArgs: AppArgs) {
   const viewerDownbar = createViewerDownbar(args.viewerEl, {
     getMode: () => viewDisplay.getMode(),
     setMode: setViewerDisplayMode,
+    getProjection: () => get3dProjection(),
+    setProjection: (projection) => {
+      set3dProjection(projection);
+      viewNavigation?.syncControls();
+      recordRecentActivity(`Projection set to ${projection}`);
+    },
+    getIs3dView: () => viewMode === "3d",
     hidden: {
       hasHiddenObjects: () => visibilityController.hasHiddenObjects(),
       isShowHidden: () => visibilityController.showHidden,
@@ -565,7 +649,8 @@ export function startApp(initialArgs: AppArgs) {
     getMode: () => mode,
     getViewMode: () => viewMode,
     getActiveViewerTab: () => activeViewerTab,
-    clearToolHud
+    clearToolHud,
+    recordActivity: (label) => recordRecentActivity(label)
   });
   const dimensionState = technicalDimensions.state;
 
@@ -632,6 +717,34 @@ export function startApp(initialArgs: AppArgs) {
   S.redoBtnEl = redoBtnEl;
   S.history = history;
 
+  const openBomPanelForState = (panelArgs: Pick<AppState, "instances" | "kitchenWorktops" | "kitchenCtx">) => {
+    openBomPanel({ ...panelArgs, catalog: clientCatalog });
+  };
+
+  const openPricingCatalogForState = () => {
+    openPricingCatalog(clientCatalog);
+  };
+
+  document.querySelector<HTMLButtonElement>("[data-open-bom-panel]")?.addEventListener("click", () => {
+    openBomPanelForState({ instances, kitchenWorktops, kitchenCtx: S.kitchenCtx });
+  });
+
+  const recentActivityController = createRecentActivityController({
+    S,
+    getHelpers: () => helpers,
+    selectTarget: (target) => {
+      if (!target.kind || !target.id) return;
+      if (target.kind === "wall") setSelectedWall(target.id);
+      else if (target.kind === "module") setSelectedModule(target.id);
+      else if (target.kind === "floor") setSelectedFloor(target.id);
+      else if (target.kind === "column") setSelectedColumn(target.id);
+      else if (target.kind === "section") setSelectedSection(target.id);
+      updateSelectionHighlights();
+      mountProps();
+    },
+    onRestore: () => undefined
+  });
+  recordRecentActivity = (label) => recentActivityController.record(label);
   function syncSelectionState() {
     S.selectedKind = selectedKind;
     S.selectedInstanceId = selectedInstanceId;
@@ -1076,6 +1189,11 @@ export function startApp(initialArgs: AppArgs) {
     getCamera: cam,
     getControls: ctl,
     getState: () => ({ mode, viewMode, activeViewerTab }),
+    getViewerToolMode: () => viewerToolMode,
+    setViewerPanActive: (active) => {
+      viewerPanActive = active;
+      syncViewerCursor();
+    },
     isTypingTarget,
     isInteractionBlocked: () =>
       dragState.active ||
@@ -1092,7 +1210,8 @@ export function startApp(initialArgs: AppArgs) {
       detailViewController.activeDetailClipPlanes = [];
       updateDetailViewCamera();
       updateDetailSliceOverlay();
-    }
+    },
+    activate3dView: () => setView2d(false)
   });
   viewNavigation.syncControls();
 
@@ -1101,13 +1220,34 @@ export function startApp(initialArgs: AppArgs) {
   const handleLayoutEscape = (ev: KeyboardEvent) => toolModeController.handleLayoutEscape(ev);
   const clearWallDrawState = () => toolModeController.clearWallDrawState();
   const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => toolModeController.deactivateMeasureTool(opts);
-  const setToolSelect = () => toolModeController.setToolSelect();
-  const setToolWall = () => toolModeController.setToolWall();
-  const setToolAlign = () => toolModeController.setToolAlign();
-  const setToolTrim = () => toolModeController.setToolTrim();
-  const setToolSection = () => toolModeController.setToolSection();
-  const setToolMeasure = () => toolModeController.setToolMeasure();
-  const setToolDimension = () => toolModeController.setToolDimension();
+  const setToolSelect = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolSelect();
+  };
+  const setToolWall = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolWall();
+  };
+  const setToolAlign = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolAlign();
+  };
+  const setToolTrim = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolTrim();
+  };
+  const setToolSection = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolSection();
+  };
+  const setToolMeasure = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolMeasure();
+  };
+  const setToolDimension = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolDimension();
+  };
 
   toolModeController = createToolModeController({
     S,
@@ -1184,6 +1324,15 @@ export function startApp(initialArgs: AppArgs) {
       if (handleGlobalMeasurementClear(ev)) return;
       if (ev.defaultPrevented) return;
       if (!isEscapeKey(ev)) return;
+      if (viewerToolMode !== "select") {
+        viewerToolMode = "select";
+        viewerPanActive = false;
+        syncViewerToolButtons();
+        syncViewerCursor();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       handleLayoutEscape(ev);
     },
     true
@@ -1343,28 +1492,6 @@ export function startApp(initialArgs: AppArgs) {
     setActiveViewerTab: (next) => { activeViewerTab = next; }
   });
 
-  drawOrthoToggleEl = document.createElement("button");
-  drawOrthoToggleEl.type = "button";
-  drawOrthoToggleEl.style.position = "absolute";
-  drawOrthoToggleEl.style.right = "16px";
-  drawOrthoToggleEl.style.bottom = "16px";
-  drawOrthoToggleEl.style.zIndex = "12";
-  drawOrthoToggleEl.style.padding = "10px 14px";
-  drawOrthoToggleEl.style.borderRadius = "999px";
-  drawOrthoToggleEl.style.border = "1px solid rgba(255,255,255,0.14)";
-  drawOrthoToggleEl.style.boxShadow = "0 10px 30px rgba(0,0,0,0.24)";
-  drawOrthoToggleEl.style.backdropFilter = "blur(14px)";
-  drawOrthoToggleEl.style.fontSize = "12px";
-  drawOrthoToggleEl.style.fontWeight = "700";
-  drawOrthoToggleEl.style.letterSpacing = "0.04em";
-  drawOrthoToggleEl.style.cursor = "pointer";
-  drawOrthoToggleEl.textContent = "Ortho ON";
-  drawOrthoToggleEl.style.background = "rgba(16,42,60,0.96)";
-  drawOrthoToggleEl.style.borderColor = "#53c6ff";
-  drawOrthoToggleEl.style.color = "#dff6ff";
-  drawOrthoToggleEl.addEventListener("click", () => toggleDrawOrthoMode());
-  args.viewerEl.appendChild(drawOrthoToggleEl);
-
   const { photoSamples, photoStatus } = createRenderControls({
     layoutUi,
     enableSsgi: ENABLE_SSGI,
@@ -1438,6 +1565,7 @@ export function startApp(initialArgs: AppArgs) {
     propertiesEl: args.propertiesEl,
     ensureFloorplanView: () => ensureFloorplanViewerTab(),
     onCamerasChanged: () => refreshViewerTabs(),
+    recordActivity: (label) => recordRecentActivity(label),
     setStatus: setUnderlayStatus,
     commitHistory: () => commitHistory(S)
   });
@@ -1474,7 +1602,11 @@ export function startApp(initialArgs: AppArgs) {
     getWindowInsts: () => windows,
     getDoorInst: () => doorInst,
     getDoorInsts: () => doors,
-    nextWallId: () => `w${wallCounter++}`
+    nextWallId: () => {
+      const id = `w${wallCounter++}`;
+      S.wallCounter = wallCounter;
+      return id;
+    }
   });
 
   const editHudController = createEditHudController({
@@ -1544,6 +1676,7 @@ export function startApp(initialArgs: AppArgs) {
     I_HIDE,
     I_INSTALL,
     I_ISOLATE,
+    I_LIVING_WALL,
     I_MEASURE,
     I_MOVE,
     I_REDO,
@@ -1562,10 +1695,15 @@ export function startApp(initialArgs: AppArgs) {
     I_WINDOW,
     I_WALL
   } = topbarIcons;
-  const tb = createTopbar(args.ribbonEl);
-  const projectHeader = createProjectHeader(args.ribbonEl);
+  const tb = createTopbar(args.ribbonEl, {
+    organizationUsers: args.clientProfile?.organization.users ?? [],
+    currentUserId: args.clientContext.userId
+  });
+  const projectHeader = createProjectHeader(args.ribbonEl, {
+    describeUser: (userId) => organizationUserName(args.clientProfile?.organization.users ?? [], userId)
+  });
   tb.setChrome({
-    title: "Kitchen Layout 2026 - Floor Plan",
+    title: "PROJECT - VILLA NORD",
     projectLabel: args.clientProfile?.company.name ?? "Project 1",
     tabs: [
       { id: "file", label: "File", accent: true },
@@ -1612,6 +1750,18 @@ export function startApp(initialArgs: AppArgs) {
     error: "",
     overlayEl: null as HTMLDivElement | null
   };
+  const syncViewerCursor = () => {
+    const insertMode =
+      mode === "layout" &&
+      (layoutTool !== "select" || placement.active || wallDraw.active || kitchenWorktopDraw.active || floorEdit.active || sectionDraw.active);
+    let cursor = viewerCursors.select;
+    if (insertMode) cursor = viewerCursors.insert;
+    else if (viewerPanActive) cursor = viewerCursors.panGrab;
+    else if (viewerToolMode === "pan" || viewerToolMode === "orbit") cursor = viewerCursors.pan;
+    else if (viewerToolMode === "zoom-in") cursor = viewerCursors.zoomIn;
+    else if (viewerToolMode === "zoom-out") cursor = viewerCursors.zoomOut;
+    renderer.domElement.style.cursor = cursor;
+  };
 
   let floorBoundaryController!: ReturnType<typeof createFloorBoundaryController>;
   const syncDrawOrthoUi = () => floorBoundaryController.syncDrawOrthoUi();
@@ -1624,7 +1774,10 @@ export function startApp(initialArgs: AppArgs) {
   const renderFloorBoundaryEdit = () => floorBoundaryController.renderFloorBoundaryEdit();
   const setFloorBoundaryTool = (tool: FloorBoundaryTool) => floorBoundaryController.setFloorBoundaryTool(tool);
   const buildFloorBoundaryTopbar = () => floorBoundaryController.buildFloorBoundaryTopbar();
-  const enterFloorBoundaryEdit = (floorId?: string) => floorBoundaryController.enterFloorBoundaryEdit(floorId);
+  const enterFloorBoundaryEdit = (floorId?: string) => {
+    cancelViewerToolMode();
+    return floorBoundaryController.enterFloorBoundaryEdit(floorId);
+  };
   const discardFloorBoundaryEdit = () => floorBoundaryController.discardFloorBoundaryEdit();
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => floorBoundaryController.addFloorEditSegment(a, b);
 
@@ -1683,10 +1836,15 @@ export function startApp(initialArgs: AppArgs) {
     return createWindowControlsControllerResult;
   };
   const addOrSelectWindow = () => {
+    cancelViewerToolMode();
     cancelDoorPlacement();
     return requireWindowControls().addOrSelectWindow();
   };
-  const insertWindowAtWallPoint = (...args: Parameters<WindowControlsApi["insertWindowAtWallPoint"]>) => requireWindowControls().insertWindowAtWallPoint(...args);
+  const insertWindowAtWallPoint = (...args: Parameters<WindowControlsApi["insertWindowAtWallPoint"]>) => {
+    const inserted = requireWindowControls().insertWindowAtWallPoint(...args);
+    if (inserted) recentActivityController.record("Window added");
+    return inserted;
+  };
   const updateWindowPlacementPreview = (...args: Parameters<WindowControlsApi["updateWindowPlacementPreview"]>) => createWindowControlsControllerResult?.updateWindowPlacementPreview(...args) ?? false;
   const clearWindowPlacementPreview = () => createWindowControlsControllerResult?.clearWindowPlacementPreview();
   const cancelWindowPlacement = () => createWindowControlsControllerResult?.cancelWindowPlacement() ?? false;
@@ -1703,10 +1861,15 @@ export function startApp(initialArgs: AppArgs) {
     return createDoorControlsControllerResult;
   };
   const addOrSelectDoor = () => {
+    cancelViewerToolMode();
     cancelWindowPlacement();
     return requireDoorControls().addOrSelectDoor();
   };
-  const insertDoorAtWallPoint = (...args: Parameters<DoorControlsApi["insertDoorAtWallPoint"]>) => requireDoorControls().insertDoorAtWallPoint(...args);
+  const insertDoorAtWallPoint = (...args: Parameters<DoorControlsApi["insertDoorAtWallPoint"]>) => {
+    const inserted = requireDoorControls().insertDoorAtWallPoint(...args);
+    if (inserted) recentActivityController.record("Door added");
+    return inserted;
+  };
   const updateDoorPlacementPreview = (...args: Parameters<DoorControlsApi["updateDoorPlacementPreview"]>) => createDoorControlsControllerResult?.updateDoorPlacementPreview(...args) ?? false;
   const clearDoorPlacementPreview = () => createDoorControlsControllerResult?.clearDoorPlacementPreview();
   const cancelDoorPlacement = () => createDoorControlsControllerResult?.cancelDoorPlacement() ?? false;
@@ -1786,6 +1949,7 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function addColumn() {
+    cancelViewerToolMode();
     ensureLayoutMode();
     ensureFloorplanViewerTab();
     if (placement.active) cancelPlacement(S, placementHelpers);
@@ -1897,7 +2061,8 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayOffZEl: (el: HTMLInputElement) => { underlayOffZEl = el; },
     setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; },
     markUnderlaySelected: () => { selectedKind = "underlay"; },
-    scheduleKitchenWorktopPreviewUpdate
+    scheduleKitchenWorktopPreviewUpdate,
+    recordActivity: (label) => recentActivityController.record(label)
   });
   const mountProps = () => propertiesRouter.mountProps();
 
@@ -2052,6 +2217,7 @@ export function startApp(initialArgs: AppArgs) {
     syncWindowSelectionVisuals(false);
     if (wall) rebuildWall(wall);
     rebuildWallPlanMesh();
+    recordRecentActivity("Window deleted");
     return true;
   };
 
@@ -2070,6 +2236,7 @@ export function startApp(initialArgs: AppArgs) {
     syncDoorSelectionVisuals(false);
     if (wall) rebuildWall(wall);
     rebuildWallPlanMesh();
+    recordRecentActivity("Door deleted");
     return true;
   };
 
@@ -2125,14 +2292,36 @@ export function startApp(initialArgs: AppArgs) {
   const toggle2dView = layoutActionsController.toggle2dView;
 
   floorplanTab.addEventListener("click", () => {
-    if (mode !== "layout") return;
+    ensureLayoutMode();
     activateViewerTab("floorplan");
   });
 
   view3dTab.addEventListener("click", () => {
-    if (mode !== "layout") return;
+    ensureLayoutMode();
     activateViewerTab("3d");
   });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-bottom-view-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      ensureLayoutMode();
+      const key = button.dataset.bottomViewKey;
+      if (!key) return;
+      activateViewerTab(key);
+    });
+  });
+  syncBottomViewList(activeViewerTab);
+
+  document.querySelectorAll<HTMLButtonElement>("[data-viewer-tool]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tool = button.dataset.viewerTool as ViewerToolMode | undefined;
+      if (!tool) return;
+      viewerPanActive = false;
+      viewerToolMode = tool;
+      syncViewerToolButtons();
+      syncViewerCursor();
+    });
+  });
+  syncViewerToolButtons();
 
   let createClassicTopbarControllerResult!: ReturnType<typeof createClassicTopbarController>;
   const buildClassicTopbar = (...args: Parameters<ReturnType<typeof createClassicTopbarController>["buildClassicTopbar"]>) => createClassicTopbarControllerResult.buildClassicTopbar(...args);
@@ -2152,6 +2341,7 @@ export function startApp(initialArgs: AppArgs) {
     I_HIDE,
     I_INSTALL,
     I_ISOLATE,
+    I_LIVING_WALL,
     I_MEASURE,
     I_MOVE,
     I_REDO,
@@ -2182,8 +2372,8 @@ export function startApp(initialArgs: AppArgs) {
     get kitchenMode() { return kitchenMode; },
     get wardrobeMode() { return wardrobeMode; },
     layoutTool,
-    openBomPanel: (panelArgs) => openBomPanel({ ...panelArgs, catalog: clientCatalog }),
-    openPricingCatalog: () => openPricingCatalog(clientCatalog),
+    openBomPanel: (panelArgs) => openBomPanelForState(panelArgs),
+    openPricingCatalog: () => openPricingCatalogForState(),
     openUnderlayPanel,
     promptAppInstall,
     redo,
@@ -2194,9 +2384,18 @@ export function startApp(initialArgs: AppArgs) {
     setToolSelect,
     setToolTrim,
     setToolWall,
-    startCameraPlacement: () => cameraPlacementController.activate(),
-    startMaterialModify: () => materialModifyController.activate(),
-    startTransformFromSelection,
+    startCameraPlacement: () => {
+      cancelViewerToolMode();
+      cameraPlacementController.activate();
+    },
+    startMaterialModify: () => {
+      cancelViewerToolMode();
+      materialModifyController.activate();
+    },
+    startTransformFromSelection: (...transformArgs) => {
+      cancelViewerToolMode();
+      startTransformFromSelection(...transformArgs);
+    },
     subscribeInstallState,
     tb,
     toggle2dView,
@@ -2215,6 +2414,20 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   syncClassicTopbarVisibility = createClassicTopbarControllerResult.syncClassicTopbarVisibility;
+
+  createWorkspaceNavigationController({
+    root: document.getElementById("app") ?? document.body,
+    S,
+    catalog: clientCatalog,
+    setVisualisationTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("visualisation");
+    },
+    setDesignTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("architecture");
+    }
+  });
 
 
   kitchenMode = createKitchenEditMode({
@@ -2271,6 +2484,7 @@ export function startApp(initialArgs: AppArgs) {
     buildClassicTopbar,
     restoreStandardTopbar: () => rebuildStandardTopbar(),
     refreshProps: () => mountProps(),
+    recordActivity: (label) => recordRecentActivity(label),
     catalog: clientCatalog
   });
 
@@ -2585,9 +2799,54 @@ export function startApp(initialArgs: AppArgs) {
 
   const vectorSnapshot = (v: THREE.Vector3) => ({ x: v.x, y: v.y, z: v.z });
   const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+  const nextCounterFromIds = (ids: string[], prefix: string) => {
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`^${escapedPrefix}(\\d+)$`);
+    return ids.reduce((next, id) => {
+      const match = pattern.exec(id);
+      if (!match) return next;
+      const value = Number(match[1]);
+      return Number.isFinite(value) ? Math.max(next, value + 1) : next;
+    }, 1);
+  };
+  const syncRestoredCounters = () => {
+    wallCounter = Math.max(S.wallCounter, nextCounterFromIds(walls.map((wall) => wall.id), "w"));
+    floorCounter = Math.max(S.floorCounter, nextCounterFromIds(floors.map((floor) => floor.id), "f"));
+    columnCounter = Math.max(S.columnCounter, nextCounterFromIds(columns.map((column) => column.id), "c"));
+    sectionCounter = Math.max(S.sectionCounter, nextCounterFromIds(sections.map((section) => section.id), "s"));
+    worktopCounter = Math.max(S.worktopCounter, nextCounterFromIds(kitchenWorktops.map((worktop) => worktop.id), "wt"));
+    instanceCounter = Math.max(S.instanceCounter, nextCounterFromIds(instances.map((inst) => inst.id), "m"));
+    S.wallCounter = wallCounter;
+    S.floorCounter = floorCounter;
+    S.columnCounter = columnCounter;
+    S.sectionCounter = sectionCounter;
+    S.worktopCounter = worktopCounter;
+    S.instanceCounter = instanceCounter;
+  };
+  const resetProjectInteractionStateForLoad = () => {
+    ensureLayoutMode();
+    cancelViewerToolMode();
+    setToolSelect();
+    if (floorEdit.active) discardFloorBoundaryEdit();
+    marquee.active = false;
+    marquee.pending = false;
+    marquee.pointerId = null;
+    marquee.hitSomething = false;
+    marqueeEl.style.display = "none";
+    wallTypedHud.style.display = "none";
+  };
   const buildProjectAppState = (): ProjectSaveFile["appState"] => {
+    recentActivityController.syncFromHistory();
     const camera = cam();
-    const target = (ctl() as any)?.target;
+    const controls = ctl() as { target?: unknown } | null | undefined;
+    const target = controls?.target;
+    const projectPreview = captureProjectPreview({
+      renderer,
+      scene,
+      camera,
+      target: target instanceof THREE.Vector3 ? target : undefined,
+      viewMode
+    });
     return {
       layout: {
         snapshot: captureLayoutSnapshot(S),
@@ -2629,12 +2888,17 @@ export function startApp(initialArgs: AppArgs) {
       },
       editor: {
         layoutTool,
-        activeViewerTab
+        activeViewerTab,
+        visibility: visibilityController.getSaveState(),
+        dimensions: technicalDimensions.getSaveState(),
+        wardrobe: wardrobeMode?.getSaveState() ?? null
       },
+      recentActivity: recentActivityController.getSaveState(),
       camera: {
         type: camera.type,
         position: vectorSnapshot(camera.position),
-        target: target instanceof THREE.Vector3 ? vectorSnapshot(target) : undefined
+        target: target instanceof THREE.Vector3 ? vectorSnapshot(target) : undefined,
+        placedCameras: cameraPlacementController.getSaveState()
       },
       selections: {
         selectedKind,
@@ -2647,11 +2911,13 @@ export function startApp(initialArgs: AppArgs) {
         selectedInstanceIds: [...selectedInstanceIds]
       },
       pricingSettings: null,
-      quoteSettings: null
+      quoteSettings: null,
+      projectPreview
     };
   };
 
   const restoreProjectSave = (save: ProjectSaveFile) => {
+    resetProjectInteractionStateForLoad();
     const layout = save.appState.layout as {
       snapshot?: unknown;
       windows?: Array<{ id: string; params: WindowParams }>;
@@ -2659,6 +2925,8 @@ export function startApp(initialArgs: AppArgs) {
       counters?: { windowCounter?: number; doorCounter?: number };
     } | null;
     const kitchen = save.appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null } | null;
+    const editor = save.appState.editor as { visibility?: unknown; dimensions?: unknown; wardrobe?: unknown } | null | undefined;
+    const savedCamera = save.appState.camera as { placedCameras?: unknown } | null | undefined;
     if (kitchen?.context) S.kitchenCtx = resolveContext(kitchen.context as typeof S.kitchenCtx);
     S.kitchenGroups.splice(0, S.kitchenGroups.length);
     for (const group of kitchen?.groups ?? []) {
@@ -2686,22 +2954,27 @@ export function startApp(initialArgs: AppArgs) {
       const params = clampWindowParams(cloneJson(savedWindow.params));
       const inst = createWindow(params.wall, params.wallId ?? null, { id: savedWindow.id });
       inst.params = params;
-      updateWindowTransform(inst);
       windows.push(inst);
       layoutRoot.add(inst.root);
+      updateWindowTransform(inst);
       windowInst = inst;
     }
     for (const savedDoor of layout.doors ?? []) {
       const params = clampDoorParams(cloneJson(savedDoor.params));
       const inst = createDoor(params.wall, params.wallId ?? null, { id: savedDoor.id });
       inst.params = params;
-      updateDoorTransform(inst);
       doors.push(inst);
       layoutRoot.add(inst.root);
+      updateDoorTransform(inst);
       doorInst = inst;
     }
     windowCounter = Math.max(layout.counters?.windowCounter ?? 1, ...windows.map((item) => Number(item.id.replace(/\D/g, "")) + 1).filter(Number.isFinite), 1);
     doorCounter = Math.max(layout.counters?.doorCounter ?? 1, ...doors.map((item) => Number(item.id.replace(/\D/g, "")) + 1).filter(Number.isFinite), 1);
+    cameraPlacementController.restoreSaveState(savedCamera?.placedCameras);
+    technicalDimensions.restoreSaveState(editor?.dimensions);
+    wardrobeMode?.restoreSaveState(editor?.wardrobe);
+    visibilityController.restoreSaveState(editor?.visibility);
+    syncRestoredCounters();
     rebuildWallPlanMesh();
     S.history.current = captureLayoutSnapshot(S);
     S.history.past = [];
@@ -2709,6 +2982,7 @@ export function startApp(initialArgs: AppArgs) {
     updateUndoRedoUi(S);
     mountProps();
     updateLayoutPanel();
+    recentActivityController.restoreSaveState(save.appState.recentActivity);
   };
 
   const projectActions = createProjectActions({
@@ -2717,9 +2991,37 @@ export function startApp(initialArgs: AppArgs) {
     onProjectChanged: (project, status) => {
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Project 1");
       projectHeader.render(project, status);
-    }
+    },
+    initialProject: args.initialProjectSave?.project ?? args.initialProject ?? null
   });
-  const projectMenuActions = createProjectMenuActions(projectActions);
+  const projectMenuActions = createProjectMenuActions(projectActions, {
+    openProjectManager: args.openProjectManager,
+    currentUserName: organizationUserName(args.clientProfile?.organization.users ?? [], args.clientContext.userId),
+    formatSavedMessage: (save, fallback) =>
+      `${fallback} Ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
+  });
+  createProjectAutosaveController({
+    actions: projectActions,
+    getChangeToken: () =>
+      JSON.stringify({
+        layout: S.history.current ? snapshotSignature(S.history.current) : "",
+        cameras: cameraPlacementController.getSaveState(),
+        visibility: visibilityController.getSaveState(),
+        dimensions: technicalDimensions.getSaveState(),
+        wardrobe: wardrobeMode?.getSaveState() ?? null
+      }),
+    formatSavedMessage: (save) =>
+      `Autosave ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
+  }).start();
+  tb.getQuickAction("save")?.addEventListener("click", () => {
+    void projectMenuActions.saveProject();
+  });
+  tb.getQuickAction("print")?.addEventListener("click", () => {
+    void projectMenuActions.saveProject();
+  });
+  tb.getQuickAction("open")?.addEventListener("click", () => {
+    projectMenuActions.openProjectManager();
+  });
 
   const buildSelectionController = createBuildSelectionController({
     S,
@@ -3324,6 +3626,15 @@ export function startApp(initialArgs: AppArgs) {
   history.future = [];
   updateUndoRedoUi(S);
 
+  if (args.initialProjectSave) {
+    restoreProjectSave(args.initialProjectSave);
+    tb.setProjectLabel(args.initialProjectSave.project.name);
+    projectHeader.render(args.initialProjectSave.project, "Loaded.");
+  } else if (args.initialProject) {
+    tb.setProjectLabel(args.initialProject.name);
+    projectHeader.render(args.initialProject, "Project ready.");
+  }
+
   let createWallEditHudUpdaterResult!: ReturnType<typeof createWallEditHudUpdater>;
   function updateWallEditHud(...args: Parameters<ReturnType<typeof createWallEditHudUpdater>["updateWallEditHud"]>) { return createWallEditHudUpdaterResult.updateWallEditHud(...args); }
 
@@ -3561,6 +3872,8 @@ export function startApp(initialArgs: AppArgs) {
     bindingFromPlanSnap,
     addMeasurement,
     createFloor,
+    createColumn,
+    createSectionInstance,
     cloneFloorParams,
     setSelectedFloor,
     setSelectedWall,
@@ -3642,6 +3955,8 @@ export function startApp(initialArgs: AppArgs) {
     demosLivePreviewColor.sync();
     cameraPlacementController.syncActiveCameraView(activeViewerTab, cam(), ctl());
     renderAppFrame(frameRendererContext, dt);
+    recentActivityController.syncFromHistory();
+    syncViewerCursor();
     requestAnimationFrame(tick);
   };
   tick();

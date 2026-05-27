@@ -25,6 +25,7 @@ type FileMenuActions = {
   saveProject?: () => void | Promise<void>;
   downloadProject?: () => void | Promise<void>;
   loadProjectFile?: () => void | Promise<void>;
+  openProjectManager?: () => void | Promise<void>;
   save: () => void | Promise<void>;
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
@@ -83,6 +84,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
         { label: t("New Project"), onSelect: actions.newProject },
         { label: t("Open Project"), onSelect: actions.openProject ?? actions.save },
         { label: t("Save Project"), onSelect: actions.saveProject ?? actions.save },
+        { label: t("Project Manager"), onSelect: actions.openProjectManager ?? actions.openProject ?? actions.save },
         { label: t("Download Project File"), onSelect: actions.downloadProject ?? actions.saveAs },
         { label: t("Load Project File"), onSelect: actions.loadProjectFile ?? actions.saveAs },
         { type: "separator" }

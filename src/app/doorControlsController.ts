@@ -852,8 +852,8 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     };
     ctx.doorInst = inst;
     ctx.doors.push(inst);
-    updateDoorTransform(inst);
     ctx.layoutRoot.add(inst.root);
+    updateDoorTransform(inst);
     placementActive = true;
     placementPreview.visible = false;
     ctx.setSelectedDoor();

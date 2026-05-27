@@ -972,8 +972,8 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     };
     ctx.windowInst = inst;
     ctx.windows.push(inst);
-    updateWindowTransform(inst);
     ctx.layoutRoot.add(inst.root);
+    updateWindowTransform(inst);
     placementActive = true;
     placementPreview.visible = false;
     ctx.setSelectedWindow();

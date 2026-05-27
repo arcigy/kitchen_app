@@ -4,7 +4,7 @@ import type { ClientContext } from "../client/client-context";
 import { resolveClientStoragePath, resolveProjectStoragePath, resolvePhaseBucketPath } from "../storage/storage-path-resolver";
 import { createClientProjectPhaseScope, sanitizeStorageId } from "../storage/storage-types";
 import { assertClientProjectPhaseAccess, assertProjectBelongsToClient } from "../storage/project-ownership";
-import type { CreateProjectInput, ProjectMetadata } from "./project-types";
+import type { CreateProjectInput, ProjectMetadata, ProjectVersionMetadata } from "./project-types";
 import { createProjectMetadata } from "./project-metadata";
 import { assertValidCreateProjectInput, assertValidProjectMetadata } from "./project-validation";
 import type { ProjectBundledAssetPayload, ProjectSaveFile } from "../project-save/project-save-types";
@@ -18,12 +18,16 @@ export type ProjectRepository = {
   saveProjectMetadata(ctx: ClientContext, metadata: ProjectMetadata): Promise<void>;
   loadProjectSave(ctx: ClientContext, projectId: string, phaseId: string): Promise<ProjectSaveFile>;
   saveProjectSnapshot(ctx: ClientContext, projectId: string, phaseId: string, save: ProjectSaveFile): Promise<void>;
+  listProjectVersions(ctx: ClientContext, projectId: string): Promise<ProjectVersionMetadata[]>;
+  loadProjectVersion(ctx: ClientContext, projectId: string, versionNumber: number): Promise<ProjectSaveFile>;
+  saveProjectVersion(ctx: ClientContext, metadata: ProjectVersionMetadata, save: ProjectSaveFile): Promise<void>;
   bundleProjectAssets(ctx: ClientContext, save: ProjectSaveFile): Promise<{ save: ProjectSaveFile; bundledAssets: ProjectBundledAssetPayload[] }>;
   restoreProjectAssets(ctx: ClientContext, save: ProjectSaveFile, bundledAssets: ProjectBundledAssetPayload[]): Promise<ProjectSaveFile>;
 };
 
 const PROJECT_META_FILE = "project.meta.json";
 const SAVE_FILE = "save.json";
+const VERSION_MANIFEST_FILE = "version-manifest.json";
 
 function projectMetaPath(projectRoot: string, ctx: ClientContext, projectId: string): string {
   const scope = createClientProjectPhaseScope(ctx, { projectId, phaseId: "phase_1" });
@@ -35,8 +39,27 @@ function savePath(projectRoot: string, ctx: ClientContext, projectId: string, ph
   return path.join(resolvePhaseBucketPath(projectRoot, scope, "saves"), SAVE_FILE);
 }
 
+function projectVersionsPath(projectRoot: string, ctx: ClientContext, projectId: string): string {
+  const scope = createClientProjectPhaseScope(ctx, { projectId, phaseId: "phase_1" });
+  return path.join(resolveProjectStoragePath(projectRoot, scope), "versions");
+}
+
+function versionSavePath(projectRoot: string, ctx: ClientContext, projectId: string, versionNumber: number): string {
+  return path.join(projectVersionsPath(projectRoot, ctx, projectId), `v${String(versionNumber).padStart(4, "0")}.json`);
+}
+
 async function readJsonFile<T>(filePath: string): Promise<T> {
   return JSON.parse(await readFile(filePath, "utf-8")) as T;
+}
+
+async function readVersionManifest(dir: string): Promise<ProjectVersionMetadata[]> {
+  try {
+    const versions = await readJsonFile<ProjectVersionMetadata[]>(path.join(dir, VERSION_MANIFEST_FILE));
+    return Array.isArray(versions) ? versions : [];
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 export function createFileProjectRepository(projectRoot: string): ProjectRepository {
@@ -111,6 +134,37 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
       const target = savePath(root, ctx, safeProjectId, safePhaseId);
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, JSON.stringify(save, null, 2), "utf-8");
+    },
+
+    async listProjectVersions(ctx, projectId) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      await assertProjectBelongsToClient(root, ctx.clientId, safeProjectId);
+      const versions = await readVersionManifest(projectVersionsPath(root, ctx, safeProjectId));
+      return versions.sort((a, b) => b.versionNumber - a.versionNumber);
+    },
+
+    async loadProjectVersion(ctx, projectId, versionNumber) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      await assertProjectBelongsToClient(root, ctx.clientId, safeProjectId);
+      const save = await readJsonFile<ProjectSaveFile>(versionSavePath(root, ctx, safeProjectId, versionNumber));
+      validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
+      return save;
+    },
+
+    async saveProjectVersion(ctx, metadata, save) {
+      if (metadata.projectId !== save.projectId) throw new Error("Project version metadata does not match save.");
+      const safeProjectId = sanitizeStorageId(metadata.projectId, "projectId");
+      validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
+      await assertProjectBelongsToClient(root, ctx.clientId, safeProjectId, "write");
+      const dir = projectVersionsPath(root, ctx, safeProjectId);
+      await mkdir(dir, { recursive: true });
+      const versions = await readVersionManifest(dir);
+      const nextVersions = [
+        ...versions.filter((item) => item.versionNumber !== metadata.versionNumber),
+        metadata
+      ].sort((a, b) => b.versionNumber - a.versionNumber);
+      await writeFile(versionSavePath(root, ctx, safeProjectId, metadata.versionNumber), JSON.stringify(save, null, 2), "utf-8");
+      await writeFile(path.join(dir, VERSION_MANIFEST_FILE), JSON.stringify(nextVersions, null, 2), "utf-8");
     },
 
     async bundleProjectAssets(ctx, save) {

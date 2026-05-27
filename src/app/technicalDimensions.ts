@@ -29,6 +29,7 @@ type TechnicalDimensionManagerArgs = {
   getViewMode: () => "3d" | "2d";
   getActiveViewerTab: () => string;
   clearToolHud: () => void;
+  recordActivity?: (label: string) => void;
 };
 
 const linePointToDimensionPoint = (p: THREE.Vector3): TechnicalDimensionPoint => ({ x: p.x, y: -p.z });
@@ -132,6 +133,7 @@ export function createTechnicalDimensionManager(args: TechnicalDimensionManagerA
     for (const dim of next) {
       dimensions.push({ ...dim, id: `dimension-${nextId++}` });
     }
+    if (next.length > 0) args.recordActivity?.(next.length > 1 ? `${next.length} dimensions added` : "Dimension added");
   };
 
   const resetDraft = () => {
@@ -147,6 +149,30 @@ export function createTechnicalDimensionManager(args: TechnicalDimensionManagerA
     isLinePicked,
     buildFromPickedLines,
     commitDimensions,
-    resetDraft
+    resetDraft,
+    getSaveState: () => ({
+      dimensions: dimensions.map((dimension) => ({ ...dimension })),
+      nextId
+    }),
+    restoreSaveState(state: unknown) {
+      const saved = state as { dimensions?: TechnicalDimensionRecord[]; nextId?: number } | null | undefined;
+      dimensions.splice(0, dimensions.length);
+      if (Array.isArray(saved?.dimensions)) {
+        for (const dimension of saved.dimensions) {
+          if (
+            typeof dimension?.id === "string" &&
+            dimension.start &&
+            dimension.end &&
+            dimension.extensionStart &&
+            dimension.extensionEnd
+          ) {
+            dimensions.push({ ...dimension });
+          }
+        }
+      }
+      nextId = Math.max(Number.isFinite(saved?.nextId) ? Number(saved?.nextId) : 1, dimensions.length + 1, 1);
+      resetDraft();
+      render();
+    }
   };
 }

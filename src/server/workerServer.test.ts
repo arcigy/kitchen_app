@@ -392,7 +392,7 @@ describe("multi-client worker isolation", () => {
     expect(projectA.status).toBe(201);
   });
 
-  it("does not overwrite an existing project on encrypted import conflict", async () => {
+  it("imports an encrypted project as a copy when the project already exists", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
@@ -411,7 +411,12 @@ describe("multi-client worker isolation", () => {
       cookie,
       body: { envelope: downloaded.text }
     });
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
+    const imported = (response.body as { save: { projectId: string; project: { importedFrom?: { projectId: string } } } }).save;
+    expect(imported.projectId).not.toBe(project.projectId);
+    expect(imported.project.importedFrom?.projectId).toBe(project.projectId);
+    const list = await requestWorker(controller!.port, "/api/projects", { cookie });
+    expect((list.body as { projects: unknown[] }).projects).toHaveLength(2);
   });
 
   it("prevents client A from reading storage belonging to client B", async () => {

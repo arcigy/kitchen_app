@@ -70,6 +70,12 @@ If a change needs more than a small wiring edit, create or update a focused file
 - Keep feature-specific types beside the controller that owns them.
 - Export a type only when another module genuinely consumes it.
 
+## Project save/load contract
+
+Read and follow `docs/PROJECT_SAVE_LOAD_CONTRACT.md` before adding or changing any persisted project state, module parameters, layout entities, database project storage, import/export, recent activity, BOM/pricing snapshots, or restore logic.
+
+Any new user-visible state must be serialized, restored, validated, and asserted in the project roundtrip tests.
+
 ## Required checks after structural changes
 
 Run at minimum:
@@ -78,6 +84,7 @@ Run at minimum:
 npm run typecheck
 npm test
 npm run build
+npm run test:project-roundtrip-full
 npm run test:ui-regression
 ```
 

@@ -1,13 +1,23 @@
-import { mountBomDevPanel } from "../ui/bomDevPanel";
-import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 
 type BomPanelArgs = {
-  instances: Parameters<typeof mountBomDevPanel>[1];
-  kitchenWorktops: Parameters<typeof mountBomDevPanel>[2];
-  kitchenCtx: Parameters<typeof mountBomDevPanel>[3];
+  instances: LayoutInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
+  kitchenCtx: KitchenContext;
   catalog: ClientCatalog;
 };
+
+function mountPanelError(container: HTMLElement, message: string) {
+  container.innerHTML = "";
+  const error = document.createElement("p");
+  error.textContent = message;
+  error.style.margin = "0";
+  error.style.color = "#ef4444";
+  container.appendChild(error);
+}
 
 export function openBomPanel(args: BomPanelArgs) {
   const overlay = document.createElement("div");
@@ -22,7 +32,7 @@ export function openBomPanel(args: BomPanelArgs) {
   panel.appendChild(header);
 
   const title = document.createElement("h2");
-  title.textContent = "BOM";
+  title.textContent = "Nacitavam kusovnik";
   title.className = "bom-modal__title";
   header.appendChild(title);
 
@@ -34,6 +44,7 @@ export function openBomPanel(args: BomPanelArgs) {
 
   const content = document.createElement("div");
   content.className = "bom-modal__content";
+  content.textContent = args.instances.length > 0 ? "Loading BOM..." : "Nie su umiestnene ziadne moduly.";
   panel.appendChild(content);
 
   const close = () => overlay.remove();
@@ -42,8 +53,15 @@ export function openBomPanel(args: BomPanelArgs) {
     if (event.target === overlay) close();
   });
 
-  mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.kitchenCtx, args.catalog);
   document.body.appendChild(overlay);
+  void import("../ui/bomDevPanel")
+    .then(({ mountBomDevPanel }) => {
+      if (!overlay.isConnected) return;
+      title.textContent = "Kusovnik";
+      content.innerHTML = "";
+      mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.kitchenCtx, args.catalog);
+    })
+    .catch(() => mountPanelError(content, "BOM could not be loaded."));
 }
 
 export function openPricingCatalog(catalog: ClientCatalog) {

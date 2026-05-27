@@ -29,6 +29,7 @@ type ClassicTopbarControllerContext = {
   I_HIDE: string;
   I_INSTALL: string;
   I_ISOLATE: string;
+  I_LIVING_WALL: string;
   I_MEASURE: string;
   I_MOVE: string;
   I_REDO: string;
@@ -183,7 +184,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addLivingWallTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Living Wall", { row });
-    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_CABINET });
+    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
   };
 
   const addRoomTab = (row: HTMLElement) => {

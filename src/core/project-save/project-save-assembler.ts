@@ -1,7 +1,7 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "../module-package/module-package-file";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
-import type { ProjectMetadata } from "../project/project-types";
+import type { ProjectMetadata, ProjectPreview } from "../project/project-types";
 import type { ProjectAssetManifest, ProjectCatalogSnapshot, ProjectSaveFile, UsedModulePackageSnapshot } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { validateProjectSaveFile } from "./project-save-validation";
@@ -24,10 +24,12 @@ export type ProjectSaveAssemblerInput = {
   moduleInstances: unknown[];
   sceneState: unknown;
   editorState?: unknown;
+  recentActivity?: unknown;
   cameraState?: unknown;
   selections?: unknown;
   pricingSettings?: unknown;
   quoteSettings?: unknown;
+  projectPreview?: ProjectPreview;
   bomSnapshot?: unknown;
   assets?: ProjectAssetManifest;
   modulePackages?: FurnQuoteModulePackage[];
@@ -176,10 +178,12 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
       modules: moduleInstances,
       scene: cloneJson(input.sceneState),
       editor: cloneJson(input.editorState),
+      recentActivity: cloneJson(input.recentActivity),
       camera: cloneJson(input.cameraState),
       selections: cloneJson(input.selections),
       pricingSettings: cloneJson(input.pricingSettings),
-      quoteSettings: cloneJson(input.quoteSettings)
+      quoteSettings: cloneJson(input.quoteSettings),
+      projectPreview: cloneJson(input.projectPreview)
     },
     assets: input.assets ?? { bundled: [], external: [], missing: [], generated: [] },
     integrity: {
