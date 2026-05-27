@@ -8,7 +8,7 @@ export type WallSolvedEnd = {
   left: Point;
   right: Point;
   join: "butt" | "miter" | "bevel";
-  source: "free" | "join" | "bodyJoin" | "fallback";
+  source: "free" | "join" | "bodyJoin" | "cornerJoin" | "fallback";
   boundaryChain?: Point[];
   bevelJoinPoly?: Point[];
   ownedCapPoly?: Point[];
@@ -35,7 +35,7 @@ export type WallJoinDebugEdge = {
 export type WallJoinDebugCap = {
   wallId: string;
   end: WallEnd;
-  source: "free" | "join" | "bodyJoin" | "fallback";
+  source: "free" | "join" | "bodyJoin" | "cornerJoin" | "fallback";
   left: Point;
   right: Point;
   boundaryChain?: Point[];
@@ -89,7 +89,7 @@ type EndpointRef = { wall: Wall; end: WallEnd; point: Point };
 type NodeDraft = { id: string; p: Point; incident: Array<{ wall: Wall; end: WallEnd }> };
 type SortedIncident = { item: { wall: Wall; end: WallEnd }; index: number; angle: number };
 type SolvedEndSource = WallJoinDebugCap["source"];
-type SolvedEndDraft = { left: Point; right: Point; source: SolvedEndSource; boundaryChain?: Point[]; extra?: Point[] };
+type SolvedEndDraft = { left: Point; right: Point; source: SolvedEndSource; boundaryChain?: Point[]; extra?: Point[]; fillPoly?: Point[] };
 
 const polygonClipper = polygonClipping as PolygonClipper;
 export const DEFAULT_WALL_MITER_LIMIT = Number.POSITIVE_INFINITY;
@@ -337,22 +337,26 @@ function solvedWallBoundaryEdges(solvedWalls: WallSolved[]): WallJoinDebugBounda
       }
     }
 
-    const capCandidates: Array<{ end: WallEnd; source: WallJoinDebugCap["source"]; a: Point; b: Point }> = [
-      { end: "a", source: wall.a.source, a: wall.a.left, b: wall.a.right },
-      { end: "b", source: wall.b.source, a: wall.b.right, b: wall.b.left }
+    const capCandidates: Array<{ end: WallEnd; source: WallJoinDebugCap["source"]; path: Point[] }> = [
+      { end: "a", source: wall.a.source, path: [wall.a.left, ...(wall.a.boundaryChain ?? []), wall.a.right] },
+      { end: "b", source: wall.b.source, path: [wall.b.right, ...[...(wall.b.boundaryChain ?? [])].reverse(), wall.b.left] }
     ];
     for (const candidate of capCandidates) {
       if (candidate.source === "join") continue;
-      if (!finiteSegment(candidate.a, candidate.b)) continue;
-      edges.push({
-        kind: candidate.source === "bodyJoin" ? "join" : "cap",
-        wallId: wall.id,
-        side: "cap",
-        end: candidate.end,
-        source: candidate.source,
-        a: candidate.a,
-        b: candidate.b
-      });
+      for (let index = 0; index + 1 < candidate.path.length; index += 1) {
+        const a = candidate.path[index]!;
+        const b = candidate.path[index + 1]!;
+        if (!finiteSegment(a, b)) continue;
+        edges.push({
+          kind: candidate.source === "bodyJoin" ? "join" : "cap",
+          wallId: wall.id,
+          side: "cap",
+          end: candidate.end,
+          source: candidate.source,
+          a,
+          b
+        });
+      }
     }
   }
   return edges.sort(
@@ -588,7 +592,8 @@ function cloneEndDraft(end: SolvedEndDraft): SolvedEndDraft {
     right: { ...end.right },
     source: end.source,
     boundaryChain: end.boundaryChain?.map((point) => ({ ...point })),
-    extra: end.extra?.map((point) => ({ ...point }))
+    extra: end.extra?.map((point) => ({ ...point })),
+    fillPoly: end.fillPoly?.map((point) => ({ ...point }))
   };
 }
 
@@ -904,11 +909,11 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const best = candidates[0]!;
     const sameDistanceTol = Math.max(nodeTolM, 1e-6);
     const nearbyCandidates = candidates.filter((candidate) => Math.abs(candidate.distance - best.distance) <= sameDistanceTol);
-    // A body join needs one resolved host face per endpoint. Combining equally close corner
-    // hosts produced an L-shaped "extra" point, which made the wall outline close through
-    // the wrong boundary. Keep the highest-ranked host deterministic here; multi-host corner
-    // fills are handled by the final network footprint, not by a single wall outline.
-    const activeCandidates = [best];
+    // A body join normally clips against one host face. At an actual corner, though, two
+    // host faces belong to one physical corner; treating them as separate body joins makes
+    // a small triangle in the branch outline. Keep at most the two deterministic nearest
+    // faces, then only promote them to cornerJoin if their host centerlines share a corner.
+    const activeCandidates = nearbyCandidates.slice(0, 2);
     const chooseSideHit = (side: "left" | "right") => {
       const branchLine = sideLineForSideAtNode(endpoint.wall, endpoint.end, endpoint.point, side).line;
       const hits = activeCandidates
@@ -936,6 +941,28 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     let leftPoint = leftHit.hit.p;
     let rightPoint = rightHit.hit.p;
     const isCornerCap = leftHit.candidate !== rightHit.candidate || leftHit.candidate.cut.side !== rightHit.candidate.cut.side;
+    const cornerTol = Math.max(nodeTolM, endpoint.wall.thicknessM * 1.5, 1e-6);
+    const hostCornerNearEndpoint = (first: typeof leftHit.candidate, second: typeof rightHit.candidate) => {
+      if (first.host.id === second.host.id) return false;
+      const firstEnds = [first.host.a, first.host.b];
+      const secondEnds = [second.host.a, second.host.b];
+      return firstEnds.some((firstPoint) =>
+        secondEnds.some(
+          (secondPoint) =>
+            dist(firstPoint, secondPoint) <= cornerTol &&
+            dist(firstPoint, endpoint.point) <= cornerTol &&
+            dist(secondPoint, endpoint.point) <= cornerTol
+        )
+      );
+    };
+    const isPhysicalCornerJoin = isCornerCap && hostCornerNearEndpoint(leftHit.candidate, rightHit.candidate);
+    const cornerCapIntersection = isPhysicalCornerJoin ? intersectLines(leftHit.candidate.cut.line, rightHit.candidate.cut.line) : null;
+    const cornerBoundaryPoint =
+      isPhysicalCornerJoin &&
+      cornerCapIntersection &&
+      dist(cornerCapIntersection.p, endpoint.point) <= cornerTol
+        ? cornerCapIntersection.p
+        : null;
     if (!isCornerCap && activeCandidates.length > 1) {
       const hostDir = baseDir(best.host);
       for (const candidate of nearbyCandidates) {
@@ -957,15 +984,22 @@ function solveEndpointOnWallBodyJoins(walls: Wall[], nodeDrafts: NodeDraft[], so
     const ends = solvedEnds.get(endpoint.wall.id);
     if (!ends) continue;
     const draft = cloneEndDraft(rawEndCornersAtNode(endpoint.wall, endpoint.point));
-    draft.source = "bodyJoin";
+    draft.source = cornerBoundaryPoint ? "cornerJoin" : "bodyJoin";
+    if (cornerBoundaryPoint) {
+      const keepLeft =
+        leftHit.candidate === best && rightHit.candidate !== best
+          ? true
+          : rightHit.candidate === best && leftHit.candidate !== best
+            ? false
+            : leftHit.candidate.alignment >= rightHit.candidate.alignment;
+      if (keepLeft) rightPoint = cornerBoundaryPoint;
+      else leftPoint = cornerBoundaryPoint;
+    }
     setDraftSide(draft, "left", leftPoint);
     setDraftSide(draft, "right", rightPoint);
-    if (isCornerCap) {
-      const corner = intersectLines(leftHit.candidate.cut.line, rightHit.candidate.cut.line);
-      if (corner && dist(corner.p, draft.left) > 1e-8 && dist(corner.p, draft.right) > 1e-8) {
-        draft.boundaryChain = [corner.p];
-        draft.extra = [corner.p];
-      }
+    if (cornerBoundaryPoint) {
+      draft.boundaryChain = undefined;
+      draft.extra = undefined;
     }
     ends[endpoint.end] = draft;
   }
@@ -1053,7 +1087,8 @@ export function solveWallNetwork(
       outline: solved.outline
     };
   });
-  const joinPolys = nodeDrafts.map(buildJoinPolyForNode).filter((poly) => poly.length >= 3);
+  const bodyJoinFillPolys = solvedWalls.flatMap((wall) => [wall.a.fillPoly, wall.b.fillPoly]).filter((poly): poly is Point[] => !!poly && poly.length >= 3);
+  const joinPolys = [...nodeDrafts.map(buildJoinPolyForNode), ...bodyJoinFillPolys].filter((poly) => poly.length >= 3);
   const footprint = polygonUnionMulti([...solvedWalls.map((entry) => entry.outline), ...joinPolys]);
   const finalPolygons = flattenMultiPolygon(footprint);
   const nodes = nodeDrafts.map(buildNodeDebug);

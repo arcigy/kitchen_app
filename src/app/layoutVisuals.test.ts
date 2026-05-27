@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { createSelectionHighlights, createWallSnapMarkers } from "./layoutVisuals";
 import type { FloorInstance, LayoutInstance, WallInstance } from "./localTypes";
 
-const createWall = (): WallInstance =>
+const createWall = (id = "wall"): WallInstance =>
   ({
-    id: "wall",
+    id,
     params: {
       thicknessMm: 150,
       heightMm: 2600,
@@ -91,8 +91,80 @@ describe("createSelectionHighlights", () => {
     expect(selectionHighlights.children).toHaveLength(1);
     const line = selectionHighlights.children[0] as THREE.Line;
     const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
-    expect(position.count).toBe(7);
+    expect(position.count).toBe(12);
     expect(position.getX(0)).toBeCloseTo(-0.075);
-    expect(position.getZ(4)).toBeCloseTo(5.18);
+    expect(position.getZ(8)).toBeCloseTo(5.18);
+  });
+
+  it("does not highlight short internal cap edges that are covered by neighboring walls", () => {
+    const layoutRoot = new THREE.Group();
+    const diagonal = createWall("diagonal");
+    const left = createWall("left");
+    const bottom = createWall("bottom");
+    const selectedWallIds = new Set(["diagonal"]);
+    const solvedOutlines = new Map([
+      [
+        "left",
+        [
+          { x: -0.075, z: 0.075 },
+          { x: 0.075, z: 0.075 },
+          { x: 0.075, z: 3 },
+          { x: -0.075, z: 3 }
+        ]
+      ],
+      [
+        "bottom",
+        [
+          { x: -0.075, z: 0.075 },
+          { x: -0.075, z: -0.075 },
+          { x: 5, z: -0.075 },
+          { x: 5, z: 0.075 }
+        ]
+      ],
+      [
+        "diagonal",
+        [
+          { x: 0.075, z: 0.132464 },
+          { x: 0.075, z: 0.075 },
+          { x: 0.270774, z: 0.075 },
+          { x: 5.038587, z: 2.935688 },
+          { x: 4.961413, z: 3.064312 }
+        ]
+      ]
+    ]);
+    const { selectionHighlights, updateSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getWalls: () => [left, bottom, diagonal],
+      getSelectedWallIds: () => selectedWallIds,
+      getSelectedInstanceIds: () => new Set<string>(),
+      getWallSolvedOutlines: () => solvedOutlines,
+      getSelectedKind: () => "wall",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => [] as LayoutInstance[],
+      getModuleLocalBackCenter: () => new THREE.Vector3()
+    });
+
+    updateSelectionHighlights();
+
+    const line = selectionHighlights.children[0] as THREE.LineSegments;
+    const position = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const segments = Array.from({ length: position.count / 2 }, (_, index) => {
+      const i = index * 2;
+      return [
+        { x: position.getX(i), z: position.getZ(i) },
+        { x: position.getX(i + 1), z: position.getZ(i + 1) }
+      ];
+    });
+
+    expect(
+      segments.some(
+        ([a, b]) =>
+          Math.hypot(a.x - b.x, a.z - b.z) < 0.21 &&
+          Math.max(a.x, b.x) <= 0.28 &&
+          Math.max(a.z, b.z) <= 0.14
+      )
+    ).toBe(false);
   });
 });

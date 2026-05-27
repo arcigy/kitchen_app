@@ -117,6 +117,7 @@ export type WallControllerContext = {
   getSelectedKind: () => string | null;
   getSelectedWallId: () => string | null;
   getSelectedWallIds?: () => Set<string>;
+  getShowAllWallSolvedOutlines?: () => boolean;
   setSelectedWallId: (next: string | null) => void;
   getWallDebugEnabled: () => boolean;
   getWallDebugLayers?: () => Partial<Record<WallDebugLayer, boolean>>;
@@ -1610,6 +1611,42 @@ export function createWallController(ctx: WallControllerContext) {
       const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
       return solved.walls.some((solvedWall) => solvedWall.id !== wallId && pointInOrOnPolygon(mid, solvedWall.outline));
     };
+    const isSolvedBodyJoinCapSegment = (wallId: string | null, a: { x: number; z: number }, b: { x: number; z: number }) =>
+      solved.debug.solvedCaps.some((cap) => {
+        if ((wallId && cap.wallId !== wallId) || cap.source !== "bodyJoin") return false;
+        if (
+          (pointsClose(a, cap.left, 0.004) && pointsClose(b, cap.right, 0.004)) ||
+          (pointsClose(a, cap.right, 0.004) && pointsClose(b, cap.left, 0.004))
+        )
+          return true;
+        const capPath = [cap.left, ...(cap.boundaryChain ?? []), cap.right];
+        for (let index = 0; index + 1 < capPath.length; index += 1) {
+          const c = capPath[index]!;
+          const d = capPath[index + 1]!;
+          if (
+            (pointsClose(a, c, 0.004) && pointsClose(b, d, 0.004)) ||
+            (pointsClose(a, d, 0.004) && pointsClose(b, c, 0.004))
+          )
+            return true;
+        }
+        return false;
+      });
+    const isSolvedBodyJoinBoundarySegment = (wallId: string | null, a: { x: number; z: number }, b: { x: number; z: number }) =>
+      !!wallId &&
+      solved.debug.solvedCaps.some((cap) => {
+        if (cap.wallId !== wallId || cap.source !== "bodyJoin" || (cap.boundaryChain ?? []).length === 0) return false;
+        const capPath = [cap.left, ...(cap.boundaryChain ?? []), cap.right];
+        for (let index = 0; index + 1 < capPath.length; index += 1) {
+          const c = capPath[index]!;
+          const d = capPath[index + 1]!;
+          if (
+            (pointsClose(a, c, 0.004) && pointsClose(b, d, 0.004)) ||
+            (pointsClose(a, d, 0.004) && pointsClose(b, c, 0.004))
+          )
+            return true;
+        }
+        return false;
+      });
     const addHiddenSpan = (
       spans: Array<[number, number]>,
       a: { x: number; z: number },
@@ -1709,7 +1746,8 @@ export function createWallController(ctx: WallControllerContext) {
       y = 0.02,
       opacity = 0.98,
       showInternalJoinSegments = false,
-      sourceWallId: string | null = null
+      sourceWallId: string | null = null,
+      hideBodyJoinCapSegments = false
     ) => {
       if (pts.length < 2) return null;
       const linePts: THREE.Vector3[] = [];
@@ -1721,7 +1759,9 @@ export function createWallController(ctx: WallControllerContext) {
           !a ||
           !b ||
           isWindowOpeningOutlineSegment(a, b) ||
-          isCoveredShortCapSegment(sourceWallId, a, b) ||
+          (hideBodyJoinCapSegments && isSolvedBodyJoinCapSegment(null, a, b)) ||
+          (showInternalJoinSegments && sourceWallId && isSolvedBodyJoinCapSegment(sourceWallId, a, b)) ||
+          (!isSolvedBodyJoinBoundarySegment(sourceWallId, a, b) && isCoveredShortCapSegment(sourceWallId, a, b)) ||
           (!sourceWallId && !showInternalJoinSegments && isInternalJoinBaseSegment(a, b))
         )
           continue;
@@ -1808,9 +1848,22 @@ export function createWallController(ctx: WallControllerContext) {
     }
 
     const activeSelectedWallId = ctx.getSelectedKind() === "wall" ? ctx.getSelectedWallId() : null;
+    // Temporary diagnostics: show every solved wall footprint so wall joins can be inspected in the live app.
+    const showAllWallSolvedOutlines = ctx.getShowAllWallSolvedOutlines?.() ?? true;
     for (const wall of solved.walls) {
-      if (wall.id !== activeSelectedWallId) continue;
-      const line = makePlanPolyline(wall.outline, 0x2bdc84, 0.031, 0.92, true, null);
+      const isSelectedWall = wall.id === activeSelectedWallId;
+      if (!showAllWallSolvedOutlines && !isSelectedWall) continue;
+      const showClosedSelectedOutline = isSelectedWall && !showAllWallSolvedOutlines;
+      const showFullDiagnosticOutline = showAllWallSolvedOutlines;
+      const line = makePlanPolyline(
+        wall.outline,
+        0x2bdc84,
+        0.031,
+        isSelectedWall ? 0.92 : 0.74,
+        showClosedSelectedOutline || showFullDiagnosticOutline,
+        showClosedSelectedOutline ? null : wall.id,
+        showFullDiagnosticOutline
+      );
       if (!line) continue;
       const position = line.geometry.getAttribute("position");
       const renderedSegments: Array<{ a: WallPlanPoint; b: WallPlanPoint }> = [];
@@ -1822,31 +1875,34 @@ export function createWallController(ctx: WallControllerContext) {
           });
         }
       }
-      const selectedOutlineDebug = {
-        rendererFile: "src/app/wallController.ts",
-        rendererFunction: "rebuildWallPlanMesh:selectedWallOverlay",
-        geometrySource: "solveWallNetwork(...).walls[].outline",
-        selectedWallId: wall.id,
-        solvedOutline: wall.outline.map((point) => ({ x: point.x, z: point.z })),
-        storedSolvedOutline: (wallSolvedOutlines.get(wall.id) ?? []).map((point) => ({ x: point.x, z: point.z })),
-        renderedSegments,
-        renderedPointCount: position?.count ?? 0,
-        closedByRenderer: wall.outline.length >= 3,
-        closingSegment:
-          wall.outline.length >= 2
-            ? {
-                a: wall.outline[wall.outline.length - 1],
-                b: wall.outline[0]
-              }
-            : null
-      };
-      (globalThis as typeof globalThis & { __kitchenSelectedWallOutlineDebug?: typeof selectedOutlineDebug })
-        .__kitchenSelectedWallOutlineDebug = selectedOutlineDebug;
-      console.info("[wall-selected-outline-debug]", selectedOutlineDebug);
-      line.name = `wallPlan_faces_${wall.id}`;
-      line.userData.kind = "wallPlanWallFaces";
+      if (isSelectedWall) {
+        const selectedOutlineDebug = {
+          rendererFile: "src/app/wallController.ts",
+          rendererFunction: "rebuildWallPlanMesh:selectedWallOverlay",
+          geometrySource: "solveWallNetwork(...).walls[].outline",
+          selectedWallId: wall.id,
+          solvedOutline: wall.outline.map((point) => ({ x: point.x, z: point.z })),
+          storedSolvedOutline: (wallSolvedOutlines.get(wall.id) ?? []).map((point) => ({ x: point.x, z: point.z })),
+          renderedSegments,
+          renderedPointCount: position?.count ?? 0,
+          closedByRenderer: wall.outline.length >= 3,
+          closingSegment:
+            wall.outline.length >= 2
+              ? {
+                  a: wall.outline[wall.outline.length - 1],
+                  b: wall.outline[0]
+                }
+              : null
+        };
+        (globalThis as typeof globalThis & { __kitchenSelectedWallOutlineDebug?: typeof selectedOutlineDebug })
+          .__kitchenSelectedWallOutlineDebug = selectedOutlineDebug;
+        console.info("[wall-selected-outline-debug]", selectedOutlineDebug);
+      }
+      line.name = isSelectedWall ? `wallPlan_faces_${wall.id}` : `wallPlan_all_faces_${wall.id}`;
+      line.userData.kind = isSelectedWall ? "wallPlanWallFaces" : "wallPlanAllSolvedFaces";
       line.userData.wallId = wall.id;
-      line.renderOrder = 28;
+      line.userData.debugAllWalls = showAllWallSolvedOutlines && !isSelectedWall;
+      line.renderOrder = isSelectedWall ? 28 : 27;
       wallPlanMeshes.set(line.name, line);
       wallPlanGroup.add(line);
     }
@@ -1855,7 +1911,7 @@ export function createWallController(ctx: WallControllerContext) {
     for (const rings of fillSource) {
       for (const ring of rings) {
         const pts = (ring.length > 1 ? ring.slice(0, -1) : ring).map(([x, z]) => ({ x, z }));
-        const line = makePlanPolyline(pts, 0x4f4f4f);
+        const line = makePlanPolyline(pts, 0x4f4f4f, 0.02, 0.98, true, null, true);
         if (!line) continue;
         line.name = `wallPlan_union_${unionLineIndex}`;
         line.userData.kind = "wallPlanUnion";
@@ -1927,10 +1983,22 @@ export function createWallController(ctx: WallControllerContext) {
         }
       }
 
-      const mkLine = (pts: Array<{ x: number; z: number }>, color: number, y = 0.031) => {
-        const g = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p.x, y, p.z)));
+      const mkLine = (pts: Array<{ x: number; z: number }>, color: number, y = 0.031, hideBodyJoinCapSegments = false) => {
+        const renderPts: THREE.Vector3[] = [];
+        if (hideBodyJoinCapSegments) {
+          for (let index = 0; index + 1 < pts.length; index += 1) {
+            const a = pts[index]!;
+            const b = pts[index + 1]!;
+            if (isSolvedBodyJoinCapSegment(null, a, b)) continue;
+            renderPts.push(new THREE.Vector3(a.x, y, a.z), new THREE.Vector3(b.x, y, b.z));
+          }
+        } else {
+          renderPts.push(...pts.map((p) => new THREE.Vector3(p.x, y, p.z)));
+        }
+        if (renderPts.length < 2) return;
+        const g = new THREE.BufferGeometry().setFromPoints(renderPts);
         const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
-        const l = new THREE.Line(g, m);
+        const l = hideBodyJoinCapSegments ? new THREE.LineSegments(g, m) : new THREE.Line(g, m);
         wallDebugGroup.add(l);
       };
 
@@ -1939,21 +2007,26 @@ export function createWallController(ctx: WallControllerContext) {
         if (debugLayers.centerlines) mkLine([w.a, w.b], 0xffd166, 0.031);
         const poly = wallSolvedOutlines.get(w.id);
         if (debugLayers.perWallOutlines && poly && poly.length >= 3) {
-          mkLine([...poly, poly[0]], 0x5c8cff, 0.032);
+          mkLine([...poly, poly[0]], 0x5c8cff, 0.032, true);
         }
       }
 
       if (debugLayers.offsetEdges) {
         for (const edge of solved.debug.offsetEdges) {
+          if (isSolvedBodyJoinCapSegment(null, edge.a, edge.b)) continue;
           mkLine([edge.a, edge.b], edge.side === "cap" ? 0xff7f50 : 0x00d4ff, 0.034);
         }
       }
 
       if (debugLayers.capEdges) {
         for (const cap of solved.debug.solvedCaps) {
+          if (cap.source === "bodyJoin") continue;
           const color = cap.source === "fallback" ? 0xff3355 : cap.end === "a" ? 0xe05cff : 0x22e6ff;
-          mkLine([cap.left, cap.right], color, 0.038);
-          for (const point of [cap.left, cap.right]) {
+          const capPath = [cap.left, ...(cap.boundaryChain ?? []), cap.right];
+          for (let index = 0; index + 1 < capPath.length; index += 1) {
+            mkLine([capPath[index]!, capPath[index + 1]!], color, 0.038);
+          }
+          for (const point of capPath) {
             const g = new THREE.PlaneGeometry(0.026, 0.026);
             const m = new THREE.MeshBasicMaterial({ color, depthWrite: false });
             const marker = new THREE.Mesh(g, m);
@@ -1966,12 +2039,13 @@ export function createWallController(ctx: WallControllerContext) {
 
       if (debugLayers.finalFootprint) {
         for (const poly of solved.debug.finalPolygons) {
-          if (poly.length >= 3) mkLine([...poly, poly[0]], 0x35e07b, 0.036);
+          if (poly.length >= 3) mkLine([...poly, poly[0]], 0x35e07b, 0.036, true);
         }
       }
 
       if (debugLayers.boundaryEdges) {
         for (const edge of solved.debug.boundaryEdges) {
+          if (isSolvedBodyJoinCapSegment(null, edge.a, edge.b)) continue;
           const color =
             edge.kind === "outer"
               ? 0x18d26b

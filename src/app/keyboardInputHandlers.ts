@@ -513,6 +513,30 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
 
       if (ev.key === "Escape" && ctx.handleLayoutEscape(ev)) return;
 
+      if (
+        ctx.mode === "layout" &&
+        ctx.layoutTool === "wall" &&
+        ctx.viewMode === "2d" &&
+        (ev.key === "n" || ev.key === "N") &&
+        !ev.ctrlKey &&
+        !ev.metaKey &&
+        !ev.altKey
+      ) {
+        ctx.wallDraw.freeMm = !ctx.wallDraw.freeMm;
+        ctx.wallDrawSnap = null;
+        ctx.selectPlanSnap = null;
+        ctx.drawSnapOverlay?.hide?.();
+        ctx.hideHoverCursor?.();
+        if (ctx.hudHoverLine) ctx.hudHoverLine.visible = false;
+        ctx.setUnderlayStatus(
+          ctx.wallDraw.freeMm
+            ? "Wall: precision 1 mm. Ortho stays on, dashed guide visible, snaps only very close. N = normal guide snap."
+            : "Wall: dashed alignment on. N = precision 1 mm near guide."
+        );
+        ev.preventDefault();
+        return;
+      }
+
       // Typed length while placing wall segment (Revit-style).
       if (ctx.layoutTool === "wall" && ctx.wallDraw.active && ctx.wallDraw.a && ctx.viewMode === "2d") {
         const isDigit = ev.key.length === 1 && ev.key >= "0" && ev.key <= "9";
@@ -536,7 +560,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
             ctx.setUnderlayStatus(`Wall: ${ctx.wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
           } else {
             ctx.wallTypedHud.style.display = "none";
-            ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+            ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
           }
           ev.preventDefault();
           return;
@@ -591,7 +615,7 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-            ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+            ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
             ctx.selectedKind = "wall";
             ctx.selectedWallId = w.id;
             ctx.mountProps();

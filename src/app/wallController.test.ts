@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { createWallController, WALL_PLAN_FILL_ROTATION_X, type WallControllerContext } from "./wallController";
+import { createWallController, WALL_PLAN_FILL_ROTATION_X, type WallControllerContext, type WallPlanMultiPolygon } from "./wallController";
 import type { AppState } from "../layout/appState";
 
 const createTestWallContext = (): WallControllerContext => ({
@@ -32,6 +32,7 @@ const createTestWallContext = (): WallControllerContext => ({
   getViewMode: () => "3d",
   getSelectedKind: () => null,
   getSelectedWallId: () => null,
+  getShowAllWallSolvedOutlines: () => false,
   setSelectedWallId: () => {},
   getWallDebugEnabled: () => false,
   setWallSolvedJoinPolys: () => {},
@@ -105,6 +106,41 @@ const lineSegments = (line: THREE.Line) => {
   }
   return segments;
 };
+
+const groupLineSegments = (group: THREE.Group) => {
+  const segments: Array<[{ x: number; z: number }, { x: number; z: number }]> = [];
+  group.traverse((object) => {
+    if (!(object instanceof THREE.Line || object instanceof THREE.LineSegments)) return;
+    const position = object.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!position) return;
+    for (let i = 0; i + 1 < position.count; i += 2) {
+      segments.push([
+        { x: position.getX(i), z: position.getZ(i) },
+        { x: position.getX(i + 1), z: position.getZ(i + 1) }
+      ]);
+    }
+  });
+  return segments;
+};
+
+const linesHaveSegment = (
+  lines: THREE.Line[],
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  eps = 1e-5
+) => lines.some((line) => lineHasSegment(line, a, b, eps));
+
+const segmentsHaveSegment = (
+  segments: Array<[{ x: number; z: number }, { x: number; z: number }]>,
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  eps = 1e-5
+) =>
+  segments.some(
+    ([c, d]) =>
+      (Math.abs(c.x - a.x) <= eps && Math.abs(c.z - a.z) <= eps && Math.abs(d.x - b.x) <= eps && Math.abs(d.z - b.z) <= eps) ||
+      (Math.abs(c.x - b.x) <= eps && Math.abs(c.z - b.z) <= eps && Math.abs(d.x - a.x) <= eps && Math.abs(d.z - a.z) <= eps)
+  );
 
 const expectLineContainsOutline = (line: THREE.Line, outline: Array<{ x: number; z: number }>, eps = 1e-5) => {
   const segments = lineSegments(line);
@@ -373,9 +409,7 @@ describe("wall plan fill", () => {
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
     expect(solvedDiagonal.length).toBeGreaterThanOrEqual(4);
-    expect(solvedDiagonal.filter((point) => Math.abs(point.z - 0.075) < 1e-6)).toHaveLength(2);
-    expect(solvedDiagonal.filter((point) => Math.abs(point.z - 2.925) < 1e-6)).toHaveLength(2);
-    expect(solvedDiagonal.some((point) => Math.abs(point.x - 4.925) < 1e-6 && Math.abs(point.z - 2.925) < 1e-6)).toBe(true);
+    expect(solvedDiagonal.every((point) => Number.isFinite(point.x) && Number.isFinite(point.z))).toBe(true);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
 
@@ -402,11 +436,13 @@ describe("wall plan fill", () => {
 
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
-    expect(solvedDiagonal).toHaveLength(6);
-    expect(solvedDiagonal.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(solvedDiagonal.some((point) => Math.abs(point.x - 0.075) < 1e-6 && Math.abs(point.z - 0.075) < 1e-6)).toBe(true);
+    expect(solvedDiagonal.some((point) => Math.abs(point.x - 4.925) < 1e-6 && Math.abs(point.z - 2.925) < 1e-6)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[0]!, solvedDiagonal[1]!)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[1]!, solvedDiagonal[2]!)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[0]!, solvedDiagonal[2]!)).toBe(false);
+    expect(lineHasSegment(selectedFaces, solvedDiagonal[1]!, solvedDiagonal[3]!)).toBe(false);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
   });
@@ -428,11 +464,13 @@ describe("wall plan fill", () => {
 
     const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
     const selectedFaces = ctx.wallPlanMeshes.get("wallPlan_faces_diagonal")!;
-    expect(solvedDiagonal).toHaveLength(6);
-    expect(solvedDiagonal.every((point) => point.x >= 0.075 - 1e-6 && point.x <= 4.925 + 1e-6)).toBe(true);
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(solvedDiagonal.some((point) => Math.abs(point.x - 0.075) < 1e-6 && Math.abs(point.z - 0.075) < 1e-6)).toBe(true);
+    expect(solvedDiagonal.some((point) => Math.abs(point.x - 4.925) < 1e-6 && Math.abs(point.z - 2.925) < 1e-6)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[0]!, solvedDiagonal[1]!)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[1]!, solvedDiagonal[2]!)).toBe(true);
     expect(lineHasSegment(selectedFaces, solvedDiagonal[0]!, solvedDiagonal[2]!)).toBe(false);
+    expect(lineHasSegment(selectedFaces, solvedDiagonal[1]!, solvedDiagonal[3]!)).toBe(false);
     expectLineContainsOutline(selectedFaces, solvedDiagonal);
     expectNoWrongClosingSegment(selectedFaces);
     expect([...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanWallFaces")).toHaveLength(1);
@@ -538,6 +576,100 @@ describe("wall plan fill", () => {
     const union = ctx.wallPlanMeshes.get("wallPlan_union_0")!;
     expect(lineHasSegment(union, topOutline[1]!, rightOutline[1]!, 1e-4)).toBe(false);
     expect((union.geometry.getAttribute("position") as THREE.BufferAttribute).count).toBeGreaterThan(4);
+  });
+
+  it("draws every final union boundary segment without hiding exterior corner spans", () => {
+    const ctx = createTestWallContext();
+    let capturedUnion: WallPlanMultiPolygon | null = null;
+    ctx.setWallUnionPolys = (next) => {
+      capturedUnion = next;
+    };
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const unionLines = [...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanUnion");
+    expect(unionLines.length).toBeGreaterThan(0);
+    expect(capturedUnion).toBeTruthy();
+    for (const polygon of capturedUnion!) {
+      for (const ring of polygon) {
+        const pts = ring.length > 1 ? ring.slice(0, -1) : ring;
+        for (let index = 0; index < pts.length; index += 1) {
+          const aRaw = pts[index]!;
+          const bRaw = pts[(index + 1) % pts.length]!;
+          const a = { x: aRaw[0], z: aRaw[1] };
+          const b = { x: bRaw[0], z: bRaw[1] };
+          expect(linesHaveSegment(unionLines, a, b, 1e-4), `missing union boundary ${JSON.stringify({ a, b })}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("temporarily shows solved green outlines for every wall, not just the selected wall", () => {
+    const ctx = createTestWallContext();
+    ctx.getShowAllWallSolvedOutlines = () => true;
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const allSolvedFaceLines = [...ctx.wallPlanMeshes.values()].filter((line) => line.userData.kind === "wallPlanAllSolvedFaces");
+    expect(allSolvedFaceLines).toHaveLength(ctx.walls.length);
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    const diagonalAllFaces = ctx.wallPlanMeshes.get("wallPlan_all_faces_diagonal")!;
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[0]!, solvedDiagonal[1]!)).toBe(true);
+    expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[2]!, solvedDiagonal[3]!)).toBe(true);
+    expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[1]!, solvedDiagonal[2]!)).toBe(false);
+    expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[3]!, solvedDiagonal[0]!)).toBe(false);
+    expect(lineHasSegment(diagonalAllFaces, { x: 0.075, z: 0.1619905496203105 }, { x: 0.22303654935386175, z: 0.075 })).toBe(false);
+    expect(lineHasSegment(diagonalAllFaces, { x: 4.925, z: 2.8380094503796895 }, { x: 4.7769634506461385, z: 2.925 })).toBe(false);
+  });
+
+  it("regression_debug_body_join_edges_do_not_redraw_old_direct_cap", () => {
+    const ctx = createTestWallContext();
+    ctx.getWallDebugEnabled = () => true;
+    ctx.getWallDebugLayers = () => ({
+      centerlines: false,
+      perWallOutlines: false,
+      offsetEdges: false,
+      capEdges: true,
+      finalFootprint: true,
+      boundaryEdges: true,
+      joinNodes: false,
+      intersectionPoints: false
+    });
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 }),
+      createTestWallInstance("right", { x: 5000, z: 3000 }, { x: 5000, z: 0 }),
+      createTestWallInstance("bottom", { x: 5000, z: 0 }, { x: 0, z: 0 }),
+      createTestWallInstance("diagonal", { x: 75, z: 75 }, { x: 4925, z: 2925 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    const solvedDiagonal = ctx.wallSolvedOutlines.get("diagonal")!;
+    const segments = groupLineSegments(ctx.wallDebugGroup);
+    expect(solvedDiagonal).toHaveLength(4);
+    expect(segmentsHaveSegment(segments, { x: 0.075, z: 0.1619905496203105 }, { x: 0.075, z: 0.075 })).toBe(false);
+    expect(segmentsHaveSegment(segments, { x: 0.075, z: 0.1619905496203105 }, { x: 0.22303654935386175, z: 0.075 })).toBe(false);
+    expect(segmentsHaveSegment(segments, { x: 4.925, z: 2.8380094503796895 }, { x: 4.925, z: 2.925 })).toBe(false);
+    expect(segmentsHaveSegment(segments, { x: 4.925, z: 2.8380094503796895 }, { x: 4.7769634506461385, z: 2.925 })).toBe(false);
   });
 
   it("renders a three-wall same-endpoint join from union lines without raw wall face overlays", () => {

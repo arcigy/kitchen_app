@@ -38,12 +38,16 @@ type PlanSnapCandidate = {
   b?: THREE.Vector3 | null;
   owner?: PlanSnapOwner;
   binding?: PlanSnapBinding | null;
+  snapRole?: "wallAxisIntersection";
+  snapPriority?: number;
 };
 
 type PlanSnapSegment = {
   a: THREE.Vector3;
   b: THREE.Vector3;
   owner: PlanSnapOwner;
+  source?: "wallAxis" | "outline" | "other";
+  wallId?: string;
   bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null;
 };
 
@@ -117,6 +121,19 @@ const KIND_SCORE_MULTIPLIER: Record<Exclude<PlanSnapKind, "none">, number> = {
   axis: 1.08
 };
 
+function candidateRadiusMultiplier(candidate: PlanSnapCandidate) {
+  if (candidate.snapRole === "wallAxisIntersection") return 3.2;
+  return KIND_RADIUS_MULTIPLIER[candidate.kind] ?? 1;
+}
+
+function candidateScoreMultiplier(candidate: PlanSnapCandidate) {
+  return KIND_SCORE_MULTIPLIER[candidate.kind] ?? 1;
+}
+
+function candidatePriority(candidate: PlanSnapCandidate) {
+  return candidate.snapPriority ?? 0;
+}
+
 function dist2(a: { x: number; y: number }, b: { x: number; y: number }) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -139,10 +156,11 @@ function pushSegment(
   a: THREE.Vector3,
   b: THREE.Vector3,
   owner: PlanSnapOwner,
-  bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null
+  bindingAt: (t: number, point: THREE.Vector3) => PlanSnapBinding | null,
+  meta?: { source?: PlanSnapSegment["source"]; wallId?: string }
 ) {
   if (a.distanceToSquared(b) < 1e-12) return;
-  segments.push({ a: a.clone(), b: b.clone(), owner, bindingAt });
+  segments.push({ a: a.clone(), b: b.clone(), owner, bindingAt, source: meta?.source ?? "other", wallId: meta?.wallId });
 }
 
 function addClosestEdgeCandidate(
@@ -153,7 +171,8 @@ function addClosestEdgeCandidate(
   b: THREE.Vector3,
   owner: PlanSnapOwner,
   options?: PlanSnapOptions,
-  bindingAt?: (t: number, point: THREE.Vector3) => PlanSnapBinding | null
+  bindingAt?: (t: number, point: THREE.Vector3) => PlanSnapBinding | null,
+  meta?: { source?: PlanSnapSegment["source"]; wallId?: string }
 ) {
   const ab = b.clone().sub(a);
   const denom = ab.lengthSq();
@@ -194,7 +213,7 @@ function addClosestEdgeCandidate(
     }
   }
 
-  pushSegment(segments, a, b, owner, bindingAt ?? (() => null));
+  pushSegment(segments, a, b, owner, bindingAt ?? (() => null), meta);
 }
 
 function getModuleLocalAnchor(inst: LayoutInstance, anchorName: string) {
@@ -393,6 +412,35 @@ function addGuideIntersections(candidates: PlanSnapCandidate[], guides: PlanSnap
   }
 }
 
+function addWallAxisIntersections(candidates: PlanSnapCandidate[], walls: WallInstance[], segments: PlanSnapSegment[]) {
+  const wallAxes = segments.filter((segment) => segment.owner === "wall" && segment.source === "wallAxis" && segment.wallId);
+  const seen = new Set<string>();
+  for (let i = 0; i < wallAxes.length; i += 1) {
+    for (let j = i + 1; j < wallAxes.length; j += 1) {
+      const a = wallAxes[i]!;
+      const b = wallAxes[j]!;
+      if (a.wallId === b.wallId) continue;
+      const hit = intersectLinesXZ(a.a, a.b, b.a, b.b);
+      if (!hit) continue;
+      if (hit.ta < -1e-6 || hit.ta > 1 + 1e-6 || hit.tb < -1e-6 || hit.tb > 1 + 1e-6) continue;
+      const key = `${Math.round(hit.point.x * 1000)},${Math.round(hit.point.z * 1000)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const binding = getNearestWallBindingAtPoint(walls, hit.point, 0.02) ?? a.bindingAt(Math.max(0, Math.min(1, hit.ta)), hit.point);
+      candidates.push({
+        p: hit.point,
+        kind: "corner",
+        a: a.a.clone(),
+        b: b.a.clone(),
+        owner: "wall",
+        binding,
+        snapRole: "wallAxisIntersection",
+        snapPriority: -10
+      });
+    }
+  }
+}
+
 function getWallProjectionBinding(wall: WallInstance, point: THREE.Vector3, endpointTolT = 0.06): PlanSnapBinding {
   const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
   const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
@@ -427,6 +475,27 @@ function getNearestWallBindingAtPoint(walls: WallInstance[], point: THREE.Vector
   return getWallProjectionBinding(best.wall, point);
 }
 
+export function resolveWallSnapBindingPoint(
+  walls: WallInstance[],
+  snap: PlanSnapResult | null | undefined,
+  fallback: THREE.Vector3
+) {
+  const binding = snap?.binding;
+  if (!binding || (binding.type !== "wallEndpoint" && binding.type !== "wallCenterline")) {
+    return snap?.kind && snap.kind !== "none" ? snap.point.clone() : fallback.clone();
+  }
+
+  const wall = walls.find((item) => item.id === binding.wallId) ?? null;
+  if (!wall) return snap?.point.clone() ?? fallback.clone();
+
+  const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
+  const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
+  if (binding.type === "wallEndpoint") return (binding.endpoint === "a" ? a : b).clone();
+
+  const t = Math.max(0, Math.min(1, binding.t));
+  return a.lerp(b, t);
+}
+
 export function createPlanSnapper(args: CreatePlanSnapperArgs) {
   return function snapPoint2D(
     raw: THREE.Vector3,
@@ -451,7 +520,8 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         b,
         "wall",
         options,
-        (t) => ({ type: "wallCenterline", wallId: w.id, t })
+        (t) => ({ type: "wallCenterline", wallId: w.id, t }),
+        { source: "wallAxis", wallId: w.id }
       );
 
       const ab = b.clone().sub(a);
@@ -467,6 +537,7 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         binding: { type: "wallCenterline", wallId: w.id, t: tt }
       });
     }
+    addWallAxisIntersections(candidates, args.getWalls(), segments);
 
     for (const [wallId, poly] of args.getWallSolvedOutlines().entries()) {
       const wall = args.getWalls().find((item) => item.id === wallId) ?? null;
@@ -602,19 +673,23 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
 
     const rawScreen = worldToScreen(raw, camera, rect);
     const isIgnored = (candidate: PlanSnapCandidate) => !!options?.ignoreBinding?.(candidate.binding ?? null, candidate.owner);
-    const bestByKind = new Map<Exclude<PlanSnapKind, "none">, { candidate: PlanSnapCandidate; d2: number }>();
+    const bestByKind = new Map<Exclude<PlanSnapKind, "none">, { candidate: PlanSnapCandidate; d2: number; priority: number; score: number }>();
     for (const candidate of candidates) {
       if (isIgnored(candidate)) continue;
       const screen = worldToScreen(candidate.p, camera, rect);
       const d2 = dist2(rawScreen, screen);
+      const score = d2 * candidateScoreMultiplier(candidate);
+      const priority = candidatePriority(candidate);
       const prev = bestByKind.get(candidate.kind);
-      if (!prev || d2 < prev.d2) bestByKind.set(candidate.kind, { candidate, d2 });
+      if (!prev || priority < prev.priority || (priority === prev.priority && score < prev.score)) {
+        bestByKind.set(candidate.kind, { candidate, d2, priority, score });
+      }
     }
 
     const pick = (kind: Exclude<PlanSnapKind, "none">) => {
       const value = bestByKind.get(kind);
       if (!value) return null;
-      const limit = maxPx * (KIND_RADIUS_MULTIPLIER[kind] ?? 1);
+      const limit = maxPx * candidateRadiusMultiplier(value.candidate);
       if (value.d2 > limit * limit) return null;
       return {
         point: value.candidate.p.clone(),
@@ -628,9 +703,49 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
 
     const order = options?.kindPriority ?? DEFAULT_KIND_ORDER;
 
+    const hasWallAxisIntersectionNear = candidates.some((candidate) => {
+      if (candidate.snapRole !== "wallAxisIntersection" || isIgnored(candidate)) return false;
+      const screen = worldToScreen(candidate.p, camera, rect);
+      const d2 = dist2(rawScreen, screen);
+      const limit = maxPx * candidateRadiusMultiplier(candidate);
+      return d2 <= limit * limit;
+    });
+
+    const validHits = candidates
+      .map((candidate) => {
+        if (isIgnored(candidate)) return null;
+        const kind = candidate.kind;
+        const rank = order.indexOf(kind);
+        if (rank < 0) return null;
+        const screen = worldToScreen(candidate.p, camera, rect);
+        const d2 = dist2(rawScreen, screen);
+        const limit = maxPx * candidateRadiusMultiplier(candidate);
+        if (d2 > limit * limit) return null;
+        return {
+          point: candidate.p.clone(),
+          kind,
+          a: candidate.a?.clone() ?? null,
+          b: candidate.b?.clone() ?? null,
+          owner: candidate.owner,
+          binding: candidate.binding ?? null,
+          d2,
+          rank,
+          priority: candidatePriority(candidate),
+          score: d2 * candidateScoreMultiplier(candidate)
+        };
+      })
+      .filter((hit): hit is NonNullable<typeof hit> => !!hit)
+      .sort((a, b) =>
+        a.priority !== b.priority
+          ? a.priority - b.priority
+          : Math.abs(a.score - b.score) > 1e-6
+            ? a.score - b.score
+            : a.rank - b.rank
+      );
+
     const sticky = options?.sticky ?? null;
     const stickyThresholdPx = options?.stickyThresholdPx ?? Math.max(16, maxPx + 6);
-    if (sticky && sticky.kind !== "none" && !options?.ignoreBinding?.(sticky.binding ?? null, sticky.owner)) {
+    if (!hasWallAxisIntersectionNear && sticky && sticky.kind !== "none" && !options?.ignoreBinding?.(sticky.binding ?? null, sticky.owner)) {
       const stickyScreen = worldToScreen(sticky.point, camera, rect);
       if (dist2(rawScreen, stickyScreen) <= stickyThresholdPx * stickyThresholdPx) {
         return {
@@ -643,31 +758,6 @@ export function createPlanSnapper(args: CreatePlanSnapperArgs) {
         };
       }
     }
-
-    const validHits = candidates
-      .map((candidate) => {
-        if (isIgnored(candidate)) return null;
-        const kind = candidate.kind;
-        const rank = order.indexOf(kind);
-        if (rank < 0) return null;
-        const screen = worldToScreen(candidate.p, camera, rect);
-        const d2 = dist2(rawScreen, screen);
-        const limit = maxPx * (KIND_RADIUS_MULTIPLIER[kind] ?? 1);
-        if (d2 > limit * limit) return null;
-        return {
-          point: candidate.p.clone(),
-          kind,
-          a: candidate.a?.clone() ?? null,
-          b: candidate.b?.clone() ?? null,
-          owner: candidate.owner,
-          binding: candidate.binding ?? null,
-          d2,
-          rank,
-          score: d2 * (KIND_SCORE_MULTIPLIER[kind] ?? 1)
-        };
-      })
-      .filter((hit): hit is NonNullable<typeof hit> => !!hit)
-      .sort((a, b) => (Math.abs(a.score - b.score) > 1e-6 ? a.score - b.score : a.rank - b.rank));
 
     const dedupedHits: typeof validHits = [];
     const seen = new Set<string>();

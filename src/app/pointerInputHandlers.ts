@@ -7,9 +7,10 @@ import type {
   WallInstance,
   WindowInstance
 } from "./localTypes";
-import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
+import { resolveWallSnapBindingPoint, type PlanSnapBinding, type PlanSnapResult } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { MeasureState } from "./measureTools";
+import { findParallelWallEndAlignmentGuide } from "./wallAlignmentGuide";
 
 type PointerInputHandlersContext = Record<string, any> & {
   renderer: THREE.WebGLRenderer;
@@ -124,6 +125,70 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return null;
   };
   const worldFromMm = (point: { x: number; z: number }) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000);
+  const resolveWallDrawSnapPoint = (snap: PlanSnapResult | null | undefined, fallback: THREE.Vector3) =>
+    resolveWallSnapBindingPoint(ctx.walls, snap, fallback);
+  const wallDrawAlignmentSnapDistanceM = (rect: DOMRect) => {
+    const camera = ctx.cam();
+    if (camera instanceof THREE.OrthographicCamera) {
+      const visibleWidthM = Math.abs(camera.right - camera.left) / Math.max(1e-6, camera.zoom);
+      const worldPerPx = visibleWidthM / Math.max(1, rect.width);
+      return Math.min(0.24, Math.max(0.035, worldPerPx * 28));
+    }
+    return 0.11;
+  };
+  const wallDrawPrecisionAlignmentSnapDistanceM = (rect: DOMRect) => {
+    const camera = ctx.cam();
+    if (camera instanceof THREE.OrthographicCamera) {
+      const visibleWidthM = Math.abs(camera.right - camera.left) / Math.max(1e-6, camera.zoom);
+      const worldPerPx = visibleWidthM / Math.max(1, rect.width);
+      return Math.min(0.035, Math.max(0.008, worldPerPx * 7));
+    }
+    return 0.018;
+  };
+  const isWallDrawFreeMm = () => ctx.wallDraw?.freeMm === true;
+  const roundPointToMillimeters = (point: THREE.Vector3) =>
+    new THREE.Vector3(Math.round(point.x * 1000) / 1000, 0, Math.round(point.z * 1000) / 1000);
+  const wallDrawPointDistanceM = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+  const shouldUseWallAlignmentSnap = (
+    guide: { snapPoint: THREE.Vector3 } | null,
+    rawEnd: THREE.Vector3,
+    rect: DOMRect,
+    precisionMm: boolean
+  ) => {
+    if (!guide) return false;
+    if (!precisionMm) return true;
+    return wallDrawPointDistanceM(rawEnd, guide.snapPoint) <= wallDrawPrecisionAlignmentSnapDistanceM(rect);
+  };
+  const hideWallEndAlignmentGuide = () => {
+    if (ctx.hudWallEndAlignmentGuide) ctx.hudWallEndAlignmentGuide.visible = false;
+  };
+  const resolveWallDrawAlignmentGuide = (
+    start: THREE.Vector3,
+    rawEnd: THREE.Vector3,
+    rect: DOMRect,
+    opts: { enabled: boolean; show: boolean }
+  ) => {
+    if (!opts.enabled) {
+      if (opts.show) hideWallEndAlignmentGuide();
+      return null;
+    }
+
+    const guide = findParallelWallEndAlignmentGuide({
+      walls: ctx.walls,
+      start,
+      cursor: rawEnd,
+      snapDistanceM: wallDrawAlignmentSnapDistanceM(rect)
+    });
+    if (!guide) {
+      if (opts.show) hideWallEndAlignmentGuide();
+      return null;
+    }
+
+    if (opts.show && ctx.hudWallEndAlignmentGuide && ctx.updateHudDashedLine) {
+      ctx.updateHudDashedLine(ctx.hudWallEndAlignmentGuide, guide.refPoint, guide.snapPoint);
+    }
+    return guide;
+  };
   const getWallAxisInfo = (wall: WallInstance) => {
     const a = worldFromMm(wall.params.aMm);
     const b = worldFromMm(wall.params.bMm);
@@ -1544,13 +1609,15 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const hitPoint = new THREE.Vector3();
         if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
+        const precisionMm = isWallDrawFreeMm();
         const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
         const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && snapped.kind === "none";
 
       if (!ctx.wallDraw.active) {
+        hideWallEndAlignmentGuide();
         ctx.wallDraw.active = true;
         ctx.wallDraw.segments = ctx.wallDraw.segments || 0;
-        const start = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
+        const start = resolveWallDrawSnapPoint(snapped, hitPoint);
         const startMm = { x: Math.round(start.x * 1000), z: Math.round(start.z * 1000) };
         ctx.wallDraw.a = new THREE.Vector3(startMm.x / 1000, 0, startMm.z / 1000);
         if (!ctx.wallDraw.chainStart) ctx.wallDraw.chainStart = ctx.wallDraw.a.clone();
@@ -1570,7 +1637,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-        ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+        ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
         return;
       }
 
@@ -1578,11 +1645,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (!a) return;
         const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
         const cs = ctx.wallDraw.chainStart;
-        const rawB = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
+        const rawB = resolveWallDrawSnapPoint(snapped, hitPoint);
         const closesRaw =
           !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
         const b0 = closesRaw && cs ? cs.clone() : rawB;
-        const b = shouldAxisSnap && !closesRaw ? ctx.snapAxisXZ(a, b0, true) : b0;
+        const alignmentGuide = resolveWallDrawAlignmentGuide(a, b0, rect2, {
+          enabled: !closesRaw && snapped.kind === "none",
+          show: false
+        });
+        const useAlignmentSnap = shouldUseWallAlignmentSnap(alignmentGuide, b0, rect2, precisionMm);
+        const b = useAlignmentSnap ? alignmentGuide!.snapPoint.clone() : shouldAxisSnap && !closesRaw ? ctx.snapAxisXZ(a, b0, true) : b0;
         const bMm = { x: Math.round(b.x * 1000), z: Math.round(b.z * 1000) };
         const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
@@ -1594,6 +1666,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         // Finish wall
         const w = ctx.addWall(a, end, ctx.wallDefault.thicknessMm);
         if (!w) return;
+        hideWallEndAlignmentGuide();
         ctx.autoJoinAtMmPoint(w.params.aMm);
         ctx.autoJoinAtMmPoint(w.params.bMm);
         ctx.wallDraw.segments += 1;
@@ -1618,7 +1691,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           ctx.wallDefault.justification,
           ctx.wallDefault.exteriorSign
         );
-        ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+        ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
         // Keep wall tool active; just show properties for the placed wall.
         ctx.selectedKind = "wall";
         ctx.selectedWallId = w.id;
@@ -2661,25 +2734,38 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
       const hitPoint = new THREE.Vector3();
       if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      const precisionMm = isWallDrawFreeMm();
       const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 14, {
         sticky: ctx.wallDrawSnap
       });
-      const activeSnap = snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(hitPoint, ctx.wallDrawSnap, ctx.cam(), rect, 18);
+      const activeSnap =
+        snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(hitPoint, ctx.wallDrawSnap, ctx.cam(), rect, 18);
       ctx.wallDrawSnap = activeSnap;
       if (activeSnap) {
         ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
       } else {
         ctx.hideHoverCursor();
+        ctx.drawSnapOverlay?.hide?.();
       }
 
       const closeTolM = Math.max(0.03, Math.min(0.15, ctx.wallDefault.thicknessMm / 1000));
       const cs = ctx.wallDraw.chainStart;
-      const rawB = activeSnap ? activeSnap.point : hitPoint;
+      const rawB = resolveWallDrawSnapPoint(activeSnap, hitPoint);
       const closesRaw =
         !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(rawB.x - cs.x, rawB.z - cs.z) <= closeTolM;
       const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap && !closesRaw;
       const b0 = closesRaw && cs ? cs : rawB;
-      const b = shouldAxisSnap ? ctx.snapAxisXZ(ctx.wallDraw.a, b0, true) : b0;
+      const alignmentGuide = resolveWallDrawAlignmentGuide(ctx.wallDraw.a, b0, rect, {
+        enabled: !activeSnap && !closesRaw,
+        show: true
+      });
+      const useAlignmentSnap = shouldUseWallAlignmentSnap(alignmentGuide, b0, rect, precisionMm);
+      const bCandidate = useAlignmentSnap
+        ? alignmentGuide!.snapPoint.clone()
+        : shouldAxisSnap
+          ? ctx.snapAxisXZ(ctx.wallDraw.a, b0, true)
+          : b0;
+      const b = precisionMm ? roundPointToMillimeters(bCandidate) : bCandidate;
       ctx.wallDraw.hoverB = b.clone();
       ctx.updateWallMeshWithJustification(
         ctx.wallDraw.preview,
@@ -2702,6 +2788,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
 
     if (ctx.mode === "layout" && ctx.layoutTool === "wall" && ctx.viewMode === "2d") {
+      hideWallEndAlignmentGuide();
       const rect = ctx.renderer.domElement.getBoundingClientRect();
       const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);

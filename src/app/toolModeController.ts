@@ -54,6 +54,7 @@ type WallDrawState = {
   hoverB: FloorBoundaryPoint | null;
   typedMm: string;
   preview: THREE.Mesh | null;
+  freeMm?: boolean;
 };
 
 type ToolModeControllerContext = {
@@ -233,6 +234,7 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     ctx.wallDraw.segments = 0;
     ctx.wallDraw.hoverB = null;
     ctx.wallDraw.typedMm = "";
+    ctx.wallDraw.freeMm = false;
     ctx.wallTypedHud.textContent = "";
     if (ctx.wallDraw.preview) {
       ctx.layoutRoot.remove(ctx.wallDraw.preview);

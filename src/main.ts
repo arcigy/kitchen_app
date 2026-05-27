@@ -8,7 +8,29 @@ if (!app) {
 
 const appRoot = app;
 
-void start();
+void start().catch((error: unknown) => {
+  console.error("Failed to start app", error);
+  const message = error instanceof Error ? error.message : String(error);
+  appRoot.innerHTML = `
+    <div style="padding:16px;font-family:sans-serif;color:#111">
+      <strong>App start failed</strong>
+      <pre style="white-space:pre-wrap">${escapeHtml(message)}</pre>
+    </div>
+  `;
+});
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    };
+    return entities[char] ?? char;
+  });
+}
 
 async function start(): Promise<void> {
   const { requireClientSession } = await import("./app/authController");

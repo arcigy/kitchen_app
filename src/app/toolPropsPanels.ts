@@ -110,7 +110,7 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
     };
     const hint = document.createElement("div");
     hint.className = "muted";
-    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
+    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. N = presne 1 mm, ciara sa chyti iba tesne. Esc = stop chain.";
     s.appendChild(hint);
     typeSelect.addEventListener("change", () => {
       const preset = applyWallTypeToParams(wallDefault, typeSelect.value);
