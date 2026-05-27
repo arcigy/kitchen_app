@@ -30,6 +30,39 @@ jobs:
       - name: Create deploy archive
         run: tar --exclude-vcs --exclude=.env --exclude=node_modules --exclude=dist --exclude=reports --exclude=outputs --exclude=storage --exclude='*.log' -cf kitchenapp.tar .
 
+      - name: Ensure CapRover app exists
+        run: |
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t /user/apps/appDefinitions \
+            -m GET \
+            -o caprover-apps.json
+
+          if node - <<'NODE'
+          const fs = require("fs");
+          const appName = process.env.CAPROVER_APP;
+          const payload = JSON.parse(fs.readFileSync("caprover-apps.json", "utf8"));
+          const appDefinitions = payload?.data?.appDefinitions ?? payload?.appDefinitions ?? [];
+          process.exit(appDefinitions.some((app) => app?.appName === appName) ? 0 : 1);
+          NODE
+          then
+            echo "CapRover app already exists: $CAPROVER_APP"
+          else
+            echo "Creating CapRover app: $CAPROVER_APP"
+            register_data="$(node -e 'process.stdout.write(JSON.stringify({ appName: process.env.CAPROVER_APP, hasPersistentData: false }))')"
+            npx caprover@2.3.1 api \
+              -u "$CAPROVER_SERVER" \
+              -p "$CAPROVER_PASSWORD" \
+              -t /user/apps/appDefinitions/register \
+              -m POST \
+              -d "$register_data"
+          fi
+        env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+
       - name: Deploy
         run: npx caprover@2.3.1 deploy -h "$CAPROVER_SERVER" -p "$CAPROVER_PASSWORD" -a "$CAPROVER_APP" -t kitchenapp.tar
         env:
