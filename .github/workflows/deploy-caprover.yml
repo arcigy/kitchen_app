@@ -28,7 +28,41 @@ jobs:
         run: npm run build
 
       - name: Create deploy archive
-        run: tar --exclude-vcs --exclude=.env --exclude=node_modules --exclude=dist --exclude=reports --exclude=outputs --exclude=storage --exclude='*.log' -cf kitchenapp.tar .
+        run: |
+          node - <<'NODE' > material-basecolor-files.txt
+          const fs = require("fs");
+          const source = [
+            fs.readFileSync("src/app/materialPbrOptions.ts", "utf8"),
+            fs.readFileSync("server/workerServer.ts", "utf8")
+          ].join("\n");
+          const paths = [...new Set([...source.matchAll(/assets\/materials\/[^"'`]+?\/maps\/basecolor\.jpg/g)].map((match) => match[0]))];
+          for (const filePath of paths) {
+            if (fs.existsSync(filePath)) console.log(filePath);
+          }
+          NODE
+
+          tar \
+            --exclude-vcs \
+            --exclude=.env \
+            --exclude=node_modules \
+            --exclude=dist \
+            --exclude=reports \
+            --exclude=outputs \
+            --exclude=storage \
+            --exclude='*.log' \
+            --exclude=kitchenapp.tar \
+            --exclude=material-basecolor-files.txt \
+            --exclude=assets/materials \
+            --exclude=backend/materials/assets \
+            --exclude=HDRI \
+            --exclude=Materials \
+            --exclude=blender/previews \
+            --exclude=public/hdri \
+            --exclude=public/materials \
+            -cf kitchenapp.tar .
+
+          tar -rf kitchenapp.tar -T material-basecolor-files.txt
+          ls -lh kitchenapp.tar
 
       - name: Ensure CapRover app exists
         run: |

@@ -11,3 +11,9 @@ tmp
 *.fqp
 *.kitchenproj
 vite-dev-live.out.log
+HDRI
+Materials
+blender/previews
+public/hdri
+public/materials
+backend/materials/assets
