@@ -37,6 +37,7 @@ jobs:
             -p "$CAPROVER_PASSWORD" \
             -t /user/apps/appDefinitions \
             -m GET \
+            -d '{}' \
             -o caprover-apps.json
 
           if node - <<'NODE'
