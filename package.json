@@ -26,6 +26,7 @@
     "worker:dev": "tsx scripts/worker.ts",
     "dev:local": "tsx scripts/devLocal.ts",
     "dev:local:postgres": "tsx scripts/devLocalPostgres.ts",
+    "serve:caprover": "tsx scripts/worker.ts",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:init": "tsx scripts/initProjectDatabase.ts"
