@@ -44,21 +44,21 @@ jobs:
           tar \
             --exclude-vcs \
             --exclude=.env \
-            --exclude=node_modules \
-            --exclude=dist \
-            --exclude=reports \
-            --exclude=outputs \
-            --exclude=storage \
+            --exclude=./node_modules \
+            --exclude=./dist \
+            --exclude=./reports \
+            --exclude=./outputs \
+            --exclude=./storage \
             --exclude='*.log' \
             --exclude=kitchenapp.tar \
             --exclude=material-basecolor-files.txt \
-            --exclude=assets/materials \
-            --exclude=backend/materials/assets \
-            --exclude=HDRI \
-            --exclude=Materials \
-            --exclude=blender/previews \
-            --exclude=public/hdri \
-            --exclude=public/materials \
+            --exclude=./assets/materials \
+            --exclude=./backend/materials/assets \
+            --exclude=./HDRI \
+            --exclude=./Materials \
+            --exclude=./blender/previews \
+            --exclude=./public/hdri \
+            --exclude=./public/materials \
             -cf kitchenapp.tar .
 
           tar -rf kitchenapp.tar -T material-basecolor-files.txt
