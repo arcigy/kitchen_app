@@ -25,10 +25,12 @@ type FileMenuActions = {
   saveProject?: () => void | Promise<void>;
   downloadProject?: () => void | Promise<void>;
   loadProjectFile?: () => void | Promise<void>;
+  openProjectManager?: () => void | Promise<void>;
   save: () => void | Promise<void>;
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
   exportSceneJson: () => void | Promise<void>;
+  exportBlenderPreview: () => void | Promise<void>;
   exportPng: () => void | Promise<void>;
   copyJson: () => void | Promise<void>;
   onLanguageChange?: (language: AppLanguage) => void;
@@ -82,6 +84,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
         { label: t("New Project"), onSelect: actions.newProject },
         { label: t("Open Project"), onSelect: actions.openProject ?? actions.save },
         { label: t("Save Project"), onSelect: actions.saveProject ?? actions.save },
+        { label: t("Project Manager"), onSelect: actions.openProjectManager ?? actions.openProject ?? actions.save },
         { label: t("Download Project File"), onSelect: actions.downloadProject ?? actions.saveAs },
         { label: t("Load Project File"), onSelect: actions.loadProjectFile ?? actions.saveAs },
         { type: "separator" }
@@ -95,6 +98,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
     { label: t("Export Layout JSON…"), onSelect: actions.exportLayoutJson },
     { label: t("Export Scene JSON…"), onSelect: actions.exportSceneJson },
     { label: t("Export PNG Snapshot…"), onSelect: actions.exportPng },
+    { label: t("Export Blender Material Preview..."), onSelect: actions.exportBlenderPreview },
     { label: t("Copy JSON to Clipboard"), onSelect: actions.copyJson },
     {
       type: "submenu",

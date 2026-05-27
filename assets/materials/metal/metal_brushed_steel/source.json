@@ -1,0 +1,21 @@
+{
+  "id": "metal_brushed_steel",
+  "source": "ambientCG",
+  "assetId": "Metal009",
+  "requestedAssetId": "Metal009",
+  "matchedAssetId": "Metal009",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Metal009_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": false,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": true,
+    "opacity": false
+  },
+  "notes": []
+}

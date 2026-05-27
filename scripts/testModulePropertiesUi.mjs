@@ -59,7 +59,7 @@ async function main() {
       const partRows = partSection ? [...partSection.querySelectorAll(".portable-field")].filter((row) => row.querySelectorAll("select").length >= 2) : [];
       const firstRow = partRows.find((row) => {
         const materialSelect = row.querySelectorAll("select")[0];
-        return materialSelect && [...materialSelect.options].some((option) => (option.textContent || "").includes("DTD Grey"));
+        return materialSelect && [...materialSelect.options].some((option) => (option.textContent || "").includes("DTDL"));
       }) ?? partRows[0];
       const [firstMaterialSelect, firstThicknessSelect] = firstRow ? [...firstRow.querySelectorAll("select")] : [null, null];
 
@@ -110,16 +110,16 @@ async function main() {
         };
       }
 
-      const greyOption = [...firstMaterialSelect.options].find((option) => (option.textContent || "").includes("DTD Grey"));
-      if (!greyOption) {
+      const demosBoardOption = [...firstMaterialSelect.options].find((option) => (option.textContent || "").includes("DTDL"));
+      if (!demosBoardOption) {
         return {
           ok: false,
-          reason: "Missing DTD Grey option",
+          reason: "Missing Démos board option",
           text: text.slice(0, 3000)
         };
       }
 
-      firstMaterialSelect.value = greyOption.value;
+      firstMaterialSelect.value = demosBoardOption.value;
       firstMaterialSelect.dispatchEvent(new Event("change", { bubbles: true }));
 
       const hasEightMm = [...firstThicknessSelect.options].some((option) => (option.textContent || "").includes("8 mm"));

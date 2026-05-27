@@ -1,0 +1,29 @@
+{
+  "dryRun": false,
+  "input": "backend/materials/imports/demos_import_sample.json",
+  "recordsInInput": 5,
+  "inserted": 5,
+  "updated": 0,
+  "skipped": 0,
+  "ready": 23,
+  "missing_asset": 6,
+  "fallback_asset": 1,
+  "warnings": [
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection",
+    "Pillow is not available; copied image without resize/metadata inspection"
+  ],
+  "importedVendorDecorIds": [
+    "demos_import_oak_matte_001",
+    "demos_import_oak_gloss_002",
+    "demos_import_missing_003",
+    "demos_import_concrete_004",
+    "demos_import_satin_override_005"
+  ]
+}

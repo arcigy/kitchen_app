@@ -1,0 +1,23 @@
+{
+  "id": "wood_varnished_satin",
+  "source": "ambientCG",
+  "assetId": "Wood050",
+  "requestedAssetId": "wood_table_001",
+  "matchedAssetId": "Wood050",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood050_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": [
+    "Substitute asset: requested wood_table_001, used Wood050."
+  ]
+}

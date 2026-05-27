@@ -1,6 +1,9 @@
 # Kitchen App Architecture
 
-See also: `docs/AI_DEVELOPMENT_RULES.md`.
+See also:
+
+- `docs/AI_DEVELOPMENT_RULES.md`
+- `docs/PROJECT_SAVE_LOAD_CONTRACT.md`
 
 Current app composition rule: do not add feature logic directly into `src/app.ts`. New logic must go into the matching controller/helper file and `app.ts` should only wire it.
 
@@ -108,6 +111,7 @@ For structural changes:
 npm run typecheck
 npm test
 npm run build
+npm run test:project-roundtrip-full
 npm run test:ui-regression
 ```
 

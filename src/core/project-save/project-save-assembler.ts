@@ -1,7 +1,7 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "../module-package/module-package-file";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
-import type { ProjectMetadata } from "../project/project-types";
+import type { ProjectMetadata, ProjectPreview } from "../project/project-types";
 import type { ProjectAssetManifest, ProjectCatalogSnapshot, ProjectSaveFile, UsedModulePackageSnapshot } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { validateProjectSaveFile } from "./project-save-validation";
@@ -24,10 +24,12 @@ export type ProjectSaveAssemblerInput = {
   moduleInstances: unknown[];
   sceneState: unknown;
   editorState?: unknown;
+  recentActivity?: unknown;
   cameraState?: unknown;
   selections?: unknown;
   pricingSettings?: unknown;
   quoteSettings?: unknown;
+  projectPreview?: ProjectPreview;
   bomSnapshot?: unknown;
   assets?: ProjectAssetManifest;
   modulePackages?: FurnQuoteModulePackage[];
@@ -89,6 +91,14 @@ function createUsedModulePackageSnapshots(
     });
 }
 
+function createPriceListSnapshot(catalog: ClientCatalog, usedCatalogIds: readonly string[]) {
+  const used = new Set(usedCatalogIds);
+  return {
+    ...catalog.priceList,
+    prices: Object.fromEntries(Object.entries(catalog.priceList.prices).filter(([id]) => used.has(id)))
+  };
+}
+
 export function createCatalogSnapshot(
   catalog: ClientCatalog,
   source: unknown,
@@ -98,6 +108,11 @@ export function createCatalogSnapshot(
   const usedComponentIds = collectStringIds(source, new Set(["componentId", "handleComponentId", "hingeComponentId", "drawerSystemComponentId"]));
   const usedModuleTypes = collectStringIds(source, new Set(["type", "moduleType"]));
   const usedModulePackageSnapshots = createUsedModulePackageSnapshots(modulePackages, usedModuleTypes, source);
+  const usedCatalogIds = [...new Set([...usedMaterialIds, ...usedComponentIds])].sort();
+  const materials = catalog.materials.filter((item) => usedMaterialIds.includes(item.id));
+  const components = catalog.components.filter((item) => usedComponentIds.includes(item.id));
+  const modules = catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType));
+  const priceListSnapshot = createPriceListSnapshot(catalog, usedCatalogIds);
   return {
     catalogVersion: catalog.meta.catalogVersion,
     capturedAt: nowIso(),
@@ -105,11 +120,17 @@ export function createCatalogSnapshot(
     usedComponentIds,
     usedModuleTypes,
     usedModulePackageSnapshots,
-    materials: catalog.materials.filter((item) => usedMaterialIds.includes(item.id)),
-    components: catalog.components.filter((item) => usedComponentIds.includes(item.id)),
-    modules: catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType)),
-    priceListSnapshot: cloneJson(catalog.priceList),
-    fullCatalog: cloneJson(catalog)
+    materials,
+    components,
+    modules,
+    priceListSnapshot: cloneJson(priceListSnapshot),
+    fullCatalog: cloneJson({
+      ...catalog,
+      materials,
+      components,
+      modules,
+      priceList: priceListSnapshot
+    })
   };
 }
 
@@ -157,10 +178,12 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
       modules: moduleInstances,
       scene: cloneJson(input.sceneState),
       editor: cloneJson(input.editorState),
+      recentActivity: cloneJson(input.recentActivity),
       camera: cloneJson(input.cameraState),
       selections: cloneJson(input.selections),
       pricingSettings: cloneJson(input.pricingSettings),
-      quoteSettings: cloneJson(input.quoteSettings)
+      quoteSettings: cloneJson(input.quoteSettings),
+      projectPreview: cloneJson(input.projectPreview)
     },
     assets: input.assets ?? { bundled: [], external: [], missing: [], generated: [] },
     integrity: {

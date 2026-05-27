@@ -29,6 +29,7 @@ type ClassicTopbarControllerContext = {
   I_HIDE: string;
   I_INSTALL: string;
   I_ISOLATE: string;
+  I_LIVING_WALL: string;
   I_MEASURE: string;
   I_MOVE: string;
   I_REDO: string;
@@ -53,6 +54,7 @@ type ClassicTopbarControllerContext = {
   args: AppArgs & {
     copyBtn: HTMLButtonElement;
     exportBtn: HTMLButtonElement;
+    exportSceneBtn: HTMLButtonElement;
     resetBtn: HTMLButtonElement;
     viewerEl: HTMLElement;
   };
@@ -77,6 +79,8 @@ type ClassicTopbarControllerContext = {
   setToolTrim: () => void;
   setToolWall: () => void;
   startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => void;
+  startCameraPlacement: () => void;
+  startMaterialModify: () => void;
   subscribeInstallState: (listener: (state: AppInstallState) => void) => () => void;
   tb: ReturnType<typeof createTopbar>;
   toggle2dView: () => void;
@@ -95,8 +99,8 @@ type ClassicTopbarControllerContext = {
   };
 };
 
-type TopbarTab = "architecture" | "kitchen" | "livingWall" | "room" | "modify" | "view";
-const TOPBAR_TABS: TopbarTab[] = ["architecture", "kitchen", "livingWall", "room", "modify", "view"];
+type TopbarTab = "architecture" | "kitchen" | "livingWall" | "room" | "modify" | "visualisation" | "view";
+const TOPBAR_TABS: TopbarTab[] = ["architecture", "kitchen", "livingWall", "room", "modify", "visualisation", "view"];
 
 export function createClassicTopbarController(ctx: ClassicTopbarControllerContext) {
   let hideBtn: HTMLButtonElement | null = null;
@@ -180,7 +184,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addLivingWallTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Living Wall", { row });
-    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_CABINET });
+    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
   };
 
   const addRoomTab = (row: HTMLElement) => {
@@ -236,6 +240,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
     const output = ctx.tb.addGroup("Output", { row });
     addButton(output, { title: "Export JSON", label: "Export", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportBtn.click() });
+    addButton(output, { title: "Blender Material Review", label: "Blender", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportSceneBtn.click() });
     addButton(output, { title: "Copy Export", label: "Copy", iconSvg: ctx.I_COPY, onClick: () => ctx.args.copyBtn.click() });
     addButton(output, { title: "Pricing Catalog", iconSvg: ctx.I_BOM, label: "Catalog", onClick: ctx.openPricingCatalog });
     ctx.tb.toolButton(output, {
@@ -268,6 +273,23 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(output, { title: "Reset Defaults", label: "Reset", iconSvg: ctx.I_RESET, onClick: () => ctx.args.resetBtn.click() });
   };
 
+  const addVisualisationTab = (row: HTMLElement) => {
+    const material = ctx.tb.addGroup("Materials", { row });
+    addButton(material, {
+      title: "Material modify",
+      label: "Material",
+      iconSvg: ctx.I_VIEW,
+      onClick: ctx.startMaterialModify
+    });
+    const camera = ctx.tb.addGroup("Camera", { row });
+    addButton(camera, {
+      title: "Camera",
+      label: "Camera",
+      iconSvg: ctx.I_VIEW,
+      onClick: ctx.startCameraPlacement
+    });
+  };
+
   function buildClassicTopbar() {
     installTabHandlers();
     syncTopbarTabs();
@@ -285,6 +307,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     else if (activeTab === "livingWall") addLivingWallTab(row);
     else if (activeTab === "room") addRoomTab(row);
     else if (activeTab === "modify") addModifyTab(row);
+    else if (activeTab === "visualisation") addVisualisationTab(row);
     else addViewTab(row);
 
     ctx.updateUndoRedoUi(ctx.S);

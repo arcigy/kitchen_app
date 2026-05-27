@@ -1,0 +1,2 @@
+vendor,vendorDecorId,vendorSku,displayName,slug,materialType,decorFamily,colorFamily,surfaceHint,targetInternalMaterialId,surfaceProfile,baseColorHex,tintStrength,tileSizeMeters,grainDirectionDefault,mappingStatus,confidence,notes
+demos,demos_dub_artisan_001,,Dub Artisan,dub-artisan,wood,oak,natural,matte,wood_oak_natural,wood_standard_matte,#b98a55,0.35,0.4,vertical,mapped,0.75,Approximate visual mapping. No Demos texture used.

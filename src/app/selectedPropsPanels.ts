@@ -114,6 +114,7 @@ type WindowPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type WindowPlacementPropsContext = {
@@ -130,6 +131,7 @@ type DoorPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type DoorPlacementPropsContext = {
@@ -940,6 +942,7 @@ export function mountWindowPropsPanel(ctx: WindowPropsContext) {
       ctx.updateWindowTransform(windowInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Window updated");
         ctx.mountProps();
       }
     },
@@ -1107,6 +1110,7 @@ export function mountDoorPropsPanel(ctx: DoorPropsContext) {
       ctx.updateDoorTransform(doorInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Door updated");
         ctx.mountProps();
       }
     },

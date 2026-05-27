@@ -4,6 +4,7 @@ import {
   type PortableMaterialsSnapshot
 } from "./portableCommercial";
 import type { ClientCatalog, ComponentGeometryDefinition, ComponentType } from "../../core/catalog/catalog-types";
+import { createMaterialRequestFromCatalogMaterial } from "../../core/catalog/material-render-request";
 import {
   createModuleRuntimeCatalogContext,
   SYSTEM_PLACEHOLDER_MATERIAL,
@@ -538,6 +539,7 @@ function resolveLivePartOverride(
       slotAssignment?.assignedMaterial;
     if (selectedMaterial) {
       return {
+        catalogMaterial: selectedMaterial,
         colorHex: selectedMaterial.preview.colorHex,
         roughness: selectedMaterial.preview.roughness,
         metalness: selectedMaterial.preview.metalness,
@@ -882,7 +884,26 @@ function buildMeshFromLivePart(
   if (typeof rotationZ === "number") mesh.rotation.z += rotationZ;
   mesh.visible = part.visible !== false;
   mesh.userData.selectable = part.selectable !== false;
+  const boardSlot = resolvePortableBoardSlot(part.name, materialsSnapshot);
+  const slotAssignment = boardSlot
+    ? (materialsSnapshot?.slotAssignments ?? []).find((slot) => slot.slotId === boardSlot || slot.partId === boardSlot) ?? null
+    : null;
+  const boardFamily = slotAssignment?.boardFamily;
   mesh.userData.paramKeys = [...(part.paramKeys ?? [])];
+  mesh.userData.tags = [
+    "module",
+    ...(boardFamily ? [boardFamily] : []),
+    ...(boardFamily === "front" ? ["front", "door", "wood"] : []),
+    ...(boardFamily === "drawer_bottom" || boardFamily === "drawer_box" ? ["drawer", "drawer_bottom"] : []),
+    ...(boardFamily === "back" ? ["back"] : []),
+    ...(boardFamily === "shelf" ? ["shelf"] : []),
+    ...(part.name.toLowerCase().includes("handle") ? ["metal", "handle"] : [])
+  ];
+  if (override?.catalogMaterial) {
+    mesh.userData.catalogMaterialId = override.catalogMaterial.id;
+    mesh.userData.catalogMaterialName = override.catalogMaterial.displayName;
+    mesh.userData.materialRequest = createMaterialRequestFromCatalogMaterial(override.catalogMaterial);
+  }
   mesh.userData.dimensionsMm = {
     width: geometrySize.x,
     height: geometrySize.y,

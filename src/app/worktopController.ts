@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { createMaterialRequestFromCatalogMaterial } from "../core/catalog/material-render-request";
 import type { FloorBoundaryPoint, KitchenWorktopInstance, KitchenWorktopParams } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
 import { disposeObject3D } from "../core/dispose";
@@ -70,6 +71,16 @@ export function createWorktopController(ctx: WorktopControllerContext) {
   const makeCurrentKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) =>
     makeKitchenWorktopBackGuideGeometry(params, getKitchenWorktopBackGuidePath(params));
 
+  const applyWorktopMaterialMetadata = (mesh: THREE.Mesh, materialId: string) => {
+    const material = ctx.catalog.materials.find((item) => item.id === materialId) ?? null;
+    mesh.userData.tags = ["worktop"];
+    mesh.userData.catalogMaterialId = materialId;
+    if (material) {
+      mesh.userData.catalogMaterialName = material.displayName;
+      mesh.userData.materialRequest = createMaterialRequestFromCatalogMaterial(material);
+    }
+  };
+
   function rebuildKitchenWorktop(inst: KitchenWorktopInstance) {
     inst.params = cloneKitchenWorktopParams(inst.params);
     inst.params.path = sanitizeKitchenWorktopPath(inst.params.path);
@@ -82,6 +93,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params);
     const prevMaterial = inst.mesh.material as THREE.Material;
     inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
+    applyWorktopMaterialMetadata(inst.mesh, inst.params.materialId);
     prevMaterial.dispose();
     inst.mesh.position.y = inst.params.heightMm / 1000;
     inst.mesh.castShadow = true;
@@ -127,6 +139,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     mesh.userData.kind = "kitchenWorktop";
     mesh.userData.worktopId = id;
     mesh.userData.kitchenGroupId = kitchenGroupId;
+    applyWorktopMaterialMetadata(mesh, params.materialId);
     root.add(mesh);
 
     const outline = new THREE.Line(

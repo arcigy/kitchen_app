@@ -684,7 +684,7 @@ describe("runtime and project save integration", () => {
 
     expect(selections.boardMaterials["drawer-front-4"]).toBe(kitchenCtx.frontsMaterialId);
     expect(selections.boardMaterials["drawer-box-4-bottom-panel"]).toBe(kitchenCtx.drawerBottomMaterialId);
-    expect(selections.boardMaterials["drawer-box-4-side-panels"]).toMatch(/^mat\.board\.drawer_box\./);
+    expect(selections.boardMaterials["drawer-box-4-side-panels"]).toMatch(/^(mat\.board\.drawer_box\.|mat\.demos\.drawer_box\.)/);
     expect(selections.boardMaterials["drawer-box-4-front-back-panels"]).toBe(selections.boardMaterials["drawer-box-4-side-panels"]);
     expect(selections.boardThicknesses["drawer-front-4"]).toBeGreaterThan(0);
     expect(selections.boardThicknesses["drawer-box-4-bottom-panel"]).toBeGreaterThan(0);

@@ -1,0 +1,21 @@
+{
+  "id": "tile_black_stone_square",
+  "source": "ambientCG",
+  "assetId": "Tiles138",
+  "requestedAssetId": "Tiles138",
+  "matchedAssetId": "Tiles138",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Tiles138_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": true,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

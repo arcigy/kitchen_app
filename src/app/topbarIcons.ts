@@ -3,22 +3,25 @@ const icon = (body: string) => `
   ${body}
 </svg>`;
 
+const imageIcon = (src: string) => `<img src="${src}" alt="" aria-hidden="true">`;
+
 export const topbarIcons = {
   I_SELECT: icon(`<path d="M7 4.8l9.8 8.1-5 .8-2.3 4.7L7 4.8z"/><path d="M12.4 13.7l3.6 4.5"/>`),
-  I_WALL: icon(`<path d="M4.5 8.2h15v7.6h-15z"/><path d="M7.5 8.2v7.6M12 8.2v7.6M16.5 8.2v7.6"/><path d="M4.5 6.2h15M4.5 17.8h15"/>`),
-  I_DOOR: icon(`<path d="M7 19.5V4.5h9.5v15"/><path d="M9.2 17.5l5.1 1.5V6.1L9.2 4.5z"/><path d="M12.7 12.2h.1"/>`),
-  I_WINDOW: icon(`<rect x="4.8" y="5.2" width="14.4" height="13.6" rx="1.2"/><path d="M12 5.2v13.6M4.8 12h14.4"/><path d="M7.2 7.6h2.2M14.6 7.6h2.2M7.2 16.4h2.2M14.6 16.4h2.2"/>`),
-  I_COLUMN: icon(`<path d="M7.5 5.5h9"/><path d="M6.5 18.5h11"/><path d="M9 7.5h6v9H9z"/><path d="M8 7.5h8M8 16.5h8"/>`),
-  I_STAIR: icon(`<path d="M4.5 17.5h4v-3h3.5v-3h3.5v-3h4"/><path d="M4.5 20h15"/><path d="M7.8 9.5l3-3 3 3"/><path d="M10.8 6.5v7"/>`),
+  I_WALL: imageIcon("/cad-icons/stena.svg"),
+  I_DOOR: imageIcon("/cad-icons/dvere.svg"),
+  I_WINDOW: imageIcon("/cad-icons/window.svg"),
+  I_COLUMN: imageIcon("/cad-icons/stlp.svg"),
+  I_STAIR: imageIcon("/cad-icons/stairs.svg"),
   I_ALIGN: icon(`<path d="M18 4.5v15"/><path d="M6 7h8M6 12h11M6 17h8"/><path d="M15.5 7H18M15.5 17H18"/>`),
   I_TRIM: icon(`<path d="M5 6.5h10.5"/><path d="M5 17.5h8"/><path d="M16.5 5.5l3 3"/><path d="M11.3 13.7l7.2-7.2"/><path d="M13.2 13.2l5.3 5.3"/>`),
   I_SECTION: icon(`<path d="M4.5 7h15"/><path d="M7.5 10v8.5M16.5 10v8.5"/><path d="M7.5 10l2.5 2.5M7.5 10L5 12.5"/><path d="M16.5 10L14 12.5M16.5 10l2.5 2.5"/><path d="M10.5 15h3"/>`),
   I_DIM: icon(`<path d="M5.5 6.5v11M18.5 6.5v11"/><path d="M7.5 12h9"/><path d="M7.5 12l2-2M7.5 12l2 2M16.5 12l-2-2M16.5 12l-2 2"/><path d="M8.5 5h7M8.5 19h7"/>`),
   I_MEASURE: icon(`<path d="M5 15.5l10.5-10.5 3.5 3.5L8.5 19H5z"/><path d="M8.1 15.9l1.4 1.4M10.2 13.8l1 1M12.3 11.7l1.4 1.4M14.4 9.6l1 1M16.5 7.5l1.4 1.4"/>`),
-  I_FLOOR: icon(`<path d="M4 14.5l8 4.2 8-4.2-8-4.2z"/><path d="M4 10l8 4.2 8-4.2"/><path d="M8.2 12.2l7.6 4M15.8 12.2l-7.6 4"/>`),
+  I_FLOOR: imageIcon("/cad-icons/strop.svg"),
   I_UNDERLAY: icon(`<path d="M7 3.8h7.8L18 7v13.2H7z"/><path d="M14.8 3.8V7H18"/><path d="M9.2 15.5l2-2 1.4 1.3 1.9-2.4 1.9 3.1z"/><path d="M9.2 10.2h5.6"/>`),
-  I_CABINET: icon(`<path d="M5 7h14v12H5z"/><path d="M4.2 6h15.6"/><path d="M5 11h14M12 11v8"/><path d="M8.5 15h.1M15.5 15h.1"/><path d="M7 19v1.5M17 19v1.5"/>`),
-  I_WARDROBE: icon(`<path d="M6 4h12v16H6z"/><path d="M12 4v16"/><path d="M9.5 11.5h.1M14.5 11.5h.1"/><path d="M7.5 6.5h3M13.5 6.5h3"/><path d="M8 20v1M16 20v1"/>`),
+  I_CABINET: imageIcon("/cad-icons/kitchen.svg"),
+  I_LIVING_WALL: imageIcon("/cad-icons/livingroomwall.svg"),
+  I_WARDROBE: imageIcon("/cad-icons/wardrobe.svg"),
   I_GRID2D: icon(`<rect x="4.5" y="4.5" width="15" height="15" rx="1.2"/><path d="M9.5 4.5v15M14.5 4.5v15M4.5 9.5h15M4.5 14.5h15"/>`),
   I_UNDO: icon(`<path d="M8.8 7.5H4.8V3.8"/><path d="M4.8 7.5l3.6-3.4"/><path d="M5.2 13.2a6.5 6.5 0 1 0 2.2-4.9"/>`),
   I_REDO: icon(`<path d="M15.2 7.5h4V3.8"/><path d="M19.2 7.5l-3.6-3.4"/><path d="M18.8 13.2a6.5 6.5 0 1 1-2.2-4.9"/>`),

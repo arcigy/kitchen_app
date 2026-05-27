@@ -1,5 +1,5 @@
 import { MATERIALS } from "../../data/materials";
-import { materialDefinitions } from "../../data/pricing/materialDefinitions";
+import { demosMaterialTemplates } from "./demosCatalog";
 
-export const systemMaterialTemplates = materialDefinitions;
+export const systemMaterialTemplates = demosMaterialTemplates;
 export const systemLegacyMaterialTemplates = MATERIALS;

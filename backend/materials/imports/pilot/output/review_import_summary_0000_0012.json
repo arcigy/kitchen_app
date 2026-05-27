@@ -1,0 +1,148 @@
+{
+  "master": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+  "reviewed": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\review_batches\\demos_review_batch_0000_0005.csv",
+  "reviewedMaster": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+  "stagingRecords": 47,
+  "productionRecords": 11,
+  "stagingSummary": {
+    "dryRun": false,
+    "catalogMode": "staging",
+    "input": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+    "imported": 1,
+    "inserted": 0,
+    "updated": 1,
+    "skipped": 0,
+    "skippedLocked": 11,
+    "skippedNotProductionSafe": 0,
+    "productionSafe": 11,
+    "mapped": 11,
+    "needs_review": 36,
+    "unmapped": 0,
+    "locked": 11,
+    "unlocked": 36,
+    "warnings": [
+      "demos_master_oak_natural_matte_001: skipped locked mapping",
+      "demos_master_oak_light_matte_002: skipped locked mapping",
+      "demos_master_oak_brown_matte_003: skipped locked mapping",
+      "demos_master_oak_rustic_deep_004: skipped locked mapping",
+      "demos_master_walnut_satin_005: skipped locked mapping",
+      "demos_master_walnut_dark_matte_006: skipped locked mapping",
+      "demos_master_fine_light_wood_007: skipped locked mapping",
+      "demos_master_supermat_subtle_008: skipped locked mapping",
+      "demos_master_black_wood_009: skipped locked mapping",
+      "demos_master_solid_cream_010: skipped locked mapping",
+      "demos_master_generic_grey_011: skipped locked mapping"
+    ],
+    "importedVendorDecorIds": [
+      "demos_master_needs_review_012"
+    ]
+  },
+  "productionSummary": {
+    "dryRun": false,
+    "catalogMode": "production",
+    "input": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+    "imported": 0,
+    "inserted": 0,
+    "updated": 0,
+    "skipped": 0,
+    "skippedLocked": 11,
+    "skippedNotProductionSafe": 1,
+    "productionSafe": 11,
+    "mapped": 11,
+    "needs_review": 0,
+    "unmapped": 0,
+    "locked": 11,
+    "unlocked": 0,
+    "warnings": [
+      "demos_master_oak_natural_matte_001: skipped locked mapping",
+      "demos_master_oak_light_matte_002: skipped locked mapping",
+      "demos_master_oak_brown_matte_003: skipped locked mapping",
+      "demos_master_oak_rustic_deep_004: skipped locked mapping",
+      "demos_master_walnut_satin_005: skipped locked mapping",
+      "demos_master_walnut_dark_matte_006: skipped locked mapping",
+      "demos_master_fine_light_wood_007: skipped locked mapping",
+      "demos_master_supermat_subtle_008: skipped locked mapping",
+      "demos_master_black_wood_009: skipped locked mapping",
+      "demos_master_solid_cream_010: skipped locked mapping",
+      "demos_master_generic_grey_011: skipped locked mapping",
+      "demos_master_needs_review_012: skipped non-production-safe mapping (mappingStatus is not mapped; mappingLocked is not true; confidence is below 0.7; colorSourceMethod is rule_inferred)"
+    ],
+    "importedVendorDecorIds": []
+  },
+  "commands": [
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/import_reviewed_demos_mapping_batch.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--master",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+        "--reviewed",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\review_batches\\demos_review_batch_0000_0005.csv",
+        "--output",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+        "--reviewed-by",
+        "Laube",
+        "--lock-approved"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"masterRows\": 12,\n  \"reviewedRows\": 1,\n  \"approved\": 0,\n  \"edited\": 0,\n  \"keptNeedsReview\": 0,\n  \"rejected\": 0,\n  \"noAction\": 1,\n  \"skippedLocked\": 0,\n  \"errors\": [],\n  \"dryRun\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/audit_demos_mapping_master_csv.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+        "--output-json",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_reviewed_audit_0000_0012.json",
+        "--output-csv",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\audit\\demos_mapping_master_reviewed_audit_0000_0012.csv"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"rows\": 12,\n  \"mapped\": 11,\n  \"needs_review\": 1,\n  \"unmapped\": 0,\n  \"locked\": 11,\n  \"unlocked\": 1,\n  \"mappedButUnlocked\": 0,\n  \"mappedLowConfidence\": 0,\n  \"mappedMissingBaseColorHex\": 0,\n  \"mappedMissingGrainPatternId\": 0,\n  \"mappedMissingTargetInternalMaterialId\": 0,\n  \"mappedMissingSurfaceProfile\": 0,\n  \"duplicateVendorDecorId\": 0,\n  \"forbiddenAssetFields\": 0,\n  \"readyForImport\": 11,\n  \"needsHumanReview\": 1,\n  \"invalid\": 0,\n  \"productionSafe\": 11\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/import_vendor_decor_mappings.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--vendor",
+        "demos",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+        "--catalog-mode",
+        "staging",
+        "--respect-locked"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"dryRun\": false,\n  \"catalogMode\": \"staging\",\n  \"input\": \"C:\\\\Users\\\\laube\\\\Documents\\\\GitHub\\\\kitchen_app\\\\backend\\\\materials\\\\imports\\\\pilot\\\\output\\\\demos_mapping_master_reviewed_0000_0012.csv\",\n  \"imported\": 1,\n  \"inserted\": 0,\n  \"updated\": 1,\n  \"skipped\": 0,\n  \"skippedLocked\": 11,\n  \"skippedNotProductionSafe\": 0,\n  \"productionSafe\": 11,\n  \"mapped\": 11,\n  \"needs_review\": 36,\n  \"unmapped\": 0,\n  \"locked\": 11,\n  \"unlocked\": 36,\n  \"warnings\": [\n    \"demos_master_oak_natural_matte_001: skipped locked mapping\",\n    \"demos_master_oak_light_matte_002: skipped locked mapping\",\n    \"demos_master_oak_brown_matte_003: skipped locked mapping\",\n    \"demos_master_oak_rustic_deep_004: skipped locked mapping\",\n    \"demos_master_walnut_satin_005: skipped locked mapping\",\n    \"demos_master_walnut_dark_matte_006: skipped locked mapping\",\n    \"demos_master_fine_light_wood_007: skipped locked mapping\",\n    \"demos_master_supermat_subtle_008: skipped locked mapping\",\n    \"demos_master_black_wood_009: skipped locked mapping\",\n    \"demos_master_solid_cream_010: skipped locked mapping\",\n    \"demos_master_generic_grey_011: skipped locked mapping\"\n  ],\n  \"importedVendorDecorIds\": [\n    \"demos_master_needs_review_012\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "tools/import_vendor_decor_mappings.py",
+        "--project-root",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app",
+        "--vendor",
+        "demos",
+        "--input",
+        "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_reviewed_0000_0012.csv",
+        "--catalog-mode",
+        "production",
+        "--respect-locked"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"dryRun\": false,\n  \"catalogMode\": \"production\",\n  \"input\": \"C:\\\\Users\\\\laube\\\\Documents\\\\GitHub\\\\kitchen_app\\\\backend\\\\materials\\\\imports\\\\pilot\\\\output\\\\demos_mapping_master_reviewed_0000_0012.csv\",\n  \"imported\": 0,\n  \"inserted\": 0,\n  \"updated\": 0,\n  \"skipped\": 0,\n  \"skippedLocked\": 11,\n  \"skippedNotProductionSafe\": 1,\n  \"productionSafe\": 11,\n  \"mapped\": 11,\n  \"needs_review\": 0,\n  \"unmapped\": 0,\n  \"locked\": 11,\n  \"unlocked\": 0,\n  \"warnings\": [\n    \"demos_master_oak_natural_matte_001: skipped locked mapping\",\n    \"demos_master_oak_light_matte_002: skipped locked mapping\",\n    \"demos_master_oak_brown_matte_003: skipped locked mapping\",\n    \"demos_master_oak_rustic_deep_004: skipped locked mapping\",\n    \"demos_master_walnut_satin_005: skipped locked mapping\",\n    \"demos_master_walnut_dark_matte_006: skipped locked mapping\",\n    \"demos_master_fine_light_wood_007: skipped locked mapping\",\n    \"demos_master_supermat_subtle_008: skipped locked mapping\",\n    \"demos_master_black_wood_009: skipped locked mapping\",\n    \"demos_master_solid_cream_010: skipped locked mapping\",\n    \"demos_master_generic_grey_011: skipped locked mapping\",\n    \"demos_master_needs_review_012: skipped non-production-safe mapping (mappingStatus is not mapped; mappingLocked is not true; confidence is below 0.7; colorSourceMethod is rule_inferred)\"\n  ],\n  \"importedVendorDecorIds\": []\n}\n",
+      "stderr": ""
+    }
+  ],
+  "dryRun": false
+}

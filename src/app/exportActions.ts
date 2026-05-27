@@ -5,11 +5,14 @@ import { downloadCanvasPng, saveTextFile, saveTextFileAs, type WritableHandle } 
 import { createClientProjectPhaseScope } from "../core/storage/storage-types";
 import { attachFileMenu } from "../ui/createFileMenu";
 import type { AppArgs } from "./bootstrap";
+import { openBlenderMaterialReview } from "./blenderMaterialReview";
 
 type HdriSettings = {
   id: string | null;
   background: boolean;
 };
+
+const DEFAULT_BLENDER_HDRI = "/hdri/OutdoorFieldBaseballDayClear001/HdrOutdoorFieldBaseballDayClear001_HDR_2K.exr";
 
 type ExportAppArgs = Pick<
   Required<AppArgs>,
@@ -42,6 +45,50 @@ type BlenderExportResponse = {
   ok: boolean;
   error?: string;
   previewUrl?: string;
+  previewPath?: string;
+  blendPath?: string;
+};
+
+type BlenderExportUi = {
+  statusEl: HTMLElement | null;
+  spinnerEl: HTMLElement | null;
+  errorEl: HTMLElement | null;
+  previewLinkEl: HTMLAnchorElement | null;
+  previewImg: HTMLImageElement | null;
+  openBlendBtn: HTMLButtonElement | null;
+  openPngBtn: HTMLButtonElement | null;
+};
+
+const ensureBlenderExportPanel = (): BlenderExportUi => {
+  let panel = document.getElementById("blenderExportPanel");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "blenderExportPanel";
+    panel.className = "blender-export-panel";
+    panel.innerHTML = `
+      <div class="blender-export-header">Blender material export</div>
+      <div id="blenderStatus" class="blender-status">Ready.</div>
+      <div id="blenderSpinner" class="spinner" aria-hidden="true"></div>
+      <div id="blenderError" class="blender-error"></div>
+      <div class="blender-open-actions">
+        <button id="blenderOpenBlend" type="button">Open .blend</button>
+        <button id="blenderOpenPng" type="button">Open PNG</button>
+      </div>
+      <a id="blenderPreviewLink" class="blender-preview-link" href="#" target="_blank" rel="noreferrer">Open preview</a>
+      <img id="blenderPreview" class="blender-preview-image" alt="Blender preview" />
+    `;
+    document.body.appendChild(panel);
+  }
+
+  return {
+    statusEl: document.getElementById("blenderStatus"),
+    spinnerEl: document.getElementById("blenderSpinner"),
+    errorEl: document.getElementById("blenderError"),
+    previewLinkEl: document.getElementById("blenderPreviewLink") as HTMLAnchorElement | null,
+    previewImg: document.getElementById("blenderPreview") as HTMLImageElement | null,
+    openBlendBtn: document.getElementById("blenderOpenBlend") as HTMLButtonElement | null,
+    openPngBtn: document.getElementById("blenderOpenPng") as HTMLButtonElement | null
+  };
 };
 
 const copyTextToClipboard = async (text: string) => {
@@ -61,10 +108,24 @@ const parseBlenderExportResponse = (text: string): BlenderExportResponse | null 
     return {
       ok: record.ok === true,
       error: typeof record.error === "string" ? record.error : undefined,
-      previewUrl: typeof record.previewUrl === "string" ? record.previewUrl : undefined
+      previewUrl: typeof record.previewUrl === "string" ? record.previewUrl : undefined,
+      previewPath: typeof record.previewPath === "string" ? record.previewPath : undefined,
+      blendPath: typeof record.blendPath === "string" ? record.blendPath : undefined
     };
   } catch {
     return null;
+  }
+};
+
+const openDesktopFile = async (path: string) => {
+  const res = await fetch("/api/blender/open-output", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Open failed (${res.status})`);
   }
 };
 
@@ -96,14 +157,20 @@ export function createExportActions(args: ExportActionsArgs) {
       camera: args.getCamera(),
       cameraTarget: args.getCameraTarget(),
       environment: {
-        hdriPath: hdri.id,
-        hdriStrength: 5,
-        hdriBackground: hdri.background,
-        hdriBackgroundStrength: 5,
+        hdriPath: hdri.id || DEFAULT_BLENDER_HDRI,
+        hdriStrength: hdri.id ? 0.08 : 0.055,
+        hdriBackground: hdri.id ? hdri.background : true,
+        hdriBackgroundStrength: hdri.id ? 0.75 : 0.6,
         hdriRotationDeg: 60
       },
-      colorManagement: { viewTransform: "AgX", exposure: 0.5, look: "Medium High Contrast" },
-      lighting: { sunDirection, sunStrength: 5, sunAngle: 30 },
+      colorManagement: { viewTransform: "AgX", exposure: 0, look: "Medium High Contrast" },
+      renderProfile: {
+        preset: "interior_app",
+        materialMode: "app",
+        previewResolution: [1280, 960],
+        finalResolution: [1920, 1440]
+      },
+      lighting: { sunDirection, sunStrength: 1.8, sunAngle: 4 },
       window: { opening, daylightIntensity },
       includeInvisible: false,
       storageScope
@@ -163,13 +230,9 @@ export function createExportActions(args: ExportActionsArgs) {
     args.appArgs.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
   });
 
-  args.appArgs.exportSceneBtn.addEventListener("click", async () => {
+  const exportBlenderPreview = async () => {
     args.appArgs.copyStatusEl.textContent = "";
-    const statusEl = document.getElementById("blenderStatus");
-    const spinnerEl = document.getElementById("blenderSpinner");
-    const errorEl = document.getElementById("blenderError");
-    const previewLinkEl = document.getElementById("blenderPreviewLink") as HTMLAnchorElement | null;
-    const previewImg = document.getElementById("blenderPreview") as HTMLImageElement | null;
+    const { statusEl, spinnerEl, errorEl, previewLinkEl, previewImg, openBlendBtn, openPngBtn } = ensureBlenderExportPanel();
 
     const setUi = (state: "idle" | "running" | "done" | "error", msg: string, detail?: string) => {
       if (statusEl) statusEl.textContent = msg;
@@ -184,9 +247,20 @@ export function createExportActions(args: ExportActionsArgs) {
         }
       }
       if (previewLinkEl) previewLinkEl.style.display = state === "done" ? "inline" : "none";
+      if (previewImg) previewImg.style.display = state === "done" ? "block" : "none";
+      if (openBlendBtn) openBlendBtn.style.display = state === "done" ? "inline-block" : "none";
+      if (openPngBtn) openPngBtn.style.display = state === "done" ? "inline-block" : "none";
     };
 
-    const { payload, json } = buildSceneExportJson();
+    const { payload } = buildSceneExportJson();
+    const reviewedPayload = await openBlenderMaterialReview(payload);
+    if (!reviewedPayload) {
+      setUi("idle", "Ready.");
+      args.appArgs.copyStatusEl.textContent = "";
+      return;
+    }
+    const json = JSON.stringify(reviewedPayload, null, 2);
+    args.appArgs.exportOutEl.value = json;
 
     args.appArgs.exportSceneBtn.disabled = true;
     setUi("running", "Running Blender (up to 60s)...");
@@ -198,7 +272,7 @@ export function createExportActions(args: ExportActionsArgs) {
       const res = await fetch("/api/blender/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sceneJson: payload, projectId: storageScope.projectId, phaseId: storageScope.phaseId }),
+        body: JSON.stringify({ sceneJson: reviewedPayload, projectId: storageScope.projectId, phaseId: storageScope.phaseId }),
         signal: ctrl.signal
       });
       window.clearTimeout(t);
@@ -216,8 +290,20 @@ export function createExportActions(args: ExportActionsArgs) {
 
       if (previewLinkEl) previewLinkEl.href = previewUrl;
       if (previewImg) previewImg.src = previewUrl;
+      if (openBlendBtn) {
+        openBlendBtn.disabled = !data.blendPath;
+        openBlendBtn.onclick = data.blendPath
+          ? () => void openDesktopFile(data.blendPath as string).catch((error: unknown) => setUi("error", "Could not open .blend.", error instanceof Error ? error.message : String(error)))
+          : null;
+      }
+      if (openPngBtn) {
+        openPngBtn.disabled = !data.previewPath;
+        openPngBtn.onclick = data.previewPath
+          ? () => void openDesktopFile(data.previewPath as string).catch((error: unknown) => setUi("error", "Could not open PNG.", error instanceof Error ? error.message : String(error)))
+          : null;
+      }
 
-      setUi("done", `Done. ${copyOk ? "Copied JSON." : "Copy failed."}`);
+      setUi("done", copyOk ? "Done. JSON copied." : "Done.");
       args.appArgs.copyStatusEl.textContent = "";
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -226,6 +312,10 @@ export function createExportActions(args: ExportActionsArgs) {
     } finally {
       args.appArgs.exportSceneBtn.disabled = false;
     }
+  };
+
+  args.appArgs.exportSceneBtn.addEventListener("click", () => {
+    void exportBlenderPreview();
   });
 
   args.appArgs.copyBtn.addEventListener("click", async () => {
@@ -239,6 +329,7 @@ export function createExportActions(args: ExportActionsArgs) {
       saveAs: saveLayoutFileAs,
       exportLayoutJson: exportLayoutJsonFile,
       exportSceneJson: exportSceneJsonFile,
+      exportBlenderPreview,
       exportPng: downloadViewportPng,
       copyJson: copyCurrentExport,
       onLanguageChange: args.onLanguageChange
@@ -251,6 +342,7 @@ export function createExportActions(args: ExportActionsArgs) {
     copyCurrentExport,
     downloadViewportPng,
     exportLayoutJsonFile,
+    exportBlenderPreview,
     exportSceneJsonFile,
     saveLayoutFile,
     saveLayoutFileAs

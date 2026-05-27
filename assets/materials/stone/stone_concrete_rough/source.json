@@ -1,0 +1,21 @@
+{
+  "id": "stone_concrete_rough",
+  "source": "ambientCG",
+  "assetId": "Concrete047A",
+  "requestedAssetId": "Concrete047A",
+  "matchedAssetId": "Concrete047A",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Concrete047A_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": true,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

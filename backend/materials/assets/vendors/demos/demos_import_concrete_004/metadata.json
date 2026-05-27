@@ -1,0 +1,14 @@
+{
+  "width": null,
+  "height": null,
+  "mode": null,
+  "format": null,
+  "sourcePath": "assets/materials/stone/stone_concrete_smooth/maps/basecolor.jpg",
+  "importedAt": "2026-05-20T16:11:49.843225+00:00",
+  "hasNormal": false,
+  "hasRoughness": true,
+  "normalMeta": {},
+  "roughnessMeta": {
+    "sourcePath": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\assets\\materials\\stone\\stone_concrete_smooth\\maps\\roughness.jpg"
+  }
+}

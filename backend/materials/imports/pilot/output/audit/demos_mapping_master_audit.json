@@ -1,0 +1,98 @@
+{
+  "input": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\backend\\materials\\imports\\pilot\\output\\demos_mapping_master_pilot_draft_0000_0012.csv",
+  "summary": {
+    "rows": 12,
+    "mapped": 11,
+    "needs_review": 1,
+    "unmapped": 0,
+    "locked": 11,
+    "unlocked": 1,
+    "mappedButUnlocked": 0,
+    "mappedLowConfidence": 0,
+    "mappedMissingBaseColorHex": 0,
+    "mappedMissingGrainPatternId": 0,
+    "mappedMissingTargetInternalMaterialId": 0,
+    "mappedMissingSurfaceProfile": 0,
+    "duplicateVendorDecorId": 0,
+    "forbiddenAssetFields": 0,
+    "readyForImport": 11,
+    "needsHumanReview": 1,
+    "invalid": 0,
+    "productionSafe": 11
+  },
+  "distributions": {
+    "materialType": {
+      "wood": 10,
+      "solid": 1,
+      "generic": 1
+    },
+    "decorFamily": {
+      "oak": 4,
+      "walnut": 2,
+      "fine_grain": 2,
+      "subtle_grain": 1,
+      "solid": 1,
+      "generic": 1,
+      "unknown": 1
+    },
+    "colorFamily": {
+      "natural": 1,
+      "light": 2,
+      "brown": 2,
+      "rustic": 1,
+      "dark": 1,
+      "cream": 2,
+      "black": 1,
+      "grey": 1,
+      "warm": 1
+    },
+    "surfaceHint": {
+      "matte": 8,
+      "raw": 1,
+      "satin": 1,
+      "supermat": 1,
+      "unknown": 1
+    },
+    "targetInternalMaterialId": {
+      "wood_oak_neutral_template": 4,
+      "wood_deep_grain_neutral_template": 1,
+      "wood_walnut_neutral_template": 2,
+      "wood_fine_grain_neutral_template": 2,
+      "wood_subtle_grain_neutral_template": 1,
+      "solid_color_neutral_template": 1,
+      "generic_neutral_template": 1
+    },
+    "grainPatternId": {
+      "oak_medium_grain": 2,
+      "oak_fine_light_grain": 1,
+      "oak_medium_dark_grain": 1,
+      "oak_rustic_deep_grain": 1,
+      "walnut_medium_grain": 1,
+      "walnut_dark_grain": 1,
+      "fine_light_linear_grain": 1,
+      "subtle_soft_grain": 1,
+      "fine_black_grain": 1,
+      "solid_none": 1,
+      "generic_none": 1
+    },
+    "surfaceProfile": {
+      "wood_standard_matte": 7,
+      "wood_raw_matte": 1,
+      "wood_satin_lacquer": 1,
+      "wood_soft_touch_supermat": 1,
+      "generic_matte": 2
+    },
+    "colorSourceMethod": {
+      "website_visual_match": 4,
+      "manual_approx": 4,
+      "internal_review": 2,
+      "official_swatch": 1,
+      "rule_inferred": 1
+    },
+    "mappingStatus": {
+      "mapped": 11,
+      "needs_review": 1
+    }
+  },
+  "issues": []
+}

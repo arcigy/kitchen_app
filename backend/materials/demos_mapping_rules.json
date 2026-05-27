@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "defaults": {
+    "vendor": "demos",
+    "tileSizeMeters": 0.4,
+    "uvScale": 2.5,
+    "mappingStatus": "needs_review",
+    "mappingLocked": false,
+    "confidence": 0.35,
+    "usesExternalVendorTexture": false,
+    "colorSourceMethod": "rule_inferred",
+    "notesSuffix": "Auto draft. Needs human review. No Demos texture used."
+  },
+  "materialTypeRules": [
+    { "keywords": ["dub", "oak", "sonoma", "artisan", "halifax", "wotan"], "materialType": "wood", "decorFamily": "oak" },
+    { "keywords": ["orech", "walnut"], "materialType": "wood", "decorFamily": "walnut" },
+    { "keywords": ["jaseň", "jasen", "ash"], "materialType": "wood", "decorFamily": "ash" },
+    { "keywords": ["buk", "beech"], "materialType": "wood", "decorFamily": "beech" },
+    { "keywords": ["breza", "birch"], "materialType": "wood", "decorFamily": "birch" },
+    { "keywords": ["javor", "maple"], "materialType": "wood", "decorFamily": "maple" },
+    { "keywords": ["betón", "beton", "concrete"], "materialType": "concrete", "decorFamily": "concrete" },
+    { "keywords": ["kameň", "kamen", "stone", "marble", "mramor"], "materialType": "stone", "decorFamily": "stone" },
+    { "keywords": ["kov", "metal", "aluminium", "aluminum", "steel"], "materialType": "metal", "decorFamily": "metal" },
+    { "keywords": ["uni", "solid", "jednofareb", "biela", "white", "black", "čierna", "cierna", "grey", "gray", "sivá", "siva"], "materialType": "solid", "decorFamily": "solid" }
+  ],
+  "decorFamilyRules": [],
+  "colorFamilyRules": [
+    { "keywords": ["natural", "prírod", "prirod"], "colorFamily": "natural" },
+    { "keywords": ["light", "svetl"], "colorFamily": "light" },
+    { "keywords": ["beige", "béž", "bez"], "colorFamily": "beige" },
+    { "keywords": ["warm", "tepl"], "colorFamily": "warm" },
+    { "keywords": ["brown", "hned"], "colorFamily": "brown" },
+    { "keywords": ["dark", "tmav"], "colorFamily": "dark" },
+    { "keywords": ["grey", "gray", "sivá", "siva"], "colorFamily": "grey" },
+    { "keywords": ["white", "biela"], "colorFamily": "white" },
+    { "keywords": ["black", "čierna", "cierna"], "colorFamily": "black" }
+  ],
+  "surfaceHintRules": [
+    { "keywords": ["supermat", "super matte", "soft touch", "velvet"], "surfaceHint": "supermat" },
+    { "keywords": ["lesk", "gloss", "high gloss"], "surfaceHint": "gloss" },
+    { "keywords": ["satin", "satén", "saten", "lacquer", "lak"], "surfaceHint": "satin" },
+    { "keywords": ["raw", "rustic", "rustik", "prírodné", "prirodne"], "surfaceHint": "raw" },
+    { "keywords": ["mat", "matte"], "surfaceHint": "matte" }
+  ],
+  "targetTemplateRules": [
+    { "decorFamilies": ["oak"], "targetInternalMaterialId": "wood_oak_neutral_template", "proceduralTemplate": "wood_oak_neutral" },
+    { "decorFamilies": ["walnut"], "targetInternalMaterialId": "wood_walnut_neutral_template", "proceduralTemplate": "wood_walnut_neutral" },
+    { "decorFamilies": ["ash", "birch", "beech", "maple"], "targetInternalMaterialId": "wood_fine_grain_neutral_template", "proceduralTemplate": "wood_fine_grain_neutral" },
+    { "keywords": ["rustic", "rustik", "halifax", "synchron", "deep grain"], "targetInternalMaterialId": "wood_deep_grain_neutral_template", "proceduralTemplate": "wood_deep_grain_neutral" },
+    { "keywords": ["supermat", "subtle", "modern light wood"], "targetInternalMaterialId": "wood_subtle_grain_neutral_template", "proceduralTemplate": "wood_subtle_grain_neutral" },
+    { "materialTypes": ["solid"], "targetInternalMaterialId": "solid_color_neutral_template", "proceduralTemplate": "solid_color_neutral" },
+    { "materialTypes": ["generic", "concrete", "stone", "metal"], "targetInternalMaterialId": "generic_neutral_template", "proceduralTemplate": "generic_neutral" }
+  ],
+  "grainPatternRules": [
+    { "decorFamilies": ["oak"], "grainPatternId": "oak_medium_grain" },
+    { "keywords": ["rustic", "rustik", "deep", "halifax"], "grainPatternId": "oak_deep_grain" },
+    { "decorFamilies": ["walnut"], "grainPatternId": "walnut_soft_grain" },
+    { "decorFamilies": ["ash", "birch", "beech", "maple"], "grainPatternId": "fine_light_grain" },
+    { "keywords": ["supermat", "subtle"], "grainPatternId": "subtle_modern_grain" },
+    { "materialTypes": ["solid"], "grainPatternId": "solid_no_grain" },
+    { "materialTypes": ["generic", "concrete", "stone", "metal"], "grainPatternId": "generic_noise" }
+  ],
+  "surfaceProfileRules": [
+    { "surfaceHint": "raw", "materialType": "wood", "surfaceProfile": "wood_raw_matte" },
+    { "surfaceHint": "matte", "materialType": "wood", "surfaceProfile": "wood_standard_matte" },
+    { "surfaceHint": "supermat", "materialType": "wood", "surfaceProfile": "wood_soft_touch_supermat" },
+    { "surfaceHint": "satin", "materialType": "wood", "surfaceProfile": "wood_satin_lacquer" },
+    { "surfaceHint": "gloss", "materialType": "wood", "surfaceProfile": "wood_gloss_laminate" },
+    { "materialType": "non_wood", "surfaceProfile": "generic_matte" }
+  ],
+  "colorPresetRules": [
+    { "colorFamily": "natural", "baseColorHex": "#b98a55", "grainColorHex": "#6f4425" },
+    { "colorFamily": "light", "baseColorHex": "#d3b48b", "grainColorHex": "#9b7447" },
+    { "colorFamily": "beige", "baseColorHex": "#c8b292", "grainColorHex": "#8e7352" },
+    { "colorFamily": "warm", "baseColorHex": "#b98754", "grainColorHex": "#704527" },
+    { "colorFamily": "brown", "baseColorHex": "#7a4b2a", "grainColorHex": "#3f2415" },
+    { "colorFamily": "dark", "baseColorHex": "#4a2f22", "grainColorHex": "#1f1510" },
+    { "colorFamily": "grey", "baseColorHex": "#8f8a82", "grainColorHex": "#5d5a55" },
+    { "colorFamily": "white", "baseColorHex": "#e8e2d6", "grainColorHex": "#b8b0a2" },
+    { "colorFamily": "black", "baseColorHex": "#151412", "grainColorHex": "#050505" },
+    { "colorFamily": "unknown", "baseColorHex": "#a8835a", "grainColorHex": "#6f4a2f" }
+  ]
+}

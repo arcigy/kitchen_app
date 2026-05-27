@@ -4,6 +4,7 @@ import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
 import { makeDefaultKitchenContext } from "../../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../../layout/kitchenMaterialSync";
 import { makeDefaultDrawerLowParams } from "../drawerLow/types";
+import type { DrawerLowParams } from "../drawerLow/types";
 import { buildDrawerLowParametric } from "../drawerLow/parametricGeometry";
 import materialsSnapshot from "../drawerLow/package/definitions/drawer_low.materials.snapshot.json";
 import { makeDefaultSwingShelvesLowParams } from "../swingShelvesLow/types";
@@ -42,8 +43,8 @@ describe("module runtime catalog context", () => {
   it("resolves valid materials from ClientCatalog", () => {
     const catalog = getSystemSeedCatalog();
     const ctx = createModuleRuntimeCatalogContext(catalog);
-    const material = ctx.resolveMaterial("mat.board.body.dtd.grey.18", "carcass");
-    expect(material?.id).toBe("mat.board.body.dtd.grey.18");
+    const material = ctx.resolveMaterial(catalog.kitchenDefaults.carcassMaterialId, "carcass");
+    expect(material?.id).toBe(catalog.kitchenDefaults.carcassMaterialId);
   });
 
   it("falls back through kitchen defaults, first material, then system placeholder", () => {
@@ -97,7 +98,7 @@ describe("module runtime catalog context", () => {
   it("uses each client's material catalog in drawer parametric geometry", () => {
     const clientA = getSystemSeedCatalog();
     const clientB = getSystemSeedCatalog();
-    const materialId = "mat.board.body.dtd.white.18";
+    const materialId = clientA.kitchenDefaults.carcassMaterialId!;
     clientA.materials = clientA.materials.map((material) =>
       material.id === materialId ? { ...material, preview: { ...material.preview, colorHex: "#112233" } } : material
     );
@@ -105,10 +106,11 @@ describe("module runtime catalog context", () => {
       material.id === materialId ? { ...material, preview: { ...material.preview, colorHex: "#445566" } } : material
     );
 
-    const params = makeDefaultDrawerLowParams();
+    const paramsA = applyKitchenContextToModuleParams(makeDefaultDrawerLowParams(), makeDefaultKitchenContext(clientA), clientA);
+    const paramsB = applyKitchenContextToModuleParams(makeDefaultDrawerLowParams(), makeDefaultKitchenContext(clientB), clientB);
     const snapshot = materialsSnapshot as unknown as Parameters<typeof buildDrawerLowParametric>[1];
-    const groupA = buildDrawerLowParametric(params, snapshot, clientA);
-    const groupB = buildDrawerLowParametric(params, snapshot, clientB);
+    const groupA = buildDrawerLowParametric(paramsA as DrawerLowParams, snapshot, clientA);
+    const groupB = buildDrawerLowParametric(paramsB as DrawerLowParams, snapshot, clientB);
     const leftA = groupA.getObjectByName("leftSide") as Mesh;
     const leftB = groupB.getObjectByName("leftSide") as Mesh;
 

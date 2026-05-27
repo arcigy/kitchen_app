@@ -188,6 +188,7 @@ type PropertiesRouterContext = {
   getAllMaterials: () => Material[];
   getMaterialDefinitionById: (id: string) => MaterialDefinition | null;
   catalog: ClientCatalog;
+  recordActivity?: (label: string) => void;
 };
 
 export function createPropertiesRouter(ctx: PropertiesRouterContext) {
@@ -219,7 +220,8 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     updateWindowTransform: ctx.updateWindowTransform,
     commitHistory: ctx.commitHistory,
     S: ctx.S,
-    mountProps
+    mountProps,
+    recordActivity: ctx.recordActivity
   });
   const mountWindowPlacementProps = () => {
     if (!ctx.windowPlacementParams) return ctx.showNoProps();
@@ -236,7 +238,8 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     updateDoorTransform: ctx.updateDoorTransform,
     commitHistory: ctx.commitHistory,
     S: ctx.S,
-    mountProps
+    mountProps,
+    recordActivity: ctx.recordActivity
   });
   const mountDoorPlacementProps = () => {
     if (!ctx.doorPlacementParams) return ctx.showNoProps();

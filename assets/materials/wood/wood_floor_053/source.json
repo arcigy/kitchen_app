@@ -1,0 +1,23 @@
+﻿{
+    "id":  "wood_floor_053",
+    "source":  "ambientCG",
+    "assetId":  "WoodFloor053",
+    "requestedAssetId":  "WoodFloor053",
+    "matchedAssetId":  "WoodFloor053",
+    "downloadProfile":  "2K",
+    "license":  "CC0",
+    "originalMatchedPath":  "C:\\Users\\laube\\Downloads\\WoodFloor053_2K-JPG.zip",
+    "normalConvention":  "GL",
+    "mapsFound":  {
+                      "basecolor":  true,
+                      "roughness":  true,
+                      "normal":  true,
+                      "ao":  true,
+                      "displacement":  true,
+                      "metallic":  false,
+                      "opacity":  false
+                  },
+    "notes":  [
+
+              ]
+}

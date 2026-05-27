@@ -1,0 +1,21 @@
+{
+  "id": "wood_dark_rough",
+  "source": "ambientCG",
+  "assetId": "Wood076",
+  "requestedAssetId": "Wood076",
+  "matchedAssetId": "Wood076",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood076_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": true,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

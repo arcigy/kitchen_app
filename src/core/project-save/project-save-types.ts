@@ -1,6 +1,6 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
-import type { ProjectMetadata, ProjectPhaseStatus } from "../project/project-types";
+import type { ProjectMetadata, ProjectPhaseStatus, ProjectPreview } from "../project/project-types";
 
 export const CURRENT_PROJECT_SAVE_VERSION = 1;
 
@@ -96,10 +96,12 @@ export type ProjectSaveFile = {
     modules: unknown[];
     scene: unknown;
     editor?: unknown;
+    recentActivity?: unknown;
     camera?: unknown;
     selections?: unknown;
     pricingSettings?: unknown;
     quoteSettings?: unknown;
+    projectPreview?: ProjectPreview;
   };
   assets: ProjectAssetManifest;
   integrity: {

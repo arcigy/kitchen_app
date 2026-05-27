@@ -1,0 +1,159 @@
+{
+  "objects": [
+    {
+      "objectName": "left_door",
+      "material": {
+        "vendor": "demos",
+        "vendorDecorId": "demos_master_oak_natural_matte_001",
+        "grainPatternId": "oak_medium_grain",
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.5,
+        "reflectivity": 0.35,
+        "grainDirection": "vertical"
+      }
+    },
+    {
+      "objectName": "right_door",
+      "material": {
+        "vendor": "demos",
+        "vendorDecorId": "demos_master_walnut_satin_005",
+        "surfaceProfile": "wood_satin_lacquer",
+        "colorTransform": {
+          "mode": "tint_mix",
+          "baseColorHex": "#a8754d",
+          "grainColorHex": "#4c2f1d",
+          "tintStrength": 0.25
+        },
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.6,
+        "reflectivity": 0.42,
+        "grainDirection": "vertical"
+      }
+    },
+    {
+      "objectName": "upper_door",
+      "material": {
+        "materialId": "wood_dark_espresso",
+        "surfaceProfile": "wood_satin_lacquer",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.6,
+        "reflectivity": 0.42,
+        "grainDirection": "vertical"
+      }
+    },
+    {
+      "objectName": "drawer_front",
+      "material": {
+        "vendor": "demos",
+        "vendorDecorId": "demos_master_oak_rustic_deep_004",
+        "surfaceProfile": "wood_gloss_laminate",
+        "grainPatternId": "oak_rustic_deep_grain",
+        "roughnessMultiplier": 0.85,
+        "bumpMultiplier": 1.2,
+        "colorTransform": {
+          "mode": "tint_multiply",
+          "baseColorHex": "#b98248",
+          "grainColorHex": "#3f2415",
+          "tintStrength": 0.3
+        },
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.45,
+        "reflectivity": 0.65,
+        "grainDirection": "horizontal"
+      }
+    },
+    {
+      "objectName": "worktop",
+      "material": {
+        "materialId": "stone_marble_white_grey",
+        "surfaceProfile": "stone_polished",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.7,
+        "reflectivity": 0.45,
+        "grainDirection": "lengthwise"
+      }
+    },
+    {
+      "objectName": "backsplash",
+      "material": {
+        "materialId": "tile_white_simple",
+        "surfaceProfile": "tile_satin",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.65,
+        "reflectivity": 0.35,
+        "grainDirection": "none"
+      }
+    },
+    {
+      "objectName": "handle_001",
+      "material": {
+        "materialId": "metal_brushed_steel",
+        "surfaceProfile": "metal_brushed",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.7,
+        "reflectivity": 0.65,
+        "grainDirection": "none"
+      }
+    },
+    {
+      "objectName": "handle_002",
+      "material": {
+        "materialId": "metal_black_dark",
+        "surfaceProfile": "metal_matte_black",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.55,
+        "reflectivity": 0.4,
+        "grainDirection": "none"
+      }
+    },
+    {
+      "objectName": "wall_panel",
+      "material": {
+        "materialId": "wall_beige_matte",
+        "surfaceProfile": "wall_matte",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.35,
+        "reflectivity": 0.12,
+        "grainDirection": "none"
+      }
+    },
+    {
+      "objectName": "floor_panel",
+      "material": {
+        "materialId": "stone_concrete_smooth",
+        "surfaceProfile": "stone_matte",
+        "baseColor": null,
+        "tileSizeMeters": 0.4,
+        "uvScale": 2.5,
+        "rotation": 0.0,
+        "textureStrength": 0.5,
+        "reflectivity": 0.18,
+        "grainDirection": "none"
+      }
+    }
+  ]
+}
