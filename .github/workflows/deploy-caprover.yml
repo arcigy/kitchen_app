@@ -29,7 +29,12 @@ jobs:
       - name: Create deploy archive
         run: tar -cf kitchenapp.tar captain-definition nginx.conf dist
 
-      - name: Deploy
+      - name: Deploy production
         run: npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a kitchenapp -t kitchenapp.tar
+        env:
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+
+      - name: Deploy develop
+        run: npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a arcigy-kitchen-develop -t kitchenapp.tar
         env:
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
