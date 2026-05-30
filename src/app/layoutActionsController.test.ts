@@ -134,6 +134,141 @@ describe("layout delete action", () => {
     expect(columns.ctx.deleteColumn).toHaveBeenCalledWith("c1");
   });
 
+  it("deleteSelected deletes selected module and commits once", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "module", instanceId: "m1" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteInstance).toHaveBeenCalledExactlyOnceWith("m1");
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.getSelectedInstanceId()).toBe(null);
+    expect(harness.selectedInstanceIds.size).toBe(0);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected deletes multi-selected modules as one command", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "module", instanceId: "m-primary" });
+    harness.selectedInstanceIds.add("m1");
+    harness.selectedInstanceIds.add("m2");
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteInstance).toHaveBeenCalledTimes(2);
+    expect(harness.ctx.deleteInstance).toHaveBeenNthCalledWith(1, "m1");
+    expect(harness.ctx.deleteInstance).toHaveBeenNthCalledWith(2, "m2");
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.getSelectedInstanceId()).toBe(null);
+    expect(harness.selectedInstanceIds.size).toBe(0);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected deletes selected wall when multi wall selection is empty", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteWall).toHaveBeenCalledExactlyOnceWith("w1");
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.getSelectedWallId()).toBe(null);
+    expect(harness.selectedWallIds.size).toBe(0);
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+  });
+
+  it("deleteSelected deletes multi-selected walls as one command", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w-primary" });
+    harness.selectedWallIds.add("w1");
+    harness.selectedWallIds.add("w2");
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteWall).toHaveBeenCalledTimes(2);
+    expect(harness.ctx.deleteWall).toHaveBeenNthCalledWith(1, "w1");
+    expect(harness.ctx.deleteWall).toHaveBeenNthCalledWith(2, "w2");
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.getSelectedWallId()).toBe(null);
+    expect(harness.selectedWallIds.size).toBe(0);
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+  });
+
+  it("deleteSelected routes selected window deletion", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "window" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteWindow).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected routes selected door deletion", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "door" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteDoor).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.getSelectedKind()).toBe(null);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected delegates custom furniture deletion before global selection", () => {
+    const deleteCustomFurnitureSelection = vi.fn(() => true);
+    const harness = makeController({ deleteCustomFurnitureSelection });
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteWardrobeSelection).toHaveBeenCalledTimes(1);
+    expect(deleteCustomFurnitureSelection).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.deleteWall).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected delegates wardrobe deletion before global selection", () => {
+    const deleteCustomFurnitureSelection = vi.fn(() => true);
+    const harness = makeController({
+      deleteWardrobeSelection: vi.fn(() => true),
+      deleteCustomFurnitureSelection
+    });
+    harness.setSelection({ kind: "module", instanceId: "m1" });
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteWardrobeSelection).toHaveBeenCalledTimes(1);
+    expect(deleteCustomFurnitureSelection).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteWall).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("deleteSelected returns false without mutating state when there is no supported selection", () => {
+    const harness = makeController();
+
+    expect(harness.controller.deleteSelected()).toBe(false);
+
+    expect(harness.ctx.deleteInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteWall).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteWindow).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteDoor).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteKitchenGroup).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteSectionInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteFloor).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteColumn).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteUnderlay).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
   it("routes window, door, underlay, and wardrobe deletion through the shared action", () => {
     const windowHarness = makeController();
     windowHarness.setSelection({ kind: "window" });
