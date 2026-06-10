@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { createTransformController } from "./transformController";
-import type { DoorParams, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
+import { createTransformController, type TransformControllerContext } from "./transformController";
+import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
+import { makeDefaultKitchenContext } from "../layout/kitchenContext";
 
 function makeTransformState() {
   return {
@@ -31,13 +32,77 @@ function makeTransformState() {
   };
 }
 
+function makeTransformContext(overrides: Partial<TransformControllerContext> = {}): TransformControllerContext {
+  const base: TransformControllerContext = {
+    S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+    mode: "layout",
+    viewMode: "2d",
+    layoutTool: "select",
+    measureState: { enabled: false },
+    dragState: { active: false },
+    windowDragState: { active: false },
+    doorDragState: { active: false },
+    wallEditHud: { drag: null },
+    marquee: { active: false },
+    underlayCal: { active: false },
+    selectedWallIds: new Set<string>(),
+    selectedInstanceIds: new Set<string>(),
+    selectedKind: null,
+    selectedWallId: null,
+    selectedInstanceId: null,
+    selectedSectionId: null,
+    windowInst: null,
+    doorInst: null,
+    walls: [],
+    windows: [],
+    doors: [],
+    instances: [],
+    sections: [],
+    pinnedWallIds: new Set<string>(),
+    wallJoinTolMm: 1,
+    transformState: makeTransformState(),
+    setUnderlayStatus: vi.fn(),
+    mountProps: vi.fn(),
+    rebuildWall: vi.fn(),
+    rebuildWallPlanMesh: vi.fn(),
+    updateLayoutPanel: vi.fn(),
+    updateSelectionHighlights: vi.fn(),
+    cloneSectionParams: (params: SectionInstance["params"]) => structuredClone(params),
+    updateSectionVisual: vi.fn(),
+    updateWindowTransform: vi.fn(),
+    updateDoorTransform: vi.fn(),
+    instanceWorldBox: () => new THREE.Box3(),
+    detectModuleAdjacency: () => null,
+    mmDist: (a, b) => Math.hypot(a.x - b.x, a.z - b.z),
+    findInstance: (id) => base.instances.find((instance) => instance.id === id) ?? null,
+    applyWallConstraints: (_instance, desired) => desired.clone(),
+    snapPositionDetailed: (_instance, desired) => ({ position: desired.clone() }),
+    autoOrientModuleToRoomWallIfSnapped: vi.fn(),
+    nudgePinnedModuleChain: vi.fn(),
+    instanceFitsRoom: () => true,
+    anyOverlapIgnoring: () => false,
+    anyOverlap: () => false,
+    moduleOverlapsWalls: () => false,
+    moduleOverlapsKitchenWorktops: () => false,
+    inferKitchenPlacementBinding: (instance: LayoutInstance) => instance.kitchenPlacement,
+    fromMmPoint: (point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000),
+    toMmPoint: (point) => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) })
+  };
+  Object.defineProperties(base, Object.getOwnPropertyDescriptors(overrides));
+  return base;
+}
+
+function createTestTransformController(overrides: Partial<TransformControllerContext>) {
+  return createTransformController(makeTransformContext(overrides));
+}
+
 describe("transform move tool", () => {
   it("enters Revit-style selection step when Move starts with no selection", () => {
     const transformState = makeTransformState();
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -73,10 +138,10 @@ describe("transform move tool", () => {
 
   it("keeps sticky move active after a completed move until toggled off", () => {
     const transformState = makeTransformState();
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -128,10 +193,10 @@ describe("transform move tool", () => {
     transformState.kind = "move";
     transformState.step = "selectElements";
     transformState.stickyMove = true;
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "3d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "3d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -180,10 +245,10 @@ describe("transform move tool", () => {
     } as WallInstance;
     const transformState = makeTransformState();
 
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -234,7 +299,7 @@ describe("transform move tool", () => {
         materialId: "wall"
       }
     } as WallInstance;
-    const window = {
+    const window: { id: string; params: WindowParams } = {
       id: "win1",
       params: {
         wall: "back",
@@ -260,10 +325,10 @@ describe("transform move tool", () => {
     const transformState = makeTransformState();
     const updateWindowTransform = vi.fn();
 
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -317,7 +382,7 @@ describe("transform move tool", () => {
         materialId: "wall"
       }
     } as WallInstance;
-    const window = {
+    const window: { id: string; params: WindowParams } = {
       id: "win1",
       params: {
         wall: "back",
@@ -341,10 +406,10 @@ describe("transform move tool", () => {
       }
     };
     const transformState = makeTransformState();
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },
@@ -397,7 +462,7 @@ describe("transform move tool", () => {
         materialId: "wall"
       }
     } as WallInstance;
-    const door = {
+    const door: { id: string; params: DoorParams } = {
       id: "door1",
       params: {
         wall: "back",
@@ -420,10 +485,10 @@ describe("transform move tool", () => {
     const transformState = makeTransformState();
     const updateDoorTransform = vi.fn();
 
-    const controller = createTransformController({
-      S: { kitchenCtx: {} as any, kitchenGroups: [] },
-      get mode() { return "layout"; },
-      get viewMode() { return "2d"; },
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [] },
+      get mode() { return "layout" as const; },
+      get viewMode() { return "2d" as const; },
       get layoutTool() { return "select"; },
       measureState: { enabled: false },
       dragState: { active: false },

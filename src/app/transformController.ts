@@ -1,15 +1,101 @@
 import * as THREE from "three";
-import type { DoorParams, LayoutInstance, SectionInstance, WallInstance, WallParams, WindowParams } from "./localTypes";
+import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 
-type TransformControllerContext = Record<string, any> & {
+type MmPoint = { x: number; z: number };
+type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
+type TransformStep = "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating";
+
+export type TransformState = {
+  kind: null | "move" | "rotate";
+  step: null | TransformStep;
+  stickyMove: boolean;
+  moveSnapDisabled: boolean;
+  base: THREE.Vector3 | null;
+  pivot: THREE.Vector3 | null;
+  typed: string;
+  lastAngleSign: number;
+  selectedWallIds: string[];
+  selectedInstanceIds: string[];
+  selectedSectionIds: string[];
+  selectedWindowIds: string[];
+  selectedDoorIds: string[];
+  startWalls: Map<string, WallParams>;
+  startInstances: Map<string, { pos: THREE.Vector3; rotY: number }>;
+  startInstanceAdjacency: Map<string, string | null>;
+  startSections: Map<string, SectionInstance["params"]>;
+  startWindows: Map<string, WindowParams>;
+  startDoors: Map<string, DoorParams>;
+  startPointerAngle: number;
+  lastValidDelta: THREE.Vector3;
+  lastValidAngle: number;
+};
+
+export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
   sections: SectionInstance[];
+  windows?: Array<OpeningInstance<WindowParams>>;
+  doors?: Array<OpeningInstance<DoorParams>>;
   S: {
     kitchenCtx: KitchenContext;
     kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
   };
+  mode: "build" | "layout";
+  viewMode: "2d" | "3d";
+  layoutTool: string;
+  measureState: { enabled: boolean };
+  dragState: { active: boolean };
+  windowDragState: { active: boolean };
+  doorDragState?: { active: boolean };
+  wallEditHud: { drag: unknown };
+  marquee: { active: boolean };
+  underlayCal: { active: boolean };
+  selectedWallIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedInstanceId: string | null;
+  selectedSectionId: string | null;
+  windowInst?: OpeningInstance<WindowParams> | null;
+  doorInst?: OpeningInstance<DoorParams> | null;
+  pinnedWallIds: Set<string>;
+  wallJoinTolMm: number;
+  transformState: TransformState;
+  setUnderlayStatus: (message: string) => void;
+  mountProps: () => void;
+  rebuildWall: (wall: WallInstance) => void;
+  rebuildWallPlanMesh: () => void;
+  updateLayoutPanel: () => void;
+  updateSelectionHighlights: () => void;
+  cloneSectionParams: (params: SectionInstance["params"]) => SectionInstance["params"];
+  updateSectionVisual: (section: SectionInstance) => void;
+  updateWindowTransform(window: OpeningInstance<WindowParams>): void;
+  updateDoorTransform(door: OpeningInstance<DoorParams>): void;
+  instanceWorldBox: (instance: LayoutInstance) => THREE.Box3;
+  detectModuleAdjacency: (box: THREE.Box3, otherBox: THREE.Box3, otherId: string) => unknown;
+  mmDist: (a: MmPoint, b: MmPoint) => number;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  applyWallConstraints: (instance: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  snapPositionDetailed: (
+    instance: LayoutInstance,
+    desired: THREE.Vector3,
+    opts: { ignoreIds?: Set<string>; stickyNeighborId?: string | null }
+  ) => { position: THREE.Vector3 };
+  autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
+  nudgePinnedModuleChain: (instance: LayoutInstance, delta: THREE.Vector3) => void;
+  instanceFitsRoom: (instance: LayoutInstance) => boolean;
+  anyOverlapIgnoring: (instance: LayoutInstance, ignoreIds: Set<string>) => boolean;
+  anyOverlap: (instance: LayoutInstance, selectedId: string | null) => boolean;
+  moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
+  inferKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    kitchenGroupId: string,
+    backOffsetMm: number
+  ) => LayoutInstance["kitchenPlacement"];
+  fromMmPoint: (point: MmPoint) => THREE.Vector3;
+  toMmPoint: (point: THREE.Vector3) => MmPoint;
 };
 
 type ClearTransformOptions = {
