@@ -7,6 +7,7 @@ export type ClientProfileValidationResult = {
 
 const currencies = new Set<ClientProfile["defaults"]["currency"]>(["EUR", "CZK"]);
 const languages = new Set<ClientProfile["defaults"]["language"]>(["sk", "cz", "en"]);
+const organizationRoles = new Set(["administrator", "team_member", "observer"]);
 
 export function validateClientProfile(profile: ClientProfile): ClientProfileValidationResult {
   const errors: string[] = [];
@@ -18,6 +19,20 @@ export function validateClientProfile(profile: ClientProfile): ClientProfileVali
   requireText(profile.workshop.country, "workshop.country", errors);
   requireText(profile.createdAt, "createdAt", errors);
   requireText(profile.updatedAt, "updatedAt", errors);
+  if (!profile.organization) {
+    errors.push("organization is required.");
+  } else {
+    requireText(profile.organization.name, "organization.name", errors);
+    if (profile.organization.users.length === 0) errors.push("organization.users must include at least one user.");
+
+    for (const user of profile.organization.users) {
+      requireText(user.id, "organization.users.id", errors);
+      requireText(user.name, "organization.users.name", errors);
+      requireText(user.position, "organization.users.position", errors);
+      requireText(user.photoUrl, "organization.users.photoUrl", errors);
+      if (!organizationRoles.has(user.role)) errors.push(`organization user role is invalid: ${user.role}`);
+    }
+  }
 
   if (!currencies.has(profile.defaults.currency)) errors.push("defaults.currency is invalid.");
   if (!languages.has(profile.defaults.language)) errors.push("defaults.language is invalid.");

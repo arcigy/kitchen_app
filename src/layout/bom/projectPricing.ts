@@ -4,7 +4,9 @@ import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type 
 import { getModuleDescriptor } from "../../modules/registry";
 import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
 import type { KitchenContext } from "../kitchenContext";
+import type { CustomFurnitureInstance } from "../customFurnitureTypes";
 import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
+import { createCustomFurnitureBOM } from "./customFurniturePricing";
 import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
 import { buildProjectQuoteSummary, type ProjectQuoteSettings } from "./projectQuote";
@@ -20,7 +22,7 @@ export type WorktopFormulaView = {
 
 export type ProjectPricingView = {
   instanceId: string;
-  kind: "module" | "worktop";
+  kind: "module" | "worktop" | "customFurniture";
   label: string;
   result: BOMResult;
   worktopFormula?: WorktopFormulaView;
@@ -173,6 +175,7 @@ function createWorktopBOM(worktop: KitchenWorktopInstance, index: number, catalo
 export function buildProjectPricingViews(
   instances: LayoutInstance[],
   worktops: KitchenWorktopInstance[],
+  customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
   catalog: ClientCatalog
 ): ProjectPricingView[] {
@@ -198,7 +201,14 @@ export function buildProjectPricingViews(
     worktopFormula: buildWorktopFormulaView(worktop)
   }));
 
-  return [...moduleViews, ...worktopViews];
+  const customFurnitureViews = customFurniture.map((furniture, index) => ({
+    instanceId: furniture.id,
+    kind: "customFurniture" as const,
+    label: `${furniture.params.name || "Custom furniture"} #${index + 1}`,
+    result: createCustomFurnitureBOM(furniture, catalog)
+  }));
+
+  return [...moduleViews, ...worktopViews, ...customFurnitureViews];
 }
 
 export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: Partial<ProjectQuoteSettings> | null) {

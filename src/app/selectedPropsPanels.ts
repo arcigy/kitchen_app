@@ -15,7 +15,6 @@ import type {
   FloorInstance,
   FloorParams,
   LayoutInstance,
-  OpeningHandleType,
   SectionInstance,
   SectionParams,
   WallInstance,
@@ -24,6 +23,7 @@ import type {
   WindowParams
 } from "./localTypes";
 import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
+import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberRows, appendOpeningSwingRows } from "./openingPropsPanelControls";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import {
@@ -114,6 +114,7 @@ type WindowPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type WindowPlacementPropsContext = {
@@ -130,6 +131,7 @@ type DoorPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type DoorPlacementPropsContext = {
@@ -720,62 +722,6 @@ function appendColumnParameterRows(
   });
 }
 
-type OpeningHandleEditableParams = {
-  handleType: OpeningHandleType;
-  handleOffsetMm: number;
-  handleHeightMm: number;
-};
-
-const HANDLE_TYPE_OPTIONS: Array<{ value: OpeningHandleType; label: string }> = [
-  { value: "lever", label: "Paka" },
-  { value: "knob", label: "Gula" },
-  { value: "bar", label: "Madlo" },
-  { value: "none", label: "Bez klucky" }
-];
-
-function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
-  props: PropertiesPanelApi,
-  section: HTMLElement,
-  params: T,
-  apply: (commit: boolean, patch: Partial<T>) => void
-) {
-  const typeSelect = document.createElement("select");
-  typeSelect.innerHTML = HANDLE_TYPE_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
-  typeSelect.value = params.handleType;
-  typeSelect.addEventListener("change", () => {
-    const next = HANDLE_TYPE_OPTIONS.find((option) => option.value === typeSelect.value)?.value ?? "lever";
-    params.handleType = next;
-    apply(true, { handleType: next } as Partial<T>);
-  });
-  props.row(section, "Typ klucky", typeSelect);
-
-  const numberRow = (label: string, key: "handleOffsetMm" | "handleHeightMm") => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
-    props.row(section, label, input);
-    const read = () => {
-      const next = Number(input.value);
-      if (!Number.isFinite(next)) return false;
-      params[key] = Math.max(0, Math.round(next));
-      return true;
-    };
-    input.addEventListener("input", () => {
-      if (read()) apply(false, { [key]: params[key] } as Partial<T>);
-    });
-    input.addEventListener("change", () => {
-      if (read()) apply(true, { [key]: params[key] } as Partial<T>);
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<T>);
-    });
-  };
-
-  numberRow("Vyska klucky (mm)", "handleHeightMm");
-  numberRow("Odsadenie klucky (mm)", "handleOffsetMm");
-}
-
 function appendWindowParameterRows(
   props: PropertiesPanelApi,
   section: HTMLElement,
@@ -783,120 +729,39 @@ function appendWindowParameterRows(
   apply: (commit: boolean, patch: Partial<WindowParams>) => void,
   options: { includeCenter: boolean }
 ) {
-  const numberRow = (
-    label: string,
-    key: keyof Pick<
-      WindowParams,
-      | "widthMm"
-      | "heightMm"
-      | "sillHeightMm"
-      | "centerMm"
-      | "frameWidthMm"
-      | "offsetFromInteriorMm"
-      | "sashWidthMm"
-      | "sashProfileDepthMm"
-      | "frameProfileDepthMm"
-    >
-  ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
-    props.row(section, label, input);
-    const read = () => {
-      const next = Number(input.value);
-      if (!Number.isFinite(next)) return false;
-      params[key] = Math.round(next) as never;
-      return true;
-    };
-    input.addEventListener("input", () => {
-      if (read()) apply(false, { [key]: params[key] } as Partial<WindowParams>);
-    });
-    input.addEventListener("change", () => {
-      if (read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
-    });
-  };
+  appendOpeningNumberRows(
+    props,
+    section,
+    params,
+    [
+      { label: "Sirka (mm)", key: "widthMm" },
+      { label: "Vyska (mm)", key: "heightMm" },
+      { label: "Sill height (mm)", key: "sillHeightMm" },
+      ...(options.includeCenter ? [{ label: "Poloha na stene (mm)", key: "centerMm" as const }] : []),
+      { label: "Sirka ramu (mm)", key: "frameWidthMm" },
+      { label: "Odsadenie od vnutornej plochy (mm)", key: "offsetFromInteriorMm" },
+      { label: "Sirka kridla (mm)", key: "sashWidthMm" },
+      { label: "Vyska prierezu kridla (mm)", key: "sashProfileDepthMm" },
+      { label: "Vyska prierezu ramu (mm)", key: "frameProfileDepthMm" }
+    ],
+    apply
+  );
 
-  numberRow("Sirka (mm)", "widthMm");
-  numberRow("Vyska (mm)", "heightMm");
-  numberRow("Sill height (mm)", "sillHeightMm");
-  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
-  numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
-  numberRow("Sirka kridla (mm)", "sashWidthMm");
-  numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
-  numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
-
-  const swingControls = document.createElement("div");
-  swingControls.className = "door-swing-controls";
-  const makeSwingButton = (html: string, title: string) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "door-swing-button";
-    button.innerHTML = html;
-    button.title = title;
-    return button;
-  };
-  const handednessButton = makeSwingButton("&#8596;", "Prehodit lave/prave okno");
-  const sideButton = makeSwingButton("&#8597;", "Prehodit otvaranie dovnutra/von");
-  swingControls.append(handednessButton, sideButton);
-  props.row(section, "Sipky", swingControls);
-
-  const swing = document.createElement("select");
-  swing.innerHTML = `
-    <option value="left">Lave</option>
-    <option value="right">Prave</option>
-  `;
-  swing.value = params.swingDirection;
-  const swingSide = document.createElement("select");
-  swingSide.innerHTML = `
-    <option value="inward">Dovnutra</option>
-    <option value="outward">Von</option>
-  `;
-  swingSide.value = params.swingSide;
-  const syncSwingControls = () => {
-    swing.value = params.swingDirection;
-    swingSide.value = params.swingSide;
-    handednessButton.title = params.swingDirection === "right" ? "Prehodit na lave okno" : "Prehodit na prave okno";
-    sideButton.title = params.swingSide === "outward" ? "Prehodit otvaranie dovnutra" : "Prehodit otvaranie von";
-  };
-  handednessButton.addEventListener("click", () => {
-    params.swingDirection = params.swingDirection === "right" ? "left" : "right";
-    syncSwingControls();
-    apply(true, { swingDirection: params.swingDirection });
+  appendOpeningSwingRows(props, section, params, apply, {
+    controlsRow: "Sipky",
+    directionRow: "Otvaranie",
+    sideRow: "Smer",
+    handednessButton: "Prehodit lave/prave okno",
+    sideButton: "Prehodit otvaranie dovnutra/von",
+    handednessToLeft: "Prehodit na lave okno",
+    handednessToRight: "Prehodit na prave okno",
+    sideToInward: "Prehodit otvaranie dovnutra",
+    sideToOutward: "Prehodit otvaranie von"
   });
-  sideButton.addEventListener("click", () => {
-    params.swingSide = params.swingSide === "outward" ? "inward" : "outward";
-    syncSwingControls();
-    apply(true, { swingSide: params.swingSide });
-  });
-  swing.addEventListener("change", () => {
-    params.swingDirection = swing.value === "right" ? "right" : "left";
-    syncSwingControls();
-    apply(true, { swingDirection: params.swingDirection });
-  });
-  props.row(section, "Otvaranie", swing);
-  swingSide.addEventListener("change", () => {
-    params.swingSide = swingSide.value === "outward" ? "outward" : "inward";
-    syncSwingControls();
-    apply(true, { swingSide: params.swingSide });
-  });
-  props.row(section, "Smer", swingSide);
-  syncSwingControls();
 
   appendOpeningHandleRows(props, section, params, apply);
 
-  const material = document.createElement("select");
-  material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
-  material.value = params.materialId;
-  material.addEventListener("change", () => {
-    params.materialId = material.value;
-    apply(true, { materialId: material.value });
-  });
-  props.row(section, "Material", material);
+  appendOpeningMaterialRow(props, section, params, WINDOW_MATERIAL_OPTIONS, apply);
 }
 
 export function mountWindowPlacementPropsPanel(ctx: WindowPlacementPropsContext) {
@@ -940,6 +805,7 @@ export function mountWindowPropsPanel(ctx: WindowPropsContext) {
       ctx.updateWindowTransform(windowInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Window updated");
         ctx.mountProps();
       }
     },
@@ -954,116 +820,40 @@ function appendDoorParameterRows(
   apply: (commit: boolean, patch: Partial<DoorParams>) => void,
   options: { includeCenter: boolean }
 ) {
-  const numberRow = (
-    label: string,
-    key: keyof Pick<
-      DoorParams,
-      "widthMm" | "heightMm" | "centerMm" | "frameWidthMm" | "offsetFromInteriorMm" | "panelThicknessMm" | "swingAngleDeg"
-    >
-  ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
-    props.row(section, label, input);
-    const read = () => {
-      const next = Number(input.value);
-      if (!Number.isFinite(next)) return false;
-      params[key] = Math.round(next) as never;
-      return true;
-    };
-    input.addEventListener("input", () => {
-      if (read()) apply(false, { [key]: params[key] } as Partial<DoorParams>);
-    });
-    input.addEventListener("change", () => {
-      if (read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
-    });
-  };
+  appendOpeningNumberRows(
+    props,
+    section,
+    params,
+    [
+      { label: "Sirka (mm)", key: "widthMm" },
+      { label: "Vyska (mm)", key: "heightMm" },
+      ...(options.includeCenter ? [{ label: "Poloha na stene (mm)", key: "centerMm" as const }] : []),
+      { label: "Sirka ramu (mm)", key: "frameWidthMm" },
+      { label: "Odsadenie kridla (mm)", key: "offsetFromInteriorMm" },
+      { label: "Hrubka kridla (mm)", key: "panelThicknessMm" },
+      { label: "Uhol otvorenia", key: "swingAngleDeg" }
+    ],
+    apply
+  );
 
-  numberRow("Sirka (mm)", "widthMm");
-  numberRow("Vyska (mm)", "heightMm");
-  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
-  numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie kridla (mm)", "offsetFromInteriorMm");
-  numberRow("Hrubka kridla (mm)", "panelThicknessMm");
-  numberRow("Uhol otvorenia", "swingAngleDeg");
-
-  const swingControls = document.createElement("div");
-  swingControls.className = "door-swing-controls";
-  const makeSwingButton = (html: string, label: string) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "door-swing-button";
-    button.innerHTML = html;
-    button.title = label;
-    button.setAttribute("aria-label", label);
-    return button;
-  };
-  const handednessButton = makeSwingButton("&#8596;", "Prehodit lave/prave dvere");
-  const sideButton = makeSwingButton("&#8597;", "Prehodit otvaranie dovnutra/von");
-  swingControls.append(handednessButton, sideButton);
-  props.row(section, "Sipky", swingControls);
-
-  const swing = document.createElement("select");
-  swing.innerHTML = `
-    <option value="left">Lave</option>
-    <option value="right">Prave</option>
-  `;
-  swing.value = params.swingDirection;
-
-  const swingSide = document.createElement("select");
-  swingSide.innerHTML = `
-    <option value="inward">Dovnutra</option>
-    <option value="outward">Von</option>
-  `;
-  swingSide.value = params.swingSide;
-
-  const syncSwingControls = () => {
-    swing.value = params.swingDirection;
-    swingSide.value = params.swingSide;
-    handednessButton.title = params.swingDirection === "right" ? "Prehodit na lave dvere" : "Prehodit na prave dvere";
-    sideButton.title = params.swingSide === "outward" ? "Prehodit otvaranie dovnutra" : "Prehodit otvaranie von";
-  };
-
-  handednessButton.addEventListener("click", () => {
-    params.swingDirection = params.swingDirection === "right" ? "left" : "right";
-    syncSwingControls();
-    apply(true, { swingDirection: params.swingDirection });
+  appendOpeningSwingRows(props, section, params, apply, {
+    controlsRow: "Sipky",
+    directionRow: "Otvaranie",
+    sideRow: "Smer",
+    handednessButton: "Prehodit lave/prave dvere",
+    sideButton: "Prehodit otvaranie dovnutra/von",
+    handednessToLeft: "Prehodit na lave dvere",
+    handednessToRight: "Prehodit na prave dvere",
+    sideToInward: "Prehodit otvaranie dovnutra",
+    sideToOutward: "Prehodit otvaranie von",
+    includeButtonAriaLabel: true
   });
-  sideButton.addEventListener("click", () => {
-    params.swingSide = params.swingSide === "outward" ? "inward" : "outward";
-    syncSwingControls();
-    apply(true, { swingSide: params.swingSide });
-  });
-  swing.addEventListener("change", () => {
-    params.swingDirection = swing.value === "right" ? "right" : "left";
-    syncSwingControls();
-    apply(true, { swingDirection: params.swingDirection });
-  });
-  props.row(section, "Otvaranie", swing);
-  swingSide.addEventListener("change", () => {
-    params.swingSide = swingSide.value === "outward" ? "outward" : "inward";
-    syncSwingControls();
-    apply(true, { swingSide: params.swingSide });
-  });
-  props.row(section, "Smer", swingSide);
-  syncSwingControls();
 
   appendOpeningHandleRows(props, section, params, apply);
 
-  const material = document.createElement("select");
-  material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
-  params.materialId = getDoorMaterialOption(params.materialId).id;
-  material.value = params.materialId;
-  material.addEventListener("change", () => {
-    params.materialId = getDoorMaterialOption(material.value).id;
-    material.value = params.materialId;
-    apply(true, { materialId: material.value });
+  appendOpeningMaterialRow(props, section, params, DOOR_MATERIAL_OPTIONS, apply, {
+    normalize: (value) => getDoorMaterialOption(value).id
   });
-  props.row(section, "Material", material);
 }
 
 export function mountDoorPlacementPropsPanel(ctx: DoorPlacementPropsContext) {
@@ -1107,6 +897,7 @@ export function mountDoorPropsPanel(ctx: DoorPropsContext) {
       ctx.updateDoorTransform(doorInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Door updated");
         ctx.mountProps();
       }
     },

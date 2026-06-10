@@ -27,6 +27,8 @@ Scope: whole repository.
 
 ## Required Checks
 
+- Every implemented feature, fix, or user-reported behavior correction needs a focused regression test that protects the working behavior.
+
 Run after structural or UI changes:
 
 ```bash

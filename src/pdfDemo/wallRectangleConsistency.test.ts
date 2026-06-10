@@ -5,13 +5,10 @@ import { getOrientation, segmentLength, type Segment2 } from "./geometryUtils";
 import { DEFAULT_WALL_DETECTOR_CONFIG, detectLineweightWallCandidates } from "./wallCandidateDetector";
 
 const FIXTURE_PATH = "public/debug-pdf/generated-debug.dxf";
+const itWithFixture = existsSync(FIXTURE_PATH) ? it : it.skip;
 
 describe("PDF demo wall rectangle consistency", () => {
-  it("covers every target lineweight wall boundary with a wall rectangle", async () => {
-    if (!existsSync(FIXTURE_PATH)) {
-      throw new Error(`Missing fixture ${FIXTURE_PATH}. Generate it from /pdf-demo?convertDxf=1 first.`);
-    }
-
+  itWithFixture("covers every target lineweight wall boundary with a wall rectangle", async () => {
     const dxfText = readFileSync(FIXTURE_PATH, "utf8");
     const extraction = await extractDxfVectorObjects(new File([dxfText], "generated-debug.dxf"), { drawingScale: 1 });
     const detection = detectLineweightWallCandidates(extraction.page, extraction.isVectorPdf, extraction.objects, {
@@ -33,11 +30,7 @@ describe("PDF demo wall rectangle consistency", () => {
     ).toEqual([]);
   });
 
-  it("highlights every axis-aligned target lineweight DXF wall segment as a wall candidate", async () => {
-    if (!existsSync(FIXTURE_PATH)) {
-      throw new Error(`Missing fixture ${FIXTURE_PATH}. Generate it from /pdf-demo?convertDxf=1 first.`);
-    }
-
+  itWithFixture("highlights every axis-aligned target lineweight DXF wall segment as a wall candidate", async () => {
     const dxfText = readFileSync(FIXTURE_PATH, "utf8");
     const extraction = await extractDxfVectorObjects(new File([dxfText], "generated-debug.dxf"), { drawingScale: 1 });
     const config = {

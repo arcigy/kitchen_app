@@ -5,6 +5,11 @@ export type VisibilityTarget = {
   root: THREE.Object3D | THREE.Object3D[];
 };
 
+export type VisibilitySaveState = {
+  hiddenKeys: string[];
+  showHidden: boolean;
+};
+
 type MaterialState = {
   transparent: boolean;
   opacity: number;
@@ -32,6 +37,7 @@ export function createVisibilityController(args: {
   getAllTargets: () => VisibilityTarget[];
   getSelectedTargetKeys: () => string[];
   onChanged: () => void;
+  recordActivity?: (label: string) => void;
 }) {
   const hiddenKeys = new Set<string>();
   const materialStates = new WeakMap<THREE.Material, MaterialState>();
@@ -110,9 +116,10 @@ export function createVisibilityController(args: {
     return true;
   };
 
-  const notify = () => {
+  const notify = (label?: string) => {
     sync();
     args.onChanged();
+    if (label) args.recordActivity?.(label);
   };
 
   return {
@@ -129,19 +136,21 @@ export function createVisibilityController(args: {
     isObjectPickable,
     setShowHidden(next: boolean) {
       showHidden = next;
-      notify();
+      notify(showHidden ? "Hidden objects shown" : "Hidden objects hidden");
     },
     toggleShowHidden() {
       showHidden = !showHidden;
-      notify();
+      notify(showHidden ? "Hidden objects shown" : "Hidden objects hidden");
     },
     hideSelected() {
-      for (const key of getSelectedKeys()) hiddenKeys.add(key);
-      notify();
+      const keys = getSelectedKeys();
+      for (const key of keys) hiddenKeys.add(key);
+      notify(keys.length > 1 ? `${keys.length} objects hidden` : "Object hidden");
     },
     unhideSelected() {
-      for (const key of getSelectedKeys()) hiddenKeys.delete(key);
-      notify();
+      const keys = getSelectedKeys();
+      for (const key of keys) hiddenKeys.delete(key);
+      notify(keys.length > 1 ? `${keys.length} objects shown` : "Object shown");
     },
     isolateSelected() {
       const selected = new Set(getSelectedKeys());
@@ -150,13 +159,31 @@ export function createVisibilityController(args: {
         if (selected.has(target.key)) hiddenKeys.delete(target.key);
         else hiddenKeys.add(target.key);
       }
-      notify();
+      notify(selected.size > 1 ? `${selected.size} objects isolated` : "Object isolated");
     },
     unhideAll() {
       hiddenKeys.clear();
       showHidden = false;
-      notify();
+      notify("All objects shown");
     },
-    sync
+    sync,
+    getSaveState(): VisibilitySaveState {
+      return {
+        hiddenKeys: Array.from(hiddenKeys),
+        showHidden
+      };
+    },
+    restoreSaveState(state: unknown) {
+      const saved = state as Partial<VisibilitySaveState> | null | undefined;
+      hiddenKeys.clear();
+      if (Array.isArray(saved?.hiddenKeys)) {
+        for (const key of saved.hiddenKeys) {
+          if (typeof key === "string" && key.trim()) hiddenKeys.add(key);
+        }
+      }
+      showHidden = saved?.showHidden === true;
+      sync();
+      args.onChanged();
+    }
   };
 }

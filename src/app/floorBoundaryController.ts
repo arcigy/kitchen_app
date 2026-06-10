@@ -25,6 +25,7 @@ import type {
 } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import { clearDrawingToolSelection } from "./selectionController";
 
 type FloorEditState = {
   active: boolean;
@@ -237,12 +238,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     ctx.floorEdit.selectedVertex = null;
     ctx.floorEdit.drag = null;
     ctx.floorEdit.error = "";
-    ctx.selectedKind = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceIds.clear();
-    ctx.setInstanceSelected(null);
+    clearDrawingToolSelection(ctx);
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
     renderFloorBoundaryEdit();

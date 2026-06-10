@@ -10,6 +10,12 @@ type CameraProofParams = {
   pitchDeg: number;
 };
 
+export type CameraPlacementSaveState = {
+  cameras: Array<{ id: string; params: CameraProofParams }>;
+  selectedId: string | null;
+  counter: number;
+};
+
 type CameraProofInstance = {
   id: string;
   params: CameraProofParams;
@@ -26,6 +32,7 @@ type CameraPlacementControllerContext = {
   propertiesEl: HTMLElement;
   ensureFloorplanView?: () => void;
   onCamerasChanged?: () => void;
+  recordActivity?: (label: string) => void;
   setStatus: (text: string) => void;
   commitHistory: () => void;
 };
@@ -297,6 +304,7 @@ export function createCameraPlacementController(ctx: CameraPlacementControllerCo
         updateCameraVisual(camera);
       });
       input.addEventListener("change", () => ctx.commitHistory());
+      input.addEventListener("change", () => ctx.recordActivity?.("Camera updated"));
     });
     section.querySelector<HTMLButtonElement>("[data-camera-action='place']")?.addEventListener("click", () => activate());
   };
@@ -327,6 +335,7 @@ export function createCameraPlacementController(ctx: CameraPlacementControllerCo
     renderProps();
     ctx.onCamerasChanged?.();
     ctx.commitHistory();
+    ctx.recordActivity?.("Camera added");
   };
 
   const updateDraftDirection = (directionPoint: THREE.Vector3) => {
@@ -412,6 +421,7 @@ export function createCameraPlacementController(ctx: CameraPlacementControllerCo
     }
     if (activeViewId) ctx.renderer.domElement.style.cursor = "grab";
     ctx.commitHistory();
+    ctx.recordActivity?.("Camera view updated");
   };
 
   ctx.renderer.domElement.addEventListener("pointerdown", onPointerDown, true);
@@ -437,6 +447,48 @@ export function createCameraPlacementController(ctx: CameraPlacementControllerCo
     ctx.renderer.domElement.removeEventListener("pointerup", onPointerUp, true);
     if (draft) disposeCameraVisual(draft);
     overlay?.remove();
+  };
+
+  const clearCameras = () => {
+    if (draft) {
+      disposeCameraVisual(draft);
+      draft = null;
+    }
+    for (const camera of cameras.splice(0, cameras.length)) disposeCameraVisual(camera);
+    selectedId = null;
+    activeViewId = null;
+    viewDrag = null;
+    setOverlayVisible(false);
+  };
+
+  const restoreSaveState = (state: unknown) => {
+    clearCameras();
+    const saved = state as Partial<CameraPlacementSaveState> | null | undefined;
+    if (Array.isArray(saved?.cameras)) {
+      for (const item of saved.cameras) {
+        if (!item || typeof item.id !== "string" || !item.params) continue;
+        const params = item.params as Partial<CameraProofParams>;
+        const instance = createCameraVisual(item.id, {
+          name: typeof params.name === "string" && params.name.trim() ? params.name : "Camera",
+          xMm: Number.isFinite(params.xMm) ? Number(params.xMm) : 0,
+          zMm: Number.isFinite(params.zMm) ? Number(params.zMm) : 0,
+          heightMm: Number.isFinite(params.heightMm) ? clamp(Number(params.heightMm), 100, 3000) : DEFAULT_HEIGHT_MM,
+          fovDeg: Number.isFinite(params.fovDeg) ? clamp(Number(params.fovDeg), 20, 120) : DEFAULT_FOV_DEG,
+          rotationDeg: Number.isFinite(params.rotationDeg) ? Number(params.rotationDeg) : 0,
+          pitchDeg: Number.isFinite(params.pitchDeg) ? clamp(Number(params.pitchDeg), -80, 80) : DEFAULT_PITCH_DEG
+        });
+        cameras.push(instance);
+        ctx.layoutRoot.add(instance.root);
+      }
+    }
+    selectedId = typeof saved?.selectedId === "string" && cameras.some((camera) => camera.id === saved.selectedId) ? saved.selectedId : cameras.at(-1)?.id ?? null;
+    counter = Math.max(
+      Number.isFinite(saved?.counter) ? Number(saved?.counter) : 1,
+      ...cameras.map((camera) => Number(camera.id.replace(/\D/g, "")) + 1).filter(Number.isFinite),
+      1
+    );
+    ctx.onCamerasChanged?.();
+    renderProps();
   };
 
   return {
@@ -502,6 +554,13 @@ export function createCameraPlacementController(ctx: CameraPlacementControllerCo
       renderProps();
       return true;
     },
-    getCameras: () => cameras.map((camera) => ({ id: camera.id, params: { ...camera.params } }))
+    getCameras: () => cameras.map((camera) => ({ id: camera.id, params: { ...camera.params } })),
+    getSaveState: (): CameraPlacementSaveState => ({
+      cameras: cameras.map((camera) => ({ id: camera.id, params: { ...camera.params } })),
+      selectedId,
+      counter
+    }),
+    restoreSaveState,
+    clearCameras
   };
 }

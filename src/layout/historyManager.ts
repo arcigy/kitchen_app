@@ -5,11 +5,14 @@ import type {
   WallParams,
   ModuleParams,
   WallInstance,
+  LayoutInstance,
   KitchenWorktopParams,
   KitchenPlacementBinding,
   SectionParams,
   ColumnParams
 } from "./appState";
+import type { CustomFurnitureSnapshotItem } from "./customFurnitureTypes";
+import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 import { getKitchenModuleRole } from "./kitchenModuleRules";
 
 export interface HistoryHelpers {
@@ -19,7 +22,7 @@ export interface HistoryHelpers {
   setSelectedModule: (id: string | null) => void;
   updateSelectionHighlights: () => void;
   disposeObject3D: (obj: THREE.Object3D) => void;
-  createInstance: (params: ModuleParams, opts: { id?: string }) => any; // Return type to match your LayoutInstance
+  createInstance: (params: ModuleParams, opts: { id?: string }) => LayoutInstance;
   createWallMesh: (a: THREE.Vector3, b: THREE.Vector3, thickness: number, heightMm?: number) => THREE.Mesh;
   createWallOutline: (geometry: THREE.BufferGeometry, wallId?: string) => THREE.LineSegments;
   rebuildWall: (inst: WallInstance) => void;
@@ -31,6 +34,8 @@ export interface HistoryHelpers {
     worktops: NonNullable<LayoutSnapshot["worktops"]>,
     worktopCounter?: number
   ) => void;
+  restoreCustomFurniture?: (items: CustomFurnitureSnapshotItem[], customFurnitureCounter?: number) => void;
+  restoreWardrobe?: (state: WardrobeEditSaveState | null | undefined) => void;
   clearToolHud: () => void;
   mountProps: () => void;
   updateLayoutPanel: () => void;
@@ -41,7 +46,7 @@ export interface HistoryHelpers {
 export const snapshotSignature = (s: LayoutSnapshot) => {
   // Compact-ish signature to skip duplicates
   const w = s.walls
-    .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.typeId ?? ""}:${x.params.thicknessMm}:${x.params.heightMm}:${x.params.materialId ?? ""}:${(x.params as any).justification ?? "center"}:${x.params.exteriorSign ?? 1}:${JSON.stringify(x.params.joinEnds ?? {})}`)
+    .map((x) => `${x.id}:${x.params.aMm.x},${x.params.aMm.z}-${x.params.bMm.x},${x.params.bMm.z}:${x.params.typeId ?? ""}:${x.params.thicknessMm}:${x.params.heightMm}:${x.params.materialId ?? ""}:${x.params.justification ?? "center"}:${x.params.exteriorSign ?? 1}:${JSON.stringify(x.params.joinEnds ?? {})}`)
     .join("|");
   const mods = (s.instances ?? [])
     .map(
@@ -66,8 +71,12 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
           .join(";")}`
     )
     .join("|");
+  const customFurniture = (s.customFurniture ?? [])
+    .map((item) => `${item.id}:${JSON.stringify(item.params)}`)
+    .join("|");
+  const wardrobe = s.wardrobe ? JSON.stringify(s.wardrobe) : "";
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${mods}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${customFurniture}::${wardrobe}::${mods}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -84,8 +93,7 @@ const getRestoredInstanceY = (S: AppState, m: LayoutSnapshot["instances"][number
   return 0;
 };
 
-export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap: LayoutSnapshot) => {
-  // Clear selection visuals first
+export const clearSelectionBeforeSnapshotRestore = (S: AppState, helpers: Pick<HistoryHelpers, "setSelectedWall" | "setSelectedModule" | "setSelectedColumn" | "setSelectedSection" | "updateSelectionHighlights">) => {
   helpers.setSelectedWall(null);
   helpers.setSelectedModule(null);
   helpers.setSelectedColumn?.(null);
@@ -93,6 +101,11 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   S.selectedWallIds.clear();
   S.selectedInstanceIds.clear();
   helpers.updateSelectionHighlights();
+};
+
+export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap: LayoutSnapshot) => {
+  // Clear selection visuals first
+  clearSelectionBeforeSnapshotRestore(S, helpers);
 
   // Clear wall roots
   for (const w of S.walls.splice(0, S.walls.length)) {
@@ -105,6 +118,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   S.columnCounter = snap.columnCounter ?? S.columnCounter;
   S.sectionCounter = snap.sectionCounter ?? S.sectionCounter;
   S.worktopCounter = snap.worktopCounter ?? S.worktopCounter;
+  S.customFurnitureCounter = snap.customFurnitureCounter ?? S.customFurnitureCounter;
   S.instanceCounter = snap.instanceCounter ?? S.instanceCounter;
 
   S.pinnedWallIds.clear();
@@ -122,6 +136,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   if (helpers.restoreWorktops) {
     helpers.restoreWorktops(snap.worktops ?? [], snap.worktopCounter);
   }
+  helpers.restoreCustomFurniture?.(snap.customFurniture ?? [], snap.customFurnitureCounter);
+  helpers.restoreWardrobe?.(snap.wardrobe ?? null);
 
   // Clear modules
   for (const inst of S.instances.splice(0, S.instances.length)) {
@@ -211,6 +227,9 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       kitchenGroupId: worktop.kitchenGroupId,
       params: copyWorktopParams(worktop.params)
     })),
+    customFurnitureCounter: S.customFurnitureCounter,
+    customFurniture: S.customFurniture.map((item) => ({ id: item.id, params: JSON.parse(JSON.stringify(item.params)) })),
+    wardrobe: S.wardrobeHistory?.getSaveState() ?? null,
     instanceCounter: S.instanceCounter,
     instances: S.instances.map((i) => ({
       id: i.id,

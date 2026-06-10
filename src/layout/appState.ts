@@ -4,6 +4,8 @@ export type { ModuleParams };
 import type { SsgiPipeline } from "../rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
+import type { CustomFurnitureInstance, CustomFurnitureParams } from "./customFurnitureTypes";
+import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
@@ -13,6 +15,10 @@ export type WallId = "back" | "left" | "right";
 export type DoorSwingDirection = "left" | "right";
 export type DoorSwingSide = "inward" | "outward";
 export type OpeningHandleType = "lever" | "knob" | "bar" | "none";
+export type PolygonClipPoint = [number, number];
+export type PolygonClipRing = PolygonClipPoint[];
+export type PolygonClipPolygon = PolygonClipRing[];
+export type PolygonClipMultiPolygon = PolygonClipPolygon[];
 
 export type WindowParams = {
   wall: WallId;
@@ -84,6 +90,9 @@ export type LayoutSnapshot = {
   sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
   worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
+  customFurnitureCounter?: number;
+  customFurniture?: Array<{ id: string; params: CustomFurnitureParams }>;
+  wardrobe?: WardrobeEditSaveState | null;
   instanceCounter: number;
   instances: Array<{
     id: string;
@@ -251,7 +260,7 @@ export interface AppState {
   wallPlanUnionMesh: THREE.Mesh | null;
   wallDebugEnabled: boolean;
   wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>>;
-  wallUnionPolys: any | null;
+  wallUnionPolys: PolygonClipMultiPolygon | null;
   floors: FloorInstance[];
   floorCounter: number;
   columns: ColumnInstance[];
@@ -260,6 +269,9 @@ export interface AppState {
   sectionCounter: number;
   kitchenWorktops: KitchenWorktopInstance[];
   worktopCounter: number;
+  customFurniture: CustomFurnitureInstance[];
+  customFurnitureCounter: number;
+  wardrobeHistory: { getSaveState: () => WardrobeEditSaveState | null } | null;
 
   // Layout instances
   instances: LayoutInstance[];
@@ -346,6 +358,9 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     sectionCounter: 1,
     kitchenWorktops: [],
     worktopCounter: 1,
+    customFurniture: [],
+    customFurnitureCounter: 1,
+    wardrobeHistory: null,
 
     instances: [],
     instanceCounter: 1,

@@ -41,6 +41,61 @@ const sendText = (res: http.ServerResponse, status: number, text: string) => {
   res.end(text);
 };
 
+const STATIC_MIME_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2"
+};
+
+const getStaticMimeType = (filePath: string): string => {
+  return STATIC_MIME_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
+};
+
+const resolveStaticFilePath = (staticRoot: string, pathname: string): string | null => {
+  const decoded = decodeURIComponent(pathname);
+  const relativePath = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
+  const normalized = path.normalize(relativePath);
+  if (normalized.startsWith("..") || path.isAbsolute(normalized)) return null;
+  return path.join(staticRoot, normalized);
+};
+
+const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> => {
+  const staticRoot = process.env.KITCHEN_STATIC_ROOT;
+  if (!staticRoot || (req.method !== "GET" && req.method !== "HEAD")) return false;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/storage/")) return false;
+
+  const requestedFile = resolveStaticFilePath(staticRoot, url.pathname);
+  if (!requestedFile) return sendText(res, 400, "Invalid static path."), true;
+
+  try {
+    await access(requestedFile);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", getStaticMimeType(requestedFile));
+    res.setHeader("Cache-Control", requestedFile.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable");
+    if (req.method === "HEAD") return res.end(), true;
+    res.end(await readFile(requestedFile));
+    return true;
+  } catch {
+    const indexPath = path.join(staticRoot, "index.html");
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    if (req.method === "HEAD") return res.end(), true;
+    res.end(await readFile(indexPath));
+    return true;
+  }
+};
+
 const port = Number(process.env.BLENDER_WORKER_PORT || 5191);
 const host = process.env.BLENDER_WORKER_HOST || "127.0.0.1";
 
@@ -659,6 +714,8 @@ export function startWorkerServer() {
         await getValidatedClientContext(req.headers.cookie);
         return await handlePageVisionValidator(req, res, readJsonBody, sendJson);
       }
+
+      if (await serveStaticApp(req, res, url)) return;
 
       return sendText(res, 404, "Not found");
     } catch (err: unknown) {

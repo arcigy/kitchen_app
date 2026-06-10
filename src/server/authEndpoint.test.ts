@@ -110,6 +110,34 @@ describe("auth endpoints", () => {
     expect((res.body as { ok: boolean }).ok).toBe(true);
   });
 
+  it("logs in Andrej with organization credentials", async () => {
+    const res = mockRes();
+    await handleAuthLogin(mockReq(), res, readBody({ username: "andrej", password: "andrej2026" }), sendJson, {
+      userService: createTestUserService(),
+      loginRateLimiter: createLoginRateLimiter()
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cookie = String(res.headers["Set-Cookie"]);
+    const session = parseClientSessionCookie(cookie);
+    expect(session?.userId).toBe("user_andrej");
+    expect(session?.displayName).toBe("Andrej");
+  });
+
+  it("logs in Branislav with his organization credentials", async () => {
+    const res = mockRes();
+    await handleAuthLogin(mockReq(), res, readBody({ username: "branislav", password: "branislav2026" }), sendJson, {
+      userService: createTestUserService(),
+      loginRateLimiter: createLoginRateLimiter()
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cookie = String(res.headers["Set-Cookie"]);
+    const session = parseClientSessionCookie(cookie);
+    expect(session?.userId).toBe("user_arcigy_owner");
+    expect(session?.displayName).toBe("Branislav");
+  });
+
   it("rejects inactive user with safe error", async () => {
     const inactiveUser = { ...seedAuthUsers[0]!, username: "inactive", isActive: false };
     const res = mockRes();

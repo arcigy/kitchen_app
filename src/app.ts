@@ -158,6 +158,7 @@ import { createKitchenEditMode } from "./layout/kitchenEditMode";
 import { createWardrobeEditMode } from "./layout/wardrobeEditMode";
 import {
   updateUndoRedoUi,
+  snapshotSignature,
   commitHistory,
   undo,
   redo,
@@ -181,6 +182,8 @@ import {
 import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
+import { createProjectAutosaveController } from "./app/project/projectAutosave";
+import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
 import { renderAppFrame } from "./app/frameRenderer";
@@ -221,6 +224,7 @@ import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createDoorControlsController } from "./app/doorControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
+import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
@@ -237,21 +241,28 @@ import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
 import { createColumnController } from "./app/columnController";
 import { createKitchenWorktopSelectionController } from "./app/kitchenWorktopSelectionController";
+import { createCustomFurnitureController } from "./app/customFurnitureController";
 import { createMaterialModifyController } from "./app/materialModifyController";
 import { createDemosLivePreviewColorController } from "./app/demosLivePreviewColor";
 import { createCameraPlacementController } from "./app/cameraPlacementController";
 import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
+import { createRecentActivityController } from "./app/recentActivityController";
+import { setupMagneticButtons } from "./app/magneticButtons";
+import { createViewerToolModeController } from "./app/viewerToolModeController";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
+import { organizationUserName } from "./core/client/organization-users";
 import {
   createDefaultModulePackageParameters,
   resolveModulePackageComponentAssignments,
   resolveModulePackageMaterialAssignments
 } from "./core/module-package/runtime/module-runtime-adapter";
 import { createModulePackageControls, findModulePackageForParams } from "./core/module-package/runtime/module-package-controls";
+import type { CustomFurnitureInstance } from "./layout/customFurnitureTypes";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
+  setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
 
@@ -292,6 +303,8 @@ export function startApp(initialArgs: AppArgs) {
     renderer,
     setSize,
     setViewMode,
+    set3dProjection,
+    get3dProjection,
     setPlanPresentation,
     getCamera,
     getControls,
@@ -320,9 +333,22 @@ export function startApp(initialArgs: AppArgs) {
   type AppMode = "build" | "layout";
   let mode: AppMode = "layout";
   let viewMode: "3d" | "2d" = "3d";
-  const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs } = createViewerTabs(args.viewerEl);
+  const { floorplanTab, view3dTab, setExtraTabs, syncViewerTabs: syncViewerTabsBase } = createViewerTabs(args.viewerEl);
   const viewDisplay = createViewDisplayController(scene);
   let activeViewerTab = "3d";
+  const syncBottomViewList = (activeKey: string) => {
+    document.querySelectorAll<HTMLButtonElement>("[data-bottom-view-key]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.bottomViewKey === activeKey);
+    });
+  };
+  const syncViewerTabs = (activeKey: string) => {
+    syncViewerTabsBase(activeKey);
+    syncBottomViewList(activeKey);
+  };
+  let viewerToolModeController: ReturnType<typeof createViewerToolModeController> | null = null;
+  const getViewerToolMode = () => viewerToolModeController?.getToolMode() ?? "select";
+  const setViewerPanActive = (active: boolean) => viewerToolModeController?.setPanActive(active);
+  const cancelViewerToolMode = () => viewerToolModeController?.cancel();
 
   type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
@@ -349,6 +375,7 @@ export function startApp(initialArgs: AppArgs) {
 
   let cabinetGroup: THREE.Group | null = null;
   const hiddenParts = new Set<string>();
+  let recordRecentActivity = (_label: string) => {};
 
   const setViewerDisplayMode = (displayMode: ReturnType<typeof viewDisplay.getMode>) => {
     viewDisplay.setMode(displayMode);
@@ -364,6 +391,7 @@ export function startApp(initialArgs: AppArgs) {
       photoLastLightingRevision = -1;
     }
     syncViewerDownbar();
+    recordRecentActivity(`Visualisation set to ${displayMode}`);
   };
 
   const layoutRoot = new THREE.Group();
@@ -402,7 +430,7 @@ export function startApp(initialArgs: AppArgs) {
   let wallDebugEnabled = false;
   const wallSolvedOutlines = new Map<string, Array<{ x: number; z: number }>>();
   let wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>> = [];
-  let wallUnionPolys: any | null = null;
+  let wallUnionPolys: WallPlanMultiPolygon | null = null;
 
   const { wallSnapMarkers, showWallSnapMarkersFor } = createWallSnapMarkers({
     layoutRoot,
@@ -476,6 +504,7 @@ export function startApp(initialArgs: AppArgs) {
   let selectedSectionId: string | null = null;
   let kitchenMode: ReturnType<typeof createKitchenEditMode> | null = null;
   let wardrobeMode: ReturnType<typeof createWardrobeEditMode> | null = null;
+  let customFurnitureMode: ReturnType<typeof createCustomFurnitureController> | null = null;
 
   const walls: WallInstance[] = [];
   let wallCounter = 1;
@@ -503,6 +532,8 @@ export function startApp(initialArgs: AppArgs) {
 
   const kitchenWorktops: KitchenWorktopInstance[] = [];
   let worktopCounter = 1;
+  const customFurniture: CustomFurnitureInstance[] = [];
+  let customFurnitureCounter = 1;
 
   const getVisibilityTargets = (): VisibilityTarget[] => {
     const targets: VisibilityTarget[] = [
@@ -512,6 +543,7 @@ export function startApp(initialArgs: AppArgs) {
       ...columns.map((column) => ({ key: `column:${column.id}`, root: column.root })),
       ...sections.map((section) => ({ key: `section:${section.id}`, root: section.root })),
       ...kitchenWorktops.map((worktop) => ({ key: `worktop:${worktop.id}`, root: worktop.root })),
+      ...(customFurnitureMode?.getVisibilityTargets() ?? []),
       ...(wardrobeMode?.getVisibilityTargets() ?? [])
     ];
     targets.push(...windows.map((window) => ({ key: `window:${window.id}`, root: window.root })));
@@ -529,6 +561,8 @@ export function startApp(initialArgs: AppArgs) {
     if (selectedKind === "window" && windowInst) return [`window:${windowInst.id}`];
     if (selectedKind === "door" && doorInst) return [`door:${doorInst.id}`];
     if (selectedKind === "underlay") return ["underlay:main"];
+    const customFurnitureKeys = customFurnitureMode?.getSelectedVisibilityTargetKeys() ?? [];
+    if (customFurnitureKeys.length > 0) return customFurnitureKeys;
     const wardrobeKeys = wardrobeMode?.getSelectedVisibilityTargetKeys() ?? [];
     if (wardrobeKeys.length > 0) return wardrobeKeys;
     return [];
@@ -539,6 +573,7 @@ export function startApp(initialArgs: AppArgs) {
   const visibilityController = createVisibilityController({
     getAllTargets: getVisibilityTargets,
     getSelectedTargetKeys: getSelectedVisibilityTargetKeys,
+    recordActivity: (label) => recordRecentActivity(label),
     onChanged: () => {
       args.viewerEl.classList.toggle("viewer-show-hidden", visibilityController.showHidden && visibilityController.hasHiddenObjects());
       viewDisplay.sync();
@@ -549,6 +584,13 @@ export function startApp(initialArgs: AppArgs) {
   const viewerDownbar = createViewerDownbar(args.viewerEl, {
     getMode: () => viewDisplay.getMode(),
     setMode: setViewerDisplayMode,
+    getProjection: () => get3dProjection(),
+    setProjection: (projection) => {
+      set3dProjection(projection);
+      viewNavigation?.syncControls();
+      recordRecentActivity(`Projection set to ${projection}`);
+    },
+    getIs3dView: () => viewMode === "3d",
     hidden: {
       hasHiddenObjects: () => visibilityController.hasHiddenObjects(),
       isShowHidden: () => visibilityController.showHidden,
@@ -565,7 +607,8 @@ export function startApp(initialArgs: AppArgs) {
     getMode: () => mode,
     getViewMode: () => viewMode,
     getActiveViewerTab: () => activeViewerTab,
-    clearToolHud
+    clearToolHud,
+    recordActivity: (label) => recordRecentActivity(label)
   });
   const dimensionState = technicalDimensions.state;
 
@@ -587,7 +630,7 @@ export function startApp(initialArgs: AppArgs) {
   const placement = {
     active: false,
     params: null as ModuleParams | null,
-    ghost: null as any,
+    ghost: null as LayoutInstance | null,
     ghostValid: false,
     lastCursor: new THREE.Vector3(0, 0, 0)
   };
@@ -611,6 +654,8 @@ export function startApp(initialArgs: AppArgs) {
   S.sectionCounter = sectionCounter;
   S.kitchenWorktops = kitchenWorktops;
   S.worktopCounter = worktopCounter;
+  S.customFurniture = customFurniture;
+  S.customFurnitureCounter = customFurnitureCounter;
   S.instances = instances;
   S.instanceCounter = instanceCounter;
   S.params = params;
@@ -632,6 +677,34 @@ export function startApp(initialArgs: AppArgs) {
   S.redoBtnEl = redoBtnEl;
   S.history = history;
 
+  const openBomPanelForState = (panelArgs: Pick<AppState, "instances" | "kitchenWorktops" | "customFurniture" | "kitchenCtx">) => {
+    openBomPanel({ ...panelArgs, catalog: clientCatalog });
+  };
+
+  const openPricingCatalogForState = () => {
+    openPricingCatalog(clientCatalog);
+  };
+
+  document.querySelector<HTMLButtonElement>("[data-open-bom-panel]")?.addEventListener("click", () => {
+    openBomPanelForState({ instances, kitchenWorktops, customFurniture, kitchenCtx: S.kitchenCtx });
+  });
+
+  const recentActivityController = createRecentActivityController({
+    S,
+    getHelpers: () => helpers,
+    selectTarget: (target) => {
+      if (!target.kind || !target.id) return;
+      if (target.kind === "wall") setSelectedWall(target.id);
+      else if (target.kind === "module") setSelectedModule(target.id);
+      else if (target.kind === "floor") setSelectedFloor(target.id);
+      else if (target.kind === "column") setSelectedColumn(target.id);
+      else if (target.kind === "section") setSelectedSection(target.id);
+      updateSelectionHighlights();
+      mountProps();
+    },
+    onRestore: () => undefined
+  });
+  recordRecentActivity = (label) => recentActivityController.record(label);
   function syncSelectionState() {
     S.selectedKind = selectedKind;
     S.selectedInstanceId = selectedInstanceId;
@@ -1063,7 +1136,7 @@ export function startApp(initialArgs: AppArgs) {
     if (!el) return false;
     const tag = el.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-    if ((el as any).isContentEditable) return true;
+    if (el.isContentEditable) return true;
     return false;
   };
 
@@ -1076,6 +1149,8 @@ export function startApp(initialArgs: AppArgs) {
     getCamera: cam,
     getControls: ctl,
     getState: () => ({ mode, viewMode, activeViewerTab }),
+    getViewerToolMode,
+    setViewerPanActive,
     isTypingTarget,
     isInteractionBlocked: () =>
       dragState.active ||
@@ -1087,12 +1162,23 @@ export function startApp(initialArgs: AppArgs) {
       floorEdit.active ||
       underlayDragState.active ||
       !!transformState.kind,
+    isPanInteractionBlocked: () =>
+      dragState.active ||
+      windowDragState.active ||
+      doorDragState.active ||
+      Boolean(wallEditHud.drag) ||
+      marquee.active ||
+      marquee.pending ||
+      Boolean(floorEdit.drag) ||
+      underlayDragState.active ||
+      !!transformState.kind,
     getSceneBounds: () => getNavigationSceneBounds(),
     refreshDetailView: () => {
       detailViewController.activeDetailClipPlanes = [];
       updateDetailViewCamera();
       updateDetailSliceOverlay();
-    }
+    },
+    activate3dView: () => setView2d(false)
   });
   viewNavigation.syncControls();
 
@@ -1101,13 +1187,34 @@ export function startApp(initialArgs: AppArgs) {
   const handleLayoutEscape = (ev: KeyboardEvent) => toolModeController.handleLayoutEscape(ev);
   const clearWallDrawState = () => toolModeController.clearWallDrawState();
   const deactivateMeasureTool = (opts?: { clearSaved?: boolean }) => toolModeController.deactivateMeasureTool(opts);
-  const setToolSelect = () => toolModeController.setToolSelect();
-  const setToolWall = () => toolModeController.setToolWall();
-  const setToolAlign = () => toolModeController.setToolAlign();
-  const setToolTrim = () => toolModeController.setToolTrim();
-  const setToolSection = () => toolModeController.setToolSection();
-  const setToolMeasure = () => toolModeController.setToolMeasure();
-  const setToolDimension = () => toolModeController.setToolDimension();
+  const setToolSelect = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolSelect();
+  };
+  const setToolWall = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolWall();
+  };
+  const setToolAlign = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolAlign();
+  };
+  const setToolTrim = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolTrim();
+  };
+  const setToolSection = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolSection();
+  };
+  const setToolMeasure = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolMeasure();
+  };
+  const setToolDimension = () => {
+    cancelViewerToolMode();
+    toolModeController.setToolDimension();
+  };
 
   toolModeController = createToolModeController({
     S,
@@ -1184,6 +1291,13 @@ export function startApp(initialArgs: AppArgs) {
       if (handleGlobalMeasurementClear(ev)) return;
       if (ev.defaultPrevented) return;
       if (!isEscapeKey(ev)) return;
+      if (customFurnitureMode?.handleEscapeKey(ev)) return;
+      if (getViewerToolMode() !== "select") {
+        cancelViewerToolMode();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       handleLayoutEscape(ev);
     },
     true
@@ -1343,28 +1457,6 @@ export function startApp(initialArgs: AppArgs) {
     setActiveViewerTab: (next) => { activeViewerTab = next; }
   });
 
-  drawOrthoToggleEl = document.createElement("button");
-  drawOrthoToggleEl.type = "button";
-  drawOrthoToggleEl.style.position = "absolute";
-  drawOrthoToggleEl.style.right = "16px";
-  drawOrthoToggleEl.style.bottom = "16px";
-  drawOrthoToggleEl.style.zIndex = "12";
-  drawOrthoToggleEl.style.padding = "10px 14px";
-  drawOrthoToggleEl.style.borderRadius = "999px";
-  drawOrthoToggleEl.style.border = "1px solid rgba(255,255,255,0.14)";
-  drawOrthoToggleEl.style.boxShadow = "0 10px 30px rgba(0,0,0,0.24)";
-  drawOrthoToggleEl.style.backdropFilter = "blur(14px)";
-  drawOrthoToggleEl.style.fontSize = "12px";
-  drawOrthoToggleEl.style.fontWeight = "700";
-  drawOrthoToggleEl.style.letterSpacing = "0.04em";
-  drawOrthoToggleEl.style.cursor = "pointer";
-  drawOrthoToggleEl.textContent = "Ortho ON";
-  drawOrthoToggleEl.style.background = "rgba(16,42,60,0.96)";
-  drawOrthoToggleEl.style.borderColor = "#53c6ff";
-  drawOrthoToggleEl.style.color = "#dff6ff";
-  drawOrthoToggleEl.addEventListener("click", () => toggleDrawOrthoMode());
-  args.viewerEl.appendChild(drawOrthoToggleEl);
-
   const { photoSamples, photoStatus } = createRenderControls({
     layoutUi,
     enableSsgi: ENABLE_SSGI,
@@ -1438,6 +1530,7 @@ export function startApp(initialArgs: AppArgs) {
     propertiesEl: args.propertiesEl,
     ensureFloorplanView: () => ensureFloorplanViewerTab(),
     onCamerasChanged: () => refreshViewerTabs(),
+    recordActivity: (label) => recordRecentActivity(label),
     setStatus: setUnderlayStatus,
     commitHistory: () => commitHistory(S)
   });
@@ -1474,7 +1567,11 @@ export function startApp(initialArgs: AppArgs) {
     getWindowInsts: () => windows,
     getDoorInst: () => doorInst,
     getDoorInsts: () => doors,
-    nextWallId: () => `w${wallCounter++}`
+    nextWallId: () => {
+      const id = `w${wallCounter++}`;
+      S.wallCounter = wallCounter;
+      return id;
+    }
   });
 
   const editHudController = createEditHudController({
@@ -1544,6 +1641,7 @@ export function startApp(initialArgs: AppArgs) {
     I_HIDE,
     I_INSTALL,
     I_ISOLATE,
+    I_LIVING_WALL,
     I_MEASURE,
     I_MOVE,
     I_REDO,
@@ -1562,11 +1660,16 @@ export function startApp(initialArgs: AppArgs) {
     I_WINDOW,
     I_WALL
   } = topbarIcons;
-  const tb = createTopbar(args.ribbonEl);
-  const projectHeader = createProjectHeader(args.ribbonEl);
+  const tb = createTopbar(args.ribbonEl, {
+    organizationUsers: args.clientProfile?.organization.users ?? [],
+    currentUserId: args.clientContext.userId
+  });
+  const projectHeader = createProjectHeader(args.ribbonEl, {
+    describeUser: (userId) => organizationUserName(args.clientProfile?.organization.users ?? [], userId)
+  });
   tb.setChrome({
-    title: "Kitchen Layout 2026 - Floor Plan",
-    projectLabel: args.clientProfile?.company.name ?? "Project 1",
+    title: "Arcigy Kitchen",
+    projectLabel: args.clientProfile?.company.name ?? "Workspace",
     tabs: [
       { id: "file", label: "File", accent: true },
       { id: "architecture", label: "Architecture", active: true },
@@ -1612,6 +1715,20 @@ export function startApp(initialArgs: AppArgs) {
     error: "",
     overlayEl: null as HTMLDivElement | null
   };
+  viewerToolModeController = createViewerToolModeController({
+    canvasEl: renderer.domElement,
+    getInsertMode: () =>
+      mode === "layout" &&
+      (layoutTool !== "select" ||
+        placement.active ||
+        wallDraw.active ||
+        kitchenWorktopDraw.active ||
+        floorEdit.active ||
+        sectionDraw.active ||
+        Boolean(customFurnitureMode?.isCursorToolActive())),
+    syncNavigationControls: () => viewNavigation.syncControls()
+  });
+  const syncViewerCursor = () => viewerToolModeController.syncCursor();
 
   let floorBoundaryController!: ReturnType<typeof createFloorBoundaryController>;
   const syncDrawOrthoUi = () => floorBoundaryController.syncDrawOrthoUi();
@@ -1624,7 +1741,10 @@ export function startApp(initialArgs: AppArgs) {
   const renderFloorBoundaryEdit = () => floorBoundaryController.renderFloorBoundaryEdit();
   const setFloorBoundaryTool = (tool: FloorBoundaryTool) => floorBoundaryController.setFloorBoundaryTool(tool);
   const buildFloorBoundaryTopbar = () => floorBoundaryController.buildFloorBoundaryTopbar();
-  const enterFloorBoundaryEdit = (floorId?: string) => floorBoundaryController.enterFloorBoundaryEdit(floorId);
+  const enterFloorBoundaryEdit = (floorId?: string) => {
+    cancelViewerToolMode();
+    return floorBoundaryController.enterFloorBoundaryEdit(floorId);
+  };
   const discardFloorBoundaryEdit = () => floorBoundaryController.discardFloorBoundaryEdit();
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => floorBoundaryController.addFloorEditSegment(a, b);
 
@@ -1683,10 +1803,15 @@ export function startApp(initialArgs: AppArgs) {
     return createWindowControlsControllerResult;
   };
   const addOrSelectWindow = () => {
+    cancelViewerToolMode();
     cancelDoorPlacement();
     return requireWindowControls().addOrSelectWindow();
   };
-  const insertWindowAtWallPoint = (...args: Parameters<WindowControlsApi["insertWindowAtWallPoint"]>) => requireWindowControls().insertWindowAtWallPoint(...args);
+  const insertWindowAtWallPoint = (...args: Parameters<WindowControlsApi["insertWindowAtWallPoint"]>) => {
+    const inserted = requireWindowControls().insertWindowAtWallPoint(...args);
+    if (inserted) recentActivityController.record("Window added");
+    return inserted;
+  };
   const updateWindowPlacementPreview = (...args: Parameters<WindowControlsApi["updateWindowPlacementPreview"]>) => createWindowControlsControllerResult?.updateWindowPlacementPreview(...args) ?? false;
   const clearWindowPlacementPreview = () => createWindowControlsControllerResult?.clearWindowPlacementPreview();
   const cancelWindowPlacement = () => createWindowControlsControllerResult?.cancelWindowPlacement() ?? false;
@@ -1703,10 +1828,15 @@ export function startApp(initialArgs: AppArgs) {
     return createDoorControlsControllerResult;
   };
   const addOrSelectDoor = () => {
+    cancelViewerToolMode();
     cancelWindowPlacement();
     return requireDoorControls().addOrSelectDoor();
   };
-  const insertDoorAtWallPoint = (...args: Parameters<DoorControlsApi["insertDoorAtWallPoint"]>) => requireDoorControls().insertDoorAtWallPoint(...args);
+  const insertDoorAtWallPoint = (...args: Parameters<DoorControlsApi["insertDoorAtWallPoint"]>) => {
+    const inserted = requireDoorControls().insertDoorAtWallPoint(...args);
+    if (inserted) recentActivityController.record("Door added");
+    return inserted;
+  };
   const updateDoorPlacementPreview = (...args: Parameters<DoorControlsApi["updateDoorPlacementPreview"]>) => createDoorControlsControllerResult?.updateDoorPlacementPreview(...args) ?? false;
   const clearDoorPlacementPreview = () => createDoorControlsControllerResult?.clearDoorPlacementPreview();
   const cancelDoorPlacement = () => createDoorControlsControllerResult?.cancelDoorPlacement() ?? false;
@@ -1786,6 +1916,7 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   function addColumn() {
+    cancelViewerToolMode();
     ensureLayoutMode();
     ensureFloorplanViewerTab();
     if (placement.active) cancelPlacement(S, placementHelpers);
@@ -1879,6 +2010,7 @@ export function startApp(initialArgs: AppArgs) {
     isColumnPlacementActive,
     isWindowPlacementActive,
     isDoorPlacementActive,
+    get customFurnitureMode() { return customFurnitureMode; },
     get wardrobeMode() { return wardrobeMode; },
     get drawOrthoEnabled() { return drawOrthoEnabled; },
     get kitchenMode() { return kitchenMode; },
@@ -1897,7 +2029,8 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayOffZEl: (el: HTMLInputElement) => { underlayOffZEl = el; },
     setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; },
     markUnderlaySelected: () => { selectedKind = "underlay"; },
-    scheduleKitchenWorktopPreviewUpdate
+    scheduleKitchenWorktopPreviewUpdate,
+    recordActivity: (label) => recentActivityController.record(label)
   });
   const mountProps = () => propertiesRouter.mountProps();
 
@@ -1942,6 +2075,7 @@ export function startApp(initialArgs: AppArgs) {
     restoreColumns: restoreColumnsFromSnapshot,
     restoreSections: restoreSectionsFromSnapshot,
     restoreWorktops: restoreKitchenWorktopsFromSnapshot,
+    restoreWardrobe: (state) => wardrobeMode?.restoreSaveState(state),
     clearToolHud,
     mountProps,
     setSelectedSection,
@@ -2052,6 +2186,7 @@ export function startApp(initialArgs: AppArgs) {
     syncWindowSelectionVisuals(false);
     if (wall) rebuildWall(wall);
     rebuildWallPlanMesh();
+    recordRecentActivity("Window deleted");
     return true;
   };
 
@@ -2070,6 +2205,7 @@ export function startApp(initialArgs: AppArgs) {
     syncDoorSelectionVisuals(false);
     if (wall) rebuildWall(wall);
     rebuildWallPlanMesh();
+    recordRecentActivity("Door deleted");
     return true;
   };
 
@@ -2116,6 +2252,7 @@ export function startApp(initialArgs: AppArgs) {
     deleteDoor,
     deleteUnderlay,
     deleteWardrobeSelection: () => wardrobeMode?.deleteSelected() ?? false,
+    deleteCustomFurnitureSelection: (opts) => customFurnitureMode?.deleteSelected(opts) ?? false,
     commitHistory: () => commitHistory(S),
     setView2d: (checked) => setView2d(checked)
   });
@@ -2125,14 +2262,26 @@ export function startApp(initialArgs: AppArgs) {
   const toggle2dView = layoutActionsController.toggle2dView;
 
   floorplanTab.addEventListener("click", () => {
-    if (mode !== "layout") return;
+    ensureLayoutMode();
     activateViewerTab("floorplan");
   });
 
   view3dTab.addEventListener("click", () => {
-    if (mode !== "layout") return;
+    ensureLayoutMode();
     activateViewerTab("3d");
   });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-bottom-view-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      ensureLayoutMode();
+      const key = button.dataset.bottomViewKey;
+      if (!key) return;
+      activateViewerTab(key);
+    });
+  });
+  syncBottomViewList(activeViewerTab);
+
+  viewerToolModeController.installButtons();
 
   let createClassicTopbarControllerResult!: ReturnType<typeof createClassicTopbarController>;
   const buildClassicTopbar = (...args: Parameters<ReturnType<typeof createClassicTopbarController>["buildClassicTopbar"]>) => createClassicTopbarControllerResult.buildClassicTopbar(...args);
@@ -2152,6 +2301,7 @@ export function startApp(initialArgs: AppArgs) {
     I_HIDE,
     I_INSTALL,
     I_ISOLATE,
+    I_LIVING_WALL,
     I_MEASURE,
     I_MOVE,
     I_REDO,
@@ -2179,11 +2329,12 @@ export function startApp(initialArgs: AppArgs) {
     enterFloorBoundaryEdit,
     getInstallState,
     helpers,
+    get customFurnitureMode() { return customFurnitureMode; },
     get kitchenMode() { return kitchenMode; },
     get wardrobeMode() { return wardrobeMode; },
     layoutTool,
-    openBomPanel: (panelArgs) => openBomPanel({ ...panelArgs, catalog: clientCatalog }),
-    openPricingCatalog: () => openPricingCatalog(clientCatalog),
+    openBomPanel: (panelArgs) => openBomPanelForState(panelArgs),
+    openPricingCatalog: () => openPricingCatalogForState(),
     openUnderlayPanel,
     promptAppInstall,
     redo,
@@ -2194,9 +2345,18 @@ export function startApp(initialArgs: AppArgs) {
     setToolSelect,
     setToolTrim,
     setToolWall,
-    startCameraPlacement: () => cameraPlacementController.activate(),
-    startMaterialModify: () => materialModifyController.activate(),
-    startTransformFromSelection,
+    startCameraPlacement: () => {
+      cancelViewerToolMode();
+      cameraPlacementController.activate();
+    },
+    startMaterialModify: () => {
+      cancelViewerToolMode();
+      materialModifyController.activate();
+    },
+    startTransformFromSelection: (...transformArgs) => {
+      cancelViewerToolMode();
+      startTransformFromSelection(...transformArgs);
+    },
     subscribeInstallState,
     tb,
     toggle2dView,
@@ -2215,6 +2375,20 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   syncClassicTopbarVisibility = createClassicTopbarControllerResult.syncClassicTopbarVisibility;
+
+  createWorkspaceNavigationController({
+    root: document.getElementById("app") ?? document.body,
+    S,
+    catalog: clientCatalog,
+    setVisualisationTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("visualisation");
+    },
+    setDesignTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("architecture");
+    }
+  });
 
 
   kitchenMode = createKitchenEditMode({
@@ -2271,8 +2445,10 @@ export function startApp(initialArgs: AppArgs) {
     buildClassicTopbar,
     restoreStandardTopbar: () => rebuildStandardTopbar(),
     refreshProps: () => mountProps(),
+    recordActivity: (label) => recordRecentActivity(label),
     catalog: clientCatalog
   });
+  S.wardrobeHistory = { getSaveState: () => wardrobeMode?.getSaveState() ?? null };
 
   rebuildStandardTopbar = () => {
     tb.clear();
@@ -2413,7 +2589,57 @@ export function startApp(initialArgs: AppArgs) {
     get selectedWallBox() { return selectedWallBox; }, set selectedWallBox(next: THREE.BoxHelper | null) { selectedWallBox = next; },
     get selectedWallId() { return selectedWallId; }, set selectedWallId(next: string | null) { selectedWallId = next; }
   });
-  function deleteWall(id: string) {
+
+  customFurnitureMode = createCustomFurnitureController({
+    S,
+    catalog: clientCatalog,
+    customFurniture,
+    layoutRoot,
+    renderer,
+    getCamera: cam,
+    tb,
+    props,
+    icons: {
+      board: I_CABINET,
+      cancel: I_CANCEL,
+      done: I_DONE,
+      edge: I_TRIM,
+      furniture: I_LIVING_WALL,
+      horizontal: I_FLOOR,
+      vertical: I_CABINET
+    },
+    ensureLayoutMode,
+    ensureFloorplanViewerTab,
+    setLayoutSelectTool: setToolSelect,
+    buildClassicTopbar,
+    restoreStandardTopbar: () => rebuildStandardTopbar(),
+    refreshProps: () => mountProps(),
+    syncViewerCursor,
+    commitHistory: () => commitHistory(S),
+    setStatus: setUnderlayStatus,
+    drawSnapOverlay,
+    snapPoint2D,
+    keepStickyPlanSnap,
+    updateHoverCursor,
+    hideHoverCursor,
+    clearAppSelection: () => {
+      selectedKind = null;
+      setSelectedModule(null);
+      setSelectedWall(null);
+      setSelectedFloor(null);
+      setSelectedColumn(null);
+      setSelectedSection(null);
+    },
+    getCounter: () => customFurnitureCounter,
+    setCounter: (next) => {
+      customFurnitureCounter = Math.max(1, Math.round(next));
+      S.customFurnitureCounter = customFurnitureCounter;
+    },
+    getViewerToolMode
+  });
+  helpers.restoreCustomFurniture = customFurnitureMode.restoreCustomFurnitureFromSnapshot;
+
+  function deleteWall(id: string, opts?: { skipHistory?: boolean; skipMountProps?: boolean }) {
     const idx = walls.findIndex((x) => x.id === id);
     if (idx < 0) return;
     const w = walls[idx];
@@ -2423,9 +2649,8 @@ export function startApp(initialArgs: AppArgs) {
       setSelectedWall(null);
     }
 
-    // keep properties in sync
-    mountProps();
-    commitHistory(S);
+    if (!opts?.skipMountProps) mountProps();
+    if (!opts?.skipHistory) commitHistory(S);
   }
 
   const windowInstanceController = createWindowInstanceController({
@@ -2585,9 +2810,57 @@ export function startApp(initialArgs: AppArgs) {
 
   const vectorSnapshot = (v: THREE.Vector3) => ({ x: v.x, y: v.y, z: v.z });
   const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+  const nextCounterFromIds = (ids: string[], prefix: string) => {
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`^${escapedPrefix}(\\d+)$`);
+    return ids.reduce((next, id) => {
+      const match = pattern.exec(id);
+      if (!match) return next;
+      const value = Number(match[1]);
+      return Number.isFinite(value) ? Math.max(next, value + 1) : next;
+    }, 1);
+  };
+  const syncRestoredCounters = () => {
+    wallCounter = Math.max(S.wallCounter, nextCounterFromIds(walls.map((wall) => wall.id), "w"));
+    floorCounter = Math.max(S.floorCounter, nextCounterFromIds(floors.map((floor) => floor.id), "f"));
+    columnCounter = Math.max(S.columnCounter, nextCounterFromIds(columns.map((column) => column.id), "c"));
+    sectionCounter = Math.max(S.sectionCounter, nextCounterFromIds(sections.map((section) => section.id), "s"));
+    worktopCounter = Math.max(S.worktopCounter, nextCounterFromIds(kitchenWorktops.map((worktop) => worktop.id), "wt"));
+    customFurnitureCounter = Math.max(S.customFurnitureCounter, nextCounterFromIds(customFurniture.map((item) => item.id), "cf"));
+    instanceCounter = Math.max(S.instanceCounter, nextCounterFromIds(instances.map((inst) => inst.id), "m"));
+    S.wallCounter = wallCounter;
+    S.floorCounter = floorCounter;
+    S.columnCounter = columnCounter;
+    S.sectionCounter = sectionCounter;
+    S.worktopCounter = worktopCounter;
+    S.customFurnitureCounter = customFurnitureCounter;
+    S.instanceCounter = instanceCounter;
+  };
+  const resetProjectInteractionStateForLoad = () => {
+    ensureLayoutMode();
+    cancelViewerToolMode();
+    setToolSelect();
+    if (floorEdit.active) discardFloorBoundaryEdit();
+    marquee.active = false;
+    marquee.pending = false;
+    marquee.pointerId = null;
+    marquee.hitSomething = false;
+    marqueeEl.style.display = "none";
+    wallTypedHud.style.display = "none";
+  };
   const buildProjectAppState = (): ProjectSaveFile["appState"] => {
+    customFurnitureMode?.commitActiveDraft();
+    recentActivityController.syncFromHistory();
     const camera = cam();
-    const target = (ctl() as any)?.target;
+    const controls = ctl() as { target?: unknown } | null | undefined;
+    const target = controls?.target;
+    const projectPreview = captureProjectPreview({
+      renderer,
+      scene,
+      camera,
+      target: target instanceof THREE.Vector3 ? target : undefined,
+      viewMode
+    });
     return {
       layout: {
         snapshot: captureLayoutSnapshot(S),
@@ -2629,12 +2902,17 @@ export function startApp(initialArgs: AppArgs) {
       },
       editor: {
         layoutTool,
-        activeViewerTab
+        activeViewerTab,
+        visibility: visibilityController.getSaveState(),
+        dimensions: technicalDimensions.getSaveState(),
+        wardrobe: wardrobeMode?.getSaveState() ?? null
       },
+      recentActivity: recentActivityController.getSaveState(),
       camera: {
         type: camera.type,
         position: vectorSnapshot(camera.position),
-        target: target instanceof THREE.Vector3 ? vectorSnapshot(target) : undefined
+        target: target instanceof THREE.Vector3 ? vectorSnapshot(target) : undefined,
+        placedCameras: cameraPlacementController.getSaveState()
       },
       selections: {
         selectedKind,
@@ -2647,11 +2925,13 @@ export function startApp(initialArgs: AppArgs) {
         selectedInstanceIds: [...selectedInstanceIds]
       },
       pricingSettings: null,
-      quoteSettings: null
+      quoteSettings: null,
+      projectPreview
     };
   };
 
   const restoreProjectSave = (save: ProjectSaveFile) => {
+    resetProjectInteractionStateForLoad();
     const layout = save.appState.layout as {
       snapshot?: unknown;
       windows?: Array<{ id: string; params: WindowParams }>;
@@ -2659,6 +2939,8 @@ export function startApp(initialArgs: AppArgs) {
       counters?: { windowCounter?: number; doorCounter?: number };
     } | null;
     const kitchen = save.appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null } | null;
+    const editor = save.appState.editor as { visibility?: unknown; dimensions?: unknown; wardrobe?: unknown } | null | undefined;
+    const savedCamera = save.appState.camera as { placedCameras?: unknown } | null | undefined;
     if (kitchen?.context) S.kitchenCtx = resolveContext(kitchen.context as typeof S.kitchenCtx);
     S.kitchenGroups.splice(0, S.kitchenGroups.length);
     for (const group of kitchen?.groups ?? []) {
@@ -2686,22 +2968,27 @@ export function startApp(initialArgs: AppArgs) {
       const params = clampWindowParams(cloneJson(savedWindow.params));
       const inst = createWindow(params.wall, params.wallId ?? null, { id: savedWindow.id });
       inst.params = params;
-      updateWindowTransform(inst);
       windows.push(inst);
       layoutRoot.add(inst.root);
+      updateWindowTransform(inst);
       windowInst = inst;
     }
     for (const savedDoor of layout.doors ?? []) {
       const params = clampDoorParams(cloneJson(savedDoor.params));
       const inst = createDoor(params.wall, params.wallId ?? null, { id: savedDoor.id });
       inst.params = params;
-      updateDoorTransform(inst);
       doors.push(inst);
       layoutRoot.add(inst.root);
+      updateDoorTransform(inst);
       doorInst = inst;
     }
     windowCounter = Math.max(layout.counters?.windowCounter ?? 1, ...windows.map((item) => Number(item.id.replace(/\D/g, "")) + 1).filter(Number.isFinite), 1);
     doorCounter = Math.max(layout.counters?.doorCounter ?? 1, ...doors.map((item) => Number(item.id.replace(/\D/g, "")) + 1).filter(Number.isFinite), 1);
+    cameraPlacementController.restoreSaveState(savedCamera?.placedCameras);
+    technicalDimensions.restoreSaveState(editor?.dimensions);
+    wardrobeMode?.restoreSaveState(editor?.wardrobe);
+    visibilityController.restoreSaveState(editor?.visibility);
+    syncRestoredCounters();
     rebuildWallPlanMesh();
     S.history.current = captureLayoutSnapshot(S);
     S.history.past = [];
@@ -2709,17 +2996,54 @@ export function startApp(initialArgs: AppArgs) {
     updateUndoRedoUi(S);
     mountProps();
     updateLayoutPanel();
+    recentActivityController.restoreSaveState(save.appState.recentActivity);
   };
 
   const projectActions = createProjectActions({
     buildAppState: buildProjectAppState,
     restoreSave: restoreProjectSave,
     onProjectChanged: (project, status) => {
-      tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Project 1");
+      tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
-    }
+    },
+    initialProject: args.initialProjectSave?.project ?? args.initialProject ?? null
   });
-  const projectMenuActions = createProjectMenuActions(projectActions);
+  const projectMenuActions = createProjectMenuActions(projectActions, {
+    openProjectManager: args.openProjectManager,
+    currentUserName: organizationUserName(args.clientProfile?.organization.users ?? [], args.clientContext.userId),
+    formatSavedMessage: (save, fallback) =>
+      `${fallback} Ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
+  });
+  createProjectAutosaveController({
+    actions: projectActions,
+    getChangeToken: () =>
+      JSON.stringify({
+        layout: S.history.current ? snapshotSignature(S.history.current) : "",
+        cameras: cameraPlacementController.getSaveState(),
+        visibility: visibilityController.getSaveState(),
+        dimensions: technicalDimensions.getSaveState(),
+        wardrobe: wardrobeMode?.getSaveState() ?? null
+      }),
+    formatSavedMessage: (save) =>
+      `Autosave ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
+  }).start();
+  tb.getQuickAction("save")?.addEventListener("click", () => {
+    void projectMenuActions.saveProject();
+  });
+  tb.getQuickAction("print")?.addEventListener("click", () => {
+    void projectMenuActions.saveProject();
+  });
+  tb.getQuickAction("open")?.addEventListener("click", () => {
+    projectMenuActions.openProjectManager();
+  });
+  tb.getQuickAction("undo")?.addEventListener("click", () => {
+    if (customFurnitureMode?.undoActiveEdit()) return;
+    undo(S, helpers);
+  });
+  tb.getQuickAction("redo")?.addEventListener("click", () => {
+    if (customFurnitureMode?.redoActiveEdit()) return;
+    redo(S, helpers);
+  });
 
   const buildSelectionController = createBuildSelectionController({
     S,
@@ -2787,7 +3111,8 @@ export function startApp(initialArgs: AppArgs) {
     scene,
     getCamera: cam,
     getCameraTarget: () => {
-      const target = (ctl() as any)?.target;
+      const controls = ctl() as { target?: unknown } | null | undefined;
+      const target = controls?.target;
       return target instanceof THREE.Vector3 ? target : undefined;
     },
     getHdriSettings,
@@ -2943,6 +3268,7 @@ export function startApp(initialArgs: AppArgs) {
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addWall,
     anyOverlap,
+    applyMoveDelta,
     applyRotateAngle,
     applyWallConstraints,
     autoJoinAtMmPoint,
@@ -3324,6 +3650,15 @@ export function startApp(initialArgs: AppArgs) {
   history.future = [];
   updateUndoRedoUi(S);
 
+  if (args.initialProjectSave) {
+    restoreProjectSave(args.initialProjectSave);
+    tb.setProjectLabel(args.initialProjectSave.project.name);
+    projectHeader.render(args.initialProjectSave.project, "Loaded.");
+  } else if (args.initialProject) {
+    tb.setProjectLabel(args.initialProject.name);
+    projectHeader.render(args.initialProject, "Project ready.");
+  }
+
   let createWallEditHudUpdaterResult!: ReturnType<typeof createWallEditHudUpdater>;
   function updateWallEditHud(...args: Parameters<ReturnType<typeof createWallEditHudUpdater>["updateWallEditHud"]>) { return createWallEditHudUpdaterResult.updateWallEditHud(...args); }
 
@@ -3561,6 +3896,8 @@ export function startApp(initialArgs: AppArgs) {
     bindingFromPlanSnap,
     addMeasurement,
     createFloor,
+    createColumn,
+    createSectionInstance,
     cloneFloorParams,
     setSelectedFloor,
     setSelectedWall,
@@ -3642,6 +3979,8 @@ export function startApp(initialArgs: AppArgs) {
     demosLivePreviewColor.sync();
     cameraPlacementController.syncActiveCameraView(activeViewerTab, cam(), ctl());
     renderAppFrame(frameRendererContext, dt);
+    recentActivityController.syncFromHistory();
+    syncViewerCursor();
     requestAnimationFrame(tick);
   };
   tick();

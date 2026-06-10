@@ -1,5 +1,6 @@
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { DEFAULT_PHASE_ID, DEFAULT_PROJECT_ID } from "../core/storage/storage-types";
@@ -193,10 +194,11 @@ export function mountBomDevPanel(
   container: HTMLElement,
   instances: LayoutInstance[],
   worktops: KitchenWorktopInstance[],
+  customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
   catalog: ClientCatalog
 ): void {
-  const entries = buildProjectPricingViews(instances, worktops, ctx, catalog);
+  const entries = buildProjectPricingViews(instances, worktops, customFurniture, ctx, catalog);
   const storageKey = quoteSettingsStorageKey(catalog);
   let settings = readStoredSettings(storageKey);
 
@@ -205,7 +207,7 @@ export function mountBomDevPanel(
   const render = () => {
     container.innerHTML = "";
 
-    if (instances.length === 0 && worktops.length === 0) {
+    if (instances.length === 0 && worktops.length === 0 && customFurniture.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "Nie su umiestnene ziadne moduly.";
       empty.className = "bom-dev__empty";

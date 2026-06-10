@@ -2,6 +2,7 @@ import type { ProjectSaveFile } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { assertValidProjectMetadata } from "../project/project-validation";
 import { assertNoMissingCriticalProjectSerializers } from "./project-save-serializers";
+import { validateProjectAppState } from "./project-app-state-validation";
 
 export type ProjectSaveValidationScope = {
   clientId?: string;
@@ -57,5 +58,6 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
   if (!isObject(layout)) throw new Error("Project save must include layout serializer data.");
   if (!("windows" in layout) || !Array.isArray(layout.windows)) throw new Error("Project save must include windows serializer data.");
   if (!("doors" in layout) || !Array.isArray(layout.doors)) throw new Error("Project save must include doors serializer data.");
+  validateProjectAppState(save.appState);
   assertPlainSerializable(save);
 }

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { createWallController, WALL_PLAN_FILL_ROTATION_X, type WallControllerContext } from "./wallController";
 import type { AppState } from "../layout/appState";
+import type { DoorInstance, DoorParams, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 
 const createTestWallContext = (): WallControllerContext => ({
   walls: [],
@@ -49,8 +50,7 @@ const getWorldVertices = (mesh: THREE.Mesh) => {
   return vertices;
 };
 
-const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: { x: number; z: number }) =>
-  ({
+const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: { x: number; z: number }): WallInstance => ({
     id,
     params: {
       thicknessMm: 150,
@@ -65,7 +65,59 @@ const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: 
     root: new THREE.Group(),
     mesh: new THREE.Mesh(new THREE.BoxGeometry(1, 2.6, 0.15), new THREE.MeshBasicMaterial()),
     outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
-  }) as any;
+  });
+
+const createTestWindowInstance = (params: Partial<WindowParams> & Pick<WindowParams, "centerMm" | "heightMm" | "sillHeightMm" | "widthMm">): WindowInstance => ({
+  id: "window1",
+  params: {
+    wall: "back",
+    wallId: null,
+    frameWidthMm: 70,
+    offsetFromInteriorMm: 0,
+    sashWidthMm: 60,
+    sashProfileDepthMm: 40,
+    frameProfileDepthMm: 70,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 0,
+    handleType: "none",
+    handleOffsetMm: 0,
+    handleHeightMm: 1000,
+    materialId: "default",
+    ...params
+  },
+  root: new THREE.Group(),
+  frame: new THREE.Group(),
+  plan: new THREE.Group(),
+  selection: new THREE.Group(),
+  pick: new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+  outline: new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
+});
+
+const createTestDoorInstance = (params: Partial<DoorParams> & Pick<DoorParams, "centerMm" | "heightMm" | "widthMm">): DoorInstance => ({
+  id: "door1",
+  params: {
+    wall: "back",
+    wallId: null,
+    frameWidthMm: 70,
+    offsetFromInteriorMm: 0,
+    panelThicknessMm: 40,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 90,
+    handleType: "lever",
+    handleOffsetMm: 80,
+    handleHeightMm: 1000,
+    materialId: "default",
+    ...params
+  },
+  root: new THREE.Group(),
+  frame: new THREE.Group(),
+  plan: new THREE.Group(),
+  selection: new THREE.Group(),
+  pick: new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+  outline: new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
+});
 
 const createPlanCamera = () => {
   const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
@@ -127,15 +179,13 @@ describe("wall plan fill", () => {
   it("keeps wall face lines through the window opening in floorplan", () => {
     const ctx = createTestWallContext();
     ctx.getWindowInst = () =>
-      ({
-        params: {
+      createTestWindowInstance({
           wallId: "w1",
           widthMm: 900,
           heightMm: 900,
           sillHeightMm: 900,
           centerMm: 2000
-        }
-      }) as any;
+      });
     ctx.walls.push({
       id: "w1",
       params: {
@@ -151,7 +201,7 @@ describe("wall plan fill", () => {
       root: new THREE.Group(),
       mesh: new THREE.Mesh(new THREE.BoxGeometry(4, 2.6, 0.18), new THREE.MeshBasicMaterial()),
       outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
-    } as any);
+    });
     const controller = createWallController(ctx);
 
     controller.rebuildWallPlanMesh();
@@ -305,27 +355,13 @@ describe("wall plan fill", () => {
     ctx.walls.push(wall);
     ctx.getDoorInsts = () =>
       [
-        {
-          id: "door1",
-          params: {
-            wall: "back",
+        createTestDoorInstance({
             wallId: "with-door",
             widthMm: 900,
             heightMm: 2100,
-            centerMm: 1000,
-            frameWidthMm: 70,
-            offsetFromInteriorMm: 0,
-            panelThicknessMm: 40,
-            swingDirection: "left",
-            swingSide: "inward",
-            swingAngleDeg: 90,
-            handleType: "lever",
-            handleOffsetMm: 80,
-            handleHeightMm: 1000,
-            materialId: "default"
-          }
-        }
-      ] as any;
+            centerMm: 1000
+        })
+      ];
     const controller = createWallController(ctx);
 
     const picked = controller.pickDimensionLineAt(new THREE.Vector3(0.55, 0, 0), { x: 555, y: 500 }, testRect);
@@ -460,16 +496,14 @@ describe("wall plan fill", () => {
     ctx.walls.push(main, branch);
     ctx.getWindowInsts = () =>
       [
-        {
-          params: {
+        createTestWindowInstance({
             wallId: "branch",
             widthMm: 900,
             heightMm: 900,
             sillHeightMm: 900,
             centerMm: 2500
-          }
-        }
-      ] as any;
+        })
+      ];
 
     const controller = createWallController(ctx);
     controller.rebuildWall(branch);

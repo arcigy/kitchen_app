@@ -5,6 +5,7 @@ import { createProject, downloadProject, importProjectFile, listProjects, loadPr
 export type ProjectRuntimeState = {
   currentProject: ProjectMetadata | null;
   lastSavedAt: string | null;
+  editingSessionId: string;
 };
 
 export type ProjectActions = {
@@ -22,14 +23,18 @@ export function createProjectActions(args: {
   buildAppState: () => ProjectSaveFile["appState"];
   restoreSave: (save: ProjectSaveFile) => void;
   onProjectChanged: (project: ProjectMetadata | null, status?: string) => void;
+  initialProject?: ProjectMetadata | null;
 }): ProjectActions {
+  const createEditingSessionId = () => `edit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const state: ProjectRuntimeState = {
-    currentProject: null,
-    lastSavedAt: null
+    currentProject: args.initialProject ?? null,
+    lastSavedAt: null,
+    editingSessionId: createEditingSessionId()
   };
 
-  const setProject = (project: ProjectMetadata | null, status?: string) => {
+  const setProject = (project: ProjectMetadata | null, status?: string, resetSession = false) => {
     state.currentProject = project;
+    if (resetSession) state.editingSessionId = createEditingSessionId();
     args.onProjectChanged(project, status);
   };
 
@@ -37,12 +42,12 @@ export function createProjectActions(args: {
     getState: () => state,
     async create(input) {
       const project = await createProject(input);
-      setProject(project, "Project created.");
+      setProject(project, "Project created.", true);
       return project;
     },
     async save() {
       if (!state.currentProject) throw new Error("Create or load a project before saving.");
-      const save = await saveProject(state.currentProject.projectId, args.buildAppState());
+      const save = await saveProject(state.currentProject.projectId, args.buildAppState(), state.editingSessionId);
       state.lastSavedAt = save.integrity.savedAt;
       setProject(save.project, "Saved.");
       return save;
@@ -55,20 +60,20 @@ export function createProjectActions(args: {
       if (!state.currentProject) throw new Error("Select a project before loading.");
       const save = await loadProject(state.currentProject.projectId);
       args.restoreSave(save);
-      setProject(save.project, "Loaded.");
+      setProject(save.project, "Loaded.", true);
       return save;
     },
     list: () => listProjects(),
     async loadById(projectId) {
       const save = await loadProject(projectId);
       args.restoreSave(save);
-      setProject(save.project, "Loaded.");
+      setProject(save.project, "Loaded.", true);
       return save;
     },
     async importFile(file) {
       const save = await importProjectFile(file);
       args.restoreSave(save);
-      setProject(save.project, "Imported.");
+      setProject(save.project, "Imported.", true);
       return save;
     }
   };

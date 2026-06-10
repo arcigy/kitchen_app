@@ -173,10 +173,32 @@ const decomposeBlenderTRS = (worldMatrixThree: THREE.Matrix4) => {
 
 const threeToBlenderVec3 = (x: number, y: number, z: number) => [x, -z, y] as [number, number, number];
 
+type TextureImageSource = {
+  currentSrc?: unknown;
+  src?: unknown;
+};
+
+type PbrMaterialLike = THREE.Material & {
+  color?: unknown;
+  emissive?: unknown;
+  map?: THREE.Texture;
+  normalMap?: THREE.Texture;
+  roughnessMap?: THREE.Texture;
+  metalnessMap?: THREE.Texture;
+  emissiveMap?: THREE.Texture;
+  normalScale?: unknown;
+  roughness?: unknown;
+  metalness?: unknown;
+  transmission?: unknown;
+  ior?: unknown;
+  emissiveIntensity?: unknown;
+  envMapIntensity?: unknown;
+};
+
 const texToSpec = (tex: THREE.Texture | null | undefined) => {
   if (!tex) return null;
 
-  const img: any = (tex as any).image;
+  const img = tex.image as TextureImageSource | null | undefined;
   const uri =
     typeof img?.currentSrc === "string" && img.currentSrc.trim().length > 0
       ? img.currentSrc
@@ -534,15 +556,15 @@ const extractPbr = (material: THREE.Material | null | undefined, tags: string[])
 
   if (!material) return fallback;
 
-  const m = material as any;
+  const m = material as PbrMaterialLike;
   const color = m.color instanceof THREE.Color ? m.color : null;
   const emissive = m.emissive instanceof THREE.Color ? m.emissive : null;
 
-  const baseColorTex = texToSpec(m.map as THREE.Texture | undefined);
-  const normalTex = texToSpec(m.normalMap as THREE.Texture | undefined);
-  const roughnessTex = texToSpec(m.roughnessMap as THREE.Texture | undefined);
-  const metallicTex = texToSpec(m.metalnessMap as THREE.Texture | undefined);
-  const emissiveTex = texToSpec(m.emissiveMap as THREE.Texture | undefined);
+  const baseColorTex = texToSpec(m.map);
+  const normalTex = texToSpec(m.normalMap);
+  const roughnessTex = texToSpec(m.roughnessMap);
+  const metallicTex = texToSpec(m.metalnessMap);
+  const emissiveTex = texToSpec(m.emissiveMap);
   const normalScale =
     m.normalScale instanceof THREE.Vector2 && Number.isFinite(m.normalScale.x) && Number.isFinite(m.normalScale.y)
       ? (Math.abs(m.normalScale.x) + Math.abs(m.normalScale.y)) / 2
@@ -626,20 +648,26 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
   args.camera.updateMatrixWorld(true);
   const cameraWorld = args.camera.matrixWorld.clone();
   const camTRS = decomposeBlenderTRS(cameraWorld);
-  const isPerspective = (args.camera as any).isPerspectiveCamera === true;
-  const isOrtho = (args.camera as any).isOrthographicCamera === true;
+  const perspectiveCamera = args.camera instanceof THREE.PerspectiveCamera ? args.camera : null;
+  const orthoCamera = args.camera instanceof THREE.OrthographicCamera ? args.camera : null;
+  const isPerspective = !!perspectiveCamera;
+  const isOrtho = !!orthoCamera;
   const cameraType: SceneExportV1["camera"]["type"] = isOrtho ? "orthographic" : "perspective";
-  const fov = isPerspective && typeof (args.camera as any).fov === "number" ? toFiniteNumber((args.camera as any).fov, 35) : undefined;
+  const fov = perspectiveCamera ? toFiniteNumber(perspectiveCamera.fov, 35) : undefined;
   const orthoScale =
-    isOrtho &&
-    typeof (args.camera as any).left === "number" &&
-    typeof (args.camera as any).right === "number" &&
-    Number.isFinite((args.camera as any).left) &&
-    Number.isFinite((args.camera as any).right)
-      ? Math.max(0.0001, Math.abs((args.camera as any).right - (args.camera as any).left))
+    orthoCamera && Number.isFinite(orthoCamera.left) && Number.isFinite(orthoCamera.right)
+      ? Math.max(0.0001, Math.abs(orthoCamera.right - orthoCamera.left))
       : undefined;
-  const near = typeof (args.camera as any).near === "number" && Number.isFinite((args.camera as any).near) ? (args.camera as any).near : undefined;
-  const far = typeof (args.camera as any).far === "number" && Number.isFinite((args.camera as any).far) ? (args.camera as any).far : undefined;
+  const near = perspectiveCamera
+    ? perspectiveCamera.near
+    : orthoCamera
+      ? orthoCamera.near
+      : undefined;
+  const far = perspectiveCamera
+    ? perspectiveCamera.far
+    : orthoCamera
+      ? orthoCamera.far
+      : undefined;
 
   const env = args.environment ?? { hdriPath: null, hdriStrength: 0.35 };
   const hdriStrength = Math.max(0, toFiniteNumber(env.hdriStrength, 0.35));
@@ -658,13 +686,13 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
   args.scene.updateMatrixWorld(true);
 
   args.scene.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!(mesh as any).isMesh) return;
+    if (!(obj instanceof THREE.Mesh)) return;
+    const mesh = obj;
     if (!args.includeInvisible && !mesh.visible) return;
     if (isExportHelperMesh(mesh.name || "")) return;
 
     const geo = mesh.geometry as THREE.BufferGeometry | undefined;
-    if (!geo || !(geo as any).isBufferGeometry) {
+    if (!geo || !(geo instanceof THREE.BufferGeometry)) {
       warnings.push(`Skipping non-buffer geometry mesh: ${mesh.name || mesh.uuid}`);
       return;
     }
@@ -676,7 +704,7 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
     }
 
     const idx = geo.getIndex();
-    const indices = idx ? Array.from(idx.array as any as ArrayLike<number>) : Array.from({ length: posAttr.count }, (_, i) => i);
+    const indices = idx ? Array.from(idx.array as ArrayLike<number>) : Array.from({ length: posAttr.count }, (_, i) => i);
 
     const vertices: number[] = new Array(posAttr.count * 3);
     for (let i = 0; i < posAttr.count; i++) {

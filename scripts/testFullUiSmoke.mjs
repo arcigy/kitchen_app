@@ -13,9 +13,16 @@ function assert(condition, message, context) {
 async function clickButton(page, predicateSource) {
   return await page.evaluate((src) => {
     const predicate = new Function("title", "text", `return (${src})(title, text);`);
-    const button = [...document.querySelectorAll("button")].find((item) =>
-      predicate((item.getAttribute("title") || "").toLowerCase(), (item.textContent || "").toLowerCase())
-    );
+    const button = [...document.querySelectorAll("button")].find((item) => {
+      const rect = item.getBoundingClientRect();
+      const style = window.getComputedStyle(item);
+      const visible = rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return (
+        visible &&
+        !item.disabled &&
+        predicate((item.getAttribute("title") || "").toLowerCase(), (item.textContent || "").toLowerCase())
+      );
+    });
     if (!button) return false;
     button.click();
     return true;
@@ -182,16 +189,21 @@ async function main() {
     const menuOk = await page.evaluate(() => (document.querySelector(".app-menu-root")?.textContent || "").toLowerCase().includes("json"));
     assert(menuOk, "File menu missing JSON entries");
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector(".app-menu-root"), null, { timeout: 5000 });
 
-    assert(await clickButton(page, `(title, text) => title.includes("katal")`), "Pricing catalog button not found");
-    await page.waitForFunction(() => document.body.textContent.toLowerCase().includes("materi"), null, { timeout: 10000 });
-    await clickButton(page, `(title, text) => text.includes("zavrie")`);
+    const pricingCatalogButton = page.locator('button[title*="katal" i], button[title*="catalog" i]').first();
+    assert(await pricingCatalogButton.count(), "Pricing catalog button not found");
+    await pricingCatalogButton.click();
+    await page.waitForSelector(".pricing-catalog-modal", { timeout: 10000 });
+    const pricingCatalogText = await page.locator(".pricing-catalog-modal").textContent();
+    assert(pricingCatalogText?.toLowerCase().includes("materi"), "Pricing catalog modal missing materials section", pricingCatalogText);
+    await page.locator(".pricing-catalog-modal__close").click();
 
     assert(await clickButton(page, `(title, text) => title.includes("kus") || text.includes("kus") || title === "bom"`), "BOM button not found");
     assert((await page.locator(".bom-modal").count()) === 1, "BOM modal did not open");
     await page.locator(".bom-modal__close").click();
 
-    assert(await clickTopbarTab(page, ["Modify", "Upraviť", "UpraviĹĄ"]), "Modify tab not found");
+    assert(await clickTopbarTab(page, ["Modify", "Upraviť"]), "Modify tab not found");
     assert(
       await clickButton(page, `(title, text) => title === "dimension" || title.includes("kot") || title.includes("kót") || text.includes("kot") || text.includes("kót")`),
       "Dimension button not found"

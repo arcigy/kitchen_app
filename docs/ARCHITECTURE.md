@@ -1,6 +1,9 @@
 # Kitchen App Architecture
 
-See also: `docs/AI_DEVELOPMENT_RULES.md`.
+See also:
+
+- `docs/AI_DEVELOPMENT_RULES.md`
+- `docs/PROJECT_SAVE_LOAD_CONTRACT.md`
 
 Current app composition rule: do not add feature logic directly into `src/app.ts`. New logic must go into the matching controller/helper file and `app.ts` should only wire it.
 
@@ -108,6 +111,7 @@ For structural changes:
 npm run typecheck
 npm test
 npm run build
+npm run test:project-roundtrip-full
 npm run test:ui-regression
 ```
 
@@ -115,9 +119,9 @@ For UI-affecting changes, also load the app in the browser and verify current co
 
 ## Current Refactor Status
 
-As of the current refactor branch:
+Current cleanup direction:
 
-- `src/app.ts` is below 3000 lines.
+- `src/app.ts` is still above the 3000-line target and must keep shrinking through focused controller slices.
 - Feature logic is being moved into focused controllers.
 - New controllers should use typed contexts instead of `ctx: any`.
 - `dist/` build output is not committed as part of refactor commits.

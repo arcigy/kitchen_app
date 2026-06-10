@@ -88,11 +88,16 @@ describe("project create/save/encryption", () => {
       layoutState: { snapshot: { wallCounter: 1, walls: [], instanceCounter: 1, instances: [], pinnedWallIds: [], pinnedInstanceIds: [], underlayPinned: false, selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] } }, windows: [], doors: [] },
       kitchenState: { groups: [] },
       moduleInstances: [{ id: "m-secret", type: "drawer_low", params: { materialId: "mat.board.body.dtd.grey.18", width: 1234 } }],
-      sceneState: { viewMode: "3d" }
+      sceneState: { viewMode: "3d" },
+      recentActivity: {
+        entries: [{ id: 1, label: "Wall W1 added", createdAt: 1779650000000, snapshot: null, target: { kind: "wall", id: "w1" } }],
+        idCounter: 2
+      }
     });
     const loaded = await service.loadProject(ctxA, project.projectId);
     expect(loaded.projectId).toBe(save.projectId);
     expect(loaded.catalogSnapshot.fullCatalog?.clientId).toBe("client_a");
+    expect(loaded.appState.recentActivity).toEqual(save.appState.recentActivity);
   });
 
   it("encrypts project download without leaking plaintext and rejects tampering", async () => {
@@ -120,7 +125,8 @@ describe("project create/save/encryption", () => {
     expect(raw).not.toContain("1234");
     expect(decryptProjectSaveFile(envelope, { secret: "test-project-file-secret" }).project.name).toBe("Secret Kitchen");
     await expect(() => decryptProjectSaveFile(envelope, { secret: "wrong-project-file-secret" })).toThrow();
-    await expect(() => decryptProjectSaveFile({ ...envelope, authTag: `A${envelope.authTag.slice(1)}` }, { secret: "test-project-file-secret" })).toThrow();
+    const tamperedAuthTag = `${envelope.authTag[0] === "A" ? "B" : "A"}${envelope.authTag.slice(1)}`;
+    await expect(() => decryptProjectSaveFile({ ...envelope, authTag: tamperedAuthTag }, { secret: "test-project-file-secret" })).toThrow();
     await expect(() => decryptProjectSaveFile({ ...envelope, magic: "KITCHEN_APP_ENCRYPTED_PROJECT" }, { secret: "test-project-file-secret" })).toThrow();
   });
 
@@ -168,6 +174,51 @@ describe("project create/save/encryption", () => {
     } finally {
       await rm(importRoot, { recursive: true, force: true });
     }
+  });
+
+  it("imports an exported project as a full copy when the original already exists", async () => {
+    const repo = createFileProjectRepository(root);
+    const service = createProjectService(repo);
+    const project = await service.createProject(ctxA, createInput);
+    const catalog = { ...getSystemSeedCatalog(), clientId: ctxA.clientId };
+    await service.saveCurrentProject(ctxA, {
+      projectId: project.projectId,
+      activePhaseId: project.activePhaseId,
+      project,
+      catalog,
+      layoutState: {
+        snapshot: {
+          wallCounter: 2,
+          walls: [{ id: "w1", params: { thicknessMm: 120, heightMm: 2600, materialId: "mat.wall", aMm: { x: 0, z: 0 }, bMm: { x: 2400, z: 0 } } }],
+          instanceCounter: 1,
+          instances: [],
+          pinnedWallIds: [],
+          pinnedInstanceIds: [],
+          underlayPinned: false,
+          selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] }
+        },
+        windows: [],
+        doors: []
+      },
+      kitchenState: { groups: [] },
+      moduleInstances: [],
+      sceneState: { viewMode: "3d" },
+      recentActivity: {
+        entries: [{ id: 1, label: "Wall added", createdAt: 1779650000000, snapshot: null, target: { kind: "wall", id: "w1" } }],
+        idCounter: 2
+      }
+    });
+
+    const envelopeText = await service.exportEncryptedProjectFile(ctxA, project.projectId, { secret: "test-project-file-secret" });
+    const imported = await service.importEncryptedProjectFile(ctxA, envelopeText, { secret: "test-project-file-secret" });
+    expect(imported.projectId).not.toBe(project.projectId);
+    expect(imported.project.importedFrom?.projectId).toBe(project.projectId);
+    expect((imported.appState.layout as { snapshot: { walls: unknown[] } }).snapshot.walls).toHaveLength(1);
+    expect(imported.appState.recentActivity).toBeTruthy();
+
+    const loadedCopy = await service.loadProject(ctxA, imported.projectId);
+    expect((loadedCopy.appState.layout as { snapshot: { walls: unknown[] } }).snapshot.walls).toHaveLength(1);
+    expect(await service.listProjects(ctxA)).toHaveLength(2);
   });
 
   it("bundles and restores uploads for every saved phase, not only the active phase", async () => {
@@ -390,7 +441,16 @@ describe("project create/save/encryption", () => {
     const project = await repo.createProject(ctxA, createInput);
     const catalog = { ...getSystemSeedCatalog(), clientId: ctxA.clientId };
     const layoutState = {
-      snapshot: { wallCounter: 1, walls: [], instanceCounter: 1, instances: [], pinnedWallIds: [], pinnedInstanceIds: [], underlayPinned: false, selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] } },
+      snapshot: {
+        wallCounter: 2,
+        walls: [{ id: "wall1", params: { thicknessMm: 120, heightMm: 2600, materialId: "mat.wall", aMm: { x: 0, z: 0 }, bMm: { x: 3600, z: 0 } } }],
+        instanceCounter: 1,
+        instances: [],
+        pinnedWallIds: [],
+        pinnedInstanceIds: [],
+        underlayPinned: false,
+        selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] }
+      },
       windows: [{ id: "win7", params: { wall: "back", wallId: "wall1", widthMm: 900, heightMm: 1000, sillHeightMm: 850, centerMm: 1200, frameWidthMm: 70, offsetFromInteriorMm: 20, sashWidthMm: 48, sashProfileDepthMm: 56, frameProfileDepthMm: 72, swingDirection: "right", swingSide: "outward", swingAngleDeg: 75, handleType: "lever", handleOffsetMm: 70, handleHeightMm: 450, materialId: "white" } }],
       doors: [{ id: "door3", params: { wall: "back", wallId: "wall1", widthMm: 880, heightMm: 2100, centerMm: 2400, frameWidthMm: 70, offsetFromInteriorMm: 20, panelThicknessMm: 42, swingDirection: "right", swingSide: "outward", swingAngleDeg: 92, handleType: "bar", handleOffsetMm: 85, handleHeightMm: 1050, materialId: "white" } }]
     };
@@ -419,5 +479,35 @@ describe("project create/save/encryption", () => {
     });
     expect((saveB.appState.layout as typeof layoutState).windows).toEqual(layoutState.windows);
     expect((saveB.appState.layout as typeof layoutState).doors).toEqual(layoutState.doors);
+  });
+
+  it("rejects saved openings that point at a missing wall", async () => {
+    const repo = createFileProjectRepository(root);
+    const project = await repo.createProject(ctxA, createInput);
+    const catalog = { ...getSystemSeedCatalog(), clientId: ctxA.clientId };
+    expect(() => assembleProjectSaveFile({
+      clientId: ctxA.clientId,
+      projectId: project.projectId,
+      activePhaseId: project.activePhaseId,
+      project,
+      catalog,
+      layoutState: {
+        snapshot: {
+          wallCounter: 1,
+          walls: [],
+          instanceCounter: 1,
+          instances: [],
+          pinnedWallIds: [],
+          pinnedInstanceIds: [],
+          underlayPinned: false,
+          selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] }
+        },
+        windows: [{ id: "win7", params: { wall: "back", wallId: "wall1", widthMm: 900, heightMm: 1000, sillHeightMm: 850, centerMm: 1200, frameWidthMm: 70, offsetFromInteriorMm: 20, sashWidthMm: 48, sashProfileDepthMm: 56, frameProfileDepthMm: 72, swingDirection: "right", swingSide: "outward", swingAngleDeg: 75, handleType: "lever", handleOffsetMm: 70, handleHeightMm: 450, materialId: "white" } }],
+        doors: []
+      },
+      kitchenState: { groups: [] },
+      moduleInstances: [],
+      sceneState: {}
+    })).toThrow(/missing wall wall1/i);
   });
 });

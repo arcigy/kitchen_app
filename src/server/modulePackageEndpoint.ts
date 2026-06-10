@@ -1,9 +1,8 @@
 import type http from "node:http";
-import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
 import type { ClientContext } from "../core/client/client-context";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { createFileModulePackageRepository } from "../core/module-package/module-package-repository";
 import { createModulePackageService } from "../core/module-package/module-package-service";
+import { createServerCatalogRepository, createServerModulePackageRepository } from "./serverRepositories";
 
 type ModulePackageEndpointDeps = {
   projectRoot: string;
@@ -25,10 +24,10 @@ export async function handleModulePackageApi(
 ): Promise<boolean> {
   if (!url.pathname.startsWith("/api/modules")) return false;
   const context = await deps.getContext(req.headers.cookie);
-  const catalogRepository = createFileClientCatalogRepository(deps.projectRoot);
+  const catalogRepository = createServerCatalogRepository(deps.projectRoot);
   const service = createModulePackageService({
     context,
-    packageRepository: createFileModulePackageRepository(deps.projectRoot),
+    packageRepository: createServerModulePackageRepository(deps.projectRoot),
     catalogRepository
   });
 

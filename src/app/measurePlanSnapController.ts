@@ -8,6 +8,7 @@ import {
   planarDistanceMm,
   worldToScreen
 } from "./sharedUtils";
+import { resolveNormalGuideSegment } from "./measureGeometryHelpers";
 
 type MeasurePlanSnapContext = {
   measureState: MeasureState;
@@ -108,14 +109,11 @@ export function createMeasurePlanSnapController(ctx: MeasurePlanSnapContext) {
       let b = point.clone();
       if (ctx.measureState.axisLock) b = axisLockXZ(a, b);
       if (normalMode) {
-        const baseDir = b.clone().sub(a).setY(0);
-        if (baseDir.lengthSq() > 1e-10) {
-          baseDir.normalize();
-          const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
-          const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
+        const normalGuide = resolveNormalGuideSegment(a, b);
+        if (normalGuide) {
           ctx.updatePreview(
-            a.clone().addScaledVector(normalDir, -spanM / 2),
-            a.clone().addScaledVector(normalDir, spanM / 2),
+            normalGuide.a,
+            normalGuide.b,
             rect,
             planarDistanceMm(a, b),
             { kind: "normalGuide" }

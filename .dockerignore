@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+dist
+reports
+outputs
+storage
+tmp
+.env
+*.log
+*.fqp
+*.kitchenproj
+vite-dev-live.out.log

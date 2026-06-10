@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="18"/>
+      <feOffset dx="0" dy="18" result="offset"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope=".24"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="blurShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+
+    <linearGradient id="glassFront" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eefcff"/>
+      <stop offset=".38" stop-color="#cfeef6"/>
+      <stop offset="1" stop-color="#b8dce6"/>
+    </linearGradient>
+
+    <linearGradient id="glassSide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#bfdfe6" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#91bac2" stop-opacity=".92"/>
+    </linearGradient>
+
+    <linearGradient id="frameFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b2d25"/>
+      <stop offset=".5" stop-color="#1f1915"/>
+      <stop offset="1" stop-color="#0f0c0a"/>
+    </linearGradient>
+
+    <linearGradient id="frameDepth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#645747"/>
+      <stop offset=".52" stop-color="#352c25"/>
+      <stop offset="1" stop-color="#181310"/>
+    </linearGradient>
+
+    <linearGradient id="sillTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2f4ed"/>
+      <stop offset=".45" stop-color="#aab2a6"/>
+      <stop offset="1" stop-color="#6e776f"/>
+    </linearGradient>
+
+    <linearGradient id="sillSide" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b7beb4"/>
+      <stop offset="1" stop-color="#59635d"/>
+    </linearGradient>
+
+    <linearGradient id="woodBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b77a41"/>
+      <stop offset=".2" stop-color="#9a6234"/>
+      <stop offset=".58" stop-color="#7d4d2a"/>
+      <stop offset="1" stop-color="#4d2d1c"/>
+    </linearGradient>
+
+    <radialGradient id="woodCap" cx=".43" cy=".42" r=".62">
+      <stop offset="0" stop-color="#a86a38"/>
+      <stop offset=".58" stop-color="#6d3e25"/>
+      <stop offset="1" stop-color="#2d1810"/>
+    </radialGradient>
+
+    <radialGradient id="hole" cx=".48" cy=".48" r=".56">
+      <stop offset="0" stop-color="#25150f"/>
+      <stop offset="1" stop-color="#100907"/>
+    </radialGradient>
+
+    <clipPath id="clipLeftTop"><rect x="304" y="306" width="176" height="175" rx="2"/></clipPath>
+    <clipPath id="clipRightTop"><rect x="536" y="312" width="160" height="174" rx="2"/></clipPath>
+    <clipPath id="clipLeftBottom"><rect x="304" y="532" width="176" height="150" rx="2"/></clipPath>
+    <clipPath id="clipRightBottom"><rect x="536" y="534" width="160" height="132" rx="2"/></clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#fafafa"/>
+
+  <g filter="url(#softShadow)">
+    <ellipse cx="517" cy="824" rx="382" ry="54" fill="#1d221f" opacity=".11"/>
+    <ellipse cx="520" cy="793" rx="268" ry="34" fill="#101411" opacity=".14" filter="url(#blurShadow)"/>
+
+    <g id="window-body">
+      <path d="M710 272 L812 330 L812 704 L710 678 Z" fill="url(#glassSide)" stroke="#6d7771" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M736 336 L786 363 L786 514 L736 500 Z" fill="#dff6fb" opacity=".34"/>
+      <path d="M736 545 L786 559 L786 678 L736 666 Z" fill="#d5eef3" opacity=".32"/>
+      <path d="M795 365 L795 688" fill="none" stroke="#70685c" stroke-width="15" stroke-linecap="round" opacity=".75"/>
+      <path d="M721 292 L812 330" fill="none" stroke="#514438" stroke-width="8" stroke-linecap="round"/>
+      <path d="M721 676 L812 704" fill="none" stroke="#514438" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+
+      <path d="M268 702 L710 678 L812 704 L342 759 Z" fill="url(#sillTop)" stroke="#5d665f" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M342 759 L812 704 L796 747 L306 810 Z" fill="url(#sillSide)" opacity=".72"/>
+      <path d="M294 719 L710 696 L793 716" fill="none" stroke="#eef2e9" stroke-width="12" stroke-linecap="round" opacity=".72"/>
+      <path d="M314 800 L796 739" fill="none" stroke="#3c453e" stroke-width="9" stroke-linecap="round" opacity=".62"/>
+
+      <g opacity=".98">
+        <rect x="304" y="306" width="176" height="175" fill="url(#glassFront)" stroke="#93aeb2" stroke-width="3"/>
+        <rect x="536" y="312" width="160" height="174" fill="url(#glassFront)" stroke="#93aeb2" stroke-width="3"/>
+        <rect x="304" y="532" width="176" height="150" fill="url(#glassFront)" stroke="#93aeb2" stroke-width="3"/>
+        <rect x="536" y="534" width="160" height="132" fill="url(#glassFront)" stroke="#93aeb2" stroke-width="3"/>
+
+        <g clip-path="url(#clipLeftTop)">
+          <rect x="324" y="324" width="34" height="126" fill="#fff" opacity=".25"/>
+          <path d="M421 314 V469" stroke="#fff" stroke-width="4" opacity=".26"/>
+          <path d="M310 313 H470" stroke="#fff" stroke-width="4" opacity=".28"/>
+        </g>
+        <g clip-path="url(#clipRightTop)">
+          <rect x="558" y="332" width="31" height="122" fill="#fff" opacity=".22"/>
+          <path d="M630 321 V473" stroke="#fff" stroke-width="4" opacity=".22"/>
+          <path d="M542 319 H687" stroke="#fff" stroke-width="4" opacity=".24"/>
+        </g>
+        <g clip-path="url(#clipLeftBottom)">
+          <rect x="324" y="552" width="32" height="110" fill="#fff" opacity=".21"/>
+          <path d="M421 541 V674" stroke="#fff" stroke-width="4" opacity=".18"/>
+          <path d="M310 540 H470" stroke="#fff" stroke-width="4" opacity=".21"/>
+        </g>
+        <g clip-path="url(#clipRightBottom)">
+          <rect x="558" y="553" width="30" height="96" fill="#fff" opacity=".18"/>
+          <path d="M630 543 V657" stroke="#fff" stroke-width="4" opacity=".17"/>
+          <path d="M542 543 H687" stroke="#fff" stroke-width="4" opacity=".19"/>
+        </g>
+      </g>
+
+      <g fill="url(#frameFace)">
+        <rect x="260" y="272" width="44" height="430"/>
+        <rect x="696" y="286" width="35" height="392"/>
+        <rect x="260" y="272" width="470" height="34"/>
+        <rect x="260" y="678" width="470" height="34"/>
+        <rect x="496" y="272" width="39" height="428"/>
+        <rect x="260" y="482" width="470" height="39"/>
+      </g>
+
+      <g opacity=".5" fill="#827260">
+        <rect x="294" y="285" width="7" height="394"/>
+        <rect x="528" y="287" width="7" height="391"/>
+        <rect x="707" y="302" width="6" height="354"/>
+        <rect x="278" y="302" width="428" height="6"/>
+        <rect x="279" y="493" width="425" height="6"/>
+        <rect x="280" y="684" width="420" height="5"/>
+      </g>
+
+      <path d="M696 286 L812 330 L812 704 L696 678 Z" fill="url(#frameDepth)" opacity=".42"/>
+      <path d="M696 286 L730 286 L812 330 L778 330 Z" fill="#5f5244" opacity=".82"/>
+      <path d="M696 678 L730 678 L812 704 L778 704 Z" fill="#2e2923" opacity=".74"/>
+
+      <ellipse cx="272" cy="702" rx="28" ry="19" fill="#11100f"/>
+      <ellipse cx="516" cy="705" rx="26" ry="33" fill="#171513"/>
+      <ellipse cx="710" cy="681" rx="31" ry="18" fill="#151311" opacity=".78"/>
+      <path d="M284 716 L515 704 L706 682" fill="none" stroke="#eef1e8" stroke-width="5" stroke-linecap="round" opacity=".56"/>
+    </g>
+
+    <g id="wood-roll">
+      <path d="M232 206 C248 180 286 171 336 178 L724 195 C770 198 791 218 780 249 C771 276 738 286 690 280 L300 260 C242 257 214 237 232 206 Z" fill="#19110c" opacity=".18"/>
+      <rect x="216" y="164" width="552" height="93" rx="47" fill="url(#woodBody)" stroke="#382116" stroke-width="5"/>
+      <ellipse cx="221" cy="211" rx="73" ry="47" fill="#755234" opacity=".78"/>
+      <ellipse cx="762" cy="211" rx="48" ry="58" fill="url(#woodCap)" stroke="#321c13" stroke-width="5"/>
+      <ellipse cx="764" cy="212" rx="27" ry="32" fill="#704222"/>
+      <ellipse cx="777" cy="216" rx="19" ry="23" fill="url(#hole)"/>
+      <ellipse cx="744" cy="197" rx="11" ry="8" fill="#bc8147" opacity=".58"/>
+
+      <path d="M250 181 C370 180 526 189 726 202" fill="none" stroke="#ca8a4f" stroke-width="5" stroke-linecap="round" opacity=".34"/>
+      <path d="M246 199 C395 200 545 207 727 221" fill="none" stroke="#60391f" stroke-width="5" stroke-linecap="round" opacity=".42"/>
+      <path d="M279 221 C421 222 557 229 716 241" fill="none" stroke="#c78a4f" stroke-width="4" stroke-linecap="round" opacity=".3"/>
+      <path d="M305 237 C426 238 546 243 696 252" fill="none" stroke="#4e2d1b" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+      <path d="M250 174 C375 174 529 183 724 195" fill="none" stroke="#e0a365" stroke-width="4" stroke-linecap="round" opacity=".22"/>
+
+      <rect x="260" y="238" width="22" height="43" rx="11" fill="#17110e"/>
+      <rect x="699" y="248" width="20" height="42" rx="10" fill="#17110e"/>
+      <ellipse cx="271" cy="281" rx="13" ry="9" fill="#17110e"/>
+      <ellipse cx="709" cy="290" rx="12" ry="8" fill="#17110e"/>
+    </g>
+  </g>
+</svg>

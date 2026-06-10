@@ -1,7 +1,6 @@
-import * as THREE from "three";
 import type { AppState } from "../layout/appState";
-import { kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import type { FloorBoundaryPoint, KitchenWorktopParams } from "./localTypes";
+import { resolveKitchenWorktopTypedPoint } from "./pointerKitchenWorktopDrawClickHelpers";
 
 type KitchenWorktopDrawState = {
   active: boolean;
@@ -91,20 +90,16 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
   const commitKitchenWorktopTypedLength = () => {
     const draw = ctx.kitchenWorktopDraw;
     if (!draw.active || draw.points.length === 0) return false;
-    const mm = Math.max(1, Math.round(Number(draw.typedMm)));
-    if (!Number.isFinite(mm)) return false;
 
     const start = draw.points[draw.points.length - 1];
     if (!start) return false;
-    const startWorld = kitchenWorktopPointToWorld(start);
-    const hover = draw.hoverPoint ?? { x: start.x + 1000, z: start.z };
-    const hoverWorld = kitchenWorktopPointToWorld(hover);
-    const dir = hoverWorld.clone().sub(startWorld);
-    if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
-    dir.normalize();
-    const endWorld = startWorld.clone().addScaledVector(dir, mm / 1000);
-    const rawPoint = { x: Math.round(endWorld.x * 1000), z: Math.round(endWorld.z * 1000) };
-    return appendKitchenWorktopPoint(ctx.floorOrthoPoint(start, rawPoint));
+    const point = resolveKitchenWorktopTypedPoint({
+      start,
+      hoverPoint: draw.hoverPoint,
+      typedMm: draw.typedMm,
+      floorOrthoPoint: ctx.floorOrthoPoint
+    });
+    return point ? appendKitchenWorktopPoint(point) : false;
   };
 
   const mirrorKitchenWorktopDraw = () => {

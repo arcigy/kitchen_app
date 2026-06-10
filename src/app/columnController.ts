@@ -35,7 +35,7 @@ function normalizeColumnParams(params: Partial<ColumnParams>, defaults: Pick<Col
     const next = Math.round(Number(value));
     return Number.isFinite(next) ? Math.max(1, next) : fallback;
   };
-  const any = (value: unknown, fallback: number) => {
+  const finite = (value: unknown, fallback: number) => {
     const next = Math.round(Number(value));
     return Number.isFinite(next) ? next : fallback;
   };
@@ -46,8 +46,8 @@ function normalizeColumnParams(params: Partial<ColumnParams>, defaults: Pick<Col
   return {
     name: String(params.name ?? "Stlp").trim() || "Stlp",
     shape,
-    xMm: any(params.xMm, 0),
-    zMm: any(params.zMm, 0),
+    xMm: finite(params.xMm, 0),
+    zMm: finite(params.zMm, 0),
     justifyX: isColumnJustifyX(params.justifyX) ? params.justifyX : "center",
     justifyY: isColumnJustifyY(params.justifyY) ? params.justifyY : "center",
     widthMm,

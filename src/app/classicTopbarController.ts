@@ -14,6 +14,10 @@ type WardrobeModeActions = {
   enterNew: () => void;
 };
 
+type CustomFurnitureModeActions = {
+  enterNew: () => void;
+};
+
 type ClassicTopbarControllerContext = {
   I_ALIGN: string;
   I_BOM: string;
@@ -29,6 +33,7 @@ type ClassicTopbarControllerContext = {
   I_HIDE: string;
   I_INSTALL: string;
   I_ISOLATE: string;
+  I_LIVING_WALL: string;
   I_MEASURE: string;
   I_MOVE: string;
   I_REDO: string;
@@ -62,10 +67,11 @@ type ClassicTopbarControllerContext = {
   enterFloorBoundaryEdit: () => void;
   getInstallState: () => AppInstallState;
   helpers: HistoryHelpers;
+  customFurnitureMode: CustomFurnitureModeActions | null;
   kitchenMode: KitchenModeActions | null;
   wardrobeMode: WardrobeModeActions | null;
   layoutTool: string;
-  openBomPanel: (args: Pick<AppState, "instances" | "kitchenWorktops" | "kitchenCtx">) => void;
+  openBomPanel: (args: Pick<AppState, "instances" | "kitchenWorktops" | "customFurniture" | "kitchenCtx">) => void;
   openPricingCatalog: () => void;
   openUnderlayPanel: () => void;
   promptAppInstall: () => Promise<boolean>;
@@ -183,13 +189,14 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addLivingWallTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Living Wall", { row });
-    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_CABINET });
+    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
   };
 
   const addRoomTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Room", { row });
     addButton(tools, { title: "Room", label: "Room", iconSvg: ctx.I_WARDROBE });
     addButton(tools, { title: "Wardrobe", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, onClick: () => ctx.wardrobeMode?.enterNew() });
+    addButton(tools, { title: "Custom Furniture", label: "Custom", iconSvg: ctx.I_CABINET, onClick: () => ctx.customFurnitureMode?.enterNew() });
   };
 
   const addModifyTab = (row: HTMLElement) => {
@@ -246,7 +253,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       title: "BOM",
       iconSvg: ctx.I_BOM,
       label: "BOM",
-      onClick: () => ctx.openBomPanel({ instances: ctx.S.instances, kitchenWorktops: ctx.S.kitchenWorktops, kitchenCtx: ctx.S.kitchenCtx })
+      onClick: () => ctx.openBomPanel({ instances: ctx.S.instances, kitchenWorktops: ctx.S.kitchenWorktops, customFurniture: ctx.S.customFurniture, kitchenCtx: ctx.S.kitchenCtx })
     });
     const installBtn = ctx.tb.toolButton(output, {
       title: "Install App",

@@ -41,28 +41,28 @@ type PropsApi = {
 
 export interface PlacementHelpers {
   props: PropsApi;
-  layoutRoot: any;
+  layoutRoot: THREE.Object3D;
   setUnderlayStatus: (text: string) => void;
   getBuildParams: (type: ModuleParams["type"]) => ModuleParams | null;
   createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
-  disposeObject3D: (obj: any) => void;
+  disposeObject3D: (obj: THREE.Object3D) => void;
   updateLayoutPanel: () => void;
   mountProps: () => void;
   setSelectedModule: (id: string | null) => void;
 
-  applyWallConstraints: (moving: LayoutInstance, desired: any) => any;
-  roomContainsBoxXZ: (box: any) => boolean;
-  instanceWorldBox: (inst: LayoutInstance) => any;
+  applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  roomContainsBoxXZ: (box: THREE.Box3) => boolean;
+  instanceWorldBox: (inst: LayoutInstance) => THREE.Box3;
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (moving: LayoutInstance) => boolean;
   moduleOverlapsKitchenWorktops: (moving: LayoutInstance) => boolean;
   autoOrientModuleToRoomWallIfSnapped: (inst: LayoutInstance) => void;
   resolveModuleAdjacencySnap?: (
     moving: LayoutInstance,
-    desired: any,
+    desired: THREE.Vector3,
     opts?: { stickyNeighborId?: string | null; preferredKitchenPlacement?: KitchenPlacementBinding | null }
   ) => {
-    position: any;
+    position: THREE.Vector3;
     rotationY?: number;
     link: ModuleAdjacencyLink | null;
     kitchenPlacement?: KitchenPlacementBinding | null;
@@ -74,9 +74,9 @@ export interface PlacementHelpers {
   modulePackages?: readonly FurnQuoteModulePackage[];
   resolvePlacementConstraint?: (
     ghost: LayoutInstance,
-    cursorWorld: any
+    cursorWorld: THREE.Vector3
   ) => {
-    position: any;
+    position: THREE.Vector3;
     rotationY: number;
     valid: boolean;
     kitchenPlacement?: KitchenPlacementBinding | null;
@@ -104,7 +104,7 @@ export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   helpers.mountProps();
 };
 
-export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: any) => {
+export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: THREE.Vector3) => {
   if (!S.placement.active || !S.placement.params) return;
 
   S.placement.lastCursor.copy(cursorWorld);
@@ -113,14 +113,14 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
     const ghost = helpers.createInstance(structuredClone(S.placement.params) as ModuleParams, { id: "ghost" });
     ghost.root.name = "placementGhost";
     showGhostModulePreview(ghost);
-    (ghost.pick.material as any).transparent = true;
-    (ghost.pick.material as any).opacity = 0;
-    (ghost.pick.material as any).depthWrite = false;
+    (ghost.pick.material as THREE.Material).transparent = true;
+    (ghost.pick.material as THREE.Material).opacity = 0;
+    (ghost.pick.material as THREE.Material).depthWrite = false;
     ghost.pick.visible = false;
     ghost.outline.visible = true;
-    (ghost.outline.material as any).transparent = true;
-    (ghost.outline.material as any).opacity = 0.9;
-    (ghost.outline.material as any).depthTest = false;
+    (ghost.outline.material as THREE.Material).transparent = true;
+    (ghost.outline.material as THREE.Material).opacity = 0.9;
+    (ghost.outline.material as THREE.Material).depthTest = false;
     helpers.layoutRoot.add(ghost.root);
     S.placement.ghost = ghost;
   }
@@ -176,7 +176,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   const ok = inRoom && !overlaps && (constrainedPlacement?.valid ?? true);
   S.placement.ghostValid = ok;
 
-  (g.outline.material as any).color.setHex(ok ? 0x3ddc97 : 0xff6b6b);
+  (g.outline.material as THREE.LineBasicMaterial).color.setHex(ok ? 0x3ddc97 : 0xff6b6b);
   if (constrainedPlacement?.statusText) {
     helpers.setUnderlayStatus(constrainedPlacement.statusText);
   }

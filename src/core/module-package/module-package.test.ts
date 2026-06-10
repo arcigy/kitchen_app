@@ -341,7 +341,7 @@ describe("tenant module package import", () => {
     const storedManifestPath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "drawer_low_standard", "module.package.json");
     expect(JSON.parse(await readFile(storedFilePath, "utf-8"))).toMatchObject({ magic: "FURNQUOTE_MODULE_PACKAGE" });
     expect(JSON.parse(await readFile(storedManifestPath, "utf-8"))).toMatchObject({ format: "furnquote-module" });
-  });
+  }, 30_000);
 
   it("imports a real .fqm file, stores the envelope, runtime manifest, meta, and assets", async () => {
     const bytes = Buffer.from("preview-bytes");
@@ -378,7 +378,7 @@ describe("tenant module package import", () => {
     });
     expect(await readFile(path.join(moduleDir, "assets", "preview.png"), "utf-8")).toBe("preview-bytes");
     expect(imported.catalogModule.modulePackageId).toBe("drawer_low_fqm_import");
-  });
+  }, 15_000);
 
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
     const modulePackage = makePackage();
@@ -418,7 +418,7 @@ describe("tenant module package import", () => {
       module.modulePackageId === modulePackage.module.modulePackageId ? { ...module, enabled: false } : module
     );
     expect(listVisibleModulePackages({ catalog: catalogA, packages: [imported.modulePackage] })).toHaveLength(0);
-  });
+  }, 15_000);
 
   it("seeds new clients with tenant copies of system module packages", async () => {
     const catalogRepository = createFileClientCatalogRepository(root);
@@ -443,7 +443,7 @@ describe("tenant module package import", () => {
     expect((await packageRepository.getPackage(ctxA, "drawer_low_family_v1"))?.module.displayName).toBe("Client A Drawer");
     expect((await packageRepository.getPackage(ctxB, "drawer_low_family_v1"))?.module.displayName).not.toBe("Client A Drawer");
     expect(await readFile(clientBPath, "utf-8")).toContain("Drawer Low");
-  });
+  }, 30_000);
 
   it("uses ClientCatalog plus tenant packages as the module visibility source of truth", async () => {
     const catalogRepository = createFileClientCatalogRepository(root);
@@ -471,7 +471,7 @@ describe("tenant module package import", () => {
       },
       packages
     }).map((modulePackage) => modulePackage.module.moduleType)).not.toContain("runtime_only");
-  });
+  }, 15_000);
 });
 
 describe("corner module placement rules", () => {

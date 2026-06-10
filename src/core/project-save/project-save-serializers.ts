@@ -33,6 +33,7 @@ export const PROJECT_SAVE_SERIALIZERS: ProjectStateSerializer[] = [
   serializer("windows", true, "covered"),
   serializer("doors", true, "covered"),
   serializer("worktops", true, "covered"),
+  serializer("customFurniture", true, "covered"),
   serializer("kitchenContext", true, "covered"),
   serializer("moduleInstances", true, "covered"),
   serializer("moduleParams", true, "covered"),

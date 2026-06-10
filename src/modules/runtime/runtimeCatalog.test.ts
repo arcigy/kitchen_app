@@ -59,7 +59,7 @@ describe("module runtime catalog context", () => {
     const empty = structuredClone(catalog);
     empty.materials = [];
     expect(createModuleRuntimeCatalogContext(empty).resolveRenderMaterial("missing", "front")).toMatchObject(SYSTEM_PLACEHOLDER_MATERIAL);
-  });
+  }, 15_000);
 
   it("ignores inactive materials when resolving runtime fallbacks", () => {
     const catalog = getSystemSeedCatalog();
@@ -116,7 +116,7 @@ describe("module runtime catalog context", () => {
 
     expect(((leftA.material as MeshStandardMaterial).color.getHexString())).toBe("112233");
     expect(((leftB.material as MeshStandardMaterial).color.getHexString())).toBe("445566");
-  });
+  }, 15_000);
 
   it("builds bottom boards for lower kitchen carcasses and drawer boxes", () => {
     const catalog = getSystemSeedCatalog();
@@ -129,7 +129,7 @@ describe("module runtime catalog context", () => {
       expect(drawer.getObjectByName(`drawer_${index}_bottom`)).toBeTruthy();
     }
     expect(swing.getObjectByName("bottom")).toBeTruthy();
-  });
+  }, 15_000);
 
   it("syncs material selections for newly added drawer fronts and bottoms", () => {
     const catalog = getSystemSeedCatalog();

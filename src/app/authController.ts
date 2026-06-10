@@ -6,6 +6,16 @@ type AuthApiResponse = {
   error?: string;
 };
 
+type LoginResult =
+  | { ok: true; session: AuthenticatedClientSession }
+  | { ok: false; message: string };
+
+export function resolveLoginFailureMessage(status: number | null): string {
+  if (status === null) return "Prihlasovaci server nie je dostupny. Spusti lokalne prostredie cez npm run dev.";
+  if (status === 401 || status === 429) return "Nespravne prihlasovacie udaje.";
+  return "Prihlasenie zlyhalo na serveri. Skus to znovu alebo restartuj lokalne prostredie.";
+}
+
 function isClientSession(value: unknown): value is AuthenticatedClientSession {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
@@ -64,32 +74,84 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   const panel = document.createElement("main");
   panel.className = "auth-panel";
 
-  const title = document.createElement("h1");
-  title.textContent = "Arcigy Kitchen";
+  const visual = document.createElement("section");
+  visual.className = "auth-visual";
+  visual.setAttribute("aria-hidden", "true");
+  visual.innerHTML = `
+    <div class="auth-brand-card">
+      <span>A</span>
+      <div>
+        <strong>Arcigy Kitchen</strong>
+        <small>Project workspace</small>
+      </div>
+    </div>
+    <div class="auth-preview-window">
+      <div class="auth-preview-top">
+        <i></i><i></i><i></i>
+      </div>
+      <div class="auth-preview-body">
+        <div class="auth-preview-sidebar"></div>
+        <div class="auth-preview-canvas">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="auth-preview-props"></div>
+      </div>
+    </div>
+    <div class="auth-visual-meta">
+      <strong>Arcigy organizacia</strong>
+      <span>Projekty, verzie a aktivita su viazane na konkretneho clena timu.</span>
+    </div>
+  `;
 
-  const subtitle = document.createElement("p");
-  subtitle.textContent = "Prihlaste sa do zakaznickeho pracoviska.";
+  const content = document.createElement("section");
+  content.className = "auth-content";
+
+  const heading = document.createElement("div");
+  heading.className = "auth-heading";
+  heading.innerHTML = `
+    <span>Prihlasenie</span>
+    <h1>Vitaj spat</h1>
+    <p>Vyber svoj profil a pokracuj do pracoviska Arcigy.</p>
+  `;
+
+  const profiles = document.createElement("div");
+  profiles.className = "auth-profiles";
+  profiles.innerHTML = `
+    <button type="button" class="auth-profile-card is-active" data-auth-user="branislav" aria-label="Vybrat Branislav">
+      <img src="/organization/branislav.png" alt="" />
+      <span><strong>Branislav</strong><small>Projektovy architekt</small></span>
+    </button>
+    <button type="button" class="auth-profile-card" data-auth-user="andrej" aria-label="Vybrat Andrej">
+      <img src="/organization/andrej.png" alt="" />
+      <span><strong>Andrej</strong><small>Technicky tvorca</small></span>
+    </button>
+  `;
 
   const form = document.createElement("form");
   form.className = "auth-form";
 
   const usernameLabel = document.createElement("label");
-  usernameLabel.textContent = "Pouzivatel";
+  const usernameText = document.createElement("span");
+  usernameText.textContent = "Pouzivatel";
   const usernameInput = document.createElement("input");
   usernameInput.name = "username";
   usernameInput.autocomplete = "username";
   usernameInput.required = true;
-  usernameInput.value = "arcigy";
-  usernameLabel.appendChild(usernameInput);
+  usernameInput.value = "branislav";
+  usernameLabel.append(usernameText, usernameInput);
 
   const passwordLabel = document.createElement("label");
-  passwordLabel.textContent = "Heslo";
+  const passwordText = document.createElement("span");
+  passwordText.textContent = "Heslo";
   const passwordInput = document.createElement("input");
   passwordInput.name = "password";
   passwordInput.type = "password";
   passwordInput.autocomplete = "current-password";
   passwordInput.required = true;
-  passwordLabel.appendChild(passwordInput);
+  passwordInput.placeholder = "Zadaj heslo";
+  passwordLabel.append(passwordText, passwordInput);
 
   const error = document.createElement("div");
   error.className = "auth-error";
@@ -97,12 +159,34 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const submit = document.createElement("button");
   submit.type = "submit";
-  submit.textContent = "Prihlasit";
+  submit.textContent = "Prihlasit do workspace";
 
-  form.append(usernameLabel, passwordLabel, error, submit);
-  panel.append(title, subtitle, form);
+  const hint = document.createElement("p");
+  hint.className = "auth-hint";
+  hint.innerHTML = `<strong>Demo pristupy</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span>`;
+
+  form.append(usernameLabel, passwordLabel, hint, error, submit);
+  content.append(heading, profiles, form);
+  panel.append(visual, content);
   root.appendChild(panel);
   passwordInput.focus();
+
+  const syncActiveProfile = () => {
+    const value = usernameInput.value.trim().toLowerCase();
+    profiles.querySelectorAll<HTMLButtonElement>(".auth-profile-card").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.authUser === value);
+    });
+  };
+
+  profiles.querySelectorAll<HTMLButtonElement>("[data-auth-user]").forEach((button) => {
+    button.addEventListener("click", () => {
+      usernameInput.value = button.dataset.authUser ?? "";
+      syncActiveProfile();
+      passwordInput.focus();
+      passwordInput.select();
+    });
+  });
+  usernameInput.addEventListener("input", syncActiveProfile);
 
   return await new Promise<AuthenticatedClientSession>((resolve) => {
     form.addEventListener("submit", (event) => {
@@ -110,22 +194,22 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       error.textContent = "";
       submit.disabled = true;
 
-      void login(usernameInput.value, passwordInput.value).then((session) => {
-        if (!session) {
-          error.textContent = "Nespravne prihlasovacie udaje.";
+      void login(usernameInput.value, passwordInput.value).then((result) => {
+        if (!result.ok) {
+          error.textContent = result.message;
           submit.disabled = false;
           passwordInput.select();
           return;
         }
 
         root.className = "";
-        resolve(session);
+        resolve(result.session);
       });
     });
   });
 }
 
-async function login(username: string, password: string): Promise<AuthenticatedClientSession | null> {
+async function login(username: string, password: string): Promise<LoginResult> {
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
@@ -133,10 +217,12 @@ async function login(username: string, password: string): Promise<AuthenticatedC
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { ok: false, message: resolveLoginFailureMessage(response.status) };
     const data = await readAuthResponse(response);
-    return data.ok && data.session ? data.session : null;
+    return data.ok && data.session
+      ? { ok: true, session: data.session }
+      : { ok: false, message: resolveLoginFailureMessage(response.status) };
   } catch {
-    return null;
+    return { ok: false, message: resolveLoginFailureMessage(null) };
   }
 }

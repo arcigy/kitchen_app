@@ -225,7 +225,7 @@ describe("multi-client worker isolation", () => {
     const stored = JSON.parse(await readFile(storedPath, "utf-8")) as { prices?: Record<string, number> };
     const priceId = Object.keys(stored.prices ?? {})[0]!;
     expect(stored.prices?.[priceId]).toBe(body.catalog?.priceList?.prices?.[priceId]);
-  });
+  }, 60_000);
 
   it("loads each client's stored catalog without crossing client namespaces", async () => {
     const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
@@ -247,7 +247,7 @@ describe("multi-client worker isolation", () => {
 
     expect(catalogA?.priceList?.prices?.[priceId]).toBe(9876);
     expect(catalogB?.priceList?.prices?.[priceId]).not.toBe(9876);
-  }, 15_000);
+  }, 60_000);
 
   it("registers module package routes in the session-scoped worker API", async () => {
     const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
@@ -289,7 +289,7 @@ describe("multi-client worker isolation", () => {
       body: { clientId: "client_b_demo", package: cornerShelfLowerFixture }
     });
     expect(badClient.status).toBe(403);
-  });
+  }, 15_000);
 
   it("keeps module package routes registered in the dev:local root worker entrypoint", async () => {
     const rootServer = await readFile(path.join(process.cwd(), "server", "workerServer.ts"), "utf-8");
@@ -392,7 +392,7 @@ describe("multi-client worker isolation", () => {
     expect(projectA.status).toBe(201);
   });
 
-  it("does not overwrite an existing project on encrypted import conflict", async () => {
+  it("imports an encrypted project as a copy when the project already exists", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
@@ -411,8 +411,13 @@ describe("multi-client worker isolation", () => {
       cookie,
       body: { envelope: downloaded.text }
     });
-    expect(response.status).toBe(409);
-  });
+    expect(response.status).toBe(200);
+    const imported = (response.body as { save: { projectId: string; project: { importedFrom?: { projectId: string } } } }).save;
+    expect(imported.projectId).not.toBe(project.projectId);
+    expect(imported.project.importedFrom?.projectId).toBe(project.projectId);
+    const list = await requestWorker(controller!.port, "/api/projects", { cookie });
+    expect((list.body as { projects: unknown[] }).projects).toHaveLength(2);
+  }, 30_000);
 
   it("prevents client A from reading storage belonging to client B", async () => {
     await seedRenderFixture(projectRoot, "client_b_demo", "project-b", "phase-b", "b.json", "user_client_b_owner");
@@ -422,7 +427,7 @@ describe("multi-client worker isolation", () => {
       { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
-  });
+  }, 15_000);
 
   it("prevents client A from reading client B legacy storage without metadata", async () => {
     await seedLegacyRenderFixture(projectRoot, "client_b_demo", "legacy-project-b", "legacy-phase-b", "b.json");

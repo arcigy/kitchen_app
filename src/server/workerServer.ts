@@ -4,13 +4,13 @@ import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { requireClientContextFromCookie } from "../core/client/session-cookie";
-import { createInMemoryUserRepository } from "../core/auth/user-repository";
-import { createUserService, type UserService } from "../core/auth/user-service";
-import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
+import type { UserService } from "../core/auth/user-service";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
 import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
 import { handleModulePackageApi } from "./modulePackageEndpoint";
 import { handleProjectApi } from "./projectEndpoint";
+import { createServerProjectRepository } from "./projectRepository";
+import { createServerCatalogRepository, createServerUserService } from "./serverRepositories";
 import { runBlenderExport } from "./blender/runBlenderExport";
 
 const PROJECT_ROOT = process.cwd();
@@ -66,7 +66,15 @@ const contentTypeForFile = (fileName: string) => {
   return "application/octet-stream";
 };
 
-const defaultUserService = createUserService(createInMemoryUserRepository());
+const defaultUserService = createServerUserService();
+
+async function verifyDatabaseReady(projectRoot: string): Promise<void> {
+  const storage = process.env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
+  const hasDatabaseUrl = !!(process.env.DATABASE_URL || process.env.KITCHEN_PROJECT_DATABASE_URL || process.env.PROJECT_DATABASE_URL);
+  if (storage === "file" || (storage !== "postgres" && !hasDatabaseUrl)) return;
+  const repository = createServerProjectRepository({ projectRoot });
+  await repository.listProjects({ userId: "__startup_check", clientId: "__startup_check", role: "viewer" });
+}
 
 const getValidatedClientContext = (cookieHeader: string | string[] | undefined, userService?: UserService) =>
   requireClientContextFromCookie(cookieHeader, {
@@ -141,7 +149,7 @@ const handleCatalog = async (
   projectRoot: string
 ) => {
   const context = await getValidatedClientContext(req.headers.cookie, userService);
-  const repository = createFileClientCatalogRepository(projectRoot);
+  const repository = createServerCatalogRepository(projectRoot);
   const catalog = await repository.ensureCatalogExists(context);
   return sendJson(res, 200, { ok: true, catalog });
 };
@@ -468,9 +476,9 @@ export function startWorkerServer(
 
       if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
 
-      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson);
+      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService });
 
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson);
+      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson, { userService });
 
       if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
 
@@ -515,6 +523,13 @@ export function startWorkerServer(
 
   server.listen(port, host, () => {
     console.log(`[blender-worker] listening on http://${host}:${port}`);
+    void verifyDatabaseReady(projectRoot).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[blender-worker] database startup check failed: ${message}`);
+      server.close(() => {
+        process.exitCode = 1;
+      });
+    });
   });
   return server;
 }

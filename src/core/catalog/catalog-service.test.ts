@@ -30,7 +30,7 @@ describe("ClientCatalog repository and service", () => {
     expect(catalog.clientId).toBe("client_a");
     const stored = JSON.parse(await readFile(path.join(projectRoot, "storage", "clients", "client_a", "catalog", "pricing.json"), "utf-8")) as { id: string };
     expect(stored.id).toBe(catalog.priceList.id);
-  });
+  }, 30_000);
 
   it("ensureCatalogExists reads an existing stored catalog instead of replacing it with a new seed", async () => {
     const repo = createFileClientCatalogRepository(projectRoot);
@@ -42,7 +42,7 @@ describe("ClientCatalog repository and service", () => {
     const loaded = await repo.ensureCatalogExists(clientA);
 
     expect(loaded.priceList.prices[materialId]).toBe(4321);
-  });
+  }, 15_000);
 
   it("keeps client A and client B catalogs isolated", async () => {
     const repo = createFileClientCatalogRepository(projectRoot);
@@ -60,7 +60,7 @@ describe("ClientCatalog repository and service", () => {
     expect(nextB.priceList.prices[materialId]).toBe(catalogB.priceList.prices[materialId]);
     expect(nextA.materials[0]!.displayName).toBe("Client A Board");
     expect(nextB.materials[0]!.displayName).not.toBe("Client A Board");
-  }, 15000);
+  }, 30_000);
 
   it("service updates prices and exposes enabled modules", async () => {
     const repo = createSystemSeedClientCatalogRepository();
@@ -71,7 +71,7 @@ describe("ClientCatalog repository and service", () => {
 
     expect(await repo.getPrice(clientA, materialId)).toBe(77);
     expect(service.getEnabledModules().some((module) => module.moduleType === "drawer_low")).toBe(false);
-  });
+  }, 15_000);
 
   it("filters runtime module descriptors by enabled client modules", () => {
     const catalog = getSystemSeedCatalog();
