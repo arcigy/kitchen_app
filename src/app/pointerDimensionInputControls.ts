@@ -43,6 +43,14 @@ export type DimensionEditInputHost<T extends DimensionEditInputElement = Dimensi
   appendChild: (input: T) => unknown;
 };
 
+type DimensionEditInputArgs = {
+  ariaLabel: string;
+  id: string;
+  name?: string;
+  onCommit: () => void;
+  onHide: () => void;
+};
+
 export function parseDimensionMillimeters(raw: string): number | null {
   const value = Number(String(raw).trim().replace(",", ".").replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(value) ? Math.round(value) : null;
@@ -98,20 +106,20 @@ export function showDimensionInputForPointerEvent(
 
 export function createDimensionEditInput(
   doc: Document,
-  host: { appendChild: (input: HTMLInputElement) => unknown },
-  args: { ariaLabel: string; id: string; name?: string; onCommit: () => void; onHide: () => void }
+  host: HTMLElement,
+  args: DimensionEditInputArgs
 ): HTMLInputElement;
 export function createDimensionEditInput<T extends DimensionEditInputElement>(
   doc: DimensionEditInputDocument<T>,
   host: DimensionEditInputHost<T>,
-  args: { ariaLabel: string; id: string; name?: string; onCommit: () => void; onHide: () => void }
+  args: DimensionEditInputArgs
 ): T;
 export function createDimensionEditInput(
-  doc: { createElement: (tagName: "input") => any },
-  host: { appendChild: (input: any) => unknown },
-  args: { ariaLabel: string; id: string; name?: string; onCommit: () => void; onHide: () => void }
+  doc: Document | DimensionEditInputDocument,
+  host: HTMLElement | DimensionEditInputHost,
+  args: DimensionEditInputArgs
 ) {
-  const input = doc.createElement("input");
+  const input = doc.createElement("input") as DimensionEditInputElement;
   input.id = args.id;
   input.name = args.name ?? args.id;
   input.type = "text";
@@ -126,10 +134,10 @@ export function createDimensionEditInput(
     args.onHide();
   };
 
-  input.addEventListener("pointerdown", (ev: PointerEvent) => {
+  input.addEventListener("pointerdown", (ev) => {
     ev.stopPropagation();
   });
-  input.addEventListener("keydown", (ev: KeyboardEvent) => {
+  input.addEventListener("keydown", (ev) => {
     const key = (ev as KeyboardEvent).key;
     if (key === "Enter") {
       args.onCommit();
@@ -143,6 +151,6 @@ export function createDimensionEditInput(
   });
   input.addEventListener("blur", hide);
 
-  host.appendChild(input);
+  (host as DimensionEditInputHost<DimensionEditInputElement>).appendChild(input);
   return input;
 }
