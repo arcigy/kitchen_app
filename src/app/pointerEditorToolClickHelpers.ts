@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { AlignPickedLine } from "./localTypes";
+import { refreshSelectionHighlights } from "./selectionController";
 
 export type PointerDimensionClickState = {
   picked: AlignPickedLine[];
@@ -100,7 +101,7 @@ export function handleAlignToolClick(params: {
     return;
   }
 
-  params.updateSelectionHighlights();
+  refreshSelectionHighlights(params);
   params.commitHistory();
   params.alignState.lastA = ref;
   params.alignState.lastB = params.picked;
