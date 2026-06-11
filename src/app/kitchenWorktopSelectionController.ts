@@ -1,26 +1,12 @@
 import type { KitchenWorktopInstance } from "./localTypes";
-
-type KitchenGroupLookup = {
-  id: string;
-};
-
-type KitchenModeWorktopSelectionApi = {
-  findKitchenGroup: (id: string) => KitchenGroupLookup | null;
-};
-
-type MarqueeState = {
-  active: boolean;
-  pending: boolean;
-  pointerId: number | null;
-  hitSomething: boolean;
-};
+import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
 
 type KitchenWorktopSelectionControllerContext = {
-  marquee: MarqueeState;
+  marquee: SelectionMarqueeState;
   marqueeEl: HTMLElement;
   findKitchenWorktop: (id: string) => KitchenWorktopInstance | null;
   getKitchenEditMode: () => boolean;
-  getKitchenMode: () => KitchenModeWorktopSelectionApi | null;
+  getKitchenMode: () => KitchenModeGroupSelectionApi | null;
   setSelectedKitchenGroup: (groupId: string | null) => void;
 };
 

@@ -2,14 +2,10 @@ import * as THREE from "three";
 import { pointInPolygonXZ, worldToScreen } from "./sharedUtils";
 import { getModulePlanPolygon } from "./planSnap";
 import type { LayoutInstance } from "./localTypes";
+import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
 
-type KitchenGroupLookup = {
-  id: string;
-};
-
-type KitchenModeSelectionApi = {
+type KitchenModeSelectionApi = KitchenModeGroupSelectionApi & {
   filterSelectableInstanceId: (id: string) => string | null;
-  findKitchenGroup: (id: string) => KitchenGroupLookup | null;
 };
 
 type ModuleDragState = {
@@ -19,13 +15,6 @@ type ModuleDragState = {
   lastValid: THREE.Vector3;
 };
 
-type MarqueeState = {
-  active: boolean;
-  pending: boolean;
-  pointerId: number | null;
-  hitSomething: boolean;
-};
-
 type ModuleSelectionControllerContext = {
   instances: LayoutInstance[];
   pinnedInstanceIds: Set<string>;
@@ -33,7 +22,7 @@ type ModuleSelectionControllerContext = {
   groundPlane: THREE.Plane;
   renderer: THREE.WebGLRenderer;
   dragState: ModuleDragState;
-  marquee: MarqueeState;
+  marquee: SelectionMarqueeState;
   marqueeEl: HTMLElement;
   findInstance: (id: string) => LayoutInstance | null;
   getCamera: () => THREE.Camera;
