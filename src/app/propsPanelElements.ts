@@ -33,6 +33,13 @@ export function createRangeElement(value: string, options: { min: string; max: s
   return input;
 }
 
+export function createFileInputElement(accept: string) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = accept;
+  return input;
+}
+
 export function createSelectElement<T extends SelectOptionValue>(value: T, options: Array<{ value: T; label: string }>) {
   const select = document.createElement("select");
   for (const option of options) {

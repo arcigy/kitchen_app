@@ -492,6 +492,8 @@ describe("selected props panels", () => {
       "Calibrate mm",
       "Pinned"
     ]);
+    expect(rows[0]!.control.type).toBe("file");
+    expect(rows[0]!.control.accept).toBe(".png,.pdf,image/png,application/pdf");
     expect(rows[1]!.control.type).toBe("range");
     expect(rows[1]!.control.min).toBe("0");
     expect(rows[1]!.control.max).toBe("1");

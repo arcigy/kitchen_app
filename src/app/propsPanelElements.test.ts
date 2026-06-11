@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -70,6 +70,15 @@ describe("props panel elements", () => {
     expect(input.max).toBe("1");
     expect(input.step).toBe("0.01");
     expect(input.value).toBe("0.5");
+  });
+
+  it("creates reusable file input elements with stable accept filters", () => {
+    installFakeDocument();
+
+    const input = createFileInputElement(".png,image/png") as unknown as FakeElement;
+
+    expect(input.type).toBe("file");
+    expect(input.accept).toBe(".png,image/png");
   });
 
   it("stringifies numeric select values the same way DOM option values do", () => {

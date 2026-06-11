@@ -27,7 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
-import { createCheckboxElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
+import { createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -930,9 +930,7 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
     props.setTitle("Underlay");
     const s = props.section();
 
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = ".png,.pdf,image/png,application/pdf";
+    const file = createFileInputElement(".png,.pdf,image/png,application/pdf");
     props.row(s, "Upload", file);
 
     const opacity = createRangeElement(String(underlayState.opacity), { min: "0", max: "1", step: "0.01" });

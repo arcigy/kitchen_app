@@ -3,6 +3,7 @@ import { vi } from "vitest";
 type FakeListener = (event: Record<string, unknown>) => void;
 
 export class FakeElement {
+  accept = "";
   attributes = new Map<string, string>();
   checked = false;
   children: FakeElement[] = [];
