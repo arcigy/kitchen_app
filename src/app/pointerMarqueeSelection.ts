@@ -1,4 +1,4 @@
-import { replaceSelectionIdSet } from "./selectionController";
+import { replaceSelectionIdSet, resolveMergedSelectionIdSet } from "./selectionController";
 
 export type ScreenPoint = { x: number; y: number };
 
@@ -203,10 +203,16 @@ export type ResolvedMarqueeSelection = {
 };
 
 export function resolveMarqueeSelection(args: ResolveMarqueeSelectionArgs): ResolvedMarqueeSelection {
-  const nextWalls = new Set<string>(args.additive ? Array.from(args.selectedWallIds) : []);
-  const nextInstances = new Set<string>(args.additive ? Array.from(args.selectedInstanceIds) : []);
-  for (const id of args.hitWallIds) nextWalls.add(id);
-  for (const id of args.hitInstanceIds) nextInstances.add(id);
+  const nextWalls = resolveMergedSelectionIdSet({
+    additive: args.additive,
+    currentIds: args.selectedWallIds,
+    hitIds: args.hitWallIds
+  });
+  const nextInstances = resolveMergedSelectionIdSet({
+    additive: args.additive,
+    currentIds: args.selectedInstanceIds,
+    hitIds: args.hitInstanceIds
+  });
 
   let primaryWallId = args.currentWallId && nextWalls.has(args.currentWallId) ? args.currentWallId : null;
   let primaryInstanceId = args.currentInstanceId && nextInstances.has(args.currentInstanceId) ? args.currentInstanceId : null;

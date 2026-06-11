@@ -9,6 +9,7 @@ import {
   createSelectionController,
   getSelectionSideEffects,
   replaceSelectionIdSet,
+  resolveMergedSelectionIdSet,
   resolveSelectedIds,
   runApplySelectionCommand,
   runClearDrawingToolSelectionCommand,
@@ -593,6 +594,23 @@ describe("createSelectionController", () => {
         singleKind: "wall"
       })
     ).toEqual([]);
+  });
+
+  it("resolves merged selection id sets for additive and replacing marquee selection", () => {
+    expect([
+      ...resolveMergedSelectionIdSet({
+        additive: true,
+        currentIds: ["existing-1", "existing-2"],
+        hitIds: ["hit-1", "existing-1"]
+      })
+    ]).toEqual(["existing-1", "existing-2", "hit-1"]);
+    expect([
+      ...resolveMergedSelectionIdSet({
+        additive: false,
+        currentIds: ["existing-1"],
+        hitIds: ["hit-1"]
+      })
+    ]).toEqual(["hit-1"]);
   });
 
   it("maps selected kinds to existing selection side effects", () => {

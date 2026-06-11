@@ -312,6 +312,19 @@ export function resolveSelectedIds(args: {
       : [];
 }
 
+export function resolveMergedSelectionIdSet(args: {
+  additive: boolean;
+  currentIds: Iterable<string>;
+  hitIds: Iterable<string>;
+}) {
+  const nextIds = new Set<string>();
+  if (args.additive) {
+    for (const id of args.currentIds) nextIds.add(id);
+  }
+  for (const id of args.hitIds) nextIds.add(id);
+  return nextIds;
+}
+
 export function clearSelectionIdSet(target: Set<string>) {
   target.clear();
 }
