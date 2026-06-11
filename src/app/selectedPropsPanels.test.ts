@@ -242,6 +242,59 @@ describe("selected props panels", () => {
     expect(ctx.appendLinkedMeasureInputs).not.toHaveBeenCalled();
   });
 
+  it("keeps selected wall action buttons routed through the current rebuild and history flow", () => {
+    installFakeDocument();
+    const { props, rows, section } = makePropertiesPanelHarness();
+    const wall = makeWall("wall-1", 100, 2500);
+    const ctx = {
+      props,
+      selectedWallIds: new Set(["wall-1"]),
+      walls: [wall],
+      wallJoinTolMm: 1,
+      showNoProps: vi.fn(),
+      commitHistory: vi.fn(),
+      S: {} as AppState,
+      mountProps: vi.fn(),
+      rebuildWall: vi.fn(),
+      rebuildWallPlanMesh: vi.fn(),
+      appendLinkedMeasureInputs: vi.fn()
+    };
+
+    mountWallPropsPanel(ctx, wall);
+
+    expect(props.setTitle).toHaveBeenCalledWith("Stena (wall-1)");
+    expect(rows.map((row) => row.label)).toEqual([
+      "Typ steny",
+      "Hrúbka (mm)",
+      "Výška (mm)",
+      "Justification",
+      "Exterior",
+      "Spoj A",
+      "Spoj B"
+    ]);
+    expect(rows[4]!.control.type).toBe("button");
+    expect(rows[4]!.control.textContent).toBe("Flip exterior");
+    expect(section.children.some((child) => child.textContent === "Length: 1000 mm")).toBe(true);
+
+    const joinAButtons = rows[5]!.control.children[1]!.children;
+    expect(joinAButtons[0]!.type).toBe("button");
+    expect(joinAButtons[0]!.textContent).toBe("Tato stena pokracuje");
+    expect(joinAButtons[0]!.disabled).toBe(true);
+    expect(joinAButtons[1]!.type).toBe("button");
+    expect(joinAButtons[1]!.textContent).toBe("Vypnut spoj");
+    expect(joinAButtons[1]!.disabled).toBe(true);
+
+    rows[4]!.control.dispatch("click");
+
+    expect(wall.params.exteriorSign).toBe(-1);
+    expect(wall.params.typeId).toBe("custom");
+    expect(ctx.rebuildWall).toHaveBeenCalledWith(wall);
+    expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledOnce();
+    expect(ctx.commitHistory).toHaveBeenCalledWith(ctx.S);
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+    expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "wall", wallId: "wall-1" });
+  });
+
   it("keeps selected floor boundary editing routed through the current edit button", () => {
     installFakeDocument();
     const { props, section } = makePropertiesPanelHarness();

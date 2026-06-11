@@ -27,7 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
-import { createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
+import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -342,9 +342,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
 
     if (isMulti) return;
 
-    const flip = document.createElement("button");
-    flip.type = "button";
-    flip.textContent = "Flip exterior";
+    const flip = createButtonElement("Flip exterior");
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
     const len = document.createElement("div");
@@ -398,9 +396,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       buttons.style.gap = "6px";
       buttons.style.flexWrap = "wrap";
 
-      const makeMain = document.createElement("button");
-      makeMain.type = "button";
-      makeMain.textContent = "Tato stena pokracuje";
+      const makeMain = createButtonElement("Tato stena pokracuje");
       makeMain.disabled = connected.length === 0;
       makeMain.addEventListener("click", () => {
         const priorities = [joinPriority(firstWall, end), ...connected.map((item) => joinPriority(item.wall, item.end))];
@@ -411,9 +407,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       });
       buttons.appendChild(makeMain);
 
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.textContent = enabled ? "Vypnut spoj" : "Povolit spoj";
+      const toggle = createButtonElement(enabled ? "Vypnut spoj" : "Povolit spoj");
       toggle.disabled = connected.length === 0;
       toggle.addEventListener("click", () => {
         const join = ensureJoinEnd(firstWall, end);
