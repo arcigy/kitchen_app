@@ -75,6 +75,21 @@ export type DeleteSelectionCommandContext = Pick<
   | "commitHistory"
 >;
 
+export type DuplicateSelectionCommandContext = Pick<
+  LayoutActionsControllerContext,
+  | "ensureLayoutMode"
+  | "getSelectedKind"
+  | "getSelectedInstanceId"
+  | "getSelectedWallId"
+  | "getSelectedInstanceIds"
+  | "getSelectedWallIds"
+  | "setSelectedWall"
+  | "mountProps"
+  | "duplicateInstance"
+  | "duplicateWall"
+  | "commitHistory"
+>;
+
 export function resolveSelectedEntityIds(args: {
   selectedKind: SelectedKind;
   singleKind: Exclude<SelectedKind, null>;
@@ -127,7 +142,7 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
 type DuplicateSelectionBranchResult = "handled" | "blocked" | "not-applicable";
 
 function runSelectedModuleDuplicateBranch(
-  ctx: LayoutActionsControllerContext,
+  ctx: DuplicateSelectionCommandContext,
   selectedKind: SelectedKind
 ): DuplicateSelectionBranchResult {
   if (selectedKind !== "module") return "not-applicable";
@@ -143,7 +158,7 @@ function runSelectedModuleDuplicateBranch(
   return "handled";
 }
 
-function runSelectedWallDuplicateBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
+function runSelectedWallDuplicateBranch(ctx: DuplicateSelectionCommandContext, selectedKind: SelectedKind) {
   const selectedWallIds = ctx.getSelectedWallIds();
   const wallIds = resolveSelectedEntityIds({
     selectedKind,
@@ -167,7 +182,7 @@ function runSelectedWallDuplicateBranch(ctx: LayoutActionsControllerContext, sel
   return true;
 }
 
-export function runDuplicateSelectionCommand(ctx: LayoutActionsControllerContext) {
+export function runDuplicateSelectionCommand(ctx: DuplicateSelectionCommandContext) {
   ctx.ensureLayoutMode();
   const selectedKind = ctx.getSelectedKind();
   const moduleDuplicate = runSelectedModuleDuplicateBranch(ctx, selectedKind);
