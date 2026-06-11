@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
 import {
   formatMovePreviewStatus,
+  formatRotatePreviewStatus,
   handleTransformPointerMovePreview,
   handleTransformPreviewPointerMove,
   normalizeAngleRadians,
+  resolveRotatePreviewAngle,
   type PointerTransformPreviewState
 } from "./pointerTransformPreviewFlow";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
@@ -65,6 +67,17 @@ describe("pointerTransformPreviewFlow", () => {
     expect(formatMovePreviewStatus({ delta: new Vector3(1.234, 0, -2.345), moveSnapDisabled: true, hasObjectSnap: true })).toBe(
       "Move free 1 mm smart snap: 1234 x -2345 mm (click or type distance, N = snapping)"
     );
+  });
+
+  it("resolves rotate preview angle and formats rotate preview status", () => {
+    const angle = resolveRotatePreviewAngle({
+      hitPoint: new Vector3(1, 0, 0),
+      pivot: new Vector3(0, 0, 0),
+      startPointerAngle: Math.PI * 0.75
+    });
+
+    expect(angle).toBeCloseTo(-Math.PI * 0.75);
+    expect(formatRotatePreviewStatus(angle)).toBe("Rotate: -135 deg (click to finish)");
   });
 
   it("keeps current move preview behavior without object snap", () => {

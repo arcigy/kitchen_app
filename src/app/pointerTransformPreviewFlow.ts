@@ -17,6 +17,15 @@ export function formatMovePreviewStatus(args: { delta: THREE.Vector3; moveSnapDi
   )} mm (click or type distance, N = ${args.moveSnapDisabled ? "snapping" : "free movement"})`;
 }
 
+export function resolveRotatePreviewAngle(args: { hitPoint: THREE.Vector3; pivot: THREE.Vector3; startPointerAngle: number }): number {
+  const pointerAngle = Math.atan2(args.hitPoint.z - args.pivot.z, args.hitPoint.x - args.pivot.x);
+  return normalizeAngleRadians(pointerAngle - args.startPointerAngle);
+}
+
+export function formatRotatePreviewStatus(angleRad: number): string {
+  return `Rotate: ${Math.round((angleRad * 180) / Math.PI)} deg (click to finish)`;
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -42,12 +51,14 @@ export function handleTransformPreviewPointerMove<Snap>(args: {
   }
 
   if (transformState.kind === "rotate" && transformState.step === "rotating" && transformState.pivot) {
-    const pivot = transformState.pivot;
-    const a1 = Math.atan2(args.hitPoint.z - pivot.z, args.hitPoint.x - pivot.x);
-    const deltaAngle = normalizeAngleRadians(a1 - transformState.startPointerAngle);
+    const deltaAngle = resolveRotatePreviewAngle({
+      hitPoint: args.hitPoint,
+      pivot: transformState.pivot,
+      startPointerAngle: transformState.startPointerAngle
+    });
     transformState.lastAngleSign = deltaAngle < 0 ? -1 : 1;
     args.applyRotateAngle(deltaAngle);
-    args.setStatus(`Rotate: ${Math.round((deltaAngle * 180) / Math.PI)} deg (click to finish)`);
+    args.setStatus(formatRotatePreviewStatus(deltaAngle));
     return true;
   }
 
