@@ -10,6 +10,7 @@ import {
 import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
 import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
+import type { EditorPropsApi } from "../app/editorModeApis";
 
 function makeGhostMaterial(material: THREE.Material) {
   const ghostMaterial = material.clone();
@@ -31,14 +32,8 @@ function showGhostModulePreview(ghost: LayoutInstance) {
   });
 }
 
-type PropsApi = {
-  setTitle: (title: string) => void;
-  section: () => HTMLElement;
-  row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
-};
-
 export interface PlacementHelpers {
-  props: PropsApi;
+  props: EditorPropsApi;
   layoutRoot: THREE.Object3D;
   setUnderlayStatus: (text: string) => void;
   getBuildParams: (type: ModuleParams["type"]) => ModuleParams | null;

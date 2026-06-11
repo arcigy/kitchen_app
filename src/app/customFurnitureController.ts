@@ -72,6 +72,7 @@ import {
   CUSTOM_FURNITURE_SHARED_DRAW_ICONS,
   CUSTOM_FURNITURE_TOOLBAR_ICONS
 } from "./customFurnitureToolbarIcons";
+import type { EditorPropsApi, EditorTopbarApi } from "./editorModeApis";
 import { mountCustomFurnitureActiveToolProps } from "./customFurnitureToolPropsPanel";
 import {
   mountCustomFurnitureBoardProps,
@@ -145,23 +146,6 @@ export type {
   CustomFurnitureBoundaryVertexRef
 };
 
-type TopbarApi = {
-  clear: () => void;
-  addRow: (opts?: { title?: string; className?: string }) => HTMLElement;
-  addGroup: (title: string, opts?: { row?: HTMLElement }) => HTMLElement;
-  addSpacer: (opts?: { row?: HTMLElement }) => void;
-  toolButton: (
-    group: HTMLElement,
-    opts: { title: string; iconSvg: string; label: string; variant?: "success" | "danger"; onClick: () => void }
-  ) => HTMLButtonElement;
-};
-
-type PropsApi = {
-  setTitle: (title: string) => void;
-  section: () => HTMLElement;
-  row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
-};
-
 type CustomFurnitureTool = "boundary" | "horizontalBoard" | "verticalBoard" | "edgeBand";
 type CustomFurnitureBoundaryDrawTool =
   | "select"
@@ -213,8 +197,8 @@ type CreateCustomFurnitureControllerArgs = {
   layoutRoot: THREE.Group;
   renderer: THREE.WebGLRenderer;
   getCamera: () => THREE.Camera;
-  tb: TopbarApi;
-  props: PropsApi;
+  tb: EditorTopbarApi;
+  props: EditorPropsApi;
   icons: {
     board: string;
     cancel: string;

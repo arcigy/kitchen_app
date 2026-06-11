@@ -13,23 +13,7 @@ import {
   resolveKitchenWorktopThickness
 } from "./kitchenMaterialSync";
 import { t, translateParamLabel } from "../i18n";
-
-type TopbarApi = {
-  clear: () => void;
-  addRow: (args?: { title?: string; className?: string }) => HTMLElement;
-  addGroup: (title?: string, args?: { row?: HTMLElement }) => HTMLElement;
-  addSpacer: (args?: { row?: HTMLElement }) => void;
-  toolButton: (
-    toolsEl: HTMLElement,
-    args: { title: string; iconSvg: string; label?: string; variant?: "success" | "danger"; onClick?: () => void }
-  ) => HTMLButtonElement;
-};
-
-type PropsApi = {
-  setTitle: (title: string) => void;
-  section: () => HTMLElement;
-  row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
-};
+import type { EditorPropsApi, EditorTopbarApi } from "../app/editorModeApis";
 
 type GroupInstanceSnapshot = {
   id: string;
@@ -93,8 +77,8 @@ type CreateKitchenEditModeArgs = {
   S: AppState;
   layoutRoot: Group;
   viewerEl: HTMLElement;
-  tb: TopbarApi;
-  props: PropsApi;
+  tb: EditorTopbarApi;
+  props: EditorPropsApi;
 
   icons: {
     cabinet: string;
