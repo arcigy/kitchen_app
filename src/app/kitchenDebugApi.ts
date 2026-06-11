@@ -33,6 +33,7 @@ import type {
 } from "./localTypes";
 import type { createKitchenEditMode } from "../layout/kitchenEditMode";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { refreshSelectionHighlights } from "./selectionController";
 
 type KitchenGuideSegmentInfo = {
   start: THREE.Vector3;
@@ -784,7 +785,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     }
     const result = applyAlignBetweenPickedLines(ref, picked);
     if (result.ok) {
-      updateSelectionHighlights();
+      refreshSelectionHighlights({ updateSelectionHighlights });
       commitHistory(S);
       mountProps();
     }
