@@ -5,6 +5,7 @@ import {
   captureTransformStartState,
   createTransformController,
   enterMoveSelectElementsWithoutSelection,
+  initializeTransformStateFromSelection,
   isTransformModuleMoveValid,
   resolveMovedOpeningCenterMm,
   resolveMovedSectionParams,
@@ -250,6 +251,49 @@ describe("transform move tool", () => {
     expect(transformState.stickyMove).toBe(true);
     expect(transformState.moveSnapDisabled).toBe(true);
     expect(setUnderlayStatus).toHaveBeenLastCalledWith("Move: select element to move. Click Move again to exit. N = free movement.");
+  });
+
+  it("initializes transform state from resolved selection ids", () => {
+    const transformState = makeTransformState();
+    const selectionIds = {
+      wallIds: ["w1"],
+      instIds: ["m1"],
+      sectionIds: ["s1"],
+      windowIds: ["win1"],
+      doorIds: ["door1"]
+    };
+
+    initializeTransformStateFromSelection({
+      kind: "move",
+      moveSnapDisabled: true,
+      selectionIds,
+      stickyMove: true,
+      transformState
+    });
+
+    expect(transformState.kind).toBe("move");
+    expect(transformState.step).toBe("pickBase");
+    expect(transformState.stickyMove).toBe(true);
+    expect(transformState.moveSnapDisabled).toBe(true);
+    expect(transformState.selectedWallIds).toBe(selectionIds.wallIds);
+    expect(transformState.selectedInstanceIds).toBe(selectionIds.instIds);
+    expect(transformState.selectedSectionIds).toBe(selectionIds.sectionIds);
+    expect(transformState.selectedWindowIds).toBe(selectionIds.windowIds);
+    expect(transformState.selectedDoorIds).toBe(selectionIds.doorIds);
+
+    initializeTransformStateFromSelection({
+      kind: "rotate",
+      moveSnapDisabled: false,
+      selectionIds: { wallIds: [], instIds: ["m2"], sectionIds: [], windowIds: [], doorIds: [] },
+      stickyMove: false,
+      transformState
+    });
+
+    expect(transformState.kind).toBe("rotate");
+    expect(transformState.step).toBe("pickPivot");
+    expect(transformState.stickyMove).toBe(false);
+    expect(transformState.moveSnapDisabled).toBe(false);
+    expect(transformState.selectedInstanceIds).toEqual(["m2"]);
   });
 
   it("resolves transform ids with current multi-selection priority", () => {

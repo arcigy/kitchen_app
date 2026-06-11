@@ -240,6 +240,26 @@ export function enterMoveSelectElementsWithoutSelection(ctx: TransformNoSelectio
   ctx.mountProps();
 }
 
+export type TransformResolvedSelectionStateArgs = {
+  kind: TransformKind;
+  moveSnapDisabled: boolean;
+  selectionIds: TransformSelectionIds;
+  stickyMove: boolean;
+  transformState: TransformState;
+};
+
+export function initializeTransformStateFromSelection(args: TransformResolvedSelectionStateArgs) {
+  args.transformState.kind = args.kind;
+  args.transformState.step = args.kind === "move" ? "pickBase" : "pickPivot";
+  args.transformState.stickyMove = args.stickyMove;
+  args.transformState.moveSnapDisabled = args.moveSnapDisabled;
+  args.transformState.selectedWallIds = args.selectionIds.wallIds;
+  args.transformState.selectedInstanceIds = args.selectionIds.instIds;
+  args.transformState.selectedSectionIds = args.selectionIds.sectionIds;
+  args.transformState.selectedWindowIds = args.selectionIds.windowIds;
+  args.transformState.selectedDoorIds = args.selectionIds.doorIds;
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -345,7 +365,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
     const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
-    const { wallIds, instIds, sectionIds, windowIds, doorIds } = resolveTransformSelectionIds({
+    const selectionIds = resolveTransformSelectionIds({
       kind,
       selectedWallIds: ctx.selectedWallIds,
       selectedInstanceIds: ctx.selectedInstanceIds,
@@ -356,6 +376,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       windowInst: ctx.windowInst,
       doorInst: ctx.doorInst
     });
+    const { wallIds, instIds, sectionIds, windowIds, doorIds } = selectionIds;
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
     if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
       if (kind !== "move") return false;
@@ -371,15 +392,13 @@ export function createTransformController(ctx: TransformControllerContext) {
     }
 
     clearTransform();
-    ctx.transformState.kind = kind;
-    ctx.transformState.step = kind === "move" ? "pickBase" : "pickPivot";
-    ctx.transformState.stickyMove = stickyMove;
-    ctx.transformState.moveSnapDisabled = moveSnapDisabled;
-    ctx.transformState.selectedWallIds = wallIds;
-    ctx.transformState.selectedInstanceIds = instIds;
-    ctx.transformState.selectedSectionIds = sectionIds;
-    ctx.transformState.selectedWindowIds = windowIds;
-    ctx.transformState.selectedDoorIds = doorIds;
+    initializeTransformStateFromSelection({
+      kind,
+      moveSnapDisabled,
+      selectionIds,
+      stickyMove,
+      transformState: ctx.transformState
+    });
 
     captureTransformStartState(ctx, instIds);
 
