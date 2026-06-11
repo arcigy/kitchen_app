@@ -9,6 +9,7 @@ import {
   createSelectionController,
   getSelectionSideEffects,
   replaceSelectionIdSet,
+  runApplySelectionCommand,
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
   runClearSelectionCommand,
@@ -182,6 +183,40 @@ describe("createSelectionController", () => {
     runClearSelectionCommand(applySelection);
 
     expect(applySelection).toHaveBeenCalledExactlyOnceWith({ kind: null });
+  });
+
+  it("runs the named apply selection command in the current order with current side effects", () => {
+    const events: string[] = [];
+    const afterSelectionChanged = vi.fn((opts) => {
+      events.push(`after:${JSON.stringify(opts)}`);
+    });
+
+    runApplySelectionCommand(
+      {
+        afterSelectionChanged,
+        clearObjectSelectionVisuals: () => events.push("cleanupVisuals"),
+        clearSelectedEntityIds: () => events.push("clearIds"),
+        ensureSelectableTool: () => events.push("ensureTool"),
+        setSelectedKind: (kind) => events.push(`setKind:${kind}`)
+      },
+      {
+        kind: "wall",
+        sideEffectKind: "wall",
+        sideEffectId: "wall-1",
+        assignIds: () => events.push("assignIds"),
+        cleanupVisuals: () => events.push("customCleanup")
+      }
+    );
+
+    expect(events).toEqual([
+      "ensureTool",
+      "setKind:wall",
+      "clearIds",
+      "assignIds",
+      "customCleanup",
+      "after:{\"wallSnapId\":\"wall-1\"}"
+    ]);
+    expect(afterSelectionChanged).toHaveBeenCalledExactlyOnceWith({ wallSnapId: "wall-1" });
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {

@@ -3,7 +3,7 @@ import type { LayoutInstance, SelectedKind, WallInstance } from "./localTypes";
 
 type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 
-type SelectionSideEffects = { highlights?: boolean; wallSnapId?: string | null };
+export type SelectionSideEffects = { highlights?: boolean; wallSnapId?: string | null };
 
 export type SelectionApplyCommandArgs = {
   kind: SelectedKind;
@@ -14,6 +14,14 @@ export type SelectionApplyCommandArgs = {
 };
 
 export type SelectionApplyCommand = (args: SelectionApplyCommandArgs) => void;
+
+export type ApplySelectionCommandContext = {
+  afterSelectionChanged: (opts?: SelectionSideEffects) => void;
+  clearObjectSelectionVisuals: () => void;
+  clearSelectedEntityIds: () => void;
+  ensureSelectableTool: () => void;
+  setSelectedKind: (kind: SelectedKind) => void;
+};
 
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
@@ -129,6 +137,15 @@ export function runClearSelectionCommand(applySelection: SelectionApplyCommand) 
   applySelection({ kind: null });
 }
 
+export function runApplySelectionCommand(ctx: ApplySelectionCommandContext, args: SelectionApplyCommandArgs) {
+  ctx.ensureSelectableTool();
+  ctx.setSelectedKind(args.kind);
+  ctx.clearSelectedEntityIds();
+  args.assignIds?.();
+  (args.cleanupVisuals ?? ctx.clearObjectSelectionVisuals)();
+  ctx.afterSelectionChanged(getSelectionSideEffects(args.sideEffectKind ?? args.kind, args.sideEffectId));
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -226,13 +243,18 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     clearUnderlayBox();
   };
 
+  const applySelectionCommandContext: ApplySelectionCommandContext = {
+    afterSelectionChanged,
+    clearObjectSelectionVisuals,
+    clearSelectedEntityIds,
+    ensureSelectableTool,
+    setSelectedKind: (kind) => {
+      ctx.selectedKind = kind;
+    }
+  };
+
   const applySelection: SelectionApplyCommand = (args) => {
-    ensureSelectableTool();
-    ctx.selectedKind = args.kind;
-    clearSelectedEntityIds();
-    args.assignIds?.();
-    (args.cleanupVisuals ?? clearObjectSelectionVisuals)();
-    afterSelectionChanged(getSelectionSideEffects(args.sideEffectKind ?? args.kind, args.sideEffectId));
+    runApplySelectionCommand(applySelectionCommandContext, args);
   };
 
   function setSelectedKitchenGroup(groupId: string | null) {
