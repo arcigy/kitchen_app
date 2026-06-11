@@ -16,7 +16,7 @@ import {
   makeCustomFurnitureVerticalBoardProfile,
   makeCustomFurnitureVerticalBoardDraftPreview,
   moveCustomFurnitureBoundaryCut,
-  moveCustomFurnitureBoundarySegmentToParallelDistance,
+  moveCustomFurnitureTemporaryBoundaryDimension,
   nextCustomFurnitureVerticalBoardDraftPoints,
   offsetCustomFurniturePlanPath,
   popCustomFurnitureBoundaryRedoState,
@@ -211,7 +211,7 @@ describe("custom furniture boundary draw tools", () => {
     expect(dimension?.referenceSegmentIndex).toBe(1);
     expect(Math.round(dimension?.distanceMm ?? 0)).toBe(500);
 
-    const moved = moveCustomFurnitureBoundarySegmentToParallelDistance(segments, 0, 1, 700);
+    const moved = moveCustomFurnitureTemporaryBoundaryDimension(segments, 0, 1, 700);
     expect(moved[0]).toEqual({ a: { x: 0, z: -200 }, b: { x: 1000, z: -200 } });
     expect(moved[2]?.a).toEqual({ x: 1000, z: -200 });
     expect(moved[2]?.b).toEqual({ x: 1000, z: 700 });

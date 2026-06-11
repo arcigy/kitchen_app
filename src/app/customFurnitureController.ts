@@ -27,7 +27,6 @@ import {
   makeCustomFurniturePolygonBoundary,
   makeCustomFurnitureRectBoundary,
   moveCustomFurnitureBoundaryCut,
-  moveCustomFurnitureBoundarySegmentToParallelDistance,
   offsetCustomFurniturePlanPath,
   popCustomFurnitureBoundaryRedoState,
   popCustomFurnitureBoundaryUndoState,
@@ -46,7 +45,10 @@ import {
   type CustomFurnitureBoundaryVertexRef,
   type CustomFurnitureSharedDrawToolId
 } from "./customFurnitureBoundaryEditing";
-import { resolveCustomFurnitureTemporaryBoundaryDimension } from "./customFurnitureTemporaryDimensions";
+import {
+  moveCustomFurnitureTemporaryBoundaryDimension,
+  resolveCustomFurnitureTemporaryBoundaryDimension
+} from "./customFurnitureTemporaryDimensions";
 import {
   makeCustomFurnitureVerticalBoardDraftPreview,
   makeCustomFurnitureVerticalBoardProfile,
@@ -114,7 +116,7 @@ export {
   makeCustomFurniturePolygonBoundary,
   makeCustomFurnitureRectBoundary,
   moveCustomFurnitureBoundaryCut,
-  moveCustomFurnitureBoundarySegmentToParallelDistance,
+  moveCustomFurnitureTemporaryBoundaryDimension,
   offsetCustomFurniturePlanPath,
   popCustomFurnitureBoundaryRedoState,
   popCustomFurnitureBoundaryUndoState,
@@ -2476,7 +2478,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       setEditablePlanLineSegments(moveCustomFurnitureBoundaryCut(editableSegments, edit.cutId, next));
       selectedBoundarySegmentIndex = getEditablePlanLineSegments().findIndex((segment) => segment.cut?.id === edit.cutId);
     } else {
-      setEditablePlanLineSegments(moveCustomFurnitureBoundarySegmentToParallelDistance(
+      setEditablePlanLineSegments(moveCustomFurnitureTemporaryBoundaryDimension(
         editableSegments,
         edit.segmentIndex,
         edit.referenceSegmentIndex,
