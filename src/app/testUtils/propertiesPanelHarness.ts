@@ -9,7 +9,9 @@ export class FakeElement {
   children: FakeElement[] = [];
   className = "";
   disabled = false;
+  id = "";
   innerHTML = "";
+  inputMode = "";
   isConnected = true;
   listeners = new Map<string, FakeListener[]>();
   max = "";

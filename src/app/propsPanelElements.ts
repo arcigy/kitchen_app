@@ -32,6 +32,8 @@ export function createInputElement(
   value: string,
   options: {
     autocomplete?: HTMLInputElement["autocomplete"];
+    id?: string;
+    inputMode?: HTMLInputElement["inputMode"];
     min?: string;
     max?: string;
     name?: string;
@@ -43,6 +45,8 @@ export function createInputElement(
   const input = document.createElement("input");
   input.type = type;
   if (options.autocomplete != null) input.autocomplete = options.autocomplete;
+  if (options.id != null) input.id = options.id;
+  if (options.inputMode != null) input.inputMode = options.inputMode;
   if (options.min != null) input.min = options.min;
   if (options.max != null) input.max = options.max;
   if (options.name != null) input.name = options.name;

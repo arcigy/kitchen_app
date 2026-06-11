@@ -79,6 +79,8 @@ describe("props panel elements", () => {
 
     const input = createInputElement("password", "", {
       autocomplete: "current-password",
+      id: "login-password",
+      inputMode: "text",
       name: "password",
       placeholder: "Zadaj heslo",
       required: true
@@ -86,6 +88,8 @@ describe("props panel elements", () => {
 
     expect(input.type).toBe("password");
     expect(input.autocomplete).toBe("current-password");
+    expect(input.id).toBe("login-password");
+    expect(input.inputMode).toBe("text");
     expect(input.name).toBe("password");
     expect(input.placeholder).toBe("Zadaj heslo");
     expect(input.required).toBe(true);
