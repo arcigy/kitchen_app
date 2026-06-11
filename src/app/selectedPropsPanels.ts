@@ -26,6 +26,7 @@ import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
 import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberRows, appendOpeningSwingRows } from "./openingPropsPanelControls";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
+import { refreshSelectionHighlights } from "./selectionController";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -435,7 +436,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
 }
 
 export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstance) {
-  const { props, getAllMaterials, floorDefault, rebuildFloor, updateSelectionHighlights, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs } = ctx;
+  const { props, getAllMaterials, floorDefault, rebuildFloor, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs } = ctx;
     props.setTitle(`Podlaha (${floor.id})`);
     const s = props.section();
 
@@ -477,7 +478,7 @@ export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstanc
       thickness.value = String(floor.params.thicknessMm);
       mat.value = floor.params.materialId;
       rebuildFloor(floor);
-      updateSelectionHighlights();
+      refreshSelectionHighlights(ctx);
       commitHistory(S);
     };
 
