@@ -21,6 +21,20 @@ function moduleInstance(kitchenGroupId: string | null): LayoutInstance {
   } as LayoutInstance;
 }
 
+function cornerModule(): LayoutInstance {
+  const inst = moduleInstance("kg1");
+  inst.id = "corner";
+  inst.params = { type: "corner_shelf_lower" } as LayoutInstance["params"];
+  return inst;
+}
+
+function groupedModule(id: string, binding: NonNullable<LayoutInstance["kitchenPlacement"]>): LayoutInstance {
+  const inst = moduleInstance("kg1");
+  inst.id = id;
+  inst.kitchenPlacement = binding;
+  return inst;
+}
+
 function worktop(groupId: string): KitchenWorktopInstance {
   return {
     id: "w1",
@@ -84,5 +98,30 @@ describe("module placement helpers", () => {
     expect(helpers.inferTallResizeAnchorSide(instance)).toBe("right");
 
     expect(getKitchenGuideSegmentInfo).toHaveBeenCalledWith(expect.objectContaining({ id: "w1" }), 0, 80);
+  });
+
+  it("uses the required group offset when propagating corner resize to pinned neighbors", () => {
+    const corner = cornerModule();
+    const neighbor = groupedModule("m2", { worktopId: "w1", segmentIndex: 0, offsetAlongM: 0 });
+    const applyKitchenPlacementBinding = vi.fn((inst: LayoutInstance) => {
+      inst.root.position.x += 0.1;
+      return true;
+    });
+    const getKitchenCornerArmBindingInfo = vi.fn(() => ({
+      worktopId: "w1",
+      xSegmentIndex: 0,
+      zSegmentIndex: null
+    }));
+    const ctx = makeContext(corner);
+    ctx.instances = [corner, neighbor];
+    ctx.applyKitchenPlacementBinding = applyKitchenPlacementBinding;
+    ctx.getKitchenCornerArmBindingInfo = getKitchenCornerArmBindingInfo;
+    ctx.isCornerKitchenModule = vi.fn(() => true);
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateCornerResizeToPinnedNeighbors(corner, corner.params)).toEqual({ ok: true, movedIds: ["m2"] });
+
+    expect(getKitchenCornerArmBindingInfo).toHaveBeenCalledExactlyOnceWith(corner, 45);
+    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(neighbor, neighbor.kitchenPlacement, 45);
   });
 });

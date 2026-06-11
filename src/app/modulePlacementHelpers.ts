@@ -6,7 +6,7 @@ import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import type { KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
-import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type PolygonPoint = [number, number];
 type PolygonRing = PolygonPoint[];
@@ -518,7 +518,7 @@ function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
 
 function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) {
   if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+  const group = findKitchenPlacementGroup({ kitchenGroupId: inst.kitchenGroupId, kitchenGroups: S.kitchenGroups });
   if (!group) return { ok: true, movedIds: [] as string[] };
   void previousParams;
 

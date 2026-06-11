@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { LayoutInstance } from "./localTypes";
-import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { findKitchenPlacementGroup, refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 function moduleInstance(id: string, kitchenGroupId: string | null = null): LayoutInstance {
   return {
@@ -18,6 +18,14 @@ function moduleInstance(id: string, kitchenGroupId: string | null = null): Layou
 }
 
 describe("module kitchen placement helpers", () => {
+  it("finds kitchen placement groups without applying default fallback", () => {
+    const kitchenGroups = [{ id: "kg1", ctx: { worktopBackOffsetMm: 45 } }];
+
+    expect(findKitchenPlacementGroup({ kitchenGroupId: "kg1", kitchenGroups })).toBe(kitchenGroups[0]);
+    expect(findKitchenPlacementGroup({ kitchenGroupId: "missing", kitchenGroups })).toBeNull();
+    expect(findKitchenPlacementGroup({ kitchenGroupId: null, kitchenGroups })).toBeNull();
+  });
+
   it("resolves group-specific or default kitchen placement back offset", () => {
     expect(
       resolveKitchenPlacementBackOffset({

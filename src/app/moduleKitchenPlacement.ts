@@ -5,12 +5,23 @@ export type KitchenPlacementGroupContext = {
   ctx: { worktopBackOffsetMm: number };
 };
 
+export function findKitchenPlacementGroup(args: {
+  kitchenGroupId: string | null | undefined;
+  kitchenGroups: KitchenPlacementGroupContext[];
+}) {
+  if (!args.kitchenGroupId) return null;
+  return args.kitchenGroups.find((item) => item.id === args.kitchenGroupId) ?? null;
+}
+
 export function resolveKitchenPlacementBackOffset(args: {
   kitchenGroupId: string;
   kitchenGroups: KitchenPlacementGroupContext[];
   defaultWorktopBackOffsetMm: number;
 }) {
-  const group = args.kitchenGroups.find((item) => item.id === args.kitchenGroupId) ?? null;
+  const group = findKitchenPlacementGroup({
+    kitchenGroupId: args.kitchenGroupId,
+    kitchenGroups: args.kitchenGroups
+  });
   return group?.ctx.worktopBackOffsetMm ?? args.defaultWorktopBackOffsetMm;
 }
 
