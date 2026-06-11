@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   canStartTransformFromSelection,
   captureTransformStartState,
+  completeSelectedTransformStart,
   createTransformController,
   enterMoveSelectElementsWithoutSelection,
   initializeTransformStateFromSelection,
@@ -294,6 +295,22 @@ describe("transform move tool", () => {
     expect(transformState.stickyMove).toBe(false);
     expect(transformState.moveSnapDisabled).toBe(false);
     expect(transformState.selectedInstanceIds).toEqual(["m2"]);
+  });
+
+  it("completes selected transform start with current status text before mount", () => {
+    const setUnderlayStatus = vi.fn();
+    const mountProps = vi.fn();
+
+    completeSelectedTransformStart({ kind: "move", mountProps, setUnderlayStatus });
+
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): click base point. N = free movement.");
+    expect(mountProps).toHaveBeenCalledExactlyOnceWith();
+    expect(setUnderlayStatus.mock.invocationCallOrder[0]).toBeLessThan(mountProps.mock.invocationCallOrder[0]);
+
+    completeSelectedTransformStart({ kind: "rotate", mountProps, setUnderlayStatus });
+
+    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Rotate (R): click pivot point...");
+    expect(mountProps).toHaveBeenCalledTimes(2);
   });
 
   it("resolves transform ids with current multi-selection priority", () => {

@@ -260,6 +260,17 @@ export function initializeTransformStateFromSelection(args: TransformResolvedSel
   args.transformState.selectedDoorIds = args.selectionIds.doorIds;
 }
 
+export type TransformSelectedStartCompletionContext = {
+  kind: TransformKind;
+  mountProps: () => void;
+  setUnderlayStatus: (message: string) => void;
+};
+
+export function completeSelectedTransformStart(ctx: TransformSelectedStartCompletionContext) {
+  ctx.setUnderlayStatus(ctx.kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
+  ctx.mountProps();
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -402,8 +413,11 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     captureTransformStartState(ctx, instIds);
 
-    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
-    ctx.mountProps();
+    completeSelectedTransformStart({
+      kind,
+      mountProps: ctx.mountProps,
+      setUnderlayStatus: ctx.setUnderlayStatus
+    });
     return true;
   };
 
