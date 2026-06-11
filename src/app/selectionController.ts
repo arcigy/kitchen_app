@@ -23,6 +23,15 @@ export type ApplySelectionCommandContext = {
   setSelectedKind: (kind: SelectedKind) => void;
 };
 
+export type SelectModuleCommandContext = {
+  applySelection: SelectionApplyCommand;
+  clearUnderlayBox: () => void;
+  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  pinnedInstanceIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  setInstanceSelected: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -144,6 +153,21 @@ export function runApplySelectionCommand(ctx: ApplySelectionCommandContext, args
   args.assignIds?.();
   (args.cleanupVisuals ?? ctx.clearObjectSelectionVisuals)();
   ctx.afterSelectionChanged(getSelectionSideEffects(args.sideEffectKind ?? args.kind, args.sideEffectId));
+}
+
+export function runSelectModuleCommand(ctx: SelectModuleCommandContext, id: string | null) {
+  let selectedId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+  if (selectedId && ctx.pinnedInstanceIds.has(selectedId)) selectedId = null;
+  ctx.applySelection({
+    kind: selectedId ? "module" : null,
+    assignIds: () => {
+      if (selectedId) replaceSelectionIdSet(ctx.selectedInstanceIds, [selectedId]);
+    },
+    cleanupVisuals: () => {
+      ctx.setInstanceSelected(selectedId);
+      ctx.clearUnderlayBox();
+    }
+  });
 }
 
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
@@ -273,19 +297,14 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedModule(id: string | null) {
-    if (ctx.kitchenMode) id = ctx.kitchenMode.filterSelectableInstanceId(id);
-    if (id && ctx.pinnedInstanceIds.has(id)) id = null;
-    const selectedId = id;
-    applySelection({
-      kind: selectedId ? "module" : null,
-      assignIds: () => {
-        if (selectedId) replaceSelectionIdSet(ctx.selectedInstanceIds, [selectedId]);
-      },
-      cleanupVisuals: () => {
-        setInstanceSelected(selectedId);
-        clearUnderlayBox();
-      }
-    });
+    runSelectModuleCommand({
+      applySelection,
+      clearUnderlayBox,
+      kitchenMode: ctx.kitchenMode,
+      pinnedInstanceIds: ctx.pinnedInstanceIds,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      setInstanceSelected
+    }, id);
   }
 
   function setSelectedOpening(kind: "window" | "door") {

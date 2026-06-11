@@ -13,6 +13,7 @@ import {
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
   runClearSelectionCommand,
+  runSelectModuleCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
   type SelectionControllerContext
@@ -217,6 +218,61 @@ describe("createSelectionController", () => {
       "after:{\"wallSnapId\":\"wall-1\"}"
     ]);
     expect(afterSelectionChanged).toHaveBeenCalledExactlyOnceWith({ wallSnapId: "wall-1" });
+  });
+
+  it("runs the named module selection command with current kitchen filter behavior", () => {
+    const selectedInstanceIds = new Set<string>();
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+      args.cleanupVisuals?.();
+    });
+    const setInstanceSelected = vi.fn();
+    const clearUnderlayBox = vi.fn();
+
+    runSelectModuleCommand(
+      {
+        applySelection,
+        clearUnderlayBox,
+        kitchenMode: { filterSelectableInstanceId: () => "module-filtered" },
+        pinnedInstanceIds: new Set<string>(),
+        selectedInstanceIds,
+        setInstanceSelected
+      },
+      "module-raw"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0].kind).toBe("module");
+    expect([...selectedInstanceIds]).toEqual(["module-filtered"]);
+    expect(setInstanceSelected).toHaveBeenCalledExactlyOnceWith("module-filtered");
+    expect(clearUnderlayBox).toHaveBeenCalledOnce();
+  });
+
+  it("runs the named module selection command with current pinned module behavior", () => {
+    const selectedInstanceIds = new Set<string>(["old-module"]);
+    const applySelection = vi.fn((args) => {
+      selectedInstanceIds.clear();
+      args.assignIds?.();
+      args.cleanupVisuals?.();
+    });
+    const setInstanceSelected = vi.fn();
+
+    runSelectModuleCommand(
+      {
+        applySelection,
+        clearUnderlayBox: vi.fn(),
+        kitchenMode: null,
+        pinnedInstanceIds: new Set(["module-locked"]),
+        selectedInstanceIds,
+        setInstanceSelected
+      },
+      "module-locked"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0].kind).toBeNull();
+    expect([...selectedInstanceIds]).toEqual([]);
+    expect(setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {
