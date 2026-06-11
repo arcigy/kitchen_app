@@ -14,9 +14,15 @@ export function createButtonElement(text: string) {
 type SelectOptionValue = string | number;
 type InputElementType = "text" | "number";
 
-export function createInputElement(type: InputElementType, value: string, options: { step?: string; placeholder?: string } = {}) {
+export function createInputElement(
+  type: InputElementType,
+  value: string,
+  options: { min?: string; max?: string; step?: string; placeholder?: string } = {}
+) {
   const input = document.createElement("input");
   input.type = type;
+  if (options.min != null) input.min = options.min;
+  if (options.max != null) input.max = options.max;
   if (options.step != null) input.step = options.step;
   if (options.placeholder != null) input.placeholder = options.placeholder;
   input.value = value;

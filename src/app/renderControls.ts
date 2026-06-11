@@ -1,3 +1,5 @@
+import { createButtonElement, createCheckboxElement, createInputElement, createRangeElement, createSelectElement } from "./propsPanelElements";
+
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 
 type RenderControlsContext = {
@@ -46,34 +48,25 @@ export function createRenderControls(ctx: RenderControlsContext) {
     sunHost.appendChild(wrap);
   };
 
-  const day = document.createElement("input");
-  day.type = "range";
-  day.min = "0";
-  day.max = "25";
-  day.step = "0.1";
-  day.value = "9";
+  const day = createRangeElement("9", { min: "0", max: "25", step: "0.1" });
   day.addEventListener("input", () => ctx.setDaylightIntensity(Number(day.value)));
   sunRow("Window daylight", day);
 
-  const shadowSel = document.createElement("select");
-  shadowSel.innerHTML = `
-    <option value="pcfsoft">Shadows: PCFSoft</option>
-    <option value="vsm">Shadows: VSM (experimental)</option>
-  `;
-  shadowSel.value = ctx.getShadowAlgorithm();
+  const shadowSel = createSelectElement(ctx.getShadowAlgorithm() === "vsm" ? "vsm" : "pcfsoft", [
+    { value: "pcfsoft", label: "Shadows: PCFSoft" },
+    { value: "vsm", label: "Shadows: VSM (experimental)" }
+  ]);
   shadowSel.addEventListener("change", () => {
     const next = shadowSel.value === "vsm" ? "vsm" : "pcfsoft";
     ctx.setShadowAlgorithm(next);
   });
   sunRow("Shadows", shadowSel);
 
-  const renderModeSel = document.createElement("select");
-  renderModeSel.innerHTML = `
-    <option value="realtime">Render: realtime</option>
-    ${ctx.enableSsgi ? `<option value="realtime_ssgi">Render: realtime + SSGI (experimental)</option>` : ""}
-    ${ctx.enablePhoto ? `<option value="photo_pathtrace">Render: photo mode (path tracing)</option>` : ""}
-  `;
-  renderModeSel.value = ctx.getRenderMode();
+  const renderModeSel = createSelectElement<RenderMode>(ctx.getRenderMode(), [
+    { value: "realtime", label: "Render: realtime" },
+    ...(ctx.enableSsgi ? [{ value: "realtime_ssgi" as const, label: "Render: realtime + SSGI (experimental)" }] : []),
+    ...(ctx.enablePhoto ? [{ value: "photo_pathtrace" as const, label: "Render: photo mode (path tracing)" }] : [])
+  ]);
 
   const photoWrap = document.createElement("div");
   photoWrap.style.display = isPhotoRenderMode(ctx.getRenderMode()) ? "" : "none";
@@ -99,23 +92,14 @@ export function createRenderControls(ctx: RenderControlsContext) {
   photoControls.style.gap = "8px";
   photoWrap.appendChild(photoControls);
 
-  const photoSamples = document.createElement("input");
-  photoSamples.type = "number";
-  photoSamples.min = "1";
-  photoSamples.max = "4096";
-  photoSamples.step = "1";
-  photoSamples.value = "256";
+  const photoSamples = createInputElement("number", "256", { min: "1", max: "4096", step: "1" });
   photoSamples.style.width = "110px";
   photoControls.appendChild(photoSamples);
 
-  const photoReset = document.createElement("button");
-  photoReset.type = "button";
-  photoReset.textContent = "Reset";
+  const photoReset = createButtonElement("Reset");
   photoControls.appendChild(photoReset);
 
-  const photoSave = document.createElement("button");
-  photoSave.type = "button";
-  photoSave.textContent = "Save PNG";
+  const photoSave = createButtonElement("Save PNG");
   photoControls.appendChild(photoSave);
 
   const photoStatus = document.createElement("div");
@@ -132,26 +116,17 @@ export function createRenderControls(ctx: RenderControlsContext) {
     ctx.downloadViewportPng();
   });
 
-  const hdriSel = document.createElement("select");
-  hdriSel.innerHTML = `
-    <option value="">HDRI: off</option>
-    <option value="/hdri/OutdoorFieldBaseballDayClear001/HdrOutdoorFieldBaseballDayClear001_HDR_2K.exr">Outdoor day (2K)</option>
-    <option value="/hdri/SkySunset007/HdrSkySunset007_HDR_1K.exr">Sunset (1K)</option>
-  `;
-  hdriSel.value = "";
+  const hdriSel = createSelectElement("", [
+    { value: "", label: "HDRI: off" },
+    { value: "/hdri/OutdoorFieldBaseballDayClear001/HdrOutdoorFieldBaseballDayClear001_HDR_2K.exr", label: "Outdoor day (2K)" },
+    { value: "/hdri/SkySunset007/HdrSkySunset007_HDR_1K.exr", label: "Sunset (1K)" }
+  ]);
   sunRow("HDRI", hdriSel);
 
-  const hdriBg = document.createElement("input");
-  hdriBg.type = "checkbox";
-  hdriBg.checked = false;
+  const hdriBg = createCheckboxElement(false);
   sunRow("HDRI background", hdriBg);
 
-  const hdriIntensity = document.createElement("input");
-  hdriIntensity.type = "range";
-  hdriIntensity.min = "0";
-  hdriIntensity.max = "1";
-  hdriIntensity.step = "0.01";
-  hdriIntensity.value = "0.15";
+  const hdriIntensity = createRangeElement("0.15", { min: "0", max: "1", step: "0.01" });
   sunRow("HDRI intensity", hdriIntensity);
 
   const applyHdri = () => {

@@ -49,12 +49,14 @@ describe("props panel elements", () => {
     expect(input.value).toBe("Ground floor");
   });
 
-  it("creates reusable number input elements with stable step, placeholder, and values", () => {
+  it("creates reusable number input elements with stable bounds, step, placeholder, and values", () => {
     installFakeDocument();
 
-    const input = createInputElement("number", "120", { step: "1", placeholder: "(mixed)" }) as unknown as FakeElement;
+    const input = createInputElement("number", "120", { min: "1", max: "4096", step: "1", placeholder: "(mixed)" }) as unknown as FakeElement;
 
     expect(input.type).toBe("number");
+    expect(input.min).toBe("1");
+    expect(input.max).toBe("4096");
     expect(input.step).toBe("1");
     expect(input.placeholder).toBe("(mixed)");
     expect(input.value).toBe("120");
