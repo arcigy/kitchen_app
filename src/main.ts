@@ -4,6 +4,7 @@ import "./styles/appBoot.css";
 import "./styles/authShell.css";
 import "./styles/projectManager.css";
 import "./styles/auth.css";
+import "./styles/editorShell.css";
 import "./style.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
