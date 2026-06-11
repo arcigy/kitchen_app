@@ -43,6 +43,12 @@ export type ToolbarVisibilityCommandContext = {
   };
 };
 
+export type ToolbarEntryModeCommandContext = {
+  customFurnitureMode: { enterNew: () => void } | null;
+  enterFloorBoundaryEdit: () => void;
+  wardrobeMode: { enterNew: () => void } | null;
+};
+
 export function runToolbarMoveCommand(ctx: ToolbarTransformCommandContext) {
   ctx.startTransformFromSelection("move", { sticky: true, toggle: true });
 }
@@ -108,4 +114,16 @@ export function runToolbarIsolateCommand(ctx: ToolbarVisibilityCommandContext) {
 
 export function runToolbarUnhideAllCommand(ctx: ToolbarVisibilityCommandContext) {
   ctx.visibility.unhideAll();
+}
+
+export function runToolbarFloorCommand(ctx: Pick<ToolbarEntryModeCommandContext, "enterFloorBoundaryEdit">) {
+  ctx.enterFloorBoundaryEdit();
+}
+
+export function runToolbarWardrobeCommand(ctx: Pick<ToolbarEntryModeCommandContext, "wardrobeMode">) {
+  ctx.wardrobeMode?.enterNew();
+}
+
+export function runToolbarCustomFurnitureCommand(ctx: Pick<ToolbarEntryModeCommandContext, "customFurnitureMode">) {
+  ctx.customFurnitureMode?.enterNew();
 }

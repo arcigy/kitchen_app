@@ -3,9 +3,11 @@ import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import {
   runToolbarAlignCommand,
+  runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarFloorCommand,
   runToolbarHideToggleCommand,
   runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
@@ -17,7 +19,8 @@ import {
   runToolbarTrimCommand,
   runToolbarUndoCommand,
   runToolbarUnhideAllCommand,
-  runToolbarWallCommand
+  runToolbarWallCommand,
+  runToolbarWardrobeCommand
 } from "./editorToolbarCommands";
 
 describe("editor toolbar commands", () => {
@@ -170,5 +173,26 @@ describe("editor toolbar commands", () => {
 
     expect(ctx.visibility.isolateSelected).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.visibility.unhideAll).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes floor and room entry buttons through current entry commands", () => {
+    const ctx = {
+      customFurnitureMode: { enterNew: vi.fn() },
+      enterFloorBoundaryEdit: vi.fn(),
+      wardrobeMode: { enterNew: vi.fn() }
+    };
+
+    runToolbarFloorCommand(ctx);
+    runToolbarWardrobeCommand(ctx);
+    runToolbarCustomFurnitureCommand(ctx);
+
+    expect(ctx.enterFloorBoundaryEdit).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.wardrobeMode.enterNew).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.customFurnitureMode.enterNew).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("keeps optional room entry commands inert when modes are unavailable", () => {
+    expect(() => runToolbarWardrobeCommand({ wardrobeMode: null })).not.toThrow();
+    expect(() => runToolbarCustomFurnitureCommand({ customFurnitureMode: null })).not.toThrow();
   });
 });

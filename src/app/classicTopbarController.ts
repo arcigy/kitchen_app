@@ -7,9 +7,11 @@ import type { StartTransformOptions, TransformKind, TransformState } from "./tra
 import { t } from "../i18n";
 import {
   runToolbarAlignCommand,
+  runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarFloorCommand,
   runToolbarHideToggleCommand,
   runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
@@ -21,7 +23,8 @@ import {
   runToolbarTrimCommand,
   runToolbarUndoCommand,
   runToolbarUnhideAllCommand,
-  runToolbarWallCommand
+  runToolbarWallCommand,
+  runToolbarWardrobeCommand
 } from "./editorToolbarCommands";
 
 type KitchenModeActions = {
@@ -198,7 +201,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(tools, { title: "Door", label: "Door", iconSvg: ctx.I_DOOR, onClick: ctx.addOrSelectDoor });
     addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: ctx.addOrSelectWindow });
     addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: ctx.addColumn });
-    addButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => ctx.enterFloorBoundaryEdit() });
+    addButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => runToolbarFloorCommand(ctx) });
     addButton(tools, { title: "Stair", label: "Stair", iconSvg: ctx.I_STAIR });
   };
 
@@ -214,8 +217,8 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   const addRoomTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Room", { row });
     addButton(tools, { title: "Room", label: "Room", iconSvg: ctx.I_WARDROBE });
-    addButton(tools, { title: "Wardrobe", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, onClick: () => ctx.wardrobeMode?.enterNew() });
-    addButton(tools, { title: "Custom Furniture", label: "Custom", iconSvg: ctx.I_CABINET, onClick: () => ctx.customFurnitureMode?.enterNew() });
+    addButton(tools, { title: "Wardrobe", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, onClick: () => runToolbarWardrobeCommand(ctx) });
+    addButton(tools, { title: "Custom Furniture", label: "Custom", iconSvg: ctx.I_CABINET, onClick: () => runToolbarCustomFurnitureCommand(ctx) });
   };
 
   const addModifyTab = (row: HTMLElement) => {
