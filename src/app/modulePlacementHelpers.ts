@@ -6,6 +6,7 @@ import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import type { KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
+import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type PolygonPoint = [number, number];
 type PolygonRing = PolygonPoint[];
@@ -423,8 +424,11 @@ function inferTallResizeAnchorSide(inst: LayoutInstance) {
   const halfModuleWidthM =
     Number.isFinite(widthMm) && widthMm > 0 ? widthMm / 2000 : Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
   const backCenterWorld = getModuleLocalBackCenter(inst).clone().applyMatrix4(inst.root.matrixWorld);
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-  const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+  const backOffsetMm = resolveKitchenPlacementBackOffset({
+    kitchenGroupId: inst.kitchenGroupId,
+    kitchenGroups: S.kitchenGroups,
+    defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+  });
 
   let best:
     | {
