@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
+  canStartTransformFromSelection,
   createTransformController,
   isTransformModuleMoveValid,
   resolveMovedOpeningCenterMm,
@@ -152,6 +153,22 @@ describe("transform move tool", () => {
     expect(transformState.lastValidDelta).toBe(lastValidDelta);
     expect(transformState.lastValidDelta.toArray()).toEqual([0, 0, 0]);
     expect(transformState.lastValidAngle).toBe(0);
+  });
+
+  it("keeps start transform guard limited to idle layout 2d select mode", () => {
+    const base = makeTransformContext();
+
+    expect(canStartTransformFromSelection(base)).toBe(true);
+    expect(canStartTransformFromSelection({ ...base, mode: "build" })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, viewMode: "3d" })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, layoutTool: "wall" })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, measureState: { enabled: true } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, dragState: { active: true } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, windowDragState: { active: true } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, doorDragState: { active: true } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, wallEditHud: { drag: {} } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, marquee: { active: true } })).toBe(false);
+    expect(canStartTransformFromSelection({ ...base, underlayCal: { active: true } })).toBe(false);
   });
 
   it("resolves transform ids with current multi-selection priority", () => {

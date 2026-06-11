@@ -161,6 +161,28 @@ export function resetTransformStateForClear(transformState: TransformState) {
   transformState.lastValidAngle = 0;
 }
 
+export type TransformStartGuardContext = Pick<
+  TransformControllerContext,
+  | "mode"
+  | "viewMode"
+  | "layoutTool"
+  | "measureState"
+  | "dragState"
+  | "windowDragState"
+  | "doorDragState"
+  | "wallEditHud"
+  | "marquee"
+  | "underlayCal"
+>;
+
+export function canStartTransformFromSelection(ctx: TransformStartGuardContext) {
+  if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
+  if (ctx.measureState.enabled) return false;
+  if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
+  if (ctx.underlayCal.active) return false;
+  return true;
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -261,10 +283,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       return true;
     }
 
-    if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
-    if (ctx.measureState.enabled) return false;
-    if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
-    if (ctx.underlayCal.active) return false;
+    if (!canStartTransformFromSelection(ctx)) return false;
 
     const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
     const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
