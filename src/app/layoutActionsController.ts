@@ -1,5 +1,5 @@
 import type { SelectedKind } from "./localTypes";
-import { clearSelectionIdSet, replaceSelectionIdSet } from "./selectionController";
+import { clearSelectionIdSet, replaceSelectionIdSet, resolveSelectedIds } from "./selectionController";
 
 export type LayoutActionsControllerContext = {
   view2d: HTMLInputElement;
@@ -47,9 +47,12 @@ export function resolveSelectedEntityIds(args: {
   singleId: string | null;
   multiIds: Iterable<string>;
 }): string[] {
-  const multiIds = Array.from(args.multiIds);
-  if (multiIds.length > 0) return [...new Set(multiIds)];
-  return args.selectedKind === args.singleKind && args.singleId ? [args.singleId] : [];
+  return resolveSelectedIds({
+    selectedIds: new Set(args.multiIds),
+    selectedKind: args.selectedKind,
+    selectedId: args.singleId,
+    singleKind: args.singleKind
+  });
 }
 
 export function createLayoutActionsController(ctx: LayoutActionsControllerContext) {
