@@ -14,6 +14,7 @@ import { getKitchenModuleRole, staysOutsideKitchenWorktopFootprint } from "../la
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import { toFreePlanBinding } from "./measureAssociative";
+import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type KitchenGroupState = {
   id: string;
@@ -644,8 +645,11 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
     const activeWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === S.activeKitchenGroupId);
     if (activeWorktops.length === 0) return null;
-    const activeGroup = S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId) ?? null;
-    const backOffsetMm = activeGroup?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: S.activeKitchenGroupId,
+      kitchenGroups: S.kitchenGroups,
+      defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+    });
 
     if (moduleStaysOutsideKitchenWorktop(ghost)) {
       return getTallKitchenPlacementConstraint(ghost, cursorWorld, activeWorktops, backOffsetMm);
