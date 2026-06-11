@@ -68,6 +68,10 @@ import {
   type CustomFurnitureDrawToolbarContext,
   type CustomFurnitureVerticalBoardDrawMode
 } from "./customFurnitureTopbarModel";
+import {
+  CUSTOM_FURNITURE_SHARED_DRAW_ICONS,
+  CUSTOM_FURNITURE_TOOLBAR_ICONS
+} from "./customFurnitureToolbarIcons";
 import { mountCustomFurnitureActiveToolProps } from "./customFurnitureToolPropsPanel";
 import {
   mountCustomFurnitureBoardProps,
@@ -329,23 +333,6 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   let draftBoardPreviewRoot: THREE.Group | null = null;
   let boundaryEditRoot: THREE.Group | null = null;
   const editorIsolationMaterials = new Map<THREE.Material, { transparent: boolean; opacity: number; depthWrite: boolean }>();
-
-  const ribbonIcon = (body: string) => `
-<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="fill:none">
-  ${body}
-</svg>`;
-
-  const I_LINE = ribbonIcon(`<path d="M5 18 19 6"/><circle cx="5" cy="18" r="1.4"/><circle cx="19" cy="6" r="1.4"/>`);
-  const I_RECT = ribbonIcon(`<rect x="5" y="6" width="14" height="12" rx="1"/><circle cx="5" cy="6" r="1"/><circle cx="19" cy="18" r="1"/>`);
-  const I_POLYGON = ribbonIcon(`<path d="m12 4 7 5-2.6 8H7.6L5 9z"/><circle cx="12" cy="4" r="1"/><circle cx="5" cy="9" r="1"/>`);
-  const I_CIRCLE = ribbonIcon(`<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.2"/><path d="M12 12h7"/>`);
-  const I_ARC = ribbonIcon(`<path d="M5 17a9 9 0 0 1 14 0"/><circle cx="5" cy="17" r="1.1"/><circle cx="19" cy="17" r="1.1"/><circle cx="12" cy="9" r="1.1"/>`);
-  const I_SPLINE = ribbonIcon(`<path d="M4 16c3-8 5 6 8-1s5-1 8-7"/><circle cx="4" cy="16" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="20" cy="8" r="1"/>`);
-  const I_PICK = ribbonIcon(`<path d="M5 6h12"/><path d="M7 12h9"/><path d="m14 13 4 4"/><path d="m18 13-4 4"/><path d="M18 5v5"/>`);
-  const I_BOUNDARY = ribbonIcon(`<path d="M5 5h14v14H5z" stroke-dasharray="3 2"/><path d="M8 8h8v8H8z"/>`);
-  const I_PIN = ribbonIcon(`<path d="M12 3v18"/><path d="M7 8h10"/><path d="M9 5h6"/><path d="m9 15 3 3 3-3"/>`);
-  const I_SLOPE = ribbonIcon(`<path d="M4 18 19 6"/><path d="M11 6h8v8"/>`);
-  const I_SPAN = ribbonIcon(`<path d="M5 6v12M19 6v12"/><path d="M7 12h10"/><path d="m7 12 2-2M7 12l2 2M17 12l-2-2M17 12l-2 2"/>`);
 
   const nextFurnitureId = () => {
     const id = `cf${args.getCounter()}`;
@@ -1979,16 +1966,6 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     const draw = args.tb.addGroup("Draw", { row });
     draw.classList.add("cf-shared-draw-tools");
     draw.parentElement?.classList.add("cf-shared-draw-group");
-    const icons = {
-      boundaryLine: I_BOUNDARY,
-      line: I_LINE,
-      rectangle: I_RECT,
-      polygon: I_POLYGON,
-      circle: I_CIRCLE,
-      arc: I_ARC,
-      spline: I_SPLINE,
-      pickLines: I_PICK
-    };
     const onClick = (tool: CustomFurnitureSharedDrawToolId) => {
       if (context === "boundary") {
         return setBoundaryDrawTool(tool);
@@ -1999,7 +1976,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       return setBoardDrawTool(tool);
     };
     for (const tool of getCustomFurnitureSharedDrawToolIds()) {
-      const button = addRibbonButton(draw, { ...getCustomFurnitureSharedDrawToolButton({ tool, context, boundaryDrawTool, verticalBoardDrawMode, icons }), onClick: () => onClick(tool) });
+      const button = addRibbonButton(draw, { ...getCustomFurnitureSharedDrawToolButton({ tool, context, boundaryDrawTool, verticalBoardDrawMode, icons: CUSTOM_FURNITURE_SHARED_DRAW_ICONS }), onClick: () => onClick(tool) });
       button.dataset.drawTool = tool;
     }
     const offsetWrap = document.createElement("label");
@@ -2034,11 +2011,11 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     addRibbonButton(clipboard, { title: "Copy", iconSvg: args.icons.board, label: "Copy", disabled: true });
 
     const geometry = args.tb.addGroup("Geometry", { row });
-    addRibbonButton(geometry, { title: "Join", iconSvg: I_LINE, label: "Join", disabled: true });
-    addRibbonButton(geometry, { title: "Cope", iconSvg: I_RECT, label: "Cope", disabled: true });
+    addRibbonButton(geometry, { title: "Join", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.line, label: "Join", disabled: true });
+    addRibbonButton(geometry, { title: "Cope", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.rect, label: "Cope", disabled: true });
 
     const controls = args.tb.addGroup("Controls", { row });
-    addRibbonButton(controls, { title: "Activate", iconSvg: I_PIN, label: "Activate", onClick: () => args.setStatus("Furniture boundary: drawing is active.") });
+    addRibbonButton(controls, { title: "Activate", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.pin, label: "Activate", onClick: () => args.setStatus("Furniture boundary: drawing is active.") });
 
     const modify = args.tb.addGroup("Modify", { row });
     addRibbonButton(modify, {
@@ -2056,10 +2033,10 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         );
       }
     });
-    addRibbonButton(modify, { title: "Rotate", iconSvg: I_ARC, label: "Rotate", disabled: true });
+    addRibbonButton(modify, { title: "Rotate", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.arc, label: "Rotate", disabled: true });
     addRibbonButton(modify, {
       title: "Align",
-      iconSvg: I_SPAN,
+      iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.span,
       label: "Align",
       active: boundaryDrawTool === "align",
       onClick: () => setBoundaryDrawTool("align")
@@ -2073,7 +2050,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     });
     addRibbonButton(modify, {
       title: "Fillet",
-      iconSvg: I_ARC,
+      iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.arc,
       label: "Fillet",
       active: boundaryDrawTool === "fillet",
       onClick: () => setBoundaryDrawTool("fillet")
@@ -2091,7 +2068,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     addRibbonButton(view, { title: "View", iconSvg: args.icons.furniture, label: "View", onClick: () => args.ensureFloorplanViewerTab() });
 
     const measure = args.tb.addGroup("Measure", { row });
-    addRibbonButton(measure, { title: "Measure", iconSvg: I_SPAN, label: "Measure", disabled: true });
+    addRibbonButton(measure, { title: "Measure", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.span, label: "Measure", disabled: true });
 
     const create = args.tb.addGroup("Create", { row });
     addRibbonButton(create, { title: "Create form", iconSvg: args.icons.horizontal, label: "Create", disabled: true });
@@ -2112,7 +2089,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     const row = args.tb.addRow({ title: "Custom furniture", className: "topbar-custom-furniture-ribbon" });
     const boundary = args.tb.addGroup("Boundary", { row });
     if (editorFurnitureId) {
-      args.tb.toolButton(boundary, { title: "Edit furniture boundary", iconSvg: I_BOUNDARY, label: "Edit Boundary", onClick: editFurnitureBoundary });
+      args.tb.toolButton(boundary, { title: "Edit furniture boundary", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.boundary, label: "Edit Boundary", onClick: editFurnitureBoundary });
     } else {
       args.tb.toolButton(boundary, { title: "Furniture Boundary", iconSvg: args.icons.furniture, label: "Boundary", onClick: enterNew });
     }
@@ -2124,7 +2101,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     args.tb.toolButton(production, { title: "Edge Banding", iconSvg: args.icons.edge, label: "Edges", onClick: startEdgeBanding });
     args.tb.toolButton(production, { title: "Joint", iconSvg: args.icons.board, label: "Joint", onClick: () => args.setStatus("Joint: planned for confirmat, dowels, domino, lamello and eccentric connectors.") });
     args.tb.toolButton(production, { title: "Edge Cut", iconSvg: args.icons.edge, label: "Edge Cut", onClick: () => args.setStatus("Edge Cut: planned for presets and custom cuts.") });
-    args.tb.toolButton(production, { title: "Round Corner", iconSvg: I_ARC, label: "Round", onClick: () => args.setStatus("Corner Round: planned for board corner rounding.") });
+    args.tb.toolButton(production, { title: "Round Corner", iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.arc, label: "Round", onClick: () => args.setStatus("Corner Round: planned for board corner rounding.") });
     args.tb.addSpacer({ row });
     const assemblies = args.tb.addGroup("Assemblies", { row });
     args.tb.toolButton(assemblies, { title: "Drawer", iconSvg: args.icons.board, label: "Drawer", onClick: () => args.setStatus("Drawer: planned for drawer modules and fronts.") });
@@ -2136,7 +2113,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       const modify = args.tb.addGroup("Modify", { row });
       addRibbonButton(modify, {
         title: "Select vertical board sketch lines",
-        iconSvg: I_BOUNDARY,
+        iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.boundary,
         label: "Select",
         active: boundaryDrawTool === "select",
         onClick: () => {
@@ -2162,7 +2139,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       });
       addRibbonButton(modify, {
         title: "Align sketch line",
-        iconSvg: I_SPAN,
+        iconSvg: CUSTOM_FURNITURE_TOOLBAR_ICONS.span,
         label: "Align",
         active: boundaryDrawTool === "align",
         onClick: () => {

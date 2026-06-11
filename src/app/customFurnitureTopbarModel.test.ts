@@ -7,6 +7,7 @@ import {
   resolveCustomFurnitureDrawOffsetMm,
   type CustomFurnitureSharedDrawIconMap
 } from "./customFurnitureTopbarModel";
+import { CUSTOM_FURNITURE_SHARED_DRAW_ICONS } from "./customFurnitureToolbarIcons";
 
 const icons = {
   boundaryLine: "boundary",
@@ -104,5 +105,10 @@ describe("custom furniture topbar model", () => {
   it("covers every shared tool icon explicitly", () => {
     const tools: CustomFurnitureSharedDrawToolId[] = ["boundaryLine", "line", "rectangle", "polygon", "circle", "arc", "spline", "pickLines"];
     expect(tools.map((tool) => icons[tool])).toEqual(["boundary", "line", "rectangle", "polygon", "circle", "arc", "spline", "pick"]);
+  });
+
+  it("exports the controller shared draw icon map for every shared draw tool", () => {
+    const tools: CustomFurnitureSharedDrawToolId[] = ["boundaryLine", "line", "rectangle", "polygon", "circle", "arc", "spline", "pickLines"];
+    expect(tools.every((tool) => CUSTOM_FURNITURE_SHARED_DRAW_ICONS[tool].includes("<svg"))).toBe(true);
   });
 });
