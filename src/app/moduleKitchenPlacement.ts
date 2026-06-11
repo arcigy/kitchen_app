@@ -5,9 +5,9 @@ export type KitchenPlacementGroupContext = {
   ctx: { worktopBackOffsetMm: number };
 };
 
-export function findKitchenPlacementGroup(args: {
+export function findKitchenPlacementGroup<TGroup extends KitchenPlacementGroupContext>(args: {
   kitchenGroupId: string | null | undefined;
-  kitchenGroups: KitchenPlacementGroupContext[];
+  kitchenGroups: TGroup[];
 }) {
   if (!args.kitchenGroupId) return null;
   return args.kitchenGroups.find((item) => item.id === args.kitchenGroupId) ?? null;

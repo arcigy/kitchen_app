@@ -32,7 +32,7 @@ import type {
   WallInstance
 } from "./localTypes";
 import type { createKitchenEditMode } from "../layout/kitchenEditMode";
-import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type KitchenGuideSegmentInfo = {
   start: THREE.Vector3;
@@ -418,7 +418,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number; cornerIndex?: number }) => {
-    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
     const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
     if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
 
@@ -540,7 +540,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const debugPatchKitchenContext = (groupId: string, patch: Partial<ReturnType<typeof resolveContext>>) => {
-    const group = S.kitchenGroups.find((item) => item.id === groupId) ?? null;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
     if (!group) throw new Error(`Kitchen group ${groupId} not found.`);
     const prevCtx = resolveContext(structuredClone(group.ctx));
     const nextCtx = resolveContext({ ...group.ctx, ...patch });
