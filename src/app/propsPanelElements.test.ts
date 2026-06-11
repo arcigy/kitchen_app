@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -14,6 +14,15 @@ describe("props panel elements", () => {
 
     expect(element.className).toBe("");
     expect(element.textContent).toBe("Value text");
+  });
+
+  it("creates reusable text button elements", () => {
+    installFakeDocument();
+
+    const button = createButtonElement("Clear") as unknown as FakeElement;
+
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Clear");
   });
 
   it("creates reusable select elements with stable option values and labels", () => {

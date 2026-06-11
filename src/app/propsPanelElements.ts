@@ -4,6 +4,13 @@ export function createTextElement(text: string) {
   return element;
 }
 
+export function createButtonElement(text: string) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = text;
+  return button;
+}
+
 type SelectOptionValue = string | number;
 type InputElementType = "text" | "number";
 

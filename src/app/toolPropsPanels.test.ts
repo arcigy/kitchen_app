@@ -74,6 +74,8 @@ describe("tool props panels", () => {
       ["interior", "Finish face: interior"],
       ["exterior", "Finish face: exterior"]
     ]);
+    expect(rows[4]!.control.type).toBe("button");
+    expect(rows[4]!.control.textContent).toBe("Flip exterior");
     expect(section.children.at(-1)?.className).toBe("muted");
 
     rows[0]!.control.value = "bearing_200";
@@ -139,6 +141,7 @@ describe("tool props panels", () => {
     expect(axis.checked).toBe(true);
     expect(section.children[1]!.children[1]?.textContent).toBe("Axis lock (optional, 2D/3D)");
     expect(section.children[2]?.textContent).toBe("First point: (none)");
+    expect(section.children[3]?.type).toBe("button");
     expect(section.children[3]?.textContent).toBe("Clear");
 
     axis.checked = false;

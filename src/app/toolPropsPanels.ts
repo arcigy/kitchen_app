@@ -9,7 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
-import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createButtonElement, createCheckboxElement, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -83,9 +83,7 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
       { value: "exterior", label: "Finish face: exterior" }
     ]);
     props.row(s, "Justification", just);
-    const flip = document.createElement("button");
-    flip.type = "button";
-    flip.textContent = "Flip exterior";
+    const flip = createButtonElement("Flip exterior");
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
     const updatePreview = () => {
@@ -232,9 +230,7 @@ export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
     status.style.marginTop = "8px";
     s.appendChild(status);
 
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.textContent = "Clear";
+    const clearBtn = createButtonElement("Clear");
     clearBtn.style.marginTop = "10px";
     clearBtn.addEventListener("click", () => {
       clearAllMeasurements();
