@@ -444,9 +444,7 @@ export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstanc
     );
     props.row(s, "Materiál", mat);
 
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.textContent = "Edit Boundary Line";
+    const edit = createButtonElement("Edit Boundary Line");
     edit.style.marginTop = "10px";
     s.appendChild(edit);
 
@@ -954,15 +952,9 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
 
     const actions = document.createElement("div");
     actions.className = "actions";
-    const calibrateBtn = document.createElement("button");
-    calibrateBtn.type = "button";
-    calibrateBtn.textContent = "Calibrate";
-    const resetScaleBtn = document.createElement("button");
-    resetScaleBtn.type = "button";
-    resetScaleBtn.textContent = "Reset scale";
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.textContent = "Remove";
+    const calibrateBtn = createButtonElement("Calibrate");
+    const resetScaleBtn = createButtonElement("Reset scale");
+    const clearBtn = createButtonElement("Remove");
     clearBtn.style.borderColor = "#3a1f23";
     clearBtn.style.background = "#1a0f12";
     clearBtn.style.color = "#ff6b6b";

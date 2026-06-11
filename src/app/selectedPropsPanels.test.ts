@@ -323,6 +323,7 @@ describe("selected props panels", () => {
     mountFloorPropsPanel(ctx, floor);
 
     const editButton = section.children[0];
+    expect(editButton.type).toBe("button");
     expect(editButton.textContent).toBe("Edit Boundary Line");
     editButton.dispatch("click");
 
@@ -513,7 +514,7 @@ describe("selected props panels", () => {
 
   it("keeps underlay numeric controls mounted with current values and element refs", () => {
     installFakeDocument();
-    const { props, rows } = makePropertiesPanelHarness();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const underlayState = {
       opacity: 0.4,
       scale: 1.25,
@@ -582,6 +583,12 @@ describe("selected props panels", () => {
     expect(rows[6]!.control.value).toBe("900");
     expect(rows[7]!.control.type).toBe("checkbox");
     expect(rows[7]!.control.checked).toBe(false);
+    const actions = section.children.find((child) => child.className === "actions");
+    expect(actions?.children.map((child) => [child.type, child.textContent])).toEqual([
+      ["button", "Calibrate"],
+      ["button", "Reset scale"],
+      ["button", "Remove"]
+    ]);
     expect(ctx.setUnderlayScaleEl).toHaveBeenCalledWith(rows[2]!.control);
     expect(ctx.setUnderlayOffXEl).toHaveBeenCalledWith(rows[4]!.control);
     expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
