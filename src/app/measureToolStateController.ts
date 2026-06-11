@@ -3,6 +3,7 @@ import type { PlanSnapResult } from "./planSnap";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
 import type { EditorLayoutTool } from "./editorToolEntryController";
+import { refreshSelectionVisualState } from "./selectionController";
 
 export type MeasureState = {
   enabled: boolean;
@@ -130,8 +131,7 @@ export function activateMeasureToolState(ctx: MeasureToolActivationContext) {
   ctx.cancelSectionDraw({ silent: true });
   ctx.cancelKitchenWorktopDraw({ silent: true });
   ctx.clearSelectionForDrawingTool();
-  ctx.syncSelectionState();
-  ctx.updateSelectionHighlights();
+  refreshSelectionVisualState(ctx);
   ctx.args.measureBtn.textContent = "Measure: On";
   ctx.args.measureReadoutEl.textContent = "Measure: klikni prvy bod.";
   ctx.setUnderlayStatus("Measure: klikni prvy roh alebo hranu.");

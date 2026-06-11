@@ -1,3 +1,5 @@
+import { refreshSelectionVisualState } from "./selectionController";
+
 export type DimensionToolEscapeContext = {
   dimensionState: { picked: unknown[] };
   setUnderlayStatus: (message: string) => void;
@@ -31,8 +33,7 @@ export function activateDimensionToolState(ctx: DimensionToolActivationContext) 
   ctx.enterDimensionTool();
   ctx.ensureFloorplanViewerTab();
   ctx.clearSelectionForDrawingTool();
-  ctx.syncSelectionState();
-  ctx.updateSelectionHighlights();
+  refreshSelectionVisualState(ctx);
   ctx.setUnderlayStatus("Dimension: pick the first line, then another parallel line. Click empty space to place dimension.");
   ctx.mountProps();
 }

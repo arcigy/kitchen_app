@@ -1,4 +1,5 @@
 import type { FloorBoundaryPoint } from "./localTypes";
+import { refreshSelectionVisualState } from "./selectionController";
 
 export type SectionDrawState = {
   active: boolean;
@@ -44,9 +45,8 @@ export function activateSectionToolState(ctx: SectionToolActivationContext) {
   ctx.clearSectionSelection();
   ctx.clearSelectionBoxes();
   ctx.sectionDraw.active = true;
-  ctx.syncSelectionState();
+  refreshSelectionVisualState(ctx);
   ctx.updateAllSectionVisuals();
-  ctx.updateSelectionHighlights();
   ctx.setUnderlayStatus("Section: click first point, then second point. Space mirrors direction.");
   ctx.mountProps();
 }

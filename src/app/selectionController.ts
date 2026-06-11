@@ -157,6 +157,11 @@ export type SelectionBoxCleanupState = {
   selectedWallBox: THREE.BoxHelper | null;
 };
 
+export type SelectionVisualRefreshContext = {
+  syncSelectionState: () => void;
+  updateSelectionHighlights: () => void;
+};
+
 function disposeSelectionBox(scene: THREE.Scene, box: THREE.BoxHelper | null) {
   if (!box) return;
   scene.remove(box);
@@ -327,6 +332,11 @@ export function resolveMergedSelectionIdSet(args: {
 
 export function clearSelectionIdSet(target: Set<string>) {
   target.clear();
+}
+
+export function refreshSelectionVisualState(ctx: SelectionVisualRefreshContext) {
+  ctx.syncSelectionState();
+  ctx.updateSelectionHighlights();
 }
 
 export function clearWallAndUnderlaySelectionBoxes(state: SelectionBoxCleanupState) {

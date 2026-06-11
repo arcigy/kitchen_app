@@ -11,6 +11,7 @@ import {
   replaceSelectionIdSet,
   resolveMergedSelectionIdSet,
   resolveSelectedIds,
+  refreshSelectionVisualState,
   runApplySelectionCommand,
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
@@ -611,6 +612,18 @@ describe("createSelectionController", () => {
         hitIds: ["hit-1"]
       })
     ]).toEqual(["hit-1"]);
+  });
+
+  it("refreshes selection visuals through the shared sync/highlight helper", () => {
+    const calls: string[] = [];
+    const ctx = {
+      syncSelectionState: vi.fn(() => calls.push("syncSelectionState")),
+      updateSelectionHighlights: vi.fn(() => calls.push("updateSelectionHighlights"))
+    };
+
+    refreshSelectionVisualState(ctx);
+
+    expect(calls).toEqual(["syncSelectionState", "updateSelectionHighlights"]);
   });
 
   it("maps selected kinds to existing selection side effects", () => {
