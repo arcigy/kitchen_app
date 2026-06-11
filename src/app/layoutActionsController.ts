@@ -163,55 +163,67 @@ function runDelegatedDeleteSelection(ctx: LayoutActionsControllerContext): boole
   return false;
 }
 
+function runKitchenGroupDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+  const selectedKitchenGroupId = ctx.getSelectedKitchenGroupId();
+  if (!selectedKitchenGroupId) return "blocked";
+  if (!ctx.deleteKitchenGroup(selectedKitchenGroupId)) return "blocked";
+  ctx.setSelectedKind(null);
+  ctx.setSelectedModule(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+}
+
+function runSectionDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+  const selectedSectionId = ctx.getSelectedSectionId();
+  if (!selectedSectionId) return "blocked";
+  ctx.deleteSectionInstance(selectedSectionId, { skipHistory: true });
+  ctx.setSelectedSection(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+}
+
+function runFloorDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+  const selectedFloorId = ctx.getSelectedFloorId();
+  if (!selectedFloorId) return "blocked";
+  ctx.deleteFloor(selectedFloorId, { skipHistory: true });
+  ctx.setSelectedFloor(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true });
+}
+
+function runColumnDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+  const selectedColumnId = ctx.getSelectedColumnId();
+  if (!selectedColumnId) return "blocked";
+  if (!ctx.deleteColumn(selectedColumnId, { skipHistory: true })) return "blocked";
+  ctx.setSelectedColumn(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+}
+
+function runOpeningDeleteBranch(
+  ctx: LayoutActionsControllerContext,
+  kind: "window" | "door"
+): DeleteSelectionBranchResult {
+  if (kind === "window" && !ctx.deleteWindow()) return "blocked";
+  if (kind === "door" && !ctx.deleteDoor()) return "blocked";
+  ctx.setSelectedKind(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+}
+
+function runUnderlayDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+  if (!ctx.deleteUnderlay()) return "blocked";
+  ctx.setSelectedKind(null);
+  ctx.setSelectedModule(null);
+  return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+}
+
 function runSelectedKindDeleteBranch(
   ctx: LayoutActionsControllerContext,
   selectedKind: SelectedKind
 ): DeleteSelectionBranchResult {
-  if (selectedKind === "kitchenGroup") {
-    const selectedKitchenGroupId = ctx.getSelectedKitchenGroupId();
-    if (!selectedKitchenGroupId) return "blocked";
-    if (!ctx.deleteKitchenGroup(selectedKitchenGroupId)) return "blocked";
-    ctx.setSelectedKind(null);
-    ctx.setSelectedModule(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
-  if (selectedKind === "section") {
-    const selectedSectionId = ctx.getSelectedSectionId();
-    if (!selectedSectionId) return "blocked";
-    ctx.deleteSectionInstance(selectedSectionId, { skipHistory: true });
-    ctx.setSelectedSection(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
-  if (selectedKind === "floor") {
-    const selectedFloorId = ctx.getSelectedFloorId();
-    if (!selectedFloorId) return "blocked";
-    ctx.deleteFloor(selectedFloorId, { skipHistory: true });
-    ctx.setSelectedFloor(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true });
-  }
-  if (selectedKind === "column") {
-    const selectedColumnId = ctx.getSelectedColumnId();
-    if (!selectedColumnId) return "blocked";
-    if (!ctx.deleteColumn(selectedColumnId, { skipHistory: true })) return "blocked";
-    ctx.setSelectedColumn(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
-  if (selectedKind === "window") {
-    if (!ctx.deleteWindow()) return "blocked";
-    ctx.setSelectedKind(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
-  if (selectedKind === "door") {
-    if (!ctx.deleteDoor()) return "blocked";
-    ctx.setSelectedKind(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
-  if (selectedKind === "underlay") {
-    if (!ctx.deleteUnderlay()) return "blocked";
-    ctx.setSelectedKind(null);
-    ctx.setSelectedModule(null);
-    return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
-  }
+  if (selectedKind === "kitchenGroup") return runKitchenGroupDeleteBranch(ctx);
+  if (selectedKind === "section") return runSectionDeleteBranch(ctx);
+  if (selectedKind === "floor") return runFloorDeleteBranch(ctx);
+  if (selectedKind === "column") return runColumnDeleteBranch(ctx);
+  if (selectedKind === "window") return runOpeningDeleteBranch(ctx, "window");
+  if (selectedKind === "door") return runOpeningDeleteBranch(ctx, "door");
+  if (selectedKind === "underlay") return runUnderlayDeleteBranch(ctx);
   return "not-applicable";
 }
 

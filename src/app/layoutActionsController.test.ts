@@ -470,6 +470,21 @@ describe("layout delete action", () => {
     expect(harness.ctx.mountProps).not.toHaveBeenCalled();
   });
 
+  it("deleteSelected keeps current selected-kind branch priority when selected id is missing", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "section" });
+    harness.selectedInstanceIds.add("m1");
+    harness.selectedWallIds.add("w1");
+
+    expect(harness.controller.deleteSelected()).toBe(false);
+
+    expect(harness.ctx.deleteSectionInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.deleteWall).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
   it("routes window, door, underlay, and wardrobe deletion through the shared action", () => {
     const windowHarness = makeController();
     windowHarness.setSelection({ kind: "window" });
