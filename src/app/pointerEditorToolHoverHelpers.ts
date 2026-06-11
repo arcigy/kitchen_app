@@ -184,6 +184,12 @@ export function updateTrimToolHover(params: {
   }
 }
 
+export function resetAlignTrimPointerMoveHover(params: {
+  clearToolHud: () => void;
+}): void {
+  params.clearToolHud();
+}
+
 export function updateAlignTrimToolPointerMoveHover(params: {
   tool: "align" | "trim";
   hitPoint: THREE.Vector3 | null;
@@ -201,7 +207,9 @@ export function updateAlignTrimToolPointerMoveHover(params: {
   clearToolHud: () => void;
 }): void {
   if (!params.hitPoint) {
-    params.clearToolHud();
+    resetAlignTrimPointerMoveHover({
+      clearToolHud: params.clearToolHud
+    });
     return;
   }
 

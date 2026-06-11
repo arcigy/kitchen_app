@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
+  resetAlignTrimPointerMoveHover,
   updateAlignToolHover,
   updateAlignTrimToolPointerMoveHover,
   updateDimensionToolHover,
@@ -250,6 +251,16 @@ describe("pointer editor tool hover helpers", () => {
 
     expect(clearToolHud).toHaveBeenCalledTimes(1);
     expect(pickAlignLineAt).not.toHaveBeenCalled();
+  });
+
+  it("resets align/trim pointermove hover HUD", () => {
+    const clearToolHud = vi.fn();
+
+    resetAlignTrimPointerMoveHover({
+      clearToolHud
+    });
+
+    expect(clearToolHud).toHaveBeenCalledOnce();
   });
 
   it("routes align pointermove hover through align hover update", () => {
