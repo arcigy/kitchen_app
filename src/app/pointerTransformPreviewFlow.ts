@@ -11,6 +11,12 @@ export function normalizeAngleRadians(angle: number) {
   return normalized;
 }
 
+export function formatMovePreviewStatus(args: { delta: THREE.Vector3; moveSnapDisabled: boolean; hasObjectSnap: boolean }): string {
+  return `Move${args.moveSnapDisabled ? " free 1 mm" : ""}${args.hasObjectSnap ? " smart snap" : ""}: ${Math.round(args.delta.x * 1000)} x ${Math.round(
+    args.delta.z * 1000
+  )} mm (click or type distance, N = ${args.moveSnapDisabled ? "snapping" : "free movement"})`;
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -31,11 +37,7 @@ export function handleTransformPreviewPointerMove<Snap>(args: {
     const { delta, objectSnap } = args.resolveMoveDelta(constrainedDelta);
     args.applyMoveDelta(delta);
     if (objectSnap) args.updateObjectSnapFeedback(objectSnap.snap, objectSnap.target);
-    args.setStatus(
-      `Move${transformState.moveSnapDisabled ? " free 1 mm" : ""}${objectSnap ? " smart snap" : ""}: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click or type distance, N = ${
-        transformState.moveSnapDisabled ? "snapping" : "free movement"
-      })`
-    );
+    args.setStatus(formatMovePreviewStatus({ delta, moveSnapDisabled: transformState.moveSnapDisabled, hasObjectSnap: Boolean(objectSnap) }));
     return true;
   }
 

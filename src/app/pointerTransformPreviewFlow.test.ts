@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
 import {
+  formatMovePreviewStatus,
   handleTransformPointerMovePreview,
   handleTransformPreviewPointerMove,
   normalizeAngleRadians,
@@ -55,6 +56,15 @@ describe("pointerTransformPreviewFlow", () => {
   it("normalizes angles into the current signed range", () => {
     expect(normalizeAngleRadians(Math.PI + 0.1)).toBeCloseTo(-Math.PI + 0.1);
     expect(normalizeAngleRadians(-Math.PI - 0.1)).toBeCloseTo(Math.PI - 0.1);
+  });
+
+  it("formats move preview status for snap mode and free mode", () => {
+    expect(formatMovePreviewStatus({ delta: new Vector3(1, 0, 2), moveSnapDisabled: false, hasObjectSnap: false })).toBe(
+      "Move: 1000 x 2000 mm (click or type distance, N = free movement)"
+    );
+    expect(formatMovePreviewStatus({ delta: new Vector3(1.234, 0, -2.345), moveSnapDisabled: true, hasObjectSnap: true })).toBe(
+      "Move free 1 mm smart snap: 1234 x -2345 mm (click or type distance, N = snapping)"
+    );
   });
 
   it("keeps current move preview behavior without object snap", () => {
