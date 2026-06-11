@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createMeasureSelectionActions } from "./measureSelectionActions";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
-import type { AlignPickedLine, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
+import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 
@@ -77,6 +77,36 @@ describe("measure selection actions", () => {
     expect(instance.root.position.z).toBe(0.05);
     expect(ctx.inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, "kg1", 45);
     expect(instance.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+  });
+
+  it("rebuilds floor and refreshes selection highlights after a valid measure translation", () => {
+    const floor = {
+      id: "floor-1",
+      params: {
+        name: "Floor",
+        heightMm: 0,
+        thicknessMm: 20,
+        materialId: "floor",
+        boundary: [
+          { x: 0, z: 0 },
+          { x: 1000, z: 0 }
+        ]
+      },
+      root: new THREE.Group(),
+      mesh: new THREE.Mesh(),
+      outline: new THREE.Line()
+    } as FloorInstance;
+    const ctx = makeMeasureSelectionActionsContext({ floors: [floor] });
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(actions.translateFloorByMeasure(floor.id, 100, 50)).toBe(true);
+
+    expect(floor.params.boundary).toEqual([
+      { x: 100, z: 50 },
+      { x: 1100, z: 50 }
+    ]);
+    expect(ctx.rebuildFloor).toHaveBeenCalledExactlyOnceWith(floor);
+    expect(ctx.updateSelectionHighlights).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("reapplies kitchen group placement with default back offset when the group is missing", () => {

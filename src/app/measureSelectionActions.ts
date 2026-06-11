@@ -9,6 +9,7 @@ import { distance3dMm } from "./measure3d";
 import { planarDistanceMm } from "./sharedUtils";
 import { shiftPolylinePoint, shiftPolylineSegment } from "./alignTool";
 import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { refreshSelectionHighlights } from "./selectionController";
 import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 type MeasureSelectionActionsContext = {
@@ -141,7 +142,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     if (!floor) return false;
     floor.params.boundary = floor.params.boundary.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
     ctx.rebuildFloor(floor);
-    ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx);
     return true;
   };
 
@@ -194,7 +195,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     }
     ctx.rebuildKitchenWorktop(worktop);
     reapplyKitchenGroupPlacementBindings(groupId);
-    ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx);
     ctx.updateLayoutPanel();
     return true;
   };
