@@ -247,16 +247,7 @@ function deleteSelectedEntityIds(
   return true;
 }
 
-export function runDeleteSelectionCommand(ctx: LayoutActionsControllerContext) {
-  ctx.ensureLayoutMode();
-  ctx.cancelPlacementIfActive();
-
-  if (runDelegatedDeleteSelection(ctx)) return true;
-
-  const selectedKind = ctx.getSelectedKind();
-  const selectedKindDelete = runSelectedKindDeleteBranch(ctx, selectedKind);
-  if (selectedKindDelete !== "not-applicable") return selectedKindDelete === "handled";
-
+function runModuleDeleteFallbackBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
   const selectedInstanceIds = ctx.getSelectedInstanceIds();
   const instanceIds = resolveSelectedEntityIds({
     selectedKind,
@@ -264,16 +255,16 @@ export function runDeleteSelectionCommand(ctx: LayoutActionsControllerContext) {
     singleId: ctx.getSelectedInstanceId(),
     multiIds: selectedInstanceIds
   });
-  if (
-    deleteSelectedEntityIds(ctx, {
-      ids: instanceIds,
-      selectedIds: selectedInstanceIds,
-      deleteEntity: ctx.deleteInstance,
-      clearSelection: () => ctx.setSelectedModule(null),
-      commitHistory: true
-    })
-  ) return true;
+  return deleteSelectedEntityIds(ctx, {
+    ids: instanceIds,
+    selectedIds: selectedInstanceIds,
+    deleteEntity: ctx.deleteInstance,
+    clearSelection: () => ctx.setSelectedModule(null),
+    commitHistory: true
+  });
+}
 
+function runWallDeleteFallbackBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
   const selectedWallIds = ctx.getSelectedWallIds();
   const wallIds = resolveSelectedEntityIds({
     selectedKind,
@@ -289,4 +280,18 @@ export function runDeleteSelectionCommand(ctx: LayoutActionsControllerContext) {
     commitHistory: true,
     mountProps: true
   });
+}
+
+export function runDeleteSelectionCommand(ctx: LayoutActionsControllerContext) {
+  ctx.ensureLayoutMode();
+  ctx.cancelPlacementIfActive();
+
+  if (runDelegatedDeleteSelection(ctx)) return true;
+
+  const selectedKind = ctx.getSelectedKind();
+  const selectedKindDelete = runSelectedKindDeleteBranch(ctx, selectedKind);
+  if (selectedKindDelete !== "not-applicable") return selectedKindDelete === "handled";
+
+  if (runModuleDeleteFallbackBranch(ctx, selectedKind)) return true;
+  return runWallDeleteFallbackBranch(ctx, selectedKind);
 }

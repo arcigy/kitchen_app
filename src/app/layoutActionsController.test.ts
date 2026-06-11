@@ -312,6 +312,22 @@ describe("layout delete action", () => {
     expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
   });
 
+  it("deleteSelected keeps current multi-module fallback priority before walls", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+    harness.selectedInstanceIds.add("m1");
+    harness.selectedWallIds.add("w1");
+
+    expect(harness.controller.deleteSelected()).toBe(true);
+
+    expect(harness.ctx.deleteInstance).toHaveBeenCalledExactlyOnceWith("m1");
+    expect(harness.ctx.deleteWall).not.toHaveBeenCalled();
+    expect(harness.selectedInstanceIds.size).toBe(0);
+    expect(harness.selectedWallIds.size).toBe(1);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
   it("deleteSelected deletes selected wall when multi wall selection is empty", () => {
     const harness = makeController();
     harness.setSelection({ kind: "wall", wallId: "w1" });
