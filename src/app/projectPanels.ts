@@ -3,6 +3,7 @@ import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
+import { createButtonElement } from "./propsPanelElements";
 
 type BomPanelArgs = {
   instances: LayoutInstance[];
@@ -38,9 +39,7 @@ export function openBomPanel(args: BomPanelArgs) {
   title.className = "bom-modal__title";
   header.appendChild(title);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.textContent = "Zavrieť";
+  const closeBtn = createButtonElement("Zavrieť");
   closeBtn.className = "bom-modal__close";
   header.appendChild(closeBtn);
 
@@ -107,9 +106,7 @@ export function openPricingCatalog(catalog: ClientCatalog) {
   title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   header.appendChild(title);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.textContent = "Zavrieť";
+  const closeBtn = createButtonElement("Zavrieť");
   closeBtn.className = "pricing-catalog-modal__close";
   closeBtn.style.background = "#0e1118";
   closeBtn.style.color = "#eef2ff";

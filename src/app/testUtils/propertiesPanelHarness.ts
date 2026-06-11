@@ -10,6 +10,7 @@ export class FakeElement {
   className = "";
   disabled = false;
   innerHTML = "";
+  isConnected = true;
   listeners = new Map<string, FakeListener[]>();
   max = "";
   min = "";
@@ -38,6 +39,10 @@ export class FakeElement {
 
   dispatch(type: string, event: Record<string, unknown> = {}) {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+
+  remove() {
+    this.isConnected = false;
   }
 
   setAttribute(name: string, value: string) {
