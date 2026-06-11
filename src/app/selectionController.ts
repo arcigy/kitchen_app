@@ -32,6 +32,14 @@ export type SelectModuleCommandContext = {
   setInstanceSelected: (id: string | null) => void;
 };
 
+export type SelectWallCommandContext = {
+  applySelection: SelectionApplyCommand;
+  pinnedWallIds: Set<string>;
+  selectedWallIds: Set<string>;
+  setSelectedWallId: (id: string | null) => void;
+  walls: WallInstance[];
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -166,6 +174,20 @@ export function runSelectModuleCommand(ctx: SelectModuleCommandContext, id: stri
     cleanupVisuals: () => {
       ctx.setInstanceSelected(selectedId);
       ctx.clearUnderlayBox();
+    }
+  });
+}
+
+export function runSelectWallCommand(ctx: SelectWallCommandContext, id: string | null) {
+  const selectedId = id && ctx.pinnedWallIds.has(id) ? null : id;
+  const wall = selectedId ? ctx.walls.find((item) => item.id === selectedId) ?? null : null;
+  ctx.applySelection({
+    kind: selectedId ? "wall" : null,
+    sideEffectKind: "wall",
+    sideEffectId: wall ? selectedId : null,
+    assignIds: () => {
+      ctx.setSelectedWallId(selectedId);
+      if (selectedId) replaceSelectionIdSet(ctx.selectedWallIds, [selectedId]);
     }
   });
 }
@@ -353,18 +375,15 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedWall(id: string | null) {
-    if (id && ctx.pinnedWallIds.has(id)) id = null;
-    const selectedId = id;
-    const wall = selectedId ? ctx.walls.find((item) => item.id === selectedId) ?? null : null;
-    applySelection({
-      kind: selectedId ? "wall" : null,
-      sideEffectKind: "wall",
-      sideEffectId: wall ? selectedId : null,
-      assignIds: () => {
-        ctx.selectedWallId = selectedId;
-        if (selectedId) replaceSelectionIdSet(ctx.selectedWallIds, [selectedId]);
-      }
-    });
+    runSelectWallCommand({
+      applySelection,
+      pinnedWallIds: ctx.pinnedWallIds,
+      selectedWallIds: ctx.selectedWallIds,
+      setSelectedWallId: (selectedWallId) => {
+        ctx.selectedWallId = selectedWallId;
+      },
+      walls: ctx.walls
+    }, id);
   }
 
   function setSelectedFloor(id: string | null) {

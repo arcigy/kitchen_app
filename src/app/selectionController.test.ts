@@ -14,6 +14,7 @@ import {
   runClearSectionToolSelectionCommand,
   runClearSelectionCommand,
   runSelectModuleCommand,
+  runSelectWallCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
   type SelectionControllerContext
@@ -273,6 +274,95 @@ describe("createSelectionController", () => {
     expect(applySelection.mock.calls[0]?.[0].kind).toBeNull();
     expect([...selectedInstanceIds]).toEqual([]);
     expect(setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("runs the named wall selection command with current wall snap side effects", () => {
+    const selectedWallIds = new Set<string>();
+    let selectedWallId: string | null = null;
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+    });
+
+    runSelectWallCommand(
+      {
+        applySelection,
+        pinnedWallIds: new Set<string>(),
+        selectedWallIds,
+        setSelectedWallId: (id) => {
+          selectedWallId = id;
+        },
+        walls: [{ id: "wall-1" } as SelectionControllerContext["walls"][number]]
+      },
+      "wall-1"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: "wall",
+      sideEffectKind: "wall",
+      sideEffectId: "wall-1"
+    });
+    expect(selectedWallId).toBe("wall-1");
+    expect([...selectedWallIds]).toEqual(["wall-1"]);
+  });
+
+  it("runs the named wall selection command with current missing wall side effect behavior", () => {
+    const selectedWallIds = new Set<string>();
+    let selectedWallId: string | null = null;
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+    });
+
+    runSelectWallCommand(
+      {
+        applySelection,
+        pinnedWallIds: new Set<string>(),
+        selectedWallIds,
+        setSelectedWallId: (id) => {
+          selectedWallId = id;
+        },
+        walls: []
+      },
+      "missing-wall"
+    );
+
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: "wall",
+      sideEffectKind: "wall",
+      sideEffectId: null
+    });
+    expect(selectedWallId).toBe("missing-wall");
+    expect([...selectedWallIds]).toEqual(["missing-wall"]);
+  });
+
+  it("runs the named wall selection command with current pinned wall behavior", () => {
+    const selectedWallIds = new Set<string>(["old-wall"]);
+    let selectedWallId: string | null = "old-wall";
+    const applySelection = vi.fn((args) => {
+      selectedWallIds.clear();
+      args.assignIds?.();
+    });
+
+    runSelectWallCommand(
+      {
+        applySelection,
+        pinnedWallIds: new Set(["wall-locked"]),
+        selectedWallIds,
+        setSelectedWallId: (id) => {
+          selectedWallId = id;
+        },
+        walls: [{ id: "wall-locked" } as SelectionControllerContext["walls"][number]]
+      },
+      "wall-locked"
+    );
+
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: null,
+      sideEffectKind: "wall",
+      sideEffectId: null
+    });
+    expect(selectedWallId).toBeNull();
+    expect([...selectedWallIds]).toEqual([]);
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {
