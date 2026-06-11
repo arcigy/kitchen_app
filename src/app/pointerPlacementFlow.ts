@@ -163,6 +163,16 @@ export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
   return false;
 }
 
+export function resetColumnPlacementPreview(args: {
+  clearPlanSnap: () => void;
+  hideHoverCursor: () => void;
+  updatePreview: (pointMm: null) => void;
+}) {
+  args.updatePreview(null);
+  args.clearPlanSnap();
+  args.hideHoverCursor();
+}
+
 export function handleColumnPlacementPreviewPointerMove<PointMm>(args: {
   clearPlanSnap: () => void;
   hideHoverCursor: () => void;
@@ -174,9 +184,11 @@ export function handleColumnPlacementPreviewPointerMove<PointMm>(args: {
 }) {
   if (!args.isActive) return false;
   if (!args.hitPoint) {
-    args.updatePreview(null);
-    args.clearPlanSnap();
-    args.hideHoverCursor();
+    resetColumnPlacementPreview({
+      clearPlanSnap: args.clearPlanSnap,
+      hideHoverCursor: args.hideHoverCursor,
+      updatePreview: args.updatePreview
+    });
     return true;
   }
 

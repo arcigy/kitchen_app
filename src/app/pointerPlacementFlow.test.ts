@@ -8,6 +8,7 @@ import {
   handlePlacementCommitPointerDown,
   handlePlacementPreviewPointerMove,
   handleSelectOpeningPlacementPreviewPointerMove,
+  resetColumnPlacementPreview,
   resolveSelectOpeningPlacementPreviewRoute
 } from "./pointerPlacementFlow";
 
@@ -359,6 +360,22 @@ describe("pointerPlacementFlow", () => {
         updateWindowPreview: vi.fn()
       })
     ).toBe(false);
+  });
+
+  it("resets column placement preview when ground hit is missing", () => {
+    const updatePreview = vi.fn();
+    const clearPlanSnap = vi.fn();
+    const hideHoverCursor = vi.fn();
+
+    resetColumnPlacementPreview({
+      clearPlanSnap,
+      hideHoverCursor,
+      updatePreview
+    });
+
+    expect(updatePreview).toHaveBeenCalledExactlyOnceWith(null);
+    expect(clearPlanSnap).toHaveBeenCalledOnce();
+    expect(hideHoverCursor).toHaveBeenCalledOnce();
   });
 
   it("keeps current column placement preview behavior", () => {
