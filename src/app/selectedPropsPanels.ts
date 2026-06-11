@@ -277,13 +277,11 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
 
     const resolvedTypeIds = selectedWalls.map((wall) => resolveWallTypeId(wall.params));
     const wallTypeMixed = resolvedTypeIds.some((typeId) => typeId !== resolvedTypeIds[0]);
-    const typeSelect = document.createElement("select");
-    typeSelect.innerHTML = [
-      ...(wallTypeMixed ? [`<option value="">(rozne)</option>`] : []),
-      `<option value="${CUSTOM_WALL_TYPE_ID}">Vlastna</option>`,
-      ...WALL_TYPE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.name}</option>`)
-    ].join("");
-    typeSelect.value = wallTypeMixed ? "" : resolvedTypeIds[0];
+    const typeSelect = createSelectElement(wallTypeMixed ? "" : (resolvedTypeIds[0] ?? ""), [
+      ...(wallTypeMixed ? [{ value: "", label: "(rozne)" }] : []),
+      { value: CUSTOM_WALL_TYPE_ID, label: "Vlastna" },
+      ...WALL_TYPE_PRESETS.map((preset) => ({ value: preset.id, label: preset.name }))
+    ]);
     props.row(s, "Typ steny", typeSelect);
 
     const thickness = multiVal(selectedWalls, "thicknessMm");
@@ -301,14 +299,12 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     props.row(s, "Výška (mm)", heightInput);
 
     const justification = multiVal(selectedWalls, "justification");
-    const just = document.createElement("select");
-    just.innerHTML = `
-      ${justification.mixed ? `<option value="">(rôzne)</option>` : ""}
-      <option value="center">Center</option>
-      <option value="interior">Finish face: interior</option>
-      <option value="exterior">Finish face: exterior</option>
-    `;
-    just.value = justification.mixed ? "" : String(justification.value ?? "center");
+    const just = createSelectElement(justification.mixed ? "" : String(justification.value ?? "center"), [
+      ...(justification.mixed ? [{ value: "", label: "(rôzne)" }] : []),
+      { value: "center", label: "Center" },
+      { value: "interior", label: "Finish face: interior" },
+      { value: "exterior", label: "Finish face: exterior" }
+    ]);
     props.row(s, "Justification", just);
 
     typeSelect.addEventListener("change", () => {

@@ -208,6 +208,14 @@ describe("selected props panels", () => {
 
     expect(props.setTitle).toHaveBeenCalledWith("Steny (2)");
     expect(rows.map((row) => row.label)).toEqual(["Typ steny", "Hrúbka (mm)", "Výška (mm)", "Justification"]);
+    expect(rows[0]!.control.value).toBe("custom");
+    expect(rows[0]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["custom", "Vlastna"],
+      ["partition_100", "Priecka 100"],
+      ["partition_150", "Priecka 150"],
+      ["bearing_200", "Nosna 200"],
+      ["external_300", "Obvodova 300"]
+    ]);
     expect(rows[1]!.control.type).toBe("number");
     expect(rows[1]!.control.step).toBe("1");
     expect(rows[1]!.control.placeholder).toBe("(rôzne)");
@@ -216,6 +224,11 @@ describe("selected props panels", () => {
     expect(rows[2]!.control.step).toBe("1");
     expect(rows[2]!.control.placeholder).toBe("(rôzne)");
     expect(rows[2]!.control.value).toBe("");
+    expect(rows[3]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["center", "Center"],
+      ["interior", "Finish face: interior"],
+      ["exterior", "Finish face: exterior"]
+    ]);
 
     rows[1]!.control.value = "150";
     rows[1]!.control.dispatch("change");
