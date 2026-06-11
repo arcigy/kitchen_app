@@ -87,22 +87,26 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
   };
 }
 
-export function runDuplicateSelectionCommand(ctx: LayoutActionsControllerContext) {
-  ctx.ensureLayoutMode();
-  const selectedKind = ctx.getSelectedKind();
-  if (selectedKind === "module") {
-    const instanceIds = resolveSelectedEntityIds({
-      selectedKind,
-      singleKind: "module",
-      singleId: ctx.getSelectedInstanceId(),
-      multiIds: ctx.getSelectedInstanceIds()
-    });
-    if (instanceIds.length === 0) return false;
-    for (const id of instanceIds) ctx.duplicateInstance(id);
-    ctx.commitHistory();
-    return true;
-  }
+type DuplicateSelectionBranchResult = "handled" | "blocked" | "not-applicable";
 
+function runSelectedModuleDuplicateBranch(
+  ctx: LayoutActionsControllerContext,
+  selectedKind: SelectedKind
+): DuplicateSelectionBranchResult {
+  if (selectedKind !== "module") return "not-applicable";
+  const instanceIds = resolveSelectedEntityIds({
+    selectedKind,
+    singleKind: "module",
+    singleId: ctx.getSelectedInstanceId(),
+    multiIds: ctx.getSelectedInstanceIds()
+  });
+  if (instanceIds.length === 0) return "blocked";
+  for (const id of instanceIds) ctx.duplicateInstance(id);
+  ctx.commitHistory();
+  return "handled";
+}
+
+function runSelectedWallDuplicateBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
   const selectedWallIds = ctx.getSelectedWallIds();
   const wallIds = resolveSelectedEntityIds({
     selectedKind,
@@ -124,6 +128,14 @@ export function runDuplicateSelectionCommand(ctx: LayoutActionsControllerContext
   ctx.commitHistory();
   ctx.mountProps();
   return true;
+}
+
+export function runDuplicateSelectionCommand(ctx: LayoutActionsControllerContext) {
+  ctx.ensureLayoutMode();
+  const selectedKind = ctx.getSelectedKind();
+  const moduleDuplicate = runSelectedModuleDuplicateBranch(ctx, selectedKind);
+  if (moduleDuplicate !== "not-applicable") return moduleDuplicate === "handled";
+  return runSelectedWallDuplicateBranch(ctx, selectedKind);
 }
 
 type DeleteSelectionBranchResult = "handled" | "blocked" | "not-applicable";

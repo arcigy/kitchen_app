@@ -230,6 +230,19 @@ describe("layout delete action", () => {
     expect(harness.ctx.mountProps).not.toHaveBeenCalled();
   });
 
+  it("runDuplicateSelectionCommand keeps current module branch priority when module id is missing", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "module" });
+    harness.selectedWallIds.add("w1");
+
+    expect(runDuplicateSelectionCommand(harness.ctx)).toBe(false);
+
+    expect(harness.ctx.duplicateInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.duplicateWall).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
   it("runDuplicateSelectionCommand returns false when selected wall duplication creates no copy", () => {
     const harness = makeController({ duplicateWall: vi.fn(() => null) });
     harness.setSelection({ kind: "wall", wallId: "w1" });
