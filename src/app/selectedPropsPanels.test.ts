@@ -368,6 +368,14 @@ describe("selected props panels", () => {
       "Justification Y",
       "Material"
     ]);
+    expect(columnHarness.rows[0]!.control.type).toBe("text");
+    expect(columnHarness.rows[0]!.control.value).toBe("Column");
+    expect(columnHarness.rows[2]!.control.type).toBe("number");
+    expect(columnHarness.rows[2]!.control.step).toBe("1");
+    expect(columnHarness.rows[2]!.control.value).toBe("2600");
+    expect(columnHarness.rows[3]!.control.type).toBe("number");
+    expect(columnHarness.rows[3]!.control.step).toBe("1");
+    expect(columnHarness.rows[3]!.control.value).toBe("200");
     expect(columnHarness.rows[1]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
       ["square", "Stvorcovy"],
       ["rectangular", "Obdlznikovy"],

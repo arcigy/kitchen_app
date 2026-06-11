@@ -585,9 +585,7 @@ function appendColumnParameterRows(
     apply(commit, patch, remount);
   };
 
-  const name = document.createElement("input");
-  name.type = "text";
-  name.value = params.name;
+  const name = createInputElement("text", params.name);
   props.row(s, "Nazov", name);
 
   const shape = createSelectElement(params.shape, [
@@ -602,10 +600,7 @@ function appendColumnParameterRows(
     key: keyof Pick<ColumnParams, "xMm" | "zMm" | "widthMm" | "depthMm" | "diameterMm" | "heightMm">,
     onRead?: (next: number) => Partial<ColumnParams>
   ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
+    const input = createInputElement("number", String(Math.round(Number(params[key] ?? 0))), { step: "1" });
     props.row(s, label, input);
     const restoreValue = () => {
       input.value = String(Math.round(Number(params[key] ?? 0)));
