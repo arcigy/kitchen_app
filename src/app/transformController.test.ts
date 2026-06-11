@@ -6,6 +6,7 @@ import {
   resolveMovedOpeningCenterMm,
   resolveMovedSectionParams,
   resolveTransformSelectionIds,
+  resetTransformStateForClear,
   updateMovedModuleKitchenPlacements,
   type TransformControllerContext
 } from "./transformController";
@@ -98,6 +99,61 @@ function moduleInstance(id: string, position: THREE.Vector3, kitchenGroupId: str
 }
 
 describe("transform move tool", () => {
+  it("resets transform state for clear without replacing vector and map containers", () => {
+    const transformState = makeTransformState();
+    const lastValidDelta = transformState.lastValidDelta;
+    const startWalls = transformState.startWalls;
+    transformState.kind = "move";
+    transformState.step = "pickTarget";
+    transformState.stickyMove = true;
+    transformState.moveSnapDisabled = true;
+    transformState.base = new THREE.Vector3(1, 0, 2);
+    transformState.pivot = new THREE.Vector3(3, 0, 4);
+    transformState.typed = "123";
+    transformState.lastAngleSign = -1;
+    transformState.selectedWallIds = ["w1"];
+    transformState.selectedInstanceIds = ["m1"];
+    transformState.selectedSectionIds = ["s1"];
+    transformState.selectedWindowIds = ["win1"];
+    transformState.selectedDoorIds = ["door1"];
+    transformState.startWalls.set("w1", { aMm: { x: 0, z: 0 }, bMm: { x: 1, z: 1 }, thicknessMm: 1, heightMm: 1, materialId: "wall" });
+    transformState.startInstances.set("m1", { pos: new THREE.Vector3(1, 0, 1), rotY: 0.5 });
+    transformState.startInstanceAdjacency.set("m1", "m2");
+    transformState.startSections.set("s1", { aMm: { x: 0, z: 0 }, bMm: { x: 1, z: 1 } } as SectionInstance["params"]);
+    transformState.startWindows.set("win1", { wallId: "w1", widthMm: 500 } as WindowParams);
+    transformState.startDoors.set("door1", { wallId: "w1", widthMm: 800 } as DoorParams);
+    transformState.startPointerAngle = 0.75;
+    transformState.lastValidDelta.set(1, 2, 3);
+    transformState.lastValidAngle = 0.5;
+
+    resetTransformStateForClear(transformState);
+
+    expect(transformState.kind).toBeNull();
+    expect(transformState.step).toBeNull();
+    expect(transformState.stickyMove).toBe(false);
+    expect(transformState.moveSnapDisabled).toBe(false);
+    expect(transformState.base).toBeNull();
+    expect(transformState.pivot).toBeNull();
+    expect(transformState.typed).toBe("");
+    expect(transformState.lastAngleSign).toBe(1);
+    expect(transformState.selectedWallIds).toEqual([]);
+    expect(transformState.selectedInstanceIds).toEqual([]);
+    expect(transformState.selectedSectionIds).toEqual([]);
+    expect(transformState.selectedWindowIds).toEqual([]);
+    expect(transformState.selectedDoorIds).toEqual([]);
+    expect(transformState.startWalls).toBe(startWalls);
+    expect(transformState.startWalls.size).toBe(0);
+    expect(transformState.startInstances.size).toBe(0);
+    expect(transformState.startInstanceAdjacency.size).toBe(0);
+    expect(transformState.startSections.size).toBe(0);
+    expect(transformState.startWindows.size).toBe(0);
+    expect(transformState.startDoors.size).toBe(0);
+    expect(transformState.startPointerAngle).toBe(0);
+    expect(transformState.lastValidDelta).toBe(lastValidDelta);
+    expect(transformState.lastValidDelta.toArray()).toEqual([0, 0, 0]);
+    expect(transformState.lastValidAngle).toBe(0);
+  });
+
   it("resolves transform ids with current multi-selection priority", () => {
     expect(
       resolveTransformSelectionIds({

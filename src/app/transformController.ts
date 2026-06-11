@@ -136,6 +136,31 @@ export function updateMovedModuleKitchenPlacements(args: {
   }
 }
 
+export function resetTransformStateForClear(transformState: TransformState) {
+  transformState.kind = null;
+  transformState.step = null;
+  transformState.stickyMove = false;
+  transformState.moveSnapDisabled = false;
+  transformState.base = null;
+  transformState.pivot = null;
+  transformState.typed = "";
+  transformState.lastAngleSign = 1;
+  transformState.selectedWallIds = [];
+  transformState.selectedInstanceIds = [];
+  transformState.selectedSectionIds = [];
+  transformState.selectedWindowIds = [];
+  transformState.selectedDoorIds = [];
+  transformState.startWalls.clear();
+  transformState.startInstances.clear();
+  transformState.startInstanceAdjacency.clear();
+  transformState.startSections.clear();
+  transformState.startWindows.clear();
+  transformState.startDoors.clear();
+  transformState.startPointerAngle = 0;
+  transformState.lastValidDelta.set(0, 0, 0);
+  transformState.lastValidAngle = 0;
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -215,28 +240,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.mountProps();
     }
 
-    ctx.transformState.kind = null;
-    ctx.transformState.step = null;
-    ctx.transformState.stickyMove = false;
-    ctx.transformState.moveSnapDisabled = false;
-    ctx.transformState.base = null;
-    ctx.transformState.pivot = null;
-    ctx.transformState.typed = "";
-    ctx.transformState.lastAngleSign = 1;
-    ctx.transformState.selectedWallIds = [];
-    ctx.transformState.selectedInstanceIds = [];
-    ctx.transformState.selectedSectionIds = [];
-    ctx.transformState.selectedWindowIds = [];
-    ctx.transformState.selectedDoorIds = [];
-    ctx.transformState.startWalls.clear();
-    ctx.transformState.startInstances.clear();
-    ctx.transformState.startInstanceAdjacency.clear();
-    ctx.transformState.startSections.clear();
-    ctx.transformState.startWindows.clear();
-    ctx.transformState.startDoors.clear();
-    ctx.transformState.startPointerAngle = 0;
-    ctx.transformState.lastValidDelta.set(0, 0, 0);
-    ctx.transformState.lastValidAngle = 0;
+    resetTransformStateForClear(ctx.transformState);
 
     if (opts?.continueMove) {
       ctx.transformState.kind = "move";
