@@ -219,6 +219,27 @@ export function captureTransformStartState(ctx: TransformStartSnapshotContext, s
   for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
 }
 
+export type TransformNoSelectionMoveEntryContext = {
+  clearTransform: () => void;
+  mountProps: () => void;
+  moveSnapDisabled: boolean;
+  setUnderlayStatus: (message: string) => void;
+  stickyMove: boolean;
+  transformState: TransformState;
+};
+
+export function enterMoveSelectElementsWithoutSelection(ctx: TransformNoSelectionMoveEntryContext) {
+  ctx.clearTransform();
+  ctx.transformState.kind = "move";
+  ctx.transformState.step = "selectElements";
+  ctx.transformState.stickyMove = ctx.stickyMove;
+  ctx.transformState.moveSnapDisabled = ctx.moveSnapDisabled;
+  ctx.setUnderlayStatus(
+    ctx.stickyMove ? "Move: select element to move. Click Move again to exit. N = free movement." : "Move (M): select elements, then press Enter. N = free movement."
+  );
+  ctx.mountProps();
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -338,15 +359,14 @@ export function createTransformController(ctx: TransformControllerContext) {
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
     if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
       if (kind !== "move") return false;
-      clearTransform();
-      ctx.transformState.kind = "move";
-      ctx.transformState.step = "selectElements";
-      ctx.transformState.stickyMove = stickyMove;
-      ctx.transformState.moveSnapDisabled = moveSnapDisabled;
-      ctx.setUnderlayStatus(
-        stickyMove ? "Move: select element to move. Click Move again to exit. N = free movement." : "Move (M): select elements, then press Enter. N = free movement."
-      );
-      ctx.mountProps();
+      enterMoveSelectElementsWithoutSelection({
+        clearTransform,
+        mountProps: ctx.mountProps,
+        moveSnapDisabled,
+        setUnderlayStatus: ctx.setUnderlayStatus,
+        stickyMove,
+        transformState: ctx.transformState
+      });
       return true;
     }
 

@@ -4,6 +4,7 @@ import {
   canStartTransformFromSelection,
   captureTransformStartState,
   createTransformController,
+  enterMoveSelectElementsWithoutSelection,
   isTransformModuleMoveValid,
   resolveMovedOpeningCenterMm,
   resolveMovedSectionParams,
@@ -211,6 +212,44 @@ describe("transform move tool", () => {
     expect(transformState.startWindows.get("win1")).not.toBe(window.params);
     expect(transformState.startDoors.get("door1")).toEqual(door.params);
     expect(transformState.startDoors.get("door1")).not.toBe(door.params);
+  });
+
+  it("enters no-selection Move select-elements state with current statuses and side-effect order", () => {
+    const transformState = makeTransformState();
+    const clearTransform = vi.fn();
+    const mountProps = vi.fn();
+    const setUnderlayStatus = vi.fn();
+
+    enterMoveSelectElementsWithoutSelection({
+      clearTransform,
+      mountProps,
+      moveSnapDisabled: false,
+      setUnderlayStatus,
+      stickyMove: false,
+      transformState
+    });
+
+    expect(transformState.kind).toBe("move");
+    expect(transformState.step).toBe("selectElements");
+    expect(transformState.stickyMove).toBe(false);
+    expect(transformState.moveSnapDisabled).toBe(false);
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): select elements, then press Enter. N = free movement.");
+    expect(mountProps).toHaveBeenCalledExactlyOnceWith();
+    expect(clearTransform.mock.invocationCallOrder[0]).toBeLessThan(setUnderlayStatus.mock.invocationCallOrder[0]);
+    expect(setUnderlayStatus.mock.invocationCallOrder[0]).toBeLessThan(mountProps.mock.invocationCallOrder[0]);
+
+    enterMoveSelectElementsWithoutSelection({
+      clearTransform,
+      mountProps,
+      moveSnapDisabled: true,
+      setUnderlayStatus,
+      stickyMove: true,
+      transformState
+    });
+
+    expect(transformState.stickyMove).toBe(true);
+    expect(transformState.moveSnapDisabled).toBe(true);
+    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Move: select element to move. Click Move again to exit. N = free movement.");
   });
 
   it("resolves transform ids with current multi-selection priority", () => {
