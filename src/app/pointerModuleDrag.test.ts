@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { LayoutInstance } from "../layout/appState";
-import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
+import {
+  resolvePointerModuleDragFinalPosition,
+  updateModuleDragFromGroundHit,
+  type PointerModuleDragState
+} from "./pointerModuleDrag";
 
 function moduleInstance(id: string, position: THREE.Vector3, kitchenGroupId: string | null = null): LayoutInstance {
   return {
@@ -28,6 +32,37 @@ function dragState(overrides: Partial<PointerModuleDragState> = {}): PointerModu
 }
 
 describe("pointer module drag", () => {
+  it("resolves final position through hit offset, wall constraints, snap, and wall constraints", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(1, 0.4, 1));
+    inst.root.position.copy(new THREE.Vector3(1, 0.4, 1));
+    const calls: string[] = [];
+    const applyWallConstraints = vi.fn((_instance: LayoutInstance, desired: THREE.Vector3) => {
+      calls.push(`constraint:${desired.x.toFixed(2)},${desired.y.toFixed(2)},${desired.z.toFixed(2)}`);
+      return desired.clone().add(new THREE.Vector3(0.1, 0, 0.2));
+    });
+    const snapPosition = vi.fn((_instance: LayoutInstance, desired: THREE.Vector3) => {
+      calls.push(`snap:${desired.x.toFixed(2)},${desired.y.toFixed(2)},${desired.z.toFixed(2)}`);
+      return desired.clone().add(new THREE.Vector3(0.3, 0, 0.4));
+    });
+
+    const finalPos = resolvePointerModuleDragFinalPosition({
+      dragState: dragState(),
+      hitPoint: new THREE.Vector3(2, 0, 3),
+      instance: inst,
+      applyWallConstraints,
+      snapPosition
+    });
+
+    expect(finalPos.x).toBeCloseTo(2.25);
+    expect(finalPos.y).toBeCloseTo(0.4);
+    expect(finalPos.z).toBeCloseTo(3.3);
+    expect(calls).toEqual([
+      "constraint:1.75,0.40,2.50",
+      "snap:1.85,0.40,2.70",
+      "constraint:2.15,0.40,3.10"
+    ]);
+  });
+
   it("updates dragged module through constraints, snap, orientation, nudge, and layout refresh", () => {
     const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
     inst.root.position.copy(new THREE.Vector3(1, 0, 1));

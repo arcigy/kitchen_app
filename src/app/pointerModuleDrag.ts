@@ -31,6 +31,25 @@ type UpdateModuleDragFromGroundHitParams = {
   updateLayoutPanel: () => void;
 };
 
+type ResolvePointerModuleDragFinalPositionParams = {
+  dragState: Pick<PointerModuleDragState, "offset">;
+  hitPoint: THREE.Vector3;
+  instance: LayoutInstance;
+  applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+};
+
+export function resolvePointerModuleDragFinalPosition(params: ResolvePointerModuleDragFinalPositionParams): THREE.Vector3 {
+  const desired = new THREE.Vector3(
+    params.hitPoint.x - params.dragState.offset.x,
+    params.instance.root.position.y,
+    params.hitPoint.z - params.dragState.offset.z
+  );
+  const desiredInRoom = params.applyWallConstraints(params.instance, desired);
+  const snapped = params.snapPosition(params.instance, desiredInRoom);
+  return params.applyWallConstraints(params.instance, snapped);
+}
+
 export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGroundHitParams): boolean {
   const instanceId = params.dragState.id;
   if (!instanceId || !params.hitPoint) return false;
@@ -38,14 +57,13 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
   const inst = params.findInstance(instanceId);
   if (!inst) return false;
 
-  const desired = new THREE.Vector3(
-    params.hitPoint.x - params.dragState.offset.x,
-    inst.root.position.y,
-    params.hitPoint.z - params.dragState.offset.z
-  );
-  const desiredInRoom = params.applyWallConstraints(inst, desired);
-  const snapped = params.snapPosition(inst, desiredInRoom);
-  const finalPos = params.applyWallConstraints(inst, snapped);
+  const finalPos = resolvePointerModuleDragFinalPosition({
+    dragState: params.dragState,
+    hitPoint: params.hitPoint,
+    instance: inst,
+    applyWallConstraints: params.applyWallConstraints,
+    snapPosition: params.snapPosition
+  });
 
   const prevPos = inst.root.position.clone();
   inst.root.position.copy(finalPos);
