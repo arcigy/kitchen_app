@@ -46,6 +46,15 @@ type RollbackPointerModuleDragOverlapParams = {
   findInstance: (id: string) => LayoutInstance | null;
 };
 
+type RefreshPointerModuleDragKitchenPlacementParams = {
+  instance: LayoutInstance;
+  pushed: PushedModuleSnapshot[];
+  findInstance: (id: string) => LayoutInstance | null;
+  kitchenGroups: KitchenPlacementGroupContext[];
+  defaultWorktopBackOffsetMm: number;
+  inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
+};
+
 export function resolvePointerModuleDragFinalPosition(params: ResolvePointerModuleDragFinalPositionParams): THREE.Vector3 {
   const desired = new THREE.Vector3(
     params.hitPoint.x - params.dragState.offset.x,
@@ -63,6 +72,25 @@ export function rollbackPointerModuleDragOverlap(params: RollbackPointerModuleDr
     const neighbor = params.findInstance(item.id);
     if (!neighbor) continue;
     neighbor.root.position.copy(item.prev);
+  }
+}
+
+export function refreshPointerModuleDragKitchenPlacement(params: RefreshPointerModuleDragKitchenPlacementParams): void {
+  refreshModuleKitchenPlacement({
+    instance: params.instance,
+    kitchenGroups: params.kitchenGroups,
+    defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
+    inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
+  });
+  for (const item of params.pushed) {
+    const neighbor = params.findInstance(item.id);
+    if (!neighbor) continue;
+    refreshModuleKitchenPlacement({
+      instance: neighbor,
+      kitchenGroups: params.kitchenGroups,
+      defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
+      inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
+    });
   }
 }
 
@@ -95,22 +123,14 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
     return true;
   }
 
-  refreshModuleKitchenPlacement({
+  refreshPointerModuleDragKitchenPlacement({
     instance: inst,
+    pushed,
+    findInstance: params.findInstance,
     kitchenGroups: params.kitchenGroups,
     defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
     inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
   });
-  for (const item of pushed) {
-    const neighbor = params.findInstance(item.id);
-    if (!neighbor) continue;
-    refreshModuleKitchenPlacement({
-      instance: neighbor,
-      kitchenGroups: params.kitchenGroups,
-      defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
-      inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
-    });
-  }
   params.dragState.lastValid.copy(inst.root.position);
   params.updateLayoutPanel();
   return true;

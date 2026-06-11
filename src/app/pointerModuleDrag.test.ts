@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { LayoutInstance } from "../layout/appState";
 import {
+  refreshPointerModuleDragKitchenPlacement,
   resolvePointerModuleDragFinalPosition,
   rollbackPointerModuleDragOverlap,
   updateModuleDragFromGroundHit,
@@ -82,6 +83,32 @@ describe("pointer module drag", () => {
 
     expect(inst.root.position.toArray()).toEqual([1, 0, 1]);
     expect(neighbor.root.position.toArray()).toEqual([2, 0, 2]);
+  });
+
+  it("refreshes dragged and existing pushed module kitchen placement", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
+    const neighbor = moduleInstance("m2", new THREE.Vector3(2, 0, 2), "kg2");
+    const inferKitchenPlacementBinding = vi.fn((instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => ({
+      worktopId: `${instance.id}-${kitchenGroupId}-${backOffsetMm}`,
+      segmentIndex: 0,
+      offsetAlongM: 0
+    }));
+
+    refreshPointerModuleDragKitchenPlacement({
+      instance: inst,
+      pushed: [
+        { id: "m2", prev: new THREE.Vector3(2, 0, 2) },
+        { id: "missing", prev: new THREE.Vector3(3, 0, 3) }
+      ],
+      findInstance: (id) => (id === "m2" ? neighbor : null),
+      kitchenGroups: [{ id: "kg1", ctx: { worktopBackOffsetMm: 45 } }],
+      defaultWorktopBackOffsetMm: 80,
+      inferKitchenPlacementBinding
+    });
+
+    expect(inst.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+    expect(neighbor.kitchenPlacement).toEqual({ worktopId: "m2-kg2-80", segmentIndex: 0, offsetAlongM: 0 });
+    expect(inferKitchenPlacementBinding).toHaveBeenCalledTimes(2);
   });
 
   it("updates dragged module through constraints, snap, orientation, nudge, and layout refresh", () => {
