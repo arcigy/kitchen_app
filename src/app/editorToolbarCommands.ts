@@ -49,6 +49,20 @@ export type ToolbarEntryModeCommandContext = {
   wardrobeMode: { enterNew: () => void } | null;
 };
 
+export type ToolbarViewOutputCommandContext = {
+  S: Pick<AppState, "customFurniture" | "instances" | "kitchenCtx" | "kitchenWorktops">;
+  args: {
+    copyBtn: Pick<HTMLButtonElement, "click">;
+    exportBtn: Pick<HTMLButtonElement, "click">;
+    exportSceneBtn: Pick<HTMLButtonElement, "click">;
+    resetBtn: Pick<HTMLButtonElement, "click">;
+  };
+  openBomPanel: (args: Pick<AppState, "customFurniture" | "instances" | "kitchenCtx" | "kitchenWorktops">) => void;
+  openPricingCatalog: () => void;
+  openUnderlayPanel: () => void;
+  toggle2dView: () => void;
+};
+
 export function runToolbarMoveCommand(ctx: ToolbarTransformCommandContext) {
   ctx.startTransformFromSelection("move", { sticky: true, toggle: true });
 }
@@ -126,4 +140,45 @@ export function runToolbarWardrobeCommand(ctx: Pick<ToolbarEntryModeCommandConte
 
 export function runToolbarCustomFurnitureCommand(ctx: Pick<ToolbarEntryModeCommandContext, "customFurnitureMode">) {
   ctx.customFurnitureMode?.enterNew();
+}
+
+export function runToolbarUnderlayCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openUnderlayPanel">) {
+  ctx.openUnderlayPanel();
+}
+
+export function runToolbarToggle2dCommand(ctx: Pick<ToolbarViewOutputCommandContext, "toggle2dView">) {
+  ctx.toggle2dView();
+}
+
+export function runToolbarResetViewCommand(resetViewBtn: Pick<HTMLButtonElement, "click"> | null) {
+  resetViewBtn?.click();
+}
+
+export function runToolbarExportJsonCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
+  ctx.args.exportBtn.click();
+}
+
+export function runToolbarExportSceneCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
+  ctx.args.exportSceneBtn.click();
+}
+
+export function runToolbarCopyExportCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
+  ctx.args.copyBtn.click();
+}
+
+export function runToolbarPricingCatalogCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openPricingCatalog">) {
+  ctx.openPricingCatalog();
+}
+
+export function runToolbarBomCommand(ctx: Pick<ToolbarViewOutputCommandContext, "S" | "openBomPanel">) {
+  ctx.openBomPanel({
+    customFurniture: ctx.S.customFurniture,
+    instances: ctx.S.instances,
+    kitchenCtx: ctx.S.kitchenCtx,
+    kitchenWorktops: ctx.S.kitchenWorktops
+  });
+}
+
+export function runToolbarResetDefaultsCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
+  ctx.args.resetBtn.click();
 }

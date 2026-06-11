@@ -7,21 +7,30 @@ import type { StartTransformOptions, TransformKind, TransformState } from "./tra
 import { t } from "../i18n";
 import {
   runToolbarAlignCommand,
+  runToolbarBomCommand,
+  runToolbarCopyExportCommand,
   runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarExportJsonCommand,
+  runToolbarExportSceneCommand,
   runToolbarFloorCommand,
   runToolbarHideToggleCommand,
   runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
+  runToolbarPricingCatalogCommand,
   runToolbarRedoCommand,
+  runToolbarResetDefaultsCommand,
+  runToolbarResetViewCommand,
   runToolbarRotateCommand,
   runToolbarSectionCommand,
   runToolbarSelectCommand,
+  runToolbarToggle2dCommand,
   runToolbarTrimCommand,
   runToolbarUndoCommand,
+  runToolbarUnderlayCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
   runToolbarWardrobeCommand
@@ -254,21 +263,21 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       iconSvg: ctx.I_MEASURE,
       onClick: () => runToolbarMeasureToggleCommand(ctx)
     });
-    addButton(view, { title: "Underlay", label: "Underlay", iconSvg: ctx.I_UNDERLAY, onClick: ctx.openUnderlayPanel });
-    addButton(view, { title: "2D View", label: "2D View", iconSvg: ctx.I_GRID2D, onClick: ctx.toggle2dView });
+    addButton(view, { title: "Underlay", label: "Underlay", iconSvg: ctx.I_UNDERLAY, onClick: () => runToolbarUnderlayCommand(ctx) });
+    addButton(view, { title: "2D View", label: "2D View", iconSvg: ctx.I_GRID2D, onClick: () => runToolbarToggle2dCommand(ctx) });
     const resetViewBtn = ctx.args.viewerEl.querySelector("#resetViewBtn") as HTMLButtonElement | null;
-    addButton(view, { title: "Reset View", label: "View", iconSvg: ctx.I_VIEW, onClick: () => resetViewBtn?.click() });
+    addButton(view, { title: "Reset View", label: "View", iconSvg: ctx.I_VIEW, onClick: () => runToolbarResetViewCommand(resetViewBtn) });
 
     const output = ctx.tb.addGroup("Output", { row });
-    addButton(output, { title: "Export JSON", label: "Export", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportBtn.click() });
-    addButton(output, { title: "Blender Material Review", label: "Blender", iconSvg: ctx.I_EXPORT, onClick: () => ctx.args.exportSceneBtn.click() });
-    addButton(output, { title: "Copy Export", label: "Copy", iconSvg: ctx.I_COPY, onClick: () => ctx.args.copyBtn.click() });
-    addButton(output, { title: "Pricing Catalog", iconSvg: ctx.I_BOM, label: "Catalog", onClick: ctx.openPricingCatalog });
+    addButton(output, { title: "Export JSON", label: "Export", iconSvg: ctx.I_EXPORT, onClick: () => runToolbarExportJsonCommand(ctx) });
+    addButton(output, { title: "Blender Material Review", label: "Blender", iconSvg: ctx.I_EXPORT, onClick: () => runToolbarExportSceneCommand(ctx) });
+    addButton(output, { title: "Copy Export", label: "Copy", iconSvg: ctx.I_COPY, onClick: () => runToolbarCopyExportCommand(ctx) });
+    addButton(output, { title: "Pricing Catalog", iconSvg: ctx.I_BOM, label: "Catalog", onClick: () => runToolbarPricingCatalogCommand(ctx) });
     ctx.tb.toolButton(output, {
       title: "BOM",
       iconSvg: ctx.I_BOM,
       label: "BOM",
-      onClick: () => ctx.openBomPanel({ instances: ctx.S.instances, kitchenWorktops: ctx.S.kitchenWorktops, customFurniture: ctx.S.customFurniture, kitchenCtx: ctx.S.kitchenCtx })
+      onClick: () => runToolbarBomCommand(ctx)
     });
     const installBtn = ctx.tb.toolButton(output, {
       title: "Install App",
@@ -291,7 +300,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     };
     syncInstallButton();
     ctx.subscribeInstallState(syncInstallButton);
-    addButton(output, { title: "Reset Defaults", label: "Reset", iconSvg: ctx.I_RESET, onClick: () => ctx.args.resetBtn.click() });
+    addButton(output, { title: "Reset Defaults", label: "Reset", iconSvg: ctx.I_RESET, onClick: () => runToolbarResetDefaultsCommand(ctx) });
   };
 
   const addVisualisationTab = (row: HTMLElement) => {

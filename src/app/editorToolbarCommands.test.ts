@@ -3,21 +3,30 @@ import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import {
   runToolbarAlignCommand,
+  runToolbarBomCommand,
+  runToolbarCopyExportCommand,
   runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarExportJsonCommand,
+  runToolbarExportSceneCommand,
   runToolbarFloorCommand,
   runToolbarHideToggleCommand,
   runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
   runToolbarRedoCommand,
+  runToolbarResetDefaultsCommand,
+  runToolbarResetViewCommand,
   runToolbarRotateCommand,
   runToolbarSectionCommand,
   runToolbarSelectCommand,
+  runToolbarPricingCatalogCommand,
   runToolbarTrimCommand,
+  runToolbarToggle2dCommand,
   runToolbarUndoCommand,
+  runToolbarUnderlayCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
   runToolbarWardrobeCommand
@@ -194,5 +203,68 @@ describe("editor toolbar commands", () => {
   it("keeps optional room entry commands inert when modes are unavailable", () => {
     expect(() => runToolbarWardrobeCommand({ wardrobeMode: null })).not.toThrow();
     expect(() => runToolbarCustomFurnitureCommand({ customFurnitureMode: null })).not.toThrow();
+  });
+
+  it("routes view buttons through current view commands", () => {
+    const resetViewBtn = { click: vi.fn() };
+    const ctx = {
+      openUnderlayPanel: vi.fn(),
+      toggle2dView: vi.fn()
+    };
+
+    runToolbarUnderlayCommand(ctx);
+    runToolbarToggle2dCommand(ctx);
+    runToolbarResetViewCommand(resetViewBtn);
+    runToolbarResetViewCommand(null);
+
+    expect(ctx.openUnderlayPanel).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.toggle2dView).toHaveBeenCalledExactlyOnceWith();
+    expect(resetViewBtn.click).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes output proxy buttons through their current button clicks", () => {
+    const ctx = {
+      args: {
+        copyBtn: { click: vi.fn() },
+        exportBtn: { click: vi.fn() },
+        exportSceneBtn: { click: vi.fn() },
+        resetBtn: { click: vi.fn() }
+      }
+    };
+
+    runToolbarExportJsonCommand(ctx);
+    runToolbarExportSceneCommand(ctx);
+    runToolbarCopyExportCommand(ctx);
+    runToolbarResetDefaultsCommand(ctx);
+
+    expect(ctx.args.exportBtn.click).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.args.exportSceneBtn.click).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.args.copyBtn.click).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.args.resetBtn.click).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes pricing and BOM buttons through current output commands", () => {
+    const S = {
+      customFurniture: [{ id: "cf1" }],
+      instances: [{ id: "m1" }],
+      kitchenCtx: { worktopHeightMm: 900 },
+      kitchenWorktops: [{ id: "w1" }]
+    } as unknown as Pick<AppState, "customFurniture" | "instances" | "kitchenCtx" | "kitchenWorktops">;
+    const ctx = {
+      S,
+      openBomPanel: vi.fn(),
+      openPricingCatalog: vi.fn()
+    };
+
+    runToolbarPricingCatalogCommand(ctx);
+    runToolbarBomCommand(ctx);
+
+    expect(ctx.openPricingCatalog).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.openBomPanel).toHaveBeenCalledExactlyOnceWith({
+      customFurniture: S.customFurniture,
+      instances: S.instances,
+      kitchenCtx: S.kitchenCtx,
+      kitchenWorktops: S.kitchenWorktops
+    });
   });
 });
