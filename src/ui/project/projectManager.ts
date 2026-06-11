@@ -3,6 +3,7 @@ import type { ProjectSaveFile } from "../../core/project-save/project-save-types
 import type { OrganizationUser } from "../../core/client/client-types";
 import { findOrganizationUser, organizationUserInitial, organizationUserName } from "../../core/client/organization-users";
 import { createAccountMenu } from "../account/accountMenu";
+import { createButtonElement } from "../domElements";
 import {
   createProject,
   downloadProject,
@@ -27,6 +28,10 @@ type ProjectManagerArgs = {
   currentUserId: string;
   onSelect: (selection: ProjectManagerSelection) => void;
 };
+
+export function createProjectVersionActionButton(label: string): HTMLButtonElement {
+  return createButtonElement(label);
+}
 
 function field(label: string, required = false) {
   const wrap = document.createElement("label");
@@ -216,8 +221,7 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
         </div>
       `;
       item.querySelector("div")?.appendChild(renderActor(users, version.savedByUserId, "Saved by"));
-      const preview = document.createElement("button");
-      preview.type = "button";
+      const preview = createProjectVersionActionButton("");
       preview.textContent = "Pozrieť";
       preview.addEventListener("click", async () => {
         setStatus(root, `Nacitavam verziu ${version.versionNumber}...`);
@@ -228,8 +232,7 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
           setStatus(root, error instanceof Error ? error.message : String(error), "error");
         }
       });
-      const restore = document.createElement("button");
-      restore.type = "button";
+      const restore = createProjectVersionActionButton("");
       restore.textContent = "Obnoviť";
       restore.addEventListener("click", async () => {
         const confirmed = window.confirm(`Chceš obnoviť projekt "${project.name}" na verziu ${version.versionNumber}? Aktuálny stav sa uloží ako nová verzia v histórii.`);

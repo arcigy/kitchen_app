@@ -1,6 +1,6 @@
 import type { ProjectActions } from "../../app/project/projectActions";
-import { createButtonElement } from "../../app/propsPanelElements";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
+import { createButtonElement } from "../domElements";
 import { showToast } from "../toast";
 
 type ExitChoice = "save" | "discard" | "cancel";

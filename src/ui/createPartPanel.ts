@@ -1,5 +1,5 @@
 import type { GrainAlong } from "../materials/uvGrain";
-import { createButtonElement, createCheckboxElement, createSelectElement } from "../app/propsPanelElements";
+import { createButtonElement, createCheckboxElement, createSelectElement } from "./domElements";
 export type { GrainAlong };
 
 export type BoardMaterialPresetId = "DTD1" | "DTD2" | "DTD3" | "MDF" | "DVD" | "DTD16";

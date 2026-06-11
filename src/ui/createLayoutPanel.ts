@@ -1,5 +1,5 @@
 import type { ModuleParams } from "../model/cabinetTypes";
-import { createButtonElement } from "../app/propsPanelElements";
+import { createButtonElement } from "./domElements";
 
 export type LayoutRow = {
   id: string;
