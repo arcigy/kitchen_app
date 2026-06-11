@@ -6,6 +6,7 @@ import type { PlacementHelpers } from "../layout/placementManager";
 import type { KeyboardTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 
 type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thicknessMm" | "typeId"> & {
   justification: NonNullable<WallParams["justification"]>;
@@ -541,10 +542,12 @@ export function nudgeSelectedModulesByDeltaMm(args: {
   if (!moved) return false;
 
   for (const movedInstance of args.instances) {
-    if (!movedInstance.kitchenGroupId) continue;
-    const group = args.kitchenGroups.find((item) => item.id === movedInstance.kitchenGroupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? args.defaultWorktopBackOffsetMm;
-    movedInstance.kitchenPlacement = args.inferKitchenPlacementBinding(movedInstance, movedInstance.kitchenGroupId, backOffsetMm);
+    refreshModuleKitchenPlacement({
+      instance: movedInstance,
+      kitchenGroups: args.kitchenGroups,
+      defaultWorktopBackOffsetMm: args.defaultWorktopBackOffsetMm,
+      inferKitchenPlacementBinding: args.inferKitchenPlacementBinding
+    });
   }
   args.updateLayoutPanel();
   return true;
