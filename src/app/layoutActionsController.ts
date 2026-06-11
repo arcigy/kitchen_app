@@ -41,6 +41,40 @@ export type LayoutActionsControllerContext = {
   setView2d: (checked: boolean) => void;
 };
 
+export type DeleteSelectionCommandContext = Pick<
+  LayoutActionsControllerContext,
+  | "ensureLayoutMode"
+  | "cancelPlacementIfActive"
+  | "getSelectedKind"
+  | "setSelectedKind"
+  | "getSelectedInstanceId"
+  | "getSelectedKitchenGroupId"
+  | "getSelectedSectionId"
+  | "getSelectedFloorId"
+  | "getSelectedColumnId"
+  | "getSelectedWallId"
+  | "getSelectedInstanceIds"
+  | "getSelectedWallIds"
+  | "setSelectedWall"
+  | "setSelectedModule"
+  | "setSelectedSection"
+  | "setSelectedFloor"
+  | "setSelectedColumn"
+  | "mountProps"
+  | "deleteInstance"
+  | "deleteWall"
+  | "deleteSectionInstance"
+  | "deleteFloor"
+  | "deleteColumn"
+  | "deleteKitchenGroup"
+  | "deleteWindow"
+  | "deleteDoor"
+  | "deleteUnderlay"
+  | "deleteWardrobeSelection"
+  | "deleteCustomFurnitureSelection"
+  | "commitHistory"
+>;
+
 export function resolveSelectedEntityIds(args: {
   selectedKind: SelectedKind;
   singleKind: Exclude<SelectedKind, null>;
@@ -144,7 +178,7 @@ export function runDuplicateSelectionCommand(ctx: LayoutActionsControllerContext
 type DeleteSelectionBranchResult = "handled" | "blocked" | "not-applicable";
 
 function finishDeleteSelectionBranch(
-  ctx: LayoutActionsControllerContext,
+  ctx: DeleteSelectionCommandContext,
   opts: { commitHistory?: boolean; mountProps?: boolean } = {}
 ) {
   if (opts.commitHistory) ctx.commitHistory();
@@ -152,7 +186,7 @@ function finishDeleteSelectionBranch(
   return "handled" as const;
 }
 
-function runDelegatedDeleteSelection(ctx: LayoutActionsControllerContext): boolean {
+function runDelegatedDeleteSelection(ctx: DeleteSelectionCommandContext): boolean {
   if (ctx.deleteWardrobeSelection()) {
     ctx.commitHistory();
     ctx.mountProps();
@@ -166,7 +200,7 @@ function runDelegatedDeleteSelection(ctx: LayoutActionsControllerContext): boole
   return false;
 }
 
-function runKitchenGroupDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+function runKitchenGroupDeleteBranch(ctx: DeleteSelectionCommandContext): DeleteSelectionBranchResult {
   const selectedKitchenGroupId = ctx.getSelectedKitchenGroupId();
   if (!selectedKitchenGroupId) return "blocked";
   if (!ctx.deleteKitchenGroup(selectedKitchenGroupId)) return "blocked";
@@ -175,7 +209,7 @@ function runKitchenGroupDeleteBranch(ctx: LayoutActionsControllerContext): Delet
   return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
 }
 
-function runSectionDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+function runSectionDeleteBranch(ctx: DeleteSelectionCommandContext): DeleteSelectionBranchResult {
   const selectedSectionId = ctx.getSelectedSectionId();
   if (!selectedSectionId) return "blocked";
   ctx.deleteSectionInstance(selectedSectionId, { skipHistory: true });
@@ -183,7 +217,7 @@ function runSectionDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSele
   return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
 }
 
-function runFloorDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+function runFloorDeleteBranch(ctx: DeleteSelectionCommandContext): DeleteSelectionBranchResult {
   const selectedFloorId = ctx.getSelectedFloorId();
   if (!selectedFloorId) return "blocked";
   ctx.deleteFloor(selectedFloorId, { skipHistory: true });
@@ -191,7 +225,7 @@ function runFloorDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelect
   return finishDeleteSelectionBranch(ctx, { commitHistory: true });
 }
 
-function runColumnDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+function runColumnDeleteBranch(ctx: DeleteSelectionCommandContext): DeleteSelectionBranchResult {
   const selectedColumnId = ctx.getSelectedColumnId();
   if (!selectedColumnId) return "blocked";
   if (!ctx.deleteColumn(selectedColumnId, { skipHistory: true })) return "blocked";
@@ -200,7 +234,7 @@ function runColumnDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelec
 }
 
 function runOpeningDeleteBranch(
-  ctx: LayoutActionsControllerContext,
+  ctx: DeleteSelectionCommandContext,
   kind: "window" | "door"
 ): DeleteSelectionBranchResult {
   if (kind === "window" && !ctx.deleteWindow()) return "blocked";
@@ -209,7 +243,7 @@ function runOpeningDeleteBranch(
   return finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
 }
 
-function runUnderlayDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSelectionBranchResult {
+function runUnderlayDeleteBranch(ctx: DeleteSelectionCommandContext): DeleteSelectionBranchResult {
   if (!ctx.deleteUnderlay()) return "blocked";
   ctx.setSelectedKind(null);
   ctx.setSelectedModule(null);
@@ -217,7 +251,7 @@ function runUnderlayDeleteBranch(ctx: LayoutActionsControllerContext): DeleteSel
 }
 
 function runSelectedKindDeleteBranch(
-  ctx: LayoutActionsControllerContext,
+  ctx: DeleteSelectionCommandContext,
   selectedKind: SelectedKind
 ): DeleteSelectionBranchResult {
   if (selectedKind === "kitchenGroup") return runKitchenGroupDeleteBranch(ctx);
@@ -231,7 +265,7 @@ function runSelectedKindDeleteBranch(
 }
 
 function deleteSelectedEntityIds(
-  ctx: LayoutActionsControllerContext,
+  ctx: DeleteSelectionCommandContext,
   args: {
     ids: string[];
     selectedIds: Set<string>;
@@ -249,7 +283,7 @@ function deleteSelectedEntityIds(
   return true;
 }
 
-function runModuleDeleteFallbackBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
+function runModuleDeleteFallbackBranch(ctx: DeleteSelectionCommandContext, selectedKind: SelectedKind) {
   const selectedInstanceIds = ctx.getSelectedInstanceIds();
   const instanceIds = resolveSelectedEntityIds({
     selectedKind,
@@ -266,7 +300,7 @@ function runModuleDeleteFallbackBranch(ctx: LayoutActionsControllerContext, sele
   });
 }
 
-function runWallDeleteFallbackBranch(ctx: LayoutActionsControllerContext, selectedKind: SelectedKind) {
+function runWallDeleteFallbackBranch(ctx: DeleteSelectionCommandContext, selectedKind: SelectedKind) {
   const selectedWallIds = ctx.getSelectedWallIds();
   const wallIds = resolveSelectedEntityIds({
     selectedKind,
@@ -284,7 +318,7 @@ function runWallDeleteFallbackBranch(ctx: LayoutActionsControllerContext, select
   });
 }
 
-export function runDeleteSelectionCommand(ctx: LayoutActionsControllerContext) {
+export function runDeleteSelectionCommand(ctx: DeleteSelectionCommandContext) {
   ctx.ensureLayoutMode();
   ctx.cancelPlacementIfActive();
 
