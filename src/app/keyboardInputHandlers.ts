@@ -183,6 +183,9 @@ type KeyboardNudgeSelectionCommandContext = Pick<
   | "windowDragState"
 >;
 
+type KeyboardMoveSelectionShortcutCommandContext = KeyboardNudgeSelectionCommandContext &
+  Pick<KeyboardInputHandlersContext, "cam">;
+
 type GlobalUndoRedoShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
   "customFurnitureMode" | "helpers" | "redo" | "S" | "undo"
@@ -284,12 +287,12 @@ type LayoutTransformKeyboardCommandContext = TransformEscapeCommandContext &
 
 type LayoutKeyboardCommandContext = ActivePlacementEscapeCommandContext &
   LayoutTransformKeyboardCommandContext &
-  KeyboardNudgeSelectionCommandContext &
+  KeyboardMoveSelectionShortcutCommandContext &
   LayoutToolShortcutCommandContext &
   LayoutSpaceShortcutCommandContext &
   WallTypedLengthCommandContext &
   DeleteSelectionShortcutCommandContext &
-  Pick<KeyboardInputHandlersContext, "cam" | "handleLayoutEscape" | "mode" | "viewMode">;
+  Pick<KeyboardInputHandlersContext, "handleLayoutEscape" | "mode" | "viewMode">;
 
 type KeyboardInputCommandContext = PlacementShortcutCommandContext &
   GlobalUndoRedoShortcutCommandContext &
@@ -642,6 +645,19 @@ export function runKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionComm
     ctx.commitHistory(ctx.S);
   }
   return moved;
+}
+
+export function runKeyboardMoveSelectionShortcutCommand(
+  ctx: KeyboardMoveSelectionShortcutCommandContext,
+  ev: KeyboardEvent
+) {
+  if (!ev.key.startsWith("Arrow")) return false;
+  const delta = resolveArrowNudgeDeltaM(ev.key, resolveKeyboardNudgeStepM(ctx.viewMode, ctx.cam()));
+  if (!delta) return false;
+  const moved = runKeyboardNudgeSelectionCommand(ctx, delta.dx, delta.dz);
+  if (!moved) return false;
+  ev.preventDefault();
+  return true;
 }
 
 export function runLayoutToolShortcutCommand(ctx: LayoutToolShortcutCommandContext, ev: KeyboardShortcutLike) {
@@ -1004,19 +1020,8 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
     return true;
   }
 
-  const nudgeStepM = () => {
-    return resolveKeyboardNudgeStepM(ctx.viewMode, ctx.cam());
-  };
-
-  if (ev.key.startsWith("Arrow")) {
-    const delta = resolveArrowNudgeDeltaM(ev.key, nudgeStepM());
-    if (delta) {
-      const moved = runKeyboardNudgeSelectionCommand(ctx, delta.dx, delta.dz);
-      if (moved) {
-        ev.preventDefault();
-        return true;
-      }
-    }
+  if (runKeyboardMoveSelectionShortcutCommand(ctx, ev)) {
+    return true;
   }
 
   if (runLayoutToolShortcutCommand(ctx, ev)) {

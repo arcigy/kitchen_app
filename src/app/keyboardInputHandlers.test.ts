@@ -14,6 +14,7 @@ import {
   runFloorEditEscapeCommand,
   runKitchenWorktopTypedInputCommand,
   runKeyboardInputCommand,
+  runKeyboardMoveSelectionShortcutCommand,
   runKeyboardNudgeSelectionCommand,
   runLayoutKeyboardCommand,
   runLayoutTransformKeyboardCommand,
@@ -291,6 +292,47 @@ describe("keyboard nudge helpers", () => {
     expect(resolveArrowNudgeDeltaM("ArrowDown", 0.5)).toEqual({ dx: 0, dz: 0.5 });
     expect(resolveArrowNudgeDeltaM("Enter", 0.5)).toBeNull();
     expect(resolveArrowNudgeDeltaM("ArrowLeft", 0)).toBeNull();
+  });
+
+  it("runs arrow key move selection shortcut through the nudge command", () => {
+    const section = {
+      id: "section-1",
+      params: {
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 1000, z: 0 }
+      }
+    } as SectionInstance;
+    const camera = new THREE.OrthographicCamera(-10, 10, 10, -10);
+    camera.zoom = 2;
+    const preventDefault = vi.fn();
+    const ctx = {
+      ...keyboardNudgeCommandContext({
+        sections: [section],
+        selectedKind: "section",
+        selectedSectionId: "section-1"
+      }),
+      cam: () => camera
+    } as Parameters<typeof runKeyboardMoveSelectionShortcutCommand>[0];
+
+    expect(runKeyboardMoveSelectionShortcutCommand(ctx, plainKeyEvent("ArrowRight", { preventDefault }))).toBe(true);
+
+    expect(section.params.aMm).toEqual({ x: 250, z: 0 });
+    expect(section.params.bMm).toEqual({ x: 1250, z: 0 });
+    expect(preventDefault).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.commitHistory).toHaveBeenCalledExactlyOnceWith(ctx.S);
+  });
+
+  it("does not consume arrow key move selection shortcuts when no nudge can run", () => {
+    const preventDefault = vi.fn();
+    const ctx = {
+      ...keyboardNudgeCommandContext({ measureState: { enabled: true } }),
+      cam: () => new THREE.OrthographicCamera(-10, 10, 10, -10)
+    } as Parameters<typeof runKeyboardMoveSelectionShortcutCommand>[0];
+
+    expect(runKeyboardMoveSelectionShortcutCommand(ctx, plainKeyEvent("ArrowLeft", { preventDefault }))).toBe(false);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(ctx.commitHistory).not.toHaveBeenCalled();
   });
 
   it("nudges the selected section line and refreshes its visual once", () => {
