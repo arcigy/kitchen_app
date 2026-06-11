@@ -11,6 +11,19 @@ export function createButtonElement(text: string, options: { type?: "button" | "
   return button;
 }
 
+export function createHtmlButtonElement(
+  html: string,
+  options: { ariaLabel?: string; className?: string; title?: string; type?: "button" | "submit" } = {}
+) {
+  const button = document.createElement("button");
+  button.type = options.type ?? "button";
+  if (options.className != null) button.className = options.className;
+  button.innerHTML = html;
+  if (options.title != null) button.title = options.title;
+  if (options.ariaLabel != null) button.setAttribute("aria-label", options.ariaLabel);
+  return button;
+}
+
 type SelectOptionValue = string | number;
 type InputElementType = "text" | "number" | "password";
 

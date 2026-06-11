@@ -1,6 +1,6 @@
 import type { OpeningHandleType } from "./localTypes";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
-import { createInputElement, createSelectElement } from "./propsPanelElements";
+import { createHtmlButtonElement, createInputElement, createSelectElement } from "./propsPanelElements";
 
 type OpeningSwingDirection = "left" | "right";
 type OpeningSwingSide = "inward" | "outward";
@@ -92,15 +92,12 @@ export function appendOpeningSwingRows<T extends OpeningSwingEditableParams>(
 ) {
   const swingControls = document.createElement("div");
   swingControls.className = "door-swing-controls";
-  const makeSwingButton = (html: string, label: string) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "door-swing-button";
-    button.innerHTML = html;
-    button.title = label;
-    if (labels.includeButtonAriaLabel) button.setAttribute("aria-label", label);
-    return button;
-  };
+  const makeSwingButton = (html: string, label: string) =>
+    createHtmlButtonElement(html, {
+      ariaLabel: labels.includeButtonAriaLabel ? label : undefined,
+      className: "door-swing-button",
+      title: label
+    });
   const handednessButton = makeSwingButton("&#8596;", labels.handednessButton);
   const sideButton = makeSwingButton("&#8597;", labels.sideButton);
   swingControls.append(handednessButton, sideButton);

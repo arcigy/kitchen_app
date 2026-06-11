@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createButtonElement, createCheckboxElement, createFileInputElement, createHtmlButtonElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -32,6 +32,22 @@ describe("props panel elements", () => {
 
     expect(button.type).toBe("submit");
     expect(button.textContent).toBe("Prihlasit");
+  });
+
+  it("creates reusable html button elements with labels", () => {
+    installFakeDocument();
+
+    const button = createHtmlButtonElement("&#8596;", {
+      ariaLabel: "Prehodit lave/prave dvere",
+      className: "door-swing-button",
+      title: "Prehodit na lave dvere"
+    }) as unknown as FakeElement;
+
+    expect(button.type).toBe("button");
+    expect(button.className).toBe("door-swing-button");
+    expect(button.innerHTML).toBe("&#8596;");
+    expect(button.title).toBe("Prehodit na lave dvere");
+    expect(button.attributes.get("aria-label")).toBe("Prehodit lave/prave dvere");
   });
 
   it("creates reusable select elements with stable option values and labels", () => {

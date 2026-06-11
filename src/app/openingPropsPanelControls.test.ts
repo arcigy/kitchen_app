@@ -60,8 +60,14 @@ describe("opening props panel controls", () => {
     });
 
     const [handednessButton, sideButton] = rows[0].control.children;
+    expect(handednessButton.type).toBe("button");
+    expect(handednessButton.className).toBe("door-swing-button");
+    expect(handednessButton.innerHTML).toBe("&#8596;");
     expect(handednessButton.title).toBe("Prehodit na lave dvere");
     expect(handednessButton.attributes.get("aria-label")).toBe("Prehodit lave/prave dvere");
+    expect(sideButton.type).toBe("button");
+    expect(sideButton.className).toBe("door-swing-button");
+    expect(sideButton.innerHTML).toBe("&#8597;");
     expect(rows[1].control.children.map((child) => [child.value, child.textContent])).toEqual([
       ["left", "Lave"],
       ["right", "Prave"]
