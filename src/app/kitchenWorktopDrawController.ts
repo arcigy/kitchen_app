@@ -1,6 +1,7 @@
 import type { AppState } from "../layout/appState";
 import type { FloorBoundaryPoint, KitchenWorktopParams } from "./localTypes";
 import { resolveKitchenWorktopTypedPoint } from "./pointerKitchenWorktopDrawClickHelpers";
+import { refreshSelectionVisualState } from "./selectionController";
 
 type KitchenWorktopDrawState = {
   active: boolean;
@@ -48,8 +49,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     ctx.kitchenWorktopDraw.mirrored = false;
     ctx.setWorktopDrawSnap(null);
     ctx.clearSelectionForDraw();
-    ctx.syncSelectionState();
-    ctx.updateSelectionHighlights();
+    refreshSelectionVisualState(ctx);
     ctx.setUnderlayStatus("Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
     ctx.mountProps();
   };
