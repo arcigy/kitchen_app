@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
 import type { PointerTransformState } from "./transformStateTypes";
 
+export type PointerTransformPreviewState = PointerTransformClickState & Pick<PointerTransformState, "lastPointerPx">;
+
 export function normalizeAngleRadians(angle: number) {
   let normalized = angle;
   while (normalized > Math.PI) normalized -= Math.PI * 2;
@@ -64,7 +66,7 @@ export function handleTransformPointerMovePreview<PlanSnap extends { kind: strin
   setSelectPlanSnap: (snap: PlanSnap | null) => void;
   setStatus: (status: string) => void;
   shiftKey: boolean;
-  transformState: PointerTransformClickState & Pick<PointerTransformState, "lastPointerPx">;
+  transformState: PointerTransformPreviewState;
   updateHoverCursor: (point: THREE.Vector3, kind: PlanSnap["kind"], rect: DOMRect) => void;
   updateMoveSnapFeedback: (snap: PlanSnap | null, point: THREE.Vector3, rect: DOMRect) => void;
   updateObjectSnapFeedback: (snap: ObjectSnap, target: THREE.Vector3) => void;

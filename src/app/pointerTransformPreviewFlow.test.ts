@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
-import { handleTransformPointerMovePreview, handleTransformPreviewPointerMove, normalizeAngleRadians } from "./pointerTransformPreviewFlow";
+import {
+  handleTransformPointerMovePreview,
+  handleTransformPreviewPointerMove,
+  normalizeAngleRadians,
+  type PointerTransformPreviewState
+} from "./pointerTransformPreviewFlow";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
 
 function transformState(overrides: Partial<PointerTransformClickState> = {}): PointerTransformClickState {
@@ -38,7 +43,7 @@ function previewArgs(overrides: Partial<Parameters<typeof handleTransformPreview
 
 type TestPlanSnap = { kind: "none" | "corner" | "edge"; point: Vector3 };
 
-function transformPointerState(overrides: Partial<PointerTransformClickState & { lastPointerPx: { x: number; y: number } }> = {}) {
+function transformPointerState(overrides: Partial<PointerTransformPreviewState> = {}) {
   return {
     ...transformState(),
     lastPointerPx: { x: 0, y: 0 },
