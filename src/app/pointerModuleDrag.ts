@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { AppState, LayoutInstance } from "../layout/appState";
+import { refreshModuleKitchenPlacement, type KitchenPlacementGroupContext } from "./moduleKitchenPlacement";
 
 export type PointerModuleDragState = {
   active: boolean;
@@ -13,13 +14,6 @@ type PushedModuleSnapshot = {
   prev: THREE.Vector3;
 };
 
-type KitchenGroupWithContext = {
-  id: string;
-  ctx: {
-    worktopBackOffsetMm: number;
-  };
-};
-
 type UpdateModuleDragFromGroundHitParams = {
   dragState: PointerModuleDragState;
   hitPoint: THREE.Vector3 | null;
@@ -31,23 +25,11 @@ type UpdateModuleDragFromGroundHitParams = {
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
   moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
-  kitchenGroups: KitchenGroupWithContext[];
+  kitchenGroups: KitchenPlacementGroupContext[];
   defaultWorktopBackOffsetMm: number;
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
   updateLayoutPanel: () => void;
 };
-
-function refreshKitchenPlacement(
-  instance: LayoutInstance,
-  kitchenGroups: KitchenGroupWithContext[],
-  defaultWorktopBackOffsetMm: number,
-  inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"]
-) {
-  if (!instance.kitchenGroupId) return;
-  const group = kitchenGroups.find((item) => item.id === instance.kitchenGroupId) ?? null;
-  const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? defaultWorktopBackOffsetMm;
-  instance.kitchenPlacement = inferKitchenPlacementBinding(instance, instance.kitchenGroupId, backOffsetMm);
-}
 
 export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGroundHitParams): boolean {
   const instanceId = params.dragState.id;
@@ -79,11 +61,21 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
     return true;
   }
 
-  refreshKitchenPlacement(inst, params.kitchenGroups, params.defaultWorktopBackOffsetMm, params.inferKitchenPlacementBinding);
+  refreshModuleKitchenPlacement({
+    instance: inst,
+    kitchenGroups: params.kitchenGroups,
+    defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
+    inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
+  });
   for (const item of pushed) {
     const neighbor = params.findInstance(item.id);
     if (!neighbor) continue;
-    refreshKitchenPlacement(neighbor, params.kitchenGroups, params.defaultWorktopBackOffsetMm, params.inferKitchenPlacementBinding);
+    refreshModuleKitchenPlacement({
+      instance: neighbor,
+      kitchenGroups: params.kitchenGroups,
+      defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
+      inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
+    });
   }
   params.dragState.lastValid.copy(inst.root.position);
   params.updateLayoutPanel();

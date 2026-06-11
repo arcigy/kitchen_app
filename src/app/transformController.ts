@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 
 type MmPoint = { x: number; z: number };
 type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
@@ -124,10 +125,13 @@ export function updateMovedModuleKitchenPlacements(args: {
 }) {
   for (const id of args.selectedInstanceIds) {
     const inst = args.findInstance(id);
-    if (!inst?.kitchenGroupId) continue;
-    const group = args.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? args.kitchenCtx.worktopBackOffsetMm;
-    inst.kitchenPlacement = args.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+    if (!inst) continue;
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: args.kitchenGroups,
+      defaultWorktopBackOffsetMm: args.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: args.inferKitchenPlacementBinding
+    });
   }
 }
 
