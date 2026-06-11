@@ -245,8 +245,7 @@ function deleteSelectedEntityIds(
   for (const id of args.ids) args.deleteEntity(id);
   args.clearSelection();
   clearSelectionIdSet(args.selectedIds);
-  if (args.commitHistory) ctx.commitHistory();
-  if (args.mountProps) ctx.mountProps();
+  finishDeleteSelectionBranch(ctx, { commitHistory: args.commitHistory, mountProps: args.mountProps });
   return true;
 }
 
