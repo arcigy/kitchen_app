@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   canStartTransformFromSelection,
+  captureTransformStartState,
   createTransformController,
   isTransformModuleMoveValid,
   resolveMovedOpeningCenterMm,
@@ -169,6 +170,47 @@ describe("transform move tool", () => {
     expect(canStartTransformFromSelection({ ...base, wallEditHud: { drag: {} } })).toBe(false);
     expect(canStartTransformFromSelection({ ...base, marquee: { active: true } })).toBe(false);
     expect(canStartTransformFromSelection({ ...base, underlayCal: { active: true } })).toBe(false);
+  });
+
+  it("captures transform start snapshots for geometry and selected module adjacency", () => {
+    const wall = {
+      id: "w1",
+      params: { aMm: { x: 0, z: 0 }, bMm: { x: 1000, z: 0 }, thicknessMm: 100, heightMm: 2600, materialId: "wall" }
+    } as WallInstance;
+    const selected = moduleInstance("m1", new THREE.Vector3(1, 0, 2), "kg1");
+    selected.root.rotation.y = 0.5;
+    const neighbor = moduleInstance("m2", new THREE.Vector3(3, 0, 4), "kg1");
+    const otherGroup = moduleInstance("m3", new THREE.Vector3(5, 0, 6), "kg2");
+    const section = { id: "s1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 10, z: 10 } } } as SectionInstance;
+    const window = { id: "win1", params: { wallId: "w1", widthMm: 500 } as WindowParams };
+    const door = { id: "door1", params: { wallId: "w1", widthMm: 800 } as DoorParams };
+    const detectModuleAdjacency = vi.fn((_box: THREE.Box3, _otherBox: THREE.Box3, otherId: string) => otherId === "m2");
+    const transformState = makeTransformState();
+    const ctx = makeTransformContext({
+      walls: [wall],
+      instances: [selected, neighbor, otherGroup],
+      sections: [section],
+      windows: [window],
+      doors: [door],
+      transformState,
+      instanceWorldBox: vi.fn(() => new THREE.Box3()),
+      detectModuleAdjacency
+    });
+
+    captureTransformStartState(ctx, ["m1"]);
+
+    expect(transformState.startWalls.get("w1")).toEqual(wall.params);
+    expect(transformState.startWalls.get("w1")).not.toBe(wall.params);
+    expect(transformState.startInstances.get("m1")?.pos.toArray()).toEqual([1, 0, 2]);
+    expect(transformState.startInstances.get("m1")?.rotY).toBe(0.5);
+    expect(transformState.startInstanceAdjacency.get("m1")).toBe("m2");
+    expect(detectModuleAdjacency).toHaveBeenCalledTimes(1);
+    expect(transformState.startSections.get("s1")).toEqual(section.params);
+    expect(transformState.startSections.get("s1")).not.toBe(section.params);
+    expect(transformState.startWindows.get("win1")).toEqual(window.params);
+    expect(transformState.startWindows.get("win1")).not.toBe(window.params);
+    expect(transformState.startDoors.get("door1")).toEqual(door.params);
+    expect(transformState.startDoors.get("door1")).not.toBe(door.params);
   });
 
   it("resolves transform ids with current multi-selection priority", () => {

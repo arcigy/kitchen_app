@@ -183,6 +183,42 @@ export function canStartTransformFromSelection(ctx: TransformStartGuardContext) 
   return true;
 }
 
+export type TransformStartSnapshotContext = Pick<
+  TransformControllerContext,
+  | "walls"
+  | "instances"
+  | "sections"
+  | "windows"
+  | "doors"
+  | "transformState"
+  | "instanceWorldBox"
+  | "detectModuleAdjacency"
+  | "cloneSectionParams"
+>;
+
+export function captureTransformStartState(ctx: TransformStartSnapshotContext, selectedInstanceIds: string[]) {
+  for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
+  for (const inst of ctx.instances) ctx.transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
+  for (const inst of ctx.instances) {
+    if (!selectedInstanceIds.includes(inst.id)) continue;
+    const box = ctx.instanceWorldBox(inst);
+    let neighborId: string | null = null;
+    for (const other of ctx.instances) {
+      if (other.id === inst.id) continue;
+      if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
+      const link = ctx.detectModuleAdjacency(box, ctx.instanceWorldBox(other), other.id);
+      if (link) {
+        neighborId = other.id;
+        break;
+      }
+    }
+    ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
+  }
+  for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
+  for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
+  for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -325,27 +361,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     ctx.transformState.selectedWindowIds = windowIds;
     ctx.transformState.selectedDoorIds = doorIds;
 
-    // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
-    for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
-    for (const inst of ctx.instances) ctx.transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
-    for (const inst of ctx.instances) {
-      if (!instIds.includes(inst.id)) continue;
-      const box = ctx.instanceWorldBox(inst);
-      let neighborId: string | null = null;
-      for (const other of ctx.instances) {
-        if (other.id === inst.id) continue;
-        if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
-        const link = ctx.detectModuleAdjacency(box, ctx.instanceWorldBox(other), other.id);
-        if (link) {
-          neighborId = other.id;
-          break;
-        }
-      }
-      ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
-    }
-    for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
-    for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
-    for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
+    captureTransformStartState(ctx, instIds);
 
     ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
     ctx.mountProps();
