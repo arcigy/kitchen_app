@@ -188,6 +188,19 @@ type KeyboardNudgeSelectionCommandContext = Pick<
 type KeyboardMoveSelectionShortcutCommandContext = KeyboardNudgeSelectionCommandContext &
   Pick<KeyboardInputHandlersContext, "cam">;
 
+type KeyboardNudgeSelectionGuardContext = Pick<
+  KeyboardInputHandlersContext,
+  | "doorDragState"
+  | "dragState"
+  | "layoutTool"
+  | "marquee"
+  | "measureState"
+  | "underlayCal"
+  | "viewMode"
+  | "wallEditHud"
+  | "windowDragState"
+>;
+
 type GlobalUndoRedoShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
   "customFurnitureMode" | "helpers" | "redo" | "S" | "undo"
@@ -555,12 +568,7 @@ export function nudgeSelectedModulesByDeltaMm(args: {
 }
 
 export function runKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionCommandContext, dxM: number, dzM: number) {
-  if (ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
-  if (ctx.measureState.enabled) return false;
-  if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) {
-    return false;
-  }
-  if (ctx.underlayCal.active) return false;
+  if (!canRunKeyboardNudgeSelectionCommand(ctx)) return false;
 
   const dxMm = Math.round(dxM * 1000);
   const dzMm = Math.round(dzM * 1000);
@@ -649,6 +657,16 @@ export function runKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionComm
     ctx.commitHistory(ctx.S);
   }
   return moved;
+}
+
+export function canRunKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionGuardContext) {
+  if (ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
+  if (ctx.measureState.enabled) return false;
+  if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) {
+    return false;
+  }
+  if (ctx.underlayCal.active) return false;
+  return true;
 }
 
 export function runKeyboardMoveSelectionShortcutCommand(

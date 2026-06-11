@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import {
+  canRunKeyboardNudgeSelectionCommand,
   handleGlobalUndoRedoShortcut,
   installKeyboardInputHandlers,
   nudgeSelectedModulesByDeltaMm,
@@ -292,6 +293,21 @@ describe("keyboard nudge helpers", () => {
     expect(resolveArrowNudgeDeltaM("ArrowDown", 0.5)).toEqual({ dx: 0, dz: 0.5 });
     expect(resolveArrowNudgeDeltaM("Enter", 0.5)).toBeNull();
     expect(resolveArrowNudgeDeltaM("ArrowLeft", 0)).toBeNull();
+  });
+
+  it("keeps the keyboard nudge guard limited to idle 2d select mode", () => {
+    const base = keyboardNudgeCommandContext({});
+
+    expect(canRunKeyboardNudgeSelectionCommand(base)).toBe(true);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, viewMode: "3d" })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, layoutTool: "wall" })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, measureState: { enabled: true } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, dragState: { active: true } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, windowDragState: { active: true } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, doorDragState: { active: true } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, wallEditHud: { drag: {} } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, marquee: { active: true } })).toBe(false);
+    expect(canRunKeyboardNudgeSelectionCommand({ ...base, underlayCal: { active: true } })).toBe(false);
   });
 
   it("runs arrow key move selection shortcut through the nudge command", () => {
