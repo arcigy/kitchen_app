@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { activateSelectToolState, activateToggleEditorToolState, enterEditorTool, type EditorToolEntryContext } from "./editorToolEntryController";
+import {
+  activateEditorToolPromptState,
+  activateSelectToolState,
+  activateToggleEditorToolState,
+  enterEditorTool,
+  type EditorToolEntryContext
+} from "./editorToolEntryController";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
 
@@ -50,6 +56,23 @@ describe("enterEditorTool", () => {
     expect(ctx.enterSelectTool).toHaveBeenCalledOnce();
     expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("");
     expect(ctx.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("runs prompt tool activation with shared reset/status/mount order", () => {
+    const calls: string[] = [];
+    const ctx = {
+      ensureFloorplanViewerTab: vi.fn(() => calls.push("ensureFloorplanViewerTab")),
+      enterTool: vi.fn(() => calls.push("enterTool")),
+      mountProps: vi.fn(() => calls.push("mountProps")),
+      resetToolState: vi.fn(() => calls.push("resetToolState")),
+      setUnderlayStatus: vi.fn(() => calls.push("setUnderlayStatus")),
+      status: "Tool: prompt..."
+    };
+
+    activateEditorToolPromptState(ctx);
+
+    expect(calls).toEqual(["enterTool", "resetToolState", "ensureFloorplanViewerTab", "setUnderlayStatus", "mountProps"]);
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Tool: prompt...");
   });
 
   it("routes active toggle tools back to Select without running activation", () => {

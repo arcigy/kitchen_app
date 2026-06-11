@@ -1,3 +1,5 @@
+import { activateEditorToolPromptState } from "./editorToolEntryController";
+
 export type AlignState = {
   ref: unknown | null;
   hover: unknown | null;
@@ -36,11 +38,14 @@ export function resetAlignState(ctx: AlignToolStateContext) {
 }
 
 export function activateAlignToolState(ctx: AlignToolActivationContext) {
-  ctx.enterAlignTool();
-  resetAlignState(ctx);
-  ctx.ensureFloorplanViewerTab();
-  ctx.setUnderlayStatus("Align: click reference line...");
-  ctx.mountProps();
+  activateEditorToolPromptState({
+    ensureFloorplanViewerTab: ctx.ensureFloorplanViewerTab,
+    enterTool: ctx.enterAlignTool,
+    mountProps: ctx.mountProps,
+    resetToolState: () => resetAlignState(ctx),
+    setUnderlayStatus: ctx.setUnderlayStatus,
+    status: "Align: click reference line..."
+  });
 }
 
 export function clearAlignReferenceFromEscape(ctx: AlignReferenceEscapeContext) {
