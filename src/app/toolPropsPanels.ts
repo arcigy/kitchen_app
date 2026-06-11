@@ -9,7 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
-import { appendMutedText, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -73,15 +73,9 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
       ...WALL_TYPE_PRESETS.map((preset) => ({ value: preset.id, label: preset.name }))
     ]);
     props.row(s, "Typ steny", typeSelect);
-    const th = document.createElement("input");
-    th.type = "number";
-    th.step = "1";
-    th.value = String(wallDefault.thicknessMm);
+    const th = createInputElement("number", String(wallDefault.thicknessMm), { step: "1" });
     props.row(s, "Thickness (mm)", th);
-    const height = document.createElement("input");
-    height.type = "number";
-    height.step = "1";
-    height.value = String(wallDefault.heightMm);
+    const height = createInputElement("number", String(wallDefault.heightMm), { step: "1" });
     props.row(s, "Height (mm)", height);
     const just = createSelectElement(wallDefault.justification ?? "center", [
       { value: "center", label: "Center" },

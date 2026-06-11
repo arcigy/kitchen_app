@@ -57,6 +57,12 @@ describe("tool props panels", () => {
       "bearing_200",
       "external_300"
     ]);
+    expect(rows[1]!.control.type).toBe("number");
+    expect(rows[1]!.control.step).toBe("1");
+    expect(rows[1]!.control.value).toBe("100");
+    expect(rows[2]!.control.type).toBe("number");
+    expect(rows[2]!.control.step).toBe("1");
+    expect(rows[2]!.control.value).toBe("2600");
     expect(rows[3]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
       ["center", "Center"],
       ["interior", "Finish face: interior"],
