@@ -27,6 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
+import { createMutedText } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -496,8 +497,7 @@ export function mountSectionToolPropsPanel(ctx: SectionToolContext) {
   const { props, sectionDraw, drawOrthoEnabled } = ctx;
     props.setTitle("Section");
     const s = props.section();
-    const info = document.createElement("div");
-    info.className = "muted";
+    const info = createMutedText("");
     info.textContent = sectionDraw.a
       ? `Klikni druhý bod. Ortho ${drawOrthoEnabled ? "ON" : "OFF"}, Shift = bez axis snap, Space = zrkadliť smer. Aktuálne: ${sectionDraw.mirrored ? "mirrored" : "default"}.`
       : "Klikni prvý bod section line. Po druhom bode sa section vytvorí a otvorí.";
@@ -517,15 +517,13 @@ export function mountSectionPropsPanel(ctx: SectionPropsContext, id: string) {
     name.value = section.params.name;
     props.row(s, "Name", name);
 
-    const info = document.createElement("div");
-    info.className = "muted";
+    const info = createMutedText("");
     info.style.marginTop = "8px";
     const basis = getSectionBasis(section.params);
     info.textContent = `A: ${section.params.aMm.x}, ${section.params.aMm.z} mm | B: ${section.params.bMm.x}, ${section.params.bMm.z} mm | Dĺžka: ${basis ? Math.round(basis.length * 1000) : 0} mm`;
     s.appendChild(info);
 
-    const dir = document.createElement("div");
-    dir.className = "muted";
+    const dir = createMutedText("");
     dir.style.marginTop = "6px";
     dir.textContent = `Smer: ${section.params.mirrored ? "Mirrored" : "Default"}`;
     s.appendChild(dir);
@@ -571,8 +569,7 @@ export function mountColumnPlacementPropsPanel(ctx: ColumnPlacementPropsContext)
   const { props, params, onChange, mountProps } = ctx;
   props.setTitle("Stlp - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
+  const info = createMutedText("");
   info.textContent = "Nastav parametre a klikni miesto v podoryse. Esc zrusi vkladanie.";
   s.appendChild(info);
   appendColumnParameterRows(
@@ -769,8 +766,7 @@ export function mountWindowPlacementPropsPanel(ctx: WindowPlacementPropsContext)
   const { props, params } = ctx;
   props.setTitle("Okno - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
+  const info = createMutedText("");
   info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene.";
   s.appendChild(info);
   appendWindowParameterRows(
@@ -793,8 +789,7 @@ export function mountWindowPropsPanel(ctx: WindowPropsContext) {
   const params = windowInst.params;
   const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
 
-  const wallInfo = document.createElement("div");
-  wallInfo.className = "muted";
+  const wallInfo = createMutedText("");
   wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Okno nie je vlozene v kreslenej stene.";
   s.appendChild(wallInfo);
 
@@ -861,8 +856,7 @@ export function mountDoorPlacementPropsPanel(ctx: DoorPlacementPropsContext) {
   const { props, params } = ctx;
   props.setTitle("Dvere - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
+  const info = createMutedText("");
   info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space lave/prave, Shift+Space dnu/von.";
   s.appendChild(info);
   appendDoorParameterRows(
@@ -885,8 +879,7 @@ export function mountDoorPropsPanel(ctx: DoorPropsContext) {
   const params = doorInst.params;
   const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
 
-  const wallInfo = document.createElement("div");
-  wallInfo.className = "muted";
+  const wallInfo = createMutedText("");
   wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Dvere nie su vlozene v kreslenej stene.";
   s.appendChild(wallInfo);
 
