@@ -8,16 +8,21 @@ import { t } from "../i18n";
 import {
   runToolbarAlignCommand,
   runToolbarBomCommand,
+  runToolbarCameraCommand,
+  runToolbarColumnCommand,
   runToolbarCopyExportCommand,
   runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
+  runToolbarDoorCommand,
   runToolbarDuplicateCommand,
   runToolbarExportJsonCommand,
   runToolbarExportSceneCommand,
   runToolbarFloorCommand,
   runToolbarHideToggleCommand,
+  runToolbarInstallCommand,
   runToolbarIsolateCommand,
+  runToolbarMaterialCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
   runToolbarPricingCatalogCommand,
@@ -33,7 +38,8 @@ import {
   runToolbarUnderlayCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
-  runToolbarWardrobeCommand
+  runToolbarWardrobeCommand,
+  runToolbarWindowCommand
 } from "./editorToolbarCommands";
 
 type KitchenModeActions = {
@@ -207,9 +213,9 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   const addArchitectureTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Architecture", { row });
     addButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => runToolbarWallCommand(ctx) });
-    addButton(tools, { title: "Door", label: "Door", iconSvg: ctx.I_DOOR, onClick: ctx.addOrSelectDoor });
-    addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: ctx.addOrSelectWindow });
-    addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: ctx.addColumn });
+    addButton(tools, { title: "Door", label: "Door", iconSvg: ctx.I_DOOR, onClick: () => runToolbarDoorCommand(ctx) });
+    addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: () => runToolbarWindowCommand(ctx) });
+    addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: () => runToolbarColumnCommand(ctx) });
     addButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => runToolbarFloorCommand(ctx) });
     addButton(tools, { title: "Stair", label: "Stair", iconSvg: ctx.I_STAIR });
   };
@@ -283,14 +289,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       title: "Install App",
       label: "Install",
       iconSvg: ctx.I_INSTALL,
-      onClick: () => {
-        const state = ctx.getInstallState();
-        if (state.available) {
-          void ctx.promptAppInstall();
-          return;
-        }
-        window.alert("Chrome: Save and share > Install page as app.");
-      }
+      onClick: () => runToolbarInstallCommand(ctx)
     });
     const syncInstallButton = () => {
       const state = ctx.getInstallState();
@@ -309,14 +308,14 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       title: "Material modify",
       label: "Material",
       iconSvg: ctx.I_VIEW,
-      onClick: ctx.startMaterialModify
+      onClick: () => runToolbarMaterialCommand(ctx)
     });
     const camera = ctx.tb.addGroup("Camera", { row });
     addButton(camera, {
       title: "Camera",
       label: "Camera",
       iconSvg: ctx.I_VIEW,
-      onClick: ctx.startCameraPlacement
+      onClick: () => runToolbarCameraCommand(ctx)
     });
   };
 

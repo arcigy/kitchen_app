@@ -4,16 +4,21 @@ import type { HistoryHelpers } from "../layout/historyManager";
 import {
   runToolbarAlignCommand,
   runToolbarBomCommand,
+  runToolbarCameraCommand,
+  runToolbarColumnCommand,
   runToolbarCopyExportCommand,
   runToolbarCustomFurnitureCommand,
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
+  runToolbarDoorCommand,
   runToolbarDuplicateCommand,
   runToolbarExportJsonCommand,
   runToolbarExportSceneCommand,
   runToolbarFloorCommand,
   runToolbarHideToggleCommand,
+  runToolbarInstallCommand,
   runToolbarIsolateCommand,
+  runToolbarMaterialCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
   runToolbarRedoCommand,
@@ -29,7 +34,8 @@ import {
   runToolbarUnderlayCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
-  runToolbarWardrobeCommand
+  runToolbarWardrobeCommand,
+  runToolbarWindowCommand
 } from "./editorToolbarCommands";
 
 describe("editor toolbar commands", () => {
@@ -98,6 +104,22 @@ describe("editor toolbar commands", () => {
     expect(ctx.setToolTrim).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolDimension).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolSection).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes architecture object buttons through current add/select commands", () => {
+    const ctx = {
+      addColumn: vi.fn(),
+      addOrSelectDoor: vi.fn(),
+      addOrSelectWindow: vi.fn()
+    };
+
+    runToolbarDoorCommand(ctx);
+    runToolbarWindowCommand(ctx);
+    runToolbarColumnCommand(ctx);
+
+    expect(ctx.addOrSelectDoor).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.addOrSelectWindow).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.addColumn).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes history buttons through the current history helpers", () => {
@@ -266,5 +288,44 @@ describe("editor toolbar commands", () => {
       kitchenCtx: S.kitchenCtx,
       kitchenWorktops: S.kitchenWorktops
     });
+  });
+
+  it("routes install through promptAppInstall when installation is available", () => {
+    const ctx = {
+      getInstallState: vi.fn(() => ({ available: true })),
+      promptAppInstall: vi.fn(() => Promise.resolve(true))
+    };
+    const alertUser = vi.fn();
+
+    runToolbarInstallCommand(ctx, alertUser);
+
+    expect(ctx.promptAppInstall).toHaveBeenCalledExactlyOnceWith();
+    expect(alertUser).not.toHaveBeenCalled();
+  });
+
+  it("routes install through fallback alert when installation is unavailable", () => {
+    const ctx = {
+      getInstallState: vi.fn(() => ({ available: false })),
+      promptAppInstall: vi.fn(() => Promise.resolve(true))
+    };
+    const alertUser = vi.fn();
+
+    runToolbarInstallCommand(ctx, alertUser);
+
+    expect(ctx.promptAppInstall).not.toHaveBeenCalled();
+    expect(alertUser).toHaveBeenCalledExactlyOnceWith("Chrome: Save and share > Install page as app.");
+  });
+
+  it("routes visualisation buttons through current visualisation commands", () => {
+    const ctx = {
+      startCameraPlacement: vi.fn(),
+      startMaterialModify: vi.fn()
+    };
+
+    runToolbarMaterialCommand(ctx);
+    runToolbarCameraCommand(ctx);
+
+    expect(ctx.startMaterialModify).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.startCameraPlacement).toHaveBeenCalledExactlyOnceWith();
   });
 });

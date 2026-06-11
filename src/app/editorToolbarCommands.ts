@@ -1,5 +1,6 @@
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
+import type { AppInstallState } from "../pwa/installController";
 import type { StartTransformOptions, TransformKind } from "./transformStateTypes";
 
 export type ToolbarTransformCommandContext = {
@@ -13,6 +14,9 @@ export type ToolbarMeasureToggleCommandContext = {
 };
 
 export type ToolbarToolCommandContext = {
+  addColumn: () => void;
+  addOrSelectDoor: () => void;
+  addOrSelectWindow: () => void;
   setToolAlign: () => void;
   setToolDimension: () => void;
   setToolSection: () => void;
@@ -63,6 +67,16 @@ export type ToolbarViewOutputCommandContext = {
   toggle2dView: () => void;
 };
 
+export type ToolbarInstallCommandContext = {
+  getInstallState: () => Pick<AppInstallState, "available">;
+  promptAppInstall: () => Promise<boolean>;
+};
+
+export type ToolbarVisualisationCommandContext = {
+  startCameraPlacement: () => void;
+  startMaterialModify: () => void;
+};
+
 export function runToolbarMoveCommand(ctx: ToolbarTransformCommandContext) {
   ctx.startTransformFromSelection("move", { sticky: true, toggle: true });
 }
@@ -82,6 +96,18 @@ export function runToolbarSelectCommand(ctx: Pick<ToolbarToolCommandContext, "se
 
 export function runToolbarWallCommand(ctx: Pick<ToolbarToolCommandContext, "setToolWall">) {
   ctx.setToolWall();
+}
+
+export function runToolbarDoorCommand(ctx: Pick<ToolbarToolCommandContext, "addOrSelectDoor">) {
+  ctx.addOrSelectDoor();
+}
+
+export function runToolbarWindowCommand(ctx: Pick<ToolbarToolCommandContext, "addOrSelectWindow">) {
+  ctx.addOrSelectWindow();
+}
+
+export function runToolbarColumnCommand(ctx: Pick<ToolbarToolCommandContext, "addColumn">) {
+  ctx.addColumn();
 }
 
 export function runToolbarAlignCommand(ctx: Pick<ToolbarToolCommandContext, "setToolAlign">) {
@@ -181,4 +207,24 @@ export function runToolbarBomCommand(ctx: Pick<ToolbarViewOutputCommandContext, 
 
 export function runToolbarResetDefaultsCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
   ctx.args.resetBtn.click();
+}
+
+export function runToolbarInstallCommand(
+  ctx: ToolbarInstallCommandContext,
+  alertUser: (message: string) => void = (message) => window.alert(message)
+) {
+  const state = ctx.getInstallState();
+  if (state.available) {
+    void ctx.promptAppInstall();
+    return;
+  }
+  alertUser("Chrome: Save and share > Install page as app.");
+}
+
+export function runToolbarMaterialCommand(ctx: Pick<ToolbarVisualisationCommandContext, "startMaterialModify">) {
+  ctx.startMaterialModify();
+}
+
+export function runToolbarCameraCommand(ctx: Pick<ToolbarVisualisationCommandContext, "startCameraPlacement">) {
+  ctx.startCameraPlacement();
 }
