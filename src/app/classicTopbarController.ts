@@ -5,6 +5,7 @@ import type { createTopbar } from "../ui/createTopbar";
 import type { AppInstallState } from "../pwa/installController";
 import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { t } from "../i18n";
+import { runToolbarMeasureToggleCommand, runToolbarMoveCommand, runToolbarRotateCommand } from "./editorToolbarCommands";
 
 type KitchenModeActions = {
   enterNew: () => void;
@@ -207,8 +208,8 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     const edit = ctx.tb.addGroup("Edit", { row });
     ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
     ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
-    moveBtn = addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => ctx.startTransformFromSelection("move", { sticky: true, toggle: true }) });
-    addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => ctx.startTransformFromSelection("rotate") });
+    moveBtn = addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => runToolbarMoveCommand(ctx) });
+    addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => runToolbarRotateCommand(ctx) });
     addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
     addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
     addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => ctx.setToolDimension() });
@@ -235,10 +236,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       title: "Measure",
       label: "Measure",
       iconSvg: ctx.I_MEASURE,
-      onClick: () => {
-        if (ctx.layoutTool === "measure") ctx.setToolSelect();
-        else ctx.setToolMeasure();
-      }
+      onClick: () => runToolbarMeasureToggleCommand(ctx)
     });
     addButton(view, { title: "Underlay", label: "Underlay", iconSvg: ctx.I_UNDERLAY, onClick: ctx.openUnderlayPanel });
     addButton(view, { title: "2D View", label: "2D View", iconSvg: ctx.I_GRID2D, onClick: ctx.toggle2dView });
