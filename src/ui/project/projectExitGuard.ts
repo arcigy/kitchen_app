@@ -1,33 +1,47 @@
 import type { ProjectActions } from "../../app/project/projectActions";
+import { createButtonElement } from "../../app/propsPanelElements";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { showToast } from "../toast";
 
 type ExitChoice = "save" | "discard" | "cancel";
 
+export function createProjectExitDialogElement(onChoose: (choice: ExitChoice) => void) {
+  const overlay = document.createElement("div");
+  overlay.className = "project-exit-overlay";
+  const dialog = document.createElement("section");
+  dialog.className = "project-exit-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-label", "Zatvorit projekt");
+  const title = document.createElement("strong");
+  title.textContent = "Zatvorit projekt?";
+  const copy = document.createElement("p");
+  copy.textContent = "Pred odchodom z workspace si vyber, ci sa ma projekt ulozit.";
+  const actions = document.createElement("div");
+  const cancelButton = createProjectExitButton("cancel", "Zrusit", onChoose);
+  const discardButton = createProjectExitButton("discard", "Zavriet bez ulozenia", onChoose);
+  const saveButton = createProjectExitButton("save", "Ulozit a zavriet", onChoose);
+  actions.append(cancelButton, discardButton, saveButton);
+  dialog.append(title, copy, actions);
+  overlay.appendChild(dialog);
+  return { overlay, saveButton };
+}
+
+function createProjectExitButton(choice: ExitChoice, label: string, onChoose: (choice: ExitChoice) => void) {
+  const button = createButtonElement(label);
+  button.dataset.projectExit = choice;
+  button.addEventListener("click", () => onChoose(choice));
+  return button;
+}
+
 function openExitDialog(): Promise<ExitChoice> {
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "project-exit-overlay";
-    overlay.innerHTML = `
-      <section class="project-exit-dialog" role="dialog" aria-modal="true" aria-label="Zatvorit projekt">
-        <strong>Zatvorit projekt?</strong>
-        <p>Pred odchodom z workspace si vyber, ci sa ma projekt ulozit.</p>
-        <div>
-          <button type="button" data-project-exit="cancel">Zrusit</button>
-          <button type="button" data-project-exit="discard">Zavriet bez ulozenia</button>
-          <button type="button" data-project-exit="save">Ulozit a zavriet</button>
-        </div>
-      </section>
-    `;
-
     const finish = (choice: ExitChoice) => {
       overlay.remove();
       resolve(choice);
     };
+    const { overlay, saveButton } = createProjectExitDialogElement(finish);
 
-    overlay.querySelector<HTMLButtonElement>("[data-project-exit='cancel']")?.addEventListener("click", () => finish("cancel"));
-    overlay.querySelector<HTMLButtonElement>("[data-project-exit='discard']")?.addEventListener("click", () => finish("discard"));
-    overlay.querySelector<HTMLButtonElement>("[data-project-exit='save']")?.addEventListener("click", () => finish("save"));
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) finish("cancel");
     });
@@ -36,7 +50,7 @@ function openExitDialog(): Promise<ExitChoice> {
     });
 
     document.body.appendChild(overlay);
-    overlay.querySelector<HTMLButtonElement>("[data-project-exit='save']")?.focus();
+    saveButton.focus();
   });
 }
 
