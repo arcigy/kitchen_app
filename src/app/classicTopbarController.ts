@@ -3,6 +3,7 @@ import type { HistoryHelpers } from "../layout/historyManager";
 import type { AppArgs } from "./bootstrap";
 import type { createTopbar } from "../ui/createTopbar";
 import type { AppInstallState } from "../pwa/installController";
+import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { t } from "../i18n";
 
 type KitchenModeActions = {
@@ -83,13 +84,13 @@ type ClassicTopbarControllerContext = {
   setToolSelect: () => void;
   setToolTrim: () => void;
   setToolWall: () => void;
-  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => void;
+  startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => void;
   startCameraPlacement: () => void;
   startMaterialModify: () => void;
   subscribeInstallState: (listener: (state: AppInstallState) => void) => () => void;
   tb: ReturnType<typeof createTopbar>;
   toggle2dView: () => void;
-  transformState: { kind: null | "move" | "rotate"; stickyMove?: boolean };
+  transformState: Pick<TransformState, "kind" | "stickyMove">;
   undo: (S: AppState, helpers: HistoryHelpers) => void;
   updateUndoRedoUi: (S: AppState) => void;
   visibility: {

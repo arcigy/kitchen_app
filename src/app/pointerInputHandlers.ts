@@ -19,7 +19,7 @@ import type { PlacementHelpers } from "../layout/placementManager";
 import type { MeasureState, MarqueeState, WallEditHud } from "./measureTools";
 import type { AssociativeMeasureKind } from "./measureAssociative";
 import type { TechnicalDimensionRecord } from "./technicalDimensions";
-import type { TransformState } from "./transformController";
+import type { TransformState } from "./transformStateTypes";
 import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
 import {
   finishTrimNoChange,

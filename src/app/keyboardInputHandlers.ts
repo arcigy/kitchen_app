@@ -3,6 +3,7 @@ import type { LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallP
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import type { PlacementHelpers } from "../layout/placementManager";
+import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
 
@@ -10,6 +11,11 @@ type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thickness
   justification: NonNullable<WallParams["justification"]>;
   exteriorSign: NonNullable<WallParams["exteriorSign"]>;
 };
+
+type KeyboardTransformState = Pick<
+  TransformState,
+  "kind" | "lastAngleSign" | "lastValidDelta" | "moveSnapDisabled" | "step" | "stickyMove" | "typed"
+>;
 
 type KeyboardInputHandlersContext = {
   activeViewerTab: string;
@@ -104,16 +110,8 @@ type KeyboardInputHandlersContext = {
     desired: THREE.Vector3,
     opts?: { stickyNeighborId?: string | null; snapDistanceM?: number }
   ) => { position: THREE.Vector3 };
-  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => boolean;
-  transformState: {
-    kind: "move" | "rotate" | null;
-    lastAngleSign: number;
-    lastValidDelta: THREE.Vector3;
-    moveSnapDisabled: boolean;
-    step: string | null;
-    stickyMove: boolean;
-    typed: string;
-  };
+  startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => boolean;
+  transformState: KeyboardTransformState;
   underlayCal: { active: boolean };
   undo: (state: AppState, helpers: HistoryHelpers) => void;
   updateLayoutPanel: () => void;

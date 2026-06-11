@@ -1,18 +1,20 @@
 import * as THREE from "three";
+import type { TransformState } from "./transformStateTypes";
 
-export type PointerTransformClickState = {
-  base: THREE.Vector3 | null;
-  kind: "move" | "rotate" | null;
-  lastAngleSign: number;
-  lastValidAngle: number;
-  lastValidDelta: THREE.Vector3;
-  moveSnapDisabled: boolean;
-  pivot: THREE.Vector3 | null;
-  startPointerAngle: number;
-  step: "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating" | null;
-  stickyMove: boolean;
-  typed: string;
-};
+export type PointerTransformClickState = Pick<
+  TransformState,
+  | "base"
+  | "kind"
+  | "lastAngleSign"
+  | "lastValidAngle"
+  | "lastValidDelta"
+  | "moveSnapDisabled"
+  | "pivot"
+  | "startPointerAngle"
+  | "step"
+  | "stickyMove"
+  | "typed"
+>;
 
 export function handleTransformClickPointerDown(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;

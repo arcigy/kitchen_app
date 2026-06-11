@@ -1,5 +1,6 @@
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import type { TransformState } from "./transformStateTypes";
 
 export type EditorLayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 
@@ -17,7 +18,7 @@ export type EditorToolEntryContext = {
   placementHelpers: PlacementHelpers;
   resetDimensionDraft: () => void;
   setLayoutTool: (tool: EditorLayoutTool) => void;
-  transformState: { kind: null | "move" | "rotate"; step: null | string };
+  transformState: Pick<TransformState, "kind"> & { step: TransformState["step"] | string | null };
 };
 
 export type SelectToolActivationContext = {

@@ -1,35 +1,10 @@
 import * as THREE from "three";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
+import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 
 type MmPoint = { x: number; z: number };
 type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
-type TransformStep = "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating";
-
-export type TransformState = {
-  kind: null | "move" | "rotate";
-  step: null | TransformStep;
-  stickyMove: boolean;
-  moveSnapDisabled: boolean;
-  base: THREE.Vector3 | null;
-  pivot: THREE.Vector3 | null;
-  typed: string;
-  lastAngleSign: number;
-  selectedWallIds: string[];
-  selectedInstanceIds: string[];
-  selectedSectionIds: string[];
-  selectedWindowIds: string[];
-  selectedDoorIds: string[];
-  startWalls: Map<string, WallParams>;
-  startInstances: Map<string, { pos: THREE.Vector3; rotY: number }>;
-  startInstanceAdjacency: Map<string, string | null>;
-  startSections: Map<string, SectionInstance["params"]>;
-  startWindows: Map<string, WindowParams>;
-  startDoors: Map<string, DoorParams>;
-  startPointerAngle: number;
-  lastValidDelta: THREE.Vector3;
-  lastValidAngle: number;
-};
 
 export type TransformControllerContext = {
   walls: WallInstance[];
@@ -98,19 +73,8 @@ export type TransformControllerContext = {
   toMmPoint: (point: THREE.Vector3) => MmPoint;
 };
 
-type ClearTransformOptions = {
-  restore?: boolean;
-  status?: string | null;
-  continueMove?: boolean;
-};
-
-type StartTransformOptions = {
-  sticky?: boolean;
-  toggle?: boolean;
-};
-
 export function createTransformController(ctx: TransformControllerContext) {
-  const clearTransform = (opts?: ClearTransformOptions) => {
+  const clearTransform = (opts?: TransformClearOptions) => {
     const preserveMoveSnapDisabled =
       !!opts?.continueMove && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
@@ -185,7 +149,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     if (status) ctx.setUnderlayStatus(status);
   };
 
-  const startTransformFromSelection = (kind: "move" | "rotate", opts: StartTransformOptions = {}) => {
+  const startTransformFromSelection = (kind: TransformKind, opts: StartTransformOptions = {}) => {
     if (kind === "move" && opts.toggle && ctx.transformState.kind === "move" && ctx.transformState.stickyMove) {
       const restore = ctx.transformState.step === "pickTarget" && !!ctx.transformState.base;
       clearTransform({ restore, status: "Move: off." });
