@@ -2,11 +2,7 @@ import * as THREE from "three";
 import { computeGrainArrow, findSelectableMeshByName, toggleSelectedPbr } from "./sharedUtils";
 import type { AppState } from "../layout/appState";
 import type { createPartPanel } from "../ui/createPartPanel";
-
-type ParamHighlightControls = {
-  highlightParamKeys?: (keys: string[]) => void;
-  clearHighlights?: () => void;
-};
+import type { ParamHighlightControls } from "./paramHighlightControls";
 
 type BuildSelectionControllerContext = {
   S: AppState;

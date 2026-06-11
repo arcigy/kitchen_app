@@ -15,11 +15,7 @@ import type { AppArgs } from "./bootstrap";
 import type { PartRow, OverlapRow } from "../ui/createPartPanel";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
-
-type ParamHighlightControls = {
-  highlightParamKeys?: (keys: string[]) => void;
-  clearHighlights?: () => void;
-};
+import type { ParamHighlightControls } from "./paramHighlightControls";
 
 type BuildModePanel = {
   setRows: (rows: PartRow[]) => void;

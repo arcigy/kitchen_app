@@ -257,17 +257,13 @@ import {
 } from "./core/module-package/runtime/module-runtime-adapter";
 import { createModulePackageControls, findModulePackageForParams } from "./core/module-package/runtime/module-package-controls";
 import type { CustomFurnitureInstance } from "./layout/customFurnitureTypes";
+import type { ParamHighlightControls } from "./app/paramHighlightControls";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
   setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
-
-  type ParamHighlightControls = {
-    highlightParamKeys?: (keys: string[]) => void;
-    clearHighlights?: () => void;
-  };
 
   const enabledModulePackages = getEnabledModulePackageDefinitions(clientCatalog, modulePackages);
   const runtimeDescriptorsByType = new Map<string, ReturnType<typeof getModuleDescriptors>[number]>(
