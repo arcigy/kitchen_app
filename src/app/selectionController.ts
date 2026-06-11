@@ -40,6 +40,13 @@ export type SelectWallCommandContext = {
   walls: WallInstance[];
 };
 
+export type SelectKitchenGroupCommandContext = {
+  applySelection: SelectionApplyCommand;
+  instances: LayoutInstance[];
+  selectedInstanceIds: Set<string>;
+  setSelectedKitchenGroupId: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -192,6 +199,21 @@ export function runSelectWallCommand(ctx: SelectWallCommandContext, id: string |
   });
 }
 
+export function runSelectKitchenGroupCommand(ctx: SelectKitchenGroupCommandContext, groupId: string | null) {
+  ctx.applySelection({
+    kind: groupId ? "kitchenGroup" : null,
+    sideEffectKind: "kitchenGroup",
+    assignIds: () => {
+      ctx.setSelectedKitchenGroupId(groupId);
+      if (!groupId) return;
+      replaceSelectionIdSet(
+        ctx.selectedInstanceIds,
+        ctx.instances.filter((inst) => inst.kitchenGroupId === groupId).map((inst) => inst.id)
+      );
+    }
+  });
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -304,18 +326,14 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   };
 
   function setSelectedKitchenGroup(groupId: string | null) {
-    applySelection({
-      kind: groupId ? "kitchenGroup" : null,
-      sideEffectKind: "kitchenGroup",
-      assignIds: () => {
-        ctx.selectedKitchenGroupId = groupId;
-        if (!groupId) return;
-        replaceSelectionIdSet(
-          ctx.selectedInstanceIds,
-          ctx.instances.filter((inst) => inst.kitchenGroupId === groupId).map((inst) => inst.id)
-        );
+    runSelectKitchenGroupCommand({
+      applySelection,
+      instances: ctx.instances,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      setSelectedKitchenGroupId: (selectedKitchenGroupId) => {
+        ctx.selectedKitchenGroupId = selectedKitchenGroupId;
       }
-    });
+    }, groupId);
   }
 
   function setSelectedModule(id: string | null) {

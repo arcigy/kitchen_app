@@ -13,6 +13,7 @@ import {
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
   runClearSelectionCommand,
+  runSelectKitchenGroupCommand,
   runSelectModuleCommand,
   runSelectWallCommand,
   type DrawingToolSelectionState,
@@ -363,6 +364,38 @@ describe("createSelectionController", () => {
     });
     expect(selectedWallId).toBeNull();
     expect([...selectedWallIds]).toEqual([]);
+  });
+
+  it("runs the named kitchen group selection command with current member ordering", () => {
+    const selectedInstanceIds = new Set<string>();
+    let selectedKitchenGroupId: string | null = null;
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+    });
+
+    runSelectKitchenGroupCommand(
+      {
+        applySelection,
+        instances: [
+          { id: "m-group-1", kitchenGroupId: "kg" } as SelectionControllerContext["instances"][number],
+          { id: "m-other", kitchenGroupId: "other" } as SelectionControllerContext["instances"][number],
+          { id: "m-group-2", kitchenGroupId: "kg" } as SelectionControllerContext["instances"][number]
+        ],
+        selectedInstanceIds,
+        setSelectedKitchenGroupId: (id) => {
+          selectedKitchenGroupId = id;
+        }
+      },
+      "kg"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: "kitchenGroup",
+      sideEffectKind: "kitchenGroup"
+    });
+    expect(selectedKitchenGroupId).toBe("kg");
+    expect([...selectedInstanceIds]).toEqual(["m-group-1", "m-group-2"]);
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {
