@@ -106,8 +106,8 @@ export function runClearDrawingToolSelectionCommand(state: DrawingToolSelectionS
   state.selectedKind = null;
   state.selectedWallId = null;
   state.selectedFloorId = null;
-  state.selectedWallIds.clear();
-  state.selectedInstanceIds.clear();
+  clearSelectionIdSet(state.selectedWallIds);
+  clearSelectionIdSet(state.selectedInstanceIds);
   state.setInstanceSelected(null);
 }
 
@@ -156,9 +156,9 @@ export function clearNonFloorplanFloorSelection(ctx: NonFloorplanFloorSelectionC
   ctx.selectedKitchenGroupId = null;
   ctx.selectedFloorId = null;
   ctx.selectedWallId = null;
-  ctx.selectedWallIds.clear();
+  clearSelectionIdSet(ctx.selectedWallIds);
   ctx.selectedInstanceId = null;
-  ctx.selectedInstanceIds.clear();
+  clearSelectionIdSet(ctx.selectedInstanceIds);
   ctx.setInstanceSelected(null);
   ctx.showWallSnapMarkersFor(null);
   ctx.syncSelectionState();
@@ -215,9 +215,9 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
     ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
+    clearSelectionIdSet(ctx.selectedWallIds);
     ctx.selectedInstanceId = null;
-    ctx.selectedInstanceIds.clear();
+    clearSelectionIdSet(ctx.selectedInstanceIds);
   };
 
   const clearObjectSelectionVisuals = () => {
