@@ -116,37 +116,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       !!opts?.continueMove && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
     if (opts?.restore) {
-      for (const w of ctx.walls) {
-        const p = ctx.transformState.startWalls.get(w.id);
-        if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
-        ctx.rebuildWall(w);
-      }
-      ctx.rebuildWallPlanMesh();
-      for (const inst of ctx.instances) {
-        const s = ctx.transformState.startInstances.get(inst.id);
-        if (s) {
-          inst.root.position.copy(s.pos);
-          inst.root.rotation.y = s.rotY;
-        }
-      }
-      for (const section of ctx.sections) {
-        const s = ctx.transformState.startSections.get(section.id);
-        if (!s) continue;
-        section.params = ctx.cloneSectionParams(s);
-        ctx.updateSectionVisual(section);
-      }
-      for (const window of ctx.windows ?? []) {
-        const s = ctx.transformState.startWindows.get(window.id);
-        if (!s) continue;
-        window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
-        ctx.updateWindowTransform(window);
-      }
-      for (const door of ctx.doors ?? []) {
-        const s = ctx.transformState.startDoors.get(door.id);
-        if (!s) continue;
-        door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
-        ctx.updateDoorTransform(door);
-      }
+      restoreTransformStartState();
       ctx.updateLayoutPanel();
       ctx.updateSelectionHighlights();
       ctx.mountProps();

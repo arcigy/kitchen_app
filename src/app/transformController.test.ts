@@ -287,6 +287,57 @@ describe("transform move tool", () => {
     expect(transformState.stickyMove).toBe(false);
   });
 
+  it("clearTransform restores captured wall and module start state", () => {
+    const wall = {
+      id: "w1",
+      params: {
+        aMm: { x: 100, z: 0 },
+        bMm: { x: 1100, z: 0 },
+        thicknessMm: 150,
+        heightMm: 2600,
+        materialId: "wall"
+      }
+    } as WallInstance;
+    const instance = {
+      id: "m1",
+      root: new THREE.Object3D()
+    } as LayoutInstance;
+    instance.root.position.set(2, 0, 3);
+    instance.root.rotation.y = 0.5;
+
+    const transformState = makeTransformState();
+    transformState.kind = "move";
+    transformState.step = "pickTarget";
+    transformState.startWalls.set("w1", {
+      aMm: { x: 0, z: 0 },
+      bMm: { x: 1000, z: 0 },
+      thicknessMm: 150,
+      heightMm: 2600,
+      materialId: "wall"
+    });
+    transformState.startInstances.set("m1", { pos: new THREE.Vector3(1, 0, 1), rotY: 0.25 });
+
+    const ctx = makeTransformContext({
+      walls: [wall],
+      instances: [instance],
+      transformState
+    });
+    const controller = createTransformController(ctx);
+
+    controller.clearTransform({ restore: true, status: "Canceled." });
+
+    expect(wall.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(instance.root.position.toArray()).toEqual([1, 0, 1]);
+    expect(instance.root.rotation.y).toBe(0.25);
+    expect(transformState.kind).toBeNull();
+    expect(ctx.rebuildWall).toHaveBeenCalledWith(wall);
+    expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledTimes(1);
+    expect(ctx.updateLayoutPanel).toHaveBeenCalledTimes(1);
+    expect(ctx.updateSelectionHighlights).toHaveBeenCalledTimes(1);
+    expect(ctx.mountProps).toHaveBeenCalledTimes(1);
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledWith("Canceled.");
+  });
+
   it("starts from a single wall selected after controller creation", () => {
     let selectedKind: SelectedKind = null;
     let selectedWallId: string | null = null;
