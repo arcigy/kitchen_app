@@ -6,6 +6,7 @@ import type { AppState } from "../layout/appState";
 import { disposeObject3D } from "../core/dispose";
 import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
 import { moduleRootLocalBox, tagModuleGeometry } from "./moduleVisualGeometry";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 
 type InstanceActionsContext = {
   S: AppState;
@@ -108,14 +109,12 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     ctx.layoutRoot.add(next.root);
     ctx.instances.push(next);
     ctx.placeWithoutOverlap(next);
-    if (next.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item) => item.id === next.kitchenGroupId) ?? null;
-      next.kitchenPlacement = ctx.inferKitchenPlacementBinding(
-        next,
-        next.kitchenGroupId,
-        group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm
-      );
-    }
+    refreshModuleKitchenPlacement({
+      instance: next,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+    });
     ctx.setSelectedModule(next.id);
     ctx.updateLayoutPanel();
   };
