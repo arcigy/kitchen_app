@@ -37,6 +37,18 @@ export function finishEditorEscape(ev: EditorEscapeEvent) {
   return true;
 }
 
+export function runEditorEscapeActiveOrStopBranch(args: {
+  hasActive: () => boolean;
+  clearActive: () => void;
+  stopInactive: () => void;
+}) {
+  if (args.hasActive()) {
+    args.clearActive();
+  } else {
+    args.stopInactive();
+  }
+}
+
 export function handleEditorLayoutEscape(ctx: EditorLayoutEscapeContext, ev: EditorEscapeEvent) {
   if (ctx.mode !== "layout") return false;
   if (ctx.isTypingTarget(ev.target)) return false;
@@ -47,20 +59,20 @@ export function handleEditorLayoutEscape(ctx: EditorLayoutEscapeContext, ev: Edi
   }
 
   if (ctx.layoutTool === "align") {
-    if (ctx.alignHasReference()) {
-      ctx.clearActiveAlignReference();
-    } else {
-      ctx.stopSelectTool();
-    }
+    runEditorEscapeActiveOrStopBranch({
+      hasActive: ctx.alignHasReference,
+      clearActive: ctx.clearActiveAlignReference,
+      stopInactive: ctx.stopSelectTool
+    });
     return finishEditorEscape(ev);
   }
 
   if (ctx.layoutTool === "trim") {
-    if (ctx.trimHasActiveTarget()) {
-      ctx.clearActiveTrimTarget();
-    } else {
-      ctx.stopSelectTool();
-    }
+    runEditorEscapeActiveOrStopBranch({
+      hasActive: ctx.trimHasActiveTarget,
+      clearActive: ctx.clearActiveTrimTarget,
+      stopInactive: ctx.stopSelectTool
+    });
     return finishEditorEscape(ev);
   }
 
@@ -75,11 +87,11 @@ export function handleEditorLayoutEscape(ctx: EditorLayoutEscapeContext, ev: Edi
   }
 
   if (ctx.layoutTool === "section") {
-    if (ctx.sectionHasActiveLine()) {
-      ctx.clearActiveSectionLine();
-    } else {
-      ctx.stopSectionTool();
-    }
+    runEditorEscapeActiveOrStopBranch({
+      hasActive: ctx.sectionHasActiveLine,
+      clearActive: ctx.clearActiveSectionLine,
+      stopInactive: ctx.stopSectionTool
+    });
     return finishEditorEscape(ev);
   }
 
