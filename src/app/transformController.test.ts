@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createTransformController,
   resolveMovedOpeningCenterMm,
+  resolveMovedSectionParams,
   resolveTransformSelectionIds,
   type TransformControllerContext
 } from "./transformController";
@@ -218,6 +219,22 @@ describe("transform move tool", () => {
     } as WindowParams;
 
     expect(resolveMovedOpeningCenterMm({ delta: new THREE.Vector3(0.25, 0, 0), start, wall: null })).toBeNull();
+  });
+
+  it("resolves moved section params from captured start params", () => {
+    const start = {
+      aMm: { x: 100, z: 200 },
+      bMm: { x: 700, z: 800 },
+      name: "A",
+      mirrored: false
+    };
+
+    expect(resolveMovedSectionParams(start, { dxMm: 50, dzMm: -25 })).toMatchObject({
+      aMm: { x: 150, z: 175 },
+      bMm: { x: 750, z: 775 },
+      name: "A",
+      mirrored: false
+    });
   });
 
   it("enters Revit-style selection step when Move starts with no selection", () => {
@@ -702,5 +719,38 @@ describe("transform move tool", () => {
     expect(transformState.selectedDoorIds).toEqual(["door1"]);
     expect(door.params.centerMm).toBe(1200);
     expect(updateDoorTransform).toHaveBeenCalledWith(door);
+  });
+
+  it("moves selected section lines from captured start params", () => {
+    const section = {
+      id: "section1",
+      params: {
+        aMm: { x: 100, z: 200 },
+        bMm: { x: 700, z: 800 },
+        name: "A",
+        mirrored: false
+      },
+      root: new THREE.Group(),
+      line: new THREE.Line(),
+      arrows: new THREE.LineSegments(),
+      pick: new THREE.Mesh()
+    } as SectionInstance;
+    const transformState = makeTransformState();
+    const updateSectionVisual = vi.fn();
+
+    const controller = createTestTransformController({
+      selectedKind: "section",
+      selectedSectionId: "section1",
+      sections: [section],
+      transformState,
+      updateSectionVisual
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    controller.applyMoveDelta(new THREE.Vector3(0.05, 0, -0.025));
+
+    expect(section.params.aMm).toEqual({ x: 150, z: 175 });
+    expect(section.params.bMm).toEqual({ x: 750, z: 775 });
+    expect(updateSectionVisual).toHaveBeenCalledWith(section);
   });
 });

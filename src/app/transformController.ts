@@ -67,6 +67,17 @@ export function resolveMovedOpeningCenterMm(args: {
     : Math.round(lengthMm / 2);
 }
 
+export function resolveMovedSectionParams(
+  start: SectionInstance["params"],
+  deltaMm: { dxMm: number; dzMm: number }
+): SectionInstance["params"] {
+  return {
+    ...start,
+    aMm: { x: start.aMm.x + deltaMm.dxMm, z: start.aMm.z + deltaMm.dzMm },
+    bMm: { x: start.bMm.x + deltaMm.dxMm, z: start.bMm.z + deltaMm.dzMm }
+  };
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -363,8 +374,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       const section = ctx.sections.find((item) => item.id === id) ?? null;
       const start = ctx.transformState.startSections.get(id);
       if (!section || !start) continue;
-      section.params.aMm = { x: start.aMm.x + dxMm, z: start.aMm.z + dzMm };
-      section.params.bMm = { x: start.bMm.x + dxMm, z: start.bMm.z + dzMm };
+      section.params = resolveMovedSectionParams(start, { dxMm, dzMm });
       ctx.updateSectionVisual(section);
     }
 
