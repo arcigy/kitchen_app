@@ -8,7 +8,7 @@ type OpeningParams = {
 
 type WallAxisPoint = { t: number };
 type WallLike = { params: { aMm: { x: number; z: number }; bMm: { x: number; z: number } } };
-type OpeningDragState = { active: boolean; offsetMm: number; wall: string | null };
+export type PointerOpeningDragState = { active: boolean; pointerId?: number | null; offsetMm: number; wall: string | null };
 
 export function resolveOpeningCustomWallDragOffset<Wall extends WallLike>(args: {
   centerMm: number;
@@ -74,7 +74,7 @@ export function beginWindowDragFromPick<Opening extends { params: OpeningParams 
   selectOpening: (opening: Opening) => void;
   setPointerCapture: () => void;
   toMmPoint: (point: THREE.Vector3) => { x: number; z: number };
-  windowDragState: OpeningDragState;
+  windowDragState: PointerOpeningDragState;
 }) {
   args.selectOpening(args.opening);
   args.cancelPendingMarquee();
@@ -114,7 +114,7 @@ export function beginWindowDragFromPick<Opening extends { params: OpeningParams 
 export function beginDoorDragFromPick<Opening extends { params: OpeningParams }, Wall extends WallLike>(args: {
   cancelPendingMarquee: () => void;
   continueMoveAfterSelection: () => boolean;
-  doorDragState: OpeningDragState;
+  doorDragState: PointerOpeningDragState;
   findCustomWall: (wallId: string) => Wall | null;
   getGroundHitPoint: () => THREE.Vector3 | null;
   opening: Opening;
@@ -157,7 +157,7 @@ export function updateWindowDragFromPointerMove<Opening extends { params: Openin
   pointOnWallAxisMm: (wall: Wall, pointMm: { x: number; z: number }) => WallAxisPoint;
   toMmPoint: (point: THREE.Vector3) => { x: number; z: number };
   updateOpeningTransform: (opening: Opening) => void;
-  windowDragState: OpeningDragState;
+  windowDragState: PointerOpeningDragState;
 }) {
   const customWallId = args.opening.params.wallId ?? null;
   if (customWallId) {
@@ -190,7 +190,7 @@ export function updateWindowDragFromPointerMove<Opening extends { params: Openin
 }
 
 export function updateDoorDragFromPointerMove<Opening extends { params: OpeningParams }, Wall extends WallLike>(args: {
-  doorDragState: OpeningDragState;
+  doorDragState: PointerOpeningDragState;
   findCustomWall: (wallId: string) => Wall | null;
   getGroundHitPoint: () => THREE.Vector3 | null;
   mountProps: () => void;
@@ -222,7 +222,7 @@ export function handleOpeningDragPointerMove<
   DoorOpening extends { params: OpeningParams },
   Wall extends WallLike
 >(args: {
-  doorDragState: OpeningDragState;
+  doorDragState: PointerOpeningDragState;
   doorOpening: DoorOpening | null;
   findCustomWall: (wallId: string) => Wall | null;
   getGroundHitPoint: () => THREE.Vector3 | null;
@@ -233,7 +233,7 @@ export function handleOpeningDragPointerMove<
   toMmPoint: (point: THREE.Vector3) => { x: number; z: number };
   updateDoorTransform: (opening: DoorOpening) => void;
   updateWindowTransform: (opening: WindowOpening) => void;
-  windowDragState: OpeningDragState;
+  windowDragState: PointerOpeningDragState;
   windowOpening: WindowOpening | null;
 }) {
   if (args.windowDragState.active && args.windowOpening && args.windowDragState.wall) {

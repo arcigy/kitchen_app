@@ -91,7 +91,12 @@ import {
 } from "./pointerPlacementFlow";
 import { handleTransformClickPointerDown } from "./pointerTransformClickFlow";
 import { handleTransformPointerMovePreview } from "./pointerTransformPreviewFlow";
-import { beginDoorDragFromPick, beginWindowDragFromPick, handleOpeningDragPointerMove } from "./pointerOpeningDragBegin";
+import {
+  beginDoorDragFromPick,
+  beginWindowDragFromPick,
+  handleOpeningDragPointerMove,
+  type PointerOpeningDragState
+} from "./pointerOpeningDragBegin";
 import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
 import { finishPointerDragState } from "./pointerDragFinish";
 import { buildModuleMarqueeScreenBounds, buildWallMarqueeScreenPolygon, collectMarqueeHitIds } from "./pointerMarqueeHitGeometry";
@@ -221,7 +226,7 @@ type PointerInputHandlersDataContext = {
   commitPlacement: (state: AppState, helpers: PlacementHelpers) => boolean;
   commitSectionDraw: (bMm: FloorBoundaryPoint) => boolean;
   dimensionState: PointerDimensionState;
-  doorDragState: { active: boolean; pointerId?: number | null; wall: string | null; offsetMm: number };
+  doorDragState: PointerOpeningDragState;
   doorInst: DoorInstance | null;
   dragState: PointerModuleDragState;
   drawOrthoEnabled: boolean;
@@ -454,7 +459,7 @@ type PointerInputHandlersDataContext = {
   wallEditHud: WallEditHud;
   wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
   wallTypedHud: HTMLElement;
-  windowDragState: { active: boolean; pointerId?: number | null; wall: string | null; offsetMm: number };
+  windowDragState: PointerOpeningDragState;
   windowInst: WindowInstance | null;
 };
 

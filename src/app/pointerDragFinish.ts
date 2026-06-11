@@ -1,8 +1,6 @@
-export type OpeningPointerDragFinishState = {
-  active: boolean;
-  pointerId?: number | null;
-  wall: string | null;
-};
+import type { PointerOpeningDragState } from "./pointerOpeningDragBegin";
+
+export type OpeningPointerDragFinishState = Pick<PointerOpeningDragState, "active" | "pointerId" | "wall">;
 
 export type ModulePointerDragFinishState = {
   active: boolean;
