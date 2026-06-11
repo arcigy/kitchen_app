@@ -355,7 +355,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const kitchenGroups = S.kitchenGroups;
     const allWorktops = kitchenWorktops;
     const allInstances = instances;
-    const group = groupId ? kitchenGroups.find((item) => item.id === groupId) ?? null : null;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups });
     const groupWorktops = groupId ? allWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
     const groupInstances = groupId ? allInstances.filter((item) => item.kitchenGroupId === groupId) : [];
     const backOffsetMm = groupId
