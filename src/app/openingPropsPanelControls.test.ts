@@ -62,6 +62,14 @@ describe("opening props panel controls", () => {
     const [handednessButton, sideButton] = rows[0].control.children;
     expect(handednessButton.title).toBe("Prehodit na lave dvere");
     expect(handednessButton.attributes.get("aria-label")).toBe("Prehodit lave/prave dvere");
+    expect(rows[1].control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["left", "Lave"],
+      ["right", "Prave"]
+    ]);
+    expect(rows[2].control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["inward", "Dovnutra"],
+      ["outward", "Von"]
+    ]);
 
     handednessButton.dispatch("click");
     expect(params.swingDirection).toBe("left");
@@ -85,6 +93,14 @@ describe("opening props panel controls", () => {
     const apply = vi.fn();
 
     appendOpeningHandleRows(props, section, params, apply);
+
+    const handleType = rows.find((row) => row.label === "Typ klucky")?.control;
+    expect(handleType?.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["lever", "Paka"],
+      ["knob", "Gula"],
+      ["bar", "Madlo"],
+      ["none", "Bez klucky"]
+    ]);
 
     const height = rows.find((row) => row.label === "Vyska klucky (mm)")?.control;
     expect(height).toBeDefined();
@@ -114,6 +130,10 @@ describe("opening props panel controls", () => {
     );
 
     const material = rows[0].control;
+    expect(material.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["mat-a", "A"],
+      ["mat-b", "B"]
+    ]);
     expect(params.materialId).toBe("mat-a");
     expect(material.value).toBe("mat-a");
 

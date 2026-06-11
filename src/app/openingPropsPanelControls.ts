@@ -1,6 +1,6 @@
 import type { OpeningHandleType } from "./localTypes";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
-import { createInputElement } from "./propsPanelElements";
+import { createInputElement, createSelectElement } from "./propsPanelElements";
 
 type OpeningSwingDirection = "left" | "right";
 type OpeningSwingSide = "inward" | "outward";
@@ -106,19 +106,15 @@ export function appendOpeningSwingRows<T extends OpeningSwingEditableParams>(
   swingControls.append(handednessButton, sideButton);
   props.row(section, labels.controlsRow, swingControls);
 
-  const swing = document.createElement("select");
-  swing.innerHTML = `
-    <option value="left">Lave</option>
-    <option value="right">Prave</option>
-  `;
-  swing.value = params.swingDirection;
+  const swing = createSelectElement(params.swingDirection, [
+    { value: "left", label: "Lave" },
+    { value: "right", label: "Prave" }
+  ]);
 
-  const swingSide = document.createElement("select");
-  swingSide.innerHTML = `
-    <option value="inward">Dovnutra</option>
-    <option value="outward">Von</option>
-  `;
-  swingSide.value = params.swingSide;
+  const swingSide = createSelectElement(params.swingSide, [
+    { value: "inward", label: "Dovnutra" },
+    { value: "outward", label: "Von" }
+  ]);
 
   const syncSwingControls = () => {
     swing.value = params.swingDirection;
@@ -158,9 +154,7 @@ export function appendOpeningHandleRows<T extends OpeningHandleEditableParams>(
   params: T,
   apply: (commit: boolean, patch: Partial<T>) => void
 ) {
-  const typeSelect = document.createElement("select");
-  typeSelect.innerHTML = HANDLE_TYPE_OPTIONS.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
-  typeSelect.value = params.handleType;
+  const typeSelect = createSelectElement(params.handleType, HANDLE_TYPE_OPTIONS);
   typeSelect.addEventListener("change", () => {
     const next = HANDLE_TYPE_OPTIONS.find((option) => option.value === typeSelect.value)?.value ?? "lever";
     params.handleType = next;
@@ -188,10 +182,11 @@ export function appendOpeningMaterialRow<T extends OpeningMaterialEditableParams
   apply: (commit: boolean, patch: Partial<T>) => void,
   config: { label?: string; normalize?: (value: string) => string } = {}
 ) {
-  const material = document.createElement("select");
-  material.innerHTML = options.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
   params.materialId = config.normalize ? config.normalize(params.materialId) : params.materialId;
-  material.value = params.materialId;
+  const material = createSelectElement(
+    params.materialId,
+    options.map((option) => ({ value: option.id, label: option.name }))
+  );
   material.addEventListener("change", () => {
     params.materialId = config.normalize ? config.normalize(material.value) : material.value;
     material.value = params.materialId;
