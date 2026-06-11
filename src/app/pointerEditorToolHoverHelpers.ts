@@ -186,13 +186,25 @@ export function updateTrimToolHover(params: {
   } else if (params.trimState.step === "pickCutter" && params.trimState.targetPick) {
     params.hudPickLine2.visible = false;
   } else if (params.trimState.lastUntilMs <= params.now) {
-    params.trimState.lastTarget = null;
-    params.trimState.lastCutter = null;
-    params.trimState.lastUntilMs = 0;
-    if (!params.trimState.targetPick) {
-      params.hudPickLine1.visible = false;
-      params.hudPickLine2.visible = false;
-    }
+    resetTrimRecentFeedback({
+      trimState: params.trimState,
+      hudPickLine1: params.hudPickLine1,
+      hudPickLine2: params.hudPickLine2
+    });
+  }
+}
+
+export function resetTrimRecentFeedback(params: {
+  trimState: Pick<PointerTrimHoverState, "lastTarget" | "lastCutter" | "lastUntilMs" | "targetPick">;
+  hudPickLine1: HudLine;
+  hudPickLine2: HudLine;
+}): void {
+  params.trimState.lastTarget = null;
+  params.trimState.lastCutter = null;
+  params.trimState.lastUntilMs = 0;
+  if (!params.trimState.targetPick) {
+    params.hudPickLine1.visible = false;
+    params.hudPickLine2.visible = false;
   }
 }
 

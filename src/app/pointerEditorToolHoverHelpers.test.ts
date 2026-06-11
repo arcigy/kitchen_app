@@ -9,6 +9,7 @@ import {
   updateDimensionToolHover,
   updateDimensionToolPointerMoveHover,
   resetDimensionPointerMoveHover,
+  resetTrimRecentFeedback,
   updateTrimToolHover
 } from "./pointerEditorToolHoverHelpers";
 
@@ -247,6 +248,44 @@ describe("pointer editor tool hover helpers", () => {
     expect(state.hover).toBeNull();
     expect(updateHudLine).toHaveBeenCalledWith(pick1, target.segA, target.segB, 2);
     expect(pick2.visible).toBe(false);
+  });
+
+  it("resets trim recent feedback and only hides pick HUD lines without a target pick", () => {
+    const target = line("target");
+    const cutter = line("cutter");
+    const state = {
+      lastTarget: target as AlignPickedLine | null,
+      lastCutter: cutter as AlignPickedLine | null,
+      lastUntilMs: 5,
+      targetPick: null as AlignPickedLine | null
+    };
+    const pick1 = hudLine();
+    const pick2 = hudLine();
+
+    resetTrimRecentFeedback({
+      trimState: state,
+      hudPickLine1: pick1,
+      hudPickLine2: pick2
+    });
+
+    expect(state.lastTarget).toBeNull();
+    expect(state.lastCutter).toBeNull();
+    expect(state.lastUntilMs).toBe(0);
+    expect(pick1.visible).toBe(false);
+    expect(pick2.visible).toBe(false);
+
+    state.targetPick = target;
+    pick1.visible = true;
+    pick2.visible = true;
+
+    resetTrimRecentFeedback({
+      trimState: state,
+      hudPickLine1: pick1,
+      hudPickLine2: pick2
+    });
+
+    expect(pick1.visible).toBe(true);
+    expect(pick2.visible).toBe(true);
   });
 
   it("clears align/trim pointermove HUD when there is no ground hit", () => {
