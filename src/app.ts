@@ -316,7 +316,6 @@ export function startApp(initialArgs: AppArgs) {
   renderer.localClippingEnabled = true;
   const temporaryDimensions = createTemporaryDimensionManager(renderer, cam());
   temporaryDimensions.setUnitScale(1000);
-  const dimensionOverlay = temporaryDimensions.overlay;
 
   setDaylightIntensity(9);
 
