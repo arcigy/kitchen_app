@@ -380,28 +380,32 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     const ignore = new Set<string>(ctx.transformState.selectedInstanceIds);
 
+    const moveSelectedModulesByDelta = (moduleDelta: THREE.Vector3) => {
+      for (const id of ctx.transformState.selectedInstanceIds) {
+        const inst = ctx.findInstance(id);
+        const st = ctx.transformState.startInstances.get(id);
+        if (!inst || !st) continue;
+        const desired = st.pos.clone().add(moduleDelta);
+        const desiredInRoom = ctx.applyWallConstraints(inst, desired);
+        const snapped =
+          ctx.transformState.selectedInstanceIds.length === 1
+            ? ctx.snapPositionDetailed(inst, desiredInRoom, {
+                ignoreIds: ignore,
+                stickyNeighborId: ctx.transformState.startInstanceAdjacency.get(id) ?? null
+              }).position
+            : desiredInRoom;
+        inst.root.position.copy(snapped);
+        ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
+        if (ctx.transformState.selectedInstanceIds.length === 1) {
+          const actualDelta = inst.root.position.clone().sub(st.pos);
+          ctx.nudgePinnedModuleChain(inst, actualDelta);
+        }
+      }
+    };
+
     // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
     let ok = true;
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      const st = ctx.transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const desired = st.pos.clone().add(delta);
-      const desiredInRoom = ctx.applyWallConstraints(inst, desired);
-      const snapped =
-        ctx.transformState.selectedInstanceIds.length === 1
-          ? ctx.snapPositionDetailed(inst, desiredInRoom, {
-              ignoreIds: ignore,
-              stickyNeighborId: ctx.transformState.startInstanceAdjacency.get(id) ?? null
-            }).position
-          : desiredInRoom;
-      inst.root.position.copy(snapped);
-      ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-      if (ctx.transformState.selectedInstanceIds.length === 1) {
-        const actualDelta = inst.root.position.clone().sub(st.pos);
-        ctx.nudgePinnedModuleChain(inst, actualDelta);
-      }
-    }
+    moveSelectedModulesByDelta(delta);
     for (const id of ctx.transformState.selectedInstanceIds) {
       const inst = ctx.findInstance(id);
       if (!inst) continue;
@@ -443,26 +447,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       const dxMm2 = Math.round(d.x * 1000);
       const dzMm2 = Math.round(d.z * 1000);
       if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
-      for (const id of ctx.transformState.selectedInstanceIds) {
-        const inst = ctx.findInstance(id);
-        const st = ctx.transformState.startInstances.get(id);
-        if (!inst || !st) continue;
-        const desired = st.pos.clone().add(d);
-        const desiredInRoom = ctx.applyWallConstraints(inst, desired);
-        const snapped =
-          ctx.transformState.selectedInstanceIds.length === 1
-            ? ctx.snapPositionDetailed(inst, desiredInRoom, {
-                ignoreIds: ignore,
-                stickyNeighborId: ctx.transformState.startInstanceAdjacency.get(id) ?? null
-              }).position
-            : desiredInRoom;
-        inst.root.position.copy(snapped);
-        ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-        if (ctx.transformState.selectedInstanceIds.length === 1) {
-          const actualDelta = inst.root.position.clone().sub(st.pos);
-          ctx.nudgePinnedModuleChain(inst, actualDelta);
-        }
-      }
+      moveSelectedModulesByDelta(d);
       ctx.updateLayoutPanel();
     }
   };

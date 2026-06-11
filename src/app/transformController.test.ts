@@ -79,6 +79,22 @@ function createTestTransformController(overrides: Partial<TransformControllerCon
   return createTransformController(makeTransformContext(overrides));
 }
 
+function moduleInstance(id: string, position: THREE.Vector3, kitchenGroupId: string | null = null) {
+  const root = new THREE.Group();
+  root.position.copy(position);
+  return {
+    id,
+    params: {} as LayoutInstance["params"],
+    kitchenGroupId,
+    kitchenPlacement: null,
+    root,
+    module: new THREE.Group(),
+    localBox: new THREE.Box3(),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+}
+
 describe("transform move tool", () => {
   it("resolves transform ids with current multi-selection priority", () => {
     expect(
@@ -752,5 +768,41 @@ describe("transform move tool", () => {
     expect(section.params.aMm).toEqual({ x: 150, z: 175 });
     expect(section.params.bMm).toEqual({ x: 750, z: 775 });
     expect(updateSectionVisual).toHaveBeenCalledWith(section);
+  });
+
+  it("moves selected modules through the current snap and pinned-chain path", () => {
+    const instance = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
+    const transformState = makeTransformState();
+    const snapPositionDetailed = vi.fn((_item: LayoutInstance, desired: THREE.Vector3) => ({ position: desired.clone() }));
+    const autoOrientModuleToRoomWallIfSnapped = vi.fn();
+    const nudgePinnedModuleChain = vi.fn();
+    const updateLayoutPanel = vi.fn();
+
+    const controller = createTestTransformController({
+      selectedKind: "module",
+      selectedInstanceId: "m1",
+      instances: [instance],
+      transformState,
+      snapPositionDetailed,
+      autoOrientModuleToRoomWallIfSnapped,
+      nudgePinnedModuleChain,
+      updateLayoutPanel
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    controller.applyMoveDelta(new THREE.Vector3(0.2, 0, 0.3));
+
+    expect(instance.root.position.toArray()).toEqual([1.2, 0, 1.3]);
+    expect(snapPositionDetailed).toHaveBeenCalledTimes(1);
+    expect(autoOrientModuleToRoomWallIfSnapped).toHaveBeenCalledWith(instance, new Set(["m1"]));
+    expect(nudgePinnedModuleChain).toHaveBeenCalledTimes(1);
+    expect(nudgePinnedModuleChain.mock.calls[0]?.[0]).toBe(instance);
+    expect(nudgePinnedModuleChain.mock.calls[0]?.[1].toArray()).toEqual([
+      expect.closeTo(0.2),
+      0,
+      expect.closeTo(0.3)
+    ]);
+    expect(transformState.lastValidDelta.toArray()).toEqual([0.2, 0, 0.3]);
+    expect(updateLayoutPanel).toHaveBeenCalled();
   });
 });
