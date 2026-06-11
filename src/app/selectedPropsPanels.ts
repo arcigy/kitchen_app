@@ -1102,10 +1102,7 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
     rowHost.style.marginTop = "10px";
     s.appendChild(rowHost);
 
-    const rot = document.createElement("input");
-    rot.type = "number";
-    rot.step = "1";
-    rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
+    const rot = createInputElement("number", String(Math.round((inst.root.rotation.y * 180) / Math.PI)), { step: "1" });
     props.row(rowHost, "Rotation (deg)", rot);
 
     const pinned = document.createElement("input");

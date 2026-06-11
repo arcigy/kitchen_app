@@ -5,6 +5,7 @@ import {
   mountDoorPropsPanel,
   mountFloorBoundaryPropsPanel,
   mountFloorPropsPanel,
+  mountModulePropsPanel,
   mountSectionPropsPanel,
   mountSectionToolPropsPanel,
   mountUnderlayPropsPanel,
@@ -12,9 +13,10 @@ import {
   mountWindowPlacementPropsPanel,
   mountWindowPropsPanel
 } from "./selectedPropsPanels";
-import type { ColumnParams, DoorInstance, DoorParams, FloorInstance, SectionInstance, WallInstance, WindowInstance, WindowParams } from "./localTypes";
+import type { ColumnParams, DoorInstance, DoorParams, FloorInstance, LayoutInstance, SectionInstance, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
+import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
 function makeColumnParams(): ColumnParams {
   return {
@@ -95,6 +97,23 @@ function makeWall(id: string, thicknessMm: number, heightMm: number): WallInstan
     mesh: {},
     outline: {}
   } as unknown as WallInstance;
+}
+
+function makeLayoutInstance(): LayoutInstance {
+  return {
+    id: "module-1",
+    params: makeDefaultModuleParams("drawer_low"),
+    kitchenGroupId: null,
+    kitchenPlacement: null,
+    root: {
+      position: { x: 1.2, z: -0.4 },
+      rotation: { y: Math.PI / 2 }
+    },
+    module: {},
+    localBox: {},
+    pick: {},
+    outline: {}
+  } as unknown as LayoutInstance;
 }
 
 describe("selected props panels", () => {
@@ -491,6 +510,39 @@ describe("selected props panels", () => {
     expect(ctx.setUnderlayScaleEl).toHaveBeenCalledWith(rows[2]!.control);
     expect(ctx.setUnderlayOffXEl).toHaveBeenCalledWith(rows[4]!.control);
     expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
+  });
+
+  it("keeps module rotation control mounted with current degrees and measure target", () => {
+    installFakeDocument();
+    const { props, rows, section } = makePropertiesPanelHarness();
+    const inst = makeLayoutInstance();
+    const ctx = {
+      findInstance: vi.fn(() => inst),
+      showNoProps: vi.fn(),
+      props,
+      pinnedInstanceIds: new Set<string>(),
+      instanceFitsRoom: vi.fn(() => true),
+      anyOverlap: vi.fn(() => false),
+      moduleOverlapsWalls: vi.fn(() => false),
+      moduleOverlapsKitchenWorktops: vi.fn(() => false),
+      commitHistory: vi.fn(),
+      S: {} as AppState,
+      mountProps: vi.fn(),
+      modulePackages: [],
+      args: { propertiesEl: section },
+      clientCatalog: {},
+      rebuildInstance: vi.fn(() => true),
+      appendLinkedMeasureInputs: vi.fn()
+    };
+
+    mountModulePropsPanel(ctx as unknown as Parameters<typeof mountModulePropsPanel>[0], "module-1");
+
+    expect(props.setTitle).toHaveBeenCalledWith("Module (module-1)");
+    expect(rows.map((row) => row.label)).toEqual(["Rotation (deg)", "Pinned"]);
+    expect(rows[0]!.control.type).toBe("number");
+    expect(rows[0]!.control.step).toBe("1");
+    expect(rows[0]!.control.value).toBe("90");
+    expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "module", instanceId: "module-1" });
   });
 
   it("keeps selected window and door wall info muted text", () => {
