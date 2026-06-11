@@ -11,6 +11,7 @@ import {
   replaceSelectionIdSet,
   resolveMergedSelectionIdSet,
   resolveSelectedIds,
+  refreshSelectionHighlights,
   refreshSelectionVisualState,
   runApplySelectionCommand,
   runClearDrawingToolSelectionCommand,
@@ -624,6 +625,27 @@ describe("createSelectionController", () => {
     refreshSelectionVisualState(ctx);
 
     expect(calls).toEqual(["syncSelectionState", "updateSelectionHighlights"]);
+  });
+
+  it("skips selection highlight refresh when selection side effects disable highlights", () => {
+    const ctx = {
+      syncSelectionState: vi.fn(),
+      updateSelectionHighlights: vi.fn()
+    };
+
+    refreshSelectionVisualState(ctx, { highlights: false });
+
+    expect(ctx.syncSelectionState).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.updateSelectionHighlights).not.toHaveBeenCalled();
+  });
+
+  it("refreshes selection highlights through the shared optional helper", () => {
+    const ctx = { updateSelectionHighlights: vi.fn() };
+
+    refreshSelectionHighlights(ctx);
+    refreshSelectionHighlights(ctx, { highlights: false });
+
+    expect(ctx.updateSelectionHighlights).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("maps selected kinds to existing selection side effects", () => {

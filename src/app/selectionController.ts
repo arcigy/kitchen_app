@@ -162,6 +162,14 @@ export type SelectionVisualRefreshContext = {
   updateSelectionHighlights: () => void;
 };
 
+export type SelectionHighlightRefreshContext = {
+  updateSelectionHighlights: () => void;
+};
+
+export type SelectionVisualRefreshOptions = {
+  highlights?: boolean;
+};
+
 function disposeSelectionBox(scene: THREE.Scene, box: THREE.BoxHelper | null) {
   if (!box) return;
   scene.remove(box);
@@ -334,9 +342,13 @@ export function clearSelectionIdSet(target: Set<string>) {
   target.clear();
 }
 
-export function refreshSelectionVisualState(ctx: SelectionVisualRefreshContext) {
+export function refreshSelectionHighlights(ctx: SelectionHighlightRefreshContext, opts?: SelectionVisualRefreshOptions) {
+  if (opts?.highlights !== false) ctx.updateSelectionHighlights();
+}
+
+export function refreshSelectionVisualState(ctx: SelectionVisualRefreshContext, opts?: SelectionVisualRefreshOptions) {
   ctx.syncSelectionState();
-  ctx.updateSelectionHighlights();
+  refreshSelectionHighlights(ctx, opts);
 }
 
 export function clearWallAndUnderlaySelectionBoxes(state: SelectionBoxCleanupState) {
@@ -362,8 +374,7 @@ export function clearNonFloorplanFloorSelection(ctx: NonFloorplanFloorSelectionC
   clearSelectionIdSet(ctx.selectedInstanceIds);
   ctx.setInstanceSelected(null);
   ctx.showWallSnapMarkersFor(null);
-  ctx.syncSelectionState();
-  ctx.updateSelectionHighlights();
+  refreshSelectionVisualState(ctx);
   ctx.updateAllSectionVisuals();
   ctx.mountProps();
 }
@@ -395,7 +406,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     ctx.syncColumnSelectionVisuals();
     ctx.syncSelectionState();
     ctx.rebuildWallPlanMesh();
-    if (opts?.highlights !== false) ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx, opts);
     ctx.updateAllSectionVisuals();
     ctx.mountProps();
   };
