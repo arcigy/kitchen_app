@@ -58,6 +58,11 @@ export type SelectSectionCommandContext = {
   setSelectedSectionId: (id: string | null) => void;
 };
 
+export type SelectFloorCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedFloorId: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -241,6 +246,16 @@ export function runSelectSectionCommand(ctx: SelectSectionCommandContext, id: st
     sideEffectKind: "section",
     assignIds: () => {
       ctx.setSelectedSectionId(id);
+    }
+  });
+}
+
+export function runSelectFloorCommand(ctx: SelectFloorCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "floor" : null,
+    sideEffectKind: "floor",
+    assignIds: () => {
+      ctx.setSelectedFloorId(id);
     }
   });
 }
@@ -429,13 +444,12 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedFloor(id: string | null) {
-    applySelection({
-      kind: id ? "floor" : null,
-      sideEffectKind: "floor",
-      assignIds: () => {
-        ctx.selectedFloorId = id;
+    runSelectFloorCommand({
+      applySelection,
+      setSelectedFloorId: (selectedFloorId) => {
+        ctx.selectedFloorId = selectedFloorId;
       }
-    });
+    }, id);
   }
 
   function setSelectedColumn(id: string | null) {
