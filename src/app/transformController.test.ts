@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { createTransformController, type TransformControllerContext } from "./transformController";
+import { createTransformController, resolveTransformSelectionIds, type TransformControllerContext } from "./transformController";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WindowParams } from "./localTypes";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
 import { createInitialTransformState } from "./transformStateFactory";
@@ -74,6 +74,86 @@ function createTestTransformController(overrides: Partial<TransformControllerCon
 }
 
 describe("transform move tool", () => {
+  it("resolves transform ids with current multi-selection priority", () => {
+    expect(
+      resolveTransformSelectionIds({
+        kind: "move",
+        selectedWallIds: new Set(["w1", "w2"]),
+        selectedInstanceIds: new Set(["m1", "m2"]),
+        selectedKind: "wall",
+        selectedWallId: "w-single",
+        selectedInstanceId: "m-single",
+        selectedSectionId: null
+      })
+    ).toEqual({
+      wallIds: ["w1", "w2"],
+      instIds: ["m1", "m2"],
+      sectionIds: [],
+      windowIds: [],
+      doorIds: []
+    });
+  });
+
+  it("resolves transform ids from current single selection fallback", () => {
+    expect(
+      resolveTransformSelectionIds({
+        kind: "move",
+        selectedWallIds: new Set(),
+        selectedInstanceIds: new Set(),
+        selectedKind: "module",
+        selectedWallId: null,
+        selectedInstanceId: "m-single",
+        selectedSectionId: null
+      })
+    ).toEqual({
+      wallIds: [],
+      instIds: ["m-single"],
+      sectionIds: [],
+      windowIds: [],
+      doorIds: []
+    });
+
+    expect(
+      resolveTransformSelectionIds({
+        kind: "move",
+        selectedWallIds: new Set(),
+        selectedInstanceIds: new Set(),
+        selectedKind: "section",
+        selectedWallId: null,
+        selectedInstanceId: null,
+        selectedSectionId: "s1"
+      })
+    ).toMatchObject({ sectionIds: ["s1"] });
+  });
+
+  it("resolves opening transform ids only for move", () => {
+    expect(
+      resolveTransformSelectionIds({
+        kind: "move",
+        selectedWallIds: new Set(),
+        selectedInstanceIds: new Set(),
+        selectedKind: "window",
+        selectedWallId: null,
+        selectedInstanceId: null,
+        selectedSectionId: null,
+        windowInst: { id: "win1" }
+      }).windowIds
+    ).toEqual(["win1"]);
+
+    expect(
+      resolveTransformSelectionIds({
+        kind: "rotate",
+        selectedWallIds: new Set(),
+        selectedInstanceIds: new Set(),
+        selectedKind: "door",
+        selectedWallId: null,
+        selectedInstanceId: null,
+        selectedSectionId: null,
+        doorInst: { id: "door1" }
+      }).doorIds
+    ).toEqual([]);
+  });
+
   it("enters Revit-style selection step when Move starts with no selection", () => {
     const transformState = makeTransformState();
     const controller = createTestTransformController({

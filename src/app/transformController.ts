@@ -6,6 +6,43 @@ import type { KitchenContext } from "../layout/kitchenContext";
 type MmPoint = { x: number; z: number };
 type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
 
+export type TransformSelectionIds = {
+  wallIds: string[];
+  instIds: string[];
+  sectionIds: string[];
+  windowIds: string[];
+  doorIds: string[];
+};
+
+export function resolveTransformSelectionIds(args: {
+  kind: TransformKind;
+  selectedWallIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedInstanceId: string | null;
+  selectedSectionId: string | null;
+  windowInst?: { id: string } | null;
+  doorInst?: { id: string } | null;
+}): TransformSelectionIds {
+  const wallIds =
+    args.selectedWallIds.size > 0
+      ? Array.from(args.selectedWallIds)
+      : args.selectedKind === "wall" && args.selectedWallId
+        ? [args.selectedWallId]
+        : [];
+  const instIds =
+    args.selectedInstanceIds.size > 0
+      ? Array.from(args.selectedInstanceIds)
+      : args.selectedKind === "module" && args.selectedInstanceId
+        ? [args.selectedInstanceId]
+        : [];
+  const sectionIds = args.selectedKind === "section" && args.selectedSectionId ? [args.selectedSectionId] : [];
+  const windowIds = args.kind === "move" && args.selectedKind === "window" && args.windowInst ? [args.windowInst.id] : [];
+  const doorIds = args.kind === "move" && args.selectedKind === "door" && args.doorInst ? [args.doorInst.id] : [];
+  return { wallIds, instIds, sectionIds, windowIds, doorIds };
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -165,16 +202,17 @@ export function createTransformController(ctx: TransformControllerContext) {
     const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
     const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
 
-    const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];
-    const instIds =
-      ctx.selectedInstanceIds.size > 0
-        ? Array.from(ctx.selectedInstanceIds)
-        : ctx.selectedKind === "module" && ctx.selectedInstanceId
-          ? [ctx.selectedInstanceId]
-          : [];
-    const sectionIds = ctx.selectedKind === "section" && ctx.selectedSectionId ? [ctx.selectedSectionId] : [];
-    const windowIds = kind === "move" && ctx.selectedKind === "window" && ctx.windowInst ? [ctx.windowInst.id] : [];
-    const doorIds = kind === "move" && ctx.selectedKind === "door" && ctx.doorInst ? [ctx.doorInst.id] : [];
+    const { wallIds, instIds, sectionIds, windowIds, doorIds } = resolveTransformSelectionIds({
+      kind,
+      selectedWallIds: ctx.selectedWallIds,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      selectedKind: ctx.selectedKind,
+      selectedWallId: ctx.selectedWallId,
+      selectedInstanceId: ctx.selectedInstanceId,
+      selectedSectionId: ctx.selectedSectionId,
+      windowInst: ctx.windowInst,
+      doorInst: ctx.doorInst
+    });
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
     if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
       if (kind !== "move") return false;
