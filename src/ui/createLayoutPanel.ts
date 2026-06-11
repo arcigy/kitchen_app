@@ -1,4 +1,5 @@
 import type { ModuleParams } from "../model/cabinetTypes";
+import { createButtonElement } from "../app/propsPanelElements";
 
 export type LayoutRow = {
   id: string;
@@ -75,8 +76,7 @@ export function createLayoutPanel(container: HTMLElement, args: CreateLayoutPane
       rowWrap.className = "row";
       rowWrap.style.gridTemplateColumns = "1fr auto";
 
-      const label = document.createElement("button");
-      label.type = "button";
+      const label = createButtonElement("");
       label.className = "label";
       label.textContent = `${row.type} • ${row.id}`;
       label.addEventListener("click", () => args.onSelect(row.id));
