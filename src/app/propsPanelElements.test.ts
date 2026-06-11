@@ -31,6 +31,21 @@ describe("props panel elements", () => {
     ]);
   });
 
+  it("stringifies numeric select values the same way DOM option values do", () => {
+    installFakeDocument();
+
+    const select = createSelectElement(2, [
+      { value: 1, label: "One" },
+      { value: 2, label: "Two" }
+    ]) as unknown as FakeElement;
+
+    expect(select.value).toBe("2");
+    expect(select.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["1", "One"],
+      ["2", "Two"]
+    ]);
+  });
+
   it("creates reusable muted text elements without changing text content", () => {
     installFakeDocument();
 

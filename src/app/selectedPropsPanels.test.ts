@@ -112,6 +112,10 @@ describe("selected props panels", () => {
     expect(props.setTitle).toHaveBeenCalledWith("Podlaha (floor-1)");
     expect(rows).toHaveLength(4);
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "floor", floorId: "floor-1" });
+    expect(rows[3].control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["oak", "Oak"],
+      ["tile", "Tile"]
+    ]);
 
     rows[0].control.value = "  Main floor  ";
     rows[1].control.value = "15.6";
