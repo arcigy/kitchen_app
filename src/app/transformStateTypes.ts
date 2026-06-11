@@ -40,3 +40,7 @@ export type TransformState = {
   lastValidDelta: THREE.Vector3;
   lastValidAngle: number;
 };
+
+export type PointerTransformState = TransformState & {
+  lastPointerPx: { x: number; y: number };
+};

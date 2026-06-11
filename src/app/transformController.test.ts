@@ -1,35 +1,12 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createTransformController, type TransformControllerContext } from "./transformController";
-import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
+import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WindowParams } from "./localTypes";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
+import { createInitialTransformState } from "./transformStateFactory";
 
 function makeTransformState() {
-  return {
-    kind: null as null | "move" | "rotate",
-    step: null as null | "selectElements" | "pickBase" | "pickTarget" | "pickPivot" | "rotating",
-    stickyMove: false,
-    moveSnapDisabled: false,
-    base: null as THREE.Vector3 | null,
-    pivot: null as THREE.Vector3 | null,
-    typed: "",
-    lastAngleSign: 1,
-    lastPointerPx: { x: 0, y: 0 },
-    selectedWallIds: [] as string[],
-    selectedInstanceIds: [] as string[],
-    selectedSectionIds: [] as string[],
-    selectedWindowIds: [] as string[],
-    selectedDoorIds: [] as string[],
-    startWalls: new Map<string, WallParams>(),
-    startInstances: new Map<string, { pos: THREE.Vector3; rotY: number }>(),
-    startInstanceAdjacency: new Map<string, string | null>(),
-    startSections: new Map(),
-    startWindows: new Map<string, WindowParams>(),
-    startDoors: new Map<string, DoorParams>(),
-    startPointerAngle: 0,
-    lastValidDelta: new THREE.Vector3(0, 0, 0),
-    lastValidAngle: 0
-  };
+  return createInitialTransformState();
 }
 
 function makeTransformContext(overrides: Partial<TransformControllerContext> = {}): TransformControllerContext {

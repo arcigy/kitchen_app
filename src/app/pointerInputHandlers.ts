@@ -19,7 +19,7 @@ import type { PlacementHelpers } from "../layout/placementManager";
 import type { MeasureState, MarqueeState, WallEditHud } from "./measureTools";
 import type { AssociativeMeasureKind } from "./measureAssociative";
 import type { TechnicalDimensionRecord } from "./technicalDimensions";
-import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
+import type { PointerTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
 import {
   finishTrimNoChange,
@@ -414,7 +414,7 @@ type PointerInputHandlersDataContext = {
   };
   pickAlignLineAt: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
   pickFloorEditElement: (mouse: { x: number; y: number }, rect: DOMRect) => PickedFloorEditElement | null;
-  transformState: TransformState & { lastPointerPx: { x: number; y: number } };
+  transformState: PointerTransformState;
   trimState: {
     hover: AlignPickedLine | null;
     lastCutter: AlignPickedLine | null;
