@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { createTransformController, resolveTransformSelectionIds, type TransformControllerContext } from "./transformController";
+import {
+  createTransformController,
+  resolveMovedOpeningCenterMm,
+  resolveTransformSelectionIds,
+  type TransformControllerContext
+} from "./transformController";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WindowParams } from "./localTypes";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
 import { createInitialTransformState } from "./transformStateFactory";
@@ -152,6 +157,67 @@ describe("transform move tool", () => {
         doorInst: { id: "door1" }
       }).doorIds
     ).toEqual([]);
+  });
+
+  it("resolves moved opening center along and inside the host wall", () => {
+    const wall = {
+      id: "w1",
+      params: {
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 1000, z: 0 },
+        thicknessMm: 150,
+        heightMm: 2600,
+        materialId: "wall"
+      }
+    } as WallInstance;
+    const start = {
+      wall: "back",
+      wallId: "w1",
+      widthMm: 600,
+      heightMm: 900,
+      sillHeightMm: 900,
+      centerMm: 500,
+      frameWidthMm: 70,
+      offsetFromInteriorMm: 0,
+      sashWidthMm: 50,
+      sashProfileDepthMm: 50,
+      frameProfileDepthMm: 70,
+      swingDirection: "right",
+      swingSide: "inward",
+      swingAngleDeg: 90,
+      handleType: "lever",
+      handleOffsetMm: 70,
+      handleHeightMm: 450,
+      materialId: "window"
+    } as WindowParams;
+
+    expect(resolveMovedOpeningCenterMm({ delta: new THREE.Vector3(0.25, 0, 0), start, wall })).toBe(700);
+    expect(resolveMovedOpeningCenterMm({ delta: new THREE.Vector3(-1, 0, 0), start, wall })).toBe(300);
+  });
+
+  it("does not resolve moved opening center without a valid host wall", () => {
+    const start = {
+      wall: "back",
+      wallId: "",
+      widthMm: 600,
+      heightMm: 900,
+      sillHeightMm: 900,
+      centerMm: 500,
+      frameWidthMm: 70,
+      offsetFromInteriorMm: 0,
+      sashWidthMm: 50,
+      sashProfileDepthMm: 50,
+      frameProfileDepthMm: 70,
+      swingDirection: "right",
+      swingSide: "inward",
+      swingAngleDeg: 90,
+      handleType: "lever",
+      handleOffsetMm: 70,
+      handleHeightMm: 450,
+      materialId: "window"
+    } as WindowParams;
+
+    expect(resolveMovedOpeningCenterMm({ delta: new THREE.Vector3(0.25, 0, 0), start, wall: null })).toBeNull();
   });
 
   it("enters Revit-style selection step when Move starts with no selection", () => {

@@ -43,6 +43,30 @@ export function resolveTransformSelectionIds(args: {
   return { wallIds, instIds, sectionIds, windowIds, doorIds };
 }
 
+export function resolveMovedOpeningCenterMm(args: {
+  delta: THREE.Vector3;
+  start: WindowParams | DoorParams;
+  wall: WallInstance | null;
+}) {
+  if (!args.start.wallId || !args.wall) return null;
+  const ax = args.wall.params.aMm.x;
+  const az = args.wall.params.aMm.z;
+  const bx = args.wall.params.bMm.x;
+  const bz = args.wall.params.bMm.z;
+  const lengthMm = Math.hypot(bx - ax, bz - az);
+  if (lengthMm < 1) return null;
+  const dirX = (bx - ax) / lengthMm;
+  const dirZ = (bz - az) / lengthMm;
+  const alongMm = Math.round(args.delta.x * dirX * 1000 + args.delta.z * dirZ * 1000);
+  const unclampedCenterMm = args.start.centerMm + alongMm;
+  const halfWidthMm = Math.max(0, args.start.widthMm / 2);
+  const minCenterMm = halfWidthMm;
+  const maxCenterMm = lengthMm - halfWidthMm;
+  return maxCenterMm >= minCenterMm
+    ? Math.round(Math.min(maxCenterMm, Math.max(minCenterMm, unclampedCenterMm)))
+    : Math.round(lengthMm / 2);
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -312,26 +336,10 @@ export function createTransformController(ctx: TransformControllerContext) {
     }
 
     const moveOpeningAlongHostWall = (params: WindowParams | DoorParams, start: WindowParams | DoorParams) => {
-      if (!start.wallId) return false;
       const wall = ctx.walls.find((item: WallInstance) => item.id === start.wallId) ?? null;
-      if (!wall) return false;
-      const ax = wall.params.aMm.x;
-      const az = wall.params.aMm.z;
-      const bx = wall.params.bMm.x;
-      const bz = wall.params.bMm.z;
-      const lengthMm = Math.hypot(bx - ax, bz - az);
-      if (lengthMm < 1) return false;
-      const dirX = (bx - ax) / lengthMm;
-      const dirZ = (bz - az) / lengthMm;
-      const alongMm = Math.round(delta.x * dirX * 1000 + delta.z * dirZ * 1000);
-      const unclampedCenterMm = start.centerMm + alongMm;
-      const halfWidthMm = Math.max(0, start.widthMm / 2);
-      const minCenterMm = halfWidthMm;
-      const maxCenterMm = lengthMm - halfWidthMm;
-      params.centerMm =
-        maxCenterMm >= minCenterMm
-          ? Math.round(Math.min(maxCenterMm, Math.max(minCenterMm, unclampedCenterMm)))
-          : Math.round(lengthMm / 2);
+      const centerMm = resolveMovedOpeningCenterMm({ delta, start, wall });
+      if (centerMm === null) return false;
+      params.centerMm = centerMm;
       return true;
     };
 
