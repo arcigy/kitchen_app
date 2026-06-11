@@ -208,6 +208,12 @@ describe("selected props panels", () => {
 
     expect(props.setTitle).toHaveBeenCalledWith("Floor Boundary");
     expect(rows.map((row) => row.label)).toEqual(["Výška úrovne (mm)", "Hrúbka (mm)", "Materiál"]);
+    expect(rows[0]!.control.type).toBe("number");
+    expect(rows[0]!.control.step).toBe("1");
+    expect(rows[0]!.control.value).toBe("0");
+    expect(rows[1]!.control.type).toBe("number");
+    expect(rows[1]!.control.step).toBe("1");
+    expect(rows[1]!.control.value).toBe("100");
     expect(rows[2]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
       ["oak", "Oak"],
       ["tile", "Tile"]

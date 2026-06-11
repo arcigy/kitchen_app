@@ -891,16 +891,10 @@ export function mountFloorBoundaryPropsPanel(ctx: FloorBoundaryPropsContext) {
     const params = floorEdit.params;
     if (!params) return;
 
-    const height = document.createElement("input");
-    height.type = "number";
-    height.step = "1";
-    height.value = String(params.heightMm);
+    const height = createInputElement("number", String(params.heightMm), { step: "1" });
     props.row(s, "Výška úrovne (mm)", height);
 
-    const thickness = document.createElement("input");
-    thickness.type = "number";
-    thickness.step = "1";
-    thickness.value = String(params.thicknessMm);
+    const thickness = createInputElement("number", String(params.thicknessMm), { step: "1" });
     props.row(s, "Hrúbka (mm)", thickness);
 
     const mat = createSelectElement(
