@@ -92,7 +92,7 @@ import {
 import { handleTransformClickPointerDown } from "./pointerTransformClickFlow";
 import { handleTransformPointerMovePreview } from "./pointerTransformPreviewFlow";
 import { beginDoorDragFromPick, beginWindowDragFromPick, handleOpeningDragPointerMove } from "./pointerOpeningDragBegin";
-import { updateModuleDragFromGroundHit } from "./pointerModuleDrag";
+import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
 import { finishPointerDragState } from "./pointerDragFinish";
 import { buildModuleMarqueeScreenBounds, buildWallMarqueeScreenPolygon, collectMarqueeHitIds } from "./pointerMarqueeHitGeometry";
 import { clearNonFloorplanFloorSelection } from "./selectionController";
@@ -223,7 +223,7 @@ type PointerInputHandlersDataContext = {
   dimensionState: PointerDimensionState;
   doorDragState: { active: boolean; pointerId?: number | null; wall: string | null; offsetMm: number };
   doorInst: DoorInstance | null;
-  dragState: { active: boolean; id: string | null; offset: THREE.Vector3; lastValid: THREE.Vector3 };
+  dragState: PointerModuleDragState;
   drawOrthoEnabled: boolean;
   drawSnapOverlay: PointerDrawSnapOverlay;
   floorEdit: FloorEditState;
