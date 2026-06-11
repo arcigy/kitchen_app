@@ -32,6 +32,7 @@ import type {
   WallInstance
 } from "./localTypes";
 import type { createKitchenEditMode } from "../layout/kitchenEditMode";
+import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type KitchenGuideSegmentInfo = {
   start: THREE.Vector3;
@@ -357,6 +358,13 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const group = groupId ? kitchenGroups.find((item) => item.id === groupId) ?? null : null;
     const groupWorktops = groupId ? allWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
     const groupInstances = groupId ? allInstances.filter((item) => item.kitchenGroupId === groupId) : [];
+    const backOffsetMm = groupId
+      ? resolveKitchenPlacementBackOffset({
+          kitchenGroupId: groupId,
+          kitchenGroups,
+          defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+        })
+      : S.kitchenCtx.worktopBackOffsetMm;
     return {
       selectedKitchenGroupId: ctx.getSelectedKitchenGroupId(),
       activeKitchenGroupId: S.activeKitchenGroupId,
@@ -372,9 +380,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       worktops: groupWorktops.map((worktop) => ({
         id: worktop.id,
         params: structuredClone(worktop.params),
-        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm).map(
-          (point: THREE.Vector3) => ({ x: point.x, y: point.y, z: point.z })
-        )
+        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm).map((point: THREE.Vector3) => ({
+          x: point.x,
+          y: point.y,
+          z: point.z
+        }))
       })),
       instances: groupInstances.map((inst) => getDebugModuleSnapshot(inst))
     };
