@@ -28,6 +28,19 @@ export type PointerTrimHoverState = {
   targetPick: AlignPickedLine | null;
 };
 
+export function updatePickedHudLine(params: {
+  picked: AlignPickedLine | null | undefined;
+  hudLine: HudLine;
+  hudLineThickness: number;
+  updateHudLine: UpdateHudLine;
+}): void {
+  if (params.picked) {
+    params.updateHudLine(params.hudLine, params.picked.segA, params.picked.segB, params.hudLineThickness);
+  } else {
+    params.hudLine.visible = false;
+  }
+}
+
 export function updateDimensionToolHover(params: {
   hitPoint: THREE.Vector3;
   mouse: MousePoint;
@@ -46,24 +59,27 @@ export function updateDimensionToolHover(params: {
   const picked = params.pickDimensionLineAt?.(params.hitPoint, params.mouse, params.rect) ?? params.pickAlignLineAt(params.hitPoint, params.mouse, params.rect);
   const canPick = !picked || params.dimensionState.picked.length === 0 || params.areAlignLinesParallel(params.dimensionState.picked[0]!, picked);
   params.dimensionState.hover = canPick ? picked : null;
-  if (params.dimensionState.hover) {
-    params.updateHudLine(params.hudHoverLine, params.dimensionState.hover.segA, params.dimensionState.hover.segB, params.hudLineThickness);
-  } else {
-    params.hudHoverLine.visible = false;
-  }
+  updatePickedHudLine({
+    picked: params.dimensionState.hover,
+    hudLine: params.hudHoverLine,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
-  if (params.dimensionState.picked[0]) {
-    params.updateHudLine(params.hudPickLine1, params.dimensionState.picked[0].segA, params.dimensionState.picked[0].segB, params.hudLineThickness);
-  } else {
-    params.hudPickLine1.visible = false;
-  }
+  updatePickedHudLine({
+    picked: params.dimensionState.picked[0],
+    hudLine: params.hudPickLine1,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
   const lastPicked = params.dimensionState.picked.length > 1 ? params.dimensionState.picked[params.dimensionState.picked.length - 1] : null;
-  if (lastPicked) {
-    params.updateHudLine(params.hudPickLine2, lastPicked.segA, lastPicked.segB, params.hudLineThickness);
-  } else {
-    params.hudPickLine2.visible = false;
-  }
+  updatePickedHudLine({
+    picked: lastPicked,
+    hudLine: params.hudPickLine2,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
   params.dimensionState.preview =
     !picked && params.dimensionState.picked.length >= 2
@@ -133,15 +149,34 @@ export function updateAlignToolHover(params: {
   updateHudLine: UpdateHudLine;
 }): void {
   params.alignState.hover = params.picked;
-  if (params.picked) params.updateHudLine(params.hudHoverLine, params.picked.segA, params.picked.segB, params.hudLineThickness);
-  else params.hudHoverLine.visible = false;
+  updatePickedHudLine({
+    picked: params.picked,
+    hudLine: params.hudHoverLine,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
   if (params.alignState.ref) {
-    params.updateHudLine(params.hudPickLine1, params.alignState.ref.segA, params.alignState.ref.segB, params.hudLineThickness);
+    updatePickedHudLine({
+      picked: params.alignState.ref,
+      hudLine: params.hudPickLine1,
+      hudLineThickness: params.hudLineThickness,
+      updateHudLine: params.updateHudLine
+    });
     params.hudPickLine2.visible = false;
   } else if (params.alignState.lastA && params.alignState.lastB && params.alignState.lastUntilMs > params.now) {
-    params.updateHudLine(params.hudPickLine1, params.alignState.lastA.segA, params.alignState.lastA.segB, params.hudLineThickness);
-    params.updateHudLine(params.hudPickLine2, params.alignState.lastB.segA, params.alignState.lastB.segB, params.hudLineThickness);
+    updatePickedHudLine({
+      picked: params.alignState.lastA,
+      hudLine: params.hudPickLine1,
+      hudLineThickness: params.hudLineThickness,
+      updateHudLine: params.updateHudLine
+    });
+    updatePickedHudLine({
+      picked: params.alignState.lastB,
+      hudLine: params.hudPickLine2,
+      hudLineThickness: params.hudLineThickness,
+      updateHudLine: params.updateHudLine
+    });
   } else {
     resetAlignRecentFeedback({
       alignState: params.alignState,
@@ -174,15 +209,33 @@ export function updateTrimToolHover(params: {
   updateHudLine: UpdateHudLine;
 }): void {
   params.trimState.hover = params.picked;
-  if (params.picked) params.updateHudLine(params.hudHoverLine, params.picked.segA, params.picked.segB, params.hudLineThickness);
-  else params.hudHoverLine.visible = false;
+  updatePickedHudLine({
+    picked: params.picked,
+    hudLine: params.hudHoverLine,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
-  if (params.trimState.targetPick) params.updateHudLine(params.hudPickLine1, params.trimState.targetPick.segA, params.trimState.targetPick.segB, params.hudLineThickness);
-  else params.hudPickLine1.visible = false;
+  updatePickedHudLine({
+    picked: params.trimState.targetPick,
+    hudLine: params.hudPickLine1,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
 
   if (params.trimState.lastTarget && params.trimState.lastCutter && params.trimState.lastUntilMs > params.now) {
-    params.updateHudLine(params.hudPickLine1, params.trimState.lastTarget.segA, params.trimState.lastTarget.segB, params.hudLineThickness);
-    params.updateHudLine(params.hudPickLine2, params.trimState.lastCutter.segA, params.trimState.lastCutter.segB, params.hudLineThickness);
+    updatePickedHudLine({
+      picked: params.trimState.lastTarget,
+      hudLine: params.hudPickLine1,
+      hudLineThickness: params.hudLineThickness,
+      updateHudLine: params.updateHudLine
+    });
+    updatePickedHudLine({
+      picked: params.trimState.lastCutter,
+      hudLine: params.hudPickLine2,
+      hudLineThickness: params.hudLineThickness,
+      updateHudLine: params.updateHudLine
+    });
   } else if (params.trimState.step === "pickCutter" && params.trimState.targetPick) {
     params.hudPickLine2.visible = false;
   } else if (params.trimState.lastUntilMs <= params.now) {

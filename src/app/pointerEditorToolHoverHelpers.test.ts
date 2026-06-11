@@ -4,6 +4,7 @@ import type { AlignPickedLine } from "./localTypes";
 import {
   resetAlignTrimPointerMoveHover,
   resetAlignRecentFeedback,
+  updatePickedHudLine,
   updateAlignToolHover,
   updateAlignTrimToolPointerMoveHover,
   updateDimensionToolHover,
@@ -32,6 +33,34 @@ function hudLine() {
 }
 
 describe("pointer editor tool hover helpers", () => {
+  it("updates picked HUD line or hides it when no line is picked", () => {
+    const picked = line("picked");
+    const hud = hudLine();
+    const updateHudLine = vi.fn((mesh: THREE.Mesh) => {
+      mesh.visible = true;
+    });
+
+    updatePickedHudLine({
+      picked,
+      hudLine: hud,
+      hudLineThickness: 2,
+      updateHudLine
+    });
+
+    expect(updateHudLine).toHaveBeenCalledWith(hud, picked.segA, picked.segB, 2);
+    expect(hud.visible).toBe(true);
+
+    updatePickedHudLine({
+      picked: null,
+      hudLine: hud,
+      hudLineThickness: 2,
+      updateHudLine
+    });
+
+    expect(updateHudLine).toHaveBeenCalledTimes(1);
+    expect(hud.visible).toBe(false);
+  });
+
   it("updates dimension hover and builds preview only when no line is picked", () => {
     const pickedA = line("a");
     const pickedB = line("b");
