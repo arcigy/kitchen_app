@@ -14,13 +14,16 @@ export class FakeElement {
   listeners = new Map<string, FakeListener[]>();
   max = "";
   min = "";
+  name = "";
   placeholder = "";
+  required = false;
   step = "";
   style: Record<string, string> = {};
   textContent = "";
   title = "";
   type = "";
   value = "";
+  autocomplete = "";
 
   addEventListener(type: string, listener: FakeListener) {
     const listeners = this.listeners.get(type) ?? [];
@@ -41,8 +44,20 @@ export class FakeElement {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
   }
 
+  focus() {
+    // No-op for lightweight DOM tests.
+  }
+
   remove() {
     this.isConnected = false;
+  }
+
+  querySelectorAll<T = FakeElement>(_selector: string): T[] {
+    return [];
+  }
+
+  select() {
+    // No-op for lightweight DOM tests.
   }
 
   setAttribute(name: string, value: string) {
@@ -52,7 +67,11 @@ export class FakeElement {
 
 export function installFakeDocument() {
   vi.stubGlobal("document", {
-    createElement: () => new FakeElement(),
+    createElement: (tagName: string) => {
+      const element = new FakeElement();
+      if (tagName === "input") element.type = "text";
+      return element;
+    },
     createTextNode: (text: string) => {
       const node = new FakeElement();
       node.textContent = text;

@@ -1,4 +1,5 @@
 import type { AuthenticatedClientSession } from "../core/client/client-types";
+import { createButtonElement, createInputElement } from "./propsPanelElements";
 
 type AuthApiResponse = {
   ok: boolean;
@@ -135,31 +136,29 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   const usernameLabel = document.createElement("label");
   const usernameText = document.createElement("span");
   usernameText.textContent = "Pouzivatel";
-  const usernameInput = document.createElement("input");
-  usernameInput.name = "username";
-  usernameInput.autocomplete = "username";
-  usernameInput.required = true;
-  usernameInput.value = "branislav";
+  const usernameInput = createInputElement("text", "branislav", {
+    autocomplete: "username",
+    name: "username",
+    required: true
+  });
   usernameLabel.append(usernameText, usernameInput);
 
   const passwordLabel = document.createElement("label");
   const passwordText = document.createElement("span");
   passwordText.textContent = "Heslo";
-  const passwordInput = document.createElement("input");
-  passwordInput.name = "password";
-  passwordInput.type = "password";
-  passwordInput.autocomplete = "current-password";
-  passwordInput.required = true;
-  passwordInput.placeholder = "Zadaj heslo";
+  const passwordInput = createInputElement("password", "", {
+    autocomplete: "current-password",
+    name: "password",
+    placeholder: "Zadaj heslo",
+    required: true
+  });
   passwordLabel.append(passwordText, passwordInput);
 
   const error = document.createElement("div");
   error.className = "auth-error";
   error.setAttribute("role", "alert");
 
-  const submit = document.createElement("button");
-  submit.type = "submit";
-  submit.textContent = "Prihlasit do workspace";
+  const submit = createButtonElement("Prihlasit do workspace", { type: "submit" });
 
   const hint = document.createElement("p");
   hint.className = "auth-hint";

@@ -25,6 +25,15 @@ describe("props panel elements", () => {
     expect(button.textContent).toBe("Clear");
   });
 
+  it("creates reusable submit button elements", () => {
+    installFakeDocument();
+
+    const button = createButtonElement("Prihlasit", { type: "submit" }) as unknown as FakeElement;
+
+    expect(button.type).toBe("submit");
+    expect(button.textContent).toBe("Prihlasit");
+  });
+
   it("creates reusable select elements with stable option values and labels", () => {
     installFakeDocument();
 
@@ -47,6 +56,23 @@ describe("props panel elements", () => {
 
     expect(input.type).toBe("text");
     expect(input.value).toBe("Ground floor");
+  });
+
+  it("creates reusable password input elements with form attributes", () => {
+    installFakeDocument();
+
+    const input = createInputElement("password", "", {
+      autocomplete: "current-password",
+      name: "password",
+      placeholder: "Zadaj heslo",
+      required: true
+    }) as unknown as FakeElement;
+
+    expect(input.type).toBe("password");
+    expect(input.autocomplete).toBe("current-password");
+    expect(input.name).toBe("password");
+    expect(input.placeholder).toBe("Zadaj heslo");
+    expect(input.required).toBe(true);
   });
 
   it("creates reusable number input elements with stable bounds, step, placeholder, and values", () => {

@@ -4,27 +4,38 @@ export function createTextElement(text: string) {
   return element;
 }
 
-export function createButtonElement(text: string) {
+export function createButtonElement(text: string, options: { type?: "button" | "submit" } = {}) {
   const button = document.createElement("button");
-  button.type = "button";
+  button.type = options.type ?? "button";
   button.textContent = text;
   return button;
 }
 
 type SelectOptionValue = string | number;
-type InputElementType = "text" | "number";
+type InputElementType = "text" | "number" | "password";
 
 export function createInputElement(
   type: InputElementType,
   value: string,
-  options: { min?: string; max?: string; step?: string; placeholder?: string } = {}
+  options: {
+    autocomplete?: HTMLInputElement["autocomplete"];
+    min?: string;
+    max?: string;
+    name?: string;
+    placeholder?: string;
+    required?: boolean;
+    step?: string;
+  } = {}
 ) {
   const input = document.createElement("input");
   input.type = type;
+  if (options.autocomplete != null) input.autocomplete = options.autocomplete;
   if (options.min != null) input.min = options.min;
   if (options.max != null) input.max = options.max;
+  if (options.name != null) input.name = options.name;
   if (options.step != null) input.step = options.step;
   if (options.placeholder != null) input.placeholder = options.placeholder;
+  if (options.required != null) input.required = options.required;
   input.value = value;
   return input;
 }
