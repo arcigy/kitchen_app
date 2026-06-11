@@ -24,6 +24,21 @@ export function updateMeasure2DPointerMoveHover(params: {
   params.updateMeasureHoverFromPlanPoint(params.hitPoint, params.rect, params.normalMode);
 }
 
+export function clearMeasure3DPointerMoveHover(params: {
+  measureState: Pick<MeasureState, "firstPoint" | "hoverPoint" | "hoverSnap">;
+  hideHoverCursor: () => void;
+  clearToolHud: () => void;
+  clearPreview: () => void;
+  setReadout: (message: string) => void;
+}): void {
+  params.measureState.hoverPoint = null;
+  params.measureState.hoverSnap = "none";
+  params.hideHoverCursor();
+  params.clearToolHud();
+  params.clearPreview();
+  params.setReadout(params.measureState.firstPoint ? "Measure 3D: pick second point." : "Measure 3D: click first point.");
+}
+
 export function updateMeasure3DPointerMoveHover(params: {
   hit: { point: THREE.Vector3; object: THREE.Object3D } | null;
   rect: DOMRect;
@@ -59,12 +74,13 @@ export function updateMeasure3DPointerMoveHover(params: {
   setFirstPointMarker: (point: THREE.Vector3 | null) => void;
 }): void {
   if (!params.hit) {
-    params.measureState.hoverPoint = null;
-    params.measureState.hoverSnap = "none";
-    params.hideHoverCursor();
-    params.clearToolHud();
-    params.clearPreview();
-    params.setReadout(params.measureState.firstPoint ? "Measure 3D: pick second point." : "Measure 3D: click first point.");
+    clearMeasure3DPointerMoveHover({
+      measureState: params.measureState,
+      hideHoverCursor: params.hideHoverCursor,
+      clearToolHud: params.clearToolHud,
+      clearPreview: params.clearPreview,
+      setReadout: params.setReadout
+    });
     return;
   }
 

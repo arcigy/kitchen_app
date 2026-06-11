@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanSnapBinding } from "./planSnap";
 import {
+  clearMeasure3DPointerMoveHover,
   handleLegacySurfaceMeasurePointClick,
   handleMeasurePointClick,
   updateLegacySurfaceMeasurePointerMoveHover,
@@ -138,6 +139,34 @@ describe("pointer measure click helpers", () => {
     expect(clearToolHud).toHaveBeenCalledTimes(1);
     expect(clearPreview).toHaveBeenCalledTimes(1);
     expect(setReadout).toHaveBeenCalledWith("Measure 3D: click first point.");
+  });
+
+  it("clears 3d measure hover state with the second point readout when first point exists", () => {
+    const firstPoint = new THREE.Vector3(0, 0, 0);
+    const measureState = {
+      firstPoint,
+      hoverPoint: new THREE.Vector3(1, 2, 3) as THREE.Vector3 | null,
+      hoverSnap: "corner" as const
+    };
+    const hideHoverCursor = vi.fn();
+    const clearToolHud = vi.fn();
+    const clearPreview = vi.fn();
+    const setReadout = vi.fn();
+
+    clearMeasure3DPointerMoveHover({
+      measureState,
+      hideHoverCursor,
+      clearToolHud,
+      clearPreview,
+      setReadout
+    });
+
+    expect(measureState.hoverPoint).toBeNull();
+    expect(measureState.hoverSnap).toBe("none");
+    expect(hideHoverCursor).toHaveBeenCalledOnce();
+    expect(clearToolHud).toHaveBeenCalledOnce();
+    expect(clearPreview).toHaveBeenCalledOnce();
+    expect(setReadout).toHaveBeenCalledWith("Measure 3D: pick second point.");
   });
 
   it("updates 3d measure hover preview with current axis assist behavior", () => {
