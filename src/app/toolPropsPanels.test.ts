@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine, WallParams } from "./localTypes";
-import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
+import {
+  mountAlignToolPropsPanel,
+  mountKitchenWorktopToolPropsPanel,
+  mountMeasureToolPropsPanel,
+  mountTrimToolPropsPanel,
+  mountWallToolPropsPanel
+} from "./toolPropsPanels";
 import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
@@ -104,6 +110,48 @@ describe("tool props panels", () => {
     expect(section.children[1]?.style.marginTop).toBe("8px");
     expect(section.children[2]?.textContent).toBe("Target: Target wall");
     expect(section.children[2]?.style.marginTop).toBe("6px");
+  });
+
+  it("keeps measure tool axis lock and clear behavior", () => {
+    installFakeDocument();
+    const { props, section } = makePropertiesPanelHarness();
+    const axisLockEl = { checked: false };
+    const measureState = { axisLock: true, firstPoint: null };
+    const clearAllMeasurements = vi.fn();
+    const setUnderlayStatus = vi.fn();
+    const mountProps = vi.fn();
+
+    mountMeasureToolPropsPanel({
+      props,
+      measureState,
+      args: { axisLockEl: axisLockEl as HTMLInputElement },
+      formatMm: vi.fn(),
+      clearAllMeasurements,
+      setUnderlayStatus,
+      mountProps
+    });
+
+    expect(props.setTitle).toHaveBeenCalledWith("Measure");
+    expect(section.children[0]?.className).toBe("muted");
+    expect(section.children[1]?.style.marginTop).toBe("10px");
+    const axis = section.children[1]!.children[0]!;
+    expect(axis.type).toBe("checkbox");
+    expect(axis.checked).toBe(true);
+    expect(section.children[1]!.children[1]?.textContent).toBe("Axis lock (optional, 2D/3D)");
+    expect(section.children[2]?.textContent).toBe("First point: (none)");
+    expect(section.children[3]?.textContent).toBe("Clear");
+
+    axis.checked = false;
+    axis.dispatch("change");
+
+    expect(measureState.axisLock).toBe(false);
+    expect(axisLockEl.checked).toBe(false);
+
+    section.children[3]!.dispatch("click");
+
+    expect(clearAllMeasurements).toHaveBeenCalledOnce();
+    expect(setUnderlayStatus).toHaveBeenCalledWith("Measure: click first point.");
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 
   it("keeps worktop tool read-only rows and justification change behavior", () => {

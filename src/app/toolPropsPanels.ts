@@ -9,7 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
-import { appendMutedText, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -218,9 +218,7 @@ export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
     axisWrap.style.alignItems = "center";
     axisWrap.style.gap = "8px";
     axisWrap.style.marginTop = "10px";
-    const axis = document.createElement("input");
-    axis.type = "checkbox";
-    axis.checked = measureState.axisLock;
+    const axis = createCheckboxElement(measureState.axisLock);
     axis.addEventListener("change", () => {
       measureState.axisLock = axis.checked;
       args.axisLockEl.checked = axis.checked;

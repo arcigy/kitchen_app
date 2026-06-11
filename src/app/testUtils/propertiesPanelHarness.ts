@@ -47,7 +47,12 @@ export class FakeElement {
 
 export function installFakeDocument() {
   vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
+    createElement: () => new FakeElement(),
+    createTextNode: (text: string) => {
+      const node = new FakeElement();
+      node.textContent = text;
+      return node;
+    }
   });
 }
 
