@@ -8,7 +8,7 @@ import { resolveAssociativeMeasureWorld } from "./measureAssociative";
 import { distance3dMm } from "./measure3d";
 import { planarDistanceMm } from "./sharedUtils";
 import { shiftPolylinePoint, shiftPolylineSegment } from "./alignTool";
-import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
+import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 type MeasureSelectionActionsContext = {
@@ -163,8 +163,11 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   };
 
   const reapplyKitchenGroupPlacementBindings = (groupId: string) => {
-    const group = ctx.S.kitchenGroups.find((item) => item.id === groupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: groupId,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+    });
     for (const inst of ctx.instances) {
       if (inst.kitchenGroupId !== groupId) continue;
       const binding = inst.kitchenPlacement ?? ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);

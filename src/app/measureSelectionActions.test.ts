@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createMeasureSelectionActions } from "./measureSelectionActions";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
-import type { LayoutInstance } from "./localTypes";
+import type { AlignPickedLine, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 
@@ -77,5 +77,42 @@ describe("measure selection actions", () => {
     expect(instance.root.position.z).toBe(0.05);
     expect(ctx.inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, "kg1", 45);
     expect(instance.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+  });
+
+  it("reapplies kitchen group placement with default back offset when the group is missing", () => {
+    const instance = moduleInstance("m1", "missing");
+    instance.kitchenPlacement = { worktopId: "w1", segmentIndex: 0, offsetAlongM: 0 };
+    const worktop = {
+      id: "w1",
+      kitchenGroupId: "missing",
+      params: { path: [{ x: 0, z: 0 }, { x: 1000, z: 0 }] }
+    } as KitchenWorktopInstance;
+    const ctx = makeMeasureSelectionActionsContext({
+      S: {
+        kitchenGroups: [],
+        kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 }
+      } as unknown as AppState,
+      instances: [instance],
+      kitchenWorktops: [worktop],
+      findKitchenWorktop: vi.fn((id: string) => (id === worktop.id ? worktop : null))
+    });
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(
+      actions.alignKitchenWorktopLine(
+        {
+          targetKind: "worktop",
+          worktopId: worktop.id,
+          segmentIndex: 0,
+          lineRole: "edge"
+        } as AlignPickedLine,
+        100,
+        0
+      )
+    ).toBe(true);
+
+    expect(ctx.applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, instance.kitchenPlacement, 80);
+    expect(ctx.updateSelectionHighlights).toHaveBeenCalledOnce();
+    expect(ctx.updateLayoutPanel).toHaveBeenCalledOnce();
   });
 });
