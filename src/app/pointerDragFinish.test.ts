@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { finishPointerDragState, type ModulePointerDragFinishState, type OpeningPointerDragFinishState } from "./pointerDragFinish";
+import {
+  finishOpeningPointerDragState,
+  finishPointerDragState,
+  type ModulePointerDragFinishState,
+  type OpeningPointerDragFinishState
+} from "./pointerDragFinish";
 
 function openingState(overrides: Partial<OpeningPointerDragFinishState> = {}): OpeningPointerDragFinishState {
   return {
@@ -19,6 +24,17 @@ function moduleState(overrides: Partial<ModulePointerDragFinishState> = {}): Mod
 }
 
 describe("pointer drag finish", () => {
+  it("finishes active opening drag state and leaves inactive opening drag unchanged", () => {
+    const activeState = openingState({ active: true, pointerId: 3, wall: "wall-a" });
+    const inactiveState = openingState({ active: false, pointerId: 4, wall: "wall-b" });
+
+    expect(finishOpeningPointerDragState(activeState)).toBe(true);
+    expect(activeState).toEqual({ active: false, pointerId: 3, wall: null });
+
+    expect(finishOpeningPointerDragState(inactiveState)).toBe(false);
+    expect(inactiveState).toEqual({ active: false, pointerId: 4, wall: "wall-b" });
+  });
+
   it("finishes window drag before door and module drag", () => {
     const releasePointerCapture = vi.fn();
     const windowDragState = openingState({ active: true, pointerId: 1, wall: "window-wall" });

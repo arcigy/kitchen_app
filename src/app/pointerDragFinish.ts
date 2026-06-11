@@ -15,17 +15,20 @@ type FinishPointerDragStateParams = {
   windowDragState: OpeningPointerDragFinishState;
 };
 
+export function finishOpeningPointerDragState(state: OpeningPointerDragFinishState): boolean {
+  if (!state.active) return false;
+  state.active = false;
+  state.wall = null;
+  return true;
+}
+
 export function finishPointerDragState(params: FinishPointerDragStateParams): boolean {
-  if (params.windowDragState.active) {
-    params.windowDragState.active = false;
-    params.windowDragState.wall = null;
+  if (finishOpeningPointerDragState(params.windowDragState)) {
     params.releasePointerCapture(params.pointerId);
     return true;
   }
 
-  if (params.doorDragState.active) {
-    params.doorDragState.active = false;
-    params.doorDragState.wall = null;
+  if (finishOpeningPointerDragState(params.doorDragState)) {
     params.releasePointerCapture(params.pointerId);
     return true;
   }
