@@ -9,7 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
-import { appendMutedText, createMutedText, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -154,13 +154,11 @@ export function mountKitchenWorktopToolPropsPanel(ctx: KitchenWorktopToolPropsCo
     props.setTitle("Worktop");
     const section = props.section();
 
-    const just = document.createElement("select");
-    just.innerHTML = `
-      <option value="center">Center</option>
-      <option value="back">Back edge</option>
-      <option value="front">Front edge</option>
-    `;
-    just.value = kitchenWorktopDraw.justification;
+    const just = createSelectElement(kitchenWorktopDraw.justification, [
+      { value: "center", label: "Center" },
+      { value: "back", label: "Back edge" },
+      { value: "front", label: "Front edge" }
+    ]);
     props.row(section, "Justification", just);
 
     const depth = createTextElement(`${S.kitchenCtx.worktopDepthMm} mm`);

@@ -73,6 +73,12 @@ describe("tool props panels", () => {
       ["Top Height", "910 mm"],
       ["Material", "Oak laminate"]
     ]);
+    expect(rows[0]!.control.value).toBe("back");
+    expect(rows[0]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["center", "Center"],
+      ["back", "Back edge"],
+      ["front", "Front edge"]
+    ]);
     expect(section.children.at(-1)?.className).toBe("muted");
 
     rows[0]!.control.value = "front";

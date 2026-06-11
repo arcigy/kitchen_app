@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createMutedText, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -14,6 +14,21 @@ describe("props panel elements", () => {
 
     expect(element.className).toBe("");
     expect(element.textContent).toBe("Value text");
+  });
+
+  it("creates reusable select elements with stable option values and labels", () => {
+    installFakeDocument();
+
+    const select = createSelectElement("back", [
+      { value: "center", label: "Center" },
+      { value: "back", label: "Back edge" }
+    ]) as unknown as FakeElement;
+
+    expect(select.value).toBe("back");
+    expect(select.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["center", "Center"],
+      ["back", "Back edge"]
+    ]);
   });
 
   it("creates reusable muted text elements without changing text content", () => {
