@@ -16,6 +16,7 @@ import {
   runSelectKitchenGroupCommand,
   runSelectModuleCommand,
   runSelectOpeningCommand,
+  runSelectSectionCommand,
   runSelectWallCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
@@ -412,6 +413,30 @@ describe("createSelectionController", () => {
     expect(applySelection.mock.calls[0]?.[0].kind).toBe("window");
     expect(setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
     expect(clearUnderlayBox).toHaveBeenCalledOnce();
+  });
+
+  it("runs the named section selection command with current side effects", () => {
+    let selectedSectionId: string | null = null;
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+    });
+
+    runSelectSectionCommand(
+      {
+        applySelection,
+        setSelectedSectionId: (id) => {
+          selectedSectionId = id;
+        }
+      },
+      "section-1"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: "section",
+      sideEffectKind: "section"
+    });
+    expect(selectedSectionId).toBe("section-1");
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {

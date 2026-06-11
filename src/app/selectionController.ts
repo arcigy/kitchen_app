@@ -53,6 +53,11 @@ export type SelectOpeningCommandContext = {
   setInstanceSelected: (id: string | null) => void;
 };
 
+export type SelectSectionCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedSectionId: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -230,6 +235,16 @@ export function runSelectOpeningCommand(ctx: SelectOpeningCommandContext, kind: 
   });
 }
 
+export function runSelectSectionCommand(ctx: SelectSectionCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "section" : null,
+    sideEffectKind: "section",
+    assignIds: () => {
+      ctx.setSelectedSectionId(id);
+    }
+  });
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -393,13 +408,12 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedSection(id: string | null) {
-    applySelection({
-      kind: id ? "section" : null,
-      sideEffectKind: "section",
-      assignIds: () => {
-        ctx.selectedSectionId = id;
+    runSelectSectionCommand({
+      applySelection,
+      setSelectedSectionId: (selectedSectionId) => {
+        ctx.selectedSectionId = selectedSectionId;
       }
-    });
+    }, id);
   }
 
   function setSelectedWall(id: string | null) {
