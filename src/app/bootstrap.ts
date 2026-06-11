@@ -5,7 +5,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { ProjectMetadata } from "../core/project/project-types";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
-import { createButtonElement, createHtmlButtonElement } from "./propsPanelElements";
+import { createButtonElement, createCheckboxElement, createHtmlButtonElement } from "./propsPanelElements";
 
 export type AppArgs = {
   viewerEl: HTMLElement;
@@ -39,15 +39,15 @@ export function resolveAppArgs(initialArgs: AppArgs) {
     errorsEl: document.createElement("div"),
     partsEl: document.createElement("div"),
     exportOutEl: document.createElement("textarea"),
-    copyBtn: document.createElement("button"),
+    copyBtn: createButtonElement(""),
     copyStatusEl: document.createElement("div"),
-    measureBtn: document.createElement("button"),
-    clearMeasuresBtn: document.createElement("button"),
-    axisLockEl: Object.assign(document.createElement("input"), { type: "checkbox", checked: true }),
+    measureBtn: createButtonElement(""),
+    clearMeasuresBtn: createButtonElement(""),
+    axisLockEl: createCheckboxElement(true),
     measureReadoutEl: document.createElement("div"),
-    resetBtn: document.createElement("button"),
-    exportBtn: document.createElement("button"),
-    exportSceneBtn: document.createElement("button"),
+    resetBtn: createButtonElement(""),
+    exportBtn: createButtonElement(""),
+    exportSceneBtn: createButtonElement(""),
     ...initialArgs
   };
 }

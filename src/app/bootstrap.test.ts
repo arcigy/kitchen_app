@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createViewerDownbar, createViewerTabs, type ViewerDisplayMode, type ViewerProjectionMode } from "./bootstrap";
+import { createViewerDownbar, createViewerTabs, resolveAppArgs, type ViewerDisplayMode, type ViewerProjectionMode } from "./bootstrap";
 import { FakeElement } from "./testUtils/propertiesPanelHarness";
 
 class BootstrapFakeElement extends FakeElement {
@@ -129,5 +129,32 @@ describe("bootstrap viewer shell", () => {
     expect(showHiddenButton.className).toBe("viewer-downbar-button");
     downbarController.sync();
     expect(showHiddenButton.className).toBe("viewer-downbar-button active");
+  });
+
+  it("resolves fallback app controls without overriding provided args", () => {
+    installBootstrapDocument();
+    const viewerEl = new BootstrapFakeElement();
+    const providedCopyButton = new BootstrapFakeElement();
+    providedCopyButton.type = "button";
+    providedCopyButton.textContent = "Provided copy";
+
+    const args = resolveAppArgs({
+      viewerEl: viewerEl as unknown as HTMLElement,
+      ribbonEl: new BootstrapFakeElement() as unknown as HTMLElement,
+      propertiesEl: new BootstrapFakeElement() as unknown as HTMLElement,
+      clientContext: {} as never,
+      clientCatalog: {} as never,
+      modulePackages: [],
+      copyBtn: providedCopyButton as unknown as HTMLButtonElement
+    });
+
+    expect(args.copyBtn).toBe(providedCopyButton);
+    expect((args.measureBtn as unknown as BootstrapFakeElement).type).toBe("button");
+    expect((args.clearMeasuresBtn as unknown as BootstrapFakeElement).type).toBe("button");
+    expect((args.resetBtn as unknown as BootstrapFakeElement).type).toBe("button");
+    expect((args.exportBtn as unknown as BootstrapFakeElement).type).toBe("button");
+    expect((args.exportSceneBtn as unknown as BootstrapFakeElement).type).toBe("button");
+    expect((args.axisLockEl as unknown as BootstrapFakeElement).type).toBe("checkbox");
+    expect((args.axisLockEl as unknown as BootstrapFakeElement).checked).toBe(true);
   });
 });
