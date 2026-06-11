@@ -1,38 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
 import { mountCustomFurnitureActiveToolProps } from "./customFurnitureToolPropsPanel";
-
-type FakeListener = () => void;
-
-class FakeElement {
-  children: FakeElement[] = [];
-  className = "";
-  listeners = new Map<string, FakeListener[]>();
-  textContent = "";
-  type = "";
-  value = "";
-
-  addEventListener(type: string, listener: FakeListener) {
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  appendChild(child: FakeElement) {
-    this.children.push(child);
-    return child;
-  }
-
-  dispatch(type: string) {
-    for (const listener of this.listeners.get(type) ?? []) listener();
-  }
-}
-
-function installFakeDocument() {
-  vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
-  });
-}
+import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
 function makeMaterial(id: string, displayName: string): MaterialDefinition {
   return {
@@ -64,20 +33,6 @@ function makeCatalog(): ClientCatalog {
   } as ClientCatalog;
 }
 
-function makeProps() {
-  const section = new FakeElement();
-  const rows: Array<{ label: string; control: FakeElement }> = [];
-  const props = {
-    setTitle: vi.fn(),
-    section: vi.fn(() => section as unknown as HTMLElement),
-    row: vi.fn((_section: HTMLElement, label: string, control: HTMLElement) => {
-      rows.push({ label, control: control as unknown as FakeElement });
-      return new FakeElement() as unknown as HTMLElement;
-    })
-  };
-  return { props, rows, section };
-}
-
 const baseArgs = {
   catalog: makeCatalog(),
   constraintOptions: ["projectBase", "furnitureBase", "furnitureTop", "absolute"] as const,
@@ -99,7 +54,7 @@ describe("custom furniture tool props panel", () => {
 
   it("returns false without mounting when no custom furniture tool is active", () => {
     installFakeDocument();
-    const { props } = makeProps();
+    const { props } = makePropertiesPanelHarness();
 
     expect(
       mountCustomFurnitureActiveToolProps({
@@ -119,7 +74,7 @@ describe("custom furniture tool props panel", () => {
 
   it("mounts vertical board draft rows and keeps change callbacks isolated from commit history", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const onVerticalBoardDraftChange = vi.fn();
 
     expect(
@@ -158,7 +113,7 @@ describe("custom furniture tool props panel", () => {
 
   it("mounts boundary edit summary without vertical draft controls", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
 
     expect(
       mountCustomFurnitureActiveToolProps({

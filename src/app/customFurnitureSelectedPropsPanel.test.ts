@@ -2,38 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { CustomFurnitureBoardParams, CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import { mountCustomFurnitureBoardProps, mountCustomFurnitureProps } from "./customFurnitureSelectedPropsPanel";
-
-type FakeListener = () => void;
-
-class FakeElement {
-  children: FakeElement[] = [];
-  className = "";
-  listeners = new Map<string, FakeListener[]>();
-  textContent = "";
-  type = "";
-  value = "";
-
-  addEventListener(type: string, listener: FakeListener) {
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  appendChild(child: FakeElement) {
-    this.children.push(child);
-    return child;
-  }
-
-  dispatch(type: string) {
-    for (const listener of this.listeners.get(type) ?? []) listener();
-  }
-}
-
-function installFakeDocument() {
-  vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
-  });
-}
+import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
 function makeMaterial(id: string, displayName: string): MaterialDefinition {
   return {
@@ -63,20 +32,6 @@ function makeCatalog(): ClientCatalog {
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
   } as ClientCatalog;
-}
-
-function makeProps() {
-  const section = new FakeElement();
-  const rows: Array<{ label: string; control: FakeElement }> = [];
-  const props = {
-    setTitle: vi.fn(),
-    section: vi.fn(() => section as unknown as HTMLElement),
-    row: vi.fn((_section: HTMLElement, label: string, control: HTMLElement) => {
-      rows.push({ label, control: control as unknown as FakeElement });
-      return new FakeElement() as unknown as HTMLElement;
-    })
-  };
-  return { props, rows, section };
 }
 
 function makeBoard(overrides: Partial<CustomFurnitureBoardParams> = {}): CustomFurnitureBoardParams {
@@ -131,7 +86,7 @@ describe("custom furniture selected props panel", () => {
 
   it("mounts selected furniture rows and keeps name/base offset commit behavior", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const furniture = makeFurniture();
     const rebuildFurniture = vi.fn();
     const commitHistory = vi.fn();
@@ -159,7 +114,7 @@ describe("custom furniture selected props panel", () => {
 
   it("mounts selected board rows, updates material/elevation, and keeps horizontal board summary", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const board = makeBoard();
     const furniture = makeFurniture(board);
     const rebuildFurniture = vi.fn();
@@ -206,7 +161,7 @@ describe("custom furniture selected props panel", () => {
 
   it("keeps vertical board constraint changes synced before rebuild and commit", () => {
     installFakeDocument();
-    const { props, rows } = makeProps();
+    const { props, rows } = makePropertiesPanelHarness();
     const board = makeBoard({ workplane: { type: "vertical", aMm: { x: 0, z: 0 }, bMm: { x: 1000, z: 0 }, mirrored: false } });
     const furniture = makeFurniture(board);
     const syncVerticalBoardProfileToConstraints = vi.fn();

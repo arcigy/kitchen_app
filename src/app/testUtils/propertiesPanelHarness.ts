@@ -1,5 +1,4 @@
 import { vi } from "vitest";
-import type { PropertiesPanelApi } from "../toolPropsPanels";
 
 type FakeListener = (event: Record<string, unknown>) => void;
 
@@ -50,10 +49,13 @@ export function installFakeDocument() {
 export function makePropertiesPanelHarness() {
   const rows: Array<{ label: string; control: FakeElement }> = [];
   const section = new FakeElement() as FakeElement & HTMLElement;
-  const props: PropertiesPanelApi = {
+  const props = {
     setTitle: vi.fn(),
     section: () => section,
-    row: (_section, label, control) => rows.push({ label, control: control as unknown as FakeElement })
+    row: (_section: HTMLElement, label: string, control: HTMLElement) => {
+      rows.push({ label, control: control as unknown as FakeElement });
+      return new FakeElement() as FakeElement & HTMLElement;
+    }
   };
   return { props, rows, section };
 }

@@ -9,37 +9,7 @@ import {
   selectInput,
   textInput
 } from "./customFurnitureUiControls";
-
-type FakeListener = () => void;
-
-class FakeElement {
-  children: FakeElement[] = [];
-  listeners = new Map<string, FakeListener[]>();
-  textContent = "";
-  type = "";
-  value = "";
-
-  addEventListener(type: string, listener: FakeListener) {
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  appendChild(child: FakeElement) {
-    this.children.push(child);
-    return child;
-  }
-
-  dispatch(type: string) {
-    for (const listener of this.listeners.get(type) ?? []) listener();
-  }
-}
-
-function installFakeDocument() {
-  vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
-  });
-}
+import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 function makeMaterial(args: {
   id: string;
