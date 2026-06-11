@@ -22,6 +22,13 @@ export function finishOpeningPointerDragState(state: OpeningPointerDragFinishSta
   return true;
 }
 
+export function finishModulePointerDragState(state: ModulePointerDragFinishState): boolean {
+  if (!state.active) return false;
+  state.active = false;
+  state.id = null;
+  return true;
+}
+
 export function finishPointerDragState(params: FinishPointerDragStateParams): boolean {
   if (finishOpeningPointerDragState(params.windowDragState)) {
     params.releasePointerCapture(params.pointerId);
@@ -33,9 +40,7 @@ export function finishPointerDragState(params: FinishPointerDragStateParams): bo
     return true;
   }
 
-  if (!params.moduleDragState.active) return false;
-  params.moduleDragState.active = false;
-  params.moduleDragState.id = null;
+  if (!finishModulePointerDragState(params.moduleDragState)) return false;
   params.releasePointerCapture(params.pointerId);
   return true;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  finishModulePointerDragState,
   finishOpeningPointerDragState,
   finishPointerDragState,
   type ModulePointerDragFinishState,
@@ -33,6 +34,17 @@ describe("pointer drag finish", () => {
 
     expect(finishOpeningPointerDragState(inactiveState)).toBe(false);
     expect(inactiveState).toEqual({ active: false, pointerId: 4, wall: "wall-b" });
+  });
+
+  it("finishes active module drag state and leaves inactive module drag unchanged", () => {
+    const activeState = moduleState({ active: true, id: "module-a" });
+    const inactiveState = moduleState({ active: false, id: "module-b" });
+
+    expect(finishModulePointerDragState(activeState)).toBe(true);
+    expect(activeState).toEqual({ active: false, id: null });
+
+    expect(finishModulePointerDragState(inactiveState)).toBe(false);
+    expect(inactiveState).toEqual({ active: false, id: "module-b" });
   });
 
   it("finishes window drag before door and module drag", () => {
