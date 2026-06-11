@@ -5,6 +5,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { ProjectMetadata } from "../core/project/project-types";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
+import { createButtonElement, createHtmlButtonElement } from "./propsPanelElements";
 
 export type AppArgs = {
   viewerEl: HTMLElement;
@@ -55,15 +56,11 @@ export function createViewerTabs(viewerEl: HTMLElement) {
   const viewerTabbar = document.createElement("div");
   viewerTabbar.className = "viewer-tabbar";
 
-  const floorplanTab = document.createElement("button");
-  floorplanTab.type = "button";
+  const floorplanTab = createButtonElement("Floorplan");
   floorplanTab.className = "viewer-tab";
-  floorplanTab.textContent = "Floorplan";
 
-  const view3dTab = document.createElement("button");
-  view3dTab.type = "button";
+  const view3dTab = createButtonElement("3D");
   view3dTab.className = "viewer-tab";
-  view3dTab.textContent = "3D";
 
   viewerTabbar.append(floorplanTab, view3dTab);
   viewerEl.appendChild(viewerTabbar);
@@ -81,8 +78,7 @@ export function createViewerTabs(viewerEl: HTMLElement) {
     for (const tab of tabs) {
       let button = dynamicTabs.get(tab.key) ?? null;
       if (!button) {
-        button = document.createElement("button");
-        button.type = "button";
+        button = createButtonElement("");
         button.className = "viewer-tab";
         dynamicTabs.set(tab.key, button);
       }
@@ -128,13 +124,11 @@ export function createViewerDownbar(
   }
 ) {
   const viewerControlIcon = (title: string, svg: string, extraClass = "") => {
-    const control = document.createElement("button");
-    control.type = "button";
-    control.className = ["viewer-toolbar-button", extraClass].filter(Boolean).join(" ");
-    control.title = title;
-    control.setAttribute("aria-label", title);
-    control.innerHTML = svg;
-    return control;
+    return createHtmlButtonElement(svg, {
+      ariaLabel: title,
+      className: ["viewer-toolbar-button", extraClass].filter(Boolean).join(" "),
+      title
+    });
   };
 
   const downbar = document.createElement("div");
@@ -143,8 +137,7 @@ export function createViewerDownbar(
   const displayWrap = document.createElement("div");
   displayWrap.className = "viewer-display";
 
-  const button = document.createElement("button");
-  button.type = "button";
+  const button = createButtonElement("");
   button.className = "viewer-display-button";
   button.setAttribute("aria-haspopup", "menu");
   button.setAttribute("aria-expanded", "false");
@@ -188,11 +181,9 @@ export function createViewerDownbar(
   };
 
   for (const mode of ["wireframe", "realistic", "solid"] as ViewerDisplayMode[]) {
-    const item = document.createElement("button");
-    item.type = "button";
+    const item = createButtonElement(t(viewerDisplayLabels[mode]));
     item.dataset.mode = mode;
     item.setAttribute("role", "menuitem");
-    item.textContent = t(viewerDisplayLabels[mode]);
     item.addEventListener("click", () => {
       args.setMode(mode);
       sync();
@@ -257,10 +248,8 @@ export function createViewerDownbar(
   }
   downbar.appendChild(toolbarControls);
 
-  const scale = document.createElement("button");
-  scale.type = "button";
+  const scale = createButtonElement("1:100");
   scale.className = "viewer-scale-button";
-  scale.textContent = "1:100";
   scale.title = "Scale";
   scale.setAttribute("aria-label", "Scale 1:100");
   const scaleCaret = document.createElement("span");
@@ -278,10 +267,8 @@ export function createViewerDownbar(
 
   let showHiddenBtn: HTMLButtonElement | null = null;
   if (args.hidden) {
-    showHiddenBtn = document.createElement("button");
-    showHiddenBtn.type = "button";
+    showHiddenBtn = createButtonElement(t("Show Hidden"));
     showHiddenBtn.className = "viewer-downbar-button";
-    showHiddenBtn.textContent = t("Show Hidden");
     showHiddenBtn.title = t("Show Hidden");
     showHiddenBtn.addEventListener("click", () => {
       args.hidden?.toggleShowHidden();

@@ -21,6 +21,7 @@ export class FakeElement {
         .filter((token) => token && !remove.has(token))
         .join(" ");
     },
+    contains: (token: string) => this.className.split(/\s+/).filter(Boolean).includes(token),
     toggle: (token: string, force?: boolean) => {
       const classes = new Set(this.className.split(/\s+/).filter(Boolean));
       const shouldAdd = force ?? !classes.has(token);
