@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   createTransformController,
+  isTransformModuleMoveValid,
   resolveMovedOpeningCenterMm,
   resolveMovedSectionParams,
   resolveTransformSelectionIds,
@@ -251,6 +252,58 @@ describe("transform move tool", () => {
       name: "A",
       mirrored: false
     });
+  });
+
+  it("validates selected and global module move constraints", () => {
+    const selected = moduleInstance("m1", new THREE.Vector3());
+    const other = moduleInstance("m2", new THREE.Vector3());
+
+    expect(
+      isTransformModuleMoveValid({
+        instances: [selected, other],
+        selectedInstanceIds: ["m1"],
+        ignoreIds: new Set(["m1"]),
+        findInstance: (id) => (id === "m1" ? selected : null),
+        instanceFitsRoom: () => true,
+        anyOverlapIgnoring: () => false,
+        anyOverlap: () => false,
+        moduleOverlapsWalls: () => false,
+        moduleOverlapsKitchenWorktops: () => false
+      })
+    ).toBe(true);
+
+    expect(
+      isTransformModuleMoveValid({
+        instances: [selected, other],
+        selectedInstanceIds: ["m1"],
+        ignoreIds: new Set(["m1"]),
+        findInstance: (id) => (id === "m1" ? selected : null),
+        instanceFitsRoom: () => true,
+        anyOverlapIgnoring: () => true,
+        anyOverlap: () => false,
+        moduleOverlapsWalls: () => false,
+        moduleOverlapsKitchenWorktops: () => false
+      })
+    ).toBe(false);
+  });
+
+  it("keeps current global module validation after selected modules pass", () => {
+    const selected = moduleInstance("m1", new THREE.Vector3());
+    const other = moduleInstance("m2", new THREE.Vector3());
+
+    expect(
+      isTransformModuleMoveValid({
+        instances: [selected, other],
+        selectedInstanceIds: ["m1"],
+        ignoreIds: new Set(["m1"]),
+        findInstance: (id) => (id === "m1" ? selected : null),
+        instanceFitsRoom: () => true,
+        anyOverlapIgnoring: () => false,
+        anyOverlap: (instance) => instance.id === "m2",
+        moduleOverlapsWalls: () => false,
+        moduleOverlapsKitchenWorktops: () => false
+      })
+    ).toBe(false);
   });
 
   it("enters Revit-style selection step when Move starts with no selection", () => {

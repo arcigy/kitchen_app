@@ -78,6 +78,39 @@ export function resolveMovedSectionParams(
   };
 }
 
+export function isTransformModuleMoveValid(args: {
+  instances: LayoutInstance[];
+  selectedInstanceIds: string[];
+  ignoreIds: Set<string>;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  instanceFitsRoom: (instance: LayoutInstance) => boolean;
+  anyOverlapIgnoring: (instance: LayoutInstance, ignoreIds: Set<string>) => boolean;
+  anyOverlap: (instance: LayoutInstance, selectedId: string | null) => boolean;
+  moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
+}) {
+  for (const id of args.selectedInstanceIds) {
+    const inst = args.findInstance(id);
+    if (!inst) continue;
+    const inRoom = args.instanceFitsRoom(inst);
+    const overlaps = args.anyOverlapIgnoring(inst, args.ignoreIds);
+    if (!inRoom || overlaps || args.moduleOverlapsWalls(inst) || args.moduleOverlapsKitchenWorktops(inst)) return false;
+  }
+
+  for (const inst of args.instances) {
+    if (
+      !args.instanceFitsRoom(inst) ||
+      args.anyOverlap(inst, null) ||
+      args.moduleOverlapsWalls(inst) ||
+      args.moduleOverlapsKitchenWorktops(inst)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -404,32 +437,18 @@ export function createTransformController(ctx: TransformControllerContext) {
     };
 
     // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
-    let ok = true;
     moveSelectedModulesByDelta(delta);
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      if (!inst) continue;
-      const inRoom = ctx.instanceFitsRoom(inst);
-      const overlaps = ctx.anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || ctx.moduleOverlapsWalls(inst) || ctx.moduleOverlapsKitchenWorktops(inst)) {
-        ok = false;
-        break;
-      }
-    }
-
-    if (ok) {
-      for (const inst of ctx.instances) {
-        if (
-          !ctx.instanceFitsRoom(inst) ||
-          ctx.anyOverlap(inst, null) ||
-          ctx.moduleOverlapsWalls(inst) ||
-          ctx.moduleOverlapsKitchenWorktops(inst)
-        ) {
-          ok = false;
-          break;
-        }
-      }
-    }
+    const ok = isTransformModuleMoveValid({
+      instances: ctx.instances,
+      selectedInstanceIds: ctx.transformState.selectedInstanceIds,
+      ignoreIds: ignore,
+      findInstance: ctx.findInstance,
+      instanceFitsRoom: ctx.instanceFitsRoom,
+      anyOverlapIgnoring: ctx.anyOverlapIgnoring,
+      anyOverlap: ctx.anyOverlap,
+      moduleOverlapsWalls: ctx.moduleOverlapsWalls,
+      moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops
+    });
 
     if (ok) {
       for (const id of ctx.transformState.selectedInstanceIds) {
