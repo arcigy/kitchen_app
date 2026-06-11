@@ -1,4 +1,5 @@
 import type { GrainAlong } from "../materials/uvGrain";
+import { createButtonElement, createCheckboxElement, createSelectElement } from "../app/propsPanelElements";
 export type { GrainAlong };
 
 export type BoardMaterialPresetId = "DTD1" | "DTD2" | "DTD3" | "MDF" | "DVD" | "DTD16";
@@ -44,25 +45,27 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
 
   const selected = document.createElement("div");
   selected.className = "selected";
-  selected.innerHTML = `
-    <div class="name muted">Click a part...</div>
-    <div class="dims muted"></div>
-    <button type="button" disabled>Hide selected</button>
-  `;
+  const selectedNameEl = document.createElement("div");
+  selectedNameEl.className = "name muted";
+  selectedNameEl.textContent = "Click a part...";
+  const selectedDimsEl = document.createElement("div");
+  selectedDimsEl.className = "dims muted";
+  const selectedBtn = createButtonElement("Hide selected");
+  selectedBtn.disabled = true;
+  selected.append(selectedNameEl, selectedDimsEl, selectedBtn);
   container.appendChild(selected);
 
-  const selectedNameEl = selected.querySelector(".name") as HTMLDivElement;
-  const selectedDimsEl = selected.querySelector(".dims") as HTMLDivElement;
-  const selectedBtn = selected.querySelector("button") as HTMLButtonElement;
   const selectedMaterialWrap = document.createElement("div");
   selectedMaterialWrap.className = "field";
   selectedMaterialWrap.style.display = "none";
   const selectedMaterialLabel = document.createElement("label");
   selectedMaterialLabel.textContent = "Material override";
   selectedMaterialLabel.htmlFor = "selectedPartMaterialOverride";
-  const selectedMaterialSelect = document.createElement("select");
+  const selectedMaterialSelect = createSelectElement<BoardMaterialPresetId | "">("", [
+    { value: "", label: "(no override)" },
+    ...boardMaterialPresetIds.map((id) => ({ value: id, label: id }))
+  ]);
   selectedMaterialSelect.id = "selectedPartMaterialOverride";
-  selectedMaterialSelect.innerHTML = ['<option value="">(no override)</option>', ...boardMaterialPresetIds.map((id) => `<option value="${id}">${id}</option>`)].join("");
   selectedMaterialWrap.appendChild(selectedMaterialLabel);
   selectedMaterialWrap.appendChild(selectedMaterialSelect);
   selected.appendChild(selectedMaterialWrap);
@@ -73,17 +76,21 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
 
   const overlapsWrap = document.createElement("div");
   overlapsWrap.className = "overlaps";
-  overlapsWrap.innerHTML = `
-    <div class="overlapsHeader">
-      <div>Overlaps</div>
-      <label class="overlapsToggle muted"><input id="showAllowedOverlaps" type="checkbox" /> show allowed</label>
-    </div>
-    <div class="overlapsList muted">No overlaps.</div>
-  `;
+  const overlapsHeader = document.createElement("div");
+  overlapsHeader.className = "overlapsHeader";
+  const overlapsTitle = document.createElement("div");
+  overlapsTitle.textContent = "Overlaps";
+  const overlapsToggle = document.createElement("label");
+  overlapsToggle.className = "overlapsToggle muted";
+  const showAllowedEl = createCheckboxElement(false);
+  showAllowedEl.id = "showAllowedOverlaps";
+  overlapsToggle.append(showAllowedEl, document.createTextNode(" show allowed"));
+  overlapsHeader.append(overlapsTitle, overlapsToggle);
+  const overlapsListEl = document.createElement("div");
+  overlapsListEl.className = "overlapsList muted";
+  overlapsListEl.textContent = "No overlaps.";
+  overlapsWrap.append(overlapsHeader, overlapsListEl);
   container.appendChild(overlapsWrap);
-
-  const overlapsListEl = overlapsWrap.querySelector(".overlapsList") as HTMLDivElement;
-  const showAllowedEl = overlapsWrap.querySelector("#showAllowedOverlaps") as HTMLInputElement;
 
   let rows: PartRow[] = [];
   let selectedName: string | null = null;
@@ -124,8 +131,7 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
       const item = document.createElement("div");
       item.className = "item";
 
-      const check = document.createElement("input");
-      check.type = "checkbox";
+      const check = createCheckboxElement(row.visible);
       check.checked = row.visible;
       check.title = row.visible ? "Visible" : "Hidden";
       check.addEventListener("change", () => {
@@ -135,10 +141,8 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
       const rowWrap = document.createElement("div");
       rowWrap.className = "row";
 
-      const label = document.createElement("button");
-      label.type = "button";
+      const label = createButtonElement(row.name);
       label.className = "label";
-      label.textContent = row.name;
       label.addEventListener("click", () => args.onSelect(row.name));
 
       const dims = document.createElement("div");
@@ -181,9 +185,7 @@ export function createPartPanel(container: HTMLElement, args: CreatePartPanelArg
       const suffix = o.status === "allowed" && o.reason ? ` - ${o.reason}` : "";
       text.textContent = `${prefix}${o.a} <-> ${o.b} (${ox}x${oy}x${oz} mm)${suffix}`;
 
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = "Highlight";
+      const btn = createButtonElement("Highlight");
       btn.addEventListener("click", () => args.onHighlightPair(o.a, o.b));
 
       item.appendChild(text);

@@ -34,7 +34,6 @@ export class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   id = "";
-  innerHTML = "";
   inputMode = "";
   isConnected = true;
   listeners = new Map<string, FakeListener[]>();
@@ -52,6 +51,16 @@ export class FakeElement {
   autocomplete = "";
   clickCount = 0;
   files: Array<{ name: string; size: number }> | null = null;
+  private innerHtmlValue = "";
+
+  get innerHTML() {
+    return this.innerHtmlValue;
+  }
+
+  set innerHTML(value: string) {
+    this.innerHtmlValue = value;
+    if (value === "") this.children = [];
+  }
 
   addEventListener(type: string, listener: FakeListener) {
     const listeners = this.listeners.get(type) ?? [];
