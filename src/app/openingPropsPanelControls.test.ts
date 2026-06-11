@@ -5,55 +5,7 @@ import {
   appendOpeningNumberRows,
   appendOpeningSwingRows
 } from "./openingPropsPanelControls";
-import type { PropertiesPanelApi } from "./toolPropsPanels";
-
-type FakeListener = (event: Record<string, unknown>) => void;
-
-class FakeElement {
-  attributes = new Map<string, string>();
-  children: FakeElement[] = [];
-  className = "";
-  innerHTML = "";
-  listeners = new Map<string, FakeListener[]>();
-  step = "";
-  title = "";
-  type = "";
-  value = "";
-
-  addEventListener(type: string, listener: FakeListener) {
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  append(...children: FakeElement[]) {
-    this.children.push(...children);
-  }
-
-  dispatch(type: string, event: Record<string, unknown> = {}) {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
-  }
-
-  setAttribute(name: string, value: string) {
-    this.attributes.set(name, value);
-  }
-}
-
-function installFakeDocument() {
-  vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
-  });
-}
-
-function makeProps() {
-  const rows: Array<{ label: string; control: FakeElement }> = [];
-  const props: PropertiesPanelApi = {
-    setTitle: vi.fn(),
-    section: () => new FakeElement() as unknown as HTMLElement,
-    row: (_section, label, control) => rows.push({ label, control: control as unknown as FakeElement })
-  };
-  return { props, rows, section: new FakeElement() as unknown as HTMLElement };
-}
+import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
 describe("opening props panel controls", () => {
   afterEach(() => {
@@ -62,7 +14,7 @@ describe("opening props panel controls", () => {
 
   it("applies number rows on input, change, and Enter without changing commit timing", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const params = { widthMm: 900 };
     const apply = vi.fn();
 
@@ -86,7 +38,7 @@ describe("opening props panel controls", () => {
 
   it("toggles opening swing controls through shared button and select behavior", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const params = { swingDirection: "right" as const, swingSide: "outward" as const };
     const apply = vi.fn();
 
@@ -124,7 +76,7 @@ describe("opening props panel controls", () => {
 
   it("keeps opening handle rows centralized and clamps negative numeric values", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const params = { handleType: "lever" as const, handleHeightMm: 900, handleOffsetMm: 50 };
     const apply = vi.fn();
 
@@ -141,7 +93,7 @@ describe("opening props panel controls", () => {
 
   it("applies opening material changes and supports door-style normalization", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const params = { materialId: "invalid" };
     const apply = vi.fn();
 

@@ -1,59 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountFloorPropsPanel } from "./selectedPropsPanels";
-import type { PropertiesPanelApi } from "./toolPropsPanels";
 import type { FloorInstance } from "./localTypes";
 import type { AppState } from "../layout/appState";
-
-type FakeListener = (event: Record<string, unknown>) => void;
-
-class FakeElement {
-  children: FakeElement[] = [];
-  className = "";
-  disabled = false;
-  innerHTML = "";
-  listeners = new Map<string, FakeListener[]>();
-  step = "";
-  style: Record<string, string> = {};
-  textContent = "";
-  type = "";
-  value = "";
-
-  addEventListener(type: string, listener: FakeListener) {
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.push(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  append(...children: FakeElement[]) {
-    this.children.push(...children);
-  }
-
-  appendChild(child: FakeElement) {
-    this.children.push(child);
-    return child;
-  }
-
-  dispatch(type: string, event: Record<string, unknown> = {}) {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
-  }
-}
-
-function installFakeDocument() {
-  vi.stubGlobal("document", {
-    createElement: () => new FakeElement()
-  });
-}
-
-function makeProps() {
-  const rows: Array<{ label: string; control: FakeElement }> = [];
-  const section = new FakeElement();
-  const props: PropertiesPanelApi = {
-    setTitle: vi.fn(),
-    section: () => section as unknown as HTMLElement,
-    row: (_section, label, control) => rows.push({ label, control: control as unknown as FakeElement })
-  };
-  return { props, rows, section };
-}
+import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
 describe("selected props panels", () => {
   afterEach(() => {
@@ -62,7 +11,7 @@ describe("selected props panels", () => {
 
   it("commits selected floor property changes through the current rebuild and history flow", () => {
     installFakeDocument();
-    const { props, rows, section } = makeProps();
+    const { props, rows, section } = makePropertiesPanelHarness();
     const floor = {
       id: "floor-1",
       params: {
@@ -115,7 +64,7 @@ describe("selected props panels", () => {
 
   it("keeps selected floor boundary editing routed through the current edit button", () => {
     installFakeDocument();
-    const { props, section } = makeProps();
+    const { props, section } = makePropertiesPanelHarness();
     const floor = {
       id: "floor-2",
       params: {
