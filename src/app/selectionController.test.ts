@@ -10,6 +10,7 @@ import {
   getSelectionSideEffects,
   replaceSelectionIdSet,
   runClearDrawingToolSelectionCommand,
+  runClearSectionToolSelectionCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
   type SelectionControllerContext
@@ -148,6 +149,21 @@ describe("createSelectionController", () => {
     const state = createSectionToolSelectionState();
 
     clearSectionToolSelection(state);
+
+    expect(state.selectedKind).toBeNull();
+    expect(state.selectedWallId).toBeNull();
+    expect(state.selectedFloorId).toBeNull();
+    expect(state.selectedSectionId).toBeNull();
+    expect(state.selectedKitchenGroupId).toBeNull();
+    expect([...state.selectedWallIds]).toEqual([]);
+    expect([...state.selectedInstanceIds]).toEqual([]);
+    expect(state.setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("runs the named section clear selection command with the same behavior", () => {
+    const state = createSectionToolSelectionState();
+
+    runClearSectionToolSelectionCommand(state);
 
     expect(state.selectedKind).toBeNull();
     expect(state.selectedWallId).toBeNull();

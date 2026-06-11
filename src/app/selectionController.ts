@@ -105,10 +105,14 @@ export function clearDrawingToolSelection(state: DrawingToolSelectionState) {
   runClearDrawingToolSelectionCommand(state);
 }
 
-export function clearSectionToolSelection(state: SectionToolSelectionState) {
+export function runClearSectionToolSelectionCommand(state: SectionToolSelectionState) {
   clearDrawingToolSelection(state);
   state.selectedSectionId = null;
   state.selectedKitchenGroupId = null;
+}
+
+export function clearSectionToolSelection(state: SectionToolSelectionState) {
+  runClearSectionToolSelectionCommand(state);
 }
 
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
