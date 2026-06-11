@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { runToolbarMeasureToggleCommand, runToolbarMoveCommand, runToolbarRotateCommand } from "./editorToolbarCommands";
+import {
+  runToolbarAlignCommand,
+  runToolbarDimensionCommand,
+  runToolbarMeasureToggleCommand,
+  runToolbarMoveCommand,
+  runToolbarRotateCommand,
+  runToolbarSectionCommand,
+  runToolbarSelectCommand,
+  runToolbarTrimCommand,
+  runToolbarWallCommand
+} from "./editorToolbarCommands";
 
 describe("editor toolbar commands", () => {
   it("runs the current sticky move toolbar command", () => {
@@ -42,5 +52,30 @@ describe("editor toolbar commands", () => {
 
     expect(ctx.setToolMeasure).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolSelect).not.toHaveBeenCalled();
+  });
+
+  it("routes simple tool buttons through their current tool setters", () => {
+    const ctx = {
+      setToolAlign: vi.fn(),
+      setToolDimension: vi.fn(),
+      setToolSection: vi.fn(),
+      setToolSelect: vi.fn(),
+      setToolTrim: vi.fn(),
+      setToolWall: vi.fn()
+    };
+
+    runToolbarSelectCommand(ctx);
+    runToolbarWallCommand(ctx);
+    runToolbarAlignCommand(ctx);
+    runToolbarTrimCommand(ctx);
+    runToolbarDimensionCommand(ctx);
+    runToolbarSectionCommand(ctx);
+
+    expect(ctx.setToolSelect).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.setToolWall).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.setToolAlign).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.setToolTrim).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.setToolDimension).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.setToolSection).toHaveBeenCalledExactlyOnceWith();
   });
 });

@@ -5,7 +5,17 @@ import type { createTopbar } from "../ui/createTopbar";
 import type { AppInstallState } from "../pwa/installController";
 import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { t } from "../i18n";
-import { runToolbarMeasureToggleCommand, runToolbarMoveCommand, runToolbarRotateCommand } from "./editorToolbarCommands";
+import {
+  runToolbarAlignCommand,
+  runToolbarDimensionCommand,
+  runToolbarMeasureToggleCommand,
+  runToolbarMoveCommand,
+  runToolbarRotateCommand,
+  runToolbarSectionCommand,
+  runToolbarSelectCommand,
+  runToolbarTrimCommand,
+  runToolbarWallCommand
+} from "./editorToolbarCommands";
 
 type KitchenModeActions = {
   enterNew: () => void;
@@ -177,7 +187,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addArchitectureTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Architecture", { row });
-    addButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => ctx.setToolWall() });
+    addButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => runToolbarWallCommand(ctx) });
     addButton(tools, { title: "Door", label: "Door", iconSvg: ctx.I_DOOR, onClick: ctx.addOrSelectDoor });
     addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: ctx.addOrSelectWindow });
     addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: ctx.addColumn });
@@ -203,16 +213,16 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addModifyTab = (row: HTMLElement) => {
     const select = ctx.tb.addGroup("Selection", { row });
-    addButton(select, { title: "Select", label: "Select", iconSvg: ctx.I_SELECT, onClick: () => ctx.setToolSelect() });
+    addButton(select, { title: "Select", label: "Select", iconSvg: ctx.I_SELECT, onClick: () => runToolbarSelectCommand(ctx) });
 
     const edit = ctx.tb.addGroup("Edit", { row });
     ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
     ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
     moveBtn = addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => runToolbarMoveCommand(ctx) });
     addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => runToolbarRotateCommand(ctx) });
-    addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => ctx.setToolAlign() });
-    addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => ctx.setToolTrim() });
-    addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => ctx.setToolDimension() });
+    addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => runToolbarAlignCommand(ctx) });
+    addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => runToolbarTrimCommand(ctx) });
+    addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => runToolbarDimensionCommand(ctx) });
     addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: ctx.duplicateSelected });
     hideBtn = ctx.tb.toolButton(edit, {
       title: "Hide",
@@ -231,7 +241,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addViewTab = (row: HTMLElement) => {
     const view = ctx.tb.addGroup("View", { row });
-    addButton(view, { title: "Section", label: "Section", iconSvg: ctx.I_SECTION, onClick: () => ctx.setToolSection() });
+    addButton(view, { title: "Section", label: "Section", iconSvg: ctx.I_SECTION, onClick: () => runToolbarSectionCommand(ctx) });
     addButton(view, {
       title: "Measure",
       label: "Measure",
