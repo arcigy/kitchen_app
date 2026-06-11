@@ -5,6 +5,16 @@ import { resolveNormalGuideSegment } from "./measureGeometryHelpers";
 
 export type PointerMeasureViewMode = "2d" | "3d";
 
+export function clearMeasure2DPointerMoveHover(params: {
+  hideHoverCursor: () => void;
+  clearToolHud: () => void;
+  clearPreview: () => void;
+}): void {
+  params.hideHoverCursor();
+  params.clearToolHud();
+  params.clearPreview();
+}
+
 export function updateMeasure2DPointerMoveHover(params: {
   hitPoint: THREE.Vector3 | null;
   rect: DOMRect;
@@ -15,9 +25,11 @@ export function updateMeasure2DPointerMoveHover(params: {
   updateMeasureHoverFromPlanPoint: (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => void;
 }): void {
   if (!params.hitPoint) {
-    params.hideHoverCursor();
-    params.clearToolHud();
-    params.clearPreview();
+    clearMeasure2DPointerMoveHover({
+      hideHoverCursor: params.hideHoverCursor,
+      clearToolHud: params.clearToolHud,
+      clearPreview: params.clearPreview
+    });
     return;
   }
 

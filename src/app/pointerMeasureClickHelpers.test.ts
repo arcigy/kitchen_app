@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanSnapBinding } from "./planSnap";
 import {
+  clearMeasure2DPointerMoveHover,
   clearMeasure3DPointerMoveHover,
   handleLegacySurfaceMeasurePointClick,
   handleMeasurePointClick,
@@ -52,6 +53,22 @@ function makeDeps(overrides: Partial<Parameters<typeof handleMeasurePointClick>[
 }
 
 describe("pointer measure click helpers", () => {
+  it("clears 2d measure hover UI through the reset helper", () => {
+    const hideHoverCursor = vi.fn();
+    const clearToolHud = vi.fn();
+    const clearPreview = vi.fn();
+
+    clearMeasure2DPointerMoveHover({
+      hideHoverCursor,
+      clearToolHud,
+      clearPreview
+    });
+
+    expect(hideHoverCursor).toHaveBeenCalledOnce();
+    expect(clearToolHud).toHaveBeenCalledOnce();
+    expect(clearPreview).toHaveBeenCalledOnce();
+  });
+
   it("clears 2d measure hover UI when pointermove has no ground hit", () => {
     const hideHoverCursor = vi.fn();
     const clearToolHud = vi.fn();
