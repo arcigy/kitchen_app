@@ -17,6 +17,7 @@ import {
   runKeyboardInputCommand,
   runKeyboardMoveSelectionShortcutCommand,
   runKeyboardNudgeSelectionCommand,
+  resolveKeyboardMoveSelectionShortcutDeltaM,
   runLayoutKeyboardCommand,
   runLayoutTransformKeyboardCommand,
   runLayoutSpaceShortcutCommand,
@@ -308,6 +309,20 @@ describe("keyboard nudge helpers", () => {
     expect(canRunKeyboardNudgeSelectionCommand({ ...base, wallEditHud: { drag: {} } })).toBe(false);
     expect(canRunKeyboardNudgeSelectionCommand({ ...base, marquee: { active: true } })).toBe(false);
     expect(canRunKeyboardNudgeSelectionCommand({ ...base, underlayCal: { active: true } })).toBe(false);
+  });
+
+  it("resolves keyboard move shortcut deltas before running the nudge command", () => {
+    const camera = new THREE.OrthographicCamera(-10, 10, 10, -10);
+    camera.zoom = 2;
+    const ctx = {
+      cam: () => camera,
+      viewMode: "2d"
+    } as Parameters<typeof resolveKeyboardMoveSelectionShortcutDeltaM>[0];
+
+    expect(resolveKeyboardMoveSelectionShortcutDeltaM(ctx, "ArrowRight")).toEqual({ dx: 0.25, dz: 0 });
+    expect(resolveKeyboardMoveSelectionShortcutDeltaM(ctx, "ArrowUp")).toEqual({ dx: 0, dz: -0.25 });
+    expect(resolveKeyboardMoveSelectionShortcutDeltaM(ctx, "Enter")).toBeNull();
+    expect(resolveKeyboardMoveSelectionShortcutDeltaM({ ...ctx, viewMode: "3d" }, "ArrowRight")).toBeNull();
   });
 
   it("runs arrow key move selection shortcut through the nudge command", () => {

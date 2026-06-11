@@ -188,6 +188,8 @@ type KeyboardNudgeSelectionCommandContext = Pick<
 type KeyboardMoveSelectionShortcutCommandContext = KeyboardNudgeSelectionCommandContext &
   Pick<KeyboardInputHandlersContext, "cam">;
 
+type KeyboardMoveSelectionShortcutDeltaContext = Pick<KeyboardInputHandlersContext, "cam" | "viewMode">;
+
 type KeyboardNudgeSelectionGuardContext = Pick<
   KeyboardInputHandlersContext,
   | "doorDragState"
@@ -669,12 +671,16 @@ export function canRunKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionG
   return true;
 }
 
+export function resolveKeyboardMoveSelectionShortcutDeltaM(ctx: KeyboardMoveSelectionShortcutDeltaContext, key: string) {
+  if (!key.startsWith("Arrow")) return null;
+  return resolveArrowNudgeDeltaM(key, resolveKeyboardNudgeStepM(ctx.viewMode, ctx.cam()));
+}
+
 export function runKeyboardMoveSelectionShortcutCommand(
   ctx: KeyboardMoveSelectionShortcutCommandContext,
   ev: KeyboardEvent
 ) {
-  if (!ev.key.startsWith("Arrow")) return false;
-  const delta = resolveArrowNudgeDeltaM(ev.key, resolveKeyboardNudgeStepM(ctx.viewMode, ctx.cam()));
+  const delta = resolveKeyboardMoveSelectionShortcutDeltaM(ctx, ev.key);
   if (!delta) return false;
   const moved = runKeyboardNudgeSelectionCommand(ctx, delta.dx, delta.dz);
   if (!moved) return false;
