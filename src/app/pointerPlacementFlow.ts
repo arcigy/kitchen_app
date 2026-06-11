@@ -37,6 +37,21 @@ export function handlePlacementPreviewPointerMove<State, Helpers>(args: {
   return true;
 }
 
+export function handleOpeningPlacementClick(args: {
+  insertAtWallPoint: (wallId: string) => void;
+  missingWallStatus: string;
+  pickWallId: () => string | null;
+  setStatus: (status: string) => void;
+}) {
+  const wallId = args.pickWallId();
+  if (!wallId) {
+    args.setStatus(args.missingWallStatus);
+    return true;
+  }
+  args.insertAtWallPoint(wallId);
+  return true;
+}
+
 export function handleFloorplanPlacementClick(args: {
   cancelPendingMarquee: () => void;
   insertColumnAtPoint: () => void;
@@ -59,23 +74,21 @@ export function handleFloorplanPlacementClick(args: {
   }
 
   if (args.isWindowPlacementActive) {
-    const wallId = args.pickWallId();
-    if (!wallId) {
-      args.setStatus("Window: klikni priamo na stenu.");
-      return true;
-    }
-    args.insertWindowAtWallPoint(wallId);
-    return true;
+    return handleOpeningPlacementClick({
+      insertAtWallPoint: args.insertWindowAtWallPoint,
+      missingWallStatus: "Window: klikni priamo na stenu.",
+      pickWallId: args.pickWallId,
+      setStatus: args.setStatus
+    });
   }
 
   if (args.isDoorPlacementActive) {
-    const wallId = args.pickWallId();
-    if (!wallId) {
-      args.setStatus("Door: klikni priamo na stenu.");
-      return true;
-    }
-    args.insertDoorAtWallPoint(wallId);
-    return true;
+    return handleOpeningPlacementClick({
+      insertAtWallPoint: args.insertDoorAtWallPoint,
+      missingWallStatus: "Door: klikni priamo na stenu.",
+      pickWallId: args.pickWallId,
+      setStatus: args.setStatus
+    });
   }
 
   return false;

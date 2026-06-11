@@ -3,6 +3,7 @@ import { Vector3 } from "three";
 import {
   handleColumnPlacementPreviewPointerMove,
   handleFloorplanPlacementClick,
+  handleOpeningPlacementClick,
   handleOpeningPlacementPreviewPointerMove,
   handlePlacementCommitPointerDown,
   handlePlacementPreviewPointerMove,
@@ -206,6 +207,35 @@ describe("pointerPlacementFlow", () => {
 
     expect(setStatus).toHaveBeenCalledExactlyOnceWith("Door: klikni priamo na stenu.");
     expect(insertDoorAtWallPoint).not.toHaveBeenCalled();
+  });
+
+  it("handles opening placement click through wall pick and missing wall status", () => {
+    const insertAtWallPoint = vi.fn();
+    const setStatus = vi.fn();
+
+    expect(
+      handleOpeningPlacementClick({
+        insertAtWallPoint,
+        missingWallStatus: "Opening: klikni priamo na stenu.",
+        pickWallId: vi.fn(() => "wall-1"),
+        setStatus
+      })
+    ).toBe(true);
+
+    expect(insertAtWallPoint).toHaveBeenCalledExactlyOnceWith("wall-1");
+    expect(setStatus).not.toHaveBeenCalled();
+
+    expect(
+      handleOpeningPlacementClick({
+        insertAtWallPoint,
+        missingWallStatus: "Opening: klikni priamo na stenu.",
+        pickWallId: vi.fn(() => null),
+        setStatus
+      })
+    ).toBe(true);
+
+    expect(insertAtWallPoint).toHaveBeenCalledOnce();
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Opening: klikni priamo na stenu.");
   });
 
   it("keeps current opening placement preview behavior", () => {
