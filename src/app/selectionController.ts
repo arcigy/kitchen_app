@@ -308,13 +308,18 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   function setSelectedUnderlay() {
     ensureSelectableTool();
     if (!ctx.underlayMesh.visible || !ctx.hasUnderlaySource() || ctx.underlayState.pinned) return;
-    ctx.selectedKind = "underlay";
-    clearSelectedEntityIds();
-    clearObjectSelectionVisuals();
-    ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
-    ctx.selectedUnderlayBox.name = "underlaySelectionBox";
-    ctx.scene.add(ctx.selectedUnderlayBox);
-    afterSelectionChanged(getSelectionSideEffects("underlay"));
+    runApplySelectionCommand(
+      { ...applySelectionCommandContext, ensureSelectableTool: () => {} },
+      {
+        kind: "underlay",
+        cleanupVisuals: () => {
+          clearObjectSelectionVisuals();
+          ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
+          ctx.selectedUnderlayBox.name = "underlaySelectionBox";
+          ctx.scene.add(ctx.selectedUnderlayBox);
+        }
+      }
+    );
   }
 
   function setSelectedSection(id: string | null) {

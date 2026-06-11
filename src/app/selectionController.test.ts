@@ -443,6 +443,47 @@ describe("createSelectionController", () => {
     }
   });
 
+  it("selects visible unpinned underlay through the shared apply selection path", () => {
+    const ctx = createContext();
+    ctx.layoutTool = "trim";
+    ctx.underlayMesh.visible = true;
+    ctx.hasUnderlaySource = () => true;
+    const controller = createSelectionController(ctx);
+    seedDirtySelection(ctx);
+
+    controller.setSelectedUnderlay();
+
+    expect(ctx.layoutTool).toBe("select");
+    expect(ctx.selectedKind).toBe("underlay");
+    expect(ctx.selectedInstanceId).toBeNull();
+    expect(ctx.selectedInstanceIds.size).toBe(0);
+    expect(ctx.selectedWallId).toBeNull();
+    expect(ctx.selectedWallIds.size).toBe(0);
+    expect(ctx.selectedUnderlayBox?.name).toBe("underlaySelectionBox");
+    expect(ctx.selectedUnderlayBox).not.toBeNull();
+    expect(ctx.scene.children).toContain(ctx.selectedUnderlayBox);
+    expect(ctx.syncWindowSelectionVisuals).toHaveBeenCalledWith(false);
+    expect(ctx.syncDoorSelectionVisuals).toHaveBeenCalledWith(false);
+    expect(ctx.updateSelectionHighlights).not.toHaveBeenCalled();
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("keeps current underlay guard behavior after forcing a selectable tool", () => {
+    const ctx = createContext();
+    ctx.layoutTool = "trim";
+    ctx.underlayMesh.visible = false;
+    ctx.hasUnderlaySource = () => true;
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedUnderlay();
+
+    expect(ctx.layoutTool).toBe("select");
+    expect(ctx.selectedKind).toBeNull();
+    expect(ctx.selectedUnderlayBox).toBeNull();
+    expect(ctx.syncSelectionState).not.toHaveBeenCalled();
+    expect(ctx.mountProps).not.toHaveBeenCalled();
+  });
+
   it("clears instance and underlay boxes but keeps the wall box when selecting a window", () => {
     const ctx = createContext();
     const controller = createSelectionController(ctx);
