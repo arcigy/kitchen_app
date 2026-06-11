@@ -1,7 +1,12 @@
-export function createMutedText(text: string) {
+export function createTextElement(text: string) {
   const element = document.createElement("div");
-  element.className = "muted";
   element.textContent = text;
+  return element;
+}
+
+export function createMutedText(text: string) {
+  const element = createTextElement(text);
+  element.className = "muted";
   return element;
 }
 

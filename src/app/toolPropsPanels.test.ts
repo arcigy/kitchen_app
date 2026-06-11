@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
-import { mountAlignToolPropsPanel, mountTrimToolPropsPanel } from "./toolPropsPanels";
+import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountTrimToolPropsPanel } from "./toolPropsPanels";
+import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
 function pickedLine(label: string) {
@@ -41,5 +42,43 @@ describe("tool props panels", () => {
     expect(section.children[1]?.style.marginTop).toBe("8px");
     expect(section.children[2]?.textContent).toBe("Target: Target wall");
     expect(section.children[2]?.style.marginTop).toBe("6px");
+  });
+
+  it("keeps worktop tool read-only rows and justification change behavior", () => {
+    installFakeDocument();
+    const { props, rows, section } = makePropertiesPanelHarness();
+    const scheduleKitchenWorktopPreviewUpdate = vi.fn();
+    const kitchenWorktopDraw = { justification: "back" as const };
+
+    mountKitchenWorktopToolPropsPanel({
+      props,
+      S: {
+        kitchenCtx: {
+          worktopDepthMm: 620,
+          worktopThicknessMm: 38,
+          heightMm: 910,
+          worktopMaterialId: "mat-oak"
+        }
+      } as AppState,
+      kitchenWorktopDraw,
+      scheduleKitchenWorktopPreviewUpdate,
+      getMaterialDefinitionById: (id) => (id === "mat-oak" ? { displayName: "Oak laminate" } : null)
+    });
+
+    expect(props.setTitle).toHaveBeenCalledWith("Worktop");
+    expect(rows.map((row) => [row.label, row.control.textContent])).toEqual([
+      ["Justification", ""],
+      ["Depth", "620 mm"],
+      ["Thickness", "38 mm"],
+      ["Top Height", "910 mm"],
+      ["Material", "Oak laminate"]
+    ]);
+    expect(section.children.at(-1)?.className).toBe("muted");
+
+    rows[0]!.control.value = "front";
+    rows[0]!.control.dispatch("change");
+
+    expect(kitchenWorktopDraw.justification).toBe("front");
+    expect(scheduleKitchenWorktopPreviewUpdate).toHaveBeenCalledOnce();
   });
 });

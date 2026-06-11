@@ -9,7 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
-import { appendMutedText, createMutedText } from "./propsPanelElements";
+import { appendMutedText, createMutedText, createTextElement } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -163,20 +163,16 @@ export function mountKitchenWorktopToolPropsPanel(ctx: KitchenWorktopToolPropsCo
     just.value = kitchenWorktopDraw.justification;
     props.row(section, "Justification", just);
 
-    const depth = document.createElement("div");
-    depth.textContent = `${S.kitchenCtx.worktopDepthMm} mm`;
+    const depth = createTextElement(`${S.kitchenCtx.worktopDepthMm} mm`);
     props.row(section, "Depth", depth);
 
-    const thickness = document.createElement("div");
-    thickness.textContent = `${S.kitchenCtx.worktopThicknessMm} mm`;
+    const thickness = createTextElement(`${S.kitchenCtx.worktopThicknessMm} mm`);
     props.row(section, "Thickness", thickness);
 
-    const height = document.createElement("div");
-    height.textContent = `${S.kitchenCtx.heightMm} mm`;
+    const height = createTextElement(`${S.kitchenCtx.heightMm} mm`);
     props.row(section, "Top Height", height);
 
-    const material = document.createElement("div");
-    material.textContent = getMaterialDefinitionById(S.kitchenCtx.worktopMaterialId)?.displayName ?? S.kitchenCtx.worktopMaterialId;
+    const material = createTextElement(getMaterialDefinitionById(S.kitchenCtx.worktopMaterialId)?.displayName ?? S.kitchenCtx.worktopMaterialId);
     props.row(section, "Material", material);
 
     appendMutedText(
