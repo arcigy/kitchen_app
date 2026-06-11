@@ -507,6 +507,8 @@ describe("selected props panels", () => {
     expect(rows[6]!.control.type).toBe("number");
     expect(rows[6]!.control.step).toBe("1");
     expect(rows[6]!.control.value).toBe("900");
+    expect(rows[7]!.control.type).toBe("checkbox");
+    expect(rows[7]!.control.checked).toBe(false);
     expect(ctx.setUnderlayScaleEl).toHaveBeenCalledWith(rows[2]!.control);
     expect(ctx.setUnderlayOffXEl).toHaveBeenCalledWith(rows[4]!.control);
     expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
@@ -542,6 +544,8 @@ describe("selected props panels", () => {
     expect(rows[0]!.control.type).toBe("number");
     expect(rows[0]!.control.step).toBe("1");
     expect(rows[0]!.control.value).toBe("90");
+    expect(rows[1]!.control.type).toBe("checkbox");
+    expect(rows[1]!.control.checked).toBe(false);
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "module", instanceId: "module-1" });
   });
 

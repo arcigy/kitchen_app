@@ -4,6 +4,7 @@ type FakeListener = (event: Record<string, unknown>) => void;
 
 export class FakeElement {
   attributes = new Map<string, string>();
+  checked = false;
   children: FakeElement[] = [];
   className = "";
   disabled = false;

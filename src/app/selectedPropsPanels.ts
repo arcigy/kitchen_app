@@ -27,7 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
-import { createInputElement, createMutedText, createSelectElement } from "./propsPanelElements";
+import { createCheckboxElement, createInputElement, createMutedText, createSelectElement } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -966,9 +966,7 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
     const known = createInputElement("number", String(underlayCal.knownMm), { step: "1" });
     props.row(s, "Calibrate mm", known);
 
-    const pinned = document.createElement("input");
-    pinned.type = "checkbox";
-    pinned.checked = underlayState.pinned;
+    const pinned = createCheckboxElement(underlayState.pinned);
     props.row(s, "Pinned", pinned);
 
     const actions = document.createElement("div");
@@ -1105,9 +1103,7 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
     const rot = createInputElement("number", String(Math.round((inst.root.rotation.y * 180) / Math.PI)), { step: "1" });
     props.row(rowHost, "Rotation (deg)", rot);
 
-    const pinned = document.createElement("input");
-    pinned.type = "checkbox";
-    pinned.checked = pinnedInstanceIds.has(inst.id);
+    const pinned = createCheckboxElement(pinnedInstanceIds.has(inst.id));
     props.row(rowHost, "Pinned", pinned);
 
     const applyRot = () => {

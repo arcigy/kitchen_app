@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -49,6 +49,15 @@ describe("props panel elements", () => {
     expect(input.step).toBe("1");
     expect(input.placeholder).toBe("(mixed)");
     expect(input.value).toBe("120");
+  });
+
+  it("creates reusable checkbox elements with stable checked state", () => {
+    installFakeDocument();
+
+    const input = createCheckboxElement(true) as unknown as FakeElement;
+
+    expect(input.type).toBe("checkbox");
+    expect(input.checked).toBe(true);
   });
 
   it("stringifies numeric select values the same way DOM option values do", () => {

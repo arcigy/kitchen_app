@@ -16,6 +16,13 @@ export function createInputElement(type: InputElementType, value: string, option
   return input;
 }
 
+export function createCheckboxElement(checked: boolean) {
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  return input;
+}
+
 export function createSelectElement<T extends SelectOptionValue>(value: T, options: Array<{ value: T; label: string }>) {
   const select = document.createElement("select");
   for (const option of options) {
