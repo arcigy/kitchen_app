@@ -110,6 +110,12 @@ const createToolModeContext = (): ToolModeControllerContext => ({
   wallTypedHud: { textContent: "", style: { display: "block" } } as unknown as HTMLElement
 });
 
+const createEscapeEvent = () =>
+  ({
+    preventDefault: vi.fn(),
+    target: null
+  }) as unknown as KeyboardEvent;
+
 describe("createToolModeController", () => {
   it("setToolWall clears stale multi-selection state through the drawing selection command", () => {
     const ctx = createToolModeContext();
@@ -146,5 +152,32 @@ describe("createToolModeController", () => {
     expect(ctx.updateAllSectionVisuals).toHaveBeenCalledTimes(1);
     expect(ctx.updateSelectionHighlights).toHaveBeenCalledTimes(1);
     expect(ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("handleLayoutEscape stops the wall tool with the existing status", () => {
+    const ctx = createToolModeContext();
+    ctx.layoutTool = "wall";
+    const controller = createToolModeController(ctx);
+    const ev = createEscapeEvent();
+
+    expect(controller.handleLayoutEscape(ev)).toBe(true);
+
+    expect(ctx.layoutTool).toBe("select");
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledWith("Wall: stopped.");
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("handleLayoutEscape stops idle section tool with the existing status", () => {
+    const ctx = createToolModeContext();
+    ctx.layoutTool = "section";
+    ctx.sectionDraw.a = null;
+    const controller = createToolModeController(ctx);
+    const ev = createEscapeEvent();
+
+    expect(controller.handleLayoutEscape(ev)).toBe(true);
+
+    expect(ctx.layoutTool).toBe("select");
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledWith("Section: stopped.");
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
   });
 });

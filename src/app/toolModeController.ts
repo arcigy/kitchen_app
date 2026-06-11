@@ -92,6 +92,10 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
     return handleGlobalMeasurementClearState(ctx, ev);
   };
 
+  const stopToolFromEscape = (status: string) => {
+    stopEditorToolFromEscape({ setUnderlayStatus: ctx.setUnderlayStatus, stopTool: setToolSelect }, status);
+  };
+
   const handleLayoutEscape = (ev: KeyboardEvent) => {
     return handleEditorLayoutEscape(
       {
@@ -117,8 +121,8 @@ export function createToolModeController(ctx: ToolModeControllerContext) {
             stopMeasureTool: setToolSelect
           }),
         stopSelectTool: setToolSelect,
-        stopSectionTool: () => stopEditorToolFromEscape({ setUnderlayStatus: ctx.setUnderlayStatus, stopTool: setToolSelect }, "Section: stopped."),
-        stopWallTool: () => stopEditorToolFromEscape({ setUnderlayStatus: ctx.setUnderlayStatus, stopTool: setToolSelect }, "Wall: stopped."),
+        stopSectionTool: () => stopToolFromEscape("Section: stopped."),
+        stopWallTool: () => stopToolFromEscape("Wall: stopped."),
         trimHasActiveTarget: () => ctx.trimState.step !== "pickTarget"
       },
       ev
