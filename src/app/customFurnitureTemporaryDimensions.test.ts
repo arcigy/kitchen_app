@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   moveCustomFurnitureTemporaryBoundaryDimension,
+  parseCustomFurnitureTemporaryDimensionEdit,
   resolveCustomFurnitureTemporaryBoundaryDimension
 } from "./customFurnitureTemporaryDimensions";
 
@@ -32,5 +33,34 @@ describe("resolveCustomFurnitureTemporaryBoundaryDimension", () => {
     expect(moved[0]).toEqual({ a: { x: 0, z: -200 }, b: { x: 1000, z: -200 } });
     expect(moved[2]?.a).toEqual({ x: 1000, z: -200 });
     expect(moved[2]?.b).toEqual({ x: 1000, z: 700 });
+  });
+});
+
+describe("parseCustomFurnitureTemporaryDimensionEdit", () => {
+  it("accepts the current boundary dimension edit metadata shapes", () => {
+    expect(parseCustomFurnitureTemporaryDimensionEdit({
+      kind: "parallelSegmentDistance",
+      segmentIndex: 2,
+      referenceSegmentIndex: 4
+    })).toEqual({
+      kind: "parallelSegmentDistance",
+      segmentIndex: 2,
+      referenceSegmentIndex: 4
+    });
+    expect(parseCustomFurnitureTemporaryDimensionEdit({ kind: "filletRadius", filletId: "fillet-1" })).toEqual({
+      kind: "filletRadius",
+      filletId: "fillet-1"
+    });
+    expect(parseCustomFurnitureTemporaryDimensionEdit({ kind: "cutPosition", cutId: "cut-1" })).toEqual({
+      kind: "cutPosition",
+      cutId: "cut-1"
+    });
+  });
+
+  it("ignores unsupported boundary dimension edit metadata", () => {
+    expect(parseCustomFurnitureTemporaryDimensionEdit(null)).toBeNull();
+    expect(parseCustomFurnitureTemporaryDimensionEdit({ kind: "parallelSegmentDistance", segmentIndex: 2 })).toBeNull();
+    expect(parseCustomFurnitureTemporaryDimensionEdit({ kind: "filletRadius", filletId: 1 })).toBeNull();
+    expect(parseCustomFurnitureTemporaryDimensionEdit({ kind: "unknown", id: "x" })).toBeNull();
   });
 });

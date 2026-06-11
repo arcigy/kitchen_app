@@ -47,7 +47,9 @@ import {
 } from "./customFurnitureBoundaryEditing";
 import {
   moveCustomFurnitureTemporaryBoundaryDimension,
-  resolveCustomFurnitureTemporaryBoundaryDimension
+  parseCustomFurnitureTemporaryDimensionEdit,
+  resolveCustomFurnitureTemporaryBoundaryDimension,
+  type CustomFurnitureBoundaryDimensionEdit
 } from "./customFurnitureTemporaryDimensions";
 import {
   makeCustomFurnitureVerticalBoardDraftPreview,
@@ -187,11 +189,6 @@ type CustomFurnitureBoundarySelectRect = {
   currentY: number;
   mode: "contain" | "touch";
 };
-type CustomFurnitureBoundaryDimensionEdit = {
-  kind: "parallelSegmentDistance";
-  segmentIndex: number;
-  referenceSegmentIndex: number;
-} | { kind: "filletRadius"; filletId: string } | { kind: "cutPosition"; cutId: string };
 type CreateCustomFurnitureControllerArgs = {
   S: AppState;
   catalog: ClientCatalog;
@@ -469,20 +466,6 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     mesh.position.copy(pointToWorld(point, 0.07));
     mesh.renderOrder = 125;
     root.add(mesh);
-  };
-
-  const parseBoundaryDimensionEdit = (value: unknown): CustomFurnitureBoundaryDimensionEdit | null => {
-    if (!value || typeof value !== "object") return null;
-    const edit = value as Partial<CustomFurnitureBoundaryDimensionEdit>;
-    return edit.kind === "parallelSegmentDistance" &&
-      typeof edit.segmentIndex === "number" &&
-      typeof edit.referenceSegmentIndex === "number"
-      ? (edit as CustomFurnitureBoundaryDimensionEdit)
-      : edit.kind === "filletRadius" && typeof edit.filletId === "string"
-        ? (edit as CustomFurnitureBoundaryDimensionEdit)
-        : edit.kind === "cutPosition" && typeof edit.cutId === "string"
-          ? (edit as CustomFurnitureBoundaryDimensionEdit)
-          : null;
   };
 
   const createBoundaryDimensionLine = (pointsMm: Array<{ x: number; y: number; z: number }>) => {
@@ -2408,8 +2391,8 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     raycaster.setFromCamera(pointer, args.getCamera());
     const hit = raycaster
       .intersectObjects(root.children, true)
-      .find((item) => parseBoundaryDimensionEdit(item.object.userData.customFurnitureBoundaryDimensionEdit));
-    return parseBoundaryDimensionEdit(hit?.object.userData.customFurnitureBoundaryDimensionEdit);
+      .find((item) => parseCustomFurnitureTemporaryDimensionEdit(item.object.userData.customFurnitureBoundaryDimensionEdit));
+    return parseCustomFurnitureTemporaryDimensionEdit(hit?.object.userData.customFurnitureBoundaryDimensionEdit);
   };
 
   const moveBoundaryVertex = (startSegments: CustomFurnitureBoundarySegment[], startPoint: CustomFurniturePlanPoint, nextPoint: CustomFurniturePlanPoint) => {
