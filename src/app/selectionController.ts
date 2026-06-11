@@ -15,6 +15,10 @@ export type SelectionApplyCommandArgs = {
 
 export type SelectionApplyCommand = (args: SelectionApplyCommandArgs) => void;
 
+export type ClearSelectionCommandContext = {
+  applySelection: SelectionApplyCommand;
+};
+
 export type ApplySelectionCommandContext = {
   afterSelectionChanged: (opts?: SelectionSideEffects) => void;
   clearObjectSelectionVisuals: () => void;
@@ -200,8 +204,8 @@ export function clearSectionToolSelection(state: SectionToolSelectionState) {
   runClearSectionToolSelectionCommand(state);
 }
 
-export function runClearSelectionCommand(applySelection: SelectionApplyCommand) {
-  applySelection({ kind: null });
+export function runClearSelectionCommand(ctx: ClearSelectionCommandContext) {
+  ctx.applySelection({ kind: null });
 }
 
 export function runApplySelectionCommand(ctx: ApplySelectionCommandContext, args: SelectionApplyCommandArgs) {
@@ -542,7 +546,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function clearSelection() {
-    runClearSelectionCommand(applySelection);
+    runClearSelectionCommand({ applySelection });
   }
 
   return {

@@ -192,7 +192,7 @@ describe("createSelectionController", () => {
   it("runs the named global clear selection command through the current apply selection path", () => {
     const applySelection = vi.fn();
 
-    runClearSelectionCommand(applySelection);
+    runClearSelectionCommand({ applySelection });
 
     expect(applySelection).toHaveBeenCalledExactlyOnceWith({ kind: null });
   });
