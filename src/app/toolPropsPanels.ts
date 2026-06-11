@@ -9,6 +9,7 @@ import {
   resolveWallTypeId,
   WALL_TYPE_PRESETS
 } from "./wallTypes";
+import { appendMutedText, createMutedText } from "./propsPanelElements";
 
 export type PropertiesPanelApi = {
   setTitle: (title: string) => void;
@@ -108,10 +109,7 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
         wallDefault.exteriorSign ?? 1
       );
     };
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.";
-    s.appendChild(hint);
+    appendMutedText(s, "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.");
     typeSelect.addEventListener("change", () => {
       const preset = applyWallTypeToParams(wallDefault, typeSelect.value);
       th.value = String(wallDefault.thicknessMm);
@@ -181,11 +179,10 @@ export function mountKitchenWorktopToolPropsPanel(ctx: KitchenWorktopToolPropsCo
     material.textContent = getMaterialDefinitionById(S.kitchenCtx.worktopMaterialId)?.displayName ?? S.kitchenCtx.worktopMaterialId;
     props.row(section, "Material", material);
 
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent =
-      "Click worktop shape points. Continue through more corners for L/U shapes. Esc confirms the finished shape. Space mirrors the worktop around the same back/front line.";
-    section.appendChild(hint);
+    appendMutedText(
+      section,
+      "Click worktop shape points. Continue through more corners for L/U shapes. Esc confirms the finished shape. Space mirrors the worktop around the same back/front line."
+    );
 
     just.addEventListener("change", () => {
       kitchenWorktopDraw.justification =
@@ -199,14 +196,9 @@ export function mountAlignToolPropsPanel(ctx: AlignToolPropsContext) {
   const { props, alignState } = ctx;
     props.setTitle("Align");
     const s = props.section();
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Click the reference line, then click one or more parallel lines to align. Esc = new reference, Esc again = exit.";
-    s.appendChild(hint);
-    const cur = document.createElement("div");
-    cur.className = "muted";
+    appendMutedText(s, "Click the reference line, then click one or more parallel lines to align. Esc = new reference, Esc again = exit.");
+    const cur = createMutedText(alignState.ref ? `Reference: ${alignState.ref.label}` : "Reference: (none)");
     cur.style.marginTop = "8px";
-    cur.textContent = alignState.ref ? `Reference: ${alignState.ref.label}` : "Reference: (none)";
     s.appendChild(cur);
   
 }
@@ -215,21 +207,14 @@ export function mountTrimToolPropsPanel(ctx: TrimToolPropsContext) {
   const { props, trimState } = ctx;
     props.setTitle("Trim / Extend");
     const s = props.section();
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent = "Click the target wall, then click the boundary wall or line. The nearest end trims or extends to the intersection. Esc = back.";
-    s.appendChild(hint);
+    appendMutedText(s, "Click the target wall, then click the boundary wall or line. The nearest end trims or extends to the intersection. Esc = back.");
 
-    const step = document.createElement("div");
-    step.className = "muted";
+    const step = createMutedText(trimState.step === "pickTarget" ? "Step: select target" : "Step: select cut");
     step.style.marginTop = "8px";
-    step.textContent = trimState.step === "pickTarget" ? "Step: select target" : "Step: select cut";
     s.appendChild(step);
 
-    const cur = document.createElement("div");
-    cur.className = "muted";
+    const cur = createMutedText(trimState.targetPick ? `Target: ${trimState.targetPick.label}` : "Target: (none)");
     cur.style.marginTop = "6px";
-    cur.textContent = trimState.targetPick ? `Target: ${trimState.targetPick.label}` : "Target: (none)";
     s.appendChild(cur);
   
 }
@@ -239,11 +224,10 @@ export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
     props.setTitle("Measure");
     const s = props.section();
 
-    const hint = document.createElement("div");
-    hint.className = "muted";
-    hint.textContent =
-      "Works in 2D and 3D. Click the first snap point or edge. For the second point, 2D also enables perpendicular snap to edges. Hold Shift for normal guide mode. Esc exits the tool, Shift+Esc clears saved measurements.";
-    s.appendChild(hint);
+    appendMutedText(
+      s,
+      "Works in 2D and 3D. Click the first snap point or edge. For the second point, 2D also enables perpendicular snap to edges. Hold Shift for normal guide mode. Esc exits the tool, Shift+Esc clears saved measurements."
+    );
 
     const axisWrap = document.createElement("label");
     axisWrap.style.display = "flex";
@@ -260,12 +244,10 @@ export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
     axisWrap.append(axis, document.createTextNode("Axis lock (optional, 2D/3D)"));
     s.appendChild(axisWrap);
 
-    const status = document.createElement("div");
-    status.className = "muted";
+    const status = createMutedText(
+      measureState.firstPoint ? `First point: ${formatMm(measureState.firstPoint)}` : "First point: (none)"
+    );
     status.style.marginTop = "8px";
-    status.textContent = measureState.firstPoint
-      ? `First point: ${formatMm(measureState.firstPoint)}`
-      : "First point: (none)";
     s.appendChild(status);
 
     const clearBtn = document.createElement("button");
