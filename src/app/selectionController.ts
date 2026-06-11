@@ -264,9 +264,10 @@ export function createSelectionController(ctx: SelectionControllerContext) {
       assignIds: () => {
         ctx.selectedKitchenGroupId = groupId;
         if (!groupId) return;
-        for (const inst of ctx.instances) {
-          if (inst.kitchenGroupId === groupId) ctx.selectedInstanceIds.add(inst.id);
-        }
+        replaceSelectionIdSet(
+          ctx.selectedInstanceIds,
+          ctx.instances.filter((inst) => inst.kitchenGroupId === groupId).map((inst) => inst.id)
+        );
       }
     });
   }
@@ -278,7 +279,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     applySelection({
       kind: selectedId ? "module" : null,
       assignIds: () => {
-        if (selectedId) ctx.selectedInstanceIds.add(selectedId);
+        if (selectedId) replaceSelectionIdSet(ctx.selectedInstanceIds, [selectedId]);
       },
       cleanupVisuals: () => {
         setInstanceSelected(selectedId);
@@ -342,7 +343,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
       sideEffectId: wall ? selectedId : null,
       assignIds: () => {
         ctx.selectedWallId = selectedId;
-        if (selectedId) ctx.selectedWallIds.add(selectedId);
+        if (selectedId) replaceSelectionIdSet(ctx.selectedWallIds, [selectedId]);
       }
     });
   }
