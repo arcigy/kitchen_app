@@ -63,6 +63,11 @@ export type SelectFloorCommandContext = {
   setSelectedFloorId: (id: string | null) => void;
 };
 
+export type SelectColumnCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedColumnId: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -260,6 +265,16 @@ export function runSelectFloorCommand(ctx: SelectFloorCommandContext, id: string
   });
 }
 
+export function runSelectColumnCommand(ctx: SelectColumnCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "column" : null,
+    sideEffectKind: "column",
+    assignIds: () => {
+      ctx.setSelectedColumnId(id);
+    }
+  });
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -453,13 +468,12 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedColumn(id: string | null) {
-    applySelection({
-      kind: id ? "column" : null,
-      sideEffectKind: "column",
-      assignIds: () => {
-        ctx.selectedColumnId = id;
+    runSelectColumnCommand({
+      applySelection,
+      setSelectedColumnId: (selectedColumnId) => {
+        ctx.selectedColumnId = selectedColumnId;
       }
-    });
+    }, id);
   }
 
   function clearSelection() {

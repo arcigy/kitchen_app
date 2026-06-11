@@ -13,6 +13,7 @@ import {
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
   runClearSelectionCommand,
+  runSelectColumnCommand,
   runSelectFloorCommand,
   runSelectKitchenGroupCommand,
   runSelectModuleCommand,
@@ -462,6 +463,30 @@ describe("createSelectionController", () => {
       sideEffectKind: "floor"
     });
     expect(selectedFloorId).toBe("floor-1");
+  });
+
+  it("runs the named column selection command with current side effects", () => {
+    let selectedColumnId: string | null = null;
+    const applySelection = vi.fn((args) => {
+      args.assignIds?.();
+    });
+
+    runSelectColumnCommand(
+      {
+        applySelection,
+        setSelectedColumnId: (id) => {
+          selectedColumnId = id;
+        }
+      },
+      "column-1"
+    );
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0]).toMatchObject({
+      kind: "column",
+      sideEffectKind: "column"
+    });
+    expect(selectedColumnId).toBe("column-1");
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {
