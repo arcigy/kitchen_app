@@ -6,6 +6,7 @@ import {
   resolveMovedOpeningCenterMm,
   resolveMovedSectionParams,
   resolveTransformSelectionIds,
+  updateMovedModuleKitchenPlacements,
   type TransformControllerContext
 } from "./transformController";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WindowParams } from "./localTypes";
@@ -304,6 +305,32 @@ describe("transform move tool", () => {
         moduleOverlapsKitchenWorktops: () => false
       })
     ).toBe(false);
+  });
+
+  it("updates moved module kitchen placements from group or default kitchen context", () => {
+    const inGroup = moduleInstance("m1", new THREE.Vector3(), "kg1");
+    const fallbackGroup = moduleInstance("m2", new THREE.Vector3(), "missing-group");
+    const loose = moduleInstance("m3", new THREE.Vector3(), null);
+    const inferKitchenPlacementBinding = vi.fn((instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => ({
+      worktopId: `${instance.id}-${kitchenGroupId}-${backOffsetMm}`,
+      segmentIndex: 0,
+      offsetAlongM: 0
+    }));
+
+    updateMovedModuleKitchenPlacements({
+      selectedInstanceIds: ["m1", "m2", "m3"],
+      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 30 },
+      kitchenGroups: [{ id: "kg1", ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 55 } }],
+      findInstance: (id) => [inGroup, fallbackGroup, loose].find((item) => item.id === id) ?? null,
+      inferKitchenPlacementBinding
+    });
+
+    expect(inferKitchenPlacementBinding).toHaveBeenCalledTimes(2);
+    expect(inferKitchenPlacementBinding).toHaveBeenNthCalledWith(1, inGroup, "kg1", 55);
+    expect(inferKitchenPlacementBinding).toHaveBeenNthCalledWith(2, fallbackGroup, "missing-group", 30);
+    expect(inGroup.kitchenPlacement).toEqual({ worktopId: "m1-kg1-55", segmentIndex: 0, offsetAlongM: 0 });
+    expect(fallbackGroup.kitchenPlacement).toEqual({ worktopId: "m2-missing-group-30", segmentIndex: 0, offsetAlongM: 0 });
+    expect(loose.kitchenPlacement).toBeNull();
   });
 
   it("enters Revit-style selection step when Move starts with no selection", () => {

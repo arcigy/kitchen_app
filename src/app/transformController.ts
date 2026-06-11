@@ -111,6 +111,26 @@ export function isTransformModuleMoveValid(args: {
   return true;
 }
 
+export function updateMovedModuleKitchenPlacements(args: {
+  selectedInstanceIds: string[];
+  kitchenCtx: KitchenContext;
+  kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  inferKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    kitchenGroupId: string,
+    backOffsetMm: number
+  ) => LayoutInstance["kitchenPlacement"];
+}) {
+  for (const id of args.selectedInstanceIds) {
+    const inst = args.findInstance(id);
+    if (!inst?.kitchenGroupId) continue;
+    const group = args.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? args.kitchenCtx.worktopBackOffsetMm;
+    inst.kitchenPlacement = args.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+  }
+}
+
 export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -451,13 +471,13 @@ export function createTransformController(ctx: TransformControllerContext) {
     });
 
     if (ok) {
-      for (const id of ctx.transformState.selectedInstanceIds) {
-        const inst = ctx.findInstance(id);
-        if (!inst?.kitchenGroupId) continue;
-        const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-        const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-        inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-      }
+      updateMovedModuleKitchenPlacements({
+        selectedInstanceIds: ctx.transformState.selectedInstanceIds,
+        kitchenCtx: ctx.S.kitchenCtx,
+        kitchenGroups: ctx.S.kitchenGroups,
+        findInstance: ctx.findInstance,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+      });
       ctx.transformState.lastValidDelta.copy(delta);
       ctx.updateLayoutPanel();
     } else {
