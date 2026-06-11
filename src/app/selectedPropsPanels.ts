@@ -27,7 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
-import { createMutedText, createSelectElement } from "./propsPanelElements";
+import { createInputElement, createMutedText, createSelectElement } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -441,21 +441,13 @@ export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstanc
     props.setTitle(`Podlaha (${floor.id})`);
     const s = props.section();
 
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = floor.params.name;
+    const name = createInputElement("text", floor.params.name);
     props.row(s, "Názov", name);
 
-    const height = document.createElement("input");
-    height.type = "number";
-    height.step = "1";
-    height.value = String(floor.params.heightMm);
+    const height = createInputElement("number", String(floor.params.heightMm), { step: "1" });
     props.row(s, "Výška úrovne (mm)", height);
 
-    const thickness = document.createElement("input");
-    thickness.type = "number";
-    thickness.step = "1";
-    thickness.value = String(floor.params.thicknessMm);
+    const thickness = createInputElement("number", String(floor.params.thicknessMm), { step: "1" });
     props.row(s, "Hrúbka (mm)", thickness);
 
     const mat = createSelectElement(

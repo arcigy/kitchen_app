@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -29,6 +29,25 @@ describe("props panel elements", () => {
       ["center", "Center"],
       ["back", "Back edge"]
     ]);
+  });
+
+  it("creates reusable text input elements with stable values", () => {
+    installFakeDocument();
+
+    const input = createInputElement("text", "Ground floor") as unknown as FakeElement;
+
+    expect(input.type).toBe("text");
+    expect(input.value).toBe("Ground floor");
+  });
+
+  it("creates reusable number input elements with stable step and values", () => {
+    installFakeDocument();
+
+    const input = createInputElement("number", "120", { step: "1" }) as unknown as FakeElement;
+
+    expect(input.type).toBe("number");
+    expect(input.step).toBe("1");
+    expect(input.value).toBe("120");
   });
 
   it("stringifies numeric select values the same way DOM option values do", () => {

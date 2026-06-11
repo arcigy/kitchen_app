@@ -5,6 +5,15 @@ export function createTextElement(text: string) {
 }
 
 type SelectOptionValue = string | number;
+type InputElementType = "text" | "number";
+
+export function createInputElement(type: InputElementType, value: string, options: { step?: string } = {}) {
+  const input = document.createElement("input");
+  input.type = type;
+  if (options.step != null) input.step = options.step;
+  input.value = value;
+  return input;
+}
 
 export function createSelectElement<T extends SelectOptionValue>(value: T, options: Array<{ value: T; label: string }>) {
   const select = document.createElement("select");
