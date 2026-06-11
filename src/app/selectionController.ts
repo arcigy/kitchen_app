@@ -299,6 +299,19 @@ export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>
   for (const id of ids) target.add(id);
 }
 
+export function resolveSelectedIds(args: {
+  selectedIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedId: string | null;
+  singleKind: SelectedKind;
+}) {
+  return args.selectedIds.size > 0
+    ? Array.from(args.selectedIds)
+    : args.selectedKind === args.singleKind && args.selectedId
+      ? [args.selectedId]
+      : [];
+}
+
 export function clearSelectionIdSet(target: Set<string>) {
   target.clear();
 }

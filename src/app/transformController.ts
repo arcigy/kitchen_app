@@ -3,6 +3,7 @@ import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallIns
 import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
+import { resolveSelectedIds } from "./selectionController";
 
 type MmPoint = { x: number; z: number };
 type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
@@ -26,18 +27,18 @@ export function resolveTransformSelectionIds(args: {
   windowInst?: { id: string } | null;
   doorInst?: { id: string } | null;
 }): TransformSelectionIds {
-  const wallIds =
-    args.selectedWallIds.size > 0
-      ? Array.from(args.selectedWallIds)
-      : args.selectedKind === "wall" && args.selectedWallId
-        ? [args.selectedWallId]
-        : [];
-  const instIds =
-    args.selectedInstanceIds.size > 0
-      ? Array.from(args.selectedInstanceIds)
-      : args.selectedKind === "module" && args.selectedInstanceId
-        ? [args.selectedInstanceId]
-        : [];
+  const wallIds = resolveSelectedIds({
+    selectedIds: args.selectedWallIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedWallId,
+    singleKind: "wall"
+  });
+  const instIds = resolveSelectedIds({
+    selectedIds: args.selectedInstanceIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedInstanceId,
+    singleKind: "module"
+  });
   const sectionIds = args.selectedKind === "section" && args.selectedSectionId ? [args.selectedSectionId] : [];
   const windowIds = args.kind === "move" && args.selectedKind === "window" && args.windowInst ? [args.windowInst.id] : [];
   const doorIds = args.kind === "move" && args.selectedKind === "door" && args.doorInst ? [args.doorInst.id] : [];

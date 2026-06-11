@@ -9,6 +9,7 @@ import {
   createSelectionController,
   getSelectionSideEffects,
   replaceSelectionIdSet,
+  resolveSelectedIds,
   runApplySelectionCommand,
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
@@ -565,6 +566,33 @@ describe("createSelectionController", () => {
     clearSelectionIdSet(ids);
 
     expect([...ids]).toEqual([]);
+  });
+
+  it("resolves selected ids with multi-selection priority before single selection fallback", () => {
+    expect(
+      resolveSelectedIds({
+        selectedIds: new Set(["multi-1", "multi-2"]),
+        selectedKind: "module",
+        selectedId: "single-1",
+        singleKind: "module"
+      })
+    ).toEqual(["multi-1", "multi-2"]);
+    expect(
+      resolveSelectedIds({
+        selectedIds: new Set(),
+        selectedKind: "wall",
+        selectedId: "wall-1",
+        singleKind: "wall"
+      })
+    ).toEqual(["wall-1"]);
+    expect(
+      resolveSelectedIds({
+        selectedIds: new Set(),
+        selectedKind: "section",
+        selectedId: "wall-1",
+        singleKind: "wall"
+      })
+    ).toEqual([]);
   });
 
   it("maps selected kinds to existing selection side effects", () => {

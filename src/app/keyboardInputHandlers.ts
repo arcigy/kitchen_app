@@ -7,6 +7,7 @@ import type { KeyboardTransformState, StartTransformOptions, TransformClearOptio
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
 import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
+import { resolveSelectedIds } from "./selectionController";
 
 type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thicknessMm" | "typeId"> & {
   justification: NonNullable<WallParams["justification"]>;
@@ -408,12 +409,12 @@ export function nudgeSelectedWallsByDeltaMm(args: {
   rebuildWall: (wall: WallInstance) => void;
   rebuildWallPlanMesh: () => void;
 }) {
-  const wallIds =
-    args.selectedWallIds.size > 0
-      ? Array.from(args.selectedWallIds)
-      : args.selectedKind === "wall" && args.selectedWallId
-        ? [args.selectedWallId]
-        : [];
+  const wallIds = resolveSelectedIds({
+    selectedIds: args.selectedWallIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedWallId,
+    singleKind: "wall"
+  });
   if (wallIds.length === 0) return false;
 
   const touched = new Set<string>();
@@ -487,12 +488,12 @@ export function nudgeSelectedModulesByDeltaMm(args: {
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
   updateLayoutPanel: () => void;
 }) {
-  const instanceIds =
-    args.selectedInstanceIds.size > 0
-      ? Array.from(args.selectedInstanceIds)
-      : args.selectedKind === "module" && args.selectedInstanceId
-        ? [args.selectedInstanceId]
-        : [];
+  const instanceIds = resolveSelectedIds({
+    selectedIds: args.selectedInstanceIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedInstanceId,
+    singleKind: "module"
+  });
   if (instanceIds.length === 0) return false;
 
   let moved = false;
