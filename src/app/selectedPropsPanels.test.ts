@@ -221,15 +221,54 @@ describe("selected props panels", () => {
     installFakeDocument();
 
     const columnHarness = makePropertiesPanelHarness();
+    const columnParams = makeColumnParams();
+    const onColumnChange = vi.fn();
+    const mountColumnProps = vi.fn();
     mountColumnPlacementPropsPanel({
       props: columnHarness.props,
-      params: makeColumnParams(),
-      onChange: vi.fn(),
-      mountProps: vi.fn()
+      params: columnParams,
+      onChange: onColumnChange,
+      mountProps: mountColumnProps
     });
     expect(columnHarness.props.setTitle).toHaveBeenCalledWith("Stlp - vlozenie");
     expect(columnHarness.section.children[0]?.className).toBe("muted");
     expect(columnHarness.section.children[0]?.textContent).toBe("Nastav parametre a klikni miesto v podoryse. Esc zrusi vkladanie.");
+    expect(columnHarness.rows.map((row) => row.label)).toEqual([
+      "Nazov",
+      "Prierez",
+      "Vyska (mm)",
+      "Sirka (mm)",
+      "Justification X",
+      "Justification Y",
+      "Material"
+    ]);
+    expect(columnHarness.rows[1]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["square", "Stvorcovy"],
+      ["rectangular", "Obdlznikovy"],
+      ["round", "Kruhovy"]
+    ]);
+    expect(columnHarness.rows[4]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["left", "Left"],
+      ["center", "Center"],
+      ["right", "Right"]
+    ]);
+    expect(columnHarness.rows[5]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["up", "Up"],
+      ["center", "Center"],
+      ["down", "Down"]
+    ]);
+    expect(columnHarness.rows[6]!.control.children.map((child) => [child.value, child.textContent])).toEqual([["default", "Default"]]);
+
+    columnHarness.rows[1]!.control.value = "rectangular";
+    columnHarness.rows[1]!.control.dispatch("change");
+    expect(columnParams.shape).toBe("rectangular");
+    expect(onColumnChange).toHaveBeenLastCalledWith({ shape: "rectangular" });
+    expect(mountColumnProps).toHaveBeenCalledOnce();
+
+    columnHarness.rows[4]!.control.value = "right";
+    columnHarness.rows[4]!.control.dispatch("change");
+    expect(columnParams.justifyX).toBe("right");
+    expect(onColumnChange).toHaveBeenLastCalledWith({ justifyX: "right" });
 
     const windowHarness = makePropertiesPanelHarness();
     mountWindowPlacementPropsPanel({

@@ -27,7 +27,7 @@ import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberR
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
-import { createMutedText } from "./propsPanelElements";
+import { createMutedText, createSelectElement } from "./propsPanelElements";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -601,13 +601,11 @@ function appendColumnParameterRows(
   name.value = params.name;
   props.row(s, "Nazov", name);
 
-  const shape = document.createElement("select");
-  shape.innerHTML = `
-    <option value="square">Stvorcovy</option>
-    <option value="rectangular">Obdlznikovy</option>
-    <option value="round">Kruhovy</option>
-  `;
-  shape.value = params.shape;
+  const shape = createSelectElement(params.shape, [
+    { value: "square", label: "Stvorcovy" },
+    { value: "rectangular", label: "Obdlznikovy" },
+    { value: "round", label: "Kruhovy" }
+  ]);
   props.row(s, "Prierez", shape);
 
   const addNumberRow = (
@@ -674,27 +672,21 @@ function appendColumnParameterRows(
     addNumberRow("Hlbka (mm)", "depthMm");
   }
 
-  const justifyX = document.createElement("select");
-  justifyX.innerHTML = `
-    <option value="left">Left</option>
-    <option value="center">Center</option>
-    <option value="right">Right</option>
-  `;
-  justifyX.value = params.justifyX ?? "center";
+  const justifyX = createSelectElement(params.justifyX ?? "center", [
+    { value: "left", label: "Left" },
+    { value: "center", label: "Center" },
+    { value: "right", label: "Right" }
+  ]);
   props.row(s, "Justification X", justifyX);
 
-  const justifyY = document.createElement("select");
-  justifyY.innerHTML = `
-    <option value="up">Up</option>
-    <option value="center">Center</option>
-    <option value="down">Down</option>
-  `;
-  justifyY.value = params.justifyY ?? "center";
+  const justifyY = createSelectElement(params.justifyY ?? "center", [
+    { value: "up", label: "Up" },
+    { value: "center", label: "Center" },
+    { value: "down", label: "Down" }
+  ]);
   props.row(s, "Justification Y", justifyY);
 
-  const material = document.createElement("select");
-  material.innerHTML = `<option value="default">Default</option>`;
-  material.value = params.materialId || "default";
+  const material = createSelectElement(params.materialId || "default", [{ value: "default", label: "Default" }]);
   props.row(s, "Material", material);
 
   name.addEventListener("change", () => {
