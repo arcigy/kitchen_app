@@ -1,6 +1,6 @@
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { AppState, LayoutInstance } from "../layout/appState";
-import { createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
+import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "quantities" | "materials" | "settings";
 
@@ -68,20 +68,23 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const openSheets = () => {
     const body = document.createElement("div");
     body.className = "workspace-sheets";
-    body.innerHTML = `
-      <div class="workspace-panel-actions">
-        <button type="button" class="workspace-primary" data-import-sheet>Import PDF</button>
-        <span>Vykresy sluzia ako podklad. Neskor sem bude system automaticky vkladat exportovane vykresy.</span>
-      </div>
-      <div class="workspace-sheet-grid" data-sheet-grid></div>
-    `;
-    const grid = body.querySelector<HTMLElement>("[data-sheet-grid]");
+    const actions = document.createElement("div");
+    actions.className = "workspace-panel-actions";
+    const importButton = createButtonElement("Import PDF");
+    importButton.className = "workspace-primary";
+    importButton.dataset.importSheet = "";
+    const helpText = document.createElement("span");
+    helpText.textContent = "Vykresy sluzia ako podklad. Neskor sem bude system automaticky vkladat exportovane vykresy.";
+    actions.append(importButton, helpText);
+    const grid = document.createElement("div");
+    grid.className = "workspace-sheet-grid";
+    grid.dataset.sheetGrid = "";
+    body.append(actions, grid);
     const render = () => {
-      if (!grid) return;
       grid.innerHTML = "";
       for (const sheet of sheets) grid.appendChild(renderSheetCard(sheet));
     };
-    body.querySelector<HTMLButtonElement>("[data-import-sheet]")?.addEventListener("click", () => importPdfSheet(sheets, render));
+    importButton.addEventListener("click", () => importPdfSheet(sheets, render));
     render();
     openOverlay("Sheets", "Vyber vykresu alebo PDF podkladu pre layout.", body);
   };
@@ -89,19 +92,22 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const openSchedules = () => {
     const body = document.createElement("div");
     body.className = "workspace-schedules";
-    body.innerHTML = `
-      <nav class="workspace-schedule-tabs" aria-label="Schedule type">
-        <button type="button" class="active" data-schedule-tab="modules">Module schedule</button>
-        <button type="button" data-schedule-tab="materials">Material boards</button>
-        <button type="button" data-schedule-tab="edgebanding">Opaskovanie</button>
-        <button type="button" data-schedule-tab="components">Components</button>
-        <button type="button" data-schedule-tab="views">Views</button>
-      </nav>
-      <div class="workspace-schedule-content" data-schedule-content></div>
-    `;
-    const content = body.querySelector<HTMLElement>("[data-schedule-content]");
+    const tabs = document.createElement("nav");
+    tabs.className = "workspace-schedule-tabs";
+    tabs.setAttribute("aria-label", "Schedule type");
+    const tabButtons = [
+      createScheduleTabButton("modules", "Module schedule", true),
+      createScheduleTabButton("materials", "Material boards"),
+      createScheduleTabButton("edgebanding", "Opaskovanie"),
+      createScheduleTabButton("components", "Components"),
+      createScheduleTabButton("views", "Views")
+    ];
+    tabs.append(...tabButtons);
+    const content = document.createElement("div");
+    content.className = "workspace-schedule-content";
+    content.dataset.scheduleContent = "";
+    body.append(tabs, content);
     const render = (tab: string) => {
-      if (!content) return;
       content.innerHTML = "";
       if (tab === "materials") content.appendChild(renderMaterialSchedule(args.S, args.catalog));
       else if (tab === "edgebanding") content.appendChild(renderEdgeSchedule(args.S));
@@ -109,9 +115,9 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       else if (tab === "views") content.appendChild(renderViewSchedule(args.S));
       else content.appendChild(renderModuleSchedule(args.S));
     };
-    body.querySelectorAll<HTMLButtonElement>("[data-schedule-tab]").forEach((button) => {
+    tabButtons.forEach((button) => {
       button.addEventListener("click", () => {
-        body.querySelectorAll<HTMLButtonElement>("[data-schedule-tab]").forEach((item) => item.classList.toggle("active", item === button));
+        tabButtons.forEach((item) => item.classList.toggle("active", item === button));
         render(button.dataset.scheduleTab ?? "modules");
       });
     });
@@ -123,15 +129,17 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     const materials = args.catalog.materials.filter((material) => material.isActive).slice(0, 24);
     const body = document.createElement("div");
     body.className = "workspace-materials";
-    body.innerHTML = `
-      <div class="workspace-panel-actions">
-        <button type="button" class="workspace-primary">Add material</button>
-        <span>Zatial layout kniznice materialov. Neskor sem napojime katalog, ceny, dodavatelov a pravidla pouzitia.</span>
-      </div>
-      <div class="workspace-material-grid">
-        ${materials.map((material) => renderMaterialCardHtml(material)).join("")}
-      </div>
-    `;
+    const actions = document.createElement("div");
+    actions.className = "workspace-panel-actions";
+    const addButton = createButtonElement("Add material");
+    addButton.className = "workspace-primary";
+    const helpText = document.createElement("span");
+    helpText.textContent = "Zatial layout kniznice materialov. Neskor sem napojime katalog, ceny, dodavatelov a pravidla pouzitia.";
+    actions.append(addButton, helpText);
+    const grid = document.createElement("div");
+    grid.className = "workspace-material-grid";
+    grid.innerHTML = materials.map((material) => renderMaterialCardHtml(material)).join("");
+    body.append(actions, grid);
     openOverlay("Materials", "Kniznica materialov pre projekt.", body);
   };
 
@@ -201,6 +209,13 @@ function importPdfSheet(sheets: SheetRecord[], onDone: () => void): void {
     input.remove();
   });
   input.click();
+}
+
+function createScheduleTabButton(tab: string, label: string, active = false): HTMLButtonElement {
+  const button = createButtonElement(label);
+  if (active) button.className = "active";
+  button.dataset.scheduleTab = tab;
+  return button;
 }
 
 function renderSheetCard(sheet: SheetRecord): HTMLElement {

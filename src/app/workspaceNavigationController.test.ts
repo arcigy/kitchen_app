@@ -8,12 +8,7 @@ class WorkspaceFakeElement extends FakeElement {
   private selectors = new Map<string, WorkspaceFakeElement>();
 
   querySelector<T = FakeElement>(selector: string): T | null {
-    if (
-      selector === ".workspace-dialog" ||
-      selector === "[data-workspace-close]" ||
-      selector === "[data-sheet-grid]" ||
-      selector === "[data-import-sheet]"
-    ) {
+    if (selector === ".workspace-dialog" || selector === "[data-workspace-close]") {
       return this.getSelector(selector) as T;
     }
     return null;
@@ -27,12 +22,6 @@ class WorkspaceFakeElement extends FakeElement {
     if (selector === "[data-workspace-close]") {
       element.type = "button";
       element.setAttribute("aria-label", "Close");
-    }
-    if (selector === "[data-sheet-grid]") element.dataset.sheetGrid = "";
-    if (selector === "[data-import-sheet]") {
-      element.type = "button";
-      element.textContent = "Import PDF";
-      element.dataset.importSheet = "";
     }
     this.selectors.set(selector, element);
     return element;
@@ -72,7 +61,14 @@ describe("createWorkspaceNavigationController", () => {
 
     const overlay = root.children[0] as WorkspaceFakeElement;
     const dialog = overlay.querySelector<WorkspaceFakeElement>(".workspace-dialog");
-    const grid = (dialog?.children[0] as WorkspaceFakeElement).querySelector<WorkspaceFakeElement>("[data-sheet-grid]");
+    const body = dialog?.children[0] as WorkspaceFakeElement;
+    const actions = body.children[0] as WorkspaceFakeElement;
+    const importButton = actions.children[0] as WorkspaceFakeElement;
+    const grid = body.children[1] as WorkspaceFakeElement;
+    expect(importButton.type).toBe("button");
+    expect(importButton.textContent).toBe("Import PDF");
+    expect(importButton.className).toBe("workspace-primary");
+    expect(importButton.dataset.importSheet).toBe("");
     expect(grid?.children).toHaveLength(4);
     expect(grid?.children.map((child) => child.type)).toEqual(["button", "button", "button", "button"]);
     expect(grid?.children.map((child) => child.className)).toEqual([
@@ -82,12 +78,63 @@ describe("createWorkspaceNavigationController", () => {
       "workspace-sheet-card"
     ]);
 
-    const importButton = (dialog?.children[0] as WorkspaceFakeElement).querySelector<WorkspaceFakeElement>("[data-import-sheet]");
-    importButton?.click();
+    importButton.click();
 
     expect(createdInputs).toHaveLength(1);
     expect(createdInputs[0].type).toBe("file");
     expect(createdInputs[0].accept).toBe("application/pdf,.pdf");
     expect(createdInputs[0].clickCount).toBe(1);
+  });
+
+  it("opens schedules and materials with shared action buttons preserving labels", () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [];
+    const controller = createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: { instances: [], sections: [] } as unknown as AppState,
+      catalog: {
+        materials: [{ id: "oak", displayName: "Oak", isActive: true }]
+      } as unknown as ClientCatalog,
+      setDesignTopbar: vi.fn(),
+      setVisualisationTopbar: vi.fn()
+    });
+
+    controller.openSchedules();
+
+    const schedulesOverlay = root.children[0] as WorkspaceFakeElement;
+    const schedulesDialog = schedulesOverlay.querySelector<WorkspaceFakeElement>(".workspace-dialog");
+    const schedulesBody = schedulesDialog?.children[0] as WorkspaceFakeElement;
+    const tabs = schedulesBody.children[0] as WorkspaceFakeElement;
+    expect(tabs.className).toBe("workspace-schedule-tabs");
+    expect(tabs.children.map((button) => button.textContent)).toEqual([
+      "Module schedule",
+      "Material boards",
+      "Opaskovanie",
+      "Components",
+      "Views"
+    ]);
+    expect(tabs.children.map((button) => button.type)).toEqual(["button", "button", "button", "button", "button"]);
+    expect(tabs.children[0].className).toBe("active");
+
+    tabs.children[1].click();
+
+    expect(tabs.children[0].className).toBe("");
+    expect(tabs.children[1].className).toBe("active");
+
+    controller.openMaterials();
+
+    const materialsOverlay = root.children[1] as WorkspaceFakeElement;
+    const materialsDialog = materialsOverlay.querySelector<WorkspaceFakeElement>(".workspace-dialog");
+    const materialsBody = materialsDialog?.children[0] as WorkspaceFakeElement;
+    const materialActions = materialsBody.children[0] as WorkspaceFakeElement;
+    const addMaterial = materialActions.children[0] as WorkspaceFakeElement;
+    expect(addMaterial.type).toBe("button");
+    expect(addMaterial.textContent).toBe("Add material");
+    expect(addMaterial.className).toBe("workspace-primary");
   });
 });
