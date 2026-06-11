@@ -6,6 +6,7 @@ import {
   updateAlignTrimToolPointerMoveHover,
   updateDimensionToolHover,
   updateDimensionToolPointerMoveHover,
+  resetDimensionPointerMoveHover,
   updateTrimToolHover
 } from "./pointerEditorToolHoverHelpers";
 
@@ -115,6 +116,21 @@ describe("pointer editor tool hover helpers", () => {
     expect(state.preview).toEqual([]);
     expect(clearToolHud).toHaveBeenCalledTimes(1);
     expect(pickAlignLineAt).not.toHaveBeenCalled();
+  });
+
+  it("resets dimension pointermove hover state and clears tool HUD", () => {
+    const pickedA = line("a");
+    const state = { hover: pickedA as AlignPickedLine | null, preview: ["preview"] as unknown[] };
+    const clearToolHud = vi.fn();
+
+    resetDimensionPointerMoveHover({
+      dimensionState: state,
+      clearToolHud
+    });
+
+    expect(state.hover).toBeNull();
+    expect(state.preview).toEqual([]);
+    expect(clearToolHud).toHaveBeenCalledOnce();
   });
 
   it("routes dimension pointermove hover through dimension hover update on hit", () => {

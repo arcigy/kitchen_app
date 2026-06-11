@@ -71,6 +71,15 @@ export function updateDimensionToolHover(params: {
       : [];
 }
 
+export function resetDimensionPointerMoveHover(params: {
+  dimensionState: Pick<PointerDimensionHoverState, "hover" | "preview">;
+  clearToolHud: () => void;
+}): void {
+  params.dimensionState.hover = null;
+  params.dimensionState.preview = [];
+  params.clearToolHud();
+}
+
 export function updateDimensionToolPointerMoveHover(params: {
   hitPoint: THREE.Vector3 | null;
   mouse: MousePoint | null;
@@ -88,9 +97,10 @@ export function updateDimensionToolPointerMoveHover(params: {
   clearToolHud: () => void;
 }): void {
   if (!params.hitPoint) {
-    params.dimensionState.hover = null;
-    params.dimensionState.preview = [];
-    params.clearToolHud();
+    resetDimensionPointerMoveHover({
+      dimensionState: params.dimensionState,
+      clearToolHud: params.clearToolHud
+    });
     return;
   }
 
