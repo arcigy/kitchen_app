@@ -6,6 +6,7 @@ import {
   handleTransformPointerMovePreview,
   handleTransformPreviewPointerMove,
   normalizeAngleRadians,
+  resolveTransformPreviewSnap,
   resolveRotatePreviewAngle,
   routeTransformPreviewSnapFeedback,
   type PointerTransformPreviewState
@@ -124,6 +125,55 @@ describe("pointerTransformPreviewFlow", () => {
     expect(updateMoveSnapFeedback).toHaveBeenCalledExactlyOnceWith(moveSnap, pickedPoint, rect);
     expect(updateHoverCursor).toHaveBeenCalledExactlyOnceWith(pickedPoint, "corner", rect);
     expect(hideHoverCursor).toHaveBeenCalledOnce();
+  });
+
+  it("resolves transform preview snap for move snap, move no-snap, and rotate", () => {
+    const rect = {} as DOMRect;
+    const hitPoint = new Vector3(3, 0, 4);
+    const base = new Vector3(1, 0, 1);
+    const moveSnap = { kind: "corner" as const, point: new Vector3(4, 0, 5) };
+    const rotateSnap = { kind: "edge" as const, point: new Vector3(6, 0, 7) };
+    const makeNoSnapResult = vi.fn((point: Vector3) => ({ kind: "none" as const, point }));
+    const resolveMoveSnap = vi.fn((_point: Vector3, _rect: DOMRect, _perpendicularFrom: Vector3 | null): TestPlanSnap | null => moveSnap);
+    const resolveRotateSnap = vi.fn((_point: Vector3, _rect: DOMRect): TestPlanSnap => rotateSnap);
+
+    expect(
+      resolveTransformPreviewSnap<TestPlanSnap>({
+        hitPoint,
+        makeNoSnapResult,
+        rect,
+        resolveMoveSnap,
+        resolveRotateSnap,
+        transformState: transformPointerState({ base, kind: "move", step: "pickTarget" })
+      })
+    ).toEqual({ moveSnap, snapped: moveSnap });
+    expect(resolveMoveSnap).toHaveBeenLastCalledWith(hitPoint, rect, base);
+    expect(makeNoSnapResult).not.toHaveBeenCalled();
+    expect(resolveRotateSnap).not.toHaveBeenCalled();
+
+    resolveMoveSnap.mockReturnValueOnce(null);
+    expect(
+      resolveTransformPreviewSnap<TestPlanSnap>({
+        hitPoint,
+        makeNoSnapResult,
+        rect,
+        resolveMoveSnap,
+        resolveRotateSnap,
+        transformState: transformPointerState({ kind: "move", step: "pickBase" })
+      })
+    ).toEqual({ moveSnap: null, snapped: { kind: "none", point: hitPoint } });
+    expect(resolveMoveSnap).toHaveBeenLastCalledWith(hitPoint, rect, null);
+
+    expect(
+      resolveTransformPreviewSnap<TestPlanSnap>({
+        hitPoint,
+        makeNoSnapResult,
+        rect,
+        resolveMoveSnap,
+        resolveRotateSnap,
+        transformState: transformPointerState({ kind: "rotate", step: "rotating" })
+      })
+    ).toEqual({ moveSnap: null, snapped: rotateSnap });
   });
 
   it("keeps current move preview behavior without object snap", () => {

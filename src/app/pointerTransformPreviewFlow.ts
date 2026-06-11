@@ -45,6 +45,23 @@ export function routeTransformPreviewSnapFeedback<PlanSnap extends { kind: strin
   }
 }
 
+export function resolveTransformPreviewSnap<PlanSnap extends { kind: string; point: THREE.Vector3 }>(args: {
+  hitPoint: THREE.Vector3;
+  makeNoSnapResult: (point: THREE.Vector3) => PlanSnap;
+  rect: DOMRect;
+  resolveMoveSnap: (hitPoint: THREE.Vector3, rect: DOMRect, perpendicularFrom: THREE.Vector3 | null) => PlanSnap | null;
+  resolveRotateSnap: (hitPoint: THREE.Vector3, rect: DOMRect) => PlanSnap;
+  transformState: PointerTransformPreviewState;
+}): { moveSnap: PlanSnap | null; snapped: PlanSnap } {
+  const moveSnap =
+    args.transformState.kind === "move"
+      ? args.resolveMoveSnap(args.hitPoint, args.rect, args.transformState.step === "pickTarget" ? args.transformState.base : null)
+      : null;
+  const snapped =
+    args.transformState.kind === "move" ? (moveSnap ?? args.makeNoSnapResult(args.hitPoint)) : args.resolveRotateSnap(args.hitPoint, args.rect);
+  return { moveSnap, snapped };
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -108,14 +125,14 @@ export function handleTransformPointerMovePreview<PlanSnap extends { kind: strin
   args.transformState.lastPointerPx.y = args.pointerPoint.y;
   if (!args.hitPoint) return true;
 
-  const moveSnap =
-    args.transformState.kind === "move"
-      ? args.resolveMoveSnap(args.hitPoint, args.rect, args.transformState.step === "pickTarget" ? args.transformState.base : null)
-      : null;
-  const snapped =
-    args.transformState.kind === "move"
-      ? (moveSnap ?? args.makeNoSnapResult(args.hitPoint))
-      : args.resolveRotateSnap(args.hitPoint, args.rect);
+  const { moveSnap, snapped } = resolveTransformPreviewSnap({
+    hitPoint: args.hitPoint,
+    makeNoSnapResult: args.makeNoSnapResult,
+    rect: args.rect,
+    resolveMoveSnap: args.resolveMoveSnap,
+    resolveRotateSnap: args.resolveRotateSnap,
+    transformState: args.transformState
+  });
   if (args.transformState.kind !== "move") args.setSelectPlanSnap(snapped.kind !== "none" ? snapped : null);
 
   const pickedPoint = snapped.kind !== "none" ? snapped.point : args.hitPoint;
