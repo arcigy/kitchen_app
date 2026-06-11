@@ -11,6 +11,7 @@ import {
   replaceSelectionIdSet,
   runClearDrawingToolSelectionCommand,
   runClearSectionToolSelectionCommand,
+  runClearSelectionCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
   type SelectionControllerContext
@@ -173,6 +174,14 @@ describe("createSelectionController", () => {
     expect([...state.selectedWallIds]).toEqual([]);
     expect([...state.selectedInstanceIds]).toEqual([]);
     expect(state.setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("runs the named global clear selection command through the current apply selection path", () => {
+    const applySelection = vi.fn();
+
+    runClearSelectionCommand(applySelection);
+
+    expect(applySelection).toHaveBeenCalledExactlyOnceWith({ kind: null });
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {

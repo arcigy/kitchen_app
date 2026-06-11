@@ -5,6 +5,16 @@ type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" |
 
 type SelectionSideEffects = { highlights?: boolean; wallSnapId?: string | null };
 
+export type SelectionApplyCommandArgs = {
+  kind: SelectedKind;
+  assignIds?: () => void;
+  cleanupVisuals?: () => void;
+  sideEffectKind?: SelectedKind;
+  sideEffectId?: string | null;
+};
+
+export type SelectionApplyCommand = (args: SelectionApplyCommandArgs) => void;
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -115,6 +125,10 @@ export function clearSectionToolSelection(state: SectionToolSelectionState) {
   runClearSectionToolSelectionCommand(state);
 }
 
+export function runClearSelectionCommand(applySelection: SelectionApplyCommand) {
+  applySelection({ kind: null });
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -212,13 +226,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     clearUnderlayBox();
   };
 
-  const applySelection = (args: {
-    kind: SelectedKind;
-    assignIds?: () => void;
-    cleanupVisuals?: () => void;
-    sideEffectKind?: SelectedKind;
-    sideEffectId?: string | null;
-  }) => {
+  const applySelection: SelectionApplyCommand = (args) => {
     ensureSelectableTool();
     ctx.selectedKind = args.kind;
     clearSelectedEntityIds();
@@ -333,7 +341,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function clearSelection() {
-    applySelection({ kind: null });
+    runClearSelectionCommand(applySelection);
   }
 
   return {
