@@ -1,3 +1,5 @@
+import type { AppState } from "../layout/appState";
+import type { HistoryHelpers } from "../layout/historyManager";
 import type { StartTransformOptions, TransformKind } from "./transformStateTypes";
 
 export type ToolbarTransformCommandContext = {
@@ -17,6 +19,18 @@ export type ToolbarToolCommandContext = {
   setToolSelect: () => void;
   setToolTrim: () => void;
   setToolWall: () => void;
+};
+
+export type ToolbarHistoryCommandContext = {
+  S: AppState;
+  helpers: HistoryHelpers;
+  redo: (S: AppState, helpers: HistoryHelpers) => void;
+  undo: (S: AppState, helpers: HistoryHelpers) => void;
+};
+
+export type ToolbarSelectionEditCommandContext = {
+  deleteSelected: () => void;
+  duplicateSelected: () => void;
 };
 
 export function runToolbarMoveCommand(ctx: ToolbarTransformCommandContext) {
@@ -54,4 +68,20 @@ export function runToolbarDimensionCommand(ctx: Pick<ToolbarToolCommandContext, 
 
 export function runToolbarSectionCommand(ctx: Pick<ToolbarToolCommandContext, "setToolSection">) {
   ctx.setToolSection();
+}
+
+export function runToolbarUndoCommand(ctx: ToolbarHistoryCommandContext) {
+  ctx.undo(ctx.S, ctx.helpers);
+}
+
+export function runToolbarRedoCommand(ctx: ToolbarHistoryCommandContext) {
+  ctx.redo(ctx.S, ctx.helpers);
+}
+
+export function runToolbarDuplicateCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "duplicateSelected">) {
+  ctx.duplicateSelected();
+}
+
+export function runToolbarDeleteCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "deleteSelected">) {
+  ctx.deleteSelected();
 }

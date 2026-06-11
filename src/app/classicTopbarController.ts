@@ -7,13 +7,17 @@ import type { StartTransformOptions, TransformKind, TransformState } from "./tra
 import { t } from "../i18n";
 import {
   runToolbarAlignCommand,
+  runToolbarDeleteCommand,
   runToolbarDimensionCommand,
+  runToolbarDuplicateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
+  runToolbarRedoCommand,
   runToolbarRotateCommand,
   runToolbarSectionCommand,
   runToolbarSelectCommand,
   runToolbarTrimCommand,
+  runToolbarUndoCommand,
   runToolbarWallCommand
 } from "./editorToolbarCommands";
 
@@ -216,14 +220,14 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(select, { title: "Select", label: "Select", iconSvg: ctx.I_SELECT, onClick: () => runToolbarSelectCommand(ctx) });
 
     const edit = ctx.tb.addGroup("Edit", { row });
-    ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => ctx.undo(ctx.S, ctx.helpers) });
-    ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => ctx.redo(ctx.S, ctx.helpers) });
+    ctx.S.undoBtnEl = ctx.tb.toolButton(edit, { title: "Undo", label: "Undo", iconSvg: ctx.I_UNDO, onClick: () => runToolbarUndoCommand(ctx) });
+    ctx.S.redoBtnEl = ctx.tb.toolButton(edit, { title: "Redo", label: "Redo", iconSvg: ctx.I_REDO, onClick: () => runToolbarRedoCommand(ctx) });
     moveBtn = addButton(edit, { title: "Move", label: "Move", iconSvg: ctx.I_MOVE, onClick: () => runToolbarMoveCommand(ctx) });
     addButton(edit, { title: "Rotate", label: "Rotate", iconSvg: ctx.I_ROTATE, onClick: () => runToolbarRotateCommand(ctx) });
     addButton(edit, { title: "Align", label: "Align", iconSvg: ctx.I_ALIGN, onClick: () => runToolbarAlignCommand(ctx) });
     addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => runToolbarTrimCommand(ctx) });
     addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => runToolbarDimensionCommand(ctx) });
-    addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: ctx.duplicateSelected });
+    addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: () => runToolbarDuplicateCommand(ctx) });
     hideBtn = ctx.tb.toolButton(edit, {
       title: "Hide",
       label: "Hide",
@@ -236,7 +240,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     });
     isolateBtn = addButton(edit, { title: "Isolate", label: "Isolate", iconSvg: ctx.I_ISOLATE, onClick: ctx.visibility.isolateSelected });
     unhideAllBtn = addButton(edit, { title: "Unhide All", label: "Unhide All", iconSvg: ctx.I_UNHIDE, onClick: ctx.visibility.unhideAll });
-    addButton(edit, { title: "Delete", label: "Delete", iconSvg: ctx.I_TRASH, onClick: ctx.deleteSelected });
+    addButton(edit, { title: "Delete", label: "Delete", iconSvg: ctx.I_TRASH, onClick: () => runToolbarDeleteCommand(ctx) });
   };
 
   const addViewTab = (row: HTMLElement) => {

@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AppState } from "../layout/appState";
+import type { HistoryHelpers } from "../layout/historyManager";
 import {
   runToolbarAlignCommand,
+  runToolbarDeleteCommand,
   runToolbarDimensionCommand,
+  runToolbarDuplicateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
+  runToolbarRedoCommand,
   runToolbarRotateCommand,
   runToolbarSectionCommand,
   runToolbarSelectCommand,
   runToolbarTrimCommand,
+  runToolbarUndoCommand,
   runToolbarWallCommand
 } from "./editorToolbarCommands";
 
@@ -77,5 +83,33 @@ describe("editor toolbar commands", () => {
     expect(ctx.setToolTrim).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolDimension).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolSection).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes history buttons through the current history helpers", () => {
+    const ctx = {
+      S: { marker: "state" } as unknown as AppState,
+      helpers: { marker: "helpers" } as unknown as HistoryHelpers,
+      redo: vi.fn(),
+      undo: vi.fn()
+    };
+
+    runToolbarUndoCommand(ctx);
+    runToolbarRedoCommand(ctx);
+
+    expect(ctx.undo).toHaveBeenCalledExactlyOnceWith(ctx.S, ctx.helpers);
+    expect(ctx.redo).toHaveBeenCalledExactlyOnceWith(ctx.S, ctx.helpers);
+  });
+
+  it("routes selection edit buttons through current selection commands", () => {
+    const ctx = {
+      deleteSelected: vi.fn(),
+      duplicateSelected: vi.fn()
+    };
+
+    runToolbarDuplicateCommand(ctx);
+    runToolbarDeleteCommand(ctx);
+
+    expect(ctx.duplicateSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.deleteSelected).toHaveBeenCalledExactlyOnceWith();
   });
 });
