@@ -1,0 +1,81 @@
+import * as THREE from "three";
+import { describe, expect, it, vi } from "vitest";
+import { createMeasureSelectionActions } from "./measureSelectionActions";
+import { makeDefaultKitchenContext } from "../layout/kitchenContext";
+import type { LayoutInstance } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { MeasureState } from "./measureTools";
+
+function moduleInstance(id: string, kitchenGroupId: string | null = null): LayoutInstance {
+  return {
+    id,
+    params: {} as LayoutInstance["params"],
+    kitchenGroupId,
+    kitchenPlacement: null,
+    root: new THREE.Group(),
+    module: new THREE.Group(),
+    localBox: new THREE.Box3(),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+}
+
+function makeMeasureSelectionActionsContext(overrides: Partial<Parameters<typeof createMeasureSelectionActions>[0]> = {}) {
+  const instance = moduleInstance("m1", "kg1");
+  return {
+    S: {
+      kitchenGroups: [{ id: "kg1", ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 45 } }],
+      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 }
+    } as AppState,
+    measureState: { measures: [] } as unknown as MeasureState,
+    walls: [],
+    floors: [],
+    instances: [instance],
+    kitchenWorktops: [],
+    getAssociativeMeasureContext: vi.fn(),
+    updateMeasurementGeometry: vi.fn(),
+    getSelectedKind: vi.fn(() => null),
+    getSelectedWallId: vi.fn(() => null),
+    getSelectedInstanceId: vi.fn(() => null),
+    getSelectedFloorId: vi.fn(() => null),
+    getSelectedKitchenGroupId: vi.fn(() => null),
+    wallEndpointWhich: vi.fn(),
+    setWallEndpointMm: vi.fn(),
+    rebuildWall: vi.fn(),
+    autoJoinAtMmPoint: vi.fn(),
+    rebuildWallPlanMesh: vi.fn(),
+    wallJoinTolMm: 1,
+    findInstance: vi.fn((id: string) => (id === instance.id ? instance : null)),
+    instanceFitsRoom: vi.fn(() => true),
+    anyOverlap: vi.fn(() => false),
+    moduleOverlapsWalls: vi.fn(() => false),
+    moduleOverlapsKitchenWorktops: vi.fn(() => false),
+    inferKitchenPlacementBinding: vi.fn((inst: LayoutInstance, groupId: string, backOffsetMm: number) => ({
+      worktopId: `${inst.id}-${groupId}-${backOffsetMm}`,
+      segmentIndex: 0,
+      offsetAlongM: 0
+    })),
+    rebuildFloor: vi.fn(),
+    rebuildKitchenWorktop: vi.fn(),
+    applyKitchenPlacementBinding: vi.fn(() => true),
+    findKitchenWorktop: vi.fn(() => null),
+    updateSelectionHighlights: vi.fn(),
+    updateLayoutPanel: vi.fn(),
+    ...overrides
+  } as Parameters<typeof createMeasureSelectionActions>[0];
+}
+
+describe("measure selection actions", () => {
+  it("refreshes moved module kitchen placement after a valid measure translation", () => {
+    const ctx = makeMeasureSelectionActionsContext();
+    const instance = ctx.instances[0];
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(actions.translateModuleByMeasure(instance.id, 100, 50)).toBe(true);
+
+    expect(instance.root.position.x).toBe(0.1);
+    expect(instance.root.position.z).toBe(0.05);
+    expect(ctx.inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, "kg1", 45);
+    expect(instance.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+  });
+});

@@ -8,6 +8,7 @@ import { resolveAssociativeMeasureWorld } from "./measureAssociative";
 import { distance3dMm } from "./measure3d";
 import { planarDistanceMm } from "./sharedUtils";
 import { shiftPolylinePoint, shiftPolylineSegment } from "./alignTool";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 type MeasureSelectionActionsContext = {
@@ -126,11 +127,12 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
       inst.root.position.copy(prevPos);
       return false;
     }
-    if (inst.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-    }
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+    });
     return true;
   };
 
