@@ -6,6 +6,7 @@ import "./styles/projectManager.css";
 import "./styles/auth.css";
 import "./styles/editorShell.css";
 import "./styles/classicEditorChrome.css";
+import "./styles/pdfIntake.css";
 import "./style.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
