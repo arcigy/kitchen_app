@@ -92,13 +92,17 @@ function disposeSelectionBox(scene: THREE.Scene, box: THREE.BoxHelper | null) {
   (box.material as THREE.Material).dispose();
 }
 
-export function clearDrawingToolSelection(state: DrawingToolSelectionState) {
+export function runClearDrawingToolSelectionCommand(state: DrawingToolSelectionState) {
   state.selectedKind = null;
   state.selectedWallId = null;
   state.selectedFloorId = null;
   state.selectedWallIds.clear();
   state.selectedInstanceIds.clear();
   state.setInstanceSelected(null);
+}
+
+export function clearDrawingToolSelection(state: DrawingToolSelectionState) {
+  runClearDrawingToolSelectionCommand(state);
 }
 
 export function clearSectionToolSelection(state: SectionToolSelectionState) {
