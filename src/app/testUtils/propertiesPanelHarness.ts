@@ -49,6 +49,8 @@ export class FakeElement {
   type = "";
   value = "";
   autocomplete = "";
+  clickCount = 0;
+  files: Array<{ name: string; size: number }> | null = null;
 
   addEventListener(type: string, listener: FakeListener) {
     const listeners = this.listeners.get(type) ?? [];
@@ -63,6 +65,11 @@ export class FakeElement {
   appendChild(child: FakeElement) {
     this.children.push(child);
     return child;
+  }
+
+  click() {
+    this.clickCount += 1;
+    this.dispatch("click");
   }
 
   dispatch(type: string, event: Record<string, unknown> = {}) {
@@ -83,6 +90,10 @@ export class FakeElement {
 
   querySelectorAll<T = FakeElement>(_selector: string): T[] {
     return [];
+  }
+
+  querySelector<T = FakeElement>(_selector: string): T | null {
+    return null;
   }
 
   select() {

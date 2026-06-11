@@ -1,5 +1,6 @@
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { AppState, LayoutInstance } from "../layout/appState";
+import { createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "quantities" | "materials" | "settings";
 
@@ -184,9 +185,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
 }
 
 function importPdfSheet(sheets: SheetRecord[], onDone: () => void): void {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/pdf,.pdf";
+  const input = createFileInputElement("application/pdf,.pdf");
   input.addEventListener("change", () => {
     const file = input.files?.[0] ?? null;
     if (!file) return;
@@ -205,8 +204,7 @@ function importPdfSheet(sheets: SheetRecord[], onDone: () => void): void {
 }
 
 function renderSheetCard(sheet: SheetRecord): HTMLElement {
-  const card = document.createElement("button");
-  card.type = "button";
+  const card = createHtmlButtonElement("");
   card.className = "workspace-sheet-card";
   card.innerHTML = `
     <span class="workspace-sheet-preview" style="--sheet-accent:${sheet.accent}">
