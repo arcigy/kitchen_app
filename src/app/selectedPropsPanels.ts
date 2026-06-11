@@ -503,9 +503,7 @@ export function mountSectionPropsPanel(ctx: SectionPropsContext, id: string) {
     props.setTitle(`Section (${section.id})`);
     const s = props.section();
 
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = section.params.name;
+    const name = createInputElement("text", section.params.name);
     props.row(s, "Name", name);
 
     const info = createMutedText("");

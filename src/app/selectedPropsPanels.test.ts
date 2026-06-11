@@ -333,6 +333,8 @@ describe("selected props panels", () => {
 
     expect(sectionHarness.props.setTitle).toHaveBeenCalledWith("Section (section-1)");
     expect(sectionHarness.rows.map((row) => row.label)).toEqual(["Name"]);
+    expect(sectionHarness.rows[0]!.control.type).toBe("text");
+    expect(sectionHarness.rows[0]!.control.value).toBe("Section 1");
     expect(sectionHarness.section.children[0]?.className).toBe("muted");
     expect(sectionHarness.section.children[0]?.style.marginTop).toBe("8px");
     expect(sectionHarness.section.children[0]?.textContent).toContain("1250 mm");
