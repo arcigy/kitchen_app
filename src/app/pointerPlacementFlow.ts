@@ -113,6 +113,15 @@ export function handleOpeningPlacementPreviewPointerMove<PointMm>(args: {
   return true;
 }
 
+export function resolveSelectOpeningPlacementPreviewRoute(args: {
+  isDoorActive: boolean;
+  isWindowActive: boolean;
+}) {
+  if (args.isWindowActive) return "window";
+  if (args.isDoorActive) return "door";
+  return null;
+}
+
 export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
   clearDoorPreview: () => void;
   clearWindowPreview: () => void;
@@ -124,7 +133,12 @@ export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
   updateDoorPreview: (wallId: string | null, pointMm: PointMm) => void;
   updateWindowPreview: (wallId: string | null, pointMm: PointMm) => void;
 }) {
-  if (args.isWindowActive) {
+  const route = resolveSelectOpeningPlacementPreviewRoute({
+    isDoorActive: args.isDoorActive,
+    isWindowActive: args.isWindowActive
+  });
+
+  if (route === "window") {
     return handleOpeningPlacementPreviewPointerMove({
       clearPreview: args.clearWindowPreview,
       hitPoint: args.hitPoint,
@@ -135,7 +149,7 @@ export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
     });
   }
 
-  if (args.isDoorActive) {
+  if (route === "door") {
     return handleOpeningPlacementPreviewPointerMove({
       clearPreview: args.clearDoorPreview,
       hitPoint: args.hitPoint,
