@@ -7,6 +7,7 @@ import {
   mountFloorPropsPanel,
   mountSectionPropsPanel,
   mountSectionToolPropsPanel,
+  mountWallPropsPanel,
   mountWindowPlacementPropsPanel,
   mountWindowPropsPanel
 } from "./selectedPropsPanels";
@@ -73,6 +74,26 @@ function makeDoorParams(overrides: Partial<DoorParams> = {}): DoorParams {
     materialId: "painted-white",
     ...overrides
   };
+}
+
+function makeWall(id: string, thicknessMm: number, heightMm: number): WallInstance {
+  return {
+    id,
+    params: {
+      typeId: null,
+      thicknessMm,
+      heightMm,
+      materialId: "wall",
+      justification: "center",
+      exteriorSign: 1,
+      aMm: { x: 0, z: 0 },
+      bMm: { x: 1000, z: 0 }
+    },
+    heightMm,
+    root: {},
+    mesh: {},
+    outline: {}
+  } as unknown as WallInstance;
 }
 
 describe("selected props panels", () => {
@@ -143,6 +164,49 @@ describe("selected props panels", () => {
     expect(ctx.updateSelectionHighlights).toHaveBeenCalledOnce();
     expect(ctx.commitHistory).toHaveBeenCalledOnce();
     expect(ctx.commitHistory).toHaveBeenCalledWith(ctx.S);
+  });
+
+  it("keeps multi-wall thickness and height inputs routed through the current rebuild and history flow", () => {
+    installFakeDocument();
+    const { props, rows } = makePropertiesPanelHarness();
+    const walls = [makeWall("wall-1", 100, 2500), makeWall("wall-2", 200, 2800)];
+    const ctx = {
+      props,
+      selectedWallIds: new Set(["wall-1", "wall-2"]),
+      walls,
+      wallJoinTolMm: 1,
+      showNoProps: vi.fn(),
+      commitHistory: vi.fn(),
+      S: {} as AppState,
+      mountProps: vi.fn(),
+      rebuildWall: vi.fn(),
+      rebuildWallPlanMesh: vi.fn(),
+      appendLinkedMeasureInputs: vi.fn()
+    };
+
+    mountWallPropsPanel(ctx);
+
+    expect(props.setTitle).toHaveBeenCalledWith("Steny (2)");
+    expect(rows.map((row) => row.label)).toEqual(["Typ steny", "Hrúbka (mm)", "Výška (mm)", "Justification"]);
+    expect(rows[1]!.control.type).toBe("number");
+    expect(rows[1]!.control.step).toBe("1");
+    expect(rows[1]!.control.placeholder).toBe("(rôzne)");
+    expect(rows[1]!.control.value).toBe("");
+    expect(rows[2]!.control.type).toBe("number");
+    expect(rows[2]!.control.step).toBe("1");
+    expect(rows[2]!.control.placeholder).toBe("(rôzne)");
+    expect(rows[2]!.control.value).toBe("");
+
+    rows[1]!.control.value = "150";
+    rows[1]!.control.dispatch("change");
+
+    expect(walls.map((wall) => wall.params.thicknessMm)).toEqual([150, 150]);
+    expect(ctx.rebuildWall).toHaveBeenCalledTimes(2);
+    expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledOnce();
+    expect(ctx.commitHistory).toHaveBeenCalledOnce();
+    expect(ctx.commitHistory).toHaveBeenCalledWith(ctx.S);
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+    expect(ctx.appendLinkedMeasureInputs).not.toHaveBeenCalled();
   });
 
   it("keeps selected floor boundary editing routed through the current edit button", () => {

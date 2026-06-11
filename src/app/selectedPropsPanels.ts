@@ -287,19 +287,17 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     props.row(s, "Typ steny", typeSelect);
 
     const thickness = multiVal(selectedWalls, "thicknessMm");
-    const th = document.createElement("input");
-    th.type = "number";
-    th.step = "1";
-    th.placeholder = thickness.mixed ? "(rôzne)" : "";
-    th.value = thickness.mixed ? "" : String(thickness.value);
+    const th = createInputElement("number", thickness.mixed ? "" : String(thickness.value), {
+      step: "1",
+      placeholder: thickness.mixed ? "(rôzne)" : ""
+    });
     props.row(s, "Hrúbka (mm)", th);
 
     const height = multiVal(selectedWalls, "heightMm");
-    const heightInput = document.createElement("input");
-    heightInput.type = "number";
-    heightInput.step = "1";
-    heightInput.placeholder = height.mixed ? "(rôzne)" : "";
-    heightInput.value = height.mixed ? "" : String(height.value);
+    const heightInput = createInputElement("number", height.mixed ? "" : String(height.value), {
+      step: "1",
+      placeholder: height.mixed ? "(rôzne)" : ""
+    });
     props.row(s, "Výška (mm)", heightInput);
 
     const justification = multiVal(selectedWalls, "justification");

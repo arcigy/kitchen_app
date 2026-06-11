@@ -9,6 +9,7 @@ export class FakeElement {
   disabled = false;
   innerHTML = "";
   listeners = new Map<string, FakeListener[]>();
+  placeholder = "";
   step = "";
   style: Record<string, string> = {};
   textContent = "";
