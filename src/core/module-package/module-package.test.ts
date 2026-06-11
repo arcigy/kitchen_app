@@ -24,6 +24,7 @@ import {
   buildModulePackageGeometryFromPackage,
   buildModulePackageGeometry,
   createDefaultModulePackageParameters,
+  createModulePackageDefaultParams,
   resolveModulePackageComponentAssignments,
   resolveModulePackageMaterialAssignments
 } from "./runtime/module-runtime-adapter";
@@ -581,6 +582,25 @@ describe("runtime and project save integration", () => {
     expect(group.type).toBe("Group");
     expect(resolveModulePackageMaterialAssignments({ modulePackage, catalog }).front).toBe(catalog.kitchenDefaults.frontMaterialId);
     expect(resolveModulePackageComponentAssignments({ modulePackage, catalog }).handle).toBe(catalog.kitchenDefaults.defaultHandleComponentId);
+  });
+
+  it("creates module package default params from package defaults and catalog slot assignments", () => {
+    const modulePackage = makePackage();
+    const catalog = makeCatalog();
+
+    expect(createModulePackageDefaultParams({ modulePackage, catalog })).toMatchObject({
+      width: 800,
+      modulePackageId: modulePackage.module.modulePackageId,
+      moduleType: modulePackage.module.moduleType,
+      packageVersion: modulePackage.module.version,
+      type: modulePackage.module.moduleType,
+      materialAssignments: {
+        front: catalog.kitchenDefaults.frontMaterialId
+      },
+      componentAssignments: {
+        handle: catalog.kitchenDefaults.defaultHandleComponentId
+      }
+    });
   });
 
   it("builds the real corner fixture through package defaults and trusted runtime", () => {

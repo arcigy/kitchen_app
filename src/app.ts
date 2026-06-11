@@ -253,9 +253,7 @@ import { createViewerToolModeController } from "./app/viewerToolModeController";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
 import { organizationUserName } from "./core/client/organization-users";
 import {
-  createDefaultModulePackageParameters,
-  resolveModulePackageComponentAssignments,
-  resolveModulePackageMaterialAssignments
+  createModulePackageDefaultParams
 } from "./core/module-package/runtime/module-runtime-adapter";
 import { createModulePackageControls, findModulePackageForParams } from "./core/module-package/runtime/module-package-controls";
 import type { CustomFurnitureInstance } from "./layout/customFurnitureTypes";
@@ -286,12 +284,8 @@ export function startApp(initialArgs: AppArgs) {
   const firstModulePackage = enabledModulePackages.find((modulePackage) =>
     availableModuleDescriptors.some((descriptor) => descriptor.type === modulePackage.module.moduleType)
   );
-  const createParamsFromModulePackage = (modulePackage: NonNullable<typeof firstModulePackage>) => ({
-    ...createDefaultModulePackageParameters(modulePackage),
-    materialAssignments: resolveModulePackageMaterialAssignments({ modulePackage, catalog: clientCatalog }),
-    componentAssignments: resolveModulePackageComponentAssignments({ modulePackage, catalog: clientCatalog }),
-    type: modulePackage.module.moduleType
-  } as ModuleParams);
+  const createParamsFromModulePackage = (modulePackage: NonNullable<typeof firstModulePackage>) =>
+    createModulePackageDefaultParams({ modulePackage, catalog: clientCatalog }) as ModuleParams;
   let params: ModuleParams = hasImportedModules
     ? createParamsFromModulePackage(firstModulePackage!)
     : ({ type: "__empty__" } as unknown as ModuleParams);

@@ -5,9 +5,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catalog";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import {
-  createDefaultModulePackageParameters,
-  resolveModulePackageComponentAssignments,
-  resolveModulePackageMaterialAssignments
+  createModulePackageDefaultParams
 } from "../core/module-package/runtime/module-runtime-adapter";
 import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
 import { commitHistory } from "./historyManager";
@@ -281,12 +279,7 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
     return;
   }
 
-  const defaults = {
-    ...createDefaultModulePackageParameters(modulePackage),
-    materialAssignments: resolveModulePackageMaterialAssignments({ modulePackage, catalog: helpers.catalog }),
-    componentAssignments: resolveModulePackageComponentAssignments({ modulePackage, catalog: helpers.catalog }),
-    type
-  } as ModuleParams;
+  const defaults = createModulePackageDefaultParams({ modulePackage, catalog: helpers.catalog }) as ModuleParams;
   const nextParams = structuredClone(helpers.getBuildParams(type) ?? defaults) as ModuleParams;
 
   if (S.kitchenEditMode && S.activeKitchenGroupId) {

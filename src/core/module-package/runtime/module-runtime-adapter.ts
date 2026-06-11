@@ -59,6 +59,18 @@ export function createDefaultModulePackageParameters(modulePackage: FurnQuoteMod
   return parameters;
 }
 
+export function createModulePackageDefaultParams(args: {
+  modulePackage: FurnQuoteModulePackage;
+  catalog: ClientCatalog;
+}): Record<string, unknown> {
+  return {
+    ...createDefaultModulePackageParameters(args.modulePackage),
+    materialAssignments: resolveModulePackageMaterialAssignments(args),
+    componentAssignments: resolveModulePackageComponentAssignments(args),
+    type: args.modulePackage.module.moduleType
+  };
+}
+
 export function buildModulePackageGeometryFromPackage(args: {
   modulePackage: FurnQuoteModulePackage;
   parameters?: Record<string, unknown>;
