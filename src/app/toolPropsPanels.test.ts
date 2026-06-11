@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AlignPickedLine } from "./localTypes";
-import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountTrimToolPropsPanel } from "./toolPropsPanels";
+import type { AlignPickedLine, WallParams } from "./localTypes";
+import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
 import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 
@@ -24,6 +24,62 @@ describe("tool props panels", () => {
     expect(section.children[0]?.textContent).toBe("Click the reference line, then click one or more parallel lines to align. Esc = new reference, Esc again = exit.");
     expect(section.children[1]?.textContent).toBe("Reference: Wall A");
     expect(section.children[1]?.style.marginTop).toBe("8px");
+  });
+
+  it("keeps wall tool type and justification select behavior", () => {
+    installFakeDocument();
+    const { props, rows, section } = makePropertiesPanelHarness();
+    const wallDefault = {
+      typeId: "partition_100",
+      thicknessMm: 100,
+      heightMm: 2600,
+      materialId: "default",
+      justification: "center",
+      exteriorSign: 1
+    } satisfies Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "materialId" | "justification" | "exteriorSign">;
+    const setUnderlayStatus = vi.fn();
+
+    mountWallToolPropsPanel({
+      props,
+      wallDefault,
+      wallDraw: { preview: null, a: null, hoverB: null },
+      updateWallMeshWithJustification: vi.fn(),
+      setUnderlayStatus
+    });
+
+    expect(props.setTitle).toHaveBeenCalledWith("Wall");
+    expect(rows.map((row) => row.label)).toEqual(["Typ steny", "Thickness (mm)", "Height (mm)", "Justification", "Exterior"]);
+    expect(rows[0]!.control.value).toBe("partition_100");
+    expect(rows[0]!.control.children.map((child) => child.value)).toEqual([
+      "custom",
+      "partition_100",
+      "partition_150",
+      "bearing_200",
+      "external_300"
+    ]);
+    expect(rows[3]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["center", "Center"],
+      ["interior", "Finish face: interior"],
+      ["exterior", "Finish face: exterior"]
+    ]);
+    expect(section.children.at(-1)?.className).toBe("muted");
+
+    rows[0]!.control.value = "bearing_200";
+    rows[0]!.control.dispatch("change");
+
+    expect(wallDefault.typeId).toBe("bearing_200");
+    expect(wallDefault.thicknessMm).toBe(200);
+    expect(wallDefault.heightMm).toBe(2800);
+    expect(rows[1]!.control.value).toBe("200");
+    expect(rows[2]!.control.value).toBe("2800");
+    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Wall type: Nosna 200.");
+
+    rows[3]!.control.value = "exterior";
+    rows[3]!.control.dispatch("change");
+
+    expect(wallDefault.justification).toBe("exterior");
+    expect(wallDefault.typeId).toBe("custom");
+    expect(rows[0]!.control.value).toBe("custom");
   });
 
   it("keeps trim tool muted hint, step, and target summary text", () => {

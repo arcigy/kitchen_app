@@ -68,12 +68,10 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
   const { props, wallDefault, wallDraw, updateWallMeshWithJustification, setUnderlayStatus } = ctx;
     props.setTitle("Wall");
     const s = props.section();
-    const typeSelect = document.createElement("select");
-    typeSelect.innerHTML = [
-      `<option value="${CUSTOM_WALL_TYPE_ID}">Vlastna</option>`,
-      ...WALL_TYPE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.name}</option>`)
-    ].join("");
-    typeSelect.value = resolveWallTypeId(wallDefault);
+    const typeSelect = createSelectElement(resolveWallTypeId(wallDefault), [
+      { value: CUSTOM_WALL_TYPE_ID, label: "Vlastna" },
+      ...WALL_TYPE_PRESETS.map((preset) => ({ value: preset.id, label: preset.name }))
+    ]);
     props.row(s, "Typ steny", typeSelect);
     const th = document.createElement("input");
     th.type = "number";
@@ -85,13 +83,11 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
     height.step = "1";
     height.value = String(wallDefault.heightMm);
     props.row(s, "Height (mm)", height);
-    const just = document.createElement("select");
-    just.innerHTML = `
-      <option value="center">Center</option>
-      <option value="interior">Finish face: interior</option>
-      <option value="exterior">Finish face: exterior</option>
-    `;
-    just.value = wallDefault.justification ?? "center";
+    const just = createSelectElement(wallDefault.justification ?? "center", [
+      { value: "center", label: "Center" },
+      { value: "interior", label: "Finish face: interior" },
+      { value: "exterior", label: "Finish face: exterior" }
+    ]);
     props.row(s, "Justification", just);
     const flip = document.createElement("button");
     flip.type = "button";
