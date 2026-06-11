@@ -421,6 +421,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
     const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
     if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
+    const backOffsetMm = group.ctx.worktopBackOffsetMm;
 
     const requestedType = opts?.type ?? "drawer_low";
     const modulePackage = findModulePackageForParams(modulePackages, { type: requestedType });
@@ -434,7 +435,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     inst.kitchenGroupId = groupId;
 
     if (nextParams.type === "corner_shelf_lower") {
-      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, group.ctx.worktopBackOffsetMm);
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
       let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
       const requestedCornerIndex = typeof opts?.cornerIndex === "number" ? Math.round(opts.cornerIndex) : null;
       const candidateCornerIndexes =
@@ -442,14 +443,14 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
           ? [requestedCornerIndex]
           : Array.from({ length: Math.max(0, guidePath.length - 2) }, (_, index) => index + 1);
       for (const cornerIndex of candidateCornerIndexes) {
-        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, group.ctx.worktopBackOffsetMm, inst);
+        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, backOffsetMm, inst);
         if (info?.valid) break;
       }
       if (!info) throw new Error("Debug kitchen corner not available.");
       inst.kitchenPlacement = { ...info.binding };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
     } else {
-      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
+      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, backOffsetMm);
       if (!info) throw new Error("Debug guide segment not available.");
 
       if (moduleStaysOutsideKitchenWorktop(inst)) {
@@ -458,7 +459,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
           .clone()
           .addScaledVector(info.dir, desiredAlongM)
           .addScaledVector(info.frontNormal, Math.max(0.05, worktop.params.depthMm / 2000));
-        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], group.ctx.worktopBackOffsetMm);
+        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], backOffsetMm);
         if (!tallConstraint) throw new Error("Debug tall placement not available.");
         inst.kitchenPlacement = tallConstraint.kitchenPlacement ?? null;
         inst.root.position.copy(tallConstraint.position);
@@ -473,7 +474,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         segmentIndex: opts?.segmentIndex ?? 0,
         offsetAlongM: desiredAlongM
       };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
       }
     }
 
