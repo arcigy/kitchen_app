@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { TransformState } from "./transformStateTypes";
+import type { TransformClearOptions, TransformState } from "./transformStateTypes";
 
 export type PointerTransformClickState = Pick<
   TransformState,
@@ -19,7 +19,7 @@ export type PointerTransformClickState = Pick<
 export function handleTransformClickPointerDown(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   clearMoveHud: () => void;
-  clearTransform: (options?: { continueMove?: boolean; status?: string }) => void;
+  clearTransform: (options?: TransformClearOptions) => void;
   commitHistory: () => void;
   constrainMoveDelta: (delta: THREE.Vector3) => THREE.Vector3;
   hitPoint: THREE.Vector3;

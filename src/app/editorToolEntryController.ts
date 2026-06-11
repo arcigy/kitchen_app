@@ -1,6 +1,6 @@
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
-import type { TransformState } from "./transformStateTypes";
+import type { TransformClearOptions, TransformState } from "./transformStateTypes";
 
 export type EditorLayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 
@@ -10,7 +10,7 @@ export type EditorToolEntryContext = {
   cancelKitchenWorktopDraw: (opts?: { silent?: boolean }) => void;
   cancelPlacement: (S: AppState, helpers: PlacementHelpers) => void;
   cancelSectionDraw: (opts?: { silent?: boolean }) => void;
-  clearTransform: (opts?: { restore?: boolean; status?: string | null; continueMove?: boolean }) => void;
+  clearTransform: (opts?: TransformClearOptions) => void;
   clearWallDrawState: () => void;
   deactivateMeasureTool: () => void;
   ensureLayoutMode: () => void;

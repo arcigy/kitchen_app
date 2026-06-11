@@ -19,7 +19,7 @@ import type { PlacementHelpers } from "../layout/placementManager";
 import type { MeasureState, MarqueeState, WallEditHud } from "./measureTools";
 import type { AssociativeMeasureKind } from "./measureAssociative";
 import type { TechnicalDimensionRecord } from "./technicalDimensions";
-import type { TransformState } from "./transformStateTypes";
+import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
 import {
   finishTrimNoChange,
@@ -156,12 +156,6 @@ type PointerSectionDrawPoint = {
   axisLocked: boolean;
 };
 
-type PointerClearTransformOptions = {
-  restore?: boolean;
-  status?: string | null;
-  continueMove?: boolean;
-};
-
 type PointerInputHandlersDataContext = {
   renderer: THREE.WebGLRenderer;
   walls: WallInstance[];
@@ -219,7 +213,7 @@ type PointerInputHandlersDataContext = {
   bindingFromPlanSnap: (snapped: PlanSnapResult | null, fallbackPoint: THREE.Vector3) => PlanSnapBinding;
   cam: () => THREE.Camera;
   clearDoorPlacementPreview: () => void;
-  clearTransform: (options?: PointerClearTransformOptions) => void;
+  clearTransform: (options?: TransformClearOptions) => void;
   clearWindowLightIfMissing: () => void;
   clearWindowPlacementPreview: () => void;
   cloneFloorSegments: (segments: FloorBoundarySegment[]) => FloorBoundarySegment[];
@@ -377,7 +371,7 @@ type PointerInputHandlersDataContext = {
   ) => PointerMeasure3DSnap;
   snapPointXZ: (point: THREE.Vector3, mesh: THREE.Mesh) => PointerPointSnapXZ;
   snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
-  startTransformFromSelection: (kind: "move" | "rotate", opts?: { sticky?: boolean; toggle?: boolean }) => boolean;
+  startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => boolean;
   syncSelectionState: () => void;
   updateAllSectionVisuals: () => void;
   updateColumnPlacementPreview: (pointMm: { x: number; z: number } | null) => boolean;

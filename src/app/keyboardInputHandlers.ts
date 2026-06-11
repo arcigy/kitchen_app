@@ -3,7 +3,7 @@ import type { LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallP
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import type { PlacementHelpers } from "../layout/placementManager";
-import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
+import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
 
@@ -30,7 +30,7 @@ type KeyboardInputHandlersContext = {
   cancelDoorPlacement?: () => void;
   cancelPlacement: (state: AppState, helpers: PlacementHelpers) => void;
   cancelWindowPlacement?: () => void;
-  clearTransform: (opts?: { restore?: boolean; status?: string; continueMove?: boolean }) => void;
+  clearTransform: (opts?: TransformClearOptions) => void;
   clearWallDrawState: () => void;
   commitHistory: (state: AppState) => void;
   commitKitchenWorktopTypedLength: () => boolean;

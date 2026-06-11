@@ -4,6 +4,7 @@ import type { AppArgs } from "./bootstrap";
 import type { SelectedKind } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import type { TransformClearOptions, TransformState } from "./transformStateTypes";
 import { activateAlignToolState, clearAlignReferenceFromEscape, type AlignState } from "./alignToolStateController";
 import { activateDimensionToolState, handleDimensionEscape } from "./dimensionToolStateController";
 import { handleEditorLayoutEscape, stopEditorToolFromEscape } from "./editorToolEscapeController";
@@ -41,7 +42,7 @@ export type ToolModeControllerContext = {
   clearAllMeasurements: () => void;
   clearPreview: () => void;
   clearToolHud: () => void;
-  clearTransform: (opts?: { restore?: boolean; status?: string | null; continueMove?: boolean }) => void;
+  clearTransform: (opts?: TransformClearOptions) => void;
   dimensionState: { picked: unknown[] };
   drawSnapOverlay: { hide: () => void };
   ensureFloorplanViewerTab: () => void;
@@ -76,7 +77,7 @@ export type ToolModeControllerContext = {
   showWallSnapMarkersFor: (wallId: string | null) => void;
   syncSelectionState: () => void;
   technicalDimensions: { resetDraft: () => void };
-  transformState: { kind: null | "move" | "rotate"; step: null | string };
+  transformState: Pick<TransformState, "kind"> & { step: TransformState["step"] | string | null };
   trimState: TrimState;
   updateAllSectionVisuals: () => void;
   updateSectionDrawPreview: () => void;
