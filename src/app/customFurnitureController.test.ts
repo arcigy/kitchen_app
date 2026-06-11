@@ -23,7 +23,7 @@ import {
   popCustomFurnitureBoundaryUndoState,
   releaseCustomFurnitureButtonMagnetCapture,
   resolveCustomFurnitureActiveFurnitureId,
-  resolveCustomFurnitureParallelBoundaryDimension,
+  resolveCustomFurnitureTemporaryBoundaryDimension,
   resolveCustomFurnitureCombinedAxisSnap,
   resolveCustomFurnitureBoundaryEscapeAction,
   selectCustomFurnitureBoundarySegmentsInRect,
@@ -207,7 +207,7 @@ describe("custom furniture boundary draw tools", () => {
       { a: { x: 1000, z: 0 }, b: { x: 1000, z: 700 } }
     ];
 
-    const dimension = resolveCustomFurnitureParallelBoundaryDimension(segments, 0);
+    const dimension = resolveCustomFurnitureTemporaryBoundaryDimension(segments, 0);
     expect(dimension?.referenceSegmentIndex).toBe(1);
     expect(Math.round(dimension?.distanceMm ?? 0)).toBe(500);
 

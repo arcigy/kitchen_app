@@ -34,7 +34,6 @@ import {
   resolveCustomFurnitureAutoAxisSnap,
   resolveCustomFurnitureBoundaryEscapeAction,
   resolveCustomFurnitureCombinedAxisSnap,
-  resolveCustomFurnitureParallelBoundaryDimension,
   resolveCustomFurnitureTrackedAxisSnap,
   selectCustomFurnitureBoundarySegmentsInRect,
   shouldCustomFurnitureBoundaryDrawFromPickedPoint,
@@ -47,6 +46,7 @@ import {
   type CustomFurnitureBoundaryVertexRef,
   type CustomFurnitureSharedDrawToolId
 } from "./customFurnitureBoundaryEditing";
+import { resolveCustomFurnitureTemporaryBoundaryDimension } from "./customFurnitureTemporaryDimensions";
 import {
   makeCustomFurnitureVerticalBoardDraftPreview,
   makeCustomFurnitureVerticalBoardProfile,
@@ -121,7 +121,7 @@ export {
   resolveCustomFurnitureAutoAxisSnap,
   resolveCustomFurnitureBoundaryEscapeAction,
   resolveCustomFurnitureCombinedAxisSnap,
-  resolveCustomFurnitureParallelBoundaryDimension,
+  resolveCustomFurnitureTemporaryBoundaryDimension,
   resolveCustomFurnitureTrackedAxisSnap,
   selectCustomFurnitureBoundarySegmentsInRect,
   shouldCustomFurnitureBoundaryDrawFromPickedPoint,
@@ -573,7 +573,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   const addBoundarySegmentDimension = (root: THREE.Group, segmentIndex: number, segment: CustomFurnitureBoundarySegment) => {
     if (addBoundaryFilletRadiusDimension(root, segment)) return;
     if (addBoundaryCutPositionDimension(root, segment)) return;
-    const dimension = resolveCustomFurnitureParallelBoundaryDimension(getEditablePlanLineSegments(), segmentIndex);
+    const dimension = resolveCustomFurnitureTemporaryBoundaryDimension(getEditablePlanLineSegments(), segmentIndex);
     if (!dimension) return;
     const { dir, normal } = dimension;
     const tick = 42;
@@ -2450,7 +2450,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     if (edit.kind === "cutPosition") {
       return editableSegments.find((segment) => segment.cut?.id === edit.cutId)?.cut?.centerDistanceMm ?? null;
     }
-    const dimension = resolveCustomFurnitureParallelBoundaryDimension(editableSegments, edit.segmentIndex);
+    const dimension = resolveCustomFurnitureTemporaryBoundaryDimension(editableSegments, edit.segmentIndex);
     return dimension && dimension.referenceSegmentIndex === edit.referenceSegmentIndex ? Math.round(dimension.distanceMm) : null;
   };
 
