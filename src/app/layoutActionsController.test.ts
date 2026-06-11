@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLayoutActionsController, resolveSelectedEntityIds } from "./layoutActionsController";
+import { createLayoutActionsController, resolveSelectedEntityIds, runDuplicateSelectionCommand } from "./layoutActionsController";
 import type { SelectedKind } from "./localTypes";
 
 function makeController(overrides: Partial<Parameters<typeof createLayoutActionsController>[0]> = {}) {
@@ -188,6 +188,57 @@ describe("layout delete action", () => {
 
     expect(harness.ctx.duplicateInstance).not.toHaveBeenCalled();
     expect(harness.ctx.duplicateWall).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
+  it("runDuplicateSelectionCommand duplicates selected module and returns true", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "module", instanceId: "m1" });
+
+    expect(runDuplicateSelectionCommand(harness.ctx)).toBe(true);
+
+    expect(harness.ctx.ensureLayoutMode).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.duplicateInstance).toHaveBeenCalledExactlyOnceWith("m1");
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
+  it("runDuplicateSelectionCommand duplicates selected walls and returns true", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+
+    expect(runDuplicateSelectionCommand(harness.ctx)).toBe(true);
+
+    expect(harness.ctx.ensureLayoutMode).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.duplicateWall).toHaveBeenCalledExactlyOnceWith("w1");
+    expect(harness.ctx.getSelectedWallId()).toBe("w1_copy");
+    expect([...harness.selectedWallIds]).toEqual(["w1_copy"]);
+    expect(harness.ctx.commitHistory).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("runDuplicateSelectionCommand returns false without mutation for unsupported selection", () => {
+    const harness = makeController();
+
+    expect(runDuplicateSelectionCommand(harness.ctx)).toBe(false);
+
+    expect(harness.ctx.ensureLayoutMode).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.duplicateInstance).not.toHaveBeenCalled();
+    expect(harness.ctx.duplicateWall).not.toHaveBeenCalled();
+    expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
+  it("runDuplicateSelectionCommand returns false when selected wall duplication creates no copy", () => {
+    const harness = makeController({ duplicateWall: vi.fn(() => null) });
+    harness.setSelection({ kind: "wall", wallId: "w1" });
+
+    expect(runDuplicateSelectionCommand(harness.ctx)).toBe(false);
+
+    expect(harness.ctx.duplicateWall).toHaveBeenCalledExactlyOnceWith("w1");
+    expect(harness.ctx.getSelectedWallId()).toBe("w1");
+    expect(harness.selectedWallIds.size).toBe(0);
     expect(harness.ctx.commitHistory).not.toHaveBeenCalled();
     expect(harness.ctx.mountProps).not.toHaveBeenCalled();
   });
