@@ -143,12 +143,24 @@ export function updateAlignToolHover(params: {
     params.updateHudLine(params.hudPickLine1, params.alignState.lastA.segA, params.alignState.lastA.segB, params.hudLineThickness);
     params.updateHudLine(params.hudPickLine2, params.alignState.lastB.segA, params.alignState.lastB.segB, params.hudLineThickness);
   } else {
-    params.alignState.lastA = null;
-    params.alignState.lastB = null;
-    params.alignState.lastUntilMs = 0;
-    params.hudPickLine1.visible = false;
-    params.hudPickLine2.visible = false;
+    resetAlignRecentFeedback({
+      alignState: params.alignState,
+      hudPickLine1: params.hudPickLine1,
+      hudPickLine2: params.hudPickLine2
+    });
   }
+}
+
+export function resetAlignRecentFeedback(params: {
+  alignState: Pick<PointerAlignHoverState, "lastA" | "lastB" | "lastUntilMs">;
+  hudPickLine1: HudLine;
+  hudPickLine2: HudLine;
+}): void {
+  params.alignState.lastA = null;
+  params.alignState.lastB = null;
+  params.alignState.lastUntilMs = 0;
+  params.hudPickLine1.visible = false;
+  params.hudPickLine2.visible = false;
 }
 
 export function updateTrimToolHover(params: {

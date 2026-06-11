@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
   resetAlignTrimPointerMoveHover,
+  resetAlignRecentFeedback,
   updateAlignToolHover,
   updateAlignTrimToolPointerMoveHover,
   updateDimensionToolHover,
@@ -189,6 +190,26 @@ describe("pointer editor tool hover helpers", () => {
     });
 
     expect(state.hover).toBe(ref);
+    expect(state.lastA).toBeNull();
+    expect(state.lastB).toBeNull();
+    expect(state.lastUntilMs).toBe(0);
+    expect(pick1.visible).toBe(false);
+    expect(pick2.visible).toBe(false);
+  });
+
+  it("resets align recent feedback state and hides pick HUD lines", () => {
+    const recentA = line("recent-a");
+    const recentB = line("recent-b");
+    const state = { lastA: recentA as AlignPickedLine | null, lastB: recentB as AlignPickedLine | null, lastUntilMs: 5 };
+    const pick1 = hudLine();
+    const pick2 = hudLine();
+
+    resetAlignRecentFeedback({
+      alignState: state,
+      hudPickLine1: pick1,
+      hudPickLine2: pick2
+    });
+
     expect(state.lastA).toBeNull();
     expect(state.lastB).toBeNull();
     expect(state.lastUntilMs).toBe(0);
