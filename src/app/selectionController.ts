@@ -47,6 +47,12 @@ export type SelectKitchenGroupCommandContext = {
   setSelectedKitchenGroupId: (id: string | null) => void;
 };
 
+export type SelectOpeningCommandContext = {
+  applySelection: SelectionApplyCommand;
+  clearUnderlayBox: () => void;
+  setInstanceSelected: (id: string | null) => void;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -214,6 +220,16 @@ export function runSelectKitchenGroupCommand(ctx: SelectKitchenGroupCommandConte
   });
 }
 
+export function runSelectOpeningCommand(ctx: SelectOpeningCommandContext, kind: "window" | "door") {
+  ctx.applySelection({
+    kind,
+    cleanupVisuals: () => {
+      ctx.setInstanceSelected(null);
+      ctx.clearUnderlayBox();
+    }
+  });
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -348,13 +364,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedOpening(kind: "window" | "door") {
-    applySelection({
-      kind,
-      cleanupVisuals: () => {
-        setInstanceSelected(null);
-        clearUnderlayBox();
-      }
-    });
+    runSelectOpeningCommand({ applySelection, clearUnderlayBox, setInstanceSelected }, kind);
   }
 
   function setSelectedWindow() {

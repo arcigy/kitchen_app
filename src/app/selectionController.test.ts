@@ -15,6 +15,7 @@ import {
   runClearSelectionCommand,
   runSelectKitchenGroupCommand,
   runSelectModuleCommand,
+  runSelectOpeningCommand,
   runSelectWallCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
@@ -396,6 +397,21 @@ describe("createSelectionController", () => {
     });
     expect(selectedKitchenGroupId).toBe("kg");
     expect([...selectedInstanceIds]).toEqual(["m-group-1", "m-group-2"]);
+  });
+
+  it("runs the named opening selection command with current cleanup behavior", () => {
+    const applySelection = vi.fn((args) => {
+      args.cleanupVisuals?.();
+    });
+    const clearUnderlayBox = vi.fn();
+    const setInstanceSelected = vi.fn();
+
+    runSelectOpeningCommand({ applySelection, clearUnderlayBox, setInstanceSelected }, "window");
+
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0].kind).toBe("window");
+    expect(setInstanceSelected).toHaveBeenCalledExactlyOnceWith(null);
+    expect(clearUnderlayBox).toHaveBeenCalledOnce();
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {
