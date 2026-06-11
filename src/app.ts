@@ -36,8 +36,8 @@ import {
   type MeasureSelectionTarget
 } from "./app/measureEditing";
 import { createSnapOverlay } from "./app/snapOverlay";
-import { DimensionOverlay } from "./app/dimensionOverlay";
 import { createTechnicalDimensionManager } from "./app/technicalDimensions";
+import { createTemporaryDimensionManager } from "./app/temporaryDimensionManager";
 import { createInitialTransformState } from "./app/transformStateFactory";
 import { distPointToSegment2, distPxPointToSeg } from "./app/screenGeometry";
 import {
@@ -314,8 +314,9 @@ export function startApp(initialArgs: AppArgs) {
   const cam = () => getCamera();
   const ctl = () => getControls();
   renderer.localClippingEnabled = true;
-  const dimensionOverlay = new DimensionOverlay(renderer, cam());
-  dimensionOverlay.unitScale = 1000;
+  const temporaryDimensions = createTemporaryDimensionManager(renderer, cam());
+  temporaryDimensions.setUnitScale(1000);
+  const dimensionOverlay = temporaryDimensions.overlay;
 
   setDaylightIntensity(9);
 
@@ -3092,7 +3093,7 @@ export function startApp(initialArgs: AppArgs) {
     const w = args.viewerEl.clientWidth;
     const h = args.viewerEl.clientHeight;
     setSize(w, h);
-    dimensionOverlay.setSize(w, h);
+    temporaryDimensions.setSize(w, h);
     ssgi?.setSize(w, h);
     photo?.setSize(w, h);
   });
