@@ -911,9 +911,10 @@ export function mountFloorBoundaryPropsPanel(ctx: FloorBoundaryPropsContext) {
     thickness.value = String(params.thicknessMm);
     props.row(s, "Hrúbka (mm)", thickness);
 
-    const mat = document.createElement("select");
-    mat.innerHTML = getAllMaterials().map((material: { id: string | number; name: string }) => `<option value="${material.id}">${material.name}</option>`).join("");
-    mat.value = params.materialId ?? floorDefault.materialId;
+    const mat = createSelectElement(
+      params.materialId ?? floorDefault.materialId,
+      getAllMaterials().map((material: { id: string | number; name: string }) => ({ value: material.id, label: material.name }))
+    );
     props.row(s, "Materiál", mat);
 
     const info = document.createElement("div");

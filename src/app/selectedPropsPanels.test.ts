@@ -3,6 +3,7 @@ import {
   mountColumnPlacementPropsPanel,
   mountDoorPlacementPropsPanel,
   mountDoorPropsPanel,
+  mountFloorBoundaryPropsPanel,
   mountFloorPropsPanel,
   mountSectionPropsPanel,
   mountSectionToolPropsPanel,
@@ -169,6 +170,47 @@ describe("selected props panels", () => {
 
     expect(ctx.enterFloorBoundaryEdit).toHaveBeenCalledWith("floor-2");
     expect(ctx.commitHistory).not.toHaveBeenCalled();
+  });
+
+  it("keeps floor boundary material select options and local params update behavior", () => {
+    installFakeDocument();
+    const { props, rows, section } = makePropertiesPanelHarness();
+    const params = {
+      name: "Boundary floor",
+      heightMm: 0,
+      thicknessMm: 100,
+      materialId: "oak",
+      boundary: []
+    };
+
+    mountFloorBoundaryPropsPanel({
+      props,
+      floorEdit: {
+        params,
+        segments: [{ a: { x: 0, z: 0 }, b: { x: 1000, z: 0 } }],
+        ortho: true,
+        error: ""
+      },
+      getAllMaterials: () => [
+        { id: "oak", name: "Oak" },
+        { id: "tile", name: "Tile" }
+      ],
+      floorDefault: { heightMm: 0, thicknessMm: 100, materialId: "oak" }
+    });
+
+    expect(props.setTitle).toHaveBeenCalledWith("Floor Boundary");
+    expect(rows.map((row) => row.label)).toEqual(["Výška úrovne (mm)", "Hrúbka (mm)", "Materiál"]);
+    expect(rows[2]!.control.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["oak", "Oak"],
+      ["tile", "Tile"]
+    ]);
+    expect(section.children[0]?.className).toBe("muted");
+    expect(section.children[0]?.textContent).toContain("Boundary lines: 1");
+
+    rows[2]!.control.value = "tile";
+    rows[2]!.control.dispatch("change");
+
+    expect(params.materialId).toBe("tile");
   });
 
   it("keeps section tool and selected section muted summary text", () => {
