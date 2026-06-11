@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import { createInputElement, createSelectElement } from "./propsPanelElements";
 
 export function numberInput(value: number, onChange: (next: number) => void) {
-  const input = document.createElement("input");
-  input.type = "number";
-  input.value = String(Math.round(value));
+  const input = createInputElement("number", String(Math.round(value)));
   input.addEventListener("change", () => {
     const next = Number(input.value);
     if (Number.isFinite(next)) onChange(next);
@@ -13,9 +12,7 @@ export function numberInput(value: number, onChange: (next: number) => void) {
 }
 
 export function textInput(value: string, onChange: (next: string) => void) {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = value;
+  const input = createInputElement("text", value);
   input.addEventListener("change", () => onChange(input.value.trim() || value));
   return input;
 }
@@ -25,14 +22,7 @@ export function selectInput<T extends string>(
   options: Array<{ value: T; label: string }>,
   onChange: (next: T) => void
 ) {
-  const select = document.createElement("select");
-  for (const option of options) {
-    const item = document.createElement("option");
-    item.value = option.value;
-    item.textContent = option.label;
-    select.appendChild(item);
-  }
-  select.value = value;
+  const select = createSelectElement(value, options);
   select.addEventListener("change", () => onChange(select.value as T));
   return select;
 }
@@ -43,17 +33,13 @@ export function materialSelect(
   materialType: "board" | "edge",
   onChange: (next: string) => void
 ) {
-  const select = document.createElement("select");
   const options = catalog.materials
     .filter((material) => material.materialType === materialType && material.isActive)
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
-  for (const material of options) {
-    const option = document.createElement("option");
-    option.value = material.id;
-    option.textContent = material.displayName;
-    select.appendChild(option);
-  }
-  select.value = options.some((material) => material.id === materialId) ? materialId : options[0]?.id ?? "";
+  const select = createSelectElement(
+    options.some((material) => material.id === materialId) ? materialId : options[0]?.id ?? "",
+    options.map((material) => ({ value: material.id, label: material.displayName }))
+  );
   select.addEventListener("change", () => onChange(select.value));
   return select;
 }
