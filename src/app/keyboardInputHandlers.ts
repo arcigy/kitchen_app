@@ -3,7 +3,7 @@ import type { LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallP
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import type { PlacementHelpers } from "../layout/placementManager";
-import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
+import type { KeyboardTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
 
@@ -11,11 +11,6 @@ type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thickness
   justification: NonNullable<WallParams["justification"]>;
   exteriorSign: NonNullable<WallParams["exteriorSign"]>;
 };
-
-type KeyboardTransformState = Pick<
-  TransformState,
-  "kind" | "lastAngleSign" | "lastValidDelta" | "moveSnapDisabled" | "step" | "stickyMove" | "typed"
->;
 
 type KeyboardInputHandlersContext = {
   activeViewerTab: string;

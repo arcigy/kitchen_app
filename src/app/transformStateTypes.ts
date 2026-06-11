@@ -44,3 +44,8 @@ export type TransformState = {
 export type PointerTransformState = TransformState & {
   lastPointerPx: { x: number; y: number };
 };
+
+export type KeyboardTransformState = Pick<
+  TransformState,
+  "kind" | "lastAngleSign" | "lastValidDelta" | "moveSnapDisabled" | "step" | "stickyMove" | "typed"
+>;
