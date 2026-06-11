@@ -1,4 +1,4 @@
-import { replaceSelectionIdSet, resolveMergedSelectionIdSet } from "./selectionController";
+import { refreshSelectionHighlights, replaceSelectionIdSet, resolveMergedSelectionIdSet } from "./selectionController";
 
 export type ScreenPoint = { x: number; y: number };
 
@@ -249,7 +249,7 @@ export function applyResolvedMarqueeSelection(args: {
 
   replaceSelectionIdSet(args.selectedWallIds, resolvedSelection.selectedWallIds);
   replaceSelectionIdSet(args.selectedInstanceIds, resolvedSelection.selectedInstanceIds);
-  args.updateSelectionHighlights();
+  refreshSelectionHighlights(args);
   args.mountProps();
 }
 
