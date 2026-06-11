@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { LayoutInstance } from "../layout/appState";
 import {
   resolvePointerModuleDragFinalPosition,
+  rollbackPointerModuleDragOverlap,
   updateModuleDragFromGroundHit,
   type PointerModuleDragState
 } from "./pointerModuleDrag";
@@ -61,6 +62,26 @@ describe("pointer module drag", () => {
       "snap:1.85,0.40,2.70",
       "constraint:2.15,0.40,3.10"
     ]);
+  });
+
+  it("rolls back dragged module and existing pushed neighbors after overlap", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(9, 0, 9));
+    inst.root.position.copy(new THREE.Vector3(9, 0, 9));
+    const neighbor = moduleInstance("m2", new THREE.Vector3(8, 0, 8));
+    neighbor.root.position.copy(new THREE.Vector3(8, 0, 8));
+
+    rollbackPointerModuleDragOverlap({
+      instance: inst,
+      lastValid: new THREE.Vector3(1, 0, 1),
+      pushed: [
+        { id: "m2", prev: new THREE.Vector3(2, 0, 2) },
+        { id: "missing", prev: new THREE.Vector3(3, 0, 3) }
+      ],
+      findInstance: (id) => (id === "m2" ? neighbor : null)
+    });
+
+    expect(inst.root.position.toArray()).toEqual([1, 0, 1]);
+    expect(neighbor.root.position.toArray()).toEqual([2, 0, 2]);
   });
 
   it("updates dragged module through constraints, snap, orientation, nudge, and layout refresh", () => {

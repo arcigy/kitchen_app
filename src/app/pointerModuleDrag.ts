@@ -39,6 +39,13 @@ type ResolvePointerModuleDragFinalPositionParams = {
   snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
 };
 
+type RollbackPointerModuleDragOverlapParams = {
+  instance: LayoutInstance;
+  lastValid: THREE.Vector3;
+  pushed: PushedModuleSnapshot[];
+  findInstance: (id: string) => LayoutInstance | null;
+};
+
 export function resolvePointerModuleDragFinalPosition(params: ResolvePointerModuleDragFinalPositionParams): THREE.Vector3 {
   const desired = new THREE.Vector3(
     params.hitPoint.x - params.dragState.offset.x,
@@ -48,6 +55,15 @@ export function resolvePointerModuleDragFinalPosition(params: ResolvePointerModu
   const desiredInRoom = params.applyWallConstraints(params.instance, desired);
   const snapped = params.snapPosition(params.instance, desiredInRoom);
   return params.applyWallConstraints(params.instance, snapped);
+}
+
+export function rollbackPointerModuleDragOverlap(params: RollbackPointerModuleDragOverlapParams): void {
+  params.instance.root.position.copy(params.lastValid);
+  for (const item of params.pushed) {
+    const neighbor = params.findInstance(item.id);
+    if (!neighbor) continue;
+    neighbor.root.position.copy(item.prev);
+  }
 }
 
 export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGroundHitParams): boolean {
@@ -70,12 +86,12 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
   params.autoOrientModuleToRoomWallIfSnapped(inst);
   const pushed = params.nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
   if (params.anyOverlap(inst, null) || params.moduleOverlapsWalls(inst) || params.moduleOverlapsKitchenWorktops(inst)) {
-    inst.root.position.copy(params.dragState.lastValid);
-    for (const item of pushed) {
-      const neighbor = params.findInstance(item.id);
-      if (!neighbor) continue;
-      neighbor.root.position.copy(item.prev);
-    }
+    rollbackPointerModuleDragOverlap({
+      instance: inst,
+      lastValid: params.dragState.lastValid,
+      pushed,
+      findInstance: params.findInstance
+    });
     return true;
   }
 
