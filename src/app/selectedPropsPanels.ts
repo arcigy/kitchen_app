@@ -944,41 +944,26 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
     props.row(s, "Opacity", opacity);
     S.underlayOpacityEl = opacity;
 
-    const scale = document.createElement("input");
-    scale.type = "number";
-    scale.step = "0.01";
-    scale.value = String(underlayState.scale);
+    const scale = createInputElement("number", String(underlayState.scale), { step: "0.01" });
     props.row(s, "Scale", scale);
     setUnderlayScaleEl(scale);
     S.underlayScaleEl = scale;
 
-    const rot = document.createElement("input");
-    rot.type = "number";
-    rot.step = "1";
-    rot.value = String(underlayState.rotationDeg);
+    const rot = createInputElement("number", String(underlayState.rotationDeg), { step: "1" });
     props.row(s, "Rotation °", rot);
     S.underlayRotEl = rot;
 
-    const offX = document.createElement("input");
-    offX.type = "number";
-    offX.step = "1";
-    offX.value = String(underlayState.offsetMm.x);
+    const offX = createInputElement("number", String(underlayState.offsetMm.x), { step: "1" });
     props.row(s, "Offset X", offX);
     setUnderlayOffXEl(offX);
     S.underlayOffXEl = offX;
 
-    const offZ = document.createElement("input");
-    offZ.type = "number";
-    offZ.step = "1";
-    offZ.value = String(underlayState.offsetMm.z);
+    const offZ = createInputElement("number", String(underlayState.offsetMm.z), { step: "1" });
     props.row(s, "Offset Z", offZ);
     setUnderlayOffZEl(offZ);
     S.underlayOffZEl = offZ;
 
-    const known = document.createElement("input");
-    known.type = "number";
-    known.step = "1";
-    known.value = String(underlayCal.knownMm);
+    const known = createInputElement("number", String(underlayCal.knownMm), { step: "1" });
     props.row(s, "Calibrate mm", known);
 
     const pinned = document.createElement("input");

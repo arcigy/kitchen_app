@@ -7,6 +7,7 @@ import {
   mountFloorPropsPanel,
   mountSectionPropsPanel,
   mountSectionToolPropsPanel,
+  mountUnderlayPropsPanel,
   mountWallPropsPanel,
   mountWindowPlacementPropsPanel,
   mountWindowPropsPanel
@@ -423,6 +424,73 @@ describe("selected props panels", () => {
     expect(doorHarness.props.setTitle).toHaveBeenCalledWith("Dvere - vlozenie");
     expect(doorHarness.section.children[0]?.className).toBe("muted");
     expect(doorHarness.section.children[0]?.textContent).toBe("Najprv nastav parametre, potom klikni presne miesto na stene. Space lave/prave, Shift+Space dnu/von.");
+  });
+
+  it("keeps underlay numeric controls mounted with current values and element refs", () => {
+    installFakeDocument();
+    const { props, rows } = makePropertiesPanelHarness();
+    const underlayState = {
+      opacity: 0.4,
+      scale: 1.25,
+      rotationDeg: 12,
+      offsetMm: { x: 30, z: -45 },
+      pinned: false,
+      sourceName: "plan.pdf"
+    };
+    const ctx = {
+      props,
+      loadUnderlayToCanvas: vi.fn(),
+      ensureLayoutMode: vi.fn(),
+      setUnderlayStatus: vi.fn(),
+      setUnderlayFromCanvas: vi.fn(),
+      underlayState,
+      commitHistory: vi.fn(),
+      S: { underlayState } as unknown as AppState,
+      setSelectedUnderlay: vi.fn(),
+      updateUnderlayTransform: vi.fn(),
+      underlayCal: { knownMm: 900, active: false, mode: "calibrate" as const, first: null },
+      underlayMesh: { visible: true },
+      clearUnderlay: vi.fn(),
+      setSelectedModule: vi.fn(),
+      mountProps: vi.fn(),
+      setUnderlayScaleEl: vi.fn(),
+      setUnderlayOffXEl: vi.fn(),
+      setUnderlayOffZEl: vi.fn(),
+      setUnderlayStatusEl: vi.fn(),
+      markUnderlaySelected: vi.fn()
+    };
+
+    mountUnderlayPropsPanel(ctx);
+
+    expect(props.setTitle).toHaveBeenCalledWith("Underlay");
+    expect(rows.map((row) => row.label)).toEqual([
+      "Upload",
+      "Opacity",
+      "Scale",
+      "Rotation °",
+      "Offset X",
+      "Offset Z",
+      "Calibrate mm",
+      "Pinned"
+    ]);
+    expect(rows[2]!.control.type).toBe("number");
+    expect(rows[2]!.control.step).toBe("0.01");
+    expect(rows[2]!.control.value).toBe("1.25");
+    expect(rows[3]!.control.type).toBe("number");
+    expect(rows[3]!.control.step).toBe("1");
+    expect(rows[3]!.control.value).toBe("12");
+    expect(rows[4]!.control.type).toBe("number");
+    expect(rows[4]!.control.step).toBe("1");
+    expect(rows[4]!.control.value).toBe("30");
+    expect(rows[5]!.control.type).toBe("number");
+    expect(rows[5]!.control.step).toBe("1");
+    expect(rows[5]!.control.value).toBe("-45");
+    expect(rows[6]!.control.type).toBe("number");
+    expect(rows[6]!.control.step).toBe("1");
+    expect(rows[6]!.control.value).toBe("900");
+    expect(ctx.setUnderlayScaleEl).toHaveBeenCalledWith(rows[2]!.control);
+    expect(ctx.setUnderlayOffXEl).toHaveBeenCalledWith(rows[4]!.control);
+    expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
   });
 
   it("keeps selected window and door wall info muted text", () => {
