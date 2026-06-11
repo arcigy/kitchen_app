@@ -14,7 +14,7 @@ import { getKitchenModuleRole, staysOutsideKitchenWorktopFootprint } from "../la
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import { toFreePlanBinding } from "./measureAssociative";
-import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type KitchenGroupState = {
   id: string;
@@ -120,8 +120,9 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const getKitchenModulePlacementY = (instOrParams: LayoutInstance | ModuleParams, groupId?: string | null) => {
     const params = ("params" in instOrParams ? instOrParams.params : instOrParams) as Record<string, unknown>;
     if (getKitchenModuleRole(params) !== "upper") return 0;
-    const effectiveGroupId = groupId ?? ("kitchenGroupId" in instOrParams ? instOrParams.kitchenGroupId : null);
-    const group = effectiveGroupId ? S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null : null;
+    const inferredGroupId = "kitchenGroupId" in instOrParams && typeof instOrParams.kitchenGroupId === "string" ? instOrParams.kitchenGroupId : null;
+    const effectiveGroupId = groupId ?? inferredGroupId;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: effectiveGroupId, kitchenGroups: S.kitchenGroups });
     const ctx = group?.ctx ?? S.kitchenCtx;
     return ctx.upperStartHeightMm / 1000;
   };

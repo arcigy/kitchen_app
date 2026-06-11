@@ -82,4 +82,17 @@ describe("kitchen placement controller", () => {
     expect(result?.valid).toBe(true);
     expect(getKitchenWorktopBackGuidePath).toHaveBeenCalledWith(expect.objectContaining({ materialId: "mat" }), 45);
   });
+
+  it("resolves upper module placement height from group context with default fallback", () => {
+    const ctx = makeContext();
+    ctx.S.kitchenCtx.upperStartHeightMm = 1400;
+    ctx.S.kitchenGroups[0]!.ctx.upperStartHeightMm = 1600;
+    const controller = createKitchenPlacementController(ctx);
+
+    expect(controller.getKitchenModulePlacementY({ type: "flap_shelves_low", kitchenModuleRole: "upper" } as LayoutInstance["params"], "kg1")).toBe(1.6);
+    expect(
+      controller.getKitchenModulePlacementY({ type: "flap_shelves_low", kitchenModuleRole: "upper" } as LayoutInstance["params"], "missing")
+    ).toBe(1.4);
+    expect(controller.getKitchenModulePlacementY({ type: "drawer_low", kitchenModuleRole: "base" } as LayoutInstance["params"], "kg1")).toBe(0);
+  });
 });
