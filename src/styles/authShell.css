@@ -1,0 +1,13 @@
+#app.auth-shell {
+  display: grid;
+  grid-template-rows: 1fr;
+  place-items: center;
+  padding: clamp(18px, 4vw, 44px);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(132, 105, 255, 0.16), transparent 32%),
+    radial-gradient(circle at 82% 18%, rgba(37, 114, 220, 0.13), transparent 30%),
+    linear-gradient(rgba(94, 112, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 112, 255, 0.05) 1px, transparent 1px),
+    #f3f6fb;
+  background-size: auto, auto, 38px 38px, 38px 38px, auto;
+}
