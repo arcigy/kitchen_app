@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createSelectElement, createTextElement } from "./propsPanelElements";
+import { appendMutedText, createCheckboxElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
 import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("props panel elements", () => {
@@ -58,6 +58,18 @@ describe("props panel elements", () => {
 
     expect(input.type).toBe("checkbox");
     expect(input.checked).toBe(true);
+  });
+
+  it("creates reusable range elements with stable bounds and values", () => {
+    installFakeDocument();
+
+    const input = createRangeElement("0.5", { min: "0", max: "1", step: "0.01" }) as unknown as FakeElement;
+
+    expect(input.type).toBe("range");
+    expect(input.min).toBe("0");
+    expect(input.max).toBe("1");
+    expect(input.step).toBe("0.01");
+    expect(input.value).toBe("0.5");
   });
 
   it("stringifies numeric select values the same way DOM option values do", () => {

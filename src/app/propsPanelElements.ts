@@ -23,6 +23,16 @@ export function createCheckboxElement(checked: boolean) {
   return input;
 }
 
+export function createRangeElement(value: string, options: { min: string; max: string; step: string }) {
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = options.min;
+  input.max = options.max;
+  input.step = options.step;
+  input.value = value;
+  return input;
+}
+
 export function createSelectElement<T extends SelectOptionValue>(value: T, options: Array<{ value: T; label: string }>) {
   const select = document.createElement("select");
   for (const option of options) {

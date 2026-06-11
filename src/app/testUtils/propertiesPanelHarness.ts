@@ -10,6 +10,8 @@ export class FakeElement {
   disabled = false;
   innerHTML = "";
   listeners = new Map<string, FakeListener[]>();
+  max = "";
+  min = "";
   placeholder = "";
   step = "";
   style: Record<string, string> = {};

@@ -492,6 +492,11 @@ describe("selected props panels", () => {
       "Calibrate mm",
       "Pinned"
     ]);
+    expect(rows[1]!.control.type).toBe("range");
+    expect(rows[1]!.control.min).toBe("0");
+    expect(rows[1]!.control.max).toBe("1");
+    expect(rows[1]!.control.step).toBe("0.01");
+    expect(rows[1]!.control.value).toBe("0.4");
     expect(rows[2]!.control.type).toBe("number");
     expect(rows[2]!.control.step).toBe("0.01");
     expect(rows[2]!.control.value).toBe("1.25");
