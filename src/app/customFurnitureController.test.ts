@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   alignCustomFurnitureBoundarySegmentToReference,
   applyCustomFurnitureBoundaryCut,
   applyCustomFurnitureBoundaryFillet,
   cloneCustomFurnitureBoundaryEditState,
+  createCustomFurnitureDrawOffsetInput,
   customFurniturePlanPathLengthMm,
   customFurnitureBoundarySegmentsToBoundary,
   getCustomFurnitureBoundarySegmentPieces,
@@ -36,6 +37,23 @@ import {
   trimExtendCustomFurnitureBoundarySegmentsToCorner
 } from "./customFurnitureController";
 import type { CustomFurnitureBoundaryEditState } from "./customFurnitureController";
+import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
+
+describe("custom furniture controller UI controls", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("creates the boundary draw offset input with current number attributes", () => {
+    installFakeDocument();
+
+    const input = createCustomFurnitureDrawOffsetInput(125) as unknown as FakeElement;
+
+    expect(input.type).toBe("number");
+    expect(input.step).toBe("1");
+    expect(input.value).toBe("125");
+  });
+});
 
 describe("custom furniture boundary tracking snap", () => {
   it("aligns a free point to the remembered boundary point on vertical and horizontal axes", () => {

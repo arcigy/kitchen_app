@@ -66,6 +66,7 @@ import {
   firstMaterial,
   makeMeshMaterial,
 } from "./customFurnitureUiControls";
+import { createInputElement } from "./propsPanelElements";
 import {
   getCustomFurnitureSharedDrawToolButton,
   resolveCustomFurnitureDrawOffsetMm,
@@ -78,6 +79,10 @@ import {
 } from "./customFurnitureToolbarIcons";
 import type { EditorPropsApi, EditorTopbarApi } from "./editorModeApis";
 import { mountCustomFurnitureActiveToolProps } from "./customFurnitureToolPropsPanel";
+
+export function createCustomFurnitureDrawOffsetInput(drawOffsetMm: number): HTMLInputElement {
+  return createInputElement("number", String(drawOffsetMm), { step: "1" });
+}
 import {
   mountCustomFurnitureBoardProps,
   mountCustomFurnitureProps
@@ -1953,10 +1958,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     offsetWrap.title = "Draw offset. Press Space while drawing to flip direction.";
     const offsetText = document.createElement("span");
     offsetText.textContent = `Offset ${drawOffsetDirection > 0 ? "+" : "-"}`;
-    const offsetInput = document.createElement("input");
-    offsetInput.type = "number";
-    offsetInput.step = "1";
-    offsetInput.value = String(drawOffsetMm);
+    const offsetInput = createCustomFurnitureDrawOffsetInput(drawOffsetMm);
     offsetInput.addEventListener("pointerdown", (event) => event.stopPropagation());
     offsetInput.addEventListener("click", (event) => event.stopPropagation());
     offsetInput.addEventListener("change", () => {
