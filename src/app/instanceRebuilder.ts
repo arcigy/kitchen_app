@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
-import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AdjacentModuleInfo } from "./modulePlacementHelpers";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 
 type ResizeAnchorSide = "left" | "right" | "front" | "back";
 
@@ -198,17 +198,21 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     }
 
     ctx.disposeObject3D(prevModule);
-    if (inst.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-    }
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+    });
     for (const neighborId of propagated.movedIds) {
       const neighbor = ctx.findInstance(neighborId);
-      if (!neighbor?.kitchenGroupId) continue;
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === neighbor.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      neighbor.kitchenPlacement = ctx.inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
+      if (!neighbor) continue;
+      refreshModuleKitchenPlacement({
+        instance: neighbor,
+        kitchenGroups: ctx.S.kitchenGroups,
+        defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+      });
     }
     ctx.updateLayoutPanel();
     return true;
