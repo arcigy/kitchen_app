@@ -3,7 +3,7 @@ import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallIns
 import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
-import { resolveSelectedIds } from "./selectionController";
+import { refreshSelectionHighlights, resolveSelectedIds } from "./selectionController";
 
 type MmPoint = { x: number; z: number };
 type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
@@ -211,7 +211,7 @@ export function createTransformController(ctx: TransformControllerContext) {
     if (opts?.restore) {
       restoreTransformStartState();
       ctx.updateLayoutPanel();
-      ctx.updateSelectionHighlights();
+      refreshSelectionHighlights(ctx);
       ctx.mountProps();
     }
 
