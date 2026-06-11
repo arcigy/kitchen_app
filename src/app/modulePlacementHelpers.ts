@@ -520,9 +520,10 @@ function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousPa
   if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
   const group = findKitchenPlacementGroup({ kitchenGroupId: inst.kitchenGroupId, kitchenGroups: S.kitchenGroups });
   if (!group) return { ok: true, movedIds: [] as string[] };
+  const backOffsetMm = group.ctx.worktopBackOffsetMm;
   void previousParams;
 
-  const armInfo = getKitchenCornerArmBindingInfo(inst, group.ctx.worktopBackOffsetMm);
+  const armInfo = getKitchenCornerArmBindingInfo(inst, backOffsetMm);
   if (!armInfo) return { ok: true, movedIds: [] as string[] };
   const touchedSegments = new Set([armInfo.xSegmentIndex, armInfo.zSegmentIndex].filter((value): value is number => value != null));
   if (touchedSegments.size === 0) return { ok: true, movedIds: [] as string[] };
@@ -535,7 +536,7 @@ function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousPa
     if ((otherBinding.kind ?? "segment") === "corner") continue;
     if (!touchedSegments.has(otherBinding.segmentIndex)) continue;
     const before = other.root.position.clone();
-    if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), group.ctx.worktopBackOffsetMm)) continue;
+    if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), backOffsetMm)) continue;
     if (before.distanceToSquared(other.root.position) > 1e-10) movedIds.add(other.id);
   }
 
