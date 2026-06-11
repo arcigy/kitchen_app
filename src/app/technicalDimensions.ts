@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { DimensionOverlay } from "./dimensionOverlay";
 import type { AlignPickedLine } from "./localTypes";
 import { clamp } from "./sharedUtils";
+import type { TemporaryDimensionManagerPort } from "./temporaryDimensionManager";
 
 export type TechnicalDimensionPoint = { x: number; y: number };
 
@@ -21,7 +21,7 @@ export type TechnicalDimensionState = {
 };
 
 type TechnicalDimensionManagerArgs = {
-  overlay: DimensionOverlay;
+  temporaryDimensions: TemporaryDimensionManagerPort;
   renderer: THREE.WebGLRenderer;
   getCamera: () => THREE.Camera;
   getControls: () => OrbitControls;
@@ -65,27 +65,27 @@ export function createTechnicalDimensionManager(args: TechnicalDimensionManagerA
 
   const render = () => {
     const rect = args.renderer.domElement.getBoundingClientRect();
-    args.overlay.setSize(rect.width, rect.height);
-    args.overlay.clearDimensions();
+    args.temporaryDimensions.setSize(rect.width, rect.height);
+    args.temporaryDimensions.clear();
 
     const activeCam = args.getCamera();
     const isFloorplan = args.getMode() === "layout" && args.getViewMode() === "2d" && args.getActiveViewerTab() === "floorplan";
-    args.overlay.setVisible(isFloorplan);
+    args.temporaryDimensions.setVisible(isFloorplan);
     if (!isFloorplan || !(activeCam instanceof THREE.OrthographicCamera)) return;
 
     const scaleX = (rect.width / Math.max(1e-9, Math.abs(activeCam.right - activeCam.left))) * activeCam.zoom;
     const scaleY = (rect.height / Math.max(1e-9, Math.abs(activeCam.top - activeCam.bottom))) * activeCam.zoom;
     const scale = Math.max(1e-6, Math.min(scaleX, scaleY));
     const target = args.getControls().target;
-    args.overlay.syncCamera(scale, -target.x, -target.z);
+    args.temporaryDimensions.syncCamera(scale, -target.x, -target.z);
 
     for (const dim of dimensions) {
-      args.overlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
+      args.temporaryDimensions.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
     }
     for (const dim of state.preview) {
-      args.overlay.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
+      args.temporaryDimensions.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
     }
-    args.overlay.updateLines();
+    args.temporaryDimensions.render();
   };
 
   const isLinePicked = (line: AlignPickedLine) =>

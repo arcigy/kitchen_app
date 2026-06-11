@@ -590,7 +590,7 @@ export function startApp(initialArgs: AppArgs) {
   syncViewerDownbar = viewerDownbar.sync;
 
   const technicalDimensions = createTechnicalDimensionManager({
-    overlay: dimensionOverlay,
+    temporaryDimensions,
     renderer,
     getCamera: cam,
     getControls: ctl,

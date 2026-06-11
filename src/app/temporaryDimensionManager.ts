@@ -59,6 +59,18 @@ export class TemporaryDimensionManager<Overlay extends TemporaryDimensionOverlay
   }
 }
 
+export type TemporaryDimensionManagerPort = Pick<
+  TemporaryDimensionManager,
+  | "addOffsetDimension"
+  | "addPlacedDimension"
+  | "clear"
+  | "render"
+  | "setSize"
+  | "setUnitScale"
+  | "setVisible"
+  | "syncCamera"
+>;
+
 export function createTemporaryDimensionManager(renderer: THREE.WebGLRenderer, camera?: THREE.Camera) {
   return new TemporaryDimensionManager(new DimensionOverlay(renderer, camera));
 }
