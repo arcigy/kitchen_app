@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { ModuleAdjacencyLink } from "./moduleAdjacency";
 import type { KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
+import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 
 type SnapPositionDetailedOptions = {
   stickyNeighborId?: string | null;
@@ -57,8 +58,11 @@ export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolv
     let snappedPosition = result.position.clone();
     let snappedRotationY = moving.root.rotation.y;
     if (effectiveGroupId) {
-      const group = ctx.S.kitchenGroups.find((item) => item.id === effectiveGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
+      const backOffsetMm = resolveKitchenPlacementBackOffset({
+        kitchenGroupId: effectiveGroupId,
+        kitchenGroups: ctx.S.kitchenGroups,
+        defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+      });
       const prevPos = moving.root.position.clone();
       const prevRot = moving.root.rotation.y;
       const prevKitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
