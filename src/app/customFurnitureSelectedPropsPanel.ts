@@ -8,6 +8,7 @@ import type {
   CustomFurnitureInstance
 } from "../layout/customFurnitureTypes";
 import { materialSelect, numberInput, selectInput, textInput } from "./customFurnitureUiControls";
+import { appendMutedText } from "./propsPanelElements";
 
 export type CustomFurnitureSelectedPropsApi = {
   setTitle: (title: string) => void;
@@ -49,10 +50,7 @@ export function mountCustomFurnitureProps(args: {
     args.rebuildFurniture(furniture);
     args.commitHistory();
   }));
-  const summary = document.createElement("div");
-  summary.className = "muted";
-  summary.textContent = `Boundary: ${furniture.params.boundary.length} points. Boards: ${furniture.params.boards.length}.`;
-  section.appendChild(summary);
+  appendMutedText(section, `Boundary: ${furniture.params.boundary.length} points. Boards: ${furniture.params.boards.length}.`);
 }
 
 export function mountCustomFurnitureBoardProps(args: {
@@ -130,8 +128,8 @@ export function mountCustomFurnitureBoardProps(args: {
     args.commitHistory();
   }));
   const bounds = polygonBoundsMm(board.profile);
-  const summary = document.createElement("div");
-  summary.className = "muted";
-  summary.textContent = `Profile: ${board.profile.length} points, ${Math.round(bounds.widthMm)} x ${Math.round(bounds.heightMm)} mm. Edge banding: ${board.edgeBanding.length}.`;
-  section.appendChild(summary);
+  appendMutedText(
+    section,
+    `Profile: ${board.profile.length} points, ${Math.round(bounds.widthMm)} x ${Math.round(bounds.heightMm)} mm. Edge banding: ${board.edgeBanding.length}.`
+  );
 }

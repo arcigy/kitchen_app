@@ -1,6 +1,7 @@
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { CustomFurnitureBoardJustification, CustomFurnitureConstraint } from "../layout/customFurnitureTypes";
 import { materialSelect, numberInput, selectInput } from "./customFurnitureUiControls";
+import { appendMutedText } from "./propsPanelElements";
 
 export type CustomFurnitureActiveToolKind = "boundary" | "horizontalBoard" | "verticalBoard" | "edgeBand";
 
@@ -41,14 +42,14 @@ export function mountCustomFurnitureActiveToolProps(args: {
     mountVerticalBoardDraftRows(args, section);
   }
 
-  const text = document.createElement("div");
-  text.className = "muted";
-  text.textContent = args.boundaryEditActive
-    ? `boundary: ${args.boundarySegmentsCount} line(s). ${
-        args.boundaryHasFirstPoint ? "Click next point to place the current line." : "Click a first point or select an existing line."
-      }`
-    : `${args.activeTool}: ${args.draftPointsCount} point(s).`;
-  section.appendChild(text);
+  appendMutedText(
+    section,
+    args.boundaryEditActive
+      ? `boundary: ${args.boundarySegmentsCount} line(s). ${
+          args.boundaryHasFirstPoint ? "Click next point to place the current line." : "Click a first point or select an existing line."
+        }`
+      : `${args.activeTool}: ${args.draftPointsCount} point(s).`
+  );
   return true;
 }
 
