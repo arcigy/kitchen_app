@@ -21,6 +21,10 @@ describe("opening props panel controls", () => {
     appendOpeningNumberRows(props, section, params, [{ label: "Width", key: "widthMm" }], apply);
 
     const width = rows[0].control;
+    expect(width.type).toBe("number");
+    expect(width.step).toBe("1");
+    expect(width.value).toBe("900");
+
     width.value = "925.4";
     width.dispatch("input");
     expect(params.widthMm).toBe(925);

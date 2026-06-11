@@ -1,5 +1,6 @@
 import type { OpeningHandleType } from "./localTypes";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
+import { createInputElement } from "./propsPanelElements";
 
 type OpeningSwingDirection = "left" | "right";
 type OpeningSwingSide = "inward" | "outward";
@@ -58,10 +59,7 @@ export function appendOpeningNumberRows<T extends object, K extends keyof T>(
   apply: (commit: boolean, patch: Partial<T>) => void
 ) {
   for (const row of rows) {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[row.key] ?? 0)));
+    const input = createInputElement("number", String(Math.round(Number(params[row.key] ?? 0))), { step: "1" });
     props.row(section, row.label, input);
 
     const read = () => {
