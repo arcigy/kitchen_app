@@ -90,6 +90,19 @@ export type DuplicateSelectionCommandContext = Pick<
   | "commitHistory"
 >;
 
+export type OpenUnderlayPanelCommandContext = Pick<
+  LayoutActionsControllerContext,
+  | "ensureLayoutMode"
+  | "cancelPlacementIfActive"
+  | "setToolSelect"
+  | "isVisibleUnpinnedUnderlay"
+  | "setSelectedUnderlay"
+  | "setSelectedWall"
+  | "setSelectedModule"
+  | "setSelectedKind"
+  | "mountProps"
+>;
+
 export function resolveSelectedEntityIds(args: {
   selectedKind: SelectedKind;
   singleKind: Exclude<SelectedKind, null>;
@@ -105,19 +118,7 @@ export function resolveSelectedEntityIds(args: {
 }
 
 export function createLayoutActionsController(ctx: LayoutActionsControllerContext) {
-  const openUnderlayPanel = () => {
-    ctx.ensureLayoutMode();
-    ctx.cancelPlacementIfActive();
-    ctx.setToolSelect();
-    if (ctx.isVisibleUnpinnedUnderlay()) {
-      ctx.setSelectedUnderlay();
-      return;
-    }
-    ctx.setSelectedWall(null);
-    ctx.setSelectedModule(null);
-    ctx.setSelectedKind("underlay");
-    ctx.mountProps();
-  };
+  const openUnderlayPanel = () => runOpenUnderlayPanelCommand(ctx);
 
   const duplicateSelected = () => {
     runDuplicateSelectionCommand(ctx);
@@ -137,6 +138,20 @@ export function createLayoutActionsController(ctx: LayoutActionsControllerContex
     deleteSelected,
     toggle2dView
   };
+}
+
+export function runOpenUnderlayPanelCommand(ctx: OpenUnderlayPanelCommandContext) {
+  ctx.ensureLayoutMode();
+  ctx.cancelPlacementIfActive();
+  ctx.setToolSelect();
+  if (ctx.isVisibleUnpinnedUnderlay()) {
+    ctx.setSelectedUnderlay();
+    return;
+  }
+  ctx.setSelectedWall(null);
+  ctx.setSelectedModule(null);
+  ctx.setSelectedKind("underlay");
+  ctx.mountProps();
 }
 
 type DuplicateSelectionBranchResult = "handled" | "blocked" | "not-applicable";

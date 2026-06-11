@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLayoutActionsController, resolveSelectedEntityIds, runDuplicateSelectionCommand } from "./layoutActionsController";
+import {
+  createLayoutActionsController,
+  resolveSelectedEntityIds,
+  runDuplicateSelectionCommand,
+  runOpenUnderlayPanelCommand
+} from "./layoutActionsController";
 import type { SelectedKind } from "./localTypes";
 
 function makeController(overrides: Partial<Parameters<typeof createLayoutActionsController>[0]> = {}) {
@@ -124,6 +129,41 @@ describe("layout delete action", () => {
         multiIds: []
       })
     ).toEqual([]);
+  });
+
+  it("runOpenUnderlayPanelCommand selects visible unpinned underlay through the current path", () => {
+    const harness = makeController({
+      isVisibleUnpinnedUnderlay: () => true,
+      setSelectedModule: vi.fn(),
+      setSelectedWall: vi.fn()
+    });
+
+    runOpenUnderlayPanelCommand(harness.ctx);
+
+    expect(harness.ctx.ensureLayoutMode).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.cancelPlacementIfActive).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.setToolSelect).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.setSelectedUnderlay).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.setSelectedWall).not.toHaveBeenCalled();
+    expect(harness.ctx.setSelectedModule).not.toHaveBeenCalled();
+    expect(harness.ctx.getSelectedKind()).toBeNull();
+    expect(harness.ctx.mountProps).not.toHaveBeenCalled();
+  });
+
+  it("runOpenUnderlayPanelCommand opens underlay panel selection when no visible unpinned underlay exists", () => {
+    const harness = makeController();
+    harness.setSelection({ kind: "wall", wallId: "w1", instanceId: "m1" });
+
+    runOpenUnderlayPanelCommand(harness.ctx);
+
+    expect(harness.ctx.ensureLayoutMode).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.cancelPlacementIfActive).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.setToolSelect).toHaveBeenCalledTimes(1);
+    expect(harness.ctx.setSelectedUnderlay).not.toHaveBeenCalled();
+    expect(harness.ctx.getSelectedWallId()).toBeNull();
+    expect(harness.ctx.getSelectedInstanceId()).toBeNull();
+    expect(harness.ctx.getSelectedKind()).toBe("underlay");
+    expect(harness.ctx.mountProps).toHaveBeenCalledTimes(1);
   });
 
   it("duplicates selected walls from the shared edit action", () => {
