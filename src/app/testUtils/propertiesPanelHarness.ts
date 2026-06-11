@@ -8,6 +8,29 @@ export class FakeElement {
   checked = false;
   children: FakeElement[] = [];
   className = "";
+  classList = {
+    add: (...tokens: string[]) => {
+      const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+      for (const token of tokens) classes.add(token);
+      this.className = [...classes].join(" ");
+    },
+    remove: (...tokens: string[]) => {
+      const remove = new Set(tokens);
+      this.className = this.className
+        .split(/\s+/)
+        .filter((token) => token && !remove.has(token))
+        .join(" ");
+    },
+    toggle: (token: string, force?: boolean) => {
+      const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+      const shouldAdd = force ?? !classes.has(token);
+      if (shouldAdd) classes.add(token);
+      else classes.delete(token);
+      this.className = [...classes].join(" ");
+      return shouldAdd;
+    }
+  };
+  dataset: Record<string, string> = {};
   disabled = false;
   id = "";
   innerHTML = "";
@@ -52,6 +75,10 @@ export class FakeElement {
 
   remove() {
     this.isConnected = false;
+  }
+
+  replaceChildren(...children: FakeElement[]) {
+    this.children = children;
   }
 
   querySelectorAll<T = FakeElement>(_selector: string): T[] {

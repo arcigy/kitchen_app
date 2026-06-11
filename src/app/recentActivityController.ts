@@ -6,6 +6,7 @@ import {
   type HistoryHelpers
 } from "../layout/historyManager";
 import { getModuleDescriptors } from "../modules/registry";
+import { createButtonElement } from "./propsPanelElements";
 
 export type RecentActivityTarget = {
   kind: "wall" | "module" | "floor" | "column" | "section" | null;
@@ -248,9 +249,7 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
     text.textContent = `Ukazujem stav: ${entry.label}`;
     const escape = document.createElement("b");
     escape.textContent = "ESC pre navrat";
-    const back = document.createElement("button");
-    back.type = "button";
-    back.textContent = "Spat na aktualnu verziu";
+    const back = createButtonElement("Spat na aktualnu verziu");
     back.addEventListener("click", () => exitPreview());
     banner.append(text, escape, back);
     document.body.appendChild(banner);
@@ -315,9 +314,7 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
     const header = document.createElement("header");
     const title = document.createElement("strong");
     title.textContent = "Activity History";
-    const close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "Close";
+    const close = createButtonElement("Close");
     close.addEventListener("click", closePopover);
     header.append(title, close);
 
@@ -334,23 +331,17 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
       copy.textContent = `Projekt sa obnovi do stavu po zmene "${entry.label}". Novsie aktivity sa vymazu z logu.`;
       const actions = document.createElement("div");
       actions.className = "archux-activity-confirm-actions";
-      const no = document.createElement("button");
-      no.type = "button";
-      no.textContent = "Nie";
+      const no = createButtonElement("Nie");
       no.addEventListener("click", () => {
         confirmBox.className = "";
         confirmBox.replaceChildren();
       });
-      const preview = document.createElement("button");
-      preview.type = "button";
+      const preview = createButtonElement("Ukazat stav");
       preview.dataset.activityPreview = "true";
-      preview.textContent = "Ukazat stav";
       preview.disabled = !entry.snapshot;
       preview.addEventListener("click", () => enterPreview(entry));
-      const yes = document.createElement("button");
-      yes.type = "button";
+      const yes = createButtonElement("Ano, obnovit");
       yes.dataset.activityConfirmYes = "true";
-      yes.textContent = "Ano, obnovit";
       yes.disabled = !entry.snapshot;
       yes.addEventListener("click", () => {
         restoreTo(entry);
@@ -364,8 +355,7 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
       fullList.appendChild(createRow("No recent changes", "now"));
     } else {
       for (const entry of entries) {
-        const button = document.createElement("button");
-        button.type = "button";
+        const button = createButtonElement("");
         const label = document.createElement("span");
         label.textContent = entry.label;
         const time = document.createElement("b");

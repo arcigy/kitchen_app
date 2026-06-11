@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import type { LayoutSnapshot } from "../layout/appState";
-import { describeSnapshotActivity } from "./recentActivityController";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AppState, LayoutSnapshot } from "../layout/appState";
+import { createRecentActivityController, describeSnapshotActivity } from "./recentActivityController";
+import { FakeElement } from "./testUtils/propertiesPanelHarness";
 
 const snapshot = (patch: Partial<LayoutSnapshot>): LayoutSnapshot => ({
   wallCounter: 1,
@@ -66,5 +67,76 @@ describe("describeSnapshotActivity", () => {
 
     expect(activity.label).toBe("2 objects updated");
     expect(activity.target).toEqual({ kind: null, id: null });
+  });
+});
+
+describe("createRecentActivityController", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function findByClass(root: FakeElement, className: string): FakeElement | null {
+    if (root.className.split(/\s+/).includes(className)) return root;
+    for (const child of root.children) {
+      const match = findByClass(child, className);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  it("keeps recent activity popover and confirm buttons mounted with current behavior", () => {
+    const body = new FakeElement();
+    const listEl = new FakeElement();
+    const countEl = new FakeElement();
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      body,
+      createElement: () => new FakeElement(),
+      querySelector: (selector: string) => {
+        if (selector === "[data-recent-activity]") return listEl;
+        if (selector === "[data-recent-activity-count]") return countEl;
+        if (selector.startsWith(".")) return findByClass(body, selector.slice(1));
+        return null;
+      },
+      querySelectorAll: () => []
+    });
+    vi.stubGlobal("performance", { now: () => 0 });
+    const current = snapshot({ walls: [wall("w1")] as LayoutSnapshot["walls"] });
+    const controller = createRecentActivityController({
+      S: { history: { current, past: [], future: [] } } as unknown as AppState,
+      getHelpers: vi.fn(),
+      selectTarget: vi.fn(),
+      onRestore: vi.fn()
+    });
+
+    controller.record("Wall W1 added", current, { kind: "wall", id: "w1" });
+    countEl.dispatch("click");
+
+    const popover = body.children.find((child) => child.className === "archux-activity-history-popover")!;
+    expect(popover.attributes.get("role")).toBe("dialog");
+    expect(popover.attributes.get("aria-label")).toBe("Activity history");
+    const header = popover.children[0]!;
+    expect(header.children[1]!.type).toBe("button");
+    expect(header.children[1]!.textContent).toBe("Close");
+    const list = popover.children[2]!;
+    const entryButton = list.children[0]!;
+    expect(entryButton.type).toBe("button");
+    expect(entryButton.children[0]!.textContent).toBe("Wall W1 added");
+
+    entryButton.dispatch("click");
+
+    const actions = popover.children[1]!.children[2]!;
+    expect(actions.children.map((child) => [child.type, child.textContent, child.disabled])).toEqual([
+      ["button", "Nie", false],
+      ["button", "Ukazat stav", false],
+      ["button", "Ano, obnovit", false]
+    ]);
+    expect(actions.children[1]!.dataset.activityPreview).toBe("true");
+    expect(actions.children[2]!.dataset.activityConfirmYes).toBe("true");
+
+    actions.children[0]!.dispatch("click");
+
+    expect(popover.children[1]!.className).toBe("");
+    expect(popover.children[1]!.children).toEqual([]);
   });
 });
