@@ -33,6 +33,16 @@ export type ToolbarSelectionEditCommandContext = {
   duplicateSelected: () => void;
 };
 
+export type ToolbarVisibilityCommandContext = {
+  visibility: {
+    hideSelected: () => void;
+    isolateSelected: () => void;
+    selectedHasHidden: () => boolean;
+    unhideAll: () => void;
+    unhideSelected: () => void;
+  };
+};
+
 export function runToolbarMoveCommand(ctx: ToolbarTransformCommandContext) {
   ctx.startTransformFromSelection("move", { sticky: true, toggle: true });
 }
@@ -84,4 +94,18 @@ export function runToolbarDuplicateCommand(ctx: Pick<ToolbarSelectionEditCommand
 
 export function runToolbarDeleteCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "deleteSelected">) {
   ctx.deleteSelected();
+}
+
+export function runToolbarHideToggleCommand(ctx: ToolbarVisibilityCommandContext, syncVisibility: () => void) {
+  if (ctx.visibility.selectedHasHidden()) ctx.visibility.unhideSelected();
+  else ctx.visibility.hideSelected();
+  syncVisibility();
+}
+
+export function runToolbarIsolateCommand(ctx: ToolbarVisibilityCommandContext) {
+  ctx.visibility.isolateSelected();
+}
+
+export function runToolbarUnhideAllCommand(ctx: ToolbarVisibilityCommandContext) {
+  ctx.visibility.unhideAll();
 }

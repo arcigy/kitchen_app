@@ -6,6 +6,8 @@ import {
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarHideToggleCommand,
+  runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
   runToolbarRedoCommand,
@@ -14,6 +16,7 @@ import {
   runToolbarSelectCommand,
   runToolbarTrimCommand,
   runToolbarUndoCommand,
+  runToolbarUnhideAllCommand,
   runToolbarWallCommand
 } from "./editorToolbarCommands";
 
@@ -111,5 +114,61 @@ describe("editor toolbar commands", () => {
 
     expect(ctx.duplicateSelected).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.deleteSelected).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes hide toggle through hideSelected and refreshes toolbar visibility", () => {
+    const ctx = {
+      visibility: {
+        hideSelected: vi.fn(),
+        isolateSelected: vi.fn(),
+        selectedHasHidden: vi.fn(() => false),
+        unhideAll: vi.fn(),
+        unhideSelected: vi.fn()
+      }
+    };
+    const syncVisibility = vi.fn();
+
+    runToolbarHideToggleCommand(ctx, syncVisibility);
+
+    expect(ctx.visibility.hideSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.visibility.unhideSelected).not.toHaveBeenCalled();
+    expect(syncVisibility).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes hide toggle through unhideSelected when selected objects are hidden", () => {
+    const ctx = {
+      visibility: {
+        hideSelected: vi.fn(),
+        isolateSelected: vi.fn(),
+        selectedHasHidden: vi.fn(() => true),
+        unhideAll: vi.fn(),
+        unhideSelected: vi.fn()
+      }
+    };
+    const syncVisibility = vi.fn();
+
+    runToolbarHideToggleCommand(ctx, syncVisibility);
+
+    expect(ctx.visibility.unhideSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.visibility.hideSelected).not.toHaveBeenCalled();
+    expect(syncVisibility).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes isolate and unhide all through current visibility commands", () => {
+    const ctx = {
+      visibility: {
+        hideSelected: vi.fn(),
+        isolateSelected: vi.fn(),
+        selectedHasHidden: vi.fn(),
+        unhideAll: vi.fn(),
+        unhideSelected: vi.fn()
+      }
+    };
+
+    runToolbarIsolateCommand(ctx);
+    runToolbarUnhideAllCommand(ctx);
+
+    expect(ctx.visibility.isolateSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.visibility.unhideAll).toHaveBeenCalledExactlyOnceWith();
   });
 });

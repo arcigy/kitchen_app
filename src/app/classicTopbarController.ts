@@ -10,6 +10,8 @@ import {
   runToolbarDeleteCommand,
   runToolbarDimensionCommand,
   runToolbarDuplicateCommand,
+  runToolbarHideToggleCommand,
+  runToolbarIsolateCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
   runToolbarRedoCommand,
@@ -18,6 +20,7 @@ import {
   runToolbarSelectCommand,
   runToolbarTrimCommand,
   runToolbarUndoCommand,
+  runToolbarUnhideAllCommand,
   runToolbarWallCommand
 } from "./editorToolbarCommands";
 
@@ -232,14 +235,10 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       title: "Hide",
       label: "Hide",
       iconSvg: ctx.I_HIDE,
-      onClick: () => {
-        if (ctx.visibility.selectedHasHidden()) ctx.visibility.unhideSelected();
-        else ctx.visibility.hideSelected();
-        syncClassicTopbarVisibility();
-      }
+      onClick: () => runToolbarHideToggleCommand(ctx, syncClassicTopbarVisibility)
     });
-    isolateBtn = addButton(edit, { title: "Isolate", label: "Isolate", iconSvg: ctx.I_ISOLATE, onClick: ctx.visibility.isolateSelected });
-    unhideAllBtn = addButton(edit, { title: "Unhide All", label: "Unhide All", iconSvg: ctx.I_UNHIDE, onClick: ctx.visibility.unhideAll });
+    isolateBtn = addButton(edit, { title: "Isolate", label: "Isolate", iconSvg: ctx.I_ISOLATE, onClick: () => runToolbarIsolateCommand(ctx) });
+    unhideAllBtn = addButton(edit, { title: "Unhide All", label: "Unhide All", iconSvg: ctx.I_UNHIDE, onClick: () => runToolbarUnhideAllCommand(ctx) });
     addButton(edit, { title: "Delete", label: "Delete", iconSvg: ctx.I_TRASH, onClick: () => runToolbarDeleteCommand(ctx) });
   };
 
