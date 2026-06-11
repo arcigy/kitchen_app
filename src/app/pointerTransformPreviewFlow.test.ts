@@ -7,6 +7,7 @@ import {
   handleTransformPreviewPointerMove,
   normalizeAngleRadians,
   resolveRotatePreviewAngle,
+  routeTransformPreviewSnapFeedback,
   type PointerTransformPreviewState
 } from "./pointerTransformPreviewFlow";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
@@ -78,6 +79,51 @@ describe("pointerTransformPreviewFlow", () => {
 
     expect(angle).toBeCloseTo(-Math.PI * 0.75);
     expect(formatRotatePreviewStatus(angle)).toBe("Rotate: -135 deg (click to finish)");
+  });
+
+  it("routes preview snap feedback for move, rotate snap, and rotate no-snap", () => {
+    const rect = {} as DOMRect;
+    const pickedPoint = new Vector3(2, 0, 3);
+    const moveSnap = { kind: "corner" as const, point: new Vector3(4, 0, 5) };
+    const noneSnap = { kind: "none" as const, point: pickedPoint };
+    const updateMoveSnapFeedback = vi.fn();
+    const updateHoverCursor = vi.fn();
+    const hideHoverCursor = vi.fn();
+
+    routeTransformPreviewSnapFeedback<TestPlanSnap>({
+      transformKind: "move",
+      moveSnap,
+      snapped: moveSnap,
+      pickedPoint,
+      rect,
+      updateHoverCursor,
+      updateMoveSnapFeedback,
+      hideHoverCursor
+    });
+    routeTransformPreviewSnapFeedback<TestPlanSnap>({
+      transformKind: "rotate",
+      moveSnap: null,
+      snapped: moveSnap,
+      pickedPoint,
+      rect,
+      updateHoverCursor,
+      updateMoveSnapFeedback,
+      hideHoverCursor
+    });
+    routeTransformPreviewSnapFeedback<TestPlanSnap>({
+      transformKind: "rotate",
+      moveSnap: null,
+      snapped: noneSnap,
+      pickedPoint,
+      rect,
+      updateHoverCursor,
+      updateMoveSnapFeedback,
+      hideHoverCursor
+    });
+
+    expect(updateMoveSnapFeedback).toHaveBeenCalledExactlyOnceWith(moveSnap, pickedPoint, rect);
+    expect(updateHoverCursor).toHaveBeenCalledExactlyOnceWith(pickedPoint, "corner", rect);
+    expect(hideHoverCursor).toHaveBeenCalledOnce();
   });
 
   it("keeps current move preview behavior without object snap", () => {

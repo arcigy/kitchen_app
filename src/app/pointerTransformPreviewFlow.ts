@@ -26,6 +26,25 @@ export function formatRotatePreviewStatus(angleRad: number): string {
   return `Rotate: ${Math.round((angleRad * 180) / Math.PI)} deg (click to finish)`;
 }
 
+export function routeTransformPreviewSnapFeedback<PlanSnap extends { kind: string; point: THREE.Vector3 }>(args: {
+  transformKind: PointerTransformClickState["kind"];
+  moveSnap: PlanSnap | null;
+  snapped: PlanSnap;
+  pickedPoint: THREE.Vector3;
+  rect: DOMRect;
+  updateHoverCursor: (point: THREE.Vector3, kind: PlanSnap["kind"], rect: DOMRect) => void;
+  updateMoveSnapFeedback: (snap: PlanSnap | null, point: THREE.Vector3, rect: DOMRect) => void;
+  hideHoverCursor: () => void;
+}): void {
+  if (args.transformKind === "move") {
+    args.updateMoveSnapFeedback(args.moveSnap, args.pickedPoint, args.rect);
+  } else if (args.snapped.kind !== "none") {
+    args.updateHoverCursor(args.pickedPoint, args.snapped.kind, args.rect);
+  } else {
+    args.hideHoverCursor();
+  }
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -100,13 +119,16 @@ export function handleTransformPointerMovePreview<PlanSnap extends { kind: strin
   if (args.transformState.kind !== "move") args.setSelectPlanSnap(snapped.kind !== "none" ? snapped : null);
 
   const pickedPoint = snapped.kind !== "none" ? snapped.point : args.hitPoint;
-  if (args.transformState.kind === "move") {
-    args.updateMoveSnapFeedback(moveSnap, pickedPoint, args.rect);
-  } else if (snapped.kind !== "none") {
-    args.updateHoverCursor(pickedPoint, snapped.kind, args.rect);
-  } else {
-    args.hideHoverCursor();
-  }
+  routeTransformPreviewSnapFeedback({
+    transformKind: args.transformState.kind,
+    moveSnap,
+    snapped,
+    pickedPoint,
+    rect: args.rect,
+    updateHoverCursor: args.updateHoverCursor,
+    updateMoveSnapFeedback: args.updateMoveSnapFeedback,
+    hideHoverCursor: args.hideHoverCursor
+  });
 
   return handleTransformPreviewPointerMove({
     applyMoveDelta: args.applyMoveDelta,
