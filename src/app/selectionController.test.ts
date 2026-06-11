@@ -19,6 +19,7 @@ import {
   runSelectModuleCommand,
   runSelectOpeningCommand,
   runSelectSectionCommand,
+  runSelectUnderlayCommand,
   runSelectWallCommand,
   type DrawingToolSelectionState,
   type SectionToolSelectionState,
@@ -487,6 +488,47 @@ describe("createSelectionController", () => {
       sideEffectKind: "column"
     });
     expect(selectedColumnId).toBe("column-1");
+  });
+
+  it("runs the named underlay selection command with current guard and cleanup behavior", () => {
+    const applySelection = vi.fn((args) => {
+      args.cleanupVisuals?.();
+    });
+    const createUnderlaySelectionBox = vi.fn();
+    const ensureSelectableTool = vi.fn();
+
+    const selected = runSelectUnderlayCommand({
+      applySelection,
+      createUnderlaySelectionBox,
+      ensureSelectableTool,
+      hasUnderlaySource: () => true,
+      isUnderlayPinned: () => false,
+      isUnderlayVisible: () => true
+    });
+
+    expect(selected).toBe(true);
+    expect(ensureSelectableTool).toHaveBeenCalledOnce();
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection.mock.calls[0]?.[0].kind).toBe("underlay");
+    expect(createUnderlaySelectionBox).toHaveBeenCalledOnce();
+  });
+
+  it("runs the named underlay selection command with current unavailable behavior", () => {
+    const applySelection = vi.fn();
+    const ensureSelectableTool = vi.fn();
+
+    const selected = runSelectUnderlayCommand({
+      applySelection,
+      createUnderlaySelectionBox: vi.fn(),
+      ensureSelectableTool,
+      hasUnderlaySource: () => false,
+      isUnderlayPinned: () => false,
+      isUnderlayVisible: () => true
+    });
+
+    expect(selected).toBe(false);
+    expect(ensureSelectableTool).toHaveBeenCalledOnce();
+    expect(applySelection).not.toHaveBeenCalled();
   });
 
   it("clears wall and underlay selection boxes without touching the instance box", () => {

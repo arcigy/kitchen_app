@@ -68,6 +68,15 @@ export type SelectColumnCommandContext = {
   setSelectedColumnId: (id: string | null) => void;
 };
 
+export type SelectUnderlayCommandContext = {
+  applySelection: SelectionApplyCommand;
+  createUnderlaySelectionBox: () => void;
+  ensureSelectableTool: () => void;
+  hasUnderlaySource: () => boolean;
+  isUnderlayPinned: () => boolean;
+  isUnderlayVisible: () => boolean;
+};
+
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -275,6 +284,16 @@ export function runSelectColumnCommand(ctx: SelectColumnCommandContext, id: stri
   });
 }
 
+export function runSelectUnderlayCommand(ctx: SelectUnderlayCommandContext) {
+  ctx.ensureSelectableTool();
+  if (!ctx.isUnderlayVisible() || !ctx.hasUnderlaySource() || ctx.isUnderlayPinned()) return false;
+  ctx.applySelection({
+    kind: "underlay",
+    cleanupVisuals: ctx.createUnderlaySelectionBox
+  });
+  return true;
+}
+
 export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
   target.clear();
   for (const id of ids) target.add(id);
@@ -421,20 +440,19 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedUnderlay() {
-    ensureSelectableTool();
-    if (!ctx.underlayMesh.visible || !ctx.hasUnderlaySource() || ctx.underlayState.pinned) return;
-    runApplySelectionCommand(
-      { ...applySelectionCommandContext, ensureSelectableTool: () => {} },
-      {
-        kind: "underlay",
-        cleanupVisuals: () => {
-          clearObjectSelectionVisuals();
-          ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
-          ctx.selectedUnderlayBox.name = "underlaySelectionBox";
-          ctx.scene.add(ctx.selectedUnderlayBox);
-        }
-      }
-    );
+    runSelectUnderlayCommand({
+      applySelection: (args) => runApplySelectionCommand({ ...applySelectionCommandContext, ensureSelectableTool: () => {} }, args),
+      createUnderlaySelectionBox: () => {
+        clearObjectSelectionVisuals();
+        ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
+        ctx.selectedUnderlayBox.name = "underlaySelectionBox";
+        ctx.scene.add(ctx.selectedUnderlayBox);
+      },
+      ensureSelectableTool,
+      hasUnderlaySource: ctx.hasUnderlaySource,
+      isUnderlayPinned: () => ctx.underlayState.pinned,
+      isUnderlayVisible: () => ctx.underlayMesh.visible
+    });
   }
 
   function setSelectedSection(id: string | null) {
