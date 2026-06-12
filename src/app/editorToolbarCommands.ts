@@ -135,11 +135,18 @@ export function runToolbarSectionCommand(ctx: Pick<ToolbarToolCommandContext, "s
 }
 
 export function runToolbarUndoCommand(ctx: ToolbarHistoryCommandContext) {
-  ctx.undo(ctx.S, ctx.helpers);
+  runToolbarHistoryActionCommand(ctx.undo, ctx);
 }
 
 export function runToolbarRedoCommand(ctx: ToolbarHistoryCommandContext) {
-  ctx.redo(ctx.S, ctx.helpers);
+  runToolbarHistoryActionCommand(ctx.redo, ctx);
+}
+
+export function runToolbarHistoryActionCommand(
+  action: (S: AppState, helpers: HistoryHelpers) => void,
+  ctx: Pick<ToolbarHistoryCommandContext, "S" | "helpers">
+) {
+  action(ctx.S, ctx.helpers);
 }
 
 export function runToolbarDuplicateCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "duplicateSelected">) {

@@ -18,6 +18,7 @@ import {
   runToolbarExportSceneCommand,
   runToolbarFloorCommand,
   runToolbarHideToggleCommand,
+  runToolbarHistoryActionCommand,
   runToolbarInstallCommand,
   runToolbarIsolateCommand,
   runToolbarMaterialCommand,
@@ -155,6 +156,16 @@ describe("editor toolbar commands", () => {
 
     expect(ctx.undo).toHaveBeenCalledExactlyOnceWith(ctx.S, ctx.helpers);
     expect(ctx.redo).toHaveBeenCalledExactlyOnceWith(ctx.S, ctx.helpers);
+  });
+
+  it("runs toolbar history action with current state and helpers", () => {
+    const S = { marker: "state" } as unknown as AppState;
+    const helpers = { marker: "helpers" } as unknown as HistoryHelpers;
+    const action = vi.fn();
+
+    runToolbarHistoryActionCommand(action, { S, helpers });
+
+    expect(action).toHaveBeenCalledExactlyOnceWith(S, helpers);
   });
 
   it("routes selection edit buttons through current selection commands", () => {
