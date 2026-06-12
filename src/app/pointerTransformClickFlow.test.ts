@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
 import {
   finishMoveTransformTarget,
+  finishRotateTransform,
   handleTransformClickPointerDown,
   setMoveTransformBase,
   setRotateTransformPivot,
@@ -189,6 +190,22 @@ describe("pointerTransformClickFlow", () => {
     expect(args.commitHistory).toHaveBeenCalledOnce();
     expect(args.clearTransform).toHaveBeenCalledExactlyOnceWith({ status: "Rotate: done." });
     expect(args.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("finishes rotate transform with history and done status", () => {
+    const clearTransform = vi.fn();
+    const commitHistory = vi.fn();
+    const mountProps = vi.fn();
+
+    finishRotateTransform({
+      clearTransform,
+      commitHistory,
+      mountProps
+    });
+
+    expect(commitHistory).toHaveBeenCalledOnce();
+    expect(clearTransform).toHaveBeenCalledWith({ status: "Rotate: done." });
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 
   it("ignores unsupported transform click states", () => {

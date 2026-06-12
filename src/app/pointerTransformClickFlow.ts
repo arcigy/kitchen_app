@@ -72,9 +72,11 @@ export function handleTransformClickPointerDown(args: {
     }
 
     if (transformState.step === "rotating") {
-      args.commitHistory();
-      args.clearTransform({ status: "Rotate: done." });
-      args.mountProps();
+      finishRotateTransform({
+        clearTransform: args.clearTransform,
+        commitHistory: args.commitHistory,
+        mountProps: args.mountProps
+      });
       return true;
     }
   }
@@ -128,5 +130,15 @@ export function finishMoveTransformTarget(args: {
     continueMove,
     status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
   });
+  args.mountProps();
+}
+
+export function finishRotateTransform(args: {
+  clearTransform: (options?: TransformClearOptions) => void;
+  commitHistory: () => void;
+  mountProps: () => void;
+}): void {
+  args.commitHistory();
+  args.clearTransform({ status: "Rotate: done." });
   args.mountProps();
 }
