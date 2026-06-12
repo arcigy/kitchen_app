@@ -4,6 +4,7 @@ import {
   activateSelectToolState,
   activateToggleEditorToolState,
   enterEditorTool,
+  reportEditorToolEntryStatus,
   resetEditorToolPromptFromEscape,
   type EditorToolEntryContext
 } from "./editorToolEntryController";
@@ -56,6 +57,18 @@ describe("enterEditorTool", () => {
 
     expect(ctx.enterSelectTool).toHaveBeenCalledOnce();
     expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("");
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("reports editor tool entry status and remounts props", () => {
+    const ctx = {
+      mountProps: vi.fn(),
+      setUnderlayStatus: vi.fn()
+    };
+
+    reportEditorToolEntryStatus(ctx, "Tool: active.");
+
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Tool: active.");
     expect(ctx.mountProps).toHaveBeenCalledOnce();
   });
 
