@@ -9,6 +9,7 @@ import {
   resolveTransformPreviewSnap,
   resolveRotatePreviewAngle,
   routeTransformPreviewSnapFeedback,
+  updateMoveTransformPreview,
   type PointerTransformPreviewState
 } from "./pointerTransformPreviewFlow";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
@@ -205,6 +206,37 @@ describe("pointerTransformPreviewFlow", () => {
     expect(args.applyMoveDelta).toHaveBeenCalledExactlyOnceWith(resolvedDelta);
     expect(args.updateObjectSnapFeedback).toHaveBeenCalledExactlyOnceWith("snap-a", target);
     expect(args.setStatus).toHaveBeenCalledExactlyOnceWith("Move free 1 mm smart snap: 1234 x -2345 mm (click or type distance, N = snapping)");
+  });
+
+  it("updates move transform preview with constrained resolved delta and smart snap feedback", () => {
+    const base = new Vector3(1, 0, 1);
+    const pickedPoint = new Vector3(4, 0, 5);
+    const constrainedDelta = new Vector3(3, 0, 0);
+    const resolvedDelta = new Vector3(1.234, 0, -2.345);
+    const target = new Vector3(9, 0, 9);
+    const applyMoveDelta = vi.fn();
+    const constrainMoveDelta = vi.fn(() => constrainedDelta);
+    const resolveMoveDelta = vi.fn(() => ({ delta: resolvedDelta, objectSnap: { snap: "snap-a", target } }));
+    const setStatus = vi.fn();
+    const updateObjectSnapFeedback = vi.fn();
+
+    updateMoveTransformPreview({
+      applyMoveDelta,
+      base,
+      constrainMoveDelta,
+      moveSnapDisabled: true,
+      pickedPoint,
+      resolveMoveDelta,
+      setStatus,
+      shiftKey: true,
+      updateObjectSnapFeedback
+    });
+
+    expect(constrainMoveDelta).toHaveBeenCalledExactlyOnceWith(new Vector3(3, 0, 4));
+    expect(resolveMoveDelta).toHaveBeenCalledExactlyOnceWith(constrainedDelta);
+    expect(applyMoveDelta).toHaveBeenCalledExactlyOnceWith(resolvedDelta);
+    expect(updateObjectSnapFeedback).toHaveBeenCalledExactlyOnceWith("snap-a", target);
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Move free 1 mm smart snap: 1234 x -2345 mm (click or type distance, N = snapping)");
   });
 
   it("keeps current rotate preview behavior and angle sign", () => {

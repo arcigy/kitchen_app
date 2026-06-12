@@ -62,6 +62,25 @@ export function resolveTransformPreviewSnap<PlanSnap extends { kind: string; poi
   return { moveSnap, snapped };
 }
 
+export function updateMoveTransformPreview<Snap>(args: {
+  applyMoveDelta: (delta: THREE.Vector3) => void;
+  base: THREE.Vector3;
+  constrainMoveDelta: (delta: THREE.Vector3) => THREE.Vector3;
+  moveSnapDisabled: boolean;
+  pickedPoint: THREE.Vector3;
+  resolveMoveDelta: (delta: THREE.Vector3) => { delta: THREE.Vector3; objectSnap: { snap: Snap; target: THREE.Vector3 } | null };
+  setStatus: (status: string) => void;
+  shiftKey: boolean;
+  updateObjectSnapFeedback: (snap: Snap, target: THREE.Vector3) => void;
+}): void {
+  const rawDelta = args.pickedPoint.clone().sub(args.base);
+  const constrainedDelta = args.shiftKey ? args.constrainMoveDelta(rawDelta) : rawDelta;
+  const { delta, objectSnap } = args.resolveMoveDelta(constrainedDelta);
+  args.applyMoveDelta(delta);
+  if (objectSnap) args.updateObjectSnapFeedback(objectSnap.snap, objectSnap.target);
+  args.setStatus(formatMovePreviewStatus({ delta, moveSnapDisabled: args.moveSnapDisabled, hasObjectSnap: Boolean(objectSnap) }));
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -77,12 +96,17 @@ export function handleTransformPreviewPointerMove<Snap>(args: {
   const { transformState } = args;
 
   if (transformState.kind === "move" && transformState.step === "pickTarget" && transformState.base) {
-    const rawDelta = args.pickedPoint.clone().sub(transformState.base);
-    const constrainedDelta = args.shiftKey ? args.constrainMoveDelta(rawDelta) : rawDelta;
-    const { delta, objectSnap } = args.resolveMoveDelta(constrainedDelta);
-    args.applyMoveDelta(delta);
-    if (objectSnap) args.updateObjectSnapFeedback(objectSnap.snap, objectSnap.target);
-    args.setStatus(formatMovePreviewStatus({ delta, moveSnapDisabled: transformState.moveSnapDisabled, hasObjectSnap: Boolean(objectSnap) }));
+    updateMoveTransformPreview({
+      applyMoveDelta: args.applyMoveDelta,
+      base: transformState.base,
+      constrainMoveDelta: args.constrainMoveDelta,
+      moveSnapDisabled: transformState.moveSnapDisabled,
+      pickedPoint: args.pickedPoint,
+      resolveMoveDelta: args.resolveMoveDelta,
+      setStatus: args.setStatus,
+      shiftKey: args.shiftKey,
+      updateObjectSnapFeedback: args.updateObjectSnapFeedback
+    });
     return true;
   }
 
