@@ -62,6 +62,15 @@ export function handleOpeningPlacementClick(args: {
   return true;
 }
 
+export function resolveOpeningPlacementRoute(args: {
+  isDoorActive: boolean;
+  isWindowActive: boolean;
+}) {
+  if (args.isWindowActive) return "window";
+  if (args.isDoorActive) return "door";
+  return null;
+}
+
 export function handleFloorplanPlacementClick(args: {
   cancelPendingMarquee: () => void;
   insertColumnAtPoint: () => void;
@@ -85,7 +94,12 @@ export function handleFloorplanPlacementClick(args: {
     return true;
   }
 
-  if (args.isWindowPlacementActive) {
+  const openingRoute = resolveOpeningPlacementRoute({
+    isDoorActive: args.isDoorPlacementActive,
+    isWindowActive: args.isWindowPlacementActive
+  });
+
+  if (openingRoute === "window") {
     return handleOpeningPlacementClick({
       insertAtWallPoint: args.insertWindowAtWallPoint,
       missingWallStatus: "Window: klikni priamo na stenu.",
@@ -94,7 +108,7 @@ export function handleFloorplanPlacementClick(args: {
     });
   }
 
-  if (args.isDoorPlacementActive) {
+  if (openingRoute === "door") {
     return handleOpeningPlacementClick({
       insertAtWallPoint: args.insertDoorAtWallPoint,
       missingWallStatus: "Door: klikni priamo na stenu.",
@@ -129,9 +143,7 @@ export function resolveSelectOpeningPlacementPreviewRoute(args: {
   isDoorActive: boolean;
   isWindowActive: boolean;
 }) {
-  if (args.isWindowActive) return "window";
-  if (args.isDoorActive) return "door";
-  return null;
+  return resolveOpeningPlacementRoute(args);
 }
 
 export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {

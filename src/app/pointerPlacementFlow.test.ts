@@ -10,6 +10,7 @@ import {
   handlePlacementPreviewPointerMove,
   handleSelectOpeningPlacementPreviewPointerMove,
   resetColumnPlacementPreview,
+  resolveOpeningPlacementRoute,
   resolveSelectOpeningPlacementPreviewRoute
 } from "./pointerPlacementFlow";
 
@@ -317,6 +318,13 @@ describe("pointerPlacementFlow", () => {
     expect(resolveSelectOpeningPlacementPreviewRoute({ isDoorActive: true, isWindowActive: true })).toBe("window");
     expect(resolveSelectOpeningPlacementPreviewRoute({ isDoorActive: true, isWindowActive: false })).toBe("door");
     expect(resolveSelectOpeningPlacementPreviewRoute({ isDoorActive: false, isWindowActive: false })).toBeNull();
+  });
+
+  it("resolves shared opening placement route with window priority", () => {
+    expect(resolveOpeningPlacementRoute({ isDoorActive: true, isWindowActive: true })).toBe("window");
+    expect(resolveOpeningPlacementRoute({ isDoorActive: true, isWindowActive: false })).toBe("door");
+    expect(resolveOpeningPlacementRoute({ isDoorActive: false, isWindowActive: true })).toBe("window");
+    expect(resolveOpeningPlacementRoute({ isDoorActive: false, isWindowActive: false })).toBeNull();
   });
 
   it("routes select opening placement preview to door when window placement is inactive", () => {
