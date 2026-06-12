@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
+  addDimensionPickedLine,
   finishTrimNoChange,
   finishTrimSuccess,
   handleAlignToolClick,
@@ -43,6 +44,20 @@ function trimState(overrides: Partial<PointerTrimClickState> = {}): PointerTrimC
 }
 
 describe("pointer editor tool click helpers", () => {
+  it("adds dimension picked line and clears existing preview", () => {
+    const first = line("first");
+    const picked = line("picked");
+    const state = { picked: [first], preview: ["old"] as unknown[] };
+
+    addDimensionPickedLine({
+      dimensionState: state,
+      picked
+    });
+
+    expect(state.picked).toEqual([first, picked]);
+    expect(state.preview).toEqual([]);
+  });
+
   it("adds a valid dimension picked line and clears preview", () => {
     const picked = line("picked");
     const state = { picked: [] as AlignPickedLine[], preview: ["old"] as unknown[] };

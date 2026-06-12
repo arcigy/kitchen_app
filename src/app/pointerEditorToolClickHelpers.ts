@@ -45,8 +45,10 @@ export function handleDimensionToolClick<TDimension>(params: {
       params.setStatus("Dimension: this line is already selected.");
       return;
     }
-    params.dimensionState.picked.push(params.picked);
-    params.dimensionState.preview = [];
+    addDimensionPickedLine({
+      dimensionState: params.dimensionState,
+      picked: params.picked
+    });
     params.setStatus(
       params.dimensionState.picked.length === 1
         ? "Dimension: select another parallel line."
@@ -66,6 +68,14 @@ export function handleDimensionToolClick<TDimension>(params: {
   params.resetDraft();
   params.setStatus(dimensions.length > 0 ? `Dimension: inserted ${dimensions.length}. Select the next first line.` : "Dimension: insert failed.");
   params.mountProps();
+}
+
+export function addDimensionPickedLine(params: {
+  dimensionState: PointerDimensionClickState;
+  picked: AlignPickedLine;
+}): void {
+  params.dimensionState.picked.push(params.picked);
+  params.dimensionState.preview = [];
 }
 
 export function handleAlignToolClick(params: {
