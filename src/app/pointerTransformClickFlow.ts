@@ -34,10 +34,10 @@ export function handleTransformClickPointerDown(args: {
 
   if (transformState.kind === "move") {
     if (transformState.step === "pickBase") {
-      transformState.base = args.pickedPoint.clone();
-      transformState.step = "pickTarget";
-      transformState.typed = "";
-      transformState.lastValidDelta.set(0, 0, 0);
+      setMoveTransformBase({
+        transformState,
+        pickedPoint: args.pickedPoint
+      });
       args.setStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
       return true;
     }
@@ -79,4 +79,14 @@ export function handleTransformClickPointerDown(args: {
   }
 
   return false;
+}
+
+export function setMoveTransformBase(args: {
+  transformState: Pick<PointerTransformClickState, "base" | "lastValidDelta" | "step" | "typed">;
+  pickedPoint: THREE.Vector3;
+}): void {
+  args.transformState.base = args.pickedPoint.clone();
+  args.transformState.step = "pickTarget";
+  args.transformState.typed = "";
+  args.transformState.lastValidDelta.set(0, 0, 0);
 }

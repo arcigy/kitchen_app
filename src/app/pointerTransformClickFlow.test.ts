@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
-import { handleTransformClickPointerDown, type PointerTransformClickState } from "./pointerTransformClickFlow";
+import { handleTransformClickPointerDown, setMoveTransformBase, type PointerTransformClickState } from "./pointerTransformClickFlow";
 
 function transformState(overrides: Partial<PointerTransformClickState> = {}): PointerTransformClickState {
   return {
@@ -38,6 +38,22 @@ function clickArgs(overrides: Partial<Parameters<typeof handleTransformClickPoin
 }
 
 describe("pointerTransformClickFlow", () => {
+  it("sets move transform base and clears typed delta state", () => {
+    const state = transformState({ kind: "move", step: "pickBase", typed: "500", lastValidDelta: new Vector3(9, 0, 9) });
+    const pickedPoint = new Vector3(1, 0, 2);
+
+    setMoveTransformBase({
+      transformState: state,
+      pickedPoint
+    });
+
+    expect(state.base?.toArray()).toEqual([1, 0, 2]);
+    expect(state.base).not.toBe(pickedPoint);
+    expect(state.step).toBe("pickTarget");
+    expect(state.typed).toBe("");
+    expect(state.lastValidDelta.toArray()).toEqual([0, 0, 0]);
+  });
+
   it("keeps current move pickBase click behavior", () => {
     const state = transformState({ kind: "move", step: "pickBase", typed: "500", lastValidDelta: new Vector3(9, 0, 9) });
     const args = clickArgs({ transformState: state });
