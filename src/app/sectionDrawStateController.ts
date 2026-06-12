@@ -1,4 +1,5 @@
 import type { FloorBoundaryPoint } from "./localTypes";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import { refreshSelectionVisualState } from "./selectionController";
 
 export type SectionDrawState = {
@@ -35,8 +36,7 @@ export function clearActiveSectionDrawLine(ctx: SectionDrawLineCleanupContext) {
   ctx.updateSectionDrawPreview();
   ctx.hideHoverCursor();
   ctx.drawSnapOverlay.hide();
-  ctx.setUnderlayStatus("Section: current line canceled. Click first point.");
-  ctx.mountProps();
+  reportEditorToolEntryStatus(ctx, "Section: current line canceled. Click first point.");
 }
 
 export function activateSectionToolState(ctx: SectionToolActivationContext) {
@@ -47,6 +47,5 @@ export function activateSectionToolState(ctx: SectionToolActivationContext) {
   ctx.sectionDraw.active = true;
   refreshSelectionVisualState(ctx);
   ctx.updateAllSectionVisuals();
-  ctx.setUnderlayStatus("Section: click first point, then second point. Space mirrors direction.");
-  ctx.mountProps();
+  reportEditorToolEntryStatus(ctx, "Section: click first point, then second point. Space mirrors direction.");
 }
