@@ -22,6 +22,7 @@ import {
   runToolbarMaterialCommand,
   runToolbarMeasureToggleCommand,
   runToolbarMoveCommand,
+  runToolbarOptionalEntryModeCommand,
   runToolbarRedoCommand,
   runToolbarResetDefaultsCommand,
   runToolbarResetViewCommand,
@@ -235,6 +236,15 @@ describe("editor toolbar commands", () => {
   it("keeps optional room entry commands inert when modes are unavailable", () => {
     expect(() => runToolbarWardrobeCommand({ wardrobeMode: null })).not.toThrow();
     expect(() => runToolbarCustomFurnitureCommand({ customFurnitureMode: null })).not.toThrow();
+  });
+
+  it("runs optional toolbar entry mode only when a mode exists", () => {
+    const mode = { enterNew: vi.fn() };
+
+    runToolbarOptionalEntryModeCommand(mode);
+    runToolbarOptionalEntryModeCommand(null);
+
+    expect(mode.enterNew).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes view buttons through current view commands", () => {

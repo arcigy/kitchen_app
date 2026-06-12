@@ -165,11 +165,15 @@ export function runToolbarFloorCommand(ctx: Pick<ToolbarEntryModeCommandContext,
 }
 
 export function runToolbarWardrobeCommand(ctx: Pick<ToolbarEntryModeCommandContext, "wardrobeMode">) {
-  ctx.wardrobeMode?.enterNew();
+  runToolbarOptionalEntryModeCommand(ctx.wardrobeMode);
 }
 
 export function runToolbarCustomFurnitureCommand(ctx: Pick<ToolbarEntryModeCommandContext, "customFurnitureMode">) {
-  ctx.customFurnitureMode?.enterNew();
+  runToolbarOptionalEntryModeCommand(ctx.customFurnitureMode);
+}
+
+export function runToolbarOptionalEntryModeCommand(mode: { enterNew: () => void } | null) {
+  mode?.enterNew();
 }
 
 export function runToolbarUnderlayCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openUnderlayPanel">) {
