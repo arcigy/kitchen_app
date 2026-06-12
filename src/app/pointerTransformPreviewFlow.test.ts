@@ -10,6 +10,7 @@ import {
   resolveRotatePreviewAngle,
   routeTransformPreviewSnapFeedback,
   updateMoveTransformPreview,
+  updateRotateTransformPreview,
   type PointerTransformPreviewState
 } from "./pointerTransformPreviewFlow";
 import type { PointerTransformClickState } from "./pointerTransformClickFlow";
@@ -258,6 +259,26 @@ describe("pointerTransformPreviewFlow", () => {
     const angle = vi.mocked(args.applyRotateAngle).mock.calls[0][0];
     expect(angle).toBeCloseTo(-Math.PI * 0.75);
     expect(args.setStatus).toHaveBeenCalledExactlyOnceWith("Rotate: -135 deg (click to finish)");
+  });
+
+  it("updates rotate transform preview angle sign, applied angle, and status", () => {
+    const state = transformState({ lastAngleSign: 1 });
+    const applyRotateAngle = vi.fn();
+    const setStatus = vi.fn();
+
+    updateRotateTransformPreview({
+      applyRotateAngle,
+      hitPoint: new Vector3(1, 0, 0),
+      pivot: new Vector3(0, 0, 0),
+      setStatus,
+      startPointerAngle: Math.PI * 0.75,
+      transformState: state
+    });
+
+    expect(state.lastAngleSign).toBe(-1);
+    expect(applyRotateAngle).toHaveBeenCalledOnce();
+    expect(vi.mocked(applyRotateAngle).mock.calls[0][0]).toBeCloseTo(-Math.PI * 0.75);
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Rotate: -135 deg (click to finish)");
   });
 
   it("ignores unsupported preview states", () => {

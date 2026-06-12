@@ -81,6 +81,24 @@ export function updateMoveTransformPreview<Snap>(args: {
   args.setStatus(formatMovePreviewStatus({ delta, moveSnapDisabled: args.moveSnapDisabled, hasObjectSnap: Boolean(objectSnap) }));
 }
 
+export function updateRotateTransformPreview(args: {
+  applyRotateAngle: (angleRad: number) => void;
+  hitPoint: THREE.Vector3;
+  pivot: THREE.Vector3;
+  setStatus: (status: string) => void;
+  startPointerAngle: number;
+  transformState: Pick<PointerTransformClickState, "lastAngleSign">;
+}): void {
+  const deltaAngle = resolveRotatePreviewAngle({
+    hitPoint: args.hitPoint,
+    pivot: args.pivot,
+    startPointerAngle: args.startPointerAngle
+  });
+  args.transformState.lastAngleSign = deltaAngle < 0 ? -1 : 1;
+  args.applyRotateAngle(deltaAngle);
+  args.setStatus(formatRotatePreviewStatus(deltaAngle));
+}
+
 export function handleTransformPreviewPointerMove<Snap>(args: {
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -111,14 +129,14 @@ export function handleTransformPreviewPointerMove<Snap>(args: {
   }
 
   if (transformState.kind === "rotate" && transformState.step === "rotating" && transformState.pivot) {
-    const deltaAngle = resolveRotatePreviewAngle({
+    updateRotateTransformPreview({
+      applyRotateAngle: args.applyRotateAngle,
       hitPoint: args.hitPoint,
       pivot: transformState.pivot,
-      startPointerAngle: transformState.startPointerAngle
+      setStatus: args.setStatus,
+      startPointerAngle: transformState.startPointerAngle,
+      transformState
     });
-    transformState.lastAngleSign = deltaAngle < 0 ? -1 : 1;
-    args.applyRotateAngle(deltaAngle);
-    args.setStatus(formatRotatePreviewStatus(deltaAngle));
     return true;
   }
 
