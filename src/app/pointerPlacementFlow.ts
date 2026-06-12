@@ -78,25 +78,34 @@ export function handleRoutedOpeningPlacementClick(args: {
   route: ReturnType<typeof resolveOpeningPlacementRoute>;
   setStatus: (status: string) => void;
 }) {
+  const placement = resolveRoutedOpeningPlacementClick(args);
+  if (!placement) return false;
+  return handleOpeningPlacementClick({
+    insertAtWallPoint: placement.insertAtWallPoint,
+    missingWallStatus: placement.missingWallStatus,
+    pickWallId: args.pickWallId,
+    setStatus: args.setStatus
+  });
+}
+
+function resolveRoutedOpeningPlacementClick(args: {
+  insertDoorAtWallPoint: (wallId: string) => void;
+  insertWindowAtWallPoint: (wallId: string) => void;
+  route: ReturnType<typeof resolveOpeningPlacementRoute>;
+}) {
   if (args.route === "window") {
-    return handleOpeningPlacementClick({
+    return {
       insertAtWallPoint: args.insertWindowAtWallPoint,
-      missingWallStatus: "Window: klikni priamo na stenu.",
-      pickWallId: args.pickWallId,
-      setStatus: args.setStatus
-    });
+      missingWallStatus: "Window: klikni priamo na stenu."
+    };
   }
-
   if (args.route === "door") {
-    return handleOpeningPlacementClick({
+    return {
       insertAtWallPoint: args.insertDoorAtWallPoint,
-      missingWallStatus: "Door: klikni priamo na stenu.",
-      pickWallId: args.pickWallId,
-      setStatus: args.setStatus
-    });
+      missingWallStatus: "Door: klikni priamo na stenu."
+    };
   }
-
-  return false;
+  return null;
 }
 
 export function handleFloorplanPlacementClick(args: {
