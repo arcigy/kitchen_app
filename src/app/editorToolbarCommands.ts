@@ -90,12 +90,16 @@ export function runToolbarMeasureToggleCommand(ctx: ToolbarMeasureToggleCommandC
   else ctx.setToolMeasure();
 }
 
+export function runToolbarToolSetterCommand(setTool: () => void) {
+  setTool();
+}
+
 export function runToolbarSelectCommand(ctx: Pick<ToolbarToolCommandContext, "setToolSelect">) {
-  ctx.setToolSelect();
+  runToolbarToolSetterCommand(ctx.setToolSelect);
 }
 
 export function runToolbarWallCommand(ctx: Pick<ToolbarToolCommandContext, "setToolWall">) {
-  ctx.setToolWall();
+  runToolbarToolSetterCommand(ctx.setToolWall);
 }
 
 export function runToolbarDoorCommand(ctx: Pick<ToolbarToolCommandContext, "addOrSelectDoor">) {
@@ -111,19 +115,19 @@ export function runToolbarColumnCommand(ctx: Pick<ToolbarToolCommandContext, "ad
 }
 
 export function runToolbarAlignCommand(ctx: Pick<ToolbarToolCommandContext, "setToolAlign">) {
-  ctx.setToolAlign();
+  runToolbarToolSetterCommand(ctx.setToolAlign);
 }
 
 export function runToolbarTrimCommand(ctx: Pick<ToolbarToolCommandContext, "setToolTrim">) {
-  ctx.setToolTrim();
+  runToolbarToolSetterCommand(ctx.setToolTrim);
 }
 
 export function runToolbarDimensionCommand(ctx: Pick<ToolbarToolCommandContext, "setToolDimension">) {
-  ctx.setToolDimension();
+  runToolbarToolSetterCommand(ctx.setToolDimension);
 }
 
 export function runToolbarSectionCommand(ctx: Pick<ToolbarToolCommandContext, "setToolSection">) {
-  ctx.setToolSection();
+  runToolbarToolSetterCommand(ctx.setToolSection);
 }
 
 export function runToolbarUndoCommand(ctx: ToolbarHistoryCommandContext) {

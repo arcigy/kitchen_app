@@ -28,6 +28,7 @@ import {
   runToolbarSectionCommand,
   runToolbarSelectCommand,
   runToolbarPricingCatalogCommand,
+  runToolbarToolSetterCommand,
   runToolbarTrimCommand,
   runToolbarToggle2dCommand,
   runToolbarUndoCommand,
@@ -104,6 +105,14 @@ describe("editor toolbar commands", () => {
     expect(ctx.setToolTrim).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolDimension).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.setToolSection).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("runs a simple toolbar tool setter command", () => {
+    const setTool = vi.fn();
+
+    runToolbarToolSetterCommand(setTool);
+
+    expect(setTool).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes architecture object buttons through current add/select commands", () => {
