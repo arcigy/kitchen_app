@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { FloorBoundaryPoint, SelectedKind } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 
 export type WallDrawState = {
   active: boolean;
@@ -56,8 +57,7 @@ export function resetWallDrawState(ctx: WallDrawStateCleanupContext) {
 
 export function activateWallToolState(ctx: WallToolActivationContext) {
   if (ctx.S.kitchenEditMode) {
-    ctx.setUnderlayStatus("Wall: v kitchen edit mode sa steny nekreslia.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "Wall: v kitchen edit mode sa steny nekreslia.");
     return "blocked-kitchen-edit" as const;
   }
 
