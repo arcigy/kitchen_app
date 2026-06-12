@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
 import type { MeasureState } from "./measureTools";
 import {
@@ -234,8 +235,7 @@ export function mountMeasureToolPropsPanel(ctx: MeasureToolPropsContext) {
     clearBtn.style.marginTop = "10px";
     clearBtn.addEventListener("click", () => {
       clearAllMeasurements();
-      setUnderlayStatus("Measure: click first point.");
-      mountProps();
+      reportEditorToolEntryStatus({ setUnderlayStatus, mountProps }, "Measure: click first point.");
     });
     s.appendChild(clearBtn);
   
