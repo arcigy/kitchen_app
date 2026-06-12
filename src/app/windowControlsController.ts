@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { WallId, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 import { getWindowMaterialOption } from "./windowMaterials";
 
@@ -876,8 +877,7 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     if (!placementActive) return false;
     placementActive = false;
     placementPreview.visible = false;
-    ctx.setUnderlayStatus("");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "");
     return true;
   }
 
@@ -996,8 +996,7 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     placementDraft = ctx.clampWindowParams(ctx.windowInst ? structuredClone(ctx.windowInst.params) : defaultDraftParams());
     placementActive = true;
     const selectedWallId = ctx.getSelectedWallId();
-    ctx.setUnderlayStatus(selectedWallId ? "Window: uprav parametre a klikni miesto na vybratej stene." : "Window: uprav parametre a klikni miesto na stene.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, selectedWallId ? "Window: uprav parametre a klikni miesto na vybratej stene." : "Window: uprav parametre a klikni miesto na stene.");
   }
 
   function mountWindowControls() {

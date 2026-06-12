@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { DoorInstance, DoorParams, WallInstance } from "./localTypes";
 import { getDoorMaterialOption } from "./doorMaterials";
 
@@ -748,8 +749,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     if (!placementActive) return false;
     placementActive = false;
     clearDoorPlacementPreview();
-    ctx.setUnderlayStatus("");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "");
     return true;
   }
 
@@ -874,8 +874,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     placementDraft = ctx.clampDoorParams(ctx.doorInst ? structuredClone(ctx.doorInst.params) : defaultDraftParams());
     placementActive = true;
     const selectedWallId = ctx.getSelectedWallId();
-    ctx.setUnderlayStatus(selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = lave/prave, Shift+Space = dnu/von." : "Door: uprav parametre a klikni miesto na stene. Space = lave/prave, Shift+Space = dnu/von.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, selectedWallId ? "Door: uprav parametre a klikni miesto na vybratej stene. Space = lave/prave, Shift+Space = dnu/von." : "Door: uprav parametre a klikni miesto na stene. Space = lave/prave, Shift+Space = dnu/von.");
   }
 
   return {
