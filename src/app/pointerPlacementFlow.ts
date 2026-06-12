@@ -181,29 +181,38 @@ export function handleRoutedOpeningPlacementPreviewPointerMove<PointMm>(args: {
   updateDoorPreview: (wallId: string | null, pointMm: PointMm) => void;
   updateWindowPreview: (wallId: string | null, pointMm: PointMm) => void;
 }) {
+  const preview = resolveRoutedOpeningPlacementPreview(args);
+  if (!preview) return false;
+  return handleOpeningPlacementPreviewPointerMove({
+    clearPreview: preview.clearPreview,
+    hitPoint: args.hitPoint,
+    isActive: true,
+    pickWallId: args.pickWallId,
+    pointFromHit: args.pointFromHit,
+    updatePreview: preview.updatePreview
+  });
+}
+
+function resolveRoutedOpeningPlacementPreview<PointMm>(args: {
+  clearDoorPreview: () => void;
+  clearWindowPreview: () => void;
+  route: ReturnType<typeof resolveOpeningPlacementRoute>;
+  updateDoorPreview: (wallId: string | null, pointMm: PointMm) => void;
+  updateWindowPreview: (wallId: string | null, pointMm: PointMm) => void;
+}) {
   if (args.route === "window") {
-    return handleOpeningPlacementPreviewPointerMove({
+    return {
       clearPreview: args.clearWindowPreview,
-      hitPoint: args.hitPoint,
-      isActive: true,
-      pickWallId: args.pickWallId,
-      pointFromHit: args.pointFromHit,
       updatePreview: args.updateWindowPreview
-    });
+    };
   }
-
   if (args.route === "door") {
-    return handleOpeningPlacementPreviewPointerMove({
+    return {
       clearPreview: args.clearDoorPreview,
-      hitPoint: args.hitPoint,
-      isActive: true,
-      pickWallId: args.pickWallId,
-      pointFromHit: args.pointFromHit,
       updatePreview: args.updateDoorPreview
-    });
+    };
   }
-
-  return false;
+  return null;
 }
 
 export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
