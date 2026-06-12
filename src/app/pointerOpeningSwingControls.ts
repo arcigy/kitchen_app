@@ -48,35 +48,34 @@ export function handleOpeningSelectionControlClick<WindowDimensionParam, DoorDim
 
   const windowSwingAction = args.pickWindowSwingControlAction();
   if (windowSwingAction && args.applyWindowSwingControlAction(windowSwingAction)) {
-    args.cancelPendingMarquee();
-    args.preventDefault();
-    args.stopPropagation();
-    return true;
+    return finishOpeningSelectionControlClick(args);
   }
 
   const doorSwingAction = args.pickDoorSwingControlAction();
   if (doorSwingAction && args.applyDoorSwingControlAction(doorSwingAction)) {
-    args.cancelPendingMarquee();
-    args.preventDefault();
-    args.stopPropagation();
-    return true;
+    return finishOpeningSelectionControlClick(args);
   }
 
   const windowDimensionParam = args.pickWindowDimensionParam();
   if (windowDimensionParam && args.beginWindowDimensionEdit(windowDimensionParam)) {
-    args.cancelPendingMarquee();
-    args.preventDefault();
-    args.stopPropagation();
-    return true;
+    return finishOpeningSelectionControlClick(args);
   }
 
   const doorDimensionParam = args.pickDoorDimensionParam();
   if (doorDimensionParam && args.beginDoorDimensionEdit(doorDimensionParam)) {
-    args.cancelPendingMarquee();
-    args.preventDefault();
-    args.stopPropagation();
-    return true;
+    return finishOpeningSelectionControlClick(args);
   }
 
   return false;
+}
+
+function finishOpeningSelectionControlClick(args: {
+  cancelPendingMarquee: () => void;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}) {
+  args.cancelPendingMarquee();
+  args.preventDefault();
+  args.stopPropagation();
+  return true;
 }
