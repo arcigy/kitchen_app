@@ -143,11 +143,11 @@ export function runToolbarRedoCommand(ctx: ToolbarHistoryCommandContext) {
 }
 
 export function runToolbarDuplicateCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "duplicateSelected">) {
-  ctx.duplicateSelected();
+  runToolbarActionCommand(ctx.duplicateSelected);
 }
 
 export function runToolbarDeleteCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "deleteSelected">) {
-  ctx.deleteSelected();
+  runToolbarActionCommand(ctx.deleteSelected);
 }
 
 export function runToolbarHideToggleCommand(ctx: ToolbarVisibilityCommandContext, syncVisibility: () => void) {
