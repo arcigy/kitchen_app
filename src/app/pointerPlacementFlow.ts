@@ -162,6 +162,41 @@ export function resolveSelectOpeningPlacementPreviewRoute(args: {
   return resolveOpeningPlacementRoute(args);
 }
 
+export function handleRoutedOpeningPlacementPreviewPointerMove<PointMm>(args: {
+  clearDoorPreview: () => void;
+  clearWindowPreview: () => void;
+  hitPoint: THREE.Vector3 | null;
+  pickWallId: (pointMm: PointMm) => string | null;
+  pointFromHit: (hitPoint: THREE.Vector3) => PointMm;
+  route: ReturnType<typeof resolveOpeningPlacementRoute>;
+  updateDoorPreview: (wallId: string | null, pointMm: PointMm) => void;
+  updateWindowPreview: (wallId: string | null, pointMm: PointMm) => void;
+}) {
+  if (args.route === "window") {
+    return handleOpeningPlacementPreviewPointerMove({
+      clearPreview: args.clearWindowPreview,
+      hitPoint: args.hitPoint,
+      isActive: true,
+      pickWallId: args.pickWallId,
+      pointFromHit: args.pointFromHit,
+      updatePreview: args.updateWindowPreview
+    });
+  }
+
+  if (args.route === "door") {
+    return handleOpeningPlacementPreviewPointerMove({
+      clearPreview: args.clearDoorPreview,
+      hitPoint: args.hitPoint,
+      isActive: true,
+      pickWallId: args.pickWallId,
+      pointFromHit: args.pointFromHit,
+      updatePreview: args.updateDoorPreview
+    });
+  }
+
+  return false;
+}
+
 export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
   clearDoorPreview: () => void;
   clearWindowPreview: () => void;
@@ -178,29 +213,16 @@ export function handleSelectOpeningPlacementPreviewPointerMove<PointMm>(args: {
     isWindowActive: args.isWindowActive
   });
 
-  if (route === "window") {
-    return handleOpeningPlacementPreviewPointerMove({
-      clearPreview: args.clearWindowPreview,
-      hitPoint: args.hitPoint,
-      isActive: true,
-      pickWallId: args.pickWallId,
-      pointFromHit: args.pointFromHit,
-      updatePreview: args.updateWindowPreview
-    });
-  }
-
-  if (route === "door") {
-    return handleOpeningPlacementPreviewPointerMove({
-      clearPreview: args.clearDoorPreview,
-      hitPoint: args.hitPoint,
-      isActive: true,
-      pickWallId: args.pickWallId,
-      pointFromHit: args.pointFromHit,
-      updatePreview: args.updateDoorPreview
-    });
-  }
-
-  return false;
+  return handleRoutedOpeningPlacementPreviewPointerMove({
+    clearDoorPreview: args.clearDoorPreview,
+    clearWindowPreview: args.clearWindowPreview,
+    hitPoint: args.hitPoint,
+    pickWallId: args.pickWallId,
+    pointFromHit: args.pointFromHit,
+    route,
+    updateDoorPreview: args.updateDoorPreview,
+    updateWindowPreview: args.updateWindowPreview
+  });
 }
 
 export function resetColumnPlacementPreview(args: {

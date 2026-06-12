@@ -9,6 +9,7 @@ import {
   handlePlacementCommitPointerDown,
   handlePlacementPreviewPointerMove,
   handleRoutedOpeningPlacementClick,
+  handleRoutedOpeningPlacementPreviewPointerMove,
   handleSelectOpeningPlacementPreviewPointerMove,
   resetColumnPlacementPreview,
   resolveOpeningPlacementRoute,
@@ -353,6 +354,58 @@ describe("pointerPlacementFlow", () => {
     expect(updateDoorPreview).not.toHaveBeenCalled();
     expect(clearWindowPreview).not.toHaveBeenCalled();
     expect(clearDoorPreview).not.toHaveBeenCalled();
+  });
+
+  it("handles routed opening placement preview for window, door missing hit, and no route", () => {
+    const hitPoint = new Vector3(1, 0, 2);
+    const pointMm = { x: 1000, z: 2000 };
+    const updateWindowPreview = vi.fn();
+    const updateDoorPreview = vi.fn();
+    const clearWindowPreview = vi.fn();
+    const clearDoorPreview = vi.fn();
+
+    expect(
+      handleRoutedOpeningPlacementPreviewPointerMove({
+        clearDoorPreview,
+        clearWindowPreview,
+        hitPoint,
+        pickWallId: vi.fn(() => "wall-1"),
+        pointFromHit: vi.fn(() => pointMm),
+        route: "window",
+        updateDoorPreview,
+        updateWindowPreview
+      })
+    ).toBe(true);
+    expect(updateWindowPreview).toHaveBeenCalledExactlyOnceWith("wall-1", pointMm);
+    expect(updateDoorPreview).not.toHaveBeenCalled();
+
+    expect(
+      handleRoutedOpeningPlacementPreviewPointerMove({
+        clearDoorPreview,
+        clearWindowPreview,
+        hitPoint: null,
+        pickWallId: vi.fn(),
+        pointFromHit: vi.fn(() => pointMm),
+        route: "door",
+        updateDoorPreview,
+        updateWindowPreview
+      })
+    ).toBe(true);
+    expect(clearDoorPreview).toHaveBeenCalledExactlyOnceWith();
+    expect(clearWindowPreview).not.toHaveBeenCalled();
+
+    expect(
+      handleRoutedOpeningPlacementPreviewPointerMove({
+        clearDoorPreview,
+        clearWindowPreview,
+        hitPoint,
+        pickWallId: vi.fn(),
+        pointFromHit: vi.fn(() => pointMm),
+        route: null,
+        updateDoorPreview,
+        updateWindowPreview
+      })
+    ).toBe(false);
   });
 
   it("resolves select opening placement preview route with window priority", () => {
