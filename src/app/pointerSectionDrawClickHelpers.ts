@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { FloorBoundaryPoint } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
 
@@ -36,8 +37,10 @@ export function handleSectionDrawPointClick(params: {
     params.sectionDraw.a = point;
     params.sectionDraw.hoverPoint = point;
     params.updateSectionDrawPreview();
-    params.setStatus("Section: click second point. Ortho = straight, Shift = no axis snap, Space = mirror direction.");
-    params.mountProps();
+    reportEditorToolEntryStatus(
+      { setUnderlayStatus: params.setStatus, mountProps: params.mountProps },
+      "Section: click second point. Ortho = straight, Shift = no axis snap, Space = mirror direction."
+    );
     return { preventDefault: false };
   }
 
