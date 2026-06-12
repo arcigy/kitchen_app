@@ -25,6 +25,7 @@ import type {
 } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import { clearDrawingToolSelection } from "./selectionController";
 
 type FloorEditState = {
@@ -159,7 +160,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     ctx.floorEdit.hover = null;
     ctx.clearToolHud();
     renderFloorBoundaryEdit();
-    ctx.setUnderlayStatus(
+    reportEditorToolEntryStatus(ctx,
       tool === "pickLines"
         ? "Floor boundary: Pick Lines - klikni hranu steny."
         : tool === "rectangle"
@@ -168,7 +169,6 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
             ? "Floor boundary: Circle - klikni stred a polomer."
             : "Floor boundary: Line - klikaj body boundary line."
     );
-    ctx.mountProps();
   };
 
   const buildFloorBoundaryTopbar = () => {
@@ -242,8 +242,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
     renderFloorBoundaryEdit();
-    ctx.setUnderlayStatus("Floor boundary: Line - kresli boundary line alebo pouzi Pick Lines.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "Floor boundary: Line - kresli boundary line alebo pouzi Pick Lines.");
   };
 
   const exitFloorBoundaryEditCommon = () => {
