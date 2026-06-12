@@ -71,6 +71,34 @@ export function resolveOpeningPlacementRoute(args: {
   return null;
 }
 
+export function handleRoutedOpeningPlacementClick(args: {
+  insertDoorAtWallPoint: (wallId: string) => void;
+  insertWindowAtWallPoint: (wallId: string) => void;
+  pickWallId: () => string | null;
+  route: ReturnType<typeof resolveOpeningPlacementRoute>;
+  setStatus: (status: string) => void;
+}) {
+  if (args.route === "window") {
+    return handleOpeningPlacementClick({
+      insertAtWallPoint: args.insertWindowAtWallPoint,
+      missingWallStatus: "Window: klikni priamo na stenu.",
+      pickWallId: args.pickWallId,
+      setStatus: args.setStatus
+    });
+  }
+
+  if (args.route === "door") {
+    return handleOpeningPlacementClick({
+      insertAtWallPoint: args.insertDoorAtWallPoint,
+      missingWallStatus: "Door: klikni priamo na stenu.",
+      pickWallId: args.pickWallId,
+      setStatus: args.setStatus
+    });
+  }
+
+  return false;
+}
+
 export function handleFloorplanPlacementClick(args: {
   cancelPendingMarquee: () => void;
   insertColumnAtPoint: () => void;
@@ -99,25 +127,13 @@ export function handleFloorplanPlacementClick(args: {
     isWindowActive: args.isWindowPlacementActive
   });
 
-  if (openingRoute === "window") {
-    return handleOpeningPlacementClick({
-      insertAtWallPoint: args.insertWindowAtWallPoint,
-      missingWallStatus: "Window: klikni priamo na stenu.",
-      pickWallId: args.pickWallId,
-      setStatus: args.setStatus
-    });
-  }
-
-  if (openingRoute === "door") {
-    return handleOpeningPlacementClick({
-      insertAtWallPoint: args.insertDoorAtWallPoint,
-      missingWallStatus: "Door: klikni priamo na stenu.",
-      pickWallId: args.pickWallId,
-      setStatus: args.setStatus
-    });
-  }
-
-  return false;
+  return handleRoutedOpeningPlacementClick({
+    insertDoorAtWallPoint: args.insertDoorAtWallPoint,
+    insertWindowAtWallPoint: args.insertWindowAtWallPoint,
+    pickWallId: args.pickWallId,
+    route: openingRoute,
+    setStatus: args.setStatus
+  });
 }
 
 export function handleOpeningPlacementPreviewPointerMove<PointMm>(args: {

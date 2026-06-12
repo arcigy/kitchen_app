@@ -8,6 +8,7 @@ import {
   handleOpeningPlacementPreviewPointerMove,
   handlePlacementCommitPointerDown,
   handlePlacementPreviewPointerMove,
+  handleRoutedOpeningPlacementClick,
   handleSelectOpeningPlacementPreviewPointerMove,
   resetColumnPlacementPreview,
   resolveOpeningPlacementRoute,
@@ -250,6 +251,46 @@ describe("pointerPlacementFlow", () => {
 
     expect(insertAtWallPoint).toHaveBeenCalledOnce();
     expect(setStatus).toHaveBeenCalledExactlyOnceWith("Opening: klikni priamo na stenu.");
+  });
+
+  it("handles routed opening placement click for window, door missing wall, and no route", () => {
+    const insertWindowAtWallPoint = vi.fn();
+    const insertDoorAtWallPoint = vi.fn();
+    const setStatus = vi.fn();
+
+    expect(
+      handleRoutedOpeningPlacementClick({
+        insertDoorAtWallPoint,
+        insertWindowAtWallPoint,
+        pickWallId: vi.fn(() => "wall-1"),
+        route: "window",
+        setStatus
+      })
+    ).toBe(true);
+    expect(insertWindowAtWallPoint).toHaveBeenCalledExactlyOnceWith("wall-1");
+    expect(insertDoorAtWallPoint).not.toHaveBeenCalled();
+
+    expect(
+      handleRoutedOpeningPlacementClick({
+        insertDoorAtWallPoint,
+        insertWindowAtWallPoint,
+        pickWallId: vi.fn(() => null),
+        route: "door",
+        setStatus
+      })
+    ).toBe(true);
+    expect(insertDoorAtWallPoint).not.toHaveBeenCalled();
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Door: klikni priamo na stenu.");
+
+    expect(
+      handleRoutedOpeningPlacementClick({
+        insertDoorAtWallPoint,
+        insertWindowAtWallPoint,
+        pickWallId: vi.fn(),
+        route: null,
+        setStatus
+      })
+    ).toBe(false);
   });
 
   it("keeps current opening placement preview behavior", () => {
