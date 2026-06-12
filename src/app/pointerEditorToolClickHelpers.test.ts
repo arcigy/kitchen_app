@@ -13,6 +13,7 @@ import {
   handlePinnedTrimTarget,
   handleTrimNoPick,
   handleTrimTargetPick,
+  resetTrimTargetAndReport,
   setAlignReferencePick,
   setAlignRecentFeedback,
   setTrimTargetPick,
@@ -337,6 +338,28 @@ describe("pointer editor tool click helpers", () => {
     expect(state.targetClick).toBe(click);
     expect(setStatus).toHaveBeenCalledWith("Trim: target missing. Click target wall...");
     expect(mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets trim target and reports status without clearing target click when requested", () => {
+    const click = new THREE.Vector3(1, 0, 2);
+    const state = trimState({ step: "pickCutter", targetWallId: "missing", targetPick: line("target"), targetClick: click });
+    const setStatus = vi.fn();
+    const mountProps = vi.fn();
+
+    resetTrimTargetAndReport({
+      trimState: state,
+      clearClick: false,
+      status: "Trim: target missing. Click target wall...",
+      setStatus,
+      mountProps
+    });
+
+    expect(state.step).toBe("pickTarget");
+    expect(state.targetWallId).toBeNull();
+    expect(state.targetPick).toBeNull();
+    expect(state.targetClick).toBe(click);
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Trim: target missing. Click target wall...");
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 
   it("resets pinned trim target and clears target click", () => {

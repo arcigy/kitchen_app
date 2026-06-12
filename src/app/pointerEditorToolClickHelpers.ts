@@ -236,14 +236,30 @@ export function resetTrimTarget(params: {
   if (params.clearClick) params.trimState.targetClick = null;
 }
 
+export function resetTrimTargetAndReport(params: {
+  trimState: PointerTrimClickState;
+  clearClick: boolean;
+  status: string;
+  setStatus: (message: string) => void;
+  mountProps: () => void;
+}): void {
+  resetTrimTarget({ trimState: params.trimState, clearClick: params.clearClick });
+  params.setStatus(params.status);
+  params.mountProps();
+}
+
 export function handleMissingTrimTarget(params: {
   trimState: PointerTrimClickState;
   setStatus: (message: string) => void;
   mountProps: () => void;
 }): void {
-  resetTrimTarget({ trimState: params.trimState, clearClick: false });
-  params.setStatus("Trim: target missing. Click target wall...");
-  params.mountProps();
+  resetTrimTargetAndReport({
+    trimState: params.trimState,
+    clearClick: false,
+    status: "Trim: target missing. Click target wall...",
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function handlePinnedTrimTarget(params: {
@@ -251,9 +267,13 @@ export function handlePinnedTrimTarget(params: {
   setStatus: (message: string) => void;
   mountProps: () => void;
 }): void {
-  resetTrimTarget({ trimState: params.trimState, clearClick: true });
-  params.setStatus("Trim: target is pinned.");
-  params.mountProps();
+  resetTrimTargetAndReport({
+    trimState: params.trimState,
+    clearClick: true,
+    status: "Trim: target is pinned.",
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function finishTrimNoChange(params: {
