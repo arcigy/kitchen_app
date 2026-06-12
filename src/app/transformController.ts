@@ -652,14 +652,26 @@ export function createTransformController(ctx: TransformControllerContext) {
     const ignore = new Set<string>(ctx.transformState.selectedInstanceIds);
     let ok = true;
 
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      const st = ctx.transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const nextPos = rotatePointAround(st.pos, pivot, ang);
-      inst.root.rotation.y = st.rotY + ang;
-      inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
-    }
+    const applyRotatedModulePositions = (rotationAngle: number) => {
+      for (const id of ctx.transformState.selectedInstanceIds) {
+        const inst = ctx.findInstance(id);
+        const st = ctx.transformState.startInstances.get(id);
+        if (!inst || !st) continue;
+        const nextPos = rotatePointAround(st.pos, pivot, rotationAngle);
+        inst.root.rotation.y = st.rotY + rotationAngle;
+        inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
+      }
+    };
+
+    const restoreLastValidRotateAngle = () => {
+      const lastValidAngle = ctx.transformState.lastValidAngle;
+      restoreTransformStartState();
+      rotateWallsByAnchors(pivot, lastValidAngle);
+      applyRotatedModulePositions(lastValidAngle);
+      ctx.updateLayoutPanel();
+    };
+
+    applyRotatedModulePositions(ang);
 
     for (const id of ctx.transformState.selectedInstanceIds) {
       const inst = ctx.findInstance(id);
@@ -686,18 +698,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.lastValidAngle = ang;
       ctx.updateLayoutPanel();
     } else {
-      // Keep last valid
-      restoreTransformStartState();
-      rotateWallsByAnchors(pivot, ctx.transformState.lastValidAngle);
-      for (const id of ctx.transformState.selectedInstanceIds) {
-        const inst = ctx.findInstance(id);
-        const st = ctx.transformState.startInstances.get(id);
-        if (!inst || !st) continue;
-        const nextPos = rotatePointAround(st.pos, pivot, ctx.transformState.lastValidAngle);
-        inst.root.rotation.y = st.rotY + ctx.transformState.lastValidAngle;
-        inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
-      }
-      ctx.updateLayoutPanel();
+      restoreLastValidRotateAngle();
     }
   };
 
