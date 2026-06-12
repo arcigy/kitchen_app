@@ -93,32 +93,52 @@ export function executeFloorplanSelectionActions<WindowPick, DoorPick, MovePoint
   for (const action of args.actions) {
     if (action.kind === "window") {
       if (!args.pickedWindow) continue;
-      args.cancelPendingMarquee();
-      args.selectWindow(args.pickedWindow);
-      if (args.continueMoveAfterSelection(args.hitPoint)) return true;
+      runCancelableFloorplanMoveSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        continueMoveAfterSelection: args.continueMoveAfterSelection,
+        hitPoint: args.hitPoint,
+        select: args.selectWindow,
+        value: args.pickedWindow
+      });
       return true;
     }
     if (action.kind === "door") {
       if (!args.pickedDoor) continue;
-      args.cancelPendingMarquee();
-      args.selectDoor(args.pickedDoor);
-      if (args.continueMoveAfterSelection(args.hitPoint)) return true;
+      runCancelableFloorplanMoveSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        continueMoveAfterSelection: args.continueMoveAfterSelection,
+        hitPoint: args.hitPoint,
+        select: args.selectDoor,
+        value: args.pickedDoor
+      });
       return true;
     }
     if (action.kind === "section") {
-      args.cancelPendingMarquee();
-      args.selectSection(action.id);
-      return true;
+      return runCancelableFloorplanSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        select: args.selectSection,
+        value: action.id
+      });
     }
     if (action.kind === "column") {
-      args.cancelPendingMarquee();
-      args.selectColumn(action.id);
-      return true;
+      return runCancelableFloorplanSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        select: args.selectColumn,
+        value: action.id
+      });
     }
     if (action.kind === "module-transform") {
-      args.cancelPendingMarquee();
-      args.selectModule(action.id);
-      if (args.continueMoveAfterSelection(args.hitPoint)) return true;
+      if (
+        runCancelableFloorplanMoveSelection({
+          cancelPendingMarquee: args.cancelPendingMarquee,
+          continueMoveAfterSelection: args.continueMoveAfterSelection,
+          hitPoint: args.hitPoint,
+          select: args.selectModule,
+          value: action.id
+        })
+      ) {
+        return true;
+      }
       continue;
     }
     if (action.kind === "module-select") {
@@ -130,19 +150,47 @@ export function executeFloorplanSelectionActions<WindowPick, DoorPick, MovePoint
       continue;
     }
     if (action.kind === "floor") {
-      args.cancelPendingMarquee();
-      args.selectFloor(action.id);
-      return true;
+      return runCancelableFloorplanSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        select: args.selectFloor,
+        value: action.id
+      });
     }
     if (action.kind === "wall") {
-      args.cancelPendingMarquee();
-      args.selectWall(action.id);
-      if (args.continueMoveAfterSelection(args.hitPoint)) return true;
+      runCancelableFloorplanMoveSelection({
+        cancelPendingMarquee: args.cancelPendingMarquee,
+        continueMoveAfterSelection: args.continueMoveAfterSelection,
+        hitPoint: args.hitPoint,
+        select: args.selectWall,
+        value: action.id
+      });
       return true;
     }
   }
 
   return false;
+}
+
+function runCancelableFloorplanSelection<Value>(args: {
+  cancelPendingMarquee: () => void;
+  select: (value: Value) => void;
+  value: Value;
+}) {
+  args.cancelPendingMarquee();
+  args.select(args.value);
+  return true;
+}
+
+function runCancelableFloorplanMoveSelection<Value, MovePoint>(args: {
+  cancelPendingMarquee: () => void;
+  continueMoveAfterSelection: (point: MovePoint) => boolean;
+  hitPoint: MovePoint;
+  select: (value: Value) => void;
+  value: Value;
+}) {
+  args.cancelPendingMarquee();
+  args.select(args.value);
+  return args.continueMoveAfterSelection(args.hitPoint);
 }
 
 export function handleFloorplanSelection<WindowPick, DoorPick, MovePoint>(args: HandleFloorplanSelectionArgs<WindowPick, DoorPick, MovePoint>) {
