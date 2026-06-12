@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
-import { handleTransformClickPointerDown, setMoveTransformBase, type PointerTransformClickState } from "./pointerTransformClickFlow";
+import { finishMoveTransformTarget, handleTransformClickPointerDown, setMoveTransformBase, type PointerTransformClickState } from "./pointerTransformClickFlow";
 
 function transformState(overrides: Partial<PointerTransformClickState> = {}): PointerTransformClickState {
   return {
@@ -95,6 +95,45 @@ describe("pointerTransformClickFlow", () => {
       status: "Move: done. Select next element, or click Move again to exit."
     });
     expect(args.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("finishes move transform target with resolved delta and sticky status", () => {
+    const base = new Vector3(1, 0, 1);
+    const pickedPoint = new Vector3(4, 0, 5);
+    const constrainedDelta = new Vector3(3, 0, 0);
+    const resolvedDelta = new Vector3(10, 0, 0);
+    const applyMoveDelta = vi.fn();
+    const clearMoveHud = vi.fn();
+    const clearTransform = vi.fn();
+    const commitHistory = vi.fn();
+    const constrainMoveDelta = vi.fn(() => constrainedDelta);
+    const mountProps = vi.fn();
+    const resolveMoveDelta = vi.fn(() => resolvedDelta);
+
+    finishMoveTransformTarget({
+      applyMoveDelta,
+      base,
+      clearMoveHud,
+      clearTransform,
+      commitHistory,
+      constrainMoveDelta,
+      mountProps,
+      pickedPoint,
+      resolveMoveDelta,
+      shiftKey: true,
+      stickyMove: true
+    });
+
+    expect(constrainMoveDelta).toHaveBeenCalledWith(new Vector3(3, 0, 4));
+    expect(resolveMoveDelta).toHaveBeenCalledWith(constrainedDelta);
+    expect(applyMoveDelta).toHaveBeenCalledWith(resolvedDelta);
+    expect(commitHistory).toHaveBeenCalledOnce();
+    expect(clearMoveHud).toHaveBeenCalledOnce();
+    expect(clearTransform).toHaveBeenCalledWith({
+      continueMove: true,
+      status: "Move: done. Select next element, or click Move again to exit."
+    });
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 
   it("keeps current rotate pickPivot click behavior", () => {
