@@ -1,4 +1,5 @@
 import type { AppState } from "../layout/appState";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { FloorBoundaryPoint, KitchenWorktopParams } from "./localTypes";
 import { resolveKitchenWorktopTypedPoint } from "./pointerKitchenWorktopDrawClickHelpers";
 import { refreshSelectionVisualState } from "./selectionController";
@@ -50,8 +51,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     ctx.setWorktopDrawSnap(null);
     ctx.clearSelectionForDraw();
     refreshSelectionVisualState(ctx);
-    ctx.setUnderlayStatus("Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
   };
 
   const appendKitchenWorktopPoint = (point: FloorBoundaryPoint) => {
@@ -114,8 +114,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     if (!draw.active) return false;
     if (draw.points.length < 2) {
       ctx.cancelKitchenWorktopDraw({ silent: true });
-      ctx.setUnderlayStatus("Worktop: canceled.");
-      ctx.mountProps();
+      reportEditorToolEntryStatus(ctx, "Worktop: canceled.");
       return true;
     }
     const groupId = ctx.S.activeKitchenGroupId;
@@ -133,8 +132,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     const existingId = ctx.getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${ctx.getWorktopCounter()}`;
     ctx.replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
     ctx.cancelKitchenWorktopDraw({ silent: true });
-    ctx.setUnderlayStatus(params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
     return true;
   };
 
