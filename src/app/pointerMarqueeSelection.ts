@@ -100,18 +100,13 @@ export function updatePointerMarqueePointerMove(
 }
 
 export function clearPointerMarquee(marquee: PointerMarqueeState, marqueeEl: PointerMarqueeElement) {
-  marquee.active = false;
-  marquee.pending = false;
-  marquee.pointerId = null;
-  marqueeEl.style.display = "none";
+  deactivatePointerMarquee(marquee, marqueeEl, { clearPointerId: true });
 }
 
 export function cancelPendingPointerMarqueeHit(marquee: PointerMarqueeState, marqueeEl: PointerMarqueeElement, pointerId: number) {
   if (!marquee.pending || marquee.pointerId !== pointerId) return false;
   marquee.hitSomething = true;
-  marquee.pending = false;
-  marquee.active = false;
-  marqueeEl.style.display = "none";
+  deactivatePointerMarquee(marquee, marqueeEl, { clearPointerId: false });
   return true;
 }
 
@@ -130,6 +125,17 @@ function applyPointerMarqueeRectStyle(marqueeEl: PointerMarqueeElement, rect: Sc
   marqueeEl.style.top = `${rect.y0}px`;
   marqueeEl.style.width = `${Math.max(0, rect.x1 - rect.x0)}px`;
   marqueeEl.style.height = `${Math.max(0, rect.y1 - rect.y0)}px`;
+}
+
+function deactivatePointerMarquee(
+  marquee: PointerMarqueeState,
+  marqueeEl: PointerMarqueeElement,
+  opts: { clearPointerId: boolean }
+) {
+  marquee.active = false;
+  marquee.pending = false;
+  if (opts.clearPointerId) marquee.pointerId = null;
+  marqueeEl.style.display = "none";
 }
 
 export function boundsFromPoints(points: ScreenPoint[]): ScreenBounds | null {
