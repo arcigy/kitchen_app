@@ -84,10 +84,10 @@ export function handleAlignToolClick(params: {
   }
 
   if (!params.alignState.ref) {
-    params.alignState.ref = params.picked;
-    params.alignState.lastA = null;
-    params.alignState.lastB = null;
-    params.alignState.lastUntilMs = 0;
+    setAlignReferencePick({
+      alignState: params.alignState,
+      picked: params.picked
+    });
     params.setStatus("Align: click one or more parallel lines to align. Esc = new reference.");
     params.mountProps();
     return;
@@ -108,6 +108,16 @@ export function handleAlignToolClick(params: {
   params.alignState.lastUntilMs = params.now + 2500;
   params.setStatus(result.reason);
   params.mountProps();
+}
+
+export function setAlignReferencePick(params: {
+  alignState: PointerAlignClickState;
+  picked: AlignPickedLine;
+}): void {
+  params.alignState.ref = params.picked;
+  params.alignState.lastA = null;
+  params.alignState.lastB = null;
+  params.alignState.lastUntilMs = 0;
 }
 
 export function handleTrimNoPick(params: {

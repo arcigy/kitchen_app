@@ -10,6 +10,7 @@ import {
   handlePinnedTrimTarget,
   handleTrimNoPick,
   handleTrimTargetPick,
+  setAlignReferencePick,
   type PointerTrimClickState
 } from "./pointerEditorToolClickHelpers";
 
@@ -142,6 +143,21 @@ describe("pointer editor tool click helpers", () => {
     expect(commitHistory).not.toHaveBeenCalled();
     expect(setStatus).toHaveBeenCalledWith("Align: click one or more parallel lines to align. Esc = new reference.");
     expect(mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("sets align reference pick and clears previous recent feedback", () => {
+    const picked = line("picked");
+    const state = { ref: null, lastA: line("old-a"), lastB: line("old-b"), lastUntilMs: 5 };
+
+    setAlignReferencePick({
+      alignState: state,
+      picked
+    });
+
+    expect(state.ref).toBe(picked);
+    expect(state.lastA).toBeNull();
+    expect(state.lastB).toBeNull();
+    expect(state.lastUntilMs).toBe(0);
   });
 
   it("commits successful align and stores recent feedback lines", () => {
