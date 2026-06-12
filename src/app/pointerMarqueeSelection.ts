@@ -71,10 +71,7 @@ export function updatePointerMarqueeDrag(
     marquee.mode = args.x >= marquee.startX ? "contain" : "touch";
     applyPointerMarqueeModeStyle(marquee, marqueeEl);
     const rect = makeMarqueeRect(marquee.startX, marquee.startY, args.x, args.y);
-    marqueeEl.style.left = `${rect.x0}px`;
-    marqueeEl.style.top = `${rect.y0}px`;
-    marqueeEl.style.width = `${Math.max(0, rect.x1 - rect.x0)}px`;
-    marqueeEl.style.height = `${Math.max(0, rect.y1 - rect.y0)}px`;
+    applyPointerMarqueeRectStyle(marqueeEl, rect);
     return true;
   }
 
@@ -87,10 +84,7 @@ export function updatePointerMarqueeDrag(
   marquee.active = true;
   marquee.mode = "contain";
   applyPointerMarqueeModeStyle(marquee, marqueeEl);
-  marqueeEl.style.left = `${marquee.startX}px`;
-  marqueeEl.style.top = `${marquee.startY}px`;
-  marqueeEl.style.width = "0px";
-  marqueeEl.style.height = "0px";
+  applyPointerMarqueeRectStyle(marqueeEl, makeMarqueeRect(marquee.startX, marquee.startY, marquee.startX, marquee.startY));
   marqueeEl.style.display = "block";
   return true;
 }
@@ -129,6 +123,13 @@ function applyPointerMarqueeModeStyle(marquee: PointerMarqueeState, marqueeEl: P
     marqueeEl.style.border = "1px solid rgba(61, 220, 151, 0.95)";
     marqueeEl.style.background = "rgba(61, 220, 151, 0.10)";
   }
+}
+
+function applyPointerMarqueeRectStyle(marqueeEl: PointerMarqueeElement, rect: ScreenRect) {
+  marqueeEl.style.left = `${rect.x0}px`;
+  marqueeEl.style.top = `${rect.y0}px`;
+  marqueeEl.style.width = `${Math.max(0, rect.x1 - rect.x0)}px`;
+  marqueeEl.style.height = `${Math.max(0, rect.y1 - rect.y0)}px`;
 }
 
 export function boundsFromPoints(points: ScreenPoint[]): ScreenBounds | null {
