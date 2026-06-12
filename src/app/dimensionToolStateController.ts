@@ -1,3 +1,4 @@
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import { refreshSelectionVisualState } from "./selectionController";
 
 export type DimensionToolEscapeContext = {
@@ -34,6 +35,5 @@ export function activateDimensionToolState(ctx: DimensionToolActivationContext) 
   ctx.ensureFloorplanViewerTab();
   ctx.clearSelectionForDrawingTool();
   refreshSelectionVisualState(ctx);
-  ctx.setUnderlayStatus("Dimension: pick the first line, then another parallel line. Click empty space to place dimension.");
-  ctx.mountProps();
+  reportEditorToolEntryStatus(ctx, "Dimension: pick the first line, then another parallel line. Click empty space to place dimension.");
 }
