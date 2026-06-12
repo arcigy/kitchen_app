@@ -30,7 +30,7 @@
     "serve:caprover": "tsx scripts/worker.ts",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "db:init": "npm run db:migrate",
+    "db:init": "tsx scripts/initProjectDatabase.ts",
     "db:migrate": "tsx scripts/dbMigrate.ts",
     "db:seed": "tsx scripts/dbSeedArcigy.ts"
   },

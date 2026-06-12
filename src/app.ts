@@ -433,7 +433,17 @@ export function startApp(initialArgs: AppArgs) {
   floorBoundaryGroup.visible = false;
   layoutRoot.add(floorBoundaryGroup);
 
-  const { toolHud, clearToolHud, hudHoverLine, hudLineThicknessM, hudPickLine1, hudPickLine2, updateHudLine } = createToolHud({
+  const {
+    toolHud,
+    clearToolHud,
+    hudHoverLine,
+    hudWallEndAlignmentGuide,
+    hudLineThicknessM,
+    hudPickLine1,
+    hudPickLine2,
+    updateHudDashedLine,
+    updateHudLine
+  } = createToolHud({
     layoutRoot,
     getCamera: cam
   });
@@ -3391,6 +3401,7 @@ export function startApp(initialArgs: AppArgs) {
     groundPlane,
     hideHoverCursor,
     hudHoverLine,
+    hudWallEndAlignmentGuide,
     hudLineThicknessM,
     hudPickLine1,
     hudPickLine2,
@@ -3505,6 +3516,7 @@ export function startApp(initialArgs: AppArgs) {
     underlayState,
     updateAllSectionVisuals,
     updateHoverCursor,
+    updateHudDashedLine,
     updateHudLine,
     updateLayoutPanel,
     updateMeasureHoverFromPlanPoint,

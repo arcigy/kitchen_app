@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { PlanSnapResult } from "./planSnap";
+import { findParallelWallEndAlignmentGuide, type WallEndAlignmentGuide, type WallAlignmentGuideWall } from "./wallAlignmentGuide";
 
 export type PointerWallDrawState = {
   active: boolean;
@@ -29,6 +30,65 @@ export type PointerWallDrawWall = {
   };
 };
 
+function wallDrawAlignmentSnapDistanceM(rect: DOMRect, camera: THREE.Camera) {
+  if (camera instanceof THREE.OrthographicCamera) {
+    const visibleWidthM = Math.abs(camera.right - camera.left) / Math.max(1e-6, camera.zoom);
+    const worldPerPx = visibleWidthM / Math.max(1, rect.width);
+    return Math.min(0.24, Math.max(0.035, worldPerPx * 28));
+  }
+  return 0.11;
+}
+
+function shouldUseWallAlignmentSnap(params: {
+  guide: WallEndAlignmentGuide | null;
+  cursor: THREE.Vector3;
+  rect: DOMRect;
+  camera: THREE.Camera;
+  precisionMm: boolean;
+}) {
+  if (!params.guide) return false;
+  const distance = Math.hypot(params.cursor.x - params.guide.snapPoint.x, params.cursor.z - params.guide.snapPoint.z);
+  const limit = params.precisionMm ? 0.0015 : wallDrawAlignmentSnapDistanceM(params.rect, params.camera);
+  return distance <= limit;
+}
+
+function resolveWallDrawAlignmentSnap(params: {
+  enabled: boolean;
+  walls: readonly WallAlignmentGuideWall[];
+  start: THREE.Vector3;
+  cursor: THREE.Vector3;
+  rect: DOMRect;
+  camera: THREE.Camera;
+  precisionMm: boolean;
+  show: boolean;
+  hudWallEndAlignmentGuide?: THREE.Line | null;
+  updateHudDashedLine?: ((line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => void) | null;
+}) {
+  const hideGuide = () => {
+    if (params.hudWallEndAlignmentGuide) params.hudWallEndAlignmentGuide.visible = false;
+  };
+  if (!params.enabled) {
+    if (params.show) hideGuide();
+    return null;
+  }
+
+  const guide = findParallelWallEndAlignmentGuide({
+    walls: params.walls,
+    start: params.start,
+    cursor: params.cursor,
+    snapDistanceM: wallDrawAlignmentSnapDistanceM(params.rect, params.camera)
+  });
+  if (!shouldUseWallAlignmentSnap({ guide, cursor: params.cursor, rect: params.rect, camera: params.camera, precisionMm: params.precisionMm })) {
+    if (params.show) hideGuide();
+    return null;
+  }
+
+  if (params.show && params.hudWallEndAlignmentGuide && params.updateHudDashedLine) {
+    params.updateHudDashedLine(params.hudWallEndAlignmentGuide, guide!.refPoint, guide!.snapPoint);
+  }
+  return guide!.snapPoint.clone();
+}
+
 export function resolveWallDrawStartPoint(params: {
   hitPoint: THREE.Vector3;
   snapped: Pick<PlanSnapResult, "kind" | "point">;
@@ -46,6 +106,7 @@ export function resolveWallDrawEndPoint(params: {
   segments: number;
   closeToleranceM: number;
   shouldAxisSnap: boolean;
+  alignmentSnapPoint?: THREE.Vector3 | null;
   snapAxisXZ: (a: THREE.Vector3, b: THREE.Vector3, allowDiagonal: boolean) => THREE.Vector3;
 }): { end: THREE.Vector3; closes: boolean } {
   const rawB = params.snapped.kind !== "none" ? params.snapped.point : params.hitPoint.clone();
@@ -54,7 +115,7 @@ export function resolveWallDrawEndPoint(params: {
     params.segments >= 2 &&
     Math.hypot(rawB.x - params.chainStart.x, rawB.z - params.chainStart.z) <= params.closeToleranceM;
   const b0 = closesRaw && params.chainStart ? params.chainStart.clone() : rawB;
-  const b = params.shouldAxisSnap && !closesRaw ? params.snapAxisXZ(params.a, b0, true) : b0;
+  const b = params.alignmentSnapPoint ?? (params.shouldAxisSnap && !closesRaw ? params.snapAxisXZ(params.a, b0, true) : b0);
   const bMm = { x: Math.round(b.x * 1000), z: Math.round(b.z * 1000) };
   const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
 
@@ -75,6 +136,7 @@ export function resolveWallDrawHoverPoint(params: {
   segments: number;
   closeToleranceM: number;
   allowAxisSnap: boolean;
+  alignmentSnapPoint?: THREE.Vector3 | null;
   snapAxisXZ: (a: THREE.Vector3, b: THREE.Vector3, allowDiagonal: boolean) => THREE.Vector3;
 }): THREE.Vector3 {
   const rawB = params.snapPoint ?? params.hitPoint;
@@ -84,7 +146,7 @@ export function resolveWallDrawHoverPoint(params: {
     Math.hypot(rawB.x - params.chainStart.x, rawB.z - params.chainStart.z) <= params.closeToleranceM;
   const shouldAxisSnap = params.allowAxisSnap && !params.snapPoint && !closesRaw;
   const b0 = closesRaw && params.chainStart ? params.chainStart : rawB;
-  return shouldAxisSnap ? params.snapAxisXZ(params.a, b0, true) : b0;
+  return params.alignmentSnapPoint ?? (shouldAxisSnap ? params.snapAxisXZ(params.a, b0, true) : b0);
 }
 
 export function resolveWallDrawActiveSnap(params: {
@@ -141,6 +203,10 @@ export function updateActiveWallDrawPointerMoveHover(params: {
   updateHoverCursor: (point: THREE.Vector2, kind: PlanSnapResult["kind"]) => void;
   hideHoverCursor: () => void;
   allowAxisSnap: boolean;
+  precisionMm?: boolean;
+  walls?: readonly WallAlignmentGuideWall[];
+  hudWallEndAlignmentGuide?: THREE.Line | null;
+  updateHudDashedLine?: ((line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => void) | null;
   snapAxisXZ: (a: THREE.Vector3, b: THREE.Vector3, allowDiagonal: boolean) => THREE.Vector3;
   updateWallMeshWithJustification: (
     preview: THREE.Mesh,
@@ -171,6 +237,18 @@ export function updateActiveWallDrawPointerMoveHover(params: {
   }
 
   const closeToleranceM = Math.max(0.03, Math.min(0.15, params.wallDefault.thicknessMm / 1000));
+  const alignmentSnapPoint = resolveWallDrawAlignmentSnap({
+    enabled: !activeSnap && !!params.walls,
+    walls: params.walls ?? [],
+    start: params.wallDraw.a,
+    cursor: params.hitPoint,
+    rect: params.rect,
+    camera: params.camera,
+    precisionMm: !!params.precisionMm,
+    show: true,
+    hudWallEndAlignmentGuide: params.hudWallEndAlignmentGuide,
+    updateHudDashedLine: params.updateHudDashedLine
+  });
   const b = resolveWallDrawHoverPoint({
     a: params.wallDraw.a,
     hitPoint: params.hitPoint,
@@ -179,6 +257,7 @@ export function updateActiveWallDrawPointerMoveHover(params: {
     segments: params.wallDraw.segments,
     closeToleranceM,
     allowAxisSnap: params.allowAxisSnap,
+    alignmentSnapPoint,
     snapAxisXZ: params.snapAxisXZ
   });
   params.wallDraw.hoverB = b.clone();
@@ -310,7 +389,7 @@ export function handleWallDrawStartClick(params: {
     params.wallDefault.justification ?? "center",
     params.wallDefault.exteriorSign ?? 1
   );
-  params.setStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+  params.setStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
   return true;
 }
 
@@ -362,7 +441,7 @@ export function finishWallDrawAfterAddedWall(params: {
     params.wallDefault.justification ?? "center",
     params.wallDefault.exteriorSign ?? 1
   );
-  params.setStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+  params.setStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
   params.selectWall(params.wall.id);
   return true;
 }
@@ -371,6 +450,12 @@ export function handleWallDrawEndClick(params: {
   hitPoint: THREE.Vector3;
   snapped: Pick<PlanSnapResult, "kind" | "point">;
   shouldAxisSnap: boolean;
+  rect?: DOMRect;
+  camera?: THREE.Camera;
+  precisionMm?: boolean;
+  walls?: readonly WallAlignmentGuideWall[];
+  hudWallEndAlignmentGuide?: THREE.Line | null;
+  updateHudDashedLine?: ((line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => void) | null;
   wallDraw: PointerWallDrawState;
   wallDefault: PointerWallDefault;
   wallTypedHud: { style: { display: string } };
@@ -393,6 +478,21 @@ export function handleWallDrawEndClick(params: {
   if (!a) return false;
 
   const closeToleranceM = Math.max(0.03, Math.min(0.15, params.wallDefault.thicknessMm / 1000));
+  const alignmentSnapPoint =
+    params.rect && params.camera
+      ? resolveWallDrawAlignmentSnap({
+          enabled: params.snapped.kind === "none" && !!params.walls,
+          walls: params.walls ?? [],
+          start: a,
+          cursor: params.hitPoint,
+          rect: params.rect,
+          camera: params.camera,
+          precisionMm: !!params.precisionMm,
+          show: false,
+          hudWallEndAlignmentGuide: params.hudWallEndAlignmentGuide,
+          updateHudDashedLine: params.updateHudDashedLine
+        })
+      : null;
   const { end, closes } = resolveWallDrawEndPoint({
     a,
     hitPoint: params.hitPoint,
@@ -401,6 +501,7 @@ export function handleWallDrawEndClick(params: {
     segments: params.wallDraw.segments,
     closeToleranceM,
     shouldAxisSnap: params.shouldAxisSnap,
+    alignmentSnapPoint,
     snapAxisXZ: params.snapAxisXZ
   });
 

@@ -28,7 +28,75 @@ jobs:
         run: npm run build
 
       - name: Create deploy archive
-        run: tar --exclude-vcs --exclude=.env --exclude=node_modules --exclude=dist --exclude=reports --exclude=outputs --exclude=storage --exclude='*.log' -cf kitchenapp.tar .
+        run: |
+          node - <<'NODE' > material-basecolor-files.txt
+          const fs = require("fs");
+          const source = [
+            fs.readFileSync("src/app/materialPbrOptions.ts", "utf8"),
+            fs.readFileSync("server/workerServer.ts", "utf8")
+          ].join("\n");
+          const paths = [...new Set([...source.matchAll(/assets\/materials\/[^"'`]+?\/maps\/basecolor\.jpg/g)].map((match) => match[0]))];
+          for (const filePath of paths) {
+            if (fs.existsSync(filePath)) console.log(filePath);
+          }
+          NODE
+
+          tar \
+            --exclude-vcs \
+            --exclude=.env \
+            --exclude=./node_modules \
+            --exclude=./dist \
+            --exclude=./reports \
+            --exclude=./outputs \
+            --exclude=./storage \
+            --exclude='*.log' \
+            --exclude=kitchenapp.tar \
+            --exclude=material-basecolor-files.txt \
+            --exclude=./assets/materials \
+            --exclude=./backend/materials/assets \
+            --exclude=./HDRI \
+            --exclude=./Materials \
+            --exclude=./blender/previews \
+            --exclude=./public/hdri \
+            --exclude=./public/materials \
+            -cf kitchenapp.tar .
+
+          tar -rf kitchenapp.tar -T material-basecolor-files.txt
+          ls -lh kitchenapp.tar
+
+      - name: Ensure CapRover app exists
+        run: |
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t /user/apps/appDefinitions \
+            -m GET \
+            -d '{}' \
+            -o caprover-apps.json
+
+          if node - <<'NODE'
+          const fs = require("fs");
+          const appName = process.env.CAPROVER_APP;
+          const payload = JSON.parse(fs.readFileSync("caprover-apps.json", "utf8"));
+          const appDefinitions = payload?.data?.appDefinitions ?? payload?.appDefinitions ?? [];
+          process.exit(appDefinitions.some((app) => app?.appName === appName) ? 0 : 1);
+          NODE
+          then
+            echo "CapRover app already exists: $CAPROVER_APP"
+          else
+            echo "Creating CapRover app: $CAPROVER_APP"
+            register_data="$(node -e 'process.stdout.write(JSON.stringify({ appName: process.env.CAPROVER_APP, hasPersistentData: false }))')"
+            npx caprover@2.3.1 api \
+              -u "$CAPROVER_SERVER" \
+              -p "$CAPROVER_PASSWORD" \
+              -t /user/apps/appDefinitions/register \
+              -m POST \
+              -d "$register_data"
+          fi
+        env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
 
       - name: Deploy
         run: npx caprover@2.3.1 deploy -h "$CAPROVER_SERVER" -p "$CAPROVER_PASSWORD" -a "$CAPROVER_APP" -t kitchenapp.tar

@@ -912,7 +912,7 @@ describe("wall typed length command", () => {
 
     expect(ctx.wallDraw.typedMm).toBe("");
     expect(ctx.wallTypedHud.style.display).toBe("none");
-    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
   });
 
   it("adds typed wall length and prepares the next wall segment on Enter", () => {
@@ -929,7 +929,7 @@ describe("wall typed length command", () => {
     expect(ctx.selectedKind).toBe("wall");
     expect(ctx.selectedWallId).toBe("typed-wall");
     expect(ctx.mountProps).toHaveBeenCalledOnce();
-    expect(ctx.setUnderlayStatus).toHaveBeenLastCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+    expect(ctx.setUnderlayStatus).toHaveBeenLastCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
   });
 
   it("returns false for unresolved typed wall endpoint without adding a wall", () => {

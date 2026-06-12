@@ -128,6 +128,7 @@ type KeyboardInputHandlersContext = {
     active: boolean;
     a: THREE.Vector3 | null;
     chainStart: THREE.Vector3 | null;
+    freeMm?: boolean;
     hoverB: THREE.Vector3 | null;
     lastPointerPx: { x: number; y: number };
     preview: THREE.Mesh | null;
@@ -338,8 +339,12 @@ type WallTypedLengthCommandContext = Pick<
   | "addWall"
   | "autoJoinAtMmPoint"
   | "clearWallDrawState"
+  | "drawSnapOverlay"
+  | "hideHoverCursor"
+  | "hudHoverLine"
   | "layoutTool"
   | "mountProps"
+  | "selectPlanSnap"
   | "selectedKind"
   | "selectedWallId"
   | "setUnderlayStatus"
@@ -812,6 +817,20 @@ export function runWallTypedLengthCommand(ctx: WallTypedLengthCommandContext, ev
     return false;
   }
 
+  if (ev.key.toLowerCase() === "n") {
+    ctx.wallDraw.freeMm = !ctx.wallDraw.freeMm;
+    ctx.selectPlanSnap = null;
+    ctx.drawSnapOverlay?.hide?.();
+    ctx.hideHoverCursor?.();
+    if (ctx.hudHoverLine) ctx.hudHoverLine.visible = false;
+    ctx.setUnderlayStatus(
+      ctx.wallDraw.freeMm
+        ? "Wall: precision 1 mm. Ortho stays on, dashed guide visible, snaps only very close. N = normal guide snap."
+        : "Wall: dashed alignment on. N = precision 1 mm near guide."
+    );
+    return true;
+  }
+
   const wallTypedInput = applyTypedMillimeterKey(ctx.wallDraw.typedMm, ev.key);
   if (wallTypedInput.handled) {
     ctx.wallDraw.typedMm = wallTypedInput.typedMm;
@@ -820,7 +839,7 @@ export function runWallTypedLengthCommand(ctx: WallTypedLengthCommandContext, ev
       ctx.setUnderlayStatus(`Wall: ${ctx.wallDraw.typedMm} mm (Enter = place, Backspace = edit)`);
     } else {
       updatePointerTypedHud(ctx.wallTypedHud, ctx.wallDraw.typedMm, ctx.wallDraw.lastPointerPx);
-      ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+      ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
     }
     return true;
   }

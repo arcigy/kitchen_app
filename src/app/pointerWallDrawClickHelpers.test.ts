@@ -434,7 +434,7 @@ describe("pointer wall draw click helpers", () => {
     expect(addPreviewToLayout).toHaveBeenCalledWith(preview);
     expect(state.preview).toBe(preview);
     expect(updateWallMeshWithJustification).toHaveBeenCalledWith(preview, state.a, state.a, 120, "exterior", -1);
-    expect(setStatus).toHaveBeenCalledWith("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+    expect(setStatus).toHaveBeenCalledWith("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
   });
 
   it("reuses existing preview and chain start", () => {
@@ -548,7 +548,7 @@ describe("pointer wall draw click helpers", () => {
     expect(state.typedMm).toBe("");
     expect(wallTypedHud.style.display).toBe("none");
     expect(updateWallMeshWithJustification).toHaveBeenCalledWith(preview, state.a, state.a, 120, "interior", -1);
-    expect(setStatus).toHaveBeenCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
+    expect(setStatus).toHaveBeenCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
     expect(selectWall).toHaveBeenCalledWith("wall_2");
   });
 

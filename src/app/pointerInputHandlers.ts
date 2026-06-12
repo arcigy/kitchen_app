@@ -243,6 +243,7 @@ type PointerInputHandlersDataContext = {
   fromMmPoint: (point: FloorBoundaryPoint) => THREE.Vector3;
   groundPlane: THREE.Plane;
   hudHoverLine: THREE.Mesh;
+  hudWallEndAlignmentGuide: THREE.Line;
   hudPickLine1: THREE.Mesh;
   hudPickLine2: THREE.Mesh;
   kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
@@ -383,6 +384,7 @@ type PointerInputHandlersDataContext = {
   updateDoorPlacementPreview: (wallId: string | null, pointMm: { x: number; z: number } | null) => boolean;
   updateDoorTransform: (door: DoorInstance) => void;
   updateHoverCursor: (point: THREE.Vector2, kind: MeasureState["hoverSnap"]) => void;
+  updateHudDashedLine: (line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => void;
   updateHudLine: (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, thicknessM: number) => void;
   updateLayoutPanel: () => void;
   updateMeasureHoverFromPlanPoint: (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => void;
@@ -449,6 +451,7 @@ type PointerInputHandlersDataContext = {
     active: boolean;
     a: THREE.Vector3 | null;
     chainStart: THREE.Vector3 | null;
+    freeMm?: boolean;
     hoverB: THREE.Vector3 | null;
     lastPointerPx: { x: number; y: number };
     preview: THREE.Mesh | null;
@@ -464,6 +467,8 @@ type PointerInputHandlersDataContext = {
 };
 
 type PointerInputHandlersContext = PointerInputHandlersDataContext;
+
+const isWallDrawFreeMm = (wallDraw: { freeMm?: boolean }) => wallDraw.freeMm === true;
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
@@ -1561,6 +1566,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           hitPoint,
           snapped,
           shouldAxisSnap,
+          rect: rect2,
+          camera: ctx.cam(),
+          precisionMm: isWallDrawFreeMm(ctx.wallDraw),
+          walls: ctx.walls,
+          hudWallEndAlignmentGuide: ctx.hudWallEndAlignmentGuide,
+          updateHudDashedLine: ctx.updateHudDashedLine,
           wallDraw: ctx.wallDraw,
           wallDefault: ctx.wallDefault,
           wallTypedHud: ctx.wallTypedHud,
@@ -2096,6 +2107,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         updateHoverCursor: ctx.updateHoverCursor,
         hideHoverCursor: ctx.hideHoverCursor,
         allowAxisSnap: ctx.drawOrthoEnabled && !ev.shiftKey,
+        precisionMm: isWallDrawFreeMm(ctx.wallDraw),
+        walls: ctx.walls,
+        hudWallEndAlignmentGuide: ctx.hudWallEndAlignmentGuide,
+        updateHudDashedLine: ctx.updateHudDashedLine,
         snapAxisXZ: ctx.snapAxisXZ,
         updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
         updateTypedHud: (typedMm, point) => updatePointerTypedHud(ctx.wallTypedHud, typedMm, point)

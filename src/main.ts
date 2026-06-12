@@ -27,7 +27,30 @@ let bootTarget = 8;
 let bootTimer = 0;
 
 renderBootLoading("Kontrolujem prihlasenie", 8);
-void start();
+void start().catch((error: unknown) => {
+  console.error("Failed to start app", error);
+  window.clearInterval(bootTimer);
+  const message = error instanceof Error ? error.message : String(error);
+  appRoot.innerHTML = `
+    <div style="padding:16px;font-family:sans-serif;color:#111">
+      <strong>App start failed</strong>
+      <pre style="white-space:pre-wrap">${escapeHtml(message)}</pre>
+    </div>
+  `;
+});
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    };
+    return entities[char] ?? char;
+  });
+}
 
 function renderBootLoading(status: string, target: number): void {
   bootTarget = target;

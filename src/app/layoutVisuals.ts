@@ -4,6 +4,9 @@ import type { LayoutInstance } from "./localTypes";
 import { getModulePlanPolygon } from "./planSnap";
 
 type GetCamera = () => THREE.Camera;
+type WallUnionRing = Array<[number, number]>;
+type WallUnionPolygon = WallUnionRing[];
+type WallUnionMultiPolygon = WallUnionPolygon[];
 
 export function createToolHud(args: {
   layoutRoot: THREE.Group;
@@ -16,6 +19,15 @@ export function createToolHud(args: {
   const hudMatHover = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false });
   const hudMatPick1 = new THREE.MeshBasicMaterial({ color: 0x2f78c4, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
   const hudMatPick2 = new THREE.MeshBasicMaterial({ color: 0x5c8f44, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
+  const dashedGuideMat = new THREE.LineDashedMaterial({
+    color: 0x1c8ed6,
+    dashSize: 0.11,
+    gapSize: 0.07,
+    transparent: true,
+    opacity: 0.88,
+    depthTest: false,
+    depthWrite: false
+  });
 
   const makeHudLineMesh = (mat: THREE.Material) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
@@ -29,11 +41,17 @@ export function createToolHud(args: {
   const hudHoverLine = makeHudLineMesh(hudMatHover);
   const hudPickLine1 = makeHudLineMesh(hudMatPick1);
   const hudPickLine2 = makeHudLineMesh(hudMatPick2);
+  const hudWallEndAlignmentGuide = new THREE.Line(new THREE.BufferGeometry(), dashedGuideMat);
+  hudWallEndAlignmentGuide.name = "wallEndAlignmentGuide";
+  hudWallEndAlignmentGuide.visible = false;
+  hudWallEndAlignmentGuide.renderOrder = 83;
+  toolHud.add(hudWallEndAlignmentGuide);
 
   const clearToolHud = () => {
     hudHoverLine.visible = false;
     hudPickLine1.visible = false;
     hudPickLine2.visible = false;
+    hudWallEndAlignmentGuide.visible = false;
   };
 
   const hudLineThicknessM = (rect: DOMRect) => {
@@ -61,13 +79,29 @@ export function createToolHud(args: {
     mesh.visible = true;
   };
 
+  const updateHudDashedLine = (line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => {
+    if (a.distanceToSquared(b) < 1e-10) {
+      line.visible = false;
+      return;
+    }
+    line.geometry.dispose();
+    line.geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(a.x, 0.062, a.z),
+      new THREE.Vector3(b.x, 0.062, b.z)
+    ]);
+    line.computeLineDistances();
+    line.visible = true;
+  };
+
   return {
     toolHud,
     hudHoverLine,
+    hudWallEndAlignmentGuide,
     hudPickLine1,
     hudPickLine2,
     clearToolHud,
     hudLineThicknessM,
+    updateHudDashedLine,
     updateHudLine
   };
 }
@@ -154,6 +188,7 @@ export function createSelectionHighlights(args: {
   getSelectedWallIds: () => Set<string>;
   getSelectedInstanceIds: () => Set<string>;
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
+  getWallUnionPolys?: () => WallUnionMultiPolygon | null;
   getSelectedKind: () => SelectedKind;
   getSelectedFloorId: () => string | null;
   getFloors: () => FloorInstance[];
@@ -181,14 +216,130 @@ export function createSelectionHighlights(args: {
       return;
     }
 
+    const pointOnSegment = (
+      point: { x: number; z: number },
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      eps = 0.004
+    ) => {
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq < 1e-10) return Math.hypot(point.x - a.x, point.z - a.z) <= eps;
+      const t = ((point.x - a.x) * dx + (point.z - a.z) * dz) / lenSq;
+      if (t < -eps || t > 1 + eps) return false;
+      const px = a.x + dx * t;
+      const pz = a.z + dz * t;
+      return Math.hypot(point.x - px, point.z - pz) <= eps;
+    };
+
+    const pointInOrOnPolygon = (point: { x: number; z: number }, poly: Array<{ x: number; z: number }>) => {
+      if (poly.length < 3) return false;
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        const pi = poly[i]!;
+        const pj = poly[j]!;
+        if (pointOnSegment(point, pi, pj)) return true;
+        const crosses = pi.z > point.z !== pj.z > point.z;
+        if (crosses) {
+          const xAtZ = ((pj.x - pi.x) * (point.z - pi.z)) / (pj.z - pi.z) + pi.x;
+          if (point.x < xAtZ) inside = !inside;
+        }
+      }
+      return inside;
+    };
+
+    const selectedWallEdgeIsCoveredByAnotherWall = (
+      wallId: string,
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      wallThicknessM: number
+    ) => {
+      if (Math.hypot(b.x - a.x, b.z - a.z) > Math.max(0.18, wallThicknessM * 2.25)) return false;
+      const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      for (const [otherId, otherOutline] of args.getWallSolvedOutlines()) {
+        if (otherId === wallId) continue;
+        if (pointInOrOnPolygon(mid, otherOutline)) return true;
+      }
+      return false;
+    };
+    const segmentOverlapSpan = (
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      c: { x: number; z: number },
+      d: { x: number; z: number },
+      eps = 0.004
+    ): [number, number] | null => {
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq < 1e-12) return null;
+      const lineDist = (p: { x: number; z: number }) => Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.sqrt(lenSq);
+      if (lineDist(c) > eps || lineDist(d) > eps) return null;
+      const tc = ((c.x - a.x) * dx + (c.z - a.z) * dz) / lenSq;
+      const td = ((d.x - a.x) * dx + (d.z - a.z) * dz) / lenSq;
+      const start = Math.max(0, Math.min(tc, td));
+      const end = Math.min(1, Math.max(tc, td));
+      return end - start > 1e-5 ? [start, end] : null;
+    };
+    const boundarySpansOnUnion = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+      const union = args.getWallUnionPolys?.() ?? null;
+      if (!union || union.length === 0) return null;
+      const spans: Array<[number, number]> = [];
+      for (const polygon of union) {
+        for (const ring of polygon) {
+          const pts = ring.length > 1 ? ring.slice(0, -1) : ring;
+          for (let i = 0; i < pts.length; i += 1) {
+            const cRaw = pts[i];
+            const dRaw = pts[(i + 1) % pts.length];
+            if (!cRaw || !dRaw) continue;
+            const span = segmentOverlapSpan(a, b, { x: cRaw[0], z: cRaw[1] }, { x: dRaw[0], z: dRaw[1] });
+            if (span) spans.push(span);
+          }
+        }
+      }
+      return spans;
+    };
+    const segmentPartsFromSpans = (
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+      spans: Array<[number, number]>
+    ) => {
+      const merged = spans
+        .map(([start, end]) => [Math.max(0, start), Math.min(1, end)] as [number, number])
+        .filter(([start, end]) => end - start > 1e-5)
+        .sort((left, right) => left[0] - right[0]);
+      const compact: Array<[number, number]> = [];
+      for (const span of merged) {
+        const last = compact[compact.length - 1];
+        if (last && span[0] <= last[1] + 1e-5) last[1] = Math.max(last[1], span[1]);
+        else compact.push([...span]);
+      }
+      const pointAt = (t: number) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+      return compact.map(([start, end]) => [pointAt(start), pointAt(end)] as [{ x: number; z: number }, { x: number; z: number }]);
+    };
+
     for (const id of args.getSelectedWallIds()) {
       const wall = args.getWalls().find((item) => item.id === id) ?? null;
       if (!wall) continue;
       const solvedOutline = args.getWallSolvedOutlines().get(id) ?? null;
       let pts: THREE.Vector3[];
       if (solvedOutline && solvedOutline.length >= 3) {
-        pts = solvedOutline.map((p) => new THREE.Vector3(p.x, 0.018, p.z));
-        pts.push(new THREE.Vector3(solvedOutline[0].x, 0.018, solvedOutline[0].z));
+        pts = [];
+        const thicknessM = Math.max(1, wall.params.thicknessMm) / 1000;
+        for (let i = 0; i < solvedOutline.length; i += 1) {
+          const a = solvedOutline[i]!;
+          const b = solvedOutline[(i + 1) % solvedOutline.length]!;
+          const unionSpans = boundarySpansOnUnion(a, b);
+          if (unionSpans) {
+            for (const [start, end] of segmentPartsFromSpans(a, b, unionSpans)) {
+              pts.push(new THREE.Vector3(start.x, 0.018, start.z), new THREE.Vector3(end.x, 0.018, end.z));
+            }
+            continue;
+          }
+          if (selectedWallEdgeIsCoveredByAnotherWall(id, a, b, thicknessM)) continue;
+          pts.push(new THREE.Vector3(a.x, 0.018, a.z), new THREE.Vector3(b.x, 0.018, b.z));
+        }
       } else {
         const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000);
         const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000);
@@ -205,8 +356,9 @@ export function createSelectionHighlights(args: {
           a.clone().addScaledVector(n, half)
         ];
       }
+      if (pts.length < 2) continue;
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(
+      const line = new THREE.LineSegments(
         geom,
         new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
       );
