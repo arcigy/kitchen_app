@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
 import {
+  consumePlacementPointerEvent,
   handleColumnPlacementPreviewPointerMove,
   handleFloorplanPlacementClick,
   handleOpeningPlacementClick,
@@ -13,6 +14,16 @@ import {
 } from "./pointerPlacementFlow";
 
 describe("pointerPlacementFlow", () => {
+  it("consumes placement pointer event through the shared helper", () => {
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+
+    consumePlacementPointerEvent({ preventDefault, stopPropagation });
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(stopPropagation).toHaveBeenCalledOnce();
+  });
+
   it("does not resolve hit point when placement commit flow is inactive", () => {
     const getHitPoint = vi.fn(() => new Vector3(1, 0, 2));
 

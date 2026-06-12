@@ -1,5 +1,13 @@
 import * as THREE from "three";
 
+export function consumePlacementPointerEvent(args: {
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}) {
+  args.preventDefault();
+  args.stopPropagation();
+}
+
 export function handlePlacementCommitPointerDown<State, Helpers>(args: {
   button: number;
   commitPlacement: (state: State, helpers: Helpers) => boolean;
@@ -18,8 +26,10 @@ export function handlePlacementCommitPointerDown<State, Helpers>(args: {
 
   args.rebuildGhost(args.state, args.helpers, hitPoint);
   args.commitPlacement(args.state, args.helpers);
-  args.preventDefault();
-  args.stopPropagation();
+  consumePlacementPointerEvent({
+    preventDefault: args.preventDefault,
+    stopPropagation: args.stopPropagation
+  });
   return true;
 }
 
@@ -68,8 +78,10 @@ export function handleFloorplanPlacementClick(args: {
   if (args.isColumnPlacementActive) {
     args.cancelPendingMarquee();
     args.insertColumnAtPoint();
-    args.preventDefault();
-    args.stopPropagation();
+    consumePlacementPointerEvent({
+      preventDefault: args.preventDefault,
+      stopPropagation: args.stopPropagation
+    });
     return true;
   }
 
