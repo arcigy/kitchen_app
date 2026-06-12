@@ -156,6 +156,14 @@ export function runOpenUnderlayPanelCommand(ctx: OpenUnderlayPanelCommandContext
 
 type DuplicateSelectionBranchResult = "handled" | "blocked" | "not-applicable";
 
+function finishDuplicateSelectionBranch(
+  ctx: DuplicateSelectionCommandContext,
+  opts: { mountProps?: boolean } = {}
+) {
+  ctx.commitHistory();
+  if (opts.mountProps) ctx.mountProps();
+}
+
 function runSelectedModuleDuplicateBranch(
   ctx: DuplicateSelectionCommandContext,
   selectedKind: SelectedKind
@@ -169,7 +177,7 @@ function runSelectedModuleDuplicateBranch(
   });
   if (instanceIds.length === 0) return "blocked";
   for (const id of instanceIds) ctx.duplicateInstance(id);
-  ctx.commitHistory();
+  finishDuplicateSelectionBranch(ctx);
   return "handled";
 }
 
@@ -192,8 +200,7 @@ function runSelectedWallDuplicateBranch(ctx: DuplicateSelectionCommandContext, s
 
   ctx.setSelectedWall(createdIds[0]);
   replaceSelectionIdSet(selectedWallIds, createdIds);
-  ctx.commitHistory();
-  ctx.mountProps();
+  finishDuplicateSelectionBranch(ctx, { mountProps: true });
   return true;
 }
 
