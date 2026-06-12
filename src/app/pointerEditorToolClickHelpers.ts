@@ -151,16 +151,28 @@ export function handleTrimTargetPick(params: {
   if (params.trimState.step !== "pickTarget") return false;
   if (!params.picked.wallId) return true;
 
-  params.trimState.targetWallId = params.picked.wallId;
+  setTrimTargetPick({
+    trimState: params.trimState,
+    picked: params.picked,
+    hitPoint: params.hitPoint
+  });
+  params.setStatus("Trim: click cutter line...");
+  params.mountProps();
+  return true;
+}
+
+export function setTrimTargetPick(params: {
+  trimState: PointerTrimClickState;
+  picked: AlignPickedLine & { wallId?: string | null };
+  hitPoint: THREE.Vector3;
+}): void {
+  params.trimState.targetWallId = params.picked.wallId ?? null;
   params.trimState.targetPick = params.picked;
   params.trimState.targetClick = params.hitPoint.clone();
   params.trimState.step = "pickCutter";
   params.trimState.lastTarget = null;
   params.trimState.lastCutter = null;
   params.trimState.lastUntilMs = 0;
-  params.setStatus("Trim: click cutter line...");
-  params.mountProps();
-  return true;
 }
 
 export function resetTrimTarget(params: {

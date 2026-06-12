@@ -12,6 +12,7 @@ import {
   handleTrimTargetPick,
   setAlignReferencePick,
   setAlignRecentFeedback,
+  setTrimTargetPick,
   type PointerTrimClickState
 } from "./pointerEditorToolClickHelpers";
 
@@ -234,6 +235,27 @@ describe("pointer editor tool click helpers", () => {
     expect(state.lastUntilMs).toBe(0);
     expect(setStatus).toHaveBeenCalledWith("Trim: click cutter line...");
     expect(mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("sets trim target pick state and clears previous recent feedback", () => {
+    const picked = { ...line("target"), wallId: "wall-1" };
+    const hitPoint = new THREE.Vector3(1, 0, 2);
+    const state = trimState({ lastTarget: line("old-target"), lastCutter: line("old-cutter"), lastUntilMs: 5 });
+
+    setTrimTargetPick({
+      trimState: state,
+      picked,
+      hitPoint
+    });
+
+    expect(state.targetWallId).toBe("wall-1");
+    expect(state.targetPick).toBe(picked);
+    expect(state.targetClick).toEqual(hitPoint);
+    expect(state.targetClick).not.toBe(hitPoint);
+    expect(state.step).toBe("pickCutter");
+    expect(state.lastTarget).toBeNull();
+    expect(state.lastCutter).toBeNull();
+    expect(state.lastUntilMs).toBe(0);
   });
 
   it("resets missing trim target without clearing the current target click", () => {
