@@ -63,10 +63,14 @@ export function handleDimensionToolClick<TDimension>(params: {
     return;
   }
 
-  const dimensions = params.buildDimensions(params.dimensionState.picked, params.hitPoint);
-  params.commitDimensions(dimensions);
-  params.resetDraft();
-  params.setStatus(dimensions.length > 0 ? `Dimension: inserted ${dimensions.length}. Select the next first line.` : "Dimension: insert failed.");
+  const insertedCount = commitDimensionDraft({
+    picked: params.dimensionState.picked,
+    hitPoint: params.hitPoint,
+    buildDimensions: params.buildDimensions,
+    commitDimensions: params.commitDimensions,
+    resetDraft: params.resetDraft
+  });
+  params.setStatus(insertedCount > 0 ? `Dimension: inserted ${insertedCount}. Select the next first line.` : "Dimension: insert failed.");
   params.mountProps();
 }
 
@@ -76,6 +80,19 @@ export function addDimensionPickedLine(params: {
 }): void {
   params.dimensionState.picked.push(params.picked);
   params.dimensionState.preview = [];
+}
+
+export function commitDimensionDraft<TDimension>(params: {
+  picked: AlignPickedLine[];
+  hitPoint: THREE.Vector3;
+  buildDimensions: (picked: AlignPickedLine[], hitPoint: THREE.Vector3) => TDimension[];
+  commitDimensions: (dimensions: TDimension[]) => void;
+  resetDraft: () => void;
+}): number {
+  const dimensions = params.buildDimensions(params.picked, params.hitPoint);
+  params.commitDimensions(dimensions);
+  params.resetDraft();
+  return dimensions.length;
 }
 
 export function handleAlignToolClick(params: {

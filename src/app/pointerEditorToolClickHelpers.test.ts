@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
   addDimensionPickedLine,
+  commitDimensionDraft,
   finishTrimNoChange,
   finishTrimSuccess,
   handleAlignToolClick,
@@ -134,6 +135,30 @@ describe("pointer editor tool click helpers", () => {
     expect(commitDimensions).toHaveBeenCalledWith([{ id: "dim-1", count: 2, x: 5 }, { id: "dim-2" }]);
     expect(resetDraft).toHaveBeenCalledTimes(1);
     expect(setStatus).toHaveBeenCalledWith("Dimension: inserted 2. Select the next first line.");
+  });
+
+  it("commits dimension draft and returns inserted count", () => {
+    const first = line("first");
+    const second = line("second");
+    const picked = [first, second];
+    const hitPoint = new THREE.Vector3(5, 0, 0);
+    const dimensions = [{ id: "dim-1" }, { id: "dim-2" }];
+    const buildDimensions = vi.fn(() => dimensions);
+    const commitDimensions = vi.fn();
+    const resetDraft = vi.fn();
+
+    const insertedCount = commitDimensionDraft({
+      picked,
+      hitPoint,
+      buildDimensions,
+      commitDimensions,
+      resetDraft
+    });
+
+    expect(insertedCount).toBe(2);
+    expect(buildDimensions).toHaveBeenCalledWith(picked, hitPoint);
+    expect(commitDimensions).toHaveBeenCalledWith(dimensions);
+    expect(resetDraft).toHaveBeenCalledOnce();
   });
 
   it("sets the first align reference without committing history", () => {
