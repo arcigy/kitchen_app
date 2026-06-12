@@ -49,18 +49,21 @@ export function resolveFloorplanSelectionActions(args: ResolveFloorplanSelection
   if (args.sectionId) actions.push({ kind: "section", id: args.sectionId });
   if (args.columnId) actions.push({ kind: "column", id: args.columnId });
   if (args.selectableModuleId) {
-    if (args.transformSelectElements) actions.push({ kind: "module-transform", id: args.selectableModuleId });
-    actions.push({ kind: "module-select", id: args.selectableModuleId });
+    appendModuleSelectionActions(actions, args.selectableModuleId, args.transformSelectElements);
   }
   if (args.fallbackModuleId && args.fallbackModulePickable) {
-    if (args.transformSelectElements) actions.push({ kind: "module-transform", id: args.fallbackModuleId });
-    actions.push({ kind: "module-select", id: args.fallbackModuleId });
+    appendModuleSelectionActions(actions, args.fallbackModuleId, args.transformSelectElements);
   }
   if (args.worktopId) actions.push({ kind: "worktop-select", id: args.worktopId });
   if (args.floorId) actions.push({ kind: "floor", id: args.floorId });
   if (args.polygonWallId) actions.push({ kind: "wall", id: args.polygonWallId });
   if (args.axisWallId) actions.push({ kind: "wall", id: args.axisWallId });
   return actions;
+}
+
+function appendModuleSelectionActions(actions: FloorplanSelectionAction[], id: string, transformSelectElements: boolean) {
+  if (transformSelectElements) actions.push({ kind: "module-transform", id });
+  actions.push({ kind: "module-select", id });
 }
 
 export type ExecuteFloorplanSelectionActionsArgs<WindowPick, DoorPick, MovePoint> = {
