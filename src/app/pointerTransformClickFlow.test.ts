@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
-import { finishMoveTransformTarget, handleTransformClickPointerDown, setMoveTransformBase, type PointerTransformClickState } from "./pointerTransformClickFlow";
+import {
+  finishMoveTransformTarget,
+  handleTransformClickPointerDown,
+  setMoveTransformBase,
+  setRotateTransformPivot,
+  type PointerTransformClickState
+} from "./pointerTransformClickFlow";
 
 function transformState(overrides: Partial<PointerTransformClickState> = {}): PointerTransformClickState {
   return {
@@ -153,6 +159,25 @@ describe("pointerTransformClickFlow", () => {
     expect(state.startPointerAngle).toBe(Math.atan2(4, 3));
     expect(args.setStatus).toHaveBeenCalledExactlyOnceWith("Rotate: move mouse to rotate (type degrees + Enter). Click to finish.");
     expect(args.commitHistory).not.toHaveBeenCalled();
+  });
+
+  it("sets rotate transform pivot and start pointer angle", () => {
+    const state = transformState({ kind: "rotate", step: "pickPivot", typed: "45", lastValidAngle: 12 });
+    const hitPoint = new Vector3(4, 0, 6);
+    const pickedPoint = new Vector3(1, 0, 2);
+
+    setRotateTransformPivot({
+      hitPoint,
+      pickedPoint,
+      transformState: state
+    });
+
+    expect(state.pivot?.toArray()).toEqual([1, 0, 2]);
+    expect(state.pivot).not.toBe(pickedPoint);
+    expect(state.step).toBe("rotating");
+    expect(state.typed).toBe("");
+    expect(state.lastValidAngle).toBe(0);
+    expect(state.startPointerAngle).toBe(Math.atan2(4, 3));
   });
 
   it("keeps current rotate finish click behavior", () => {

@@ -62,11 +62,11 @@ export function handleTransformClickPointerDown(args: {
 
   if (transformState.kind === "rotate") {
     if (transformState.step === "pickPivot") {
-      transformState.pivot = args.pickedPoint.clone();
-      transformState.step = "rotating";
-      transformState.typed = "";
-      transformState.lastValidAngle = 0;
-      transformState.startPointerAngle = Math.atan2(args.hitPoint.z - args.pickedPoint.z, args.hitPoint.x - args.pickedPoint.x);
+      setRotateTransformPivot({
+        hitPoint: args.hitPoint,
+        pickedPoint: args.pickedPoint,
+        transformState
+      });
       args.setStatus("Rotate: move mouse to rotate (type degrees + Enter). Click to finish.");
       return true;
     }
@@ -90,6 +90,18 @@ export function setMoveTransformBase(args: {
   args.transformState.step = "pickTarget";
   args.transformState.typed = "";
   args.transformState.lastValidDelta.set(0, 0, 0);
+}
+
+export function setRotateTransformPivot(args: {
+  hitPoint: THREE.Vector3;
+  pickedPoint: THREE.Vector3;
+  transformState: Pick<PointerTransformClickState, "lastValidAngle" | "pivot" | "startPointerAngle" | "step" | "typed">;
+}): void {
+  args.transformState.pivot = args.pickedPoint.clone();
+  args.transformState.step = "rotating";
+  args.transformState.typed = "";
+  args.transformState.lastValidAngle = 0;
+  args.transformState.startPointerAngle = Math.atan2(args.hitPoint.z - args.pickedPoint.z, args.hitPoint.x - args.pickedPoint.x);
 }
 
 export function finishMoveTransformTarget(args: {
