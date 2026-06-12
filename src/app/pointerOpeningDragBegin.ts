@@ -185,6 +185,7 @@ export function updateWindowDragFromPointerMove<Opening extends { params: Openin
   windowDragState: PointerOpeningDragState;
 }) {
   const customWallId = args.opening.params.wallId ?? null;
+  let nextCenterMm: number;
   if (customWallId) {
     const centerMm = resolveOpeningCustomWallDragCenter({
       groundHitPoint: args.getGroundHitPoint(),
@@ -194,7 +195,7 @@ export function updateWindowDragFromPointerMove<Opening extends { params: Openin
       wall: args.findCustomWall(customWallId)
     });
     if (centerMm === null) return true;
-    args.opening.params.centerMm = centerMm;
+    nextCenterMm = centerMm;
   } else {
     const wallId = args.windowDragState.wall;
     if (!wallId) return true;
@@ -206,12 +207,15 @@ export function updateWindowDragFromPointerMove<Opening extends { params: Openin
       wallHitPoint: args.getLegacyWallHitPoint(wallId)
     });
     if (centerMm === null) return true;
-    args.opening.params.centerMm = centerMm;
+    nextCenterMm = centerMm;
   }
 
-  args.updateOpeningTransform(args.opening);
-  args.mountProps();
-  return true;
+  return applyOpeningDragCenterUpdate({
+    centerMm: nextCenterMm,
+    mountProps: args.mountProps,
+    opening: args.opening,
+    updateOpeningTransform: args.updateOpeningTransform
+  });
 }
 
 export function updateDoorDragFromPointerMove<Opening extends { params: OpeningParams }, Wall extends WallLike>(args: {
@@ -236,7 +240,21 @@ export function updateDoorDragFromPointerMove<Opening extends { params: OpeningP
   });
   if (centerMm === null) return true;
 
-  args.opening.params.centerMm = centerMm;
+  return applyOpeningDragCenterUpdate({
+    centerMm,
+    mountProps: args.mountProps,
+    opening: args.opening,
+    updateOpeningTransform: args.updateOpeningTransform
+  });
+}
+
+function applyOpeningDragCenterUpdate<Opening extends { params: OpeningParams }>(args: {
+  centerMm: number;
+  mountProps: () => void;
+  opening: Opening;
+  updateOpeningTransform: (opening: Opening) => void;
+}) {
+  args.opening.params.centerMm = args.centerMm;
   args.updateOpeningTransform(args.opening);
   args.mountProps();
   return true;
