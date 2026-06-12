@@ -54,6 +54,15 @@ const pointOnPickedLineAt = (line: AlignPickedLine, dir: THREE.Vector3, along: n
   return line.p.clone().addScaledVector(dir, along - base);
 };
 
+function renderTechnicalDimensionRecords(
+  temporaryDimensions: TemporaryDimensionManagerPort,
+  records: TechnicalDimensionRecord[]
+) {
+  for (const dim of records) {
+    temporaryDimensions.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
+  }
+}
+
 export function createTechnicalDimensionManager(args: TechnicalDimensionManagerArgs) {
   const dimensions: TechnicalDimensionRecord[] = [];
   let nextId = 1;
@@ -79,12 +88,8 @@ export function createTechnicalDimensionManager(args: TechnicalDimensionManagerA
     const target = args.getControls().target;
     args.temporaryDimensions.syncCamera(scale, -target.x, -target.z);
 
-    for (const dim of dimensions) {
-      args.temporaryDimensions.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
-    }
-    for (const dim of state.preview) {
-      args.temporaryDimensions.addPlacedDimension(dim.start, dim.end, dim.extensionStart, dim.extensionEnd);
-    }
+    renderTechnicalDimensionRecords(args.temporaryDimensions, dimensions);
+    renderTechnicalDimensionRecords(args.temporaryDimensions, state.preview);
     args.temporaryDimensions.render();
   };
 

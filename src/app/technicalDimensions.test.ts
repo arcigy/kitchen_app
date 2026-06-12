@@ -66,6 +66,44 @@ describe("createTechnicalDimensionManager", () => {
     expect(args.temporaryDimensions.render).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it("renders committed dimensions before preview dimensions", () => {
+    const args = makeManagerArgs();
+    const manager = createTechnicalDimensionManager(args);
+    const committed: TechnicalDimensionRecord = {
+      id: "draft-1",
+      start: { x: 1, y: 2 },
+      end: { x: 3, y: 4 },
+      extensionStart: { x: 5, y: 6 },
+      extensionEnd: { x: 7, y: 8 }
+    };
+    const preview: TechnicalDimensionRecord = {
+      id: "preview-1",
+      start: { x: 10, y: 20 },
+      end: { x: 30, y: 40 },
+      extensionStart: { x: 50, y: 60 },
+      extensionEnd: { x: 70, y: 80 }
+    };
+    manager.commitDimensions([committed]);
+    manager.state.preview = [preview];
+
+    manager.render();
+
+    expect(args.temporaryDimensions.addPlacedDimension).toHaveBeenNthCalledWith(
+      1,
+      committed.start,
+      committed.end,
+      committed.extensionStart,
+      committed.extensionEnd
+    );
+    expect(args.temporaryDimensions.addPlacedDimension).toHaveBeenNthCalledWith(
+      2,
+      preview.start,
+      preview.end,
+      preview.extensionStart,
+      preview.extensionEnd
+    );
+  });
+
   it("hides temporary dimensions outside floorplan without rendering lines", () => {
     const args = makeManagerArgs({ getActiveViewerTab: () => "3d" });
     const manager = createTechnicalDimensionManager(args);
