@@ -11,6 +11,7 @@ import { createStorageService, readScopedStorageFile } from "../src/core/storage
 import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "../src/server/authEndpoint";
 import { handleModulePackageApi } from "../src/server/modulePackageEndpoint";
 import { handleProjectApi } from "../src/server/projectEndpoint";
+import { handleDemosMaterialImage, handleDemosMaterialLookup } from "../src/server/demosMaterialLookup";
 import { runBlenderExport } from "./blender/runBlenderExport";
 import { handlePageVisionValidator } from "./pageVisionValidatorEndpoint";
 import { handleRoomDetailVision } from "./roomDetailVisionEndpoint";
@@ -349,6 +350,40 @@ const handleCatalog = async (req: http.IncomingMessage, res: http.ServerResponse
   return sendJson(res, 200, { ok: true, catalog });
 };
 
+const handleCatalogLookup = async (req: http.IncomingMessage, reqUrl: URL, res: http.ServerResponse) => {
+  const context = await getValidatedClientContext(req.headers.cookie);
+  const kind = reqUrl.searchParams.get("kind");
+  const id = (reqUrl.searchParams.get("id") ?? "").trim();
+  if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
+
+  const repository = createFileClientCatalogRepository(PROJECT_ROOT);
+  const catalog = await repository.ensureCatalogExists(context);
+
+  if (kind === "material") {
+    const family = reqUrl.searchParams.get("family") ?? "";
+    const material =
+      catalog.materials.find(
+        (item) =>
+          item.id === id &&
+          item.materialType === "board" &&
+          item.isActive &&
+          (!family || item.boardFamily === family)
+      ) ?? null;
+    return sendJson(res, material ? 200 : 404, { ok: !!material, material });
+  }
+
+  if (kind === "component") {
+    const componentType = reqUrl.searchParams.get("componentType") ?? "";
+    const component =
+      catalog.components.find(
+        (item) => item.id === id && item.isActive && (!componentType || item.componentType === componentType)
+      ) ?? null;
+    return sendJson(res, component ? 200 : 404, { ok: !!component, component });
+  }
+
+  return sendJson(res, 400, { ok: false, error: "kind must be material or component." });
+};
+
 const readProjectJson = async (relativePath: string) => {
   const raw = await readFile(path.join(PROJECT_ROOT, relativePath), "utf-8");
   return JSON.parse(raw) as unknown;
@@ -670,7 +705,13 @@ export function startWorkerServer() {
 
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res);
 
+      if (req.method === "GET" && url.pathname === "/api/catalog/lookup") return await handleCatalogLookup(req, url, res);
+
       if (req.method === "GET" && url.pathname === "/api/material-proof/catalogs") return await handleMaterialProofCatalogs(req, res);
+
+      if (req.method === "GET" && url.pathname === "/api/demos/material-lookup") return await handleDemosMaterialLookup(url, res, sendJson);
+
+      if (req.method === "GET" && url.pathname === "/api/demos/material-image") return await handleDemosMaterialImage(url, res);
 
       if (req.method === "GET" && url.pathname === "/api/material-proof/asset") return await serveMaterialProofAsset(url, res);
 

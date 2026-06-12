@@ -85,6 +85,7 @@ export function createModulePlacementHelpers(ctx: ModulePlacementHelpersContext)
     getKitchenWorktopBackGuidePath,
     findInstance
   } = ctx;
+  let moduleAdjacencySignature = "";
 
 function placeWithoutOverlap(inst: LayoutInstance) {
   const step = 0.25;
@@ -586,14 +587,38 @@ function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
 function setPlacementAdjacencyPreview(link: ModuleAdjacencyLink | null) {
   if (!link) {
     placementAdjacencyPreview.visible = false;
+    moduleAdjacencySignature = "";
     return;
   }
   placementAdjacencyPreview.geometry.dispose();
   placementAdjacencyPreview.geometry = new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]);
   placementAdjacencyPreview.visible = true;
+  moduleAdjacencySignature = "";
 }
 
 function updateModuleAdjacencyVisuals() {
+  const viewKey = `${ctx.getViewMode()}:${ctx.getActiveViewerTab()}:${placementAdjacencyPreview.visible ? 1 : 0}`;
+  const shouldDrawAdjacency = ctx.getViewMode() === "2d" && ctx.getActiveViewerTab() === "floorplan";
+  const instanceKey = shouldDrawAdjacency
+    ? instances
+        .map((inst) => {
+          const box = instanceWorldBox(inst);
+          return [
+            inst.id,
+            box.min.x.toFixed(4),
+            box.min.y.toFixed(4),
+            box.min.z.toFixed(4),
+            box.max.x.toFixed(4),
+            box.max.y.toFixed(4),
+            box.max.z.toFixed(4)
+          ].join(",");
+        })
+        .join("|")
+    : "";
+  const nextSignature = `${viewKey}:${instanceKey}`;
+  if (nextSignature === moduleAdjacencySignature) return;
+  moduleAdjacencySignature = nextSignature;
+
   for (const child of [...moduleAdjacencyGroup.children]) {
     if (child === placementAdjacencyPreview) continue;
     moduleAdjacencyGroup.remove(child);

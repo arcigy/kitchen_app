@@ -2,6 +2,7 @@ import type { Group } from "three";
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../module-package-types";
 import { getModuleDescriptors } from "../../../modules/registry";
+import { FWM_FURNITURE_SPECS, getFwmRuntimeBuilderKey } from "../../../modules/fwmFurniture/definitions";
 import type { TrustedModuleRuntimeBuilder } from "./module-runtime-contract";
 
 const BUILDER_KEYS: Record<string, string> = {
@@ -9,7 +10,8 @@ const BUILDER_KEYS: Record<string, string> = {
   "drawerLow.v1": "drawer_low",
   "flapShelvesLow.v1": "flap_shelves_low",
   "fridgeTall.v1": "fridge_tall",
-  "swingShelvesLow.v1": "swing_shelves_low"
+  "swingShelvesLow.v1": "swing_shelves_low",
+  ...Object.fromEntries(FWM_FURNITURE_SPECS.map((spec) => [getFwmRuntimeBuilderKey(spec.moduleType), spec.moduleType]))
 };
 
 export function getTrustedRuntimeBuilderKeys(): string[] {
@@ -106,6 +108,7 @@ export function resolveModulePackageMaterialAssignments(args: {
         slot.defaultFrom === "catalog.kitchenDefaults.worktopMaterialId" ? defaults.worktopMaterialId :
         slot.defaultFrom === "catalog.kitchenDefaults.plinthMaterialId" ? defaults.plinthMaterialId :
         slot.defaultFrom === "catalog.kitchenDefaults.backPanelMaterialId" ? defaults.backPanelMaterialId :
+        slot.defaultFrom === "catalog.kitchenDefaults.drawerBottomMaterialId" ? defaults.drawerBottomMaterialId :
         undefined);
     if (value && args.catalog.materials.some((material) => material.id === value)) resolved[slot.slotId] = value;
   }

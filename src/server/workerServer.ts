@@ -11,6 +11,7 @@ import { handleModulePackageApi } from "./modulePackageEndpoint";
 import { handleProjectApi } from "./projectEndpoint";
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository, createServerUserService } from "./serverRepositories";
+import { handleDemosMaterialImage, handleDemosMaterialLookup } from "./demosMaterialLookup";
 import { runBlenderExport } from "./blender/runBlenderExport";
 
 const PROJECT_ROOT = process.cwd();
@@ -152,6 +153,43 @@ const handleCatalog = async (
   const repository = createServerCatalogRepository(projectRoot);
   const catalog = await repository.ensureCatalogExists(context);
   return sendJson(res, 200, { ok: true, catalog });
+};
+
+const handleCatalogLookup = async (
+  req: http.IncomingMessage,
+  reqUrl: URL,
+  res: http.ServerResponse,
+  userService: UserService,
+  projectRoot: string
+) => {
+  const context = await getValidatedClientContext(req.headers.cookie, userService);
+  const kind = reqUrl.searchParams.get("kind");
+  const id = (reqUrl.searchParams.get("id") ?? "").trim();
+  if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
+  const repository = createServerCatalogRepository(projectRoot);
+  const catalog = await repository.ensureCatalogExists(context);
+
+  if (kind === "material") {
+    const family = reqUrl.searchParams.get("family") ?? "";
+    const material = catalog.materials.find(
+      (item) =>
+        item.id === id &&
+        item.materialType === "board" &&
+        item.isActive &&
+        (!family || item.boardFamily === family)
+    ) ?? null;
+    return sendJson(res, material ? 200 : 404, { ok: !!material, material });
+  }
+
+  if (kind === "component") {
+    const componentType = reqUrl.searchParams.get("componentType") ?? "";
+    const component = catalog.components.find(
+      (item) => item.id === id && item.isActive && (!componentType || item.componentType === componentType)
+    ) ?? null;
+    return sendJson(res, component ? 200 : 404, { ok: !!component, component });
+  }
+
+  return sendJson(res, 400, { ok: false, error: "kind must be material or component." });
 };
 
 const readProjectJson = async (projectRoot: string, relativePath: string) => {
@@ -484,8 +522,17 @@ export function startWorkerServer(
 
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res, userService, projectRoot);
 
+      if (req.method === "GET" && url.pathname === "/api/catalog/lookup")
+        return await handleCatalogLookup(req, url, res, userService, projectRoot);
+
       if (req.method === "GET" && url.pathname === "/api/material-proof/catalogs")
         return await handleMaterialProofCatalogs(req, res, userService, projectRoot);
+
+      if (req.method === "GET" && url.pathname === "/api/demos/material-lookup")
+        return await handleDemosMaterialLookup(url, res, sendJson);
+
+      if (req.method === "GET" && url.pathname === "/api/demos/material-image")
+        return await handleDemosMaterialImage(url, res);
 
       if (
         await handleModulePackageApi(req, res, url, {

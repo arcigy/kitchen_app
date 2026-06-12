@@ -154,6 +154,7 @@ import {
 } from "./layout/worktopGeometry";
 import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
 import { createKitchenEditMode } from "./layout/kitchenEditMode";
+import { createRequestedUKitchenPlan } from "./layout/kitchenAutoLayout";
 import { createWardrobeEditMode } from "./layout/wardrobeEditMode";
 import {
   updateUndoRedoUi,
@@ -171,6 +172,7 @@ import {
   commitPlacement,
   mountPlacementControls,
   rebuildGhost,
+  scheduleRebuildGhost,
   type PlacementHelpers
 } from "./layout/placementManager";
 import { applyKitchenContextToModuleParams } from "./layout/kitchenMaterialSync";
@@ -631,7 +633,10 @@ export function startApp(initialArgs: AppArgs) {
     params: null as ModuleParams | null,
     ghost: null as LayoutInstance | null,
     ghostValid: false,
-    lastCursor: new THREE.Vector3(0, 0, 0)
+    lastCursor: new THREE.Vector3(0, 0, 0),
+    pendingCursor: null as THREE.Vector3 | null,
+    ghostFrame: null as number | null,
+    lastGhostCursor: null as THREE.Vector3 | null
   };
 
   const S: AppState = makeAppState(params);
@@ -2141,6 +2146,130 @@ export function startApp(initialArgs: AppArgs) {
     return true;
   };
 
+  const createRequestedUKitchen = () => {
+    const startedAt = performance.now();
+    ensureLayoutMode();
+    ensureFloorplanViewerTab();
+    cancelViewerToolMode();
+    setToolSelect();
+    if (S.kitchenEditMode) kitchenMode?.exitDiscard();
+    cancelKitchenWorktopDraw({ silent: true });
+    if (placement.active) cancelPlacement(S, placementHelpers);
+
+    for (const group of [...S.kitchenGroups]) {
+      if (group.name === "Presna U kuchyna 2800") deleteKitchenGroup(group.id);
+    }
+
+    const plan = createRequestedUKitchenPlan(clientCatalog, modulePackages);
+    const groupId = `kg_auto_u_${Date.now()}`;
+    const group = {
+      id: groupId,
+      name: plan.groupName,
+      ctx: resolveContext(structuredClone(plan.ctx)),
+      instanceIds: [] as string[]
+    };
+    S.kitchenGroups.push(group);
+    S.kitchenCtx = resolveContext(structuredClone(plan.ctx));
+    for (const worktop of plan.worktops) {
+      createKitchenWorktop(structuredClone(worktop), groupId, { skipHistory: true });
+    }
+
+    for (const modulePlan of plan.modules) {
+      const inst = createInstance(structuredClone(modulePlan.params));
+      inst.kitchenGroupId = groupId;
+      inst.root.position.set(modulePlan.xMm / 1000, modulePlan.yMm / 1000, modulePlan.zMm / 1000);
+      inst.root.rotation.y = THREE.MathUtils.degToRad(modulePlan.rotationYDeg);
+      inst.root.updateMatrixWorld(true);
+      inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, group.ctx.worktopBackOffsetMm);
+      layoutRoot.add(inst.root);
+      instances.push(inst);
+      group.instanceIds.push(inst.id);
+    }
+
+    updateLayoutPanel();
+    updateSelectionHighlights();
+    setSelectedKitchenGroup(groupId);
+    mountProps();
+    commitHistory(S);
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    setUnderlayStatus(`U kuchyna: ${plan.modules.length} modulov vytvorenych za ${elapsedMs} ms.`);
+    recordRecentActivity(`U kitchen created (${plan.modules.length} modules)`);
+  };
+
+  const fitSelectedKitchenModuleToGap = () => {
+    const selectedId = selectedInstanceId ?? (selectedInstanceIds.size === 1 ? Array.from(selectedInstanceIds)[0] ?? null : null);
+    const inst = selectedId ? findInstance(selectedId) : null;
+    if (!inst || !inst.kitchenGroupId) {
+      setUnderlayStatus("Fit gap: vyber jeden modul v kuchynskej skupine.");
+      return;
+    }
+
+    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+    const role = getKitchenModuleRole(inst.params as Record<string, unknown>);
+    const fitLayer = role === "upper" ? "upper" : "floor";
+    const rotationY = normalizeAngleRad(inst.root.rotation.y);
+    const widthDir = new THREE.Vector3(Math.cos(rotationY), 0, -Math.sin(rotationY)).normalize();
+    const frontDir = new THREE.Vector3(Math.sin(rotationY), 0, Math.cos(rotationY)).normalize();
+    const centerAlong = inst.root.position.dot(widthDir);
+    const centerFront = inst.root.position.dot(frontDir);
+    const sameRun = instances
+      .filter((other) =>
+        other.id !== inst.id &&
+        other.kitchenGroupId === inst.kitchenGroupId &&
+        (getKitchenModuleRole(other.params as Record<string, unknown>) === "upper" ? "upper" : "floor") === fitLayer &&
+        Math.abs(normalizeAngleRad(other.root.rotation.y - rotationY)) < 0.01 &&
+        Math.abs(other.root.position.y - inst.root.position.y) < 0.08 &&
+        Math.abs(other.root.position.dot(frontDir) - centerFront) < 0.09
+      )
+      .map((other) => {
+        const widthMm = Math.max(1, Number((other.params as Record<string, unknown>).width ?? (other.params as Record<string, unknown>).widthMm ?? 0));
+        const along = other.root.position.dot(widthDir);
+        return {
+          center: along,
+          start: along - widthMm / 2000,
+          end: along + widthMm / 2000
+        };
+      });
+
+    const left = sameRun.filter((item) => item.center < centerAlong).reduce((best, item) => Math.max(best, item.end), -Infinity);
+    const right = sameRun.filter((item) => item.center > centerAlong).reduce((best, item) => Math.min(best, item.start), Infinity);
+    if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) {
+      setUnderlayStatus("Fit gap: nenasiel som meratelnu medzeru medzi susedmi.");
+      return;
+    }
+
+    const widthMm = Math.round((right - left) * 1000);
+    if (widthMm < 100) {
+      setUnderlayStatus(`Fit gap: medzera ${widthMm} mm je prilis mala.`);
+      return;
+    }
+
+    const previousParams = structuredClone(inst.params);
+    inst.params = {
+      ...inst.params,
+      width: widthMm,
+      widthMm
+    } as ModuleParams;
+    const nextCenterAlong = (left + right) / 2;
+    inst.root.position.addScaledVector(widthDir, nextCenterAlong - centerAlong);
+    const rebuilt = rebuildInstance(inst, { skipLayoutValidation: true, previousParams, sourceKey: inst.params.type });
+    if (!rebuilt) {
+      inst.params = previousParams;
+      rebuildInstance(inst, { skipLayoutValidation: true, sourceKey: previousParams.type });
+      setUnderlayStatus("Fit gap: modul sa nepodarilo prepocitat.");
+      return;
+    }
+    inst.kitchenPlacement = inst.kitchenGroupId
+      ? inferKitchenPlacementBinding(inst, inst.kitchenGroupId, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm)
+      : null;
+    updateLayoutPanel();
+    updateSelectionHighlights();
+    mountProps();
+    commitHistory(S);
+    setUnderlayStatus(`Fit gap: modul upraveny na ${widthMm} mm.`);
+    recordRecentActivity(`Module fitted to ${widthMm} mm gap`);
+  };
+
   const deleteWindow = () => {
     const target = windowInst;
     if (!target) return false;
@@ -2295,17 +2424,24 @@ export function startApp(initialArgs: AppArgs) {
     I_WINDOW,
     I_WALL,
     S,
+    addInstance: (type) => addInstance(S, placementHelpers, type),
     addColumn,
     addOrSelectDoor,
     addOrSelectWindow,
+    clientCatalog,
     args,
     deleteSelected,
     duplicateSelected,
     enterFloorBoundaryEdit,
+    ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
+    ensureLayoutMode,
     getInstallState,
     helpers,
     get customFurnitureMode() { return customFurnitureMode; },
     get kitchenMode() { return kitchenMode; },
+    createRequestedUKitchen,
+    fitSelectedKitchenModuleToGap,
+    modulePackages,
     get wardrobeMode() { return wardrobeMode; },
     layoutTool,
     openBomPanel: (panelArgs) => openBomPanelForState(panelArgs),
@@ -3461,6 +3597,7 @@ export function startApp(initialArgs: AppArgs) {
     pointerNdc,
     raycaster,
     rebuildGhost,
+    scheduleRebuildGhost,
     rebuildWall,
     rebuildWallPlanMesh,
     renderFloorBoundaryEdit,
@@ -3862,6 +3999,7 @@ export function startApp(initialArgs: AppArgs) {
     ensureLayoutMode,
     createKitchenWorktop,
     rebuildKitchenGroupLayout,
+    fitSelectedKitchenModuleToGap,
     setToolMeasure,
     addWall,
     setWallEndpointMm,

@@ -94,6 +94,57 @@ async function main() {
     assert(await clickButton(page, `(title, text) => title.includes("discard") || title.includes("zru") || text.includes("zru")`), "Discard kitchen group button not found");
     assert(await clickTopbarTab(page, ["Architecture", "Architektúra"]), "Architecture tab not found");
 
+    const autoU = await page.evaluate(() => window.__kitchenDebug.createRequestedUKitchen());
+    const autoSnapshot = autoU.snapshot;
+    const firstDrawer = autoSnapshot.instances.find(
+      (inst) => inst.params.type === "fwm_base_drawer_cabinet" && inst.params.width === 650 && inst.params.drawerFrontHeightsMm === "100,317,317"
+    );
+    const topDrawerFront = firstDrawer?.parts.find((part) => part.name === "drawer_front_1");
+    const bodyMaterials = new Set(autoSnapshot.instances.map((inst) => inst.params.bodyMaterialId));
+    const frontMaterials = new Set(autoSnapshot.instances.map((inst) => inst.params.frontMaterialId));
+    assert(
+        autoU.createdInMs < 10000 &&
+        autoU.plan.moduleCount >= 20 &&
+        autoSnapshot.instances.length === autoU.plan.moduleCount &&
+        autoSnapshot.worktops.length >= 2 &&
+        autoSnapshot.group?.ctx?.wallHeightMm === 2800 &&
+        autoSnapshot.worktops[0]?.params?.heightMm === 900 &&
+        autoU.plan.validation.every((run) => run.gapMm === 0 && run.overlapMm === 0 && run.usedMm === run.spanMm) &&
+        firstDrawer?.params.drawerCount === 3 &&
+        Math.round(topDrawerFront?.dimensionsMm?.height ?? 0) === 100 &&
+        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_kitchen_island" && inst.params.variant === "mixed") &&
+        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_built_in_fridge" && inst.params.height === 2800) &&
+        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_oven_tower_module" && inst.params.height === 2800 && inst.params.drawerCount === 3) &&
+        bodyMaterials.size > 3 &&
+        frontMaterials.size > 3,
+      "Auto U kitchen e2e validation failed",
+      { createdInMs: autoU.createdInMs, plan: autoU.plan, firstDrawer, topDrawerFront, bodyMaterials: [...bodyMaterials], frontMaterials: [...frontMaterials] }
+    );
+
+    const ovenTower = autoSnapshot.instances.find((inst) => inst.params.type === "fwm_oven_tower_module" && inst.params.height === 2800);
+    assert(ovenTower, "Auto U oven tower not found for fit-gap regression", autoSnapshot.instances.map((inst) => inst.params.type));
+    await page.evaluate(
+      ({ id, type }) => window.__kitchenDebug.patchModuleParams(id, { width: 500, widthMm: 500 }, { sourceKey: type, preserveBackAnchor: true }),
+      { id: ovenTower.id, type: ovenTower.params.type }
+    );
+    const fitSnapshot = await page.evaluate((id) => window.__kitchenDebug.fitModuleToGap(id), ovenTower.id);
+    const fittedTower = fitSnapshot.instances.find((inst) => inst.id === ovenTower.id);
+    const fittedRightRun = fitSnapshot.instances
+      .filter((inst) => Math.abs(inst.rotationYRad + Math.PI / 2) < 0.01 && Math.abs(inst.positionM.x - ovenTower.positionM.x) < 0.01)
+      .map((inst) => ({ id: inst.id, minZ: inst.structuralWorldBoxM.min.z, maxZ: inst.structuralWorldBoxM.max.z }))
+      .sort((left, right) => left.minZ - right.minZ);
+    const fittedRunGapsMm = fittedRightRun.slice(1).map((item, index) =>
+      Math.round((item.minZ - fittedRightRun[index].maxZ) * 1000)
+    );
+    assert(
+      fittedTower?.params.width === 500 &&
+        fittedTower?.params.widthMm === 500 &&
+        fittedRunGapsMm.every((gap) => Math.abs(gap) <= 1),
+      "Shrinking/fitting right run left measurable gaps or overlaps",
+      { fittedTower, fittedRunGapsMm }
+    );
+    await page.evaluate(() => window.__kitchenDebug.reset());
+
     const scenario = await page.evaluate(() =>
       window.__kitchenDebug.createKitchenScenario({
         path: [
@@ -125,6 +176,20 @@ async function main() {
       scenario.group.id
     );
     assert(addSwing.instances?.length >= 2, "Adding second kitchen module failed", { count: addSwing.instances?.length });
+
+    const addTemporary = await page.evaluate(
+      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 2300 }),
+      scenario.group.id
+    );
+    const temporaryId = addTemporary.instances?.at(-1)?.id;
+    assert(temporaryId && addTemporary.instances.length >= 3, "Adding temporary kitchen module failed", addTemporary);
+    const afterDelete = await page.evaluate((id) => window.__kitchenDebug.deleteModule(id), temporaryId);
+    assert(
+      afterDelete.instances?.length === addSwing.instances.length &&
+        !afterDelete.instances.some((instance) => instance.id === temporaryId),
+      "Deleting kitchen module failed",
+      { temporaryId, beforeCount: addTemporary.instances?.length, afterDelete }
+    );
 
     const floor = await page.evaluate(() =>
       window.__kitchenDebug.createFloor({
@@ -222,9 +287,12 @@ async function main() {
           checks: [
             "boot",
             "debug-api",
+            "auto-u-kitchen",
+            "fit-gap-cross-role",
             "create-kitchen-scenario",
             "patch-module-params",
             "add-module",
+            "delete-module",
             "create-floor",
             "create-walls",
             "create-measure",

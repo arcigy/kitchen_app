@@ -7,6 +7,7 @@ import { getSelectionMeasureBindings } from "./measureEditing";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "../layout/kitchenContext";
+import { createRequestedUKitchenPlan } from "../layout/kitchenAutoLayout";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
 import { cancelPlacement, type PlacementHelpers } from "../layout/placementManager";
@@ -112,6 +113,7 @@ type KitchenDebugApiContext = {
   ) => TallKitchenPlacementConstraint | null;
   getKitchenModulePlacementY: (instOrParams: LayoutInstance | ModuleParams, groupId?: string | null) => number;
   ensureLayoutMode: () => void;
+  fitSelectedKitchenModuleToGap: () => void;
   createKitchenWorktop: (
     params: KitchenWorktopInstance["params"],
     kitchenGroupId: string,
@@ -353,6 +355,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const getDebugKitchenSnapshot = (groupId: string | null) => {
+    ctx.getKitchenMode()?.flushPendingContext?.();
     const kitchenGroups = S.kitchenGroups;
     const allWorktops = kitchenWorktops;
     const allInstances = instances;
@@ -541,6 +544,54 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return getDebugKitchenSnapshot(groupId);
   };
 
+  const debugCreateRequestedUKitchen = () => {
+    const startedAt = performance.now();
+    debugResetKitchenScenario();
+    ensureLayoutMode();
+
+    const plan = createRequestedUKitchenPlan(catalog, modulePackages);
+    const groupId = `dbg_u_kg_${Date.now()}`;
+    S.kitchenCtx = structuredClone(plan.ctx);
+    S.kitchenGroups.push({
+      id: groupId,
+      name: plan.groupName,
+      ctx: structuredClone(plan.ctx),
+      instanceIds: []
+    });
+
+    plan.worktops.forEach((worktop, index) => {
+      createKitchenWorktop(structuredClone(worktop), groupId, { skipHistory: true, id: `dbg_u_wt${index + 1}` });
+    });
+
+    for (const modulePlan of plan.modules) {
+      const inst = createInstance(structuredClone(modulePlan.params));
+      inst.kitchenGroupId = groupId;
+      inst.root.position.set(modulePlan.xMm / 1000, modulePlan.yMm / 1000, modulePlan.zMm / 1000);
+      inst.root.rotation.y = (modulePlan.rotationYDeg * Math.PI) / 180;
+      inst.root.updateMatrixWorld(true);
+      layoutRoot.add(inst.root);
+      instances.push(inst);
+    }
+
+    const group = S.kitchenGroups.find((item: any) => item.id === groupId);
+    if (group) group.instanceIds = instances.filter((item: any) => item.kitchenGroupId === groupId).map((item: any) => item.id);
+    setSelectedKitchenGroup(groupId);
+    updateLayoutPanel();
+    mountProps();
+    commitHistory(S);
+
+    return {
+      createdInMs: Math.round(performance.now() - startedAt),
+      plan: {
+        groupName: plan.groupName,
+        moduleCount: plan.modules.length,
+        validation: plan.validation,
+        missingTools: plan.missingTools
+      },
+      snapshot: getDebugKitchenSnapshot(groupId)
+    };
+  };
+
   const debugPatchKitchenContext = (groupId: string, patch: Partial<ReturnType<typeof resolveContext>>) => {
     const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
     if (!group) throw new Error(`Kitchen group ${groupId} not found.`);
@@ -668,6 +719,30 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugSelectModule = (instanceId: string) => {
     setSelectedModule(instanceId);
     return { selectedKind: ctx.getSelectedKind(), selectedInstanceId: ctx.getSelectedInstanceId() };
+  };
+
+  const debugFitModuleToGap = (instanceId: string) => {
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    setSelectedModule(instanceId);
+    ctx.fitSelectedKitchenModuleToGap();
+    return getDebugKitchenSnapshot(inst.kitchenGroupId ?? null);
+  };
+
+  const debugDeleteModule = (instanceId: string) => {
+    ensureLayoutMode();
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    const groupId = inst.kitchenGroupId;
+    deleteInstance(instanceId);
+    const group = groupId ? S.kitchenGroups.find((item: any) => item.id === groupId) ?? null : null;
+    if (group) group.instanceIds = instances.filter((item: any) => item.kitchenGroupId === groupId).map((item: any) => item.id);
+    setSelectedModule(null);
+    updateSelectionHighlights();
+    updateLayoutPanel();
+    mountProps();
+    commitHistory(S);
+    return getDebugKitchenSnapshot(groupId ?? null);
   };
 
   const debugPatchModuleParams = (
@@ -885,6 +960,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     reset: debugResetKitchenScenario,
     selectKitchenGroup: debugSelectKitchenGroup,
     createKitchenScenario: debugCreateKitchenScenario,
+    createRequestedUKitchen: debugCreateRequestedUKitchen,
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,
@@ -896,6 +972,8 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     selectWall: debugSelectWall,
     selectFloor: debugSelectFloor,
     selectModule: debugSelectModule,
+    fitModuleToGap: debugFitModuleToGap,
+    deleteModule: debugDeleteModule,
     patchModuleParams: debugPatchModuleParams,
     detectModuleAdjacency: debugDetectModuleAdjacency,
     commitWallMeasureValue: debugCommitWallMeasureValue,

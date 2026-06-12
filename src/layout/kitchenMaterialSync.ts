@@ -24,6 +24,7 @@ import {
   type SwingShelvesLowParams
 } from "../modules/swingShelvesLow/types";
 import swingShelvesLowMaterialsSnapshot from "../modules/swingShelvesLow/package/definitions/swing_shelves_low.materials.snapshot.json";
+import { isFwmFurnitureModuleType, normalizeFwmFurnitureParams, type FwmFurnitureParams } from "../modules/fwmFurniture/types";
 import type { PortableMaterialsSnapshot } from "../modules/runtime/portableCommercial";
 import type { KitchenContext } from "./kitchenContext";
 
@@ -67,6 +68,7 @@ function getMaterialSnapshotForModuleType(type: ModuleParams["type"]): PortableM
 
 function normalizeSyncedModuleParams(params: ModuleParams) {
   const record = params as Record<string, unknown>;
+  if (isFwmFurnitureModuleType(params.type)) Object.assign(record, normalizeFwmFurnitureParams(record as FwmFurnitureParams));
   if (params.type === "corner_shelf_lower") Object.assign(record, normalizeCornerShelfLowerParams(record as CornerShelfLowerParams));
   if (params.type === "fridge_tall") Object.assign(record, normalizeFridgeTallParams(record as FridgeTallParams));
   if (params.type === "flap_shelves_low") Object.assign(record, normalizeFlapShelvesLowParams(record as FlapShelvesLowParams));

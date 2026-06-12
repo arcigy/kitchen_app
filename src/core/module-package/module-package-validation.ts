@@ -43,6 +43,7 @@ const VALID_COMPONENT_SLOT_TYPES = new Set<ModuleComponentSlot["componentType"]>
   "hinge",
   "runner",
   "leg",
+  "plinth_clip",
   "rail",
   "led",
   "other"

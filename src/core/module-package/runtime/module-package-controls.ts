@@ -1,6 +1,7 @@
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
+import { t, translateEnumLabel, translateParamLabel } from "../../../i18n";
 
 type ControlRecord = {
   key: string;
@@ -31,7 +32,7 @@ function appendOptions(select: HTMLSelectElement, options: Array<{ label: string
   for (const option of options) {
     const el = document.createElement("option");
     el.value = option.value;
-    el.textContent = option.label;
+    el.textContent = translateEnumLabel(option.label);
     select.appendChild(el);
   }
   select.value = displayValue(currentValue);
@@ -63,6 +64,10 @@ function sortedControls(modulePackage: FurnQuoteModulePackage) {
   });
 }
 
+function isCatalogPicker(controlType: string | undefined, parameter: ModuleParameterDefinition) {
+  return controlType === "materialPicker" || controlType === "componentPicker" || parameter.type === "material" || parameter.type === "component";
+}
+
 export function findModulePackageForParams(
   modulePackages: readonly FurnQuoteModulePackage[],
   params: Record<string, unknown>
@@ -83,6 +88,7 @@ export function createModulePackageControls(
   args: ModuleControlsArgs
 ): ModuleControlsApi {
   container.innerHTML = "";
+  container.dataset.i18nSkip = "true";
   const records: ControlRecord[] = [];
   const groups = new Map<string, HTMLElement>();
   const change = args.onChange as (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
@@ -92,7 +98,7 @@ export function createModulePackageControls(
     section.className = "module-package-control-group";
     const title = document.createElement("div");
     title.className = "muted";
-    title.textContent = group.label;
+    title.textContent = t(group.label);
     section.appendChild(title);
     container.appendChild(section);
     groups.set(group.id, section);
@@ -109,11 +115,12 @@ export function createModulePackageControls(
     row.style.marginTop = "8px";
 
     const label = document.createElement("span");
-    label.textContent = parameter.unit ? `${parameter.label} (${parameter.unit})` : parameter.label;
+    const labelText = translateParamLabel(parameter.key) || t(parameter.label);
+    label.textContent = parameter.unit ? `${labelText} (${parameter.unit})` : labelText;
     row.appendChild(label);
 
     const input =
-      control.controlType === "select" || control.controlType === "materialPicker" || control.controlType === "componentPicker"
+      control.controlType === "select" && !isCatalogPicker(control.controlType, parameter)
         ? document.createElement("select")
         : document.createElement("input");
 

@@ -4,6 +4,10 @@ import type { AppArgs } from "./bootstrap";
 import type { createTopbar } from "../ui/createTopbar";
 import type { AppInstallState } from "../pwa/installController";
 import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catalog";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import type { ModuleParams } from "../model/cabinetTypes";
 import { t } from "../i18n";
 import {
   runToolbarAlignCommand,
@@ -90,6 +94,7 @@ type ClassicTopbarControllerContext = {
   I_WALL: string;
   S: AppState;
   addColumn: () => void;
+  addInstance: (type: ModuleParams["type"]) => void;
   addOrSelectDoor: () => void;
   addOrSelectWindow: () => void;
   args: AppArgs & {
@@ -102,10 +107,16 @@ type ClassicTopbarControllerContext = {
   deleteSelected: () => void;
   duplicateSelected: () => void;
   enterFloorBoundaryEdit: () => void;
+  ensureFloorplanViewerTab: () => void;
+  ensureLayoutMode: () => void;
   getInstallState: () => AppInstallState;
   helpers: HistoryHelpers;
   customFurnitureMode: CustomFurnitureModeActions | null;
   kitchenMode: KitchenModeActions | null;
+  createRequestedUKitchen: () => void;
+  fitSelectedKitchenModuleToGap: () => void;
+  clientCatalog: ClientCatalog;
+  modulePackages: readonly FurnQuoteModulePackage[];
   wardrobeMode: WardrobeModeActions | null;
   layoutTool: string;
   openBomPanel: (args: Pick<AppState, "instances" | "kitchenWorktops" | "customFurniture" | "kitchenCtx">) => void;
@@ -210,6 +221,36 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     args: { title: string; label: string; iconSvg: string; onClick?: () => void; variant?: "success" | "danger" }
   ) => ctx.tb.toolButton(toolsEl, args);
 
+  const addModuleButton = (toolsEl: HTMLElement, modulePackage: FurnQuoteModulePackage, iconSvg: string) => {
+    addButton(toolsEl, {
+      title: modulePackage.module.moduleType,
+      label: modulePackage.module.displayName,
+      iconSvg,
+      onClick: () => {
+        ctx.ensureLayoutMode();
+        ctx.ensureFloorplanViewerTab();
+        ctx.setToolSelect();
+        ctx.addInstance(modulePackage.module.moduleType as ModuleParams["type"]);
+      }
+    });
+  };
+
+  const isKitchenModule = (modulePackage: FurnQuoteModulePackage) => {
+    const tags = new Set((modulePackage.module.tags ?? []).map((tag) => tag.toLowerCase()));
+    if (tags.has("kitchen")) return true;
+    if (modulePackage.behavior?.contextBindings?.some((binding) => binding.contextType === "kitchenGroup")) return true;
+    return (
+      modulePackage.module.category === "base_cabinet" ||
+      modulePackage.module.category === "wall_cabinet" ||
+      modulePackage.module.category === "tall_cabinet" ||
+      modulePackage.module.category === "corner_cabinet"
+    );
+  };
+
+  const enabledRoomPackages = () =>
+    getEnabledModulePackageDefinitions(ctx.clientCatalog, ctx.modulePackages)
+      .filter((modulePackage) => !isKitchenModule(modulePackage));
+
   const addArchitectureTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Architecture", { row });
     addButton(tools, { title: "Wall", label: "Wall", iconSvg: ctx.I_WALL, onClick: () => runToolbarWallCommand(ctx) });
@@ -222,16 +263,33 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
 
   const addKitchenTab = (row: HTMLElement) => {
     ctx.kitchenMode?.mountTopbar(row);
+    const auto = ctx.tb.addGroup("Auto", { row });
+    addButton(auto, { title: "Create U kitchen", label: "Auto U", iconSvg: ctx.I_CABINET, onClick: ctx.createRequestedUKitchen });
+    addButton(auto, { title: "Fit selected module into gap", label: "Fit gap", iconSvg: ctx.I_ALIGN, onClick: ctx.fitSelectedKitchenModuleToGap });
   };
 
   const addLivingWallTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Living Wall", { row });
-    addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
+    const modules = enabledRoomPackages().filter((modulePackage) =>
+      modulePackage.module.moduleType === "fwm_living_wall" ||
+      modulePackage.module.category === "wall_unit" ||
+      (modulePackage.module.tags ?? []).includes("living")
+    );
+    if (modules.length === 0) {
+      addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
+      return;
+    }
+    for (const modulePackage of modules) addModuleButton(tools, modulePackage, ctx.I_LIVING_WALL);
   };
 
   const addRoomTab = (row: HTMLElement) => {
     const tools = ctx.tb.addGroup("Room", { row });
-    addButton(tools, { title: "Room", label: "Room", iconSvg: ctx.I_WARDROBE });
+    const modules = enabledRoomPackages().filter((modulePackage) =>
+      modulePackage.module.moduleType !== "fwm_living_wall" &&
+      modulePackage.module.category !== "wall_unit" &&
+      !(modulePackage.module.tags ?? []).includes("living")
+    );
+    for (const modulePackage of modules) addModuleButton(tools, modulePackage, ctx.I_WARDROBE);
     addButton(tools, { title: "Wardrobe", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, onClick: () => runToolbarWardrobeCommand(ctx) });
     addButton(tools, { title: "Custom Furniture", label: "Custom", iconSvg: ctx.I_CABINET, onClick: () => runToolbarCustomFurnitureCommand(ctx) });
   };

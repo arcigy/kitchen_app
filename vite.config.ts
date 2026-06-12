@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 
+const workerPort = process.env.BLENDER_WORKER_PORT || "5191";
+
 export default defineConfig({
   clearScreen: false,
   build: {
@@ -67,11 +69,11 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:5191",
+        target: `http://127.0.0.1:${workerPort}`,
         changeOrigin: true
       },
       "/storage": {
-        target: "http://127.0.0.1:5191",
+        target: `http://127.0.0.1:${workerPort}`,
         changeOrigin: true
       }
     }

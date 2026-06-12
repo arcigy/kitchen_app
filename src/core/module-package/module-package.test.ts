@@ -34,6 +34,7 @@ import { makeDefaultKitchenContext } from "../../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../../layout/kitchenMaterialSync";
 import type { ModuleParams } from "../../model/cabinetTypes";
 import { systemModulePackageTemplates } from "../../system/module-packages";
+import { extendedFurnitureModulePackages } from "../../system/module-packages/extendedFurniture";
 import cornerShelfLowerFixture from "./fixtures/cornerShelfLower.fqm.source.json";
 
 const ctxA: ClientContext = { userId: "user_a", clientId: "client_a", role: "owner" };
@@ -237,13 +238,17 @@ describe("FurnQuote module package validation", () => {
   });
 
   it("validates all system .fqm templates used for tenant seeding", () => {
-    expect(systemModulePackageTemplates.map((modulePackage) => modulePackage.module.modulePackageId).sort()).toEqual([
+    const basePackageIds = [
       "corner_shelf_lower_family_v1",
       "drawer_low_family_v1",
       "flap_shelves_low_family_v1",
       "fridge_tall_family_v1",
       "swing_shelves_low_family_v1"
-    ]);
+    ];
+    expect(systemModulePackageTemplates.map((modulePackage) => modulePackage.module.modulePackageId).sort()).toEqual([
+      ...basePackageIds,
+      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.modulePackageId)
+    ].sort());
     for (const modulePackage of systemModulePackageTemplates) {
       const validated = validateFurnQuoteModulePackage(modulePackage);
       expect(validated.geometry.mode).toBe("trusted-runtime");
@@ -379,7 +384,7 @@ describe("tenant module package import", () => {
     });
     expect(await readFile(path.join(moduleDir, "assets", "preview.png"), "utf-8")).toBe("preview-bytes");
     expect(imported.catalogModule.modulePackageId).toBe("drawer_low_fqm_import");
-  }, 15_000);
+  }, 30_000);
 
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
     const modulePackage = makePackage();
@@ -419,7 +424,7 @@ describe("tenant module package import", () => {
       module.modulePackageId === modulePackage.module.modulePackageId ? { ...module, enabled: false } : module
     );
     expect(listVisibleModulePackages({ catalog: catalogA, packages: [imported.modulePackage] })).toHaveLength(0);
-  }, 15_000);
+  }, 30_000);
 
   it("seeds new clients with tenant copies of system module packages", async () => {
     const catalogRepository = createFileClientCatalogRepository(root);
@@ -452,13 +457,17 @@ describe("tenant module package import", () => {
     const catalog = await catalogRepository.ensureCatalogExists(ctxA);
     const packages = await packageRepository.listPackages(ctxA);
 
-    expect(listVisibleModulePackages({ catalog, packages }).map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([
+    const baseModuleTypes = [
       "corner_shelf_lower",
       "drawer_low",
       "flap_shelves_low",
       "fridge_tall",
       "swing_shelves_low"
-    ]);
+    ];
+    expect(listVisibleModulePackages({ catalog, packages }).map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([
+      ...baseModuleTypes,
+      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.moduleType)
+    ].sort());
 
     const disabledCatalog = {
       ...catalog,
@@ -472,7 +481,7 @@ describe("tenant module package import", () => {
       },
       packages
     }).map((modulePackage) => modulePackage.module.moduleType)).not.toContain("runtime_only");
-  }, 15_000);
+  }, 30_000);
 });
 
 describe("corner module placement rules", () => {

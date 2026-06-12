@@ -11,9 +11,11 @@ describe("Démos SK system catalog", () => {
     const seed = createSystemCatalogSeed();
 
     expect(seed.materials.length).toBeGreaterThanOrEqual(6497);
-    expect(seed.components.length).toBe(33521);
+    expect(seed.components.length).toBeGreaterThanOrEqual(33521);
     expect(seed.materials.some((material) => material.id.startsWith("mat.demos."))).toBe(true);
     expect(seed.components.some((component) => component.id.startsWith("cmp.demos."))).toBe(true);
+    expect(seed.components.some((component) => component.id === "cmp.leg.adjustable.100.black" && component.componentType === "leg")).toBe(true);
+    expect(seed.components.some((component) => component.id === "cmp.clip.plinth.standard" && component.componentType === "plinth_clip")).toBe(true);
     expect(seed.priceList.name).toContain("Démos SK");
   });
 

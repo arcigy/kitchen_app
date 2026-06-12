@@ -65,8 +65,15 @@ type InstanceRebuilderContext = {
 export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
   function rebuildInstance(
     inst: LayoutInstance,
-    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
+    opts?: {
+      skipLayoutValidation?: boolean;
+      skipLayoutPanelUpdate?: boolean;
+      preserveBackAnchor?: boolean;
+      previousParams?: ModuleParams;
+      sourceKey?: string;
+    }
   ) {
+    const shouldValidateLayout = !opts?.skipLayoutValidation;
     ctx.lastRebuildDebug = null;
     const normalizedParams = ctx.normalizeModuleParamsForSource(structuredClone(inst.params), opts?.sourceKey);
     const errors = ctx.validateModule(normalizedParams);
@@ -78,9 +85,11 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
 
     const previousParams = structuredClone(opts?.previousParams ?? inst.params);
     inst.params = previousParams;
-    const prevWorldBox = ctx.instanceWorldBox(inst);
-    const prevAdjacencyInfos = ctx.collectAdjacentModuleInfos(inst, prevWorldBox);
-    const resizeAnchorSide = ctx.chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? ctx.inferTallResizeAnchorSide(inst);
+    const prevWorldBox = shouldValidateLayout ? ctx.instanceWorldBox(inst) : new THREE.Box3();
+    const prevAdjacencyInfos = shouldValidateLayout ? ctx.collectAdjacentModuleInfos(inst, prevWorldBox) : [];
+    const resizeAnchorSide = shouldValidateLayout
+      ? ctx.chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? ctx.inferTallResizeAnchorSide(inst)
+      : null;
     const prevPos = inst.root.position.clone();
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = ctx.getModuleLocalKitchenAnchor(inst).clone();
@@ -89,12 +98,14 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     const prevBox = inst.localBox.clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
     const prevWorldBoxesById = new Map<string, THREE.Box3>();
-    for (const other of ctx.instances) {
-      if (other.id === inst.id) continue;
-      prevNeighborPositions.set(other.id, other.root.position.clone());
-      prevWorldBoxesById.set(other.id, ctx.instanceWorldBox(other).clone());
+    if (shouldValidateLayout) {
+      for (const other of ctx.instances) {
+        if (other.id === inst.id) continue;
+        prevNeighborPositions.set(other.id, other.root.position.clone());
+        prevWorldBoxesById.set(other.id, ctx.instanceWorldBox(other).clone());
+      }
+      prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
     }
-    prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
 
     inst.params = normalizedParams;
 
@@ -113,8 +124,8 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       inst.localBox = ctx.moduleRootLocalBox(inst.root, inst.module);
     }
     ctx.ensurePickAndOutline(inst);
-    const keepRootPositionStable = ctx.footprintExtentsMatchXZ(prevWorldBox, ctx.instanceWorldBox(inst));
-    if (!opts?.skipLayoutValidation && !keepRootPositionStable) ctx.preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
+    const keepRootPositionStable = shouldValidateLayout && ctx.footprintExtentsMatchXZ(prevWorldBox, ctx.instanceWorldBox(inst));
+    if (shouldValidateLayout && !keepRootPositionStable) ctx.preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
     if (opts?.preserveBackAnchor) {
       ctx.preserveWorldKitchenAnchor(inst, prevWorldAnchor);
     } else if (keepRootPositionStable) {
@@ -122,23 +133,23 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       inst.root.updateMatrixWorld(true);
     }
 
-    if (!opts?.skipLayoutValidation && !opts?.preserveBackAnchor) {
+    if (shouldValidateLayout && !opts?.preserveBackAnchor) {
       const clamped = ctx.applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
-    const propagated = opts?.skipLayoutValidation
+    const propagated = !shouldValidateLayout
       ? { ok: true, movedIds: [] as string[] }
       : ctx.isCornerKitchenModule(inst)
         ? ctx.propagateCornerResizeToPinnedNeighbors(inst, previousParams)
         : ctx.propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
-    const inRoom = opts?.skipLayoutValidation ? true : ctx.instanceFitsLayoutBounds(inst);
-    const overlapsModules = opts?.skipLayoutValidation ? false : ctx.anyOverlap(inst, null);
-    const overlapsWalls = opts?.skipLayoutValidation ? false : ctx.moduleOverlapsWalls(inst);
-    const overlapsWorktops = opts?.skipLayoutValidation ? false : ctx.moduleOverlapsKitchenWorktops(inst);
+    const inRoom = shouldValidateLayout ? ctx.instanceFitsLayoutBounds(inst) : true;
+    const overlapsModules = shouldValidateLayout ? ctx.anyOverlap(inst, null) : false;
+    const overlapsWalls = shouldValidateLayout ? ctx.moduleOverlapsWalls(inst) : false;
+    const overlapsWorktops = shouldValidateLayout ? ctx.moduleOverlapsKitchenWorktops(inst) : false;
     const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
     const movedNeighborInvalid =
-      !opts?.skipLayoutValidation &&
+      shouldValidateLayout &&
       propagated.movedIds.some((id) => {
         const other = ctx.findInstance(id);
         return !!other &&
@@ -214,7 +225,7 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
         inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
       });
     }
-    ctx.updateLayoutPanel();
+    if (!opts?.skipLayoutPanelUpdate) ctx.updateLayoutPanel();
     return true;
   }
 

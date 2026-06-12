@@ -167,6 +167,14 @@ async function start(): Promise<void> {
     return;
   }
 
+  if (window.location.pathname === "/module-inspector") {
+    setBootStatus("Spustam module inspector", 84);
+    const { startModuleInspectorApp } = await import("./module-inspector/moduleInspectorApp");
+    finishBootLoading();
+    await startModuleInspectorApp(appRoot);
+    return;
+  }
+
   const { requireClientSession } = await import("./app/authController");
   const { createClientContext } = await import("./core/client/client-context");
   const { createLocalClientRepository } = await import("./core/client/client-repository");

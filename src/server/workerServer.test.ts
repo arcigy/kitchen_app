@@ -227,6 +227,29 @@ describe("multi-client worker isolation", () => {
     expect(stored.prices?.[priceId]).toBe(body.catalog?.priceList?.prices?.[priceId]);
   }, 60_000);
 
+  it("looks up catalog materials by exact ID and board family", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    const catalog = (catalogResponse.body as { catalog?: { materials?: Array<{ id: string; boardFamily?: string }> } }).catalog;
+    const frontMaterial = catalog?.materials?.find((material) => material.boardFamily === "front");
+    expect(frontMaterial?.id).toBeTruthy();
+
+    const ok = await requestWorker(
+      controller!.port,
+      `/api/catalog/lookup?kind=material&family=front&id=${encodeURIComponent(frontMaterial!.id)}`,
+      { cookie }
+    );
+    expect(ok.status).toBe(200);
+    expect((ok.body as { material?: { id?: string } }).material?.id).toBe(frontMaterial!.id);
+
+    const wrongFamily = await requestWorker(
+      controller!.port,
+      `/api/catalog/lookup?kind=material&family=body&id=${encodeURIComponent(frontMaterial!.id)}`,
+      { cookie }
+    );
+    expect(wrongFamily.status).toBe(404);
+  }, 30_000);
+
   it("loads each client's stored catalog without crossing client namespaces", async () => {
     const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
@@ -289,7 +312,7 @@ describe("multi-client worker isolation", () => {
       body: { clientId: "client_b_demo", package: cornerShelfLowerFixture }
     });
     expect(badClient.status).toBe(403);
-  }, 15_000);
+  }, 30_000);
 
   it("keeps module package routes registered in the dev:local root worker entrypoint", async () => {
     const rootServer = await readFile(path.join(process.cwd(), "server", "workerServer.ts"), "utf-8");

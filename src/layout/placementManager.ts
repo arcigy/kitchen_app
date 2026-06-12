@@ -12,22 +12,28 @@ import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
 import type { EditorPropsApi } from "../app/editorModeApis";
 
-function makeGhostMaterial(material: THREE.Material) {
+const ghostCursorSkipDistanceSq = 0.0025 * 0.0025;
+
+function makeGhostMaterial(material: THREE.Material, cache: Map<THREE.Material, THREE.Material>) {
+  const cached = cache.get(material);
+  if (cached) return cached;
   const ghostMaterial = material.clone();
   ghostMaterial.transparent = true;
   ghostMaterial.opacity = Math.min(ghostMaterial.opacity, 0.48);
   ghostMaterial.depthWrite = false;
   ghostMaterial.needsUpdate = true;
+  cache.set(material, ghostMaterial);
   return ghostMaterial;
 }
 
 function showGhostModulePreview(ghost: LayoutInstance) {
+  const materialCache = new Map<THREE.Material, THREE.Material>();
   ghost.module.visible = true;
   ghost.module.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
     object.material = Array.isArray(object.material)
-      ? object.material.map(makeGhostMaterial)
-      : makeGhostMaterial(object.material);
+      ? object.material.map((material) => makeGhostMaterial(material, materialCache))
+      : makeGhostMaterial(object.material, materialCache);
     object.renderOrder = Math.max(object.renderOrder, 40);
   });
 }
@@ -83,6 +89,7 @@ export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   if (!S.placement.active) return;
 
   helpers.setPlacementAdjacencyPreview?.(null);
+  if (S.placement.ghostFrame != null) cancelAnimationFrame(S.placement.ghostFrame);
 
   if (S.placement.ghost) {
     helpers.layoutRoot.remove(S.placement.ghost.root);
@@ -93,14 +100,26 @@ export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   S.placement.ghost = null;
   S.placement.ghostValid = false;
   S.placement.lastCursor.set(0, 0, 0);
+  S.placement.pendingCursor = null;
+  S.placement.ghostFrame = null;
+  S.placement.lastGhostCursor = null;
   helpers.setUnderlayStatus("Placement: canceled.");
   helpers.mountProps();
 };
 
-export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: THREE.Vector3) => {
+export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: THREE.Vector3, opts?: { force?: boolean }) => {
   if (!S.placement.active || !S.placement.params) return;
 
   S.placement.lastCursor.copy(cursorWorld);
+  if (
+    !opts?.force &&
+    S.placement.ghost &&
+    S.placement.lastGhostCursor &&
+    S.placement.lastGhostCursor.distanceToSquared(cursorWorld) < ghostCursorSkipDistanceSq
+  ) {
+    return;
+  }
+  S.placement.lastGhostCursor = cursorWorld.clone();
 
   if (!S.placement.ghost) {
     const ghost = helpers.createInstance(structuredClone(S.placement.params) as ModuleParams, { id: "ghost" });
@@ -173,6 +192,19 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   if (constrainedPlacement?.statusText) {
     helpers.setUnderlayStatus(constrainedPlacement.statusText);
   }
+};
+
+export const scheduleRebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: any) => {
+  if (!S.placement.active || !S.placement.params) return;
+  S.placement.lastCursor.copy(cursorWorld);
+  S.placement.pendingCursor = cursorWorld.clone();
+  if (S.placement.ghostFrame != null) return;
+  S.placement.ghostFrame = requestAnimationFrame(() => {
+    const pending = S.placement.pendingCursor;
+    S.placement.pendingCursor = null;
+    S.placement.ghostFrame = null;
+    if (pending) rebuildGhost(S, helpers, pending);
+  });
 };
 
 export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
@@ -255,7 +287,7 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
     const g = S.placement.ghost;
     if (!g) return;
     g.root.rotation.y += delta;
-    rebuildGhost(S, helpers, S.placement.lastCursor);
+    rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
   };
 
   rotL.addEventListener("click", () => applyRot(-Math.PI / 2));
@@ -287,6 +319,5 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
   S.placement.ghostValid = false;
 
   helpers.setUnderlayStatus("Placement: move cursor, click to place. Esc cancels.");
-  rebuildGhost(S, helpers, S.placement.lastCursor);
   mountPlacementControls(S, helpers);
 };

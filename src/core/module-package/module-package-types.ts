@@ -168,6 +168,7 @@ export type ModuleMaterialSlot = {
     | "catalog.kitchenDefaults.worktopMaterialId"
     | "catalog.kitchenDefaults.plinthMaterialId"
     | "catalog.kitchenDefaults.backPanelMaterialId"
+    | "catalog.kitchenDefaults.drawerBottomMaterialId"
     | "none";
   allowedMaterialTags?: string[];
   affects: Array<"geometry" | "visual" | "bom" | "pricing">;
@@ -180,12 +181,14 @@ export type ModuleMaterialSlots = {
 export type ModuleComponentSlot = {
   slotId: string;
   label: string;
-  componentType: "handle" | "hinge" | "runner" | "leg" | "rail" | "led" | "other";
+  componentType: "handle" | "hinge" | "runner" | "leg" | "plinth_clip" | "rail" | "led" | "other";
   required: boolean;
   defaultFrom?:
     | "catalog.kitchenDefaults.defaultHandleComponentId"
     | "catalog.kitchenDefaults.defaultHingeComponentId"
-    | "catalog.kitchenDefaults.defaultDrawerSystemComponentId";
+    | "catalog.kitchenDefaults.defaultDrawerSystemComponentId"
+    | "parameter.legComponentId"
+    | "parameter.clipComponentId";
   affects: Array<"geometry" | "bom" | "pricing" | "visual">;
 };
 

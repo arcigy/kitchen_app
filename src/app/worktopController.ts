@@ -83,6 +83,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
   };
 
   function rebuildKitchenWorktop(inst: KitchenWorktopInstance) {
+    const previousMaterialId = typeof inst.mesh.userData.catalogMaterialId === "string" ? inst.mesh.userData.catalogMaterialId : "";
     inst.params = cloneKitchenWorktopParams(inst.params);
     inst.params.path = sanitizeKitchenWorktopPath(inst.params.path);
     inst.params.depthMm = Math.max(1, Math.round(inst.params.depthMm));
@@ -92,10 +93,12 @@ export function createWorktopController(ctx: WorktopControllerContext) {
 
     inst.mesh.geometry.dispose();
     inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params);
-    const prevMaterial = inst.mesh.material as THREE.Material;
-    inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
-    applyWorktopMaterialMetadata(inst.mesh, inst.params.materialId);
-    prevMaterial.dispose();
+    if (previousMaterialId !== inst.params.materialId) {
+      const prevMaterial = inst.mesh.material as THREE.Material;
+      inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
+      applyWorktopMaterialMetadata(inst.mesh, inst.params.materialId);
+      prevMaterial.dispose();
+    }
     inst.mesh.position.y = inst.params.heightMm / 1000;
     inst.mesh.castShadow = true;
     inst.mesh.receiveShadow = true;
@@ -106,7 +109,9 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     inst.outline.geometry.dispose();
     inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params, flattenWorktopOutline);
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
-    outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId, ctx.catalog));
+    if (previousMaterialId !== inst.params.materialId) {
+      outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId, ctx.catalog));
+    }
     inst.outline.position.set(0, inst.params.heightMm / 1000 + (flattenWorktopOutline ? 0.0015 : 0), 0);
     inst.outline.visible = ctx.getViewMode() === "2d";
     const meshMaterial = inst.mesh.material as THREE.MeshStandardMaterial;

@@ -5,7 +5,7 @@ import { pointInPolygonXZ } from "./sharedUtils";
 import type { FloorInstance, KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import type { FurnQuoteModulePackage, ModuleContextBindingSource } from "../core/module-package/module-package-types";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutTool } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
@@ -25,6 +25,55 @@ type KitchenGroupState = {
 
 type PolygonClipMultiPolygon = Array<Array<Array<[number, number]>>>;
 
+function getChangedKitchenContextKeys(nextCtx: KitchenContext, prevCtx: KitchenContext) {
+  const keys = new Set<string>();
+  const nextRecord = nextCtx as unknown as Record<string, unknown>;
+  const prevRecord = prevCtx as unknown as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(nextRecord), ...Object.keys(prevRecord)])) {
+    if (!Object.is(nextRecord[key], prevRecord[key])) keys.add(key);
+  }
+  return keys;
+}
+
+function contextSourceKey(source: ModuleContextBindingSource) {
+  const match = source.match(/^ctx\.([A-Za-z0-9_]+)$/);
+  return match?.[1] ?? null;
+}
+
+function modulePackageReadsChangedKitchenContext(modulePackage: FurnQuoteModulePackage | null, changedKeys: Set<string>) {
+  if (changedKeys.size === 0) return false;
+  const bindings = modulePackage?.behavior?.contextBindings?.filter((binding) => binding.contextType === "kitchenGroup") ?? [];
+  if (bindings.length === 0) return true;
+  for (const binding of bindings) {
+    const sources = [
+      ...(binding.parameterSync ?? []).map((rule) => rule.source),
+      ...(binding.materialSync ?? []).map((rule) => rule.source),
+      ...(binding.componentSync ?? []).map((rule) => rule.source)
+    ];
+    for (const source of sources) {
+      const key = contextSourceKey(source);
+      if (key && changedKeys.has(key)) return true;
+    }
+  }
+  return false;
+}
+
+const worktopContextKeys = new Set([
+  "heightMm",
+  "worktopDepthMm",
+  "worktopThicknessMm",
+  "worktopCornerCutMm",
+  "worktopOverhangSideMm",
+  "worktopMaterialId"
+]);
+
+function hasAnyChangedContextKey(changedKeys: Set<string>, testedKeys: Set<string>) {
+  for (const key of changedKeys) {
+    if (testedKeys.has(key)) return true;
+  }
+  return false;
+}
+
 export type KitchenPlacementControllerContext = {
   S: {
     activeKitchenGroupId: string | null;
@@ -40,7 +89,13 @@ export type KitchenPlacementControllerContext = {
   getKitchenWorktopBackGuidePath: (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
   rebuildInstance: (
     inst: LayoutInstance,
-    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
+    opts?: {
+      skipLayoutValidation?: boolean;
+      skipLayoutPanelUpdate?: boolean;
+      preserveBackAnchor?: boolean;
+      previousParams?: ModuleParams;
+      sourceKey?: string;
+    }
   ) => boolean;
   rebuildKitchenGroupWorktops: (groupId: string, nextCtx?: KitchenContext) => void;
   updateLayoutPanel: () => void;
@@ -530,6 +585,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     prevCtx: KitchenContext = nextCtx
   ) => {
     const bindings = new Map<string, KitchenPlacementBinding>();
+    const changedContextKeys = getChangedKitchenContextKeys(nextCtx, prevCtx);
+    const shouldRebuildWorktops = hasAnyChangedContextKey(changedContextKeys, worktopContextKeys);
 
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;
@@ -541,11 +598,13 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;
-      applyKitchenContextToModuleParams(inst.params, nextCtx, ctx.catalog, getModulePackageForInstance(inst));
-      rebuildInstance(inst, { skipLayoutValidation: true, preserveBackAnchor: true });
+      const modulePackage = getModulePackageForInstance(inst);
+      if (!modulePackageReadsChangedKitchenContext(modulePackage, changedContextKeys)) continue;
+      applyKitchenContextToModuleParams(inst.params, nextCtx, ctx.catalog, modulePackage);
+      rebuildInstance(inst, { skipLayoutValidation: true, skipLayoutPanelUpdate: true, preserveBackAnchor: true });
     }
 
-    rebuildKitchenGroupWorktops(groupId, nextCtx);
+    if (shouldRebuildWorktops) rebuildKitchenGroupWorktops(groupId, nextCtx);
 
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;

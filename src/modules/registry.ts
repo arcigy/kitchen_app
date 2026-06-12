@@ -24,6 +24,12 @@ import type { SwingShelvesLowParams } from "./swingShelvesLow/types";
 import { buildSwingShelvesLow } from "./swingShelvesLow/geometry";
 import { createSwingShelvesLowControls } from "./swingShelvesLow/controls";
 import { calculateBOM as calculateSwingShelvesLowBOM } from "./swingShelvesLow/calculation";
+import { FWM_FURNITURE_SPECS, type FwmFurnitureSpec } from "./fwmFurniture/definitions";
+import type { FwmFurnitureParams } from "./fwmFurniture/types";
+import { makeDefaultFwmFurnitureParams } from "./fwmFurniture/types";
+import { buildFwmFurniture } from "./fwmFurniture/geometry";
+import { createFwmFurnitureControls } from "./fwmFurniture/controls";
+import { calculateFwmFurnitureBOM } from "./fwmFurniture/calculation";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -63,6 +69,24 @@ export type ModuleDescriptor = {
   calculateBOM: (params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
+
+const fwmFurnitureDescriptors: ModuleDescriptor[] = (FWM_FURNITURE_SPECS as readonly FwmFurnitureSpec[]).map((spec) => ({
+  type: spec.moduleType as ModuleType,
+  folder: "fwmFurniture",
+  label: spec.displayName,
+  packageName: `module-builder-${spec.moduleType}`,
+  packageVersion: "1.0.0",
+  defaultParams: () => makeDefaultFwmFurnitureParams(spec.moduleType as FwmFurnitureParams["type"]) as ModuleParams,
+  build: (params, catalog) => buildFwmFurniture(params as FwmFurnitureParams, catalog),
+  createControls: (container, params, args) => createFwmFurnitureControls(container, params as FwmFurnitureParams, args),
+  calculateBOM: (params, ctx, catalog) => calculateFwmFurnitureBOM(params as FwmFurnitureParams, ctx, catalog),
+  capabilities: {
+    hasWorktop: spec.hasWorktop === true,
+    supportsKitchenContextDimensions: !!spec.kitchenRole,
+    supportsKitchenContextMaterials: !!spec.kitchenRole,
+    supportsWallMountedVariant: spec.wallMounted === true
+  }
+}));
 
 export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
   {
@@ -142,7 +166,8 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
     }
-  }
+  },
+  ...fwmFurnitureDescriptors
 ] as const;
 
 const moduleDescriptorMap = new Map<ModuleType, ModuleDescriptor>(

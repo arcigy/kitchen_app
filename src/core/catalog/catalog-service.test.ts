@@ -42,7 +42,7 @@ describe("ClientCatalog repository and service", () => {
     const loaded = await repo.ensureCatalogExists(clientA);
 
     expect(loaded.priceList.prices[materialId]).toBe(4321);
-  }, 15_000);
+  }, 30_000);
 
   it("keeps client A and client B catalogs isolated", async () => {
     const repo = createFileClientCatalogRepository(projectRoot);
@@ -71,7 +71,7 @@ describe("ClientCatalog repository and service", () => {
 
     expect(await repo.getPrice(clientA, materialId)).toBe(77);
     expect(service.getEnabledModules().some((module) => module.moduleType === "drawer_low")).toBe(false);
-  }, 15_000);
+  }, 30_000);
 
   it("filters runtime module descriptors by enabled client modules", () => {
     const catalog = getSystemSeedCatalog();

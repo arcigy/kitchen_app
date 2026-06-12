@@ -333,6 +333,7 @@ type PointerInputHandlersDataContext = {
   hideHoverCursor: () => void;
   mountProps: () => void;
   rebuildGhost: (state: AppState, helpers: PlacementHelpers, point: THREE.Vector3) => void;
+  scheduleRebuildGhost: (state: AppState, helpers: PlacementHelpers, point: THREE.Vector3) => void;
   rebuildWall: (wall: WallInstance) => void;
   rebuildWallPlanMesh: () => void;
   pickDimensionLineAt?: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
@@ -513,6 +514,18 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
   const makeNoSnapResult = (point: THREE.Vector3) => ({ point, kind: "none" } satisfies PlanSnapResult);
+  const syncKitchenDragBindings = (instanceId: string | null) => {
+    if (!instanceId) return;
+    const moved = ctx.findInstance(instanceId);
+    const groupId = moved?.kitchenGroupId ?? null;
+    if (!groupId) return;
+    const group = ctx.S.kitchenGroups.find((item: { id: string }) => item.id === groupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
+    for (const inst of ctx.instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
+    }
+  };
   const updateRaycasterFromPointer = (ev: PointerEvent, rect: DOMRect) => {
     setPointerNdcFromEvent(ctx.pointerNdc, ev, rect);
     ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
@@ -2359,18 +2372,25 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       return;
     }
 
-    finishPointerDragState({
-      doorDragState: ctx.doorDragState,
-      moduleDragState: ctx.dragState,
-      pointerId: ev.pointerId,
-      releasePointerCapture: (pointerId) => {
-        try {
-          ctx.renderer.domElement.releasePointerCapture(pointerId);
-        } catch {
-          // ignore
-        }
-      },
-      windowDragState: ctx.windowDragState
-    });
+    const draggedInstanceId = ctx.dragState.active ? ctx.dragState.id : null;
+    if (
+      finishPointerDragState({
+        doorDragState: ctx.doorDragState,
+        moduleDragState: ctx.dragState,
+        pointerId: ev.pointerId,
+        releasePointerCapture: (pointerId) => {
+          try {
+            ctx.renderer.domElement.releasePointerCapture(pointerId);
+          } catch {
+            // ignore
+          }
+        },
+        windowDragState: ctx.windowDragState
+      }) &&
+      draggedInstanceId
+    ) {
+      syncKitchenDragBindings(draggedInstanceId);
+      ctx.updateLayoutPanel();
+    }
   });
 }

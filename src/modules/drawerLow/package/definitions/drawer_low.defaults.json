@@ -27,7 +27,7 @@
   "handleProjectionMm": 14,
   "drawerBoxThickness": 13,
   "drawerBoxSideHeight": 110,
-  "drawerBackReserveMm": 8,
+  "drawerBackReserveMm": 10,
   "drawerCount": 3,
   "drawerFrontHeights": [
     185,

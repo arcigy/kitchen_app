@@ -326,7 +326,7 @@
         "label": "Drawer Back Reserve mm",
         "type": "number",
         "required": false,
-        "defaultValue": 8,
+        "defaultValue": 10,
         "group": "advanced",
         "affects": "geometry"
       },

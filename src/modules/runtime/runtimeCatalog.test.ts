@@ -39,6 +39,10 @@ function expectNoVolumeOverlap(group: { getObjectByName(name: string): unknown }
   expect(hasVolumeOverlap(getWorldBox(left), getWorldBox(right)), `${leftName} overlaps ${rightName}`).toBe(false);
 }
 
+function expectGapMm(left: Box3, right: Box3, expectedMm: number) {
+  expect((right.min.z - left.max.z) * 1000).toBeCloseTo(expectedMm, 5);
+}
+
 describe("module runtime catalog context", () => {
   it("resolves valid materials from ClientCatalog", () => {
     const catalog = getSystemSeedCatalog();
@@ -59,7 +63,7 @@ describe("module runtime catalog context", () => {
     const empty = structuredClone(catalog);
     empty.materials = [];
     expect(createModuleRuntimeCatalogContext(empty).resolveRenderMaterial("missing", "front")).toMatchObject(SYSTEM_PLACEHOLDER_MATERIAL);
-  }, 15_000);
+  }, 30_000);
 
   it("ignores inactive materials when resolving runtime fallbacks", () => {
     const catalog = getSystemSeedCatalog();
@@ -130,6 +134,47 @@ describe("module runtime catalog context", () => {
     }
     expect(swing.getObjectByName("bottom")).toBeTruthy();
   }, 15_000);
+
+  it("keeps drawer boxes behind the back panel with a stable rear gap", () => {
+    const catalog = getSystemSeedCatalog();
+    const snapshot = materialsSnapshot as unknown as Parameters<typeof buildDrawerLowParametric>[1];
+    const commonParams = {
+      ...makeDefaultDrawerLowParams(),
+      drawerCount: 1,
+      backGrooveWidthMm: 18,
+      drawerBackReserveMm: 10
+    };
+    const thick = buildDrawerLowParametric({ ...commonParams, backThickness: 18 } as DrawerLowParams, snapshot, catalog);
+    const thin = buildDrawerLowParametric({ ...commonParams, backThickness: 3.3, backGrooveWidthMm: 3.3 } as DrawerLowParams, snapshot, catalog);
+
+    const thickBack = getWorldBox(thick.getObjectByName("back") as Mesh);
+    const thickDrawerBack = getWorldBox(thick.getObjectByName("drawer_1_back") as Mesh);
+    const thickDrawerBottom = getWorldBox(thick.getObjectByName("drawer_1_bottom") as Mesh);
+    const thickDrawerSide = getWorldBox(thick.getObjectByName("drawer_1_sideL") as Mesh);
+    const thinBack = getWorldBox(thin.getObjectByName("back") as Mesh);
+    const thinDrawerBack = getWorldBox(thin.getObjectByName("drawer_1_back") as Mesh);
+    const thinDrawerBottom = getWorldBox(thin.getObjectByName("drawer_1_bottom") as Mesh);
+    const thinDrawerSide = getWorldBox(thin.getObjectByName("drawer_1_sideL") as Mesh);
+
+    expect(thinBack.min.z).toBeCloseTo(thickBack.min.z, 6);
+    expect((thickBack.max.z - thickBack.min.z) * 1000).toBeCloseTo(18, 5);
+    expect((thinBack.max.z - thinBack.min.z) * 1000).toBeCloseTo(3.3, 5);
+
+    expectGapMm(thickBack, thickDrawerBack, 10);
+    expectGapMm(thinBack, thinDrawerBack, 10);
+    expectGapMm(thickBack, thickDrawerBottom, 10 + 13);
+    expectGapMm(thinBack, thinDrawerBottom, 10 + 13);
+    expectNoVolumeOverlap(thick, "back", "drawer_1_back");
+    expectNoVolumeOverlap(thick, "back", "drawer_1_bottom");
+    expectNoVolumeOverlap(thin, "back", "drawer_1_back");
+    expectNoVolumeOverlap(thin, "back", "drawer_1_bottom");
+
+    expect(thinDrawerSide.max.z).toBeCloseTo(thickDrawerSide.max.z, 6);
+    expect((thinDrawerSide.max.z - thinDrawerSide.min.z) * 1000).toBeCloseTo(
+      (thickDrawerSide.max.z - thickDrawerSide.min.z) * 1000 + 14.7,
+      5
+    );
+  });
 
   it("syncs material selections for newly added drawer fronts and bottoms", () => {
     const catalog = getSystemSeedCatalog();

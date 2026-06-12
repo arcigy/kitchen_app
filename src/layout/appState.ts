@@ -309,6 +309,9 @@ export interface AppState {
     ghost: LayoutInstance | null;
     ghostValid: boolean;
     lastCursor: THREE.Vector3;
+    pendingCursor: THREE.Vector3 | null;
+    ghostFrame: number | null;
+    lastGhostCursor: THREE.Vector3 | null;
   };
 
   // UI elements
@@ -394,7 +397,10 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
       params: null,
       ghost: null,
       ghostValid: false,
-      lastCursor: new THREE.Vector3(0, 0, 0)
+      lastCursor: new THREE.Vector3(0, 0, 0),
+      pendingCursor: null,
+      ghostFrame: null,
+      lastGhostCursor: null
     },
 
     undoBtnEl: null,

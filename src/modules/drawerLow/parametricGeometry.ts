@@ -326,7 +326,14 @@ export function buildDrawerLowParametric(
   const topRailDepthMm = Math.min(carcassDepthMm * 0.25, Math.max(60, boardThicknessMm * 3));
   const backVisibleWidthMm = Math.max(1, innerWidthMm + 2 * backGrooveDepthMm - backGrooveClearanceMm);
   const backVisibleHeightMm = Math.max(1, sideHeightMm - 2 * boardThicknessMm + 2 * backGrooveDepthMm - backGrooveClearanceMm);
-  const backInsetHalfMm = Math.max(Math.max(backThicknessMm, backGrooveWidthMm) / 2, boardThicknessMm / 2);
+  const carcassRearZMm = carcassCenterZMm - carcassDepthMm / 2;
+  const carcassFrontZMm = carcassCenterZMm + carcassDepthMm / 2;
+  const backRearFaceZMm = carcassRearZMm;
+  const backInnerFaceZMm = backRearFaceZMm + backThicknessMm;
+  const drawerRearFaceZMm = backInnerFaceZMm + drawerBackReserveMm;
+  const drawerFrontFaceZMm = carcassFrontZMm - 11;
+  const drawerSideDepthMm = Math.max(50, drawerFrontFaceZMm - drawerRearFaceZMm);
+  const drawerCenterZMm = (drawerRearFaceZMm + drawerFrontFaceZMm) / 2;
   const kickThicknessMm = Math.min(boardThicknessMm, carcassDepthMm * 0.2);
   const kickCenterZMm = carcassCenterZMm + carcassDepthMm / 2 - kickThicknessMm / 2 - plinthSetbackMm;
 
@@ -409,7 +416,7 @@ export function buildDrawerLowParametric(
     positionMm: {
       x: 0,
       y: plinthHeightMm + boardThicknessMm + backVisibleHeightMm / 2,
-      z: carcassCenterZMm - carcassDepthMm / 2 + backInsetHalfMm
+      z: backRearFaceZMm + backThicknessMm / 2
     },
     preview: backPreview,
     paramKeys: [
@@ -497,7 +504,6 @@ export function buildDrawerLowParametric(
 
   const drawerOuterWidthMm = Math.max(40, widthMm - 2 * boardThicknessMm - sideClearanceMm * 2);
   const drawerBackWidthMm = Math.max(20, drawerOuterWidthMm - drawerBoxThicknessMm * 2);
-  const drawerSideDepthMm = Math.max(50, carcassDepthMm - drawerBackReserveMm - 12);
   const railDepthMm = Math.max(50, drawerSideDepthMm - 5);
   const railWidthMm = 8;
   const railHeightMm = 12;
@@ -512,7 +518,6 @@ export function buildDrawerLowParametric(
     const drawerApertureHeightMm = Math.max(20, frontHeightMm - frontGapMm * 2);
     const drawerBoxBaseYMm = frontBaseMm + drawerBottomOffsetMm;
     const drawerSideCenterYMm = drawerBoxBaseYMm + drawerBoxSideHeightMm / 2;
-    const drawerCenterZMm = carcassCenterZMm + carcassDepthMm / 2 - drawerSideDepthMm / 2 - 11;
     const drawerBottomThicknessMm = resolveBoardThickness(
       `drawer_${drawerIndex}_bottom`,
       params as Record<string, unknown>,
@@ -662,7 +667,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm
       },
       preview: resolveBoardPreview(`drawer_${drawerIndex}_sideL`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
-      paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -675,7 +680,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm
       },
       preview: resolveBoardPreview(`drawer_${drawerIndex}_sideR`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
-      paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -688,7 +693,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm - drawerSideDepthMm / 2 + drawerBoxThicknessMm / 2
       },
       preview: resolveBoardPreview(`drawer_${drawerIndex}_back`, params as Record<string, unknown>, materialsSnapshot, drawerSidePreview, catalogContext),
-      paramKeys: ["drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "drawerBoxThickness", "drawerBoxSideHeight", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -701,7 +706,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm + drawerBoxThicknessMm / 2
       },
       preview: resolveBoardPreview(`drawer_${drawerIndex}_bottom`, params as Record<string, unknown>, materialsSnapshot, drawerBottomPreview, catalogContext),
-      paramKeys: ["drawerBottomThickness", "drawerBoxThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "drawerBottomThickness", "drawerBoxThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -714,7 +719,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm + (drawerSideDepthMm - railDepthMm) / 2
       },
       preview: runnerPreview,
-      paramKeys: ["sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     addBoxPart({
@@ -727,7 +732,7 @@ export function buildDrawerLowParametric(
         z: drawerCenterZMm + (drawerSideDepthMm - railDepthMm) / 2
       },
       preview: runnerPreview,
-      paramKeys: ["sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
+      paramKeys: ["backThickness", "sideClearanceMm", "drawerBackReserveMm", "width", "depth", "drawerCount"]
     });
 
     frontBaseMm += frontHeightMm + frontGapMm;

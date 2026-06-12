@@ -5,6 +5,7 @@ export interface KitchenContext {
   name: string
 
   // Base modules - dimensions
+  wallHeightMm: number           // full room wall height for tall and full-height kitchen layouts
   heightMm: number              // module height without plinth
   worktopDepthMm: number        // real worktop depth
   worktopFrontOffsetMm: number  // worktop front overhang
@@ -70,6 +71,7 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
   return {
     name: 'Kuchy\u0148a 1',
 
+    wallHeightMm: 2600,
     heightMm,
     worktopDepthMm,
     worktopFrontOffsetMm,
@@ -125,6 +127,8 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push('name is empty')
   if (ctx.heightMm <= 0)
     warnings.push(`heightMm is ${ctx.heightMm}mm - must be greater than 0`)
+  if (ctx.wallHeightMm <= ctx.heightMm)
+    warnings.push(`wallHeightMm (${ctx.wallHeightMm}) must be greater than base heightMm (${ctx.heightMm})`)
   if (ctx.worktopDepthMm <= 0)
     warnings.push(`worktopDepthMm is ${ctx.worktopDepthMm}mm - must be greater than 0`)
   if (ctx.worktopFrontOffsetMm < 0)

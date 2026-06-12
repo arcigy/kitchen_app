@@ -7094,7 +7094,31 @@ body.button-magnet-capturing * {
 .bom-dev__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
+}
+
+.bom-dev__currency-toggle {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(133, 147, 163, 0.34);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #264258;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bom-dev__currency-toggle select {
+  border: 1px solid rgba(133, 147, 163, 0.34);
+  border-radius: 8px;
+  background: #fff;
+  color: #264258;
+  padding: 6px 8px;
+  font: inherit;
 }
 
 .bom-dev__button {

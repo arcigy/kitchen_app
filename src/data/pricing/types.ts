@@ -43,7 +43,7 @@ export type ComponentType =
   | "lighting";
 
 export type CatalogSupplierSource = {
-  supplier: "demos-sk" | "system";
+  supplier: "demos-sk" | "demos-cz" | "system";
   supplierProductId: string;
   url?: string;
   imageUrl?: string;

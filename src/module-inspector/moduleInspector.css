@@ -1,0 +1,523 @@
+.module-inspector-root {
+  min-height: 100vh;
+  background: #ebe8df;
+  color: #211f1a;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.mi-app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.mi-header {
+  height: 64px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #d6d0c3;
+  background: #f7f4ec;
+}
+
+.mi-header div,
+.mi-param span,
+.mi-selected dl div,
+.mi-price-breakdown div {
+  display: grid;
+  gap: 2px;
+}
+
+.mi-header span {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #77705f;
+}
+
+.mi-header strong {
+  font-size: 18px;
+}
+
+.mi-header a,
+.mi-toolbar button,
+.mi-fx,
+.mi-part button {
+  border: 1px solid #bdb5a5;
+  background: #ffffff;
+  color: #211f1a;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mi-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 360px minmax(480px, 1fr) 390px;
+}
+
+.mi-sidebar,
+.mi-details {
+  min-height: 0;
+  overflow: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.mi-sidebar {
+  border-right: 1px solid #d6d0c3;
+}
+
+.mi-details {
+  border-left: 1px solid #d6d0c3;
+}
+
+.mi-panel {
+  background: #fbfaf6;
+  border: 1px solid #d8d0c1;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mi-panel h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #5e584c;
+}
+
+.mi-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mi-panel-head h2 {
+  margin: 0;
+}
+
+.mi-panel-head button {
+  border: 1px solid #bdb5a5;
+  background: #fff;
+  color: #211f1a;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mi-viewport {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.mi-toolbar {
+  height: 54px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #d6d0c3;
+  background: #f7f4ec;
+}
+
+.mi-toolbar select,
+.mi-param input,
+.mi-param select,
+.mi-param textarea,
+.mi-context-grid input,
+.mi-section-grid input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #c9c1b2;
+  border-radius: 6px;
+  background: #fff;
+  color: #211f1a;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.mi-toolbar select {
+  max-width: 340px;
+}
+
+.mi-currency-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #655e51;
+  font-size: 12px;
+}
+
+.mi-currency-toggle select {
+  width: 78px;
+}
+
+.mi-view {
+  min-height: 0;
+  position: relative;
+}
+
+.mi-view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mi-status {
+  padding: 8px 12px;
+  border-top: 1px solid #d6d0c3;
+  font-size: 12px;
+  color: #5d574b;
+}
+
+.mi-context-grid,
+.mi-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mi-context-grid label,
+.mi-section-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #655e51;
+}
+
+.mi-param-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mi-material-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.mi-material-slot {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #ded6c8;
+  border-radius: 8px;
+  background: #f6f2ea;
+}
+
+.mi-material-slot header {
+  display: grid;
+  grid-template-columns: 28px 1fr 32px;
+  gap: 8px;
+  align-items: center;
+}
+
+.mi-material-slot strong,
+.mi-material-slot code,
+.mi-material-slot label,
+.mi-material-slot small {
+  min-width: 0;
+}
+
+.mi-material-slot strong {
+  display: block;
+  font-size: 13px;
+}
+
+.mi-material-slot code,
+.mi-material-slot small {
+  color: #756e60;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mi-material-swatch {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 5px;
+}
+
+.mi-material-readonly {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.mi-material-readonly div {
+  display: grid;
+  gap: 2px;
+}
+
+.mi-material-readonly dt {
+  color: #756e60;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.mi-material-readonly dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.mi-demos-lookup {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #655e51;
+}
+
+.mi-demos-lookup input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #c9c1b2;
+  border-radius: 6px;
+  background: #fff;
+  color: #211f1a;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.mi-demos-status {
+  margin: 0;
+  color: #756e60;
+  font-size: 12px;
+}
+
+.mi-demos-status.error {
+  color: #b42318;
+}
+
+.mi-demos-result {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #ded6c8;
+}
+
+.mi-demos-result img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid #d2cabd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.mi-demos-result strong {
+  font-size: 12px;
+}
+
+.mi-demos-result dl {
+  margin: 6px 0;
+  display: grid;
+  gap: 4px;
+}
+
+.mi-demos-result dl div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.mi-demos-result dt {
+  color: #756e60;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.mi-demos-result dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.mi-demos-result a {
+  color: #0f5968;
+  font-size: 11px;
+}
+
+.mi-demos-color {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  border-radius: 4px;
+}
+
+.mi-param {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 1fr) auto 32px;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.mi-param b {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mi-param code,
+.mi-formulas code {
+  font-size: 11px;
+  color: #756e60;
+  white-space: normal;
+}
+
+.mi-param small {
+  font-size: 11px;
+  color: #756e60;
+}
+
+.mi-param input[type="checkbox"] {
+  width: auto;
+  justify-self: start;
+}
+
+.mi-fx {
+  padding: 7px 0;
+  font-size: 11px;
+  color: #8c8270;
+}
+
+.mi-param.bound .mi-fx {
+  border-color: #1f7a8c;
+  color: #0f5968;
+  background: #e7f4f6;
+}
+
+.mi-fx.active {
+  border-color: #1f7a8c;
+  color: #0f5968;
+  background: #e7f4f6;
+}
+
+.mi-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.mi-part-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.mi-part {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.mi-part button {
+  text-align: left;
+  padding: 7px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mi-part button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.mi-part.selected button {
+  border-color: #1f7a8c;
+  background: #e7f4f6;
+}
+
+.mi-empty {
+  margin: 0;
+  color: #756e60;
+  font-size: 13px;
+}
+
+.mi-selected strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.mi-selected dl,
+.mi-price-breakdown {
+  margin: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.mi-selected dt,
+.mi-price-breakdown dt {
+  font-size: 11px;
+  color: #756e60;
+  text-transform: uppercase;
+}
+
+.mi-selected dd,
+.mi-price-breakdown dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.mi-price-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mi-price-total strong {
+  font-size: 28px;
+}
+
+.mi-formulas {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.mi-formulas article {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  background: #f4f0e7;
+  border: 1px solid #ddd5c6;
+  border-radius: 6px;
+}
+
+.mi-formulas strong {
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .mi-layout {
+    grid-template-columns: 320px 1fr;
+  }
+
+  .mi-details {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid #d6d0c3;
+  }
+}
