@@ -24,6 +24,10 @@ Scope: whole repository.
 - Put behavior into focused controllers/helpers under the owning folder.
 - Prefer explicit typed context objects for controllers.
 - Do not use `any` or broad dependency bags when a smaller typed dependency is possible.
+- Before adding a feature, identify the owning system, search for existing similar behavior, and extend the existing owner instead of creating a parallel custom implementation.
+- If a feature touches editor behavior, selection, delete, move/drag, align, trim/extend, dimensions, temporary dimensions, undo/redo, shortcuts, topbars, or editor modes, read and follow `docs/universal-editor-contract.md` first.
+- Do not change runtime behavior during a refactor unless the task explicitly asks for that behavior change and the old behavior is covered by characterization tests.
+- Record meaningful refactor or feature slices in `MANUAL_TEST_LOG.csv` with a non-programmer manual test path.
 
 ## Required Checks
 

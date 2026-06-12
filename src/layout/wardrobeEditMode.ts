@@ -3,6 +3,7 @@ import type { Camera, Group, Object3D } from "three";
 import type { BoardFamily, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { EditorPropsApi, EditorTopbarApi } from "../app/editorModeApis";
+import { parseWardrobeDimensionEdit, type WardrobeDimensionEdit } from "./wardrobeDimensionEditMetadata";
 
 type WardrobePartKind = "vertical" | "horizontal" | "back";
 type WardrobeJointPriority = "horizontal" | "vertical";
@@ -55,11 +56,6 @@ export type WardrobeEditSaveState = {
     selectedPartId: string | null;
   }>;
 };
-
-type WardrobeDimensionEdit =
-  | { kind: "verticalGap"; aPartId: string; bPartId: string }
-  | { kind: "horizontalGap"; aPartId: string; bPartId: string }
-  | { kind: "partDepth"; partId: string };
 
 type WardrobeJointEdit = { kind: "jointPriorityToggle" };
 
@@ -1031,15 +1027,6 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     });
   };
 
-  const parseDimensionEdit = (value: unknown): WardrobeDimensionEdit | null => {
-    if (!value || typeof value !== "object") return null;
-    const edit = value as Partial<WardrobeDimensionEdit>;
-    if (edit.kind === "verticalGap" && "aPartId" in edit && "bPartId" in edit) return edit as WardrobeDimensionEdit;
-    if (edit.kind === "horizontalGap" && "aPartId" in edit && "bPartId" in edit) return edit as WardrobeDimensionEdit;
-    if (edit.kind === "partDepth" && "partId" in edit) return edit as WardrobeDimensionEdit;
-    return null;
-  };
-
   const parseJointEdit = (value: unknown): WardrobeJointEdit | null => {
     if (!value || typeof value !== "object") return null;
     const edit = value as Partial<WardrobeJointEdit>;
@@ -1181,8 +1168,8 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
 
     const dimensionHit = raycaster
       .intersectObjects(group.dimensionsRoot.children, true)
-      .find((hit) => parseDimensionEdit(hit.object.userData.wardrobeDimensionEdit));
-    const dimensionEdit = parseDimensionEdit(dimensionHit?.object.userData.wardrobeDimensionEdit);
+      .find((hit) => parseWardrobeDimensionEdit(hit.object.userData.wardrobeDimensionEdit));
+    const dimensionEdit = parseWardrobeDimensionEdit(dimensionHit?.object.userData.wardrobeDimensionEdit);
     if (dimensionEdit) {
       ev.preventDefault();
       ev.stopPropagation();
