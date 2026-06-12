@@ -4,6 +4,7 @@ import type { HistoryHelpers } from "../layout/historyManager";
 import {
   runToolbarAlignCommand,
   runToolbarBomCommand,
+  runToolbarButtonClickCommand,
   runToolbarCameraCommand,
   runToolbarColumnCommand,
   runToolbarCopyExportCommand,
@@ -251,6 +252,15 @@ describe("editor toolbar commands", () => {
     expect(ctx.openUnderlayPanel).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.toggle2dView).toHaveBeenCalledExactlyOnceWith();
     expect(resetViewBtn.click).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("runs toolbar button click command only when a button exists", () => {
+    const button = { click: vi.fn() };
+
+    runToolbarButtonClickCommand(button);
+    runToolbarButtonClickCommand(null);
+
+    expect(button.click).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes output proxy buttons through their current button clicks", () => {

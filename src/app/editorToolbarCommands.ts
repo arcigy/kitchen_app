@@ -180,20 +180,24 @@ export function runToolbarToggle2dCommand(ctx: Pick<ToolbarViewOutputCommandCont
   ctx.toggle2dView();
 }
 
+export function runToolbarButtonClickCommand(button: Pick<HTMLButtonElement, "click"> | null | undefined) {
+  button?.click();
+}
+
 export function runToolbarResetViewCommand(resetViewBtn: Pick<HTMLButtonElement, "click"> | null) {
-  resetViewBtn?.click();
+  runToolbarButtonClickCommand(resetViewBtn);
 }
 
 export function runToolbarExportJsonCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
-  ctx.args.exportBtn.click();
+  runToolbarButtonClickCommand(ctx.args.exportBtn);
 }
 
 export function runToolbarExportSceneCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
-  ctx.args.exportSceneBtn.click();
+  runToolbarButtonClickCommand(ctx.args.exportSceneBtn);
 }
 
 export function runToolbarCopyExportCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
-  ctx.args.copyBtn.click();
+  runToolbarButtonClickCommand(ctx.args.copyBtn);
 }
 
 export function runToolbarPricingCatalogCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openPricingCatalog">) {
@@ -210,7 +214,7 @@ export function runToolbarBomCommand(ctx: Pick<ToolbarViewOutputCommandContext, 
 }
 
 export function runToolbarResetDefaultsCommand(ctx: Pick<ToolbarViewOutputCommandContext, "args">) {
-  ctx.args.resetBtn.click();
+  runToolbarButtonClickCommand(ctx.args.resetBtn);
 }
 
 export function runToolbarInstallCommand(
