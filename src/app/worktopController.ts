@@ -7,6 +7,7 @@ import type { PlanSnapResult } from "./planSnap";
 import { disposeObject3D } from "../core/dispose";
 import { commitHistory } from "../layout/historyManager";
 import { sanitizeKitchenWorktopPath } from "../layout/worktopGeometry";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import {
   cloneKitchenWorktopParams,
   kitchenWorktopOutlineColor,
@@ -344,8 +345,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     wallTypedHud.textContent = "";
     wallTypedHud.style.display = "none";
     if (!opts?.silent) {
-      setUnderlayStatus("");
-      mountProps();
+      reportEditorToolEntryStatus({ setUnderlayStatus, mountProps }, "");
     }
   };
 
