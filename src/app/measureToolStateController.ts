@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { PlanSnapResult } from "./planSnap";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
-import type { EditorLayoutTool } from "./editorToolEntryController";
+import { reportEditorToolEntryStatus, type EditorLayoutTool } from "./editorToolEntryController";
 import { refreshSelectionVisualState } from "./selectionController";
 
 export type MeasureState = {
@@ -134,8 +134,7 @@ export function activateMeasureToolState(ctx: MeasureToolActivationContext) {
   refreshSelectionVisualState(ctx);
   ctx.args.measureBtn.textContent = "Measure: On";
   ctx.args.measureReadoutEl.textContent = "Measure: klikni prvy bod.";
-  ctx.setUnderlayStatus("Measure: klikni prvy roh alebo hranu.");
-  ctx.mountProps();
+  reportEditorToolEntryStatus(ctx, "Measure: klikni prvy roh alebo hranu.");
 }
 
 export function handleGlobalMeasurementClearState<TEvent extends MeasureGlobalClearEvent>(ctx: MeasureGlobalClearContext<TEvent>, ev: TEvent) {
