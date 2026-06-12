@@ -21,12 +21,17 @@ function floorParams(overrides: Partial<FloorParams> = {}): FloorParams {
 }
 
 function createToolbar() {
+  const buttons: Array<{ label: string; onClick: () => void }> = [];
   return {
+    buttons,
     clear: vi.fn(),
     addRow: vi.fn(() => new FakeElement() as FakeElement & HTMLElement),
     addGroup: vi.fn(() => new FakeElement() as FakeElement & HTMLElement),
     addSpacer: vi.fn(),
-    toolButton: vi.fn(() => new FakeElement() as FakeElement & HTMLButtonElement)
+    toolButton: vi.fn((_group: HTMLElement, opts: { label: string; onClick: () => void }) => {
+      buttons.push({ label: opts.label, onClick: opts.onClick });
+      return new FakeElement() as FakeElement & HTMLButtonElement;
+    })
   };
 }
 
@@ -126,6 +131,26 @@ describe("floorBoundaryController", () => {
     expect(ctx.floorEdit.hover).toBeNull();
     expect(ctx.clearToolHud).toHaveBeenCalledOnce();
     expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Floor boundary: Rectangle - klikni prvy a druhy roh.");
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("keeps invalid floor boundary finish status and props refresh behavior", () => {
+    installFakeDocument();
+    const toolbar = createToolbar();
+    const ctx = createContext({ tb: toolbar });
+    const controller = createFloorBoundaryController(ctx);
+
+    controller.enterFloorBoundaryEdit();
+    vi.mocked(ctx.setUnderlayStatus).mockClear();
+    vi.mocked(ctx.mountProps).mockClear();
+
+    toolbar.buttons.find((button) => button.label === "Dokoncit")?.onClick();
+
+    expect(ctx.floorEdit.active).toBe(true);
+    expect(ctx.floorEdit.error).toBe("Boundary line nie je uzavreta. Uzavri loop alebo dopln chybajuce ciary.");
+    expect(ctx.createFloor).not.toHaveBeenCalled();
+    expect(ctx.commitHistory).not.toHaveBeenCalled();
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Floor boundary: boundary musi mat aspon 3 ciary.");
     expect(ctx.mountProps).toHaveBeenCalledOnce();
   });
 });

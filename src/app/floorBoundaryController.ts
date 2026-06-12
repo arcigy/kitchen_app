@@ -270,8 +270,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     const boundary = floorSegmentsToBoundary(ctx.floorEdit.segments);
     if (!boundary || boundary.length < 3) {
       ctx.floorEdit.error = "Boundary line nie je uzavreta. Uzavri loop alebo dopln chybajuce ciary.";
-      ctx.setUnderlayStatus("Floor boundary: boundary musi mat aspon 3 ciary.");
-      ctx.mountProps();
+      reportEditorToolEntryStatus(ctx, "Floor boundary: boundary musi mat aspon 3 ciary.");
       return;
     }
     ctx.floorEdit.error = "";
