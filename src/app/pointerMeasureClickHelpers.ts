@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { MeasureState } from "./measureTools";
 import type { PlanSnapBinding } from "./planSnap";
 import { resolveNormalGuideSegment } from "./measureGeometryHelpers";
@@ -209,8 +210,10 @@ export function handleMeasurePointClick(params: {
         ? `Normal (${params.kind}): ${params.formatMm(params.point)} -> click second guide point.`
         : `First point (${params.kind}): ${params.formatMm(params.point)} -> click second point.`
     );
-    params.setStatus(params.normalMode ? "Measure: click second guide point for normal." : "Measure: click second point.");
-    params.mountProps();
+    reportEditorToolEntryStatus(
+      { setUnderlayStatus: params.setStatus, mountProps: params.mountProps },
+      params.normalMode ? "Measure: click second guide point for normal." : "Measure: click second point."
+    );
     return;
   }
 
