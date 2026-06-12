@@ -91,7 +91,11 @@ export function runToolbarMeasureToggleCommand(ctx: ToolbarMeasureToggleCommandC
 }
 
 export function runToolbarToolSetterCommand(setTool: () => void) {
-  setTool();
+  runToolbarActionCommand(setTool);
+}
+
+export function runToolbarActionCommand(action: () => void) {
+  action();
 }
 
 export function runToolbarSelectCommand(ctx: Pick<ToolbarToolCommandContext, "setToolSelect">) {
@@ -103,15 +107,15 @@ export function runToolbarWallCommand(ctx: Pick<ToolbarToolCommandContext, "setT
 }
 
 export function runToolbarDoorCommand(ctx: Pick<ToolbarToolCommandContext, "addOrSelectDoor">) {
-  ctx.addOrSelectDoor();
+  runToolbarActionCommand(ctx.addOrSelectDoor);
 }
 
 export function runToolbarWindowCommand(ctx: Pick<ToolbarToolCommandContext, "addOrSelectWindow">) {
-  ctx.addOrSelectWindow();
+  runToolbarActionCommand(ctx.addOrSelectWindow);
 }
 
 export function runToolbarColumnCommand(ctx: Pick<ToolbarToolCommandContext, "addColumn">) {
-  ctx.addColumn();
+  runToolbarActionCommand(ctx.addColumn);
 }
 
 export function runToolbarAlignCommand(ctx: Pick<ToolbarToolCommandContext, "setToolAlign">) {
@@ -153,15 +157,15 @@ export function runToolbarHideToggleCommand(ctx: ToolbarVisibilityCommandContext
 }
 
 export function runToolbarIsolateCommand(ctx: ToolbarVisibilityCommandContext) {
-  ctx.visibility.isolateSelected();
+  runToolbarActionCommand(ctx.visibility.isolateSelected);
 }
 
 export function runToolbarUnhideAllCommand(ctx: ToolbarVisibilityCommandContext) {
-  ctx.visibility.unhideAll();
+  runToolbarActionCommand(ctx.visibility.unhideAll);
 }
 
 export function runToolbarFloorCommand(ctx: Pick<ToolbarEntryModeCommandContext, "enterFloorBoundaryEdit">) {
-  ctx.enterFloorBoundaryEdit();
+  runToolbarActionCommand(ctx.enterFloorBoundaryEdit);
 }
 
 export function runToolbarWardrobeCommand(ctx: Pick<ToolbarEntryModeCommandContext, "wardrobeMode">) {
@@ -177,11 +181,11 @@ export function runToolbarOptionalEntryModeCommand(mode: { enterNew: () => void 
 }
 
 export function runToolbarUnderlayCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openUnderlayPanel">) {
-  ctx.openUnderlayPanel();
+  runToolbarActionCommand(ctx.openUnderlayPanel);
 }
 
 export function runToolbarToggle2dCommand(ctx: Pick<ToolbarViewOutputCommandContext, "toggle2dView">) {
-  ctx.toggle2dView();
+  runToolbarActionCommand(ctx.toggle2dView);
 }
 
 export function runToolbarButtonClickCommand(button: Pick<HTMLButtonElement, "click"> | null | undefined) {
@@ -205,7 +209,7 @@ export function runToolbarCopyExportCommand(ctx: Pick<ToolbarViewOutputCommandCo
 }
 
 export function runToolbarPricingCatalogCommand(ctx: Pick<ToolbarViewOutputCommandContext, "openPricingCatalog">) {
-  ctx.openPricingCatalog();
+  runToolbarActionCommand(ctx.openPricingCatalog);
 }
 
 export function runToolbarBomCommand(ctx: Pick<ToolbarViewOutputCommandContext, "S" | "openBomPanel">) {
@@ -234,9 +238,9 @@ export function runToolbarInstallCommand(
 }
 
 export function runToolbarMaterialCommand(ctx: Pick<ToolbarVisualisationCommandContext, "startMaterialModify">) {
-  ctx.startMaterialModify();
+  runToolbarActionCommand(ctx.startMaterialModify);
 }
 
 export function runToolbarCameraCommand(ctx: Pick<ToolbarVisualisationCommandContext, "startCameraPlacement">) {
-  ctx.startCameraPlacement();
+  runToolbarActionCommand(ctx.startCameraPlacement);
 }

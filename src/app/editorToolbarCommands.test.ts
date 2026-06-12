@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import {
+  runToolbarActionCommand,
   runToolbarAlignCommand,
   runToolbarBomCommand,
   runToolbarButtonClickCommand,
@@ -115,6 +116,14 @@ describe("editor toolbar commands", () => {
     runToolbarToolSetterCommand(setTool);
 
     expect(setTool).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("runs a simple toolbar action command", () => {
+    const action = vi.fn();
+
+    runToolbarActionCommand(action);
+
+    expect(action).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes architecture object buttons through current add/select commands", () => {
