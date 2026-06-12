@@ -49,12 +49,14 @@ export function handleDimensionToolClick<TDimension>(params: {
       dimensionState: params.dimensionState,
       picked: params.picked
     });
-    params.setStatus(
-      params.dimensionState.picked.length === 1
-        ? "Dimension: select another parallel line."
-        : `Dimension: selected ${params.dimensionState.picked.length} lines. Add another one or click empty space.`
-    );
-    params.mountProps();
+    reportEditorToolStatus({
+      status:
+        params.dimensionState.picked.length === 1
+          ? "Dimension: select another parallel line."
+          : `Dimension: selected ${params.dimensionState.picked.length} lines. Add another one or click empty space.`,
+      setStatus: params.setStatus,
+      mountProps: params.mountProps
+    });
     return;
   }
 
@@ -70,8 +72,11 @@ export function handleDimensionToolClick<TDimension>(params: {
     commitDimensions: params.commitDimensions,
     resetDraft: params.resetDraft
   });
-  params.setStatus(insertedCount > 0 ? `Dimension: inserted ${insertedCount}. Select the next first line.` : "Dimension: insert failed.");
-  params.mountProps();
+  reportEditorToolStatus({
+    status: insertedCount > 0 ? `Dimension: inserted ${insertedCount}. Select the next first line.` : "Dimension: insert failed.",
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function addDimensionPickedLine(params: {
@@ -95,6 +100,15 @@ export function commitDimensionDraft<TDimension>(params: {
   return dimensions.length;
 }
 
+export function reportEditorToolStatus(params: {
+  status: string;
+  setStatus: (message: string) => void;
+  mountProps: () => void;
+}): void {
+  params.setStatus(params.status);
+  params.mountProps();
+}
+
 export function handleAlignToolClick(params: {
   picked: AlignPickedLine | null;
   alignState: PointerAlignClickState;
@@ -115,16 +129,22 @@ export function handleAlignToolClick(params: {
       alignState: params.alignState,
       picked: params.picked
     });
-    params.setStatus("Align: click one or more parallel lines to align. Esc = new reference.");
-    params.mountProps();
+    reportEditorToolStatus({
+      status: "Align: click one or more parallel lines to align. Esc = new reference.",
+      setStatus: params.setStatus,
+      mountProps: params.mountProps
+    });
     return;
   }
 
   const ref = params.alignState.ref;
   const result = params.applyAlignBetweenPickedLines(ref, params.picked);
   if (!result.ok) {
-    params.setStatus(result.reason);
-    params.mountProps();
+    reportEditorToolStatus({
+      status: result.reason,
+      setStatus: params.setStatus,
+      mountProps: params.mountProps
+    });
     return;
   }
 
@@ -136,8 +156,11 @@ export function handleAlignToolClick(params: {
     lastB: params.picked,
     now: params.now
   });
-  params.setStatus(result.reason);
-  params.mountProps();
+  reportEditorToolStatus({
+    status: result.reason,
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function setAlignReferencePick(params: {
@@ -207,8 +230,11 @@ export function handleTrimTargetPick(params: {
     picked: params.picked,
     hitPoint: params.hitPoint
   });
-  params.setStatus("Trim: click cutter line...");
-  params.mountProps();
+  reportEditorToolStatus({
+    status: "Trim: click cutter line...",
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
   return true;
 }
 
@@ -244,8 +270,11 @@ export function resetTrimTargetAndReport(params: {
   mountProps: () => void;
 }): void {
   resetTrimTarget({ trimState: params.trimState, clearClick: params.clearClick });
-  params.setStatus(params.status);
-  params.mountProps();
+  reportEditorToolStatus({
+    status: params.status,
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function handleMissingTrimTarget(params: {
@@ -302,8 +331,11 @@ export function finishTrimSuccess(params: {
     now: params.now
   });
   resetTrimTarget({ trimState: params.trimState, clearClick: true });
-  params.setStatus(params.status);
-  params.mountProps();
+  reportEditorToolStatus({
+    status: params.status,
+    setStatus: params.setStatus,
+    mountProps: params.mountProps
+  });
 }
 
 export function setTrimRecentFeedback(params: {

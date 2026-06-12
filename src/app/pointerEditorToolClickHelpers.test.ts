@@ -13,6 +13,7 @@ import {
   handlePinnedTrimTarget,
   handleTrimNoPick,
   handleTrimTargetPick,
+  reportEditorToolStatus,
   resetTrimTargetAndReport,
   setAlignReferencePick,
   setAlignRecentFeedback,
@@ -161,6 +162,20 @@ describe("pointer editor tool click helpers", () => {
     expect(buildDimensions).toHaveBeenCalledWith(picked, hitPoint);
     expect(commitDimensions).toHaveBeenCalledWith(dimensions);
     expect(resetDraft).toHaveBeenCalledOnce();
+  });
+
+  it("reports editor tool status and remounts props", () => {
+    const setStatus = vi.fn();
+    const mountProps = vi.fn();
+
+    reportEditorToolStatus({
+      status: "Tool: ready.",
+      setStatus,
+      mountProps
+    });
+
+    expect(setStatus).toHaveBeenCalledExactlyOnceWith("Tool: ready.");
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 
   it("sets the first align reference without committing history", () => {
