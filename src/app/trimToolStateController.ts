@@ -1,4 +1,4 @@
-import { activateEditorToolPromptState } from "./editorToolEntryController";
+import { activateEditorToolPromptState, resetEditorToolPromptFromEscape } from "./editorToolEntryController";
 
 export type TrimState = {
   step: "pickTarget" | string;
@@ -51,8 +51,11 @@ export function activateTrimToolState(ctx: TrimToolActivationContext) {
 }
 
 export function resetTrimTargetFromEscape(ctx: TrimTargetEscapeContext) {
-  resetTrimState(ctx);
-  ctx.clearToolHud();
-  ctx.setUnderlayStatus("Trim: click target wall...");
-  ctx.mountProps();
+  resetEditorToolPromptFromEscape({
+    clearToolHud: ctx.clearToolHud,
+    mountProps: ctx.mountProps,
+    resetToolState: () => resetTrimState(ctx),
+    setUnderlayStatus: ctx.setUnderlayStatus,
+    status: "Trim: click target wall..."
+  });
 }

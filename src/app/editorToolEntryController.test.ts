@@ -4,6 +4,7 @@ import {
   activateSelectToolState,
   activateToggleEditorToolState,
   enterEditorTool,
+  resetEditorToolPromptFromEscape,
   type EditorToolEntryContext
 } from "./editorToolEntryController";
 import type { AppState } from "../layout/appState";
@@ -73,6 +74,22 @@ describe("enterEditorTool", () => {
 
     expect(calls).toEqual(["enterTool", "resetToolState", "ensureFloorplanViewerTab", "setUnderlayStatus", "mountProps"]);
     expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Tool: prompt...");
+  });
+
+  it("runs prompt tool escape reset with shared hud/status/mount order", () => {
+    const calls: string[] = [];
+    const ctx = {
+      clearToolHud: vi.fn(() => calls.push("clearToolHud")),
+      mountProps: vi.fn(() => calls.push("mountProps")),
+      resetToolState: vi.fn(() => calls.push("resetToolState")),
+      setUnderlayStatus: vi.fn(() => calls.push("setUnderlayStatus")),
+      status: "Tool: reset prompt..."
+    };
+
+    resetEditorToolPromptFromEscape(ctx);
+
+    expect(calls).toEqual(["resetToolState", "clearToolHud", "setUnderlayStatus", "mountProps"]);
+    expect(ctx.setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Tool: reset prompt...");
   });
 
   it("routes active toggle tools back to Select without running activation", () => {

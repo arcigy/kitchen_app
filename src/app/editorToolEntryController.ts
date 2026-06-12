@@ -43,6 +43,14 @@ export type EditorToolPromptActivationContext = {
   status: string;
 };
 
+export type EditorToolPromptEscapeContext = {
+  clearToolHud: () => void;
+  mountProps: () => void;
+  resetToolState: () => void;
+  setUnderlayStatus: (message: string) => void;
+  status: string;
+};
+
 export function enterEditorTool(ctx: EditorToolEntryContext, tool: EditorLayoutTool) {
   ctx.ensureLayoutMode();
   if (ctx.placement.active) ctx.cancelPlacement(ctx.S, ctx.placementHelpers);
@@ -69,6 +77,13 @@ export function activateEditorToolPromptState(ctx: EditorToolPromptActivationCon
   ctx.enterTool();
   ctx.resetToolState();
   ctx.ensureFloorplanViewerTab();
+  ctx.setUnderlayStatus(ctx.status);
+  ctx.mountProps();
+}
+
+export function resetEditorToolPromptFromEscape(ctx: EditorToolPromptEscapeContext) {
+  ctx.resetToolState();
+  ctx.clearToolHud();
   ctx.setUnderlayStatus(ctx.status);
   ctx.mountProps();
 }

@@ -1,4 +1,4 @@
-import { activateEditorToolPromptState } from "./editorToolEntryController";
+import { activateEditorToolPromptState, resetEditorToolPromptFromEscape } from "./editorToolEntryController";
 
 export type AlignState = {
   ref: unknown | null;
@@ -49,8 +49,11 @@ export function activateAlignToolState(ctx: AlignToolActivationContext) {
 }
 
 export function clearAlignReferenceFromEscape(ctx: AlignReferenceEscapeContext) {
-  clearAlignReference(ctx);
-  ctx.clearToolHud();
-  ctx.setUnderlayStatus("Align: click reference line...");
-  ctx.mountProps();
+  resetEditorToolPromptFromEscape({
+    clearToolHud: ctx.clearToolHud,
+    mountProps: ctx.mountProps,
+    resetToolState: () => clearAlignReference(ctx),
+    setUnderlayStatus: ctx.setUnderlayStatus,
+    status: "Align: click reference line..."
+  });
 }
