@@ -272,9 +272,11 @@ export function executeFallbackPickSelection<MovePoint>(args: {
   const selectableId = args.filterSelectableId(args.id);
   if (!selectableId) {
     if (args.worktopId && args.beginWorktopSelection(args.worktopId)) return true;
-    args.selectModule(null);
-    args.setDoorInstNull();
-    args.clearWindowLightIfMissing();
+    clearModuleAndOpeningSelection({
+      clearWindowLightIfMissing: args.clearWindowLightIfMissing,
+      selectModule: args.selectModule,
+      setDoorInstNull: args.setDoorInstNull
+    });
     return true;
   }
 
@@ -305,8 +307,20 @@ export function handleEmptyFallbackPickSelection<MovePoint>(args: {
 
   args.selectFloor(null);
   args.selectWall(null);
+  clearModuleAndOpeningSelection({
+    clearWindowLightIfMissing: args.clearWindowLightIfMissing,
+    selectModule: args.selectModule,
+    setDoorInstNull: args.setDoorInstNull
+  });
+  return true;
+}
+
+function clearModuleAndOpeningSelection(args: {
+  clearWindowLightIfMissing: () => void;
+  selectModule: (id: string | null) => void;
+  setDoorInstNull: () => void;
+}) {
   args.selectModule(null);
   args.setDoorInstNull();
   args.clearWindowLightIfMissing();
-  return true;
 }
