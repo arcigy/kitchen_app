@@ -76,9 +76,16 @@ export function beginWindowDragFromPick<Opening extends { params: OpeningParams 
   toMmPoint: (point: THREE.Vector3) => { x: number; z: number };
   windowDragState: PointerOpeningDragState;
 }) {
-  args.selectOpening(args.opening);
-  args.cancelPendingMarquee();
-  if (args.continueMoveAfterSelection()) return true;
+  if (
+    selectOpeningAndContinueMove({
+      cancelPendingMarquee: args.cancelPendingMarquee,
+      continueMoveAfterSelection: args.continueMoveAfterSelection,
+      opening: args.opening,
+      selectOpening: args.selectOpening
+    })
+  ) {
+    return true;
+  }
 
   args.windowDragState.active = true;
   const customWallId = args.opening.params.wallId ?? null;
@@ -123,9 +130,16 @@ export function beginDoorDragFromPick<Opening extends { params: OpeningParams },
   setPointerCapture: () => void;
   toMmPoint: (point: THREE.Vector3) => { x: number; z: number };
 }) {
-  args.selectOpening(args.opening);
-  args.cancelPendingMarquee();
-  if (args.continueMoveAfterSelection()) return true;
+  if (
+    selectOpeningAndContinueMove({
+      cancelPendingMarquee: args.cancelPendingMarquee,
+      continueMoveAfterSelection: args.continueMoveAfterSelection,
+      opening: args.opening,
+      selectOpening: args.selectOpening
+    })
+  ) {
+    return true;
+  }
 
   args.doorDragState.active = true;
   const customWallId = args.opening.params.wallId ?? null;
@@ -145,6 +159,17 @@ export function beginDoorDragFromPick<Opening extends { params: OpeningParams },
 
   args.setPointerCapture();
   return true;
+}
+
+function selectOpeningAndContinueMove<Opening>(args: {
+  cancelPendingMarquee: () => void;
+  continueMoveAfterSelection: () => boolean;
+  opening: Opening;
+  selectOpening: (opening: Opening) => void;
+}) {
+  args.selectOpening(args.opening);
+  args.cancelPendingMarquee();
+  return args.continueMoveAfterSelection();
 }
 
 export function updateWindowDragFromPointerMove<Opening extends { params: OpeningParams }, Wall extends WallLike>(args: {
