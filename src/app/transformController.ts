@@ -554,6 +554,17 @@ export function createTransformController(ctx: TransformControllerContext) {
 
     // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
     moveSelectedModulesByDelta(delta);
+
+    const restoreLastValidMoveDelta = () => {
+      restoreTransformStartState();
+      const d = ctx.transformState.lastValidDelta;
+      const dxMm2 = Math.round(d.x * 1000);
+      const dzMm2 = Math.round(d.z * 1000);
+      if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
+      moveSelectedModulesByDelta(d);
+      ctx.updateLayoutPanel();
+    };
+
     const ok = isTransformModuleMoveValid({
       instances: ctx.instances,
       selectedInstanceIds: ctx.transformState.selectedInstanceIds,
@@ -577,13 +588,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.lastValidDelta.copy(delta);
       ctx.updateLayoutPanel();
     } else {
-      restoreTransformStartState();
-      const d = ctx.transformState.lastValidDelta;
-      const dxMm2 = Math.round(d.x * 1000);
-      const dzMm2 = Math.round(d.z * 1000);
-      if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
-      moveSelectedModulesByDelta(d);
-      ctx.updateLayoutPanel();
+      restoreLastValidMoveDelta();
     }
   };
 
