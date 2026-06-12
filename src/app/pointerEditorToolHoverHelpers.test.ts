@@ -5,6 +5,7 @@ import {
   resetAlignTrimPointerMoveHover,
   resetAlignRecentFeedback,
   updatePickedHudLine,
+  updatePickedHudLinePair,
   updateAlignToolHover,
   updateAlignTrimToolPointerMoveHover,
   updateDimensionToolHover,
@@ -59,6 +60,28 @@ describe("pointer editor tool hover helpers", () => {
 
     expect(updateHudLine).toHaveBeenCalledTimes(1);
     expect(hud.visible).toBe(false);
+  });
+
+  it("updates picked HUD line pair and hides missing pair entries", () => {
+    const picked = line("picked");
+    const pick1 = hudLine();
+    const pick2 = hudLine();
+    const updateHudLine = vi.fn((mesh: THREE.Mesh) => {
+      mesh.visible = true;
+    });
+
+    updatePickedHudLinePair({
+      first: picked,
+      second: null,
+      hudLine1: pick1,
+      hudLine2: pick2,
+      hudLineThickness: 2,
+      updateHudLine
+    });
+
+    expect(updateHudLine).toHaveBeenCalledExactlyOnceWith(pick1, picked.segA, picked.segB, 2);
+    expect(pick1.visible).toBe(true);
+    expect(pick2.visible).toBe(false);
   });
 
   it("updates dimension hover and builds preview only when no line is picked", () => {

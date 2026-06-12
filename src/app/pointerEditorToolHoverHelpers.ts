@@ -41,6 +41,28 @@ export function updatePickedHudLine(params: {
   }
 }
 
+export function updatePickedHudLinePair(params: {
+  first: AlignPickedLine | null | undefined;
+  second: AlignPickedLine | null | undefined;
+  hudLine1: HudLine;
+  hudLine2: HudLine;
+  hudLineThickness: number;
+  updateHudLine: UpdateHudLine;
+}): void {
+  updatePickedHudLine({
+    picked: params.first,
+    hudLine: params.hudLine1,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
+  updatePickedHudLine({
+    picked: params.second,
+    hudLine: params.hudLine2,
+    hudLineThickness: params.hudLineThickness,
+    updateHudLine: params.updateHudLine
+  });
+}
+
 export function updateDimensionToolHover(params: {
   hitPoint: THREE.Vector3;
   mouse: MousePoint;
@@ -66,17 +88,12 @@ export function updateDimensionToolHover(params: {
     updateHudLine: params.updateHudLine
   });
 
-  updatePickedHudLine({
-    picked: params.dimensionState.picked[0],
-    hudLine: params.hudPickLine1,
-    hudLineThickness: params.hudLineThickness,
-    updateHudLine: params.updateHudLine
-  });
-
   const lastPicked = params.dimensionState.picked.length > 1 ? params.dimensionState.picked[params.dimensionState.picked.length - 1] : null;
-  updatePickedHudLine({
-    picked: lastPicked,
-    hudLine: params.hudPickLine2,
+  updatePickedHudLinePair({
+    first: params.dimensionState.picked[0],
+    second: lastPicked,
+    hudLine1: params.hudPickLine1,
+    hudLine2: params.hudPickLine2,
     hudLineThickness: params.hudLineThickness,
     updateHudLine: params.updateHudLine
   });
@@ -157,23 +174,20 @@ export function updateAlignToolHover(params: {
   });
 
   if (params.alignState.ref) {
-    updatePickedHudLine({
-      picked: params.alignState.ref,
-      hudLine: params.hudPickLine1,
+    updatePickedHudLinePair({
+      first: params.alignState.ref,
+      second: null,
+      hudLine1: params.hudPickLine1,
+      hudLine2: params.hudPickLine2,
       hudLineThickness: params.hudLineThickness,
       updateHudLine: params.updateHudLine
     });
-    params.hudPickLine2.visible = false;
   } else if (params.alignState.lastA && params.alignState.lastB && params.alignState.lastUntilMs > params.now) {
-    updatePickedHudLine({
-      picked: params.alignState.lastA,
-      hudLine: params.hudPickLine1,
-      hudLineThickness: params.hudLineThickness,
-      updateHudLine: params.updateHudLine
-    });
-    updatePickedHudLine({
-      picked: params.alignState.lastB,
-      hudLine: params.hudPickLine2,
+    updatePickedHudLinePair({
+      first: params.alignState.lastA,
+      second: params.alignState.lastB,
+      hudLine1: params.hudPickLine1,
+      hudLine2: params.hudPickLine2,
       hudLineThickness: params.hudLineThickness,
       updateHudLine: params.updateHudLine
     });
@@ -224,15 +238,11 @@ export function updateTrimToolHover(params: {
   });
 
   if (params.trimState.lastTarget && params.trimState.lastCutter && params.trimState.lastUntilMs > params.now) {
-    updatePickedHudLine({
-      picked: params.trimState.lastTarget,
-      hudLine: params.hudPickLine1,
-      hudLineThickness: params.hudLineThickness,
-      updateHudLine: params.updateHudLine
-    });
-    updatePickedHudLine({
-      picked: params.trimState.lastCutter,
-      hudLine: params.hudPickLine2,
+    updatePickedHudLinePair({
+      first: params.trimState.lastTarget,
+      second: params.trimState.lastCutter,
+      hudLine1: params.hudPickLine1,
+      hudLine2: params.hudPickLine2,
       hudLineThickness: params.hudLineThickness,
       updateHudLine: params.updateHudLine
     });
