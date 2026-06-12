@@ -103,9 +103,12 @@ export function handleAlignToolClick(params: {
 
   refreshSelectionHighlights(params);
   params.commitHistory();
-  params.alignState.lastA = ref;
-  params.alignState.lastB = params.picked;
-  params.alignState.lastUntilMs = params.now + 2500;
+  setAlignRecentFeedback({
+    alignState: params.alignState,
+    lastA: ref,
+    lastB: params.picked,
+    now: params.now
+  });
   params.setStatus(result.reason);
   params.mountProps();
 }
@@ -118,6 +121,17 @@ export function setAlignReferencePick(params: {
   params.alignState.lastA = null;
   params.alignState.lastB = null;
   params.alignState.lastUntilMs = 0;
+}
+
+export function setAlignRecentFeedback(params: {
+  alignState: Pick<PointerAlignClickState, "lastA" | "lastB" | "lastUntilMs">;
+  lastA: AlignPickedLine;
+  lastB: AlignPickedLine;
+  now: number;
+}): void {
+  params.alignState.lastA = params.lastA;
+  params.alignState.lastB = params.lastB;
+  params.alignState.lastUntilMs = params.now + 2500;
 }
 
 export function handleTrimNoPick(params: {

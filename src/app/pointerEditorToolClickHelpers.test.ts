@@ -11,6 +11,7 @@ import {
   handleTrimNoPick,
   handleTrimTargetPick,
   setAlignReferencePick,
+  setAlignRecentFeedback,
   type PointerTrimClickState
 } from "./pointerEditorToolClickHelpers";
 
@@ -185,6 +186,23 @@ describe("pointer editor tool click helpers", () => {
     expect(state.lastB).toBe(picked);
     expect(state.lastUntilMs).toBe(2600);
     expect(setStatus).toHaveBeenCalledWith("Aligned.");
+  });
+
+  it("stores align recent feedback lines for the current feedback window", () => {
+    const ref = line("ref");
+    const picked = line("picked");
+    const state = { lastA: null as AlignPickedLine | null, lastB: null as AlignPickedLine | null, lastUntilMs: 0 };
+
+    setAlignRecentFeedback({
+      alignState: state,
+      lastA: ref,
+      lastB: picked,
+      now: 100
+    });
+
+    expect(state.lastA).toBe(ref);
+    expect(state.lastB).toBe(picked);
+    expect(state.lastUntilMs).toBe(2600);
   });
 
   it("reports the current trim prompt when no line is picked", () => {
