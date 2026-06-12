@@ -156,9 +156,33 @@ export function setAlignRecentFeedback(params: {
   lastB: AlignPickedLine;
   now: number;
 }): void {
-  params.alignState.lastA = params.lastA;
-  params.alignState.lastB = params.lastB;
-  params.alignState.lastUntilMs = params.now + 2500;
+  applyLinePairRecentFeedback({
+    lastA: params.lastA,
+    lastB: params.lastB,
+    now: params.now,
+    setLastA: (line) => {
+      params.alignState.lastA = line;
+    },
+    setLastB: (line) => {
+      params.alignState.lastB = line;
+    },
+    setLastUntilMs: (untilMs) => {
+      params.alignState.lastUntilMs = untilMs;
+    }
+  });
+}
+
+export function applyLinePairRecentFeedback(params: {
+  lastA: AlignPickedLine;
+  lastB: AlignPickedLine;
+  now: number;
+  setLastA: (line: AlignPickedLine) => void;
+  setLastB: (line: AlignPickedLine) => void;
+  setLastUntilMs: (untilMs: number) => void;
+}): void {
+  params.setLastA(params.lastA);
+  params.setLastB(params.lastB);
+  params.setLastUntilMs(params.now + 2500);
 }
 
 export function handleTrimNoPick(params: {
@@ -268,7 +292,18 @@ export function setTrimRecentFeedback(params: {
   lastCutter: AlignPickedLine;
   now: number;
 }): void {
-  params.trimState.lastTarget = params.lastTarget;
-  params.trimState.lastCutter = params.lastCutter;
-  params.trimState.lastUntilMs = params.now + 2500;
+  applyLinePairRecentFeedback({
+    lastA: params.lastTarget,
+    lastB: params.lastCutter,
+    now: params.now,
+    setLastA: (line) => {
+      params.trimState.lastTarget = line;
+    },
+    setLastB: (line) => {
+      params.trimState.lastCutter = line;
+    },
+    setLastUntilMs: (untilMs) => {
+      params.trimState.lastUntilMs = untilMs;
+    }
+  });
 }

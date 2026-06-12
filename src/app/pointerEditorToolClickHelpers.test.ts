@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
   addDimensionPickedLine,
+  applyLinePairRecentFeedback,
   commitDimensionDraft,
   finishTrimNoChange,
   finishTrimSuccess,
@@ -245,6 +246,29 @@ describe("pointer editor tool click helpers", () => {
     expect(state.lastA).toBe(ref);
     expect(state.lastB).toBe(picked);
     expect(state.lastUntilMs).toBe(2600);
+  });
+
+  it("applies line pair recent feedback through explicit setters", () => {
+    const first = line("first");
+    const second = line("second");
+    const state = { first: null as AlignPickedLine | null, second: null as AlignPickedLine | null, untilMs: 0 };
+
+    applyLinePairRecentFeedback({
+      lastA: first,
+      lastB: second,
+      now: 100,
+      setLastA: (picked) => {
+        state.first = picked;
+      },
+      setLastB: (picked) => {
+        state.second = picked;
+      },
+      setLastUntilMs: (untilMs) => {
+        state.untilMs = untilMs;
+      }
+    });
+
+    expect(state).toEqual({ first, second, untilMs: 2600 });
   });
 
   it("reports the current trim prompt when no line is picked", () => {
