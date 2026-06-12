@@ -45,6 +45,32 @@ export function routeTransformPreviewSnapFeedback<PlanSnap extends { kind: strin
   }
 }
 
+export function applyTransformPreviewSnapState<PlanSnap extends { kind: string; point: THREE.Vector3 }>(args: {
+  hitPoint: THREE.Vector3;
+  moveSnap: PlanSnap | null;
+  rect: DOMRect;
+  setSelectPlanSnap: (snap: PlanSnap | null) => void;
+  snapped: PlanSnap;
+  transformKind: PointerTransformClickState["kind"];
+  updateHoverCursor: (point: THREE.Vector3, kind: PlanSnap["kind"], rect: DOMRect) => void;
+  updateMoveSnapFeedback: (snap: PlanSnap | null, point: THREE.Vector3, rect: DOMRect) => void;
+  hideHoverCursor: () => void;
+}): THREE.Vector3 {
+  if (args.transformKind !== "move") args.setSelectPlanSnap(args.snapped.kind !== "none" ? args.snapped : null);
+  const pickedPoint = args.snapped.kind !== "none" ? args.snapped.point : args.hitPoint;
+  routeTransformPreviewSnapFeedback({
+    transformKind: args.transformKind,
+    moveSnap: args.moveSnap,
+    snapped: args.snapped,
+    pickedPoint,
+    rect: args.rect,
+    updateHoverCursor: args.updateHoverCursor,
+    updateMoveSnapFeedback: args.updateMoveSnapFeedback,
+    hideHoverCursor: args.hideHoverCursor
+  });
+  return pickedPoint;
+}
+
 export function resolveTransformPreviewSnap<PlanSnap extends { kind: string; point: THREE.Vector3 }>(args: {
   hitPoint: THREE.Vector3;
   makeNoSnapResult: (point: THREE.Vector3) => PlanSnap;
@@ -175,15 +201,13 @@ export function handleTransformPointerMovePreview<PlanSnap extends { kind: strin
     resolveRotateSnap: args.resolveRotateSnap,
     transformState: args.transformState
   });
-  if (args.transformState.kind !== "move") args.setSelectPlanSnap(snapped.kind !== "none" ? snapped : null);
-
-  const pickedPoint = snapped.kind !== "none" ? snapped.point : args.hitPoint;
-  routeTransformPreviewSnapFeedback({
-    transformKind: args.transformState.kind,
+  const pickedPoint = applyTransformPreviewSnapState({
+    hitPoint: args.hitPoint,
     moveSnap,
-    snapped,
-    pickedPoint,
     rect: args.rect,
+    setSelectPlanSnap: args.setSelectPlanSnap,
+    snapped,
+    transformKind: args.transformState.kind,
     updateHoverCursor: args.updateHoverCursor,
     updateMoveSnapFeedback: args.updateMoveSnapFeedback,
     hideHoverCursor: args.hideHoverCursor

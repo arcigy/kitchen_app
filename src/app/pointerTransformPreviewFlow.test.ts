@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Vector3 } from "three";
 import {
+  applyTransformPreviewSnapState,
   formatMovePreviewStatus,
   formatRotatePreviewStatus,
   handleTransformPointerMovePreview,
@@ -127,6 +128,49 @@ describe("pointerTransformPreviewFlow", () => {
     expect(updateMoveSnapFeedback).toHaveBeenCalledExactlyOnceWith(moveSnap, pickedPoint, rect);
     expect(updateHoverCursor).toHaveBeenCalledExactlyOnceWith(pickedPoint, "corner", rect);
     expect(hideHoverCursor).toHaveBeenCalledOnce();
+  });
+
+  it("applies transform preview snap state for move and rotate without changing selection rules", () => {
+    const rect = {} as DOMRect;
+    const hitPoint = new Vector3(1, 0, 2);
+    const moveSnap = { kind: "corner" as const, point: new Vector3(3, 0, 4) };
+    const noneSnap = { kind: "none" as const, point: hitPoint };
+    const setSelectPlanSnap = vi.fn();
+    const updateHoverCursor = vi.fn();
+    const updateMoveSnapFeedback = vi.fn();
+    const hideHoverCursor = vi.fn();
+
+    expect(
+      applyTransformPreviewSnapState<TestPlanSnap>({
+        hitPoint,
+        moveSnap,
+        rect,
+        setSelectPlanSnap,
+        snapped: moveSnap,
+        transformKind: "move",
+        updateHoverCursor,
+        updateMoveSnapFeedback,
+        hideHoverCursor
+      })
+    ).toBe(moveSnap.point);
+    expect(setSelectPlanSnap).not.toHaveBeenCalled();
+    expect(updateMoveSnapFeedback).toHaveBeenCalledExactlyOnceWith(moveSnap, moveSnap.point, rect);
+
+    expect(
+      applyTransformPreviewSnapState<TestPlanSnap>({
+        hitPoint,
+        moveSnap: null,
+        rect,
+        setSelectPlanSnap,
+        snapped: noneSnap,
+        transformKind: "rotate",
+        updateHoverCursor,
+        updateMoveSnapFeedback,
+        hideHoverCursor
+      })
+    ).toBe(hitPoint);
+    expect(setSelectPlanSnap).toHaveBeenCalledExactlyOnceWith(null);
+    expect(hideHoverCursor).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("resolves transform preview snap for move snap, move no-snap, and rotate", () => {
