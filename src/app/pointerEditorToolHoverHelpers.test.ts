@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { AlignPickedLine } from "./localTypes";
 import {
+  hideHudLinePair,
   resetAlignTrimPointerMoveHover,
   resetAlignRecentFeedback,
   updatePickedHudLine,
@@ -81,6 +82,16 @@ describe("pointer editor tool hover helpers", () => {
 
     expect(updateHudLine).toHaveBeenCalledExactlyOnceWith(pick1, picked.segA, picked.segB, 2);
     expect(pick1.visible).toBe(true);
+    expect(pick2.visible).toBe(false);
+  });
+
+  it("hides HUD line pair", () => {
+    const pick1 = hudLine();
+    const pick2 = hudLine();
+
+    hideHudLinePair({ hudLine1: pick1, hudLine2: pick2 });
+
+    expect(pick1.visible).toBe(false);
     expect(pick2.visible).toBe(false);
   });
 

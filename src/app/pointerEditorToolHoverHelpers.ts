@@ -63,6 +63,14 @@ export function updatePickedHudLinePair(params: {
   });
 }
 
+export function hideHudLinePair(params: {
+  hudLine1: HudLine;
+  hudLine2: HudLine;
+}): void {
+  params.hudLine1.visible = false;
+  params.hudLine2.visible = false;
+}
+
 export function updateDimensionToolHover(params: {
   hitPoint: THREE.Vector3;
   mouse: MousePoint;
@@ -208,8 +216,10 @@ export function resetAlignRecentFeedback(params: {
   params.alignState.lastA = null;
   params.alignState.lastB = null;
   params.alignState.lastUntilMs = 0;
-  params.hudPickLine1.visible = false;
-  params.hudPickLine2.visible = false;
+  hideHudLinePair({
+    hudLine1: params.hudPickLine1,
+    hudLine2: params.hudPickLine2
+  });
 }
 
 export function updateTrimToolHover(params: {
@@ -266,8 +276,10 @@ export function resetTrimRecentFeedback(params: {
   params.trimState.lastCutter = null;
   params.trimState.lastUntilMs = 0;
   if (!params.trimState.targetPick) {
-    params.hudPickLine1.visible = false;
-    params.hudPickLine2.visible = false;
+    hideHudLinePair({
+      hudLine1: params.hudPickLine1,
+      hudLine2: params.hudPickLine2
+    });
   }
 }
 
