@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DoorParams, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 import { refreshSelectionHighlights, resolveSelectedIds } from "./selectionController";
 
@@ -234,10 +235,9 @@ export function enterMoveSelectElementsWithoutSelection(ctx: TransformNoSelectio
   ctx.transformState.step = "selectElements";
   ctx.transformState.stickyMove = ctx.stickyMove;
   ctx.transformState.moveSnapDisabled = ctx.moveSnapDisabled;
-  ctx.setUnderlayStatus(
+  reportEditorToolEntryStatus(ctx,
     ctx.stickyMove ? "Move: select element to move. Click Move again to exit. N = free movement." : "Move (M): select elements, then press Enter. N = free movement."
   );
-  ctx.mountProps();
 }
 
 export type TransformResolvedSelectionStateArgs = {
@@ -267,8 +267,7 @@ export type TransformSelectedStartCompletionContext = {
 };
 
 export function completeSelectedTransformStart(ctx: TransformSelectedStartCompletionContext) {
-  ctx.setUnderlayStatus(ctx.kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
-  ctx.mountProps();
+  reportEditorToolEntryStatus(ctx, ctx.kind === "move" ? "Move (M): click base point. N = free movement." : "Rotate (R): click pivot point...");
 }
 
 export type TransformControllerContext = {
