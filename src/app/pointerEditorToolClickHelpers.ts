@@ -224,10 +224,24 @@ export function finishTrimSuccess(params: {
   setStatus: (message: string) => void;
   mountProps: () => void;
 }): void {
-  params.trimState.lastTarget = params.lastTarget;
-  params.trimState.lastCutter = params.lastCutter;
-  params.trimState.lastUntilMs = params.now + 2500;
+  setTrimRecentFeedback({
+    trimState: params.trimState,
+    lastTarget: params.lastTarget,
+    lastCutter: params.lastCutter,
+    now: params.now
+  });
   resetTrimTarget({ trimState: params.trimState, clearClick: true });
   params.setStatus(params.status);
   params.mountProps();
+}
+
+export function setTrimRecentFeedback(params: {
+  trimState: Pick<PointerTrimClickState, "lastTarget" | "lastCutter" | "lastUntilMs">;
+  lastTarget: AlignPickedLine;
+  lastCutter: AlignPickedLine;
+  now: number;
+}): void {
+  params.trimState.lastTarget = params.lastTarget;
+  params.trimState.lastCutter = params.lastCutter;
+  params.trimState.lastUntilMs = params.now + 2500;
 }

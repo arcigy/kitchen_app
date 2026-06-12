@@ -13,6 +13,7 @@ import {
   setAlignReferencePick,
   setAlignRecentFeedback,
   setTrimTargetPick,
+  setTrimRecentFeedback,
   type PointerTrimClickState
 } from "./pointerEditorToolClickHelpers";
 
@@ -330,5 +331,22 @@ describe("pointer editor tool click helpers", () => {
     expect(state.targetClick).toBeNull();
     expect(setStatus).toHaveBeenCalledWith("Trim: done. Click target wall...");
     expect(mountProps).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores trim recent feedback lines for the current feedback window", () => {
+    const target = line("target");
+    const cutter = line("cutter");
+    const state = { lastTarget: null as AlignPickedLine | null, lastCutter: null as AlignPickedLine | null, lastUntilMs: 0 };
+
+    setTrimRecentFeedback({
+      trimState: state,
+      lastTarget: target,
+      lastCutter: cutter,
+      now: 100
+    });
+
+    expect(state.lastTarget).toBe(target);
+    expect(state.lastCutter).toBe(cutter);
+    expect(state.lastUntilMs).toBe(2600);
   });
 });
