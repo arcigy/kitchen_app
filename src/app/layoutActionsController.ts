@@ -216,16 +216,17 @@ function finishDeleteSelectionBranch(
   return "handled" as const;
 }
 
+function finishDelegatedDeleteSelection(ctx: DeleteSelectionCommandContext): true {
+  finishDeleteSelectionBranch(ctx, { commitHistory: true, mountProps: true });
+  return true;
+}
+
 function runDelegatedDeleteSelection(ctx: DeleteSelectionCommandContext): boolean {
   if (ctx.deleteWardrobeSelection()) {
-    ctx.commitHistory();
-    ctx.mountProps();
-    return true;
+    return finishDelegatedDeleteSelection(ctx);
   }
   if (ctx.deleteCustomFurnitureSelection?.({ skipHistory: true })) {
-    ctx.commitHistory();
-    ctx.mountProps();
-    return true;
+    return finishDelegatedDeleteSelection(ctx);
   }
   return false;
 }
