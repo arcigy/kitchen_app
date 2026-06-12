@@ -229,9 +229,11 @@ export function executeFallbackPickSelection<MovePoint>(args: {
       args.selectColumn(null);
       return true;
     }
-    args.cancelPendingMarquee();
-    args.selectColumn(args.columnId);
-    return true;
+    return runCancelableFloorplanSelection({
+      cancelPendingMarquee: args.cancelPendingMarquee,
+      select: args.selectColumn,
+      value: args.columnId
+    });
   }
 
   if (args.kind === "floor") {
@@ -243,9 +245,11 @@ export function executeFallbackPickSelection<MovePoint>(args: {
       args.selectFloor(null);
       return true;
     }
-    args.cancelPendingMarquee();
-    args.selectFloor(args.floorId);
-    return true;
+    return runCancelableFloorplanSelection({
+      cancelPendingMarquee: args.cancelPendingMarquee,
+      select: args.selectFloor,
+      value: args.floorId
+    });
   }
 
   if (args.kind === "wall") {
@@ -253,9 +257,13 @@ export function executeFallbackPickSelection<MovePoint>(args: {
       args.selectWall(null);
       return true;
     }
-    args.cancelPendingMarquee();
-    args.selectWall(args.wallId);
-    if (args.continueMoveAfterSelection(args.firstHitPoint)) return true;
+    runCancelableFloorplanMoveSelection({
+      cancelPendingMarquee: args.cancelPendingMarquee,
+      continueMoveAfterSelection: args.continueMoveAfterSelection,
+      hitPoint: args.firstHitPoint,
+      select: args.selectWall,
+      value: args.wallId
+    });
     return true;
   }
 
