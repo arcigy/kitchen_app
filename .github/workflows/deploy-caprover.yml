@@ -10,10 +10,21 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select CapRover app
+        id: caprover_app
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "app=kitchenapp" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=arcigy-kitchen-develop" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -30,14 +41,35 @@ jobs:
       - name: Create deploy archive
         run: tar -cf kitchenapp.tar captain-definition nginx.conf dist
 
-      - name: Deploy production
-        if: github.ref == 'refs/heads/main'
-        run: npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a kitchenapp -t kitchenapp.tar
+      - name: Deploy to CapRover
+        id: deploy_caprover
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a "${{ steps.caprover_app.outputs.app }}" -t kitchenapp.tar 2>&1 | tee deploy.log
         env:
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
 
-      - name: Deploy develop
-        if: github.ref == 'refs/heads/develop'
-        run: npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a arcigy-kitchen-develop -t kitchenapp.tar
+      - name: Notify deploy result
+        if: always() && env.NTFY_TOPIC != ''
+        run: |
+          python - <<'PY' > payload.json
+          import json, os
+          payload = {
+            "app": os.environ["APP_NAME"],
+            "status": os.environ["DEPLOY_STATUS"],
+            "commit": os.environ["GITHUB_SHA"],
+            "branch": os.environ["GITHUB_REF_NAME"],
+            "repo": os.environ["GITHUB_REPOSITORY"],
+            "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          print(json.dumps(payload))
+          PY
+          curl -fsS -X POST --data-binary @payload.json "https://ntfy.sh/$NTFY_TOPIC" || true
         env:
-          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          APP_NAME: ${{ steps.caprover_app.outputs.app }}
+          DEPLOY_STATUS: ${{ steps.deploy_caprover.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: Fail if deploy failed
+        if: steps.deploy_caprover.outcome != 'success'
+        run: exit 1
