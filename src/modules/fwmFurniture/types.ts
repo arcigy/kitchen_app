@@ -85,7 +85,8 @@ function isWallCornerVariant(spec: ReturnType<typeof getFwmFurnitureSpec>, param
 }
 
 function usesUnifiedCornerDepth(spec: ReturnType<typeof getFwmFurnitureSpec>, params: Record<string, PortableJsonValue>) {
-  return spec.moduleType === "fwm_catalog_base_corner" || isWallCornerVariant(spec, params);
+  const variant = text(params.variant, spec.variantOptions?.[0] ?? "");
+  return (spec.moduleType === "fwm_catalog_base_corner" && variant.includes("chamfered")) || isWallCornerVariant(spec, params);
 }
 
 function hasNoBackPanel(spec: ReturnType<typeof getFwmFurnitureSpec>) {

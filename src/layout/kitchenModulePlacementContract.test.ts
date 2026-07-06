@@ -11,7 +11,11 @@ const DELFI_RELEVANT_FWM_TYPES = [
   "fwm_catalog_base_corner",
   "fwm_catalog_base_doors",
   "fwm_catalog_base_drawers",
-  "fwm_catalog_tall_cabinet"
+  "fwm_catalog_base_open_end",
+  "fwm_catalog_tall_cabinet",
+  "fwm_tall_open_end",
+  "fwm_catalog_wall_cabinet",
+  "fwm_catalog_wall_open_end"
 ];
 
 describe("kitchen module placement contract", () => {

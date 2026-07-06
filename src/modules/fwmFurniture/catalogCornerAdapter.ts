@@ -24,7 +24,10 @@ function optionalText(params: Record<string, unknown>, key: string) {
 export function mapFwmCatalogCornerToCornerShelfLowerParams(params: FwmFurnitureParams): CornerShelfLowerParams {
   const source = params as Record<string, unknown>;
   const lengthX = num(source, "width", 1000);
-  const lengthZ = num(source, "depth", 1000);
+  const lengthZ = num(source, "cornerLengthZMm", lengthX);
+  const requestedArmDepth = num(source, "depth", 560);
+  const maxArmDepth = Math.max(200, Math.min(lengthX, lengthZ) - 240);
+  const armDepth = Math.min(requestedArmDepth, maxArmDepth);
   const height = num(source, "height", 720);
   const worktopThicknessMm = num(source, "worktopThicknessMm", 38);
   const hasWorktop = source.hasWorktop !== false && worktopThicknessMm > 0;
@@ -34,7 +37,7 @@ export function mapFwmCatalogCornerToCornerShelfLowerParams(params: FwmFurniture
     type: "corner_shelf_lower",
     lengthX,
     lengthZ,
-    depth: num(source, "cornerArmDepthMm", num(source, "armDepth", 560)),
+    depth: num(source, "cornerArmDepthMm", num(source, "armDepth", armDepth)),
     height,
     heightCarcass: hasWorktop ? Math.max(50, height - worktopThicknessMm) : height,
     worktopThicknessMm: hasWorktop ? worktopThicknessMm : 0,

@@ -83,6 +83,21 @@ const requiredMaterialGroupParams = [
   "drawerBoxMaterialGroup"
 ] as const;
 
+const delfiActiveRuntimeModuleTypes = [
+  "fwm_catalog_base_corner",
+  "fwm_catalog_base_doors",
+  "fwm_catalog_base_drawers",
+  "fwm_catalog_base_open_end",
+  "fwm_catalog_tall_cabinet",
+  "fwm_tall_open_end",
+  "fwm_catalog_wall_cabinet",
+  "fwm_catalog_wall_open_end"
+] as const;
+
+const legacyMaterialGroups = ["body", "carcass", "shelf"] as const;
+const canonicalBoardMaterialGroups = ["corpus", "front", "back", "plinth", "worktop", "drawer_bottom"] as const;
+const canonicalMeshMaterialGroups = [...canonicalBoardMaterialGroups, "hardware", "appliance", "glass", "soft"] as const;
+
 function meshCount(root: { traverse: (visitor: (object: unknown) => void) => void }) {
   let count = 0;
   root.traverse((object) => {
@@ -492,6 +507,15 @@ describe("FWM furniture module packages", () => {
     expect(meshes(lowerChamfered).filter((mesh) => /^open_niche_shelf_\d+$/.test(mesh.name))).toHaveLength(2);
     expect(meshes(lowerChamfered).some((mesh) => /door|drawer/i.test(mesh.name))).toBe(false);
     expect(meshes(lowerChamfered).some((mesh) => mesh.userData.edgeBandingStrategy === "explicit_visible_edges")).toBe(true);
+    expect(objectBoundsMm(lowerChamfered).width).toBeCloseTo(300, 1);
+    expect(objectBoundsMm(lowerChamfered).depth).toBeCloseTo(530, 1);
+    expect(objectBoundsMm(lowerChamfered).height).toBeCloseTo(684, 1);
+    for (const mesh of meshes(lowerChamfered).filter((entry) => ["corpus", "back", "plinth"].includes(String(entry.userData.materialGroup)))) {
+      expect(["corpus", "back", "plinth"]).toContain(mesh.userData.materialSlotId);
+      expect(["width", "height", "depth"]).toContain(mesh.userData.grainAlong);
+      expect(["body", "carcass", "shelf"]).not.toContain(mesh.userData.materialGroup);
+      expect(["body", "carcass", "shelf"]).not.toContain(mesh.userData.materialSlotId);
+    }
 
     const lowerRounded = buildModulePackageGeometryFromPackage({
       modulePackage: lowerPackage!,
@@ -513,7 +537,133 @@ describe("FWM furniture module packages", () => {
     expect(hasMeshNamed(tallRounded, /worktop/i)).toBe(false);
     expect(hasMeshNamed(tallRounded, /open_niche_rounded_ending_panel/i)).toBe(true);
     expect(meshes(tallRounded).filter((mesh) => /^open_niche_shelf_\d+$/.test(mesh.name))).toHaveLength(4);
+    expect(objectBoundsMm(tallRounded).width).toBeCloseTo(300, 1);
+    expect(objectBoundsMm(tallRounded).depth).toBeCloseTo(560, 1);
     expect(objectBoundsMm(tallRounded).height).toBeCloseTo(1480, 0);
+  });
+
+  it("syncs open/end module material colors and metadata from the kitchen group", () => {
+    const catalog = getSystemSeedCatalog();
+    const corpusMaterialId = "mat.demos.142391";
+    const backMaterialId = "mat.demos.116884";
+    expect(catalog.kitchenDefaults.carcassMaterialId).toBe(corpusMaterialId);
+    expect(catalog.kitchenDefaults.plinthMaterialId).toBe(corpusMaterialId);
+    expect(catalog.kitchenDefaults.backPanelMaterialId).toBe(backMaterialId);
+    expect(catalog.kitchenDefaults.defaultBackPanelThicknessMm).toBe(10);
+    expect(catalog.materials.find((material) => material.id === corpusMaterialId)?.boardFamily).toBe("body");
+    expect(catalog.materials.find((material) => material.id === backMaterialId)?.boardFamily).toBe("back");
+    const ctx = resolveContext({
+      ...makeDefaultKitchenContext(catalog),
+      corpusMaterialId,
+      backMaterialId,
+      moduleDepthMm: 590,
+      upperDepthMm: 360,
+      heightMm: 900,
+      moduleHeightMm: 862,
+      upperHeightMm: 720,
+      plinthHeightMm: 120,
+      plinthDepthMm: 70
+    });
+
+    for (const moduleType of ["fwm_catalog_base_open_end", "fwm_tall_open_end", "fwm_catalog_wall_open_end"]) {
+      const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === moduleType);
+      expect(modulePackage).toBeTruthy();
+      const params = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
+      applyKitchenContextToModuleParams(params, ctx, catalog, modulePackage!);
+      const normalized = normalizeFwmFurnitureParams(params);
+      const group = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: normalized, catalog });
+      const moduleMeshes = meshes(group);
+
+      for (const mesh of moduleMeshes.filter((entry) => entry.userData.materialGroup === "corpus")) {
+        expect(mesh.userData.materialSlotId, `${moduleType}:${mesh.name}`).toBe("corpus");
+        expect(mesh.userData.catalogMaterialId, `${moduleType}:${mesh.name}`).toBe(corpusMaterialId);
+        expect(mesh.userData.renderColorHex, `${moduleType}:${mesh.name}`).toBe("#eeeae0");
+      }
+      for (const mesh of moduleMeshes.filter((entry) => entry.userData.materialGroup === "back")) {
+        expect(mesh.userData.materialSlotId, `${moduleType}:${mesh.name}`).toBe("back");
+        expect(mesh.userData.catalogMaterialId, `${moduleType}:${mesh.name}`).toBe(backMaterialId);
+        expect(mesh.userData.renderColorHex, `${moduleType}:${mesh.name}`).toBe("#eeeae0");
+      }
+      expect(moduleMeshes.some((mesh) => ["body", "carcass", "shelf"].includes(String(mesh.userData.materialGroup)))).toBe(false);
+      expect(moduleMeshes.some((mesh) => ["body", "carcass", "shelf"].includes(String(mesh.userData.materialSlotId)))).toBe(false);
+
+      if (moduleType === "fwm_catalog_wall_open_end") {
+        expect(normalized.height, moduleType).toBe(ctx.upperHeightMm);
+        expect(normalized.depth, moduleType).toBe(ctx.upperDepthMm);
+        expect(objectBoundsMm(group).height, moduleType).toBeCloseTo(ctx.upperHeightMm, 0);
+        expect(objectBoundsMm(group).depth, moduleType).toBeCloseTo(ctx.upperDepthMm, 0);
+      }
+    }
+  });
+
+  it("renders DELFI kitchen modules with canonical material slots and kitchen-synced colors", () => {
+    const catalog = getSystemSeedCatalog();
+    const ctx = resolveContext({
+      ...makeDefaultKitchenContext(catalog),
+      corpusMaterialId: materialIdForFamily(catalog, "body"),
+      frontsMaterialId: materialIdForFamily(catalog, "front"),
+      backMaterialId: materialIdForFamily(catalog, "back"),
+      drawerBottomMaterialId: materialIdForFamily(catalog, "drawer_bottom"),
+      worktopMaterialId: materialIdForFamily(catalog, "worktop")
+    });
+    const expectedMaterialBySlot: Record<string, string> = {
+      corpus: ctx.corpusMaterialId,
+      front: ctx.frontsMaterialId,
+      back: ctx.backMaterialId,
+      drawer_bottom: ctx.drawerBottomMaterialId,
+      plinth: catalog.kitchenDefaults.plinthMaterialId ?? ctx.corpusMaterialId,
+      worktop: ctx.worktopMaterialId
+    };
+    const observedColorBySlot: Record<string, string> = {};
+    const packages = extendedFurnitureModulePackages.filter((modulePackage) =>
+      delfiActiveRuntimeModuleTypes.includes(modulePackage.module.moduleType as typeof delfiActiveRuntimeModuleTypes[number])
+    );
+
+    expect(packages.map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([...delfiActiveRuntimeModuleTypes].sort());
+
+    for (const modulePackage of packages) {
+      const params = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;
+      applyKitchenContextToModuleParams(params, ctx, catalog, modulePackage);
+      const group = buildModulePackageGeometryFromPackage({
+        modulePackage,
+        catalog,
+        parameters: normalizeFwmFurnitureParams(params)
+      });
+
+      for (const mesh of meshes(group)) {
+        const materialGroup = String(mesh.userData.materialGroup ?? "");
+        const materialSlotId = String(mesh.userData.materialSlotId ?? "");
+        expect(materialGroup, `${modulePackage.module.moduleType}:${mesh.name}:materialGroup`).toBeTruthy();
+        expect(materialSlotId, `${modulePackage.module.moduleType}:${mesh.name}:materialSlotId`).toBeTruthy();
+        expect(legacyMaterialGroups).not.toContain(materialGroup as typeof legacyMaterialGroups[number]);
+        expect(legacyMaterialGroups).not.toContain(materialSlotId as typeof legacyMaterialGroups[number]);
+        expect(canonicalMeshMaterialGroups, `${modulePackage.module.moduleType}:${mesh.name}:canonical group`).toContain(materialGroup as typeof canonicalMeshMaterialGroups[number]);
+
+        if (materialGroup === "hardware") {
+          expect(materialSlotId, `${modulePackage.module.moduleType}:${mesh.name}:hardware slot`).toBe("hardware");
+          expect(renderColorHex(mesh), `${modulePackage.module.moduleType}:${mesh.name}:hardware color`).toBeTruthy();
+          continue;
+        }
+
+        if (materialGroup === "appliance" || materialGroup === "glass" || materialGroup === "soft") continue;
+
+        expect(canonicalBoardMaterialGroups, `${modulePackage.module.moduleType}:${mesh.name}:board group`).toContain(materialGroup as typeof canonicalBoardMaterialGroups[number]);
+        expect(materialSlotId, `${modulePackage.module.moduleType}:${mesh.name}:slot follows group`).toBe(materialGroup);
+        expect(["width", "height", "depth"], `${modulePackage.module.moduleType}:${mesh.name}:grain`).toContain(mesh.userData.grainAlong);
+
+        const expectedMaterialId = expectedMaterialBySlot[materialSlotId];
+        if (expectedMaterialId) {
+          expect(mesh.userData.catalogMaterialId, `${modulePackage.module.moduleType}:${mesh.name}:catalog material`).toBe(expectedMaterialId);
+          const color = renderColorHex(mesh);
+          expect(color, `${modulePackage.module.moduleType}:${mesh.name}:render color`).toBeTruthy();
+          if (observedColorBySlot[materialSlotId]) {
+            expect(color, `${modulePackage.module.moduleType}:${mesh.name}:shared render color`).toBe(observedColorBySlot[materialSlotId]);
+          } else {
+            observedColorBySlot[materialSlotId] = color;
+          }
+        }
+      }
+    }
   });
 
   it("builds the upper open end wall module as chamfered or rounded geometry", () => {
@@ -558,8 +708,16 @@ describe("FWM furniture module packages", () => {
     expect(chamferedTop?.userData.grainAlong).toBeTruthy();
     expect(chamferedTop?.userData.edgeBandingStrategy).toBe("explicit_visible_edges");
     expect(Array.isArray(chamferedTop?.userData.edgeBanding)).toBe(true);
+    expect(chamferedTop?.userData.revitPlanProfileMm).toEqual([
+      { x: -150, y: 0, z: -165 },
+      { x: 150, y: 0, z: -165 },
+      { x: 150, y: 0, z: 45 },
+      { x: 30, y: 0, z: 165 },
+      { x: -150, y: 0, z: 165 }
+    ]);
     expect(((roundedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length).toBeGreaterThan(((chamferedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length);
     expect(objectBoundsMm(chamfered).height).toBeCloseTo(300, 0);
+    expect(objectBoundsMm(chamfered).width).toBeCloseTo(300, 0);
     expect(objectBoundsMm(chamfered).depth).toBeCloseTo(330, 0);
   });
 
@@ -1584,6 +1742,27 @@ describe("FWM furniture module packages", () => {
     expect((bounds.max.x - bounds.min.x) * 1000).toBeGreaterThan(850);
     expect((bounds.max.z - bounds.min.z) * 1000).toBeGreaterThan(560);
 
+    const depthSynced = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...defaults, variant: "corner_1d", width: 900, depth: 580, height: 722, plinthHeight: 100, plinthSetbackMm: 50 },
+      catalog
+    });
+    const defaultDepth = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...defaults, variant: "corner_1d", width: 900, depth: 900, height: 722, plinthHeight: 100, plinthSetbackMm: 50 },
+      catalog
+    });
+    const depthSyncedBounds = objectBoundsMm(depthSynced);
+    const defaultDepthBounds = objectBoundsMm(defaultDepth);
+    expect(depthSyncedBounds.width).toBeCloseTo(defaultDepthBounds.width, 1);
+    expect(depthSyncedBounds.depth).toBeCloseTo(580, 1);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_right_door")!).width).toBeCloseTo(objectBoundsMm(getMeshNamed(defaultDepth, "corner_right_door")!).width, 1);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_bottom_panel")!).width).toBeCloseTo(objectBoundsMm(getMeshNamed(defaultDepth, "corner_bottom_panel")!).width, 1);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_right_door")!).minY).toBeCloseTo(100, 2);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_right_door")!).maxY).toBeCloseTo(722, 2);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_blind_front_filler")!).minY).toBeCloseTo(100, 2);
+    expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_blind_front_filler")!).maxY).toBeCloseTo(722, 2);
+
     const opened = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", opened: true, plinthHeight: 100, plinthSetbackMm: 50 }, catalog });
     expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door")!).maxZ + 150);
     expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door_handle")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door_handle")!).maxZ + 150);
@@ -2101,6 +2280,33 @@ describe("FWM furniture module packages", () => {
     const bounds = new Box3().setFromObject(group);
     expect((bounds.max.x - bounds.min.x) * 1000).toBeGreaterThan(860);
     expect((bounds.max.z - bounds.min.z) * 1000).toBeGreaterThan(860);
+
+    const worktopDepthGroup = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...params, depth: 580, heightCarcass: 722, requiresWorktop: false, hasWorktop: false, worktopThicknessMm: 0 },
+      catalog
+    });
+    const oversizedDepthGroup = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...params, depth: 900, heightCarcass: 722, requiresWorktop: false, hasWorktop: false, worktopThicknessMm: 0 },
+      catalog
+    });
+    const depth580BottomX = objectBoundsMm(getMeshNamed(worktopDepthGroup, "bottom_x")!);
+    const depth900BottomX = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "bottom_x")!);
+    const depth580DoorX = objectBoundsMm(getMeshNamed(worktopDepthGroup, "door_front_x")!);
+    const depth580DoorZ = objectBoundsMm(getMeshNamed(worktopDepthGroup, "door_front_z")!);
+    const depth900DoorX = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "door_front_x")!);
+    const depth900DoorZ = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "door_front_z")!);
+    expect(depth580BottomX.width).toBeCloseTo(depth900BottomX.width, 1);
+    expect(depth580BottomX.depth).toBeCloseTo(562, 1);
+    expect(depth580DoorX.depth).toBeGreaterThan(250);
+    expect(depth580DoorZ.width).toBeGreaterThan(250);
+    expect(depth900DoorX.depth).toBeGreaterThan(200);
+    expect(depth900DoorZ.width).toBeGreaterThan(200);
+    expect(depth580DoorX.minY).toBeCloseTo(100, 2);
+    expect(depth580DoorX.maxY).toBeCloseTo(722, 2);
+    expect(depth580DoorZ.minY).toBeCloseTo(100, 2);
+    expect(depth580DoorZ.maxY).toBeCloseTo(722, 2);
 
     const bom = calculateFwmFurnitureBOM(params, ctx, catalog);
     const ids = new Set(bom.quoteBom.items.map((item) => item.id));

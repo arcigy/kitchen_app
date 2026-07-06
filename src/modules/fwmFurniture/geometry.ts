@@ -97,7 +97,11 @@ function normalizeFwmMaterialMetadata(group: THREE.Group): THREE.Group {
     const materialGroup = canonicalFwmMaterialGroup(data.materialGroup);
     const materialSlotId = canonicalFwmMaterialGroup(data.materialSlotId);
     if (materialGroup) data.materialGroup = materialGroup;
-    if (materialSlotId) data.materialSlotId = materialSlotId;
+    if (materialSlotId) {
+      data.materialSlotId = materialSlotId;
+    } else if (materialGroup) {
+      data.materialSlotId = materialGroup;
+    }
     if (data.materialRole === "body" || data.materialRole === "shelf") data.materialRole = "corpus";
 
     if (object instanceof THREE.Mesh) {
@@ -107,9 +111,15 @@ function normalizeFwmMaterialMetadata(group: THREE.Group): THREE.Group {
         const itemGroup = canonicalFwmMaterialGroup(materialData.materialGroup);
         const itemSlot = canonicalFwmMaterialGroup(materialData.materialSlotId);
         if (itemGroup) materialData.materialGroup = itemGroup;
-        if (itemSlot) materialData.materialSlotId = itemSlot;
+        if (itemSlot) {
+          materialData.materialSlotId = itemSlot;
+        } else if (itemGroup) {
+          materialData.materialSlotId = itemGroup;
+        }
         if (materialData.materialRole === "body" || materialData.materialRole === "shelf") materialData.materialRole = "corpus";
       }
+      const meshGroup = canonicalFwmMaterialGroup(data.materialGroup);
+      if (meshGroup && !data.grainAlong) data.grainAlong = inferGrainAlong(object.name, meshGroup, readMeshDimensionsMm(object));
     }
   });
   group.userData.materialGroups = {
@@ -296,6 +306,8 @@ function makeComponentMaterial(params: Record<string, unknown>, catalog: ClientC
     metalness: component.preview.metalness
   });
   material.userData.materialRole = "hardware";
+  material.userData.materialGroup = "hardware";
+  material.userData.materialSlotId = "hardware";
   material.userData.materialSource = "component";
   material.userData.renderColorHex = component.preview.colorHex;
   material.userData.catalogComponentId = component.id;
@@ -362,21 +374,23 @@ function readMeshDimensionsMm(mesh: THREE.Mesh) {
 }
 
 function inferMaterialGroup(name: string): string {
-  if (name.includes("cutlery_inner_drawer_front")) return "front";
-  if (name.includes("cutlery_inner_drawer_bottom") || name.includes("cutlery_inner_drawer_cross_rail")) return "drawer_bottom";
-  if (name.includes("cutlery_inner_drawer_system") || name.includes("cutlery_inner_drawer_runner")) return "hardware";
-  if (name.includes("drawer_bottom")) return "drawer_bottom";
-  if (name.includes("drawer_system") || name.includes("drawer_runner") || name.includes("runner")) return "hardware";
-  if (name.includes("drawer_left_side") || name.includes("drawer_right_side") || name.includes("drawer_back") || name.includes("drawer_front_inner")) {
+  const normalizedName = name.toLowerCase();
+  if (normalizedName.includes("cutlery_inner_drawer_front")) return "front";
+  if (normalizedName.includes("cutlery_inner_drawer_bottom") || normalizedName.includes("cutlery_inner_drawer_cross_rail")) return "drawer_bottom";
+  if (normalizedName.includes("cutlery_inner_drawer_system") || normalizedName.includes("cutlery_inner_drawer_runner")) return "hardware";
+  if (normalizedName.includes("kickclip") || normalizedName.includes("drawer_system") || normalizedName.includes("drawer_runner") || normalizedName.includes("runner")) return "hardware";
+  if (normalizedName.includes("handle") || normalizedName.includes("hinge") || normalizedName.includes("faucet") || normalizedName.includes("leg") || normalizedName.includes("foot") || normalizedName.includes("clip")) return "hardware";
+  if (normalizedName.includes("drawer_bottom")) return "drawer_bottom";
+  if (normalizedName.includes("drawer_left_side") || normalizedName.includes("drawer_right_side") || normalizedName.includes("drawer_back") || normalizedName.includes("drawer_front_inner")) {
     return "body";
   }
-  if (name.includes("back")) return "back";
-  if (name.includes("shelf")) return "shelf";
-  if (name.includes("plinth")) return "plinth";
-  if (name.includes("worktop") || name.includes("table_top")) return "worktop";
-  if (name.includes("handle") || name.includes("hinge") || name.includes("faucet") || name.includes("leg") || name.includes("foot") || name.includes("clip")) return "hardware";
-  if (name.includes("appliance") || name.includes("sink") || name.includes("basin")) return "appliance";
-  if (name.includes("front") || name.includes("door") || name.includes("drawer")) return "front";
+  if (normalizedName.includes("rail")) return "body";
+  if (normalizedName.includes("back")) return "back";
+  if (normalizedName.includes("shelf")) return "shelf";
+  if (normalizedName.includes("plinth")) return "plinth";
+  if (normalizedName.includes("worktop") || normalizedName.includes("table_top")) return "worktop";
+  if (normalizedName.includes("appliance") || normalizedName.includes("sink") || normalizedName.includes("basin")) return "appliance";
+  if (normalizedName.includes("front") || normalizedName.includes("door") || normalizedName.includes("drawer")) return "front";
   return "body";
 }
 
@@ -780,9 +794,12 @@ function mark(mesh: THREE.Mesh, dimensionsMm: { width: number; height: number; d
   mesh.userData.dimensionsMm = dimensionsMm;
   mesh.userData.paramKeys = paramKeys;
   mesh.userData.sideRole = sideRole;
-  mesh.userData.materialGroup = materialGroup;
-  mesh.userData.grainAlong = inferGrainAlong(mesh.name, materialGroup, dimensionsMm);
+  const canonicalGroup = canonicalFwmMaterialGroup(materialGroup) || materialGroup;
+  mesh.userData.materialGroup = canonicalGroup;
   const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const materialSlotId = canonicalFwmMaterialGroup(material?.userData?.materialSlotId) || canonicalGroup;
+  mesh.userData.materialSlotId = materialSlotId;
+  mesh.userData.grainAlong = inferGrainAlong(mesh.name, canonicalGroup, dimensionsMm);
   if (material?.userData?.materialRole) {
     mesh.userData.catalogMaterialId = material.userData.catalogMaterialId;
     mesh.userData.catalogMaterialName = material.userData.catalogMaterialName;
@@ -1232,6 +1249,7 @@ function tagOpenEndBoard(mesh: THREE.Mesh, boardName: string, materialGroup: "co
   mesh.userData.partName = boardName;
   mesh.userData.materialGroup = materialGroup;
   mesh.userData.materialSlotId = materialGroup;
+  mesh.userData.grainAlong = inferGrainAlong(boardName, materialGroup, readMeshDimensionsMm(mesh));
   if (edgeBanding.length > 0) {
     mesh.userData.edgeBandingStrategy = "explicit_visible_edges";
     mesh.userData.edgeBanding = edgeBanding;
@@ -1375,7 +1393,7 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
       : shape === "straight"
         ? `open_niche_side_panel_${segment.index + 1}`
         : `open_niche_${shape}_ending_panel_${segment.index + 1}`;
-    const mesh = addBoardBetweenPlanPoints(
+    const mesh = addInsetBoardBetweenPlanPoints(
       group,
       boardName,
       segment.start,
@@ -1384,7 +1402,8 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
       cabinetHeight,
       isBackEdge(segment, backZ) ? back : t,
       isBackEdge(segment, backZ) ? backMat : body,
-      paramKeys
+      paramKeys,
+      { x: 0, z: 0 }
     );
     tagOpenEndBoard(
       mesh,
@@ -1428,7 +1447,7 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
         !isOpenFrontEdge(segment, frontZ) &&
         Math.max(segment.start.z, segment.end.z) > frontZ - Math.max(radius, chamfer, 80) + 0.001;
       if (!isOpenFrontEdge(segment, frontZ) && !shapedFrontEdge) continue;
-      const mesh = addBoardBetweenPlanPoints(
+      const mesh = addInsetBoardBetweenPlanPoints(
         group,
         `open_niche_plinth_front_${plinthIndex}`,
         segment.start,
@@ -1437,7 +1456,8 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
         plinth,
         boardDepth,
         plinthMat,
-        ["plinthHeight", "plinthSetbackMm", "plinthMaterialId", "shape", "endingSide"]
+        ["plinthHeight", "plinthSetbackMm", "plinthMaterialId", "shape", "endingSide"],
+        { x: 0, z: 0 }
       );
       tagOpenEndBoard(mesh, `open_niche_plinth_front_${plinthIndex}`, "plinth");
       plinthIndex += 1;
@@ -1786,6 +1806,10 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   for (const part of parts) {
     const size = scaleGroundTruthSize(part.size, part.role, { width, height, depth, plinth, t, back, shelfT, frontT }, source);
     const center = scaleGroundTruthCenter(part.center, source, { width, height, depth, plinth });
+    if (part.role === "front") {
+      size.height = Math.max(1, height - plinth);
+      center.y = plinth + size.height / 2;
+    }
     if (part.name === "corner_plinth_front_board") center.z -= plinthSetbackDelta;
     if (part.name === "corner_right_door") center.z += openedOffset;
     const mesh = addBox(group, part.name, size, center, materialByRole[part.role], part.paramKeys);
@@ -1917,8 +1941,8 @@ const TOP_PANEL_OUTER_FOOTPRINT_OFFSETS = [
 ] as const;
 
 function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams): ChamferedGroundTruthParametricContext {
-  const width = Math.max(100, num(params, "width", BASE_CORNER_CHAMFERED_SOURCE.width));
   const depth = Math.max(100, num(params, "depth", BASE_CORNER_CHAMFERED_SOURCE.depth));
+  const width = depth;
   const height = Math.max(50, num(params, "height", BASE_CORNER_CHAMFERED_SOURCE.yMax));
   const frontFallback = num(params, "chamferMm", BASE_CORNER_CHAMFERED_SOURCE.chamferMm);
   const requestedFrontChamfer = num(params, "frontChamferMm", frontFallback);
@@ -2286,7 +2310,11 @@ function tagGroundTruthMesh(mesh: THREE.Mesh, primitive: ModuleGeometryPrimitive
   const boardName = readGroundTruthString(primitive.params.boardName);
   const materialGroup = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialGroup) ?? "corpus") || "corpus";
   const materialSlotId = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialSlotId) ?? materialGroup) || materialGroup;
-  const materialColorHex = readGroundTruthColorHex(primitive.params.materialColorHex) ?? fallbackGroundTruthColorForMaterialGroup(materialGroup);
+  const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const materialData = material?.userData ?? {};
+  const materialColorHex = typeof materialData.renderColorHex === "string"
+    ? materialData.renderColorHex
+    : readGroundTruthColorHex(primitive.params.materialColorHex) ?? fallbackGroundTruthColorForMaterialGroup(materialGroup);
   mesh.name = boardName
     ? `corner_chamfered_${boardName.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "").toLowerCase()}_${primitive.id}`
     : primitive.id;
@@ -2299,12 +2327,15 @@ function tagGroundTruthMesh(mesh: THREE.Mesh, primitive: ModuleGeometryPrimitive
   mesh.userData.materialSlotId = materialSlotId;
   mesh.userData.materialId = readGroundTruthString(primitive.params.materialId);
   mesh.userData.materialName = readGroundTruthString(primitive.params.materialName);
+  if (typeof materialData.catalogMaterialId === "string") mesh.userData.catalogMaterialId = materialData.catalogMaterialId;
+  if (typeof materialData.catalogMaterialName === "string") mesh.userData.catalogMaterialName = materialData.catalogMaterialName;
+  if (typeof materialData.materialRole === "string") mesh.userData.materialRole = materialData.materialRole;
   mesh.userData.materialColorHex = materialColorHex;
   mesh.userData.renderColorHex = materialColorHex;
   mesh.userData.materialParameterName = readGroundTruthString(primitive.params.materialParameterName);
   mesh.userData.materialParameterValue = readGroundTruthString(primitive.params.materialParameterValue);
   mesh.userData.revitMaterialElementId = readGroundTruthString(primitive.params.revitMaterialElementId);
-  mesh.userData.materialSource = readGroundTruthString(primitive.params.materialSource);
+  mesh.userData.materialSource = typeof materialData.materialSource === "string" ? materialData.materialSource : readGroundTruthString(primitive.params.materialSource);
   mesh.userData.sourceElementId = primitive.params.sourceElementId;
   mesh.userData.sourceUniqueId = readGroundTruthString(primitive.params.sourceUniqueId);
   mesh.userData.sourceName = readGroundTruthString(primitive.params.sourceName);
@@ -2798,6 +2829,7 @@ function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurni
     if (material && (object as THREE.Mesh).isMesh) {
       const mesh = object as THREE.Mesh;
       mesh.material = material;
+      if (group === "front") fitCopiedCornerFrontPanelHeight(mesh, params);
       data.grainAlong = inferGrainAlong(object.name, group, readMeshDimensionsMm(mesh));
       data.catalogMaterialId = material.userData.catalogMaterialId;
       data.catalogMaterialName = material.userData.catalogMaterialName;
@@ -2810,6 +2842,20 @@ function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurni
       data.componentType = name.startsWith("hinge_") ? "hinge" : name.startsWith("doorhandle_") ? "handle" : name.startsWith("leg_") ? "leg" : "plinth_clip";
     }
   });
+}
+
+function fitCopiedCornerFrontPanelHeight(mesh: THREE.Mesh, params: FwmFurnitureParams) {
+  const dimensions = readMeshDimensionsMm(mesh);
+  if (!Number.isFinite(dimensions.height) || dimensions.height <= 0) return;
+  const height = num(params, "height", 722);
+  const plinth = Math.max(0, num(params, "plinthHeight", 100));
+  const targetHeight = Math.max(1, height - plinth);
+  mesh.scale.y *= targetHeight / dimensions.height;
+  mesh.position.y = (plinth + targetHeight / 2) * MM;
+  mesh.userData.dimensionsMm = {
+    ...dimensions,
+    height: targetHeight
+  };
 }
 
 function hasCopiedCornerMaterialOverride(params: FwmFurnitureParams, role: "back" | "shelf" | "plinth") {

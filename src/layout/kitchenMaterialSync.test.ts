@@ -146,9 +146,11 @@ describe("applyKitchenContextToModuleParams", () => {
     for (const binding of packageWithoutAliases.behavior?.contextBindings ?? []) {
       for (const rule of binding.materialSync ?? []) rule.aliases = [];
     }
-    const bodyMaterialId = materialIdForFamily(catalog, "body");
+    expect(catalog.kitchenDefaults.carcassMaterialId).toBeTruthy();
+    expect(catalog.kitchenDefaults.backPanelMaterialId).toBeTruthy();
+    const bodyMaterialId = catalog.kitchenDefaults.carcassMaterialId!;
     const frontMaterialId = materialIdForFamily(catalog, "front");
-    const backMaterialId = materialIdForFamily(catalog, "back");
+    const backMaterialId = catalog.kitchenDefaults.backPanelMaterialId!;
     const drawerBottomMaterialId = materialIdForFamily(catalog, "drawer_bottom");
     const ctx = resolveContext({
       ...makeDefaultKitchenContext(catalog),

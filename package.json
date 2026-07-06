@@ -21,7 +21,7 @@
     "test:module-properties": "node scripts/testModulePropertiesUi.mjs",
     "test:portable-material-live": "node scripts/testPortableMaterialLive.mjs",
     "test:material-proof": "node scripts/testMaterialProofMode.mjs",
-    "test:kitchen-module-placement-contract": "tsx scripts/auditKitchenModulePlacementContract.ts --system --module-types=fwm_catalog_base_corner,fwm_catalog_base_doors,fwm_catalog_base_drawers,fwm_catalog_tall_cabinet",
+    "test:kitchen-module-placement-contract": "tsx scripts/auditKitchenModulePlacementContract.ts --system --module-types=fwm_catalog_base_corner,fwm_catalog_base_doors,fwm_catalog_base_drawers,fwm_catalog_base_open_end,fwm_catalog_tall_cabinet,fwm_tall_open_end,fwm_catalog_wall_cabinet,fwm_catalog_wall_open_end",
     "test:project-save-load": "node scripts/testProjectSaveLoadStability.mjs",
     "test:project-roundtrip-full": "node scripts/testProjectRoundtripFull.mjs",
     "test:ui-smoke": "node scripts/testFullUiSmoke.mjs",

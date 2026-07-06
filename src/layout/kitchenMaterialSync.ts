@@ -329,16 +329,17 @@ function applyKitchenPackageMaterialInvariants(
       if (rule.targetSlot) {
         const assignments = ensureParamRecord(record, "materialAssignments");
         assignments[rule.targetSlot] = material.id;
-        if (rule.targetSlot === "corpus" || rule.targetSlot === "carcass" || rule.family === "body" || rule.family === "shelf") {
-          assignments.corpus = material.id;
-          assignments.carcass = material.id;
-        }
       }
       if (rule.thicknessParameter) record[rule.thicknessParameter] = material.defaultThicknessMm;
 
       const aliases = new Set<ModuleContextMaterialAlias>(rule.aliases ?? []);
-      const inferred = inferredMaterialAlias(rule.family);
+      const inferred = rule.targetSlot === "plinth" ? null : inferredMaterialAlias(rule.family);
       if (inferred) aliases.add(inferred);
+      if (rule.targetSlot === "corpus" || rule.targetSlot === "carcass" || aliases.has("body") || aliases.has("shelf")) {
+        const assignments = ensureParamRecord(record, "materialAssignments");
+        assignments.corpus = material.id;
+        assignments.carcass = material.id;
+      }
       for (const alias of aliases) applyLegacyMaterialAliases(record, alias, material);
     }
   }
