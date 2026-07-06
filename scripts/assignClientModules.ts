@@ -16,6 +16,7 @@ import type { FurnQuoteModulePackage } from "../src/core/module-package/module-p
 import { validateFurnQuoteModulePackage } from "../src/core/module-package/module-package-validation";
 import { systemModulePackageTemplates } from "../src/system/module-packages";
 import { assignClientModules } from "../src/core/catalog/client-module-assignment";
+import { refreshClientModulePackagesFromSystemTemplates } from "../src/core/catalog/client-module-package-refresh";
 
 type StorageMode = "auto" | "postgres" | "file";
 type AssignmentMode = "merge" | "replace" | "disable";
@@ -25,6 +26,7 @@ type Args = {
   modules: string[];
   mode: AssignmentMode;
   write: boolean;
+  refreshPackages: boolean;
   storage: StorageMode;
   schema?: string;
   databaseUrl?: string;
@@ -39,6 +41,7 @@ function parseArgs(argv: string[]): Args {
     modules: [],
     mode: "merge",
     write: false,
+    refreshPackages: false,
     storage: "auto",
     projectRoot: process.cwd(),
     userId: "script_assign_client_modules",
@@ -56,6 +59,7 @@ function parseArgs(argv: string[]): Args {
     else if (item.startsWith("--mode=")) args.mode = parseMode(item.slice("--mode=".length));
     else if (item === "--write") args.write = true;
     else if (item === "--dry-run") args.write = false;
+    else if (item === "--refresh-packages") args.refreshPackages = true;
     else if (item === "--storage") args.storage = parseStorage(argv[++index]);
     else if (item.startsWith("--storage=")) args.storage = parseStorage(item.slice("--storage=".length));
     else if (item === "--schema") args.schema = argv[++index];
@@ -111,6 +115,7 @@ Options:
                               replace enables selected modules and disables unlisted modules.
                               disable disables selected modules.
   --write                     Persist changes. Without this the script only prints a dry-run report.
+  --refresh-packages          Re-save selected package rows. Existing client package ids are rebuilt from the current system template for their module type.
   --storage <auto|postgres|file>
   --schema <schema>           Postgres schema, for example prod or dev.
   --app-env <env>             prod, dev, local, or test.
@@ -149,12 +154,26 @@ async function readPostgresModulePackages(connectionString: string, schema: stri
   });
 }
 
-function mergePackageSources(existingPackages: readonly FurnQuoteModulePackage[]): FurnQuoteModulePackage[] {
+function selectedRefreshPackages(existingPackages: readonly FurnQuoteModulePackage[], moduleIds: readonly string[]): FurnQuoteModulePackage[] {
+  return [
+    ...refreshClientModulePackagesFromSystemTemplates({
+      existingPackages,
+      sourcePackages: systemModulePackageTemplates,
+      moduleIds
+    }),
+    ...selectedSystemPackages(moduleIds)
+  ];
+}
+
+function mergePackageSources(existingPackages: readonly FurnQuoteModulePackage[], refreshModuleIds: readonly string[] = []): FurnQuoteModulePackage[] {
   const byId = new Map<string, FurnQuoteModulePackage>();
   for (const modulePackage of systemModulePackageTemplates) {
     byId.set(modulePackage.module.modulePackageId, structuredClone(modulePackage));
   }
   for (const modulePackage of existingPackages) {
+    byId.set(modulePackage.module.modulePackageId, modulePackage);
+  }
+  for (const modulePackage of selectedRefreshPackages(existingPackages, refreshModuleIds)) {
     byId.set(modulePackage.module.modulePackageId, modulePackage);
   }
   return [...byId.values()];
@@ -171,16 +190,20 @@ function selectedSystemPackages(moduleIds: readonly string[]): FurnQuoteModulePa
     .map((modulePackage) => structuredClone(modulePackage));
 }
 
-async function ensureSelectedSystemPackages(args: {
+async function ensureSelectedPackages(args: {
   ctx: ClientContext;
   repository: ModulePackageRepository;
   existingPackages: readonly FurnQuoteModulePackage[];
   moduleIds: readonly string[];
+  refreshExisting: boolean;
 }): Promise<number> {
   const existingIds = new Set(args.existingPackages.map((modulePackage) => modulePackage.module.modulePackageId));
   let savedCount = 0;
-  for (const modulePackage of selectedSystemPackages(args.moduleIds)) {
-    if (existingIds.has(modulePackage.module.modulePackageId)) continue;
+  const selectedPackages = args.refreshExisting
+    ? selectedRefreshPackages(args.existingPackages, args.moduleIds)
+    : selectedSystemPackages(args.moduleIds);
+  for (const modulePackage of selectedPackages) {
+    if (existingIds.has(modulePackage.module.modulePackageId) && !args.refreshExisting) continue;
     await args.repository.savePackage(args.ctx, modulePackage, { source: "system-template" });
     savedCount++;
   }
@@ -220,20 +243,21 @@ try {
   const existingPackages = usePostgres && databaseConfig
     ? await readPostgresModulePackages(databaseConfig.connectionString, databaseConfig.schema, args.clientId)
     : await modulePackageRepository.listPackages(ctx);
-  const availablePackages = mergePackageSources(existingPackages);
+  const availablePackages = mergePackageSources(existingPackages, args.refreshPackages ? args.modules : []);
   const catalog = await catalogRepository.getCatalog(ctx);
   const result = assignClientModules(catalog, availablePackages, {
     moduleIds: args.modules,
     mode: args.mode
   });
 
-  let savedSystemPackageCount = 0;
+  let savedPackageCount = 0;
   if (args.write) {
-    savedSystemPackageCount = await ensureSelectedSystemPackages({
+    savedPackageCount = await ensureSelectedPackages({
       ctx,
       repository: modulePackageRepository,
       existingPackages,
-      moduleIds: args.modules
+      moduleIds: args.modules,
+      refreshExisting: args.refreshPackages
     });
     await catalogRepository.saveCatalog(ctx, result.catalog);
   }
@@ -244,7 +268,8 @@ try {
     storage: usePostgres ? "postgres" : "file",
     schema: usePostgres && databaseConfig ? databaseConfig.schema : undefined,
     clientId: args.clientId,
-    savedSystemPackageCount,
+    refreshPackages: args.refreshPackages,
+    savedPackageCount,
     summary: result.summary,
     changes: result.changes
   }, null, 2));

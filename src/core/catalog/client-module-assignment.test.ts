@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getSystemSeedCatalog } from "./catalog-repository";
 import { assignClientModules } from "./client-module-assignment";
 import { systemModulePackageTemplates } from "../../system/module-packages";
+import { computeModulePackageHash } from "../module-package/module-package-file";
 
 const now = "2026-06-23T12:00:00.000Z";
 
@@ -77,6 +78,26 @@ describe("assignClientModules", () => {
 
     expect(result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1")?.enabled).toBe(false);
     expect(result.summary.disabledCount).toBe(1);
+  });
+
+  it("updates catalog module metadata when a refreshed package is assigned", () => {
+    const catalog = getSystemSeedCatalog();
+    const sourcePackage = systemModulePackageTemplates.find((modulePackage) => modulePackage.module.modulePackageId === "drawer_low_family_v1");
+    expect(sourcePackage).toBeTruthy();
+    const refreshedPackage = structuredClone(sourcePackage!);
+    refreshedPackage.module.displayName = "Drawer Low Refreshed";
+    refreshedPackage.module.version = "9.9.9";
+
+    const result = assignClientModules(catalog, [refreshedPackage], {
+      moduleIds: ["drawer_low_family_v1"],
+      mode: "merge",
+      now
+    });
+
+    const assigned = result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1");
+    expect(assigned?.name).toBe("Drawer Low Refreshed");
+    expect(assigned?.packageHash).toBe(computeModulePackageHash(refreshedPackage));
+    expect(result.summary.updatedCount).toBe(1);
   });
 
   it("reports unknown module ids with usable examples", () => {

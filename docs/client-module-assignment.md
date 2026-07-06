@@ -40,6 +40,8 @@ npm run db:assign-client-modules -- --clientId client_delfi --modules base_corne
 npm run db:assign-client-modules -- --clientId client_delfi --modules base_corner,base_doors --mode merge --write
 ```
 
+Use `--refresh-packages` when an existing online DB package row must be overwritten from the current system module template. This is required after code/runtime fixes, including older client-specific package ids that share a system module type but keep their own catalog name or variant.
+
 ## Modes
 
 `merge` enables selected modules and keeps other modules as they are. This is the safest default.
