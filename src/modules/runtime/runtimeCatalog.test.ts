@@ -216,6 +216,11 @@ describe("module runtime catalog context", () => {
     const xDoorBox = getWorldBox(xDoor);
     const xHingeBox = getWorldBox(xHinge);
 
+    expect(zDoorBox.min.x * 1000).toBeCloseTo(541, 3);
+    expect(zDoorBox.max.x * 1000).toBeCloseTo(998, 3);
+    expect(xDoorBox.min.z * 1000).toBeCloseTo(560.2, 3);
+    expect(xDoorBox.max.z * 1000).toBeCloseTo(998, 3);
+
     expect(Math.abs(zHingeBox.max.z - zDoorBox.min.z)).toBeLessThan(0.002);
     expect(Math.abs(xHingeBox.max.x - xDoorBox.min.x)).toBeLessThan(0.002);
   });

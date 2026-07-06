@@ -16,8 +16,8 @@ export function createSnapOverlay(viewerEl: HTMLElement) {
 
   const marker = document.createElement("div");
   marker.style.position = "absolute";
-  marker.style.width = "16px";
-  marker.style.height = "16px";
+  marker.style.width = "14px";
+  marker.style.height = "14px";
   marker.style.transform = "translate(-50%, -50%)";
   marker.style.display = "none";
   marker.style.pointerEvents = "none";
@@ -30,59 +30,31 @@ export function createSnapOverlay(viewerEl: HTMLElement) {
   let desiredToken = 0;
 
   const applyMarkerStyle = (kind: SnapOverlayKind) => {
-    const color =
-      kind === "corner"
-        ? "#ff4dff"
-        : kind === "midpoint"
-          ? "#ffffff"
-          : kind === "perpendicular"
-            ? "#7cfcff"
-            : kind === "axis"
-              ? "#3ddc97"
-              : kind === "edge"
-                ? "#ffd166"
+    const color = kind === "free" ? "#64748b" : "#1d5fd1";
+    const path =
+      kind === "midpoint"
+        ? `<path d="M7 2.4 12 11.2H2Z" />`
+        : kind === "perpendicular"
+          ? `<path d="M3 2.5V11h8.5" /><path d="M3 8h3v3" />`
+          : kind === "axis"
+            ? `<path d="M7 2v10M2 7h10" />`
+            : kind === "edge"
+              ? `<path d="M2 7h10" /><path d="M4 4.5h6" />`
+              : kind === "corner"
+                ? `<path d="M7 1.8 12.2 7 7 12.2 1.8 7Z" />`
                 : kind === "endpoint"
-                  ? "#3ddc97"
-                  : "#00e5ff";
-
+                  ? `<path d="M2.5 2.5h9v9h-9Z" />`
+                  : `<circle cx="7" cy="7" r="3.4" />`;
+    marker.style.width = "14px";
+    marker.style.height = "14px";
     marker.style.border = "none";
     marker.style.borderRadius = "0";
     marker.style.background = "transparent";
     marker.style.clipPath = "none";
-    marker.style.boxShadow = `0 0 0 2px rgba(15,17,23,0.95), 0 0 16px ${color}66`;
-
-    if (kind === "midpoint") {
-      marker.style.width = "18px";
-      marker.style.height = "16px";
-      marker.style.background = color;
-      marker.style.clipPath = "polygon(50% 4%, 96% 92%, 4% 92%)";
-      marker.style.transform = "translate(-50%, -50%)";
-      return;
-    }
-
-    if (kind === "perpendicular") {
-      marker.style.width = "18px";
-      marker.style.height = "18px";
-      marker.style.background = "transparent";
-      marker.style.border = `3px solid ${color}`;
-      marker.style.borderRadius = "4px";
-      marker.style.transform = "translate(-50%, -50%)";
-      return;
-    }
-
-    marker.style.width = "16px";
-    marker.style.height = "16px";
-    marker.style.border = `3px solid ${color}`;
-    marker.style.background = "rgba(12,14,18,0.92)";
-
-    if (kind === "corner") {
-      marker.style.borderRadius = "4px";
-      marker.style.transform = "translate(-50%, -50%) rotate(45deg)";
-      return;
-    }
-
+    marker.style.boxShadow = "none";
+    marker.style.filter = "drop-shadow(0 0 1px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(255,255,255,0.95))";
     marker.style.transform = "translate(-50%, -50%)";
-    marker.style.borderRadius = kind === "edge" ? "4px" : "999px";
+    marker.innerHTML = `<svg viewBox="0 0 14 14" aria-hidden="true" focusable="false" style="display:block;width:14px;height:14px;overflow:visible"><g fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter">${path}</g></svg>`;
   };
 
   const showAt = (point: THREE.Vector2, kind: SnapOverlayKind, opts?: { stable?: boolean }) => {
@@ -120,6 +92,7 @@ export function createSnapOverlay(viewerEl: HTMLElement) {
     desiredVisible = false;
     desiredToken += 1;
     marker.style.display = "none";
+    marker.innerHTML = "";
     marker.style.transform = "translate(-50%, -50%)";
   };
 

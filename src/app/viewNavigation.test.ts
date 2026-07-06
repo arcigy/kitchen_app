@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { resolveNavigationPointerControls, resolveNavigationViewerToolMode } from "./viewNavigation";
+import {
+  isNavigationKeyboardCode,
+  resolveNavigationPointerControls,
+  resolveNavigationViewerToolMode
+} from "./viewNavigation";
 
 describe("viewNavigation pointer controls", () => {
   it("defaults to select mode before the viewer tool controller is initialized", () => {
@@ -24,5 +28,12 @@ describe("viewNavigation pointer controls", () => {
 
     expect(controls.enablePan).toBe(true);
     expect(controls.mouseButtons.LEFT).toBe(THREE.MOUSE.PAN);
+  });
+
+  it("never captures WASD for viewer movement", () => {
+    expect(isNavigationKeyboardCode("KeyW")).toBe(false);
+    expect(isNavigationKeyboardCode("KeyA")).toBe(false);
+    expect(isNavigationKeyboardCode("KeyS")).toBe(false);
+    expect(isNavigationKeyboardCode("KeyD")).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import type { PlanSnapBinding } from "./planSnap";
 import { axisLockXZ, planarDistanceMm, worldToScreen } from "./sharedUtils";
 import type { SnapOverlayController } from "./snapOverlay";
 import { createInputElement } from "./propsPanelElements";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 export type WallEditHud = {
   root: HTMLDivElement;
@@ -770,7 +771,7 @@ export function applyMeasureAxisAssist(
   point: THREE.Vector3,
   camera: THREE.Camera,
   rect: DOMRect,
-  thresholdPx = 12
+  thresholdPx: number = SNAP_DISTANCE_PX.measure2dAxis
 ) {
   if (!firstPoint) return null;
   const axisPoint = axisLockXZ(firstPoint, point);

@@ -1,7 +1,12 @@
 import * as THREE from "three";
 import { worldToScreen } from "./sharedUtils";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 export type Measure3DSnapKind = "free" | "edge" | "corner";
+export type Measure3DSnapCandidate = {
+  point: THREE.Vector3;
+  kind: Exclude<Measure3DSnapKind, "free">;
+};
 
 function closestPointOnSegment3D(point: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) {
   const ab = b.clone().sub(a);
@@ -11,16 +16,7 @@ function closestPointOnSegment3D(point: THREE.Vector3, a: THREE.Vector3, b: THRE
   return a.clone().addScaledVector(ab, t);
 }
 
-export function snapPoint3D(
-  point: THREE.Vector3,
-  target: THREE.Object3D,
-  camera: THREE.Camera,
-  rect: DOMRect,
-  thresholdPx = 32
-): {
-  point: THREE.Vector3;
-  kind: Measure3DSnapKind;
-} {
+export function createBoxMeasure3DSnapCandidates(point: THREE.Vector3, target: THREE.Object3D): Measure3DSnapCandidate[] {
   const box = new THREE.Box3().setFromObject(target);
   const { min, max } = box;
   const corners = [
@@ -43,34 +39,48 @@ export function snapPoint3D(
     [6, 7]
   ];
 
+  return [
+    ...corners.map((corner) => ({ point: corner.clone(), kind: "corner" as const })),
+    ...edgeIndexes.map(([ia, ib]) => ({
+      point: closestPointOnSegment3D(point, corners[ia]!, corners[ib]!),
+      kind: "edge" as const
+    }))
+  ];
+}
+
+export function pickBestMeasure3DSnapCandidate(
+  point: THREE.Vector3,
+  candidates: Measure3DSnapCandidate[],
+  camera: THREE.Camera,
+  rect: DOMRect,
+  thresholdPx: number
+) {
   const rawScreen = worldToScreen(point, camera, rect);
-
-  let bestCorner = corners[0]!.clone();
-  let bestCornerD = Infinity;
-  for (const corner of corners) {
-    const s = worldToScreen(corner, camera, rect);
-    const distance = Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
-    if (distance < bestCornerD) {
-      bestCornerD = distance;
-      bestCorner = corner.clone();
+  for (const kind of ["corner", "edge"] as const) {
+    let best: { candidate: Measure3DSnapCandidate; distancePx: number } | null = null;
+    for (const candidate of candidates) {
+      if (candidate.kind !== kind) continue;
+      const screen = worldToScreen(candidate.point, camera, rect);
+      const distancePx = Math.hypot(screen.x - rawScreen.x, screen.y - rawScreen.y);
+      if (!best || distancePx < best.distancePx) best = { candidate, distancePx };
     }
+    if (best && best.distancePx <= thresholdPx) return { point: best.candidate.point.clone(), kind: best.candidate.kind };
   }
-  if (bestCornerD <= thresholdPx) return { point: bestCorner, kind: "corner" };
+  return null;
+}
 
-  let bestEdge = point.clone();
-  let bestEdgeD = Infinity;
-  for (const [ia, ib] of edgeIndexes) {
-    const candidate = closestPointOnSegment3D(point, corners[ia]!, corners[ib]!);
-    const s = worldToScreen(candidate, camera, rect);
-    const distance = Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
-    if (distance < bestEdgeD) {
-      bestEdgeD = distance;
-      bestEdge = candidate;
-    }
-  }
-  if (bestEdgeD <= thresholdPx) return { point: bestEdge, kind: "edge" };
-
-  return { point: point.clone(), kind: "free" };
+export function snapPoint3D(
+  point: THREE.Vector3,
+  target: THREE.Object3D,
+  camera: THREE.Camera,
+  rect: DOMRect,
+  thresholdPx: number = SNAP_DISTANCE_PX.measure3d
+): {
+  point: THREE.Vector3;
+  kind: Measure3DSnapKind;
+} {
+  const snapped = pickBestMeasure3DSnapCandidate(point, createBoxMeasure3DSnapCandidates(point, target), camera, rect, thresholdPx);
+  return snapped ?? { point: point.clone(), kind: "free" };
 }
 
 export function axisLockPoint3D(a: THREE.Vector3, b: THREE.Vector3) {
@@ -87,7 +97,7 @@ export function applyMeasureAxisAssist3D(
   point: THREE.Vector3,
   camera: THREE.Camera,
   rect: DOMRect,
-  thresholdPx = 12
+  thresholdPx: number = SNAP_DISTANCE_PX.measure3dAxis
 ) {
   if (!firstPoint) return null;
   const candidates = [

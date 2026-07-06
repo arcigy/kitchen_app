@@ -9,6 +9,7 @@ import {
   worldToScreen
 } from "./sharedUtils";
 import { resolveNormalGuideSegment } from "./measureGeometryHelpers";
+import { SNAP_DISTANCE_PX, SNAP_PRIORITY_MEASURE } from "./snapToolProfiles";
 
 type MeasurePlanSnapContext = {
   measureState: MeasureState;
@@ -63,9 +64,9 @@ export function createMeasurePlanSnapController(ctx: MeasurePlanSnapContext) {
       measureSnapCyclePoint = hitPoint.clone();
       measureSnapCycleNormalMode = normalMode;
     }
-    const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.getCamera(), 24, {
+    const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.getCamera(), SNAP_DISTANCE_PX.measure2d, {
       perpendicularFrom: normalMode ? null : ctx.measureState.firstPoint,
-      kindPriority: ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"],
+      kindPriority: SNAP_PRIORITY_MEASURE,
       sticky: measurePlanSnap,
       cycleIndex: measureSnapCycleIndex
     });
@@ -78,7 +79,7 @@ export function createMeasurePlanSnapController(ctx: MeasurePlanSnapContext) {
     let kind = snapped.kind;
     let point = snapped.kind !== "none" ? snapped.point : hitPoint;
     if (!ctx.measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
-      const axisAssist = applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.getCamera(), rect, 12);
+      const axisAssist = applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.getCamera(), rect, SNAP_DISTANCE_PX.measure2dAxis);
       if (axisAssist) {
         point = axisAssist.point;
         kind = "axis";

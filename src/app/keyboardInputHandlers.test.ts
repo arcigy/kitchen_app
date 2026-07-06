@@ -10,6 +10,7 @@ import {
   resolveArrowNudgeDeltaM,
   resolveKeyboardNudgeStepM,
   runActivePlacementEscapeCommand,
+  runClearSelectionShortcutCommand,
   runDeleteSelectionShortcutCommand,
   runDrawingSpaceShortcutCommand,
   runFloorEditEscapeCommand,
@@ -524,6 +525,36 @@ describe("keyboard nudge helpers", () => {
     expect(nudgePinnedModuleChain.mock.calls[0][1].x).toBeCloseTo(0.15);
     expect(nudgePinnedModuleChain.mock.calls[0][1].z).toBeCloseTo(-0.05);
     expect(updateLayoutPanel).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("does not nudge a module locked by align", () => {
+    const instance = moduleInstance("m1", { x: 1, z: 2 });
+    const updateLayoutPanel = vi.fn();
+
+    expect(
+      nudgeSelectedModulesByDeltaMm(
+        moduleNudgeArgs({
+          instances: [instance],
+          selectedInstanceId: "m1",
+          dxMm: 100,
+          dzMm: -50,
+          alignLocks: [
+            {
+              id: "lock-1",
+              locked: true,
+              a: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "right" },
+              b: { targetKind: "module", targetId: "m2", lineRole: "edge", moduleSide: "left" },
+              pointMm: { x: 0, z: 0 }
+            }
+          ],
+          updateLayoutPanel
+        })
+      )
+    ).toBe(false);
+
+    expect(instance.root.position.x).toBeCloseTo(1);
+    expect(instance.root.position.z).toBeCloseTo(2);
+    expect(updateLayoutPanel).not.toHaveBeenCalled();
   });
 
   it("rebinds moved kitchen modules with the current kitchen back offset", () => {
@@ -1156,6 +1187,24 @@ describe("delete selection keyboard shortcut", () => {
   });
 });
 
+describe("clear selection keyboard shortcut", () => {
+  it("routes Escape through clearSelection", () => {
+    const clearSelection = vi.fn();
+
+    expect(runClearSelectionShortcutCommand({ clearSelection }, plainKeyEvent("Escape"))).toBe(true);
+
+    expect(clearSelection).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("ignores non-Escape keys", () => {
+    const clearSelection = vi.fn();
+
+    expect(runClearSelectionShortcutCommand({ clearSelection }, plainKeyEvent("Delete"))).toBe(false);
+
+    expect(clearSelection).not.toHaveBeenCalled();
+  });
+});
+
 describe("top-level keyboard input command dispatcher", () => {
   function topLevelKeyboardContext(overrides: Record<string, unknown> = {}) {
     const ctx = {
@@ -1167,6 +1216,7 @@ describe("top-level keyboard input command dispatcher", () => {
       cancelDoorPlacement: vi.fn(),
       cancelPlacement: vi.fn(),
       cancelWindowPlacement: vi.fn(),
+      clearSelection: vi.fn(),
       clearTransform: vi.fn(),
       clearWallDrawState: vi.fn(),
       commitKitchenWorktopTypedLength: vi.fn(() => false),
@@ -1280,8 +1330,12 @@ describe("top-level keyboard input command dispatcher", () => {
     expect(ev.stopImmediatePropagation).toHaveBeenCalledOnce();
   });
 
-  it("keeps kitchen edit mode from falling through to layout delete", () => {
-    const ev = plainKeyEvent("Delete", { preventDefault: vi.fn() });
+  it("routes Delete through global delete before kitchen edit mode swallows layout keys", () => {
+    const ev = {
+      ...plainKeyEvent("Delete", { preventDefault: vi.fn() }),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn()
+    } as unknown as KeyboardEvent;
     const deleteSelected = vi.fn(() => true);
     const ctx = topLevelKeyboardContext({
       deleteSelected,
@@ -1294,8 +1348,82 @@ describe("top-level keyboard input command dispatcher", () => {
 
     expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
 
-    expect(deleteSelected).not.toHaveBeenCalled();
-    expect(ev.preventDefault).not.toHaveBeenCalled();
+    expect(deleteSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
+    expect(ev.stopPropagation).not.toHaveBeenCalled();
+    expect(ev.stopImmediatePropagation).not.toHaveBeenCalled();
+  });
+
+  it("routes Delete through global delete before active floor edit handling", () => {
+    const ev = {
+      ...plainKeyEvent("Delete", { preventDefault: vi.fn() }),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn()
+    } as unknown as KeyboardEvent;
+    const deleteSelected = vi.fn(() => true);
+    const discardFloorBoundaryEdit = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      deleteSelected,
+      discardFloorBoundaryEdit,
+      floorEdit: { active: true, first: null, hover: null }
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(deleteSelected).toHaveBeenCalledExactlyOnceWith();
+    expect(discardFloorBoundaryEdit).not.toHaveBeenCalled();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
+    expect(ev.stopPropagation).not.toHaveBeenCalled();
+    expect(ev.stopImmediatePropagation).not.toHaveBeenCalled();
+  });
+
+  it("routes Escape through global clear selection before kitchen edit mode swallows layout keys", () => {
+    const ev = plainKeyEvent("Escape", { preventDefault: vi.fn() });
+    const clearSelection = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      clearSelection,
+      S: {
+        kitchenEditMode: true,
+        kitchenCtx: { worktopBackOffsetMm: 20 },
+        kitchenGroups: []
+      }
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(clearSelection).toHaveBeenCalledExactlyOnceWith();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("routes active Move typed distance before kitchen edit mode swallows layout keys", () => {
+    const ev = plainKeyEvent("2", { preventDefault: vi.fn() });
+    const clearSelection = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      clearSelection,
+      S: {
+        kitchenEditMode: true,
+        kitchenCtx: { worktopBackOffsetMm: 20 },
+        kitchenGroups: []
+      },
+      transformState: {
+        kind: "move",
+        lastAngleSign: 1,
+        lastPointerPx: { x: 15, y: 25 },
+        lastValidDelta: new THREE.Vector3(1, 0, 0),
+        moveSnapDisabled: false,
+        step: "pickTarget",
+        stickyMove: false,
+        typed: ""
+      }
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(ctx.transformState.typed).toBe("2");
+    expect(ctx.wallTypedHud.textContent).toBe("2 mm");
+    expect(ctx.wallTypedHud.style.display).toBe("block");
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
   });
 
   it("delegates layout Delete through the layout dispatcher", () => {
@@ -1318,6 +1446,7 @@ describe("layout keyboard command dispatcher", () => {
       applyMoveDelta: vi.fn(),
       applyRotateAngle: vi.fn(),
       cancelPlacement: vi.fn(),
+      clearSelection: vi.fn(),
       clearTransform: vi.fn(),
       clearWallDrawState: vi.fn(),
       deleteSelected: vi.fn(() => false),
@@ -1416,6 +1545,20 @@ describe("layout keyboard command dispatcher", () => {
 
     expect(handleLayoutEscape).toHaveBeenCalledExactlyOnceWith(ev);
     expect(ev.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("routes unhandled Escape through global clear selection", () => {
+    const ev = plainKeyEvent("Escape", { preventDefault: vi.fn() });
+    const clearSelection = vi.fn();
+    const ctx = layoutDispatcherContext({
+      clearSelection,
+      handleLayoutEscape: vi.fn(() => false)
+    });
+
+    expect(runLayoutKeyboardCommand(ctx, ev)).toBe(true);
+
+    expect(clearSelection).toHaveBeenCalledExactlyOnceWith();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
   });
 });
 
@@ -1550,6 +1693,34 @@ describe("placement keyboard shortcuts", () => {
 
     expect(flipDoorPlacementSwingSide).toHaveBeenCalledExactlyOnceWith();
     expect(rotateDoorPlacement).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("rotates active free module placement on Space", () => {
+    const ghost = {
+      kitchenPlacement: null,
+      root: {
+        rotation: { y: 0 }
+      }
+    };
+    const setUnderlayStatus = vi.fn();
+    const ctx = placementCtx({
+      S: {
+        placement: {
+          active: true,
+          ghost,
+          params: null,
+          lastCursor: new THREE.Vector3()
+        }
+      },
+      placement: { active: true },
+      placementHelpers: {
+        setUnderlayStatus
+      }
+    });
+
+    expect(runPlacementShortcutCommand(ctx, { ...plainKeyEvent(" "), shiftKey: false })).toBe(true);
+    expect(ghost.root.rotation.y).toBeCloseTo(Math.PI / 2);
+    expect(setUnderlayStatus).toHaveBeenCalledWith("Placement: rotacia 90°. Space = +90°.");
   });
 
   it("ignores inactive placement shortcuts", () => {
@@ -1730,13 +1901,15 @@ describe("transform keyboard shortcuts", () => {
       startTransformFromSelection: vi.fn(),
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 0, y: 0 },
         lastAngleSign: 1,
         lastValidDelta: new THREE.Vector3(1, 0, 0),
         moveSnapDisabled: false,
         step: "pickTarget",
         stickyMove: false,
         typed: "100"
-      }
+      },
+      wallTypedHud: typedHud()
     } as unknown as Parameters<typeof runLayoutTransformKeyboardCommand>[0];
 
     expect(runLayoutTransformKeyboardCommand(ctx, ev)).toBe(true);
@@ -1842,7 +2015,7 @@ describe("transform keyboard shortcuts", () => {
     expect(runTransformMoveSnapToggleCommand(ctx, plainKeyEvent("N"))).toBe(true);
 
     expect(ctx.transformState.moveSnapDisabled).toBe(false);
-    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move: snapping on. Click target point, or move mouse and type distance. N = free movement.");
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move: snapping on. Zvol cielovy bod, alebo namier smer a napis vzdialenost. N = free movement.");
   });
 
   it("ignores move snap toggle outside plain active move transform", () => {
@@ -1896,38 +2069,49 @@ describe("transform keyboard shortcuts", () => {
   });
 
   it("appends move typed distance numbers and normalizes comma decimal separator", () => {
+    const hud = typedHud();
     const setUnderlayStatus = vi.fn();
     const ctx = {
       setUnderlayStatus,
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 11, y: 22 },
         step: "pickTarget",
         typed: "12"
-      }
+      },
+      wallTypedHud: hud
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent(","))).toBe(true);
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("5"))).toBe(true);
 
     expect(ctx.transformState.typed).toBe("12.5");
+    expect(hud.textContent).toBe("12.5 mm");
+    expect(hud.style.display).toBe("block");
+    expect(hud.style.left).toBe("11px");
+    expect(hud.style.top).toBe("22px");
     expect(setUnderlayStatus).toHaveBeenLastCalledWith("Move: 12.5 mm (Enter)");
   });
 
   it("backs up move typed distance and restores empty typed status", () => {
+    const hud = typedHud();
     const setUnderlayStatus = vi.fn();
     const ctx = {
       setUnderlayStatus,
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 1, y: 2 },
         step: "pickTarget",
         typed: "5"
-      }
+      },
+      wallTypedHud: hud
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("Backspace"))).toBe(true);
 
     expect(ctx.transformState.typed).toBe("");
-    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move: click target point, or move mouse for direction and type distance.");
+    expect(hud.style.display).toBe("none");
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm.");
   });
 
   it("rejects non-positive move typed distance without mutating history", () => {
@@ -1942,11 +2126,13 @@ describe("transform keyboard shortcuts", () => {
       setUnderlayStatus,
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 0, y: 0 },
         lastValidDelta: new THREE.Vector3(1, 0, 0),
         step: "pickTarget",
         stickyMove: false,
         typed: "0"
-      }
+      },
+      wallTypedHud: typedHud()
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("Enter"))).toBe(true);
@@ -1969,11 +2155,13 @@ describe("transform keyboard shortcuts", () => {
       setUnderlayStatus,
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 0, y: 0 },
         lastValidDelta: new THREE.Vector3(0, 0, 0),
         step: "pickTarget",
         stickyMove: false,
         typed: "100"
-      }
+      },
+      wallTypedHud: typedHud()
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("Enter"))).toBe(true);
@@ -1999,11 +2187,13 @@ describe("transform keyboard shortcuts", () => {
       setUnderlayStatus: vi.fn(),
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 0, y: 0 },
         lastValidDelta: new THREE.Vector3(1, 0, 0),
         step: "pickTarget",
         stickyMove: true,
         typed: "100"
-      }
+      },
+      wallTypedHud: typedHud()
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("Enter"))).toBe(true);
@@ -2034,11 +2224,13 @@ describe("transform keyboard shortcuts", () => {
       setUnderlayStatus: vi.fn(),
       transformState: {
         kind: "move",
+        lastPointerPx: { x: 0, y: 0 },
         lastValidDelta: new THREE.Vector3(0, 0, 1),
         step: "pickTarget",
         stickyMove: false,
         typed: "250"
-      }
+      },
+      wallTypedHud: typedHud()
     } as unknown as Parameters<typeof runTransformMoveTypedDistanceCommand>[0];
 
     expect(runTransformMoveTypedDistanceCommand(ctx, plainKeyEvent("Enter"))).toBe(true);

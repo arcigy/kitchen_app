@@ -51,6 +51,7 @@ const createContext = (): SelectionControllerContext => {
   };
   return {
     instances: [],
+    getKitchenEditMode: () => false,
     kitchenMode: null,
     layoutPanel: { setSelected: vi.fn() },
     layoutTool: "select",
@@ -732,6 +733,24 @@ describe("createSelectionController", () => {
     expect(ctx.layoutPanel.setSelected).toHaveBeenCalledWith("m2");
   });
 
+  it("toggles modules into a multi-selection with additive selection", () => {
+    const ctx = createContext();
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedModule("m1");
+    controller.setSelectedModule("m2", { additive: true });
+
+    expect(ctx.selectedKind).toBe("module");
+    expect(ctx.selectedInstanceId).toBe("m2");
+    expect(Array.from(ctx.selectedInstanceIds)).toEqual(["m1", "m2"]);
+
+    controller.setSelectedModule("m1", { additive: true });
+
+    expect(ctx.selectedKind).toBe("module");
+    expect(ctx.selectedInstanceId).toBe("m2");
+    expect(Array.from(ctx.selectedInstanceIds)).toEqual(["m2"]);
+  });
+
   it("clears module selection when selecting no module", () => {
     const ctx = createContext();
     const controller = createSelectionController(ctx);
@@ -1000,6 +1019,43 @@ describe("createSelectionController", () => {
     expect(ctx.showWallSnapMarkersFor).toHaveBeenCalledWith(null);
   });
 
+  it("selects the owning kitchen group instead of an individual grouped module outside edit mode", () => {
+    const ctx = createContext();
+    ctx.instances.push(
+      { id: "m-group-1", kitchenGroupId: "kg2" } as SelectionControllerContext["instances"][number],
+      { id: "m-group-2", kitchenGroupId: "kg2" } as SelectionControllerContext["instances"][number]
+    );
+    ctx.kitchenMode = {
+      filterSelectableInstanceId: (id) => id,
+      findKitchenGroup: (id) => (id === "kg2" ? { id } : null)
+    };
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedModule("m-group-1");
+
+    expect(ctx.selectedKind).toBe("kitchenGroup");
+    expect(ctx.selectedKitchenGroupId).toBe("kg2");
+    expect(ctx.selectedInstanceId).toBeNull();
+    expect(Array.from(ctx.selectedInstanceIds)).toEqual(["m-group-1", "m-group-2"]);
+  });
+
+  it("keeps individual module selection inside kitchen edit mode", () => {
+    const ctx = createContext();
+    ctx.instances.push({ id: "m-group-1", kitchenGroupId: "kg2" } as SelectionControllerContext["instances"][number]);
+    ctx.getKitchenEditMode = () => true;
+    ctx.kitchenMode = {
+      filterSelectableInstanceId: (id) => id,
+      findKitchenGroup: (id) => (id === "kg2" ? { id } : null)
+    };
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedModule("m-group-1");
+
+    expect(ctx.selectedKind).toBe("module");
+    expect(ctx.selectedKitchenGroupId).toBeNull();
+    expect(Array.from(ctx.selectedInstanceIds)).toEqual(["m-group-1"]);
+  });
+
   it("keeps wall tool active while selecting an entity", () => {
     const ctx = createContext();
     ctx.layoutTool = "wall";
@@ -1018,6 +1074,32 @@ describe("createSelectionController", () => {
     controller.setSelectedModule("m2");
 
     expect(ctx.layoutTool).toBe("select");
+  });
+
+  it("skips wall plan and section refresh when selecting a plain module", () => {
+    const ctx = createContext();
+    ctx.instances.push({ id: "m2", kitchenGroupId: null } as SelectionControllerContext["instances"][number]);
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedModule("m2");
+
+    expect(ctx.rebuildWallPlanMesh).not.toHaveBeenCalled();
+    expect(ctx.updateAllSectionVisuals).not.toHaveBeenCalled();
+    expect(ctx.updateSelectionHighlights).toHaveBeenCalledOnce();
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("still refreshes wall plan once when switching from wall selection to a module", () => {
+    const ctx = createContext();
+    ctx.instances.push({ id: "m2", kitchenGroupId: null } as SelectionControllerContext["instances"][number]);
+    ctx.selectedKind = "wall";
+    ctx.selectedWallId = "wall";
+    ctx.selectedWallIds.add("wall");
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedModule("m2");
+
+    expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledOnce();
   });
 
   it("keeps current non-floorplan floor selection cleanup behavior", () => {

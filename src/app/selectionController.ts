@@ -3,7 +3,13 @@ import type { LayoutInstance, SelectedKind, WallInstance } from "./localTypes";
 
 type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 
-export type SelectionSideEffects = { highlights?: boolean; wallSnapId?: string | null };
+export type SelectionSideEffects = {
+  highlights?: boolean;
+  wallSnapId?: string | null;
+  previousKind?: SelectedKind;
+  previousWallSelected?: boolean;
+  previousSectionSelected?: boolean;
+};
 
 export type SelectionApplyCommandArgs = {
   kind: SelectedKind;
@@ -30,10 +36,17 @@ export type ApplySelectionCommandContext = {
 export type SelectModuleCommandContext = {
   applySelection: SelectionApplyCommand;
   clearUnderlayBox: () => void;
-  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  kitchenMode: {
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    refreshModuleCatalog?: () => void;
+  } | null;
   pinnedInstanceIds: Set<string>;
   selectedInstanceIds: Set<string>;
   setInstanceSelected: (id: string | null) => void;
+};
+
+export type SelectModuleOptions = {
+  additive?: boolean;
 };
 
 export type SelectWallCommandContext = {
@@ -83,7 +96,12 @@ export type SelectUnderlayCommandContext = {
 
 export type SelectionControllerContext = {
   instances: LayoutInstance[];
-  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  getKitchenEditMode: () => boolean;
+  kitchenMode: {
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    findKitchenGroup?: (id: string) => { id: string } | null;
+    refreshModuleCatalog?: () => void;
+  } | null;
   layoutPanel: { setSelected: (id: string | null) => void };
   layoutTool: LayoutTool;
   mountProps: () => void;
@@ -405,14 +423,20 @@ export function createSelectionController(ctx: SelectionControllerContext) {
 
   const afterSelectionChanged = (opts?: SelectionSideEffects) => {
     if (opts?.wallSnapId !== undefined) ctx.showWallSnapMarkersFor(opts.wallSnapId);
-    ctx.syncWindowSelectionVisuals(ctx.selectedKind === "window");
-    ctx.syncDoorSelectionVisuals(ctx.selectedKind === "door");
+    const nextKind = ctx.selectedKind;
+    ctx.syncWindowSelectionVisuals(nextKind === "window");
+    ctx.syncDoorSelectionVisuals(nextKind === "door");
     ctx.syncColumnSelectionVisuals();
     ctx.syncSelectionState();
-    ctx.rebuildWallPlanMesh();
+    if (opts?.previousWallSelected || nextKind === "wall" || nextKind === "window" || nextKind === "door") {
+      ctx.rebuildWallPlanMesh();
+    }
     refreshSelectionHighlights(ctx, opts);
-    ctx.updateAllSectionVisuals();
+    if (opts?.previousSectionSelected || nextKind === "section") {
+      ctx.updateAllSectionVisuals();
+    }
     ctx.mountProps();
+    ctx.kitchenMode?.refreshModuleCatalog?.();
   };
 
   const ensureSelectableTool = () => {
@@ -453,7 +477,22 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   };
 
   const applySelection: SelectionApplyCommand = (args) => {
-    runApplySelectionCommand(applySelectionCommandContext, args);
+    const previousKind = ctx.selectedKind;
+    const previousWallSelected = previousKind === "wall" || ctx.selectedWallIds.size > 0 || !!ctx.selectedWallId;
+    const previousSectionSelected = previousKind === "section" || !!ctx.selectedSectionId;
+    runApplySelectionCommand(
+      {
+        ...applySelectionCommandContext,
+        afterSelectionChanged: (opts) =>
+          afterSelectionChanged({
+            ...opts,
+            previousKind,
+            previousWallSelected,
+            previousSectionSelected
+          })
+      },
+      args
+    );
   };
 
   function setSelectedKitchenGroup(groupId: string | null) {
@@ -467,7 +506,47 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     }, groupId);
   }
 
-  function setSelectedModule(id: string | null) {
+  function setSelectedModule(id: string | null, options?: SelectModuleOptions) {
+    const inst = id ? ctx.instances.find((item) => item.id === id) ?? null : null;
+    if (!ctx.getKitchenEditMode() && inst?.kitchenGroupId && ctx.kitchenMode?.findKitchenGroup?.(inst.kitchenGroupId)) {
+      setSelectedKitchenGroup(inst.kitchenGroupId);
+      return;
+    }
+
+    if (options?.additive && id) {
+      let selectedId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+      if (selectedId && ctx.pinnedInstanceIds.has(selectedId)) selectedId = null;
+      if (!selectedId) return;
+
+      const previousKind = ctx.selectedKind;
+      const previousWallSelected = previousKind === "wall" || ctx.selectedWallIds.size > 0 || !!ctx.selectedWallId;
+      const previousSectionSelected = previousKind === "section" || !!ctx.selectedSectionId;
+      ensureSelectableTool();
+      if (ctx.selectedKind !== "module") {
+        clearSelectedEntityIds();
+        clearObjectSelectionVisuals();
+        ctx.selectedKind = "module";
+      }
+      if (ctx.selectedInstanceIds.has(selectedId)) {
+        ctx.selectedInstanceIds.delete(selectedId);
+        const nextPrimary = Array.from(ctx.selectedInstanceIds).at(-1) ?? null;
+        ctx.selectedKind = nextPrimary ? "module" : null;
+        setInstanceSelected(nextPrimary);
+      } else {
+        ctx.selectedInstanceIds.add(selectedId);
+        ctx.selectedKind = "module";
+        setInstanceSelected(selectedId);
+      }
+      clearUnderlayBox();
+      afterSelectionChanged({
+        ...getSelectionSideEffects(ctx.selectedKind),
+        previousKind,
+        previousWallSelected,
+        previousSectionSelected
+      });
+      return;
+    }
+
     runSelectModuleCommand({
       applySelection,
       clearUnderlayBox,

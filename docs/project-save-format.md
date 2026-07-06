@@ -1,6 +1,8 @@
 # Project Save Format
 
-Project lifecycle data is tenant-scoped. The server derives `clientId` from the validated session and stores projects under:
+Project lifecycle data is tenant-scoped. Production and normal development store projects in the online tenant database. The server derives `clientId` from the validated session and must not trust a client-supplied tenant id.
+
+File-backed project paths are legacy/test/migration fixtures only:
 
 ```txt
 storage/clients/{clientId}/projects/{projectId}/
@@ -12,6 +14,8 @@ storage/clients/{clientId}/projects/{projectId}/
     renders/
     uploads/
 ```
+
+Do not add new normal-runtime project, client, catalog, module, pricing, or preset flows that bypass the tenant DB. Local files may be used only for explicit import/export artifacts, tests, or controlled migration tooling.
 
 `project.meta.json` contains project identity, required project fields, active phase and ownership metadata. New projects create `phase_1` as `Faza 1`.
 

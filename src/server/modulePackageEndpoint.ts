@@ -16,6 +16,11 @@ function bodyRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function optionalRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
 export async function handleModulePackageApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -46,6 +51,32 @@ export async function handleModulePackageApi(
       return true;
     }
     deps.sendJson(res, 200, { ok: true, module: modulePackage });
+    return true;
+  }
+
+  const presetMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/parameter-presets$/);
+  if (req.method === "POST" && presetMatch) {
+    const body = bodyRecord(await deps.readJsonBody(req));
+    if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
+    const name = typeof body.name === "string" ? body.name : "";
+    const note = typeof body.note === "string" ? body.note : "";
+    const parameters = optionalRecord(body.parameters);
+    const result = await service.createParameterPreset({
+      modulePackageId: decodeURIComponent(presetMatch[1]!),
+      name,
+      note,
+      parameters
+    });
+    deps.sendJson(res, 201, {
+      ok: true,
+      modulePackage: result.modulePackage,
+      catalogModule: result.catalogModule,
+      preset: {
+        presetId: result.preset.presetId,
+        label: result.preset.label,
+        note: result.preset.note
+      }
+    });
     return true;
   }
 

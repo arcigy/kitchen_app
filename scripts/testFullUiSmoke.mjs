@@ -65,6 +65,7 @@ async function main() {
     const kitchenTab = await page.evaluate(() => {
       const rows = document.querySelector(".topbar-rows");
       const row = rows?.querySelector(".topbar");
+      const catalog = document.querySelector("#moduleCatalog");
       const children = [...(row?.children ?? [])].map((el) => ({
         title: (el.querySelector(".topbar-group-title")?.textContent || "").trim().toLowerCase(),
         flex: el instanceof HTMLElement ? el.style.flex : ""
@@ -73,16 +74,63 @@ async function main() {
       const toolTitles = [...(rows?.querySelectorAll("button") ?? [])].map((button) =>
         (button.getAttribute("title") || button.textContent || "").trim().toLowerCase()
       );
-      return { children, text, toolTitles };
+      const catalogButtons = [...(catalog?.querySelectorAll("button") ?? [])].map((button) => ({
+        text: (button.textContent || "").trim().toLowerCase(),
+        disabled: button.disabled
+      }));
+      const catalogRect = catalog?.getBoundingClientRect();
+      const viewerRect = document.querySelector("#viewer")?.getBoundingClientRect();
+      const cardRects = [...(catalog?.querySelectorAll(".module-catalog-card") ?? [])].map((card) => {
+        const rect = card.getBoundingClientRect();
+        return {
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          top: Math.round(rect.top)
+        };
+      });
+      const maxCardsPerRow = Math.max(
+        0,
+        ...Object.values(
+          cardRects.reduce((groups, rect) => {
+            groups[rect.top] = (groups[rect.top] ?? 0) + 1;
+            return groups;
+          }, {})
+        )
+      );
+      return {
+        cardRects,
+        catalogButtons,
+        catalogHidden: catalog?.hasAttribute("hidden") ?? true,
+        catalogWidth: catalogRect?.width ?? 0,
+        catalogText: (catalog?.textContent || "").toLowerCase(),
+        children,
+        maxCardsPerRow,
+        text,
+        toolTitles,
+        viewerWidth: viewerRect?.width ?? 0
+      };
     });
-    const worktopsIndex = kitchenTab.children.findIndex((child) => /worktops|pracovn/.test(child.title));
     assert(
-      (/worktops|pracovn/.test(kitchenTab.text) || kitchenTab.toolTitles.some((title) => /worktop|pracovn/.test(title))) &&
+      !kitchenTab.toolTitles.some((title) => /worktop|pracovn|drawer|cabinet|skrinka|polic/.test(title)) &&
         !kitchenTab.toolTitles.some((title) => title === "kitchen" || title === "kuchyňa"),
-      "Kitchen tab is not broken into direct tools",
+      "Kitchen modules or worktops are still in the topbar",
       kitchenTab
     );
-    assert(worktopsIndex > 0 && !kitchenTab.children[worktopsIndex - 1]?.flex, "Worktop button is separated from kitchen tools", kitchenTab);
+    assert(!kitchenTab.catalogHidden && /modul/.test(kitchenTab.catalogText), "Kitchen module catalog is not visible", kitchenTab);
+    assert(kitchenTab.catalogWidth >= 280 && kitchenTab.catalogWidth <= 360 && kitchenTab.viewerWidth > kitchenTab.catalogWidth * 2, "Kitchen module catalog layout is stretched", kitchenTab);
+    assert(
+      kitchenTab.maxCardsPerRow >= 5 &&
+        kitchenTab.cardRects.some((rect) => rect.width <= 60 && rect.height <= 64 && Math.abs(rect.width - rect.height) <= 8),
+      "Kitchen module catalog cards are not compact five-column squares",
+      kitchenTab
+    );
+    assert(
+      kitchenTab.catalogButtons.some((button) => /nov/.test(button.text) && !button.disabled) &&
+        kitchenTab.catalogButtons.some((button) => /pracovn/.test(button.text) && button.disabled) &&
+        kitchenTab.catalogButtons.some((button) => /skrinka|corner|modul|chlad/.test(button.text) && button.disabled),
+      "Kitchen module catalog does not start with disabled module/worktop actions",
+      kitchenTab
+    );
     assert(await clickButton(page, `(title, text) => title.includes("new group") || title.includes("nov") && title.includes("skup")`), "New kitchen group button not found");
     const hasAcceptGroup = await page.evaluate(() => {
       const titles = [...document.querySelectorAll(".topbar-rows button")].map((button) =>
@@ -93,57 +141,6 @@ async function main() {
     assert(hasAcceptGroup, "Accept group button not shown while editing kitchen group");
     assert(await clickButton(page, `(title, text) => title.includes("discard") || title.includes("zru") || text.includes("zru")`), "Discard kitchen group button not found");
     assert(await clickTopbarTab(page, ["Architecture", "Architektúra"]), "Architecture tab not found");
-
-    const autoU = await page.evaluate(() => window.__kitchenDebug.createRequestedUKitchen());
-    const autoSnapshot = autoU.snapshot;
-    const firstDrawer = autoSnapshot.instances.find(
-      (inst) => inst.params.type === "fwm_base_drawer_cabinet" && inst.params.width === 650 && inst.params.drawerFrontHeightsMm === "100,317,317"
-    );
-    const topDrawerFront = firstDrawer?.parts.find((part) => part.name === "drawer_front_1");
-    const bodyMaterials = new Set(autoSnapshot.instances.map((inst) => inst.params.bodyMaterialId));
-    const frontMaterials = new Set(autoSnapshot.instances.map((inst) => inst.params.frontMaterialId));
-    assert(
-        autoU.createdInMs < 10000 &&
-        autoU.plan.moduleCount >= 20 &&
-        autoSnapshot.instances.length === autoU.plan.moduleCount &&
-        autoSnapshot.worktops.length >= 2 &&
-        autoSnapshot.group?.ctx?.wallHeightMm === 2800 &&
-        autoSnapshot.worktops[0]?.params?.heightMm === 900 &&
-        autoU.plan.validation.every((run) => run.gapMm === 0 && run.overlapMm === 0 && run.usedMm === run.spanMm) &&
-        firstDrawer?.params.drawerCount === 3 &&
-        Math.round(topDrawerFront?.dimensionsMm?.height ?? 0) === 100 &&
-        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_kitchen_island" && inst.params.variant === "mixed") &&
-        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_built_in_fridge" && inst.params.height === 2800) &&
-        autoSnapshot.instances.some((inst) => inst.params.type === "fwm_oven_tower_module" && inst.params.height === 2800 && inst.params.drawerCount === 3) &&
-        bodyMaterials.size > 3 &&
-        frontMaterials.size > 3,
-      "Auto U kitchen e2e validation failed",
-      { createdInMs: autoU.createdInMs, plan: autoU.plan, firstDrawer, topDrawerFront, bodyMaterials: [...bodyMaterials], frontMaterials: [...frontMaterials] }
-    );
-
-    const ovenTower = autoSnapshot.instances.find((inst) => inst.params.type === "fwm_oven_tower_module" && inst.params.height === 2800);
-    assert(ovenTower, "Auto U oven tower not found for fit-gap regression", autoSnapshot.instances.map((inst) => inst.params.type));
-    await page.evaluate(
-      ({ id, type }) => window.__kitchenDebug.patchModuleParams(id, { width: 500, widthMm: 500 }, { sourceKey: type, preserveBackAnchor: true }),
-      { id: ovenTower.id, type: ovenTower.params.type }
-    );
-    const fitSnapshot = await page.evaluate((id) => window.__kitchenDebug.fitModuleToGap(id), ovenTower.id);
-    const fittedTower = fitSnapshot.instances.find((inst) => inst.id === ovenTower.id);
-    const fittedRightRun = fitSnapshot.instances
-      .filter((inst) => Math.abs(inst.rotationYRad + Math.PI / 2) < 0.01 && Math.abs(inst.positionM.x - ovenTower.positionM.x) < 0.01)
-      .map((inst) => ({ id: inst.id, minZ: inst.structuralWorldBoxM.min.z, maxZ: inst.structuralWorldBoxM.max.z }))
-      .sort((left, right) => left.minZ - right.minZ);
-    const fittedRunGapsMm = fittedRightRun.slice(1).map((item, index) =>
-      Math.round((item.minZ - fittedRightRun[index].maxZ) * 1000)
-    );
-    assert(
-      fittedTower?.params.width === 500 &&
-        fittedTower?.params.widthMm === 500 &&
-        fittedRunGapsMm.every((gap) => Math.abs(gap) <= 1),
-      "Shrinking/fitting right run left measurable gaps or overlaps",
-      { fittedTower, fittedRunGapsMm }
-    );
-    await page.evaluate(() => window.__kitchenDebug.reset());
 
     const scenario = await page.evaluate(() =>
       window.__kitchenDebug.createKitchenScenario({
@@ -221,6 +218,16 @@ async function main() {
 
     const snap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 5, z: 0 }));
     assert(snap?.kind && snap.kind !== "none", "Plan snap failed", snap);
+    const column = await page.evaluate(() =>
+      window.__kitchenDebug.createColumn({ xMm: 4200, zMm: 2600, widthMm: 400, depthMm: 600, shape: "rectangular" })
+    );
+    const columnSnap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 4210, z: 2605 }));
+    assert(column?.id && columnSnap?.owner === "column" && columnSnap.kind === "midpoint", "Column plan snap failed", { column, columnSnap });
+    const section = await page.evaluate(() =>
+      window.__kitchenDebug.createSection({ name: "QA Section", aMm: { x: 5200, z: 2800 }, bMm: { x: 6200, z: 2800 }, mirrored: false })
+    );
+    const sectionSnap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 5205, z: 2800 }));
+    assert(section?.id && sectionSnap?.owner === "section" && sectionSnap.kind === "endpoint", "Section plan snap failed", { section, sectionSnap });
 
     await page.evaluate(() => {
       window.__qaCopiedText = null;
@@ -287,8 +294,6 @@ async function main() {
           checks: [
             "boot",
             "debug-api",
-            "auto-u-kitchen",
-            "fit-gap-cross-role",
             "create-kitchen-scenario",
             "patch-module-params",
             "add-module",

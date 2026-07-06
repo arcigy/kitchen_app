@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from "pg";
 import { quotePgIdentifier } from "./database-config";
 import { REQUIRED_DATABASE_MIGRATION_VERSION } from "./migration-version";
+import { attachPostgresPoolErrorHandler } from "./postgres-pool-error-handler";
 
 const pools = new Map<string, Pool>();
 const verifiedSchemas = new Set<string>();
@@ -19,6 +20,7 @@ export function getSchemaPool(connectionString: string, schema: string): Pool {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000
   });
+  attachPostgresPoolErrorHandler(pool, "postgres", schema);
   pools.set(key, pool);
   return pool;
 }

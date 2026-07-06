@@ -27,6 +27,7 @@ const basePlinthHeightMm =
   typeof baseLiveRuntime?.params?.plinthHeight === "number" ? baseLiveRuntime.params.plinthHeight : 100;
 const basePlinthSetbackMm =
   typeof baseLiveRuntime?.params?.plinthSetbackMm === "number" ? baseLiveRuntime.params.plinthSetbackMm : 60;
+const cornerFrontRevealMm = 0.2;
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -449,6 +450,32 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
   }
 }
 
+function applyCornerDoorGroundTruth(group: THREE.Group, params: CornerShelfLowerParams) {
+  const lengthXMm = Math.max(400, Math.round(getNumber(params.lengthX, baseLengthXMm)));
+  const lengthZMm = Math.max(400, Math.round(getNumber(params.lengthZ, baseLengthZMm)));
+  const depthMm = Math.max(1, Math.round(getNumber(params.depth, baseDepthMm)));
+  const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, baseFrontThicknessMm)));
+  const sideGapMm = Math.max(0, Math.round(getNumber(params.sideGap, baseSideGapMm)));
+
+  const doorFrontZ = group.getObjectByName("door_front_z") as THREE.Mesh | null;
+  if (doorFrontZ instanceof THREE.Mesh) {
+    const targetMinXMm = depthMm - frontThicknessMm;
+    const targetMaxXMm = lengthXMm - sideGapMm;
+    const targetWidthMm = Math.max(1, targetMaxXMm - targetMinXMm);
+    resizeMeshAxis(doorFrontZ, "x", targetWidthMm);
+    setObjectCenterX(doorFrontZ, targetMinXMm + targetWidthMm * 0.5);
+  }
+
+  const doorFrontX = group.getObjectByName("door_front_x") as THREE.Mesh | null;
+  if (doorFrontX instanceof THREE.Mesh) {
+    const targetMinZMm = depthMm + cornerFrontRevealMm;
+    const targetMaxZMm = lengthZMm - sideGapMm;
+    const targetDepthMm = Math.max(1, targetMaxZMm - targetMinZMm);
+    resizeMeshAxis(doorFrontX, "z", targetDepthMm);
+    setObjectCenterZ(doorFrontX, targetMinZMm + targetDepthMm * 0.5);
+  }
+}
+
 function applyCornerBackAdjustments(group: THREE.Group, params: CornerShelfLowerParams) {
   const backThicknessMm = Math.max(1, Math.round(getNumber(params.backThickness, baseBackThicknessMm)));
   const backX = group.getObjectByName("back_x") as THREE.Mesh | null;
@@ -867,6 +894,7 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams, catalog: C
   syncCornerHingeMeshes(group, params);
   applyCornerDepthAdjustments(group, params);
   applyCornerLengthAdjustments(group, params);
+  applyCornerDoorGroundTruth(group, params);
   applyCornerBackAdjustments(group, params);
   applyCornerHeightAdjustments(group, params);
   applyCornerPlinthAdjustments(group, params);

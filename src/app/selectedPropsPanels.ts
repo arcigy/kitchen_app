@@ -2,7 +2,7 @@ import type { AppState } from "../layout/appState";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
+import { createResolvedModuleControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
 import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
@@ -1141,14 +1141,132 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
       missing.textContent = `Module package missing for ${inst.params.type}.`;
       editorHost.appendChild(missing);
     } else {
-      createModulePackageControls(editorHost, modulePackage, inst.params, {
+      createResolvedModuleControls(editorHost, modulePackage, inst.params, {
         ...worktopArgs,
         onChange,
         textInputCommitMode: "explicit",
-        commitBoundary: args.propertiesEl
+        commitBoundary: args.propertiesEl,
+        createParameterPreset: async ({ modulePackage: activePackage, parameters, name, note }) => {
+          const response = await fetch(`/api/modules/${encodeURIComponent(activePackage.module.modulePackageId)}/parameter-presets`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, note, parameters })
+          });
+          const payload = await response.json().catch(() => null) as {
+            ok?: boolean;
+            error?: string;
+            modulePackage?: FurnQuoteModulePackage;
+            catalogModule?: ClientCatalog["modules"][number];
+            preset?: { presetId?: string };
+          } | null;
+          if (!response.ok || !payload?.ok || !payload.modulePackage || !payload.preset?.presetId) {
+            throw new Error(payload?.error || "Preset save failed.");
+          }
+          Object.assign(activePackage, payload.modulePackage);
+          if (payload.catalogModule) {
+            const moduleIndex = ctx.clientCatalog.modules.findIndex((module) =>
+              module.modulePackageId === payload.catalogModule?.modulePackageId ||
+              module.moduleType === payload.catalogModule?.moduleType
+            );
+            if (moduleIndex >= 0) ctx.clientCatalog.modules[moduleIndex] = payload.catalogModule;
+            else ctx.clientCatalog.modules.push(payload.catalogModule);
+          }
+          inst.params.packageHash = payload.modulePackage.integrity.packageHash;
+          return { modulePackage: payload.modulePackage, presetId: payload.preset.presetId };
+        }
       });
     }
 
     appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
 
+}
+
+export function mountMultiModulePropsPanel(ctx: ModulePropsContext, ids: Iterable<string>) {
+  const { findInstance, showNoProps, props, commitHistory, S, mountProps, modulePackages, args, rebuildInstance } = ctx;
+  const selected = Array.from(ids)
+    .map((id) => findInstance(id))
+    .filter((inst): inst is LayoutInstance => Boolean(inst));
+  if (selected.length === 0) return showNoProps();
+  if (selected.length === 1) return mountModulePropsPanel(ctx, selected[0].id);
+
+  props.setTitle(`Modules (${selected.length})`);
+  const section = props.section();
+  const info = document.createElement("div");
+  info.className = "muted";
+  info.textContent = selected.map((inst) => inst.id).join(", ");
+  section.appendChild(info);
+
+  const packageByInstance = new Map<LayoutInstance, FurnQuoteModulePackage | null>();
+  for (const inst of selected) packageByInstance.set(inst, findModulePackageForParams(modulePackages, inst.params));
+  const firstPackage = packageByInstance.get(selected[0]) ?? null;
+  const samePackage = !!firstPackage && selected.every((inst) => packageByInstance.get(inst)?.module.modulePackageId === firstPackage.module.modulePackageId);
+
+  const editorHost = document.createElement("div");
+  editorHost.style.marginTop = "10px";
+  section.appendChild(editorHost);
+
+  if (!samePackage || !firstPackage) {
+    const mixed = document.createElement("div");
+    mixed.className = "muted";
+    mixed.textContent = "Vybrane moduly nemaju rovnaky parameter package. Spolocna editacia parametrov je dostupna pre rovnaky typ modulu.";
+    editorHost.appendChild(mixed);
+    return;
+  }
+
+  const aggregate = structuredClone(selected[0].params) as Record<string, unknown>;
+  const mixedKeys = new Set<string>();
+  for (const parameter of firstPackage.parameters.parameters) {
+    const firstValue = selected[0].params[parameter.key];
+    const isMixed = selected.some((inst) => inst.params[parameter.key] !== firstValue);
+    if (!isMixed) {
+      aggregate[parameter.key] = firstValue;
+      continue;
+    }
+    mixedKeys.add(parameter.key);
+    if (parameter.type === "boolean") aggregate[parameter.key] = false;
+    else aggregate[parameter.key] = "";
+  }
+
+  const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog };
+  const onChange = (_previousParams?: ModuleParams, sourceKey?: string) => {
+    if (!sourceKey) return false;
+    const nextValue = aggregate[sourceKey];
+    const previous = selected.map((inst) => ({ inst, params: structuredClone(inst.params) }));
+    for (const inst of selected) {
+      (inst.params as Record<string, unknown>)[sourceKey] = nextValue;
+      const accepted = rebuildInstance(inst, {
+        previousParams: previous.find((item) => item.inst === inst)?.params,
+        preserveBackAnchor: true,
+        sourceKey
+      });
+      if (!accepted) {
+        for (const item of previous) {
+          item.inst.params = item.params;
+          rebuildInstance(item.inst, { skipLayoutValidation: true });
+        }
+        return false;
+      }
+    }
+    commitHistory(S);
+    mountProps();
+    return true;
+  };
+
+  createResolvedModuleControls(editorHost, firstPackage, aggregate, {
+    ...worktopArgs,
+    onChange,
+    textInputCommitMode: "explicit",
+    commitBoundary: args.propertiesEl
+  });
+
+  for (const key of mixedKeys) {
+    const parameter = firstPackage.parameters.parameters.find((item) => item.key === key) ?? null;
+    const label = parameter ? parameter.label : key;
+    const rows = Array.from(editorHost.querySelectorAll<HTMLElement>(".module-package-control"));
+    const row = rows.find((item) => item.textContent?.includes(label) || item.textContent?.includes(key));
+    const input = row?.querySelector<HTMLInputElement | HTMLSelectElement>("input, select") ?? null;
+    if (!input) continue;
+    if (input instanceof HTMLInputElement && input.type !== "checkbox") input.placeholder = "rozdielne";
+    input.title = "rozdielne";
+  }
 }

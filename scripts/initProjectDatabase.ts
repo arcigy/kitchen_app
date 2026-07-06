@@ -1,14 +1,16 @@
 import { closePostgresProjectPools, createPostgresProjectRepository } from "../src/core/project/project-postgres-repository";
+import { resolveDatabaseConfig } from "../src/core/database/database-config";
 
-const connectionString =
-  process.env.KITCHEN_PROJECT_DATABASE_URL ||
-  process.env.PROJECT_DATABASE_URL ||
-  "postgres://kitchen_app:kitchen_app@127.0.0.1:5432/kitchen_app";
+const databaseConfig = resolveDatabaseConfig();
+if (!databaseConfig) {
+  throw new Error("DATABASE_URL, KITCHEN_PROJECT_DATABASE_URL, or complete POSTGRES_* env vars are required. The old local 127.0.0.1 fallback is disabled.");
+}
 
 try {
   await createPostgresProjectRepository({
-    connectionString,
-    projectRoot: process.cwd()
+    connectionString: databaseConfig.connectionString,
+    projectRoot: process.cwd(),
+    schema: databaseConfig.schema
   }).listProjects({
     clientId: "db_init",
     userId: "db_init",

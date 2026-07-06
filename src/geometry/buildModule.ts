@@ -2,6 +2,7 @@ import type { ModuleParams } from "../model/cabinetTypes";
 import { normalizeModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { getModuleDescriptorOrThrow } from "../modules/registry";
+import { applyUnassignedModuleMaterials } from "./moduleUnassignedMaterials";
 
 export function buildModule(p: ModuleParams, catalog: ClientCatalog) {
   p = normalizeModuleParams(p);
@@ -13,6 +14,7 @@ export function buildModule(p: ModuleParams, catalog: ClientCatalog) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
   });
+  applyUnassignedModuleMaterials(root);
 
   return root;
 }

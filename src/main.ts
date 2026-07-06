@@ -6,7 +6,6 @@ import "./styles/projectManager.css";
 import "./styles/auth.css";
 import "./styles/editorShell.css";
 import "./styles/classicEditorChrome.css";
-import "./styles/pdfIntake.css";
 import "./style.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
@@ -167,18 +166,9 @@ async function start(): Promise<void> {
     return;
   }
 
-  if (window.location.pathname === "/module-inspector") {
-    setBootStatus("Spustam module inspector", 84);
-    const { startModuleInspectorApp } = await import("./module-inspector/moduleInspectorApp");
-    finishBootLoading();
-    await startModuleInspectorApp(appRoot);
-    return;
-  }
-
   const { requireClientSession } = await import("./app/authController");
   const { createClientContext } = await import("./core/client/client-context");
-  const { createLocalClientRepository } = await import("./core/client/client-repository");
-  const { createClientService } = await import("./core/client/client-service");
+  const { loadCurrentClientProfileForApp } = await import("./app/clientProfileLoader");
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
   setBootStatus("Prihlasenie potvrdene", 22);
@@ -191,26 +181,7 @@ async function start(): Promise<void> {
     return;
   }
 
-  if (window.location.pathname === "/pdf-intake") {
-    setBootStatus("Spustam PDF intake", 84);
-    const { startPdfIntakePage } = await import("./features/pdf-intake/PdfIntakePage");
-    finishBootLoading();
-    startPdfIntakePage(appRoot);
-    return;
-  }
-
-  if (window.location.pathname === "/pdf-demo") {
-    setBootStatus("Spustam PDF demo", 84);
-    const { startPdfKitchenDemo } = await import("./pdfDemo/pdfKitchenDemo");
-    finishBootLoading();
-    startPdfKitchenDemo(appRoot);
-    return;
-  }
-
-  const clientProfile = createClientService({
-    context: clientContext,
-    repository: createLocalClientRepository()
-  }).getCurrentClientProfile();
+  const clientProfile = await loadCurrentClientProfileForApp(clientContext.clientId);
 
   if (!shouldAutoStartWorkspace()) {
     finishBootLoading();
@@ -243,7 +214,7 @@ async function launchWorkspace(args: {
   initialProjectSave: ProjectSaveFile | null;
 }): Promise<void> {
   setBootStatus("Zobrazujem pracovisko", 88);
-  const appDataPromise = import("./app/catalogLoader").then(({ loadClientAppDataForApp }) => loadClientAppDataForApp());
+  const appDataPromise = import("./app/catalogLoader").then(({ loadClientAppDataForApp }) => loadClientAppDataForApp(args.clientContext.clientId));
   const appModulePromise = import("./app");
   const i18nPromise = import("./i18n");
   const installPromise = import("./pwa/installController");

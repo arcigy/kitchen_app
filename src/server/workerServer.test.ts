@@ -10,8 +10,11 @@ import { getProjectMetaPath } from "../core/storage/project-ownership";
 import { createInMemoryUserRepository, seedAuthUsers } from "../core/auth/user-repository";
 import { createUserService, type UserService } from "../core/auth/user-service";
 import { CLIENT_SESSION_COOKIE, serializeClientSessionCookie } from "../core/client/session-cookie";
+import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
+import { createCatalogModuleDefinitionFromPackage } from "../core/module-package/module-package-catalog";
 import { startWorkerServer } from "./workerServer";
 import cornerShelfLowerFixture from "../core/module-package/fixtures/cornerShelfLower.fqm.source.json";
+import { createPinoSideCabinetTenantPackage } from "../system/module-packages/pinoSideCabinet";
 
 vi.mock("./blender/runBlenderExport", () => ({
   runBlenderExport: async (args: {
@@ -248,6 +251,337 @@ describe("multi-client worker isolation", () => {
       { cookie }
     );
     expect(wrongFamily.status).toBe(404);
+  }, 30_000);
+
+  it("resolves tenant vendor module lookup inside the current client catalog namespace", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
+    expect(catalog?.priceList?.prices).toBeTruthy();
+
+    const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
+    const sidePackage = createPinoSideCabinetTenantPackage();
+    const modules = [
+      createCatalogModuleDefinitionFromPackage(sidePackage, {
+        enabled: true,
+        packageHash: "pinohash",
+        catalog: { priceList: catalog!.priceList! }
+      })
+    ];
+    const vendorCatalog = {
+      vendorId: "pino_nobilia",
+      displayName: "PINO/Nobilia VKH 2026 CZ",
+      source: "vkh_2026_cz_pdf",
+      productVariants: [
+        attachVendorModuleIntent({
+          productTemplateId: "pino_side_cabinet_gb_fb_page245",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 245,
+          articleCode: "GB03FB",
+          articleFamily: "GB",
+          widthCm: null,
+          variantCode: "FB",
+          variantCodeStatus: "extracted",
+          catalogKey: "GB-FB",
+          productTemplateName: "Bocni skrinka pro vestavne spotrebice",
+          confidence: 0.95,
+          needsReview: false
+        })
+      ],
+      productTemplates: [],
+      pricingReferences: [],
+      extractionMeta: {
+        sourcePdf: "VKH_2026_CZ.pdf",
+        pages: [245],
+        productVariants: 1,
+        productTemplates: 0,
+        pricingReferences: 0,
+        importedAt: "2026-06-16T00:00:00.000Z",
+        importStatus: "review_staging",
+        productionImportApproved: false,
+        notes: []
+      }
+    };
+    await writeFile(path.join(clientCatalogDir, "modules.json"), `${JSON.stringify(modules, null, 2)}\n`, "utf-8");
+    await writeFile(path.join(clientCatalogDir, "vendorCatalog.json"), `${JSON.stringify(vendorCatalog, null, 2)}\n`, "utf-8");
+
+    const response = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_module&moduleType=pino_side_cabinet&articleFamily=GB&catalogKey=GB-FB",
+      { cookie }
+    );
+
+    expect(response.status).toBe(200);
+    const resolution = (response.body as { resolution?: { status?: string; moduleType?: string; placementZone?: string; requiresApplianceOpening?: boolean } }).resolution;
+    expect(resolution?.status).toBe("resolved");
+    expect(resolution?.moduleType).toBe("pino_side_cabinet");
+    expect(resolution?.placementZone).toBe("tall_appliance");
+    expect(resolution?.requiresApplianceOpening).toBe(true);
+  }, 30_000);
+
+  it("resolves tenant vendor module seed lookup inside the current client catalog namespace", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    await requestWorker(controller!.port, "/api/catalog", { cookie });
+
+    const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
+    const vendorCatalog = {
+      vendorId: "pino_nobilia",
+      displayName: "PINO/Nobilia VKH 2026 CZ",
+      source: "vkh_2026_cz_pdf",
+      productVariants: [
+        attachVendorModuleIntent({
+          productTemplateId: "tpl_ua",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 99,
+          articleCode: "UA60",
+          articleFamily: "UA",
+          widthCm: 60,
+          widthMm: 600,
+          variantCode: null,
+          variantCodeStatus: "none_expected",
+          catalogKey: "UA-60",
+          productTemplateName: "Modul spodni skrinky; 1 vysuv",
+          notes: ["1 vysuv"],
+          confidence: 0.95,
+          needsReview: false
+        })
+      ],
+      productTemplates: [],
+      pricingReferences: [],
+      extractionMeta: {
+        sourcePdf: "VKH_2026_CZ.pdf",
+        pages: [99],
+        productVariants: 1,
+        productTemplates: 0,
+        pricingReferences: 0,
+        importedAt: "2026-06-16T00:00:00.000Z",
+        importStatus: "review_staging",
+        productionImportApproved: false,
+        notes: []
+      }
+    };
+    await writeFile(path.join(clientCatalogDir, "vendorCatalog.json"), `${JSON.stringify(vendorCatalog, null, 2)}\n`, "utf-8");
+
+    const response = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_module_seed&articleFamily=UA&widthMm=600",
+      { cookie }
+    );
+
+    expect(response.status).toBe(200);
+    const resolution = (response.body as { resolution?: { status?: string; moduleType?: string; params?: { width?: number; drawerCount?: number } } }).resolution;
+    expect(resolution?.status).toBe("resolved");
+    expect(resolution?.moduleType).toBe("drawer_low");
+    expect(resolution?.params?.width).toBe(600);
+    expect(resolution?.params?.drawerCount).toBe(1);
+  }, 30_000);
+
+  it("returns appliance host incompatibility for oversized PINO appliance side-cabinet lookups", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
+    const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
+    const sidePackage = createPinoSideCabinetTenantPackage();
+    const modules = [
+      createCatalogModuleDefinitionFromPackage(sidePackage, {
+        enabled: true,
+        packageHash: "pinohash",
+        catalog: { priceList: catalog!.priceList! }
+      })
+    ];
+    const vendorCatalog = {
+      vendorId: "pino_nobilia",
+      displayName: "PINO/Nobilia VKH 2026 CZ",
+      source: "vkh_2026_cz_pdf",
+      productVariants: [
+        attachVendorModuleIntent({
+          productTemplateId: "pino_side_cabinet_gb_fb_page245",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 245,
+          articleCode: "GB03FB",
+          articleFamily: "GB",
+          widthCm: null,
+          widthMm: 600,
+          variantCode: "FB",
+          variantCodeStatus: "extracted",
+          catalogKey: "GB-FB",
+          productTemplateName: "Bocni skrinka pro vestavne spotrebice",
+          notes: ["1 sklapece dvirka", "Vyska vyklenku 590 mm", "1 otocna dvirka"],
+          confidence: 0.95,
+          needsReview: false
+        })
+      ],
+      productTemplates: [],
+      pricingReferences: [],
+      extractionMeta: {
+        sourcePdf: "VKH_2026_CZ.pdf",
+        pages: [245],
+        productVariants: 1,
+        productTemplates: 0,
+        pricingReferences: 0,
+        importedAt: "2026-06-16T00:00:00.000Z",
+        importStatus: "review_staging",
+        productionImportApproved: false,
+        notes: []
+      }
+    };
+    await writeFile(path.join(clientCatalogDir, "modules.json"), `${JSON.stringify(modules, null, 2)}\n`, "utf-8");
+    await writeFile(path.join(clientCatalogDir, "vendorCatalog.json"), `${JSON.stringify(vendorCatalog, null, 2)}\n`, "utf-8");
+
+    const response = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_module_seed&moduleType=pino_side_cabinet&articleFamily=GB&catalogKey=GB-FB&applianceCategory=oven_tall&applianceWidthMm=560&applianceHeightMm=580",
+      { cookie }
+    );
+
+    expect(response.status).toBe(200);
+    const resolution = (response.body as {
+      resolution?: {
+        status?: string;
+        moduleType?: string;
+        applianceHostStatus?: string;
+        applianceHostValidation?: { valid?: boolean; errors?: string[] };
+      };
+    }).resolution;
+    expect(resolution?.status).toBe("needs_review");
+    expect(resolution?.moduleType).toBe("pino_side_cabinet");
+    expect(resolution?.applianceHostStatus).toBe("incompatible");
+    expect(resolution?.applianceHostValidation?.valid).toBe(false);
+    expect(resolution?.applianceHostValidation?.errors?.join(" ")).toContain("exceeds opening width");
+  }, 30_000);
+
+  it("lists grouped tenant vendor catalog templates for group -> product -> width browsing", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    await requestWorker(controller!.port, "/api/catalog", { cookie });
+
+    const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
+    const vendorCatalog = {
+      vendorId: "pino_nobilia",
+      displayName: "PINO/Nobilia VKH 2026 CZ",
+      source: "vkh_2026_cz_pdf",
+      productVariants: [
+        attachVendorModuleIntent({
+          productTemplateId: "tpl_ua",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 99,
+          articleCode: "UA45",
+          articleFamily: "UA",
+          widthCm: 45,
+          widthMm: 450,
+          variantCode: null,
+          variantCodeStatus: "none_expected",
+          catalogKey: "UA-45",
+          productTemplateName: "Modul spodni skrinky; 1 vysuv",
+          notes: ["1 vysuv"],
+          mainGroup: "Spodni skrinky",
+          subGroup: "Zasuvkove",
+          confidence: 0.95,
+          needsReview: false
+        }),
+        attachVendorModuleIntent({
+          productTemplateId: "tpl_ua",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 99,
+          articleCode: "UA60",
+          articleFamily: "UA",
+          widthCm: 60,
+          widthMm: 600,
+          variantCode: null,
+          variantCodeStatus: "none_expected",
+          catalogKey: "UA-60",
+          productTemplateName: "Modul spodni skrinky; 1 vysuv",
+          notes: ["1 vysuv"],
+          mainGroup: "Spodni skrinky",
+          subGroup: "Zasuvkove",
+          confidence: 0.95,
+          needsReview: false
+        }),
+        {
+          ...attachVendorModuleIntent({
+          productTemplateId: "tpl_gb",
+          sourcePdf: "VKH_2026_CZ.pdf",
+          sourcePage: 245,
+          articleCode: "GB03FB",
+          articleFamily: "GB",
+          widthCm: null,
+          widthMm: null,
+          variantCode: "FB",
+          variantCodeStatus: "extracted",
+          catalogKey: "GB-FB",
+          productTemplateName: "Bocni skrinka pro vestavne spotrebice",
+          notes: [],
+          mainGroup: "Bocni skrinky",
+          subGroup: "Spotrebice",
+          confidence: 0.95,
+          needsReview: true
+        }),
+          moduleIntent: {
+            moduleClass: "appliance_tall",
+            kitchenModuleRole: "tall",
+            placementZone: "tall_appliance",
+            requiresWorktop: false,
+            requiresCorner: false,
+            requiresApplianceOpening: true,
+            requiresWallAttachment: true,
+            builderKeyCandidates: ["pinoSideCabinet.v1"],
+            featureTags: ["side_cabinet", "appliance_tall"],
+            notes: ["Test appliance group"]
+          }
+        }
+      ],
+      productTemplates: [],
+      pricingReferences: [],
+      extractionMeta: {
+        sourcePdf: "VKH_2026_CZ.pdf",
+        pages: [99, 245],
+        productVariants: 3,
+        productTemplates: 0,
+        pricingReferences: 0,
+        importedAt: "2026-06-16T00:00:00.000Z",
+        importStatus: "review_staging",
+        productionImportApproved: false,
+        notes: []
+      }
+    };
+    await writeFile(path.join(clientCatalogDir, "vendorCatalog.json"), `${JSON.stringify(vendorCatalog, null, 2)}\n`, "utf-8");
+
+    const groupsResponse = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_catalog_groups",
+      { cookie }
+    );
+    expect(groupsResponse.status).toBe(200);
+    const groups = (groupsResponse.body as { groups?: Array<{ groupId: string; label: string; availableWidthsMm: number[] }> }).groups ?? [];
+    expect(groups).toEqual([
+      expect.objectContaining({
+        groupId: "drawer_base_cabinets",
+        label: "Drawer base cabinets",
+        availableWidthsMm: [450, 600]
+      })
+    ]);
+
+    const templatesResponse = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_catalog_templates&groupId=drawer_base_cabinets",
+      { cookie }
+    );
+    expect(templatesResponse.status).toBe(200);
+    const templates = (templatesResponse.body as { templates?: Array<{ productTemplateId: string; availableWidthsMm: number[]; variantCatalogKeys: string[] }> }).templates ?? [];
+    expect(templates).toEqual([
+      expect.objectContaining({
+        productTemplateId: "tpl_ua",
+        availableWidthsMm: [450, 600],
+        variantCatalogKeys: ["UA-45", "UA-60"]
+      })
+    ]);
+
+    const reviewGroupsResponse = await requestWorker(
+      controller!.port,
+      "/api/catalog/lookup?kind=vendor_catalog_groups&includeNeedsReview=true",
+      { cookie }
+    );
+    const reviewGroups = (reviewGroupsResponse.body as { groups?: Array<{ groupId: string }> }).groups ?? [];
+    expect(reviewGroups.some((group) => group.groupId === "tall_appliances")).toBe(true);
   }, 30_000);
 
   it("loads each client's stored catalog without crossing client namespaces", async () => {

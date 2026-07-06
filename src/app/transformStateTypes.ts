@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import type { DoorParams, SectionInstance, WallParams, WindowParams } from "./localTypes";
+import type { DoorParams, LayoutInstance, SectionInstance, WallParams, WindowParams } from "./localTypes";
 
 export type TransformKind = "move" | "rotate";
 
@@ -31,7 +31,7 @@ export type TransformState = {
   selectedWindowIds: string[];
   selectedDoorIds: string[];
   startWalls: Map<string, WallParams>;
-  startInstances: Map<string, { pos: THREE.Vector3; rotY: number }>;
+  startInstances: Map<string, { pos: THREE.Vector3; rotY: number; kitchenPlacement?: LayoutInstance["kitchenPlacement"] }>;
   startInstanceAdjacency: Map<string, string | null>;
   startSections: Map<string, SectionInstance["params"]>;
   startWindows: Map<string, WindowParams>;
@@ -48,4 +48,6 @@ export type PointerTransformState = TransformState & {
 export type KeyboardTransformState = Pick<
   TransformState,
   "kind" | "lastAngleSign" | "lastValidDelta" | "moveSnapDisabled" | "step" | "stickyMove" | "typed"
->;
+> & {
+  lastPointerPx?: { x: number; y: number };
+};

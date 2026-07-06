@@ -117,6 +117,7 @@ export function handleAlignToolClick(params: {
   commitHistory: () => void;
   setStatus: (message: string) => void;
   mountProps: () => void;
+  finishAlignTool?: () => void;
   now: number;
 }): void {
   if (!params.picked) {
@@ -156,6 +157,7 @@ export function handleAlignToolClick(params: {
     lastB: params.picked,
     now: params.now
   });
+  params.finishAlignTool?.();
   reportEditorToolStatus({
     status: result.reason,
     setStatus: params.setStatus,

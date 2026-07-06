@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
 import { getSectionBasis } from "./sectionViews";
 import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
-import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlacementPropsPanel, mountDoorPropsPanel, mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPlacementPropsPanel, mountWindowPropsPanel } from "./selectedPropsPanels";
+import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlacementPropsPanel, mountDoorPropsPanel, mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountMultiModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPlacementPropsPanel, mountWindowPropsPanel } from "./selectedPropsPanels";
 import { loadUnderlayToCanvas } from "../ui/loadUnderlay";
 import type { Material } from "../types/material";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
@@ -117,6 +117,8 @@ type PropertiesRouterContext = {
   S: AppState;
   kitchenMode: null | {
     mountKitchenGroupProps: (groupId: string) => boolean;
+    tryMountActiveTallSubmoduleProps?: () => boolean;
+    getActiveTallEditorInstanceId?: () => string | null;
     tryMountActiveKitchenGroupProps: () => boolean;
   };
   wardrobeMode: null | {
@@ -216,6 +218,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountSectionToolProps = () => mountSectionToolPropsPanel({ props: ctx.props, sectionDraw: ctx.sectionDraw, drawOrthoEnabled: ctx.drawOrthoEnabled });
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props: ctx.props, sections: ctx.sections, showNoProps: ctx.showNoProps, getSectionBasis, updateAllSectionVisuals: ctx.updateAllSectionVisuals, mountProps, commitHistory: ctx.commitHistory, S: ctx.S }, id);
   const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, pinnedInstanceIds: ctx.pinnedInstanceIds, instanceFitsRoom: ctx.instanceFitsRoom, anyOverlap: ctx.anyOverlap, moduleOverlapsWalls: ctx.moduleOverlapsWalls, moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, id);
+  const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, pinnedInstanceIds: ctx.pinnedInstanceIds, instanceFitsRoom: ctx.instanceFitsRoom, anyOverlap: ctx.anyOverlap, moduleOverlapsWalls: ctx.moduleOverlapsWalls, moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
   const mountWindowProps = () => mountWindowPropsPanel({
     props: ctx.props,
     windowInst: ctx.windowInst,
@@ -290,6 +293,9 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     if (ctx.layoutTool === "trim") return mountTrimToolProps();
     if (ctx.customFurnitureMode?.tryMountActiveCustomFurnitureProps()) return;
     if (ctx.wardrobeMode?.tryMountActiveWardrobeProps()) return;
+    if (ctx.kitchenMode?.tryMountActiveTallSubmoduleProps?.()) return;
+    const activeTallEditorInstanceId = ctx.kitchenMode?.getActiveTallEditorInstanceId?.() ?? null;
+    if (activeTallEditorInstanceId) return mountModuleProps(activeTallEditorInstanceId);
     if (ctx.selectedKind === "kitchenGroup" && ctx.selectedKitchenGroupId && ctx.kitchenMode?.mountKitchenGroupProps(ctx.selectedKitchenGroupId)) {
       const section = ctx.args.propertiesEl.querySelector(".props-section:last-of-type") as HTMLElement | null;
       if (section) {
@@ -304,6 +310,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     }
     if (ctx.selectedKind === "underlay") return mountUnderlayProps();
     if (ctx.selectedWallIds.size > 1 && ctx.selectedInstanceIds.size === 0) return mountWallProps();
+    if (ctx.selectedInstanceIds.size > 1 && ctx.selectedWallIds.size === 0 && ctx.selectedKind === "module") return mountMultiModuleProps();
     if (ctx.selectedWallIds.size + ctx.selectedInstanceIds.size > 1) {
       ctx.args.propertiesEl.innerHTML = "";
       const t = document.createElement("div");

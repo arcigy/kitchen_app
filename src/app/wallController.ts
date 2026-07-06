@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import { getModulePlanPolygon } from "./planSnap";
-import { buildModuleAlignCandidates, buildWallAlignCandidates, buildWorktopAlignCandidates, pickBestAlignLine } from "./alignTool";
+import { buildModuleAlignCandidates, buildWallAlignCandidates, buildWorktopAlignCandidates, pickBestAlignLine, pickBestCompatibleAlignLine } from "./alignTool";
 import { distPointToSegment2 } from "./screenGeometry";
 import { worldToScreen } from "./sharedUtils";
 import type { AlignPickedLine, DoorInstance, KitchenWorktopInstance, LayoutInstance, PickedLine2D, WallInstance, WallParams, WindowInstance } from "./localTypes";
 import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
 import { commitHistory } from "../layout/historyManager";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
 import { type WallJustification } from "../walls2d/model";
@@ -75,6 +76,8 @@ const DEFAULT_WALL_DEBUG_LAYERS: Record<WallDebugLayer, boolean> = {
 const polygonClipper = polygonClipping as PolygonClipper;
 export const WALL_PLAN_FILL_ROTATION_X = Math.PI / 2;
 const WALL_CUTOUT_REVEAL_NAME = "wallWindowCutoutReveal";
+const WALL_PLAN_SELECTED_FACE_COLOR = 0x0f5eff;
+const WALL_PLAN_DIAGNOSTIC_FACE_COLOR = 0x4f4f4f;
 
 type WallCutoutBounds = {
   holeX0: number;
@@ -445,7 +448,12 @@ export function createWallController(ctx: WallControllerContext) {
 
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     void hitPoint;
-    return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), 12);
+    return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), SNAP_DISTANCE_PX.alignPick);
+  };
+
+  const pickCompatibleAlignLineAt = (reference: AlignPickedLine, hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
+    void hitPoint;
+    return pickBestCompatibleAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), reference, SNAP_DISTANCE_PX.alignPick);
   };
 
   const pickDimensionLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
@@ -459,7 +467,7 @@ export function createWallController(ctx: WallControllerContext) {
       const outline = wallSolvedOutlines.get(w.id) ?? null;
       if (outline && outline.length >= 3) candidates.push(...buildSolvedWallOutlineCandidates(w, outline));
     }
-    return pickBestAlignLine(mousePx, rect, cam(), candidates, 24);
+    return pickBestAlignLine(mousePx, rect, cam(), candidates, SNAP_DISTANCE_PX.dimensionPick);
   };
 
   const lineLineIntersectionXZ = (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => {
@@ -875,7 +883,7 @@ export function createWallController(ctx: WallControllerContext) {
     rebuildWallPlanMesh();
   }
 
-  function pickWallLine2D(raw: THREE.Vector3, rect: DOMRect, camera: THREE.Camera, maxPx = 14): PickedLine2D | null {
+  function pickWallLine2D(raw: THREE.Vector3, rect: DOMRect, camera: THREE.Camera, maxPx: number = SNAP_DISTANCE_PX.wallLinePick): PickedLine2D | null {
     const rawS = worldToScreen(raw, camera, rect);
     let best: { pick: PickedLine2D; d2: number } | null = null;
 
@@ -1848,8 +1856,7 @@ export function createWallController(ctx: WallControllerContext) {
     }
 
     const activeSelectedWallId = ctx.getSelectedKind() === "wall" ? ctx.getSelectedWallId() : null;
-    // Temporary diagnostics: show every solved wall footprint so wall joins can be inspected in the live app.
-    const showAllWallSolvedOutlines = ctx.getShowAllWallSolvedOutlines?.() ?? true;
+    const showAllWallSolvedOutlines = ctx.getShowAllWallSolvedOutlines?.() ?? false;
     for (const wall of solved.walls) {
       const isSelectedWall = wall.id === activeSelectedWallId;
       if (!showAllWallSolvedOutlines && !isSelectedWall) continue;
@@ -1857,7 +1864,7 @@ export function createWallController(ctx: WallControllerContext) {
       const showFullDiagnosticOutline = showAllWallSolvedOutlines;
       const line = makePlanPolyline(
         wall.outline,
-        0x2bdc84,
+        isSelectedWall ? WALL_PLAN_SELECTED_FACE_COLOR : WALL_PLAN_DIAGNOSTIC_FACE_COLOR,
         0.031,
         isSelectedWall ? 0.92 : 0.74,
         showClosedSelectedOutline || showFullDiagnosticOutline,
@@ -2389,6 +2396,7 @@ export function createWallController(ctx: WallControllerContext) {
 
   return {
     pickAlignLineAt,
+    pickCompatibleAlignLineAt,
     pickDimensionLineAt,
     lineLineIntersectionXZ,
     translateWallAndConnected,

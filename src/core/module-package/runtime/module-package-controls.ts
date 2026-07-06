@@ -1,7 +1,9 @@
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
+import { getModuleDescriptor } from "../../../modules/registry";
 import { t, translateEnumLabel, translateParamLabel } from "../../../i18n";
+import { applyModuleParameterPreset } from "./module-runtime-adapter";
 
 type ControlRecord = {
   key: string;
@@ -9,6 +11,8 @@ type ControlRecord = {
   row: HTMLElement;
   sync: () => void;
 };
+
+export type ModuleControlStrategy = "module_descriptor" | "module_package";
 
 function displayValue(value: unknown): string {
   return value == null ? "" : String(value);
@@ -68,6 +72,180 @@ function isCatalogPicker(controlType: string | undefined, parameter: ModuleParam
   return controlType === "materialPicker" || controlType === "componentPicker" || parameter.type === "material" || parameter.type === "component";
 }
 
+function hasComposedHostSlotControls(modulePackage: FurnQuoteModulePackage) {
+  const uiControls = modulePackage.ui?.controls ?? [];
+  if (uiControls.some((control) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(control.parameterKey))) return true;
+  return modulePackage.parameters?.parameters?.some((parameter) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(parameter.key)) ?? false;
+}
+
+function withParameterPresetControl(
+  container: HTMLElement,
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>,
+  args: ModuleControlsArgs,
+  api: ModuleControlsApi
+): ModuleControlsApi {
+  const row = document.createElement("label");
+  row.className = "module-package-control";
+  row.style.display = "grid";
+  row.style.gap = "4px";
+  row.style.marginTop = "8px";
+
+  const label = document.createElement("span");
+  label.textContent = "Parameter preset";
+
+  const controlRow = document.createElement("div");
+  controlRow.style.display = "grid";
+  controlRow.style.gridTemplateColumns = "1fr auto";
+  controlRow.style.gap = "6px";
+  controlRow.style.alignItems = "center";
+
+  const input = document.createElement("select");
+  const refreshPresetOptions = (selectedPresetId = "") => {
+    const presets = modulePackage.parameterPresets?.presets ?? [];
+    input.replaceChildren();
+    input.disabled = presets.length === 0;
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = presets.length === 0 ? "No presets" : "-";
+    input.appendChild(empty);
+    for (const preset of presets) {
+      const item = document.createElement("option");
+      item.value = preset.presetId;
+      item.textContent = preset.label;
+      item.title = preset.note;
+      input.appendChild(item);
+    }
+    input.value = selectedPresetId;
+  };
+  refreshPresetOptions();
+
+  const createButton = document.createElement("button");
+  createButton.type = "button";
+  createButton.textContent = "Create preset";
+  createButton.disabled = !args.createParameterPreset;
+
+  input.addEventListener("change", () => {
+    if (!input.value) return;
+    Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId: input.value }));
+    args.onChange();
+    api.syncFromParams();
+  });
+
+  createButton.addEventListener("click", () => {
+    if (!args.createParameterPreset) return;
+    openCreatePresetDialog({
+      onSave: async ({ name, note }) => {
+        const result = await args.createParameterPreset?.({
+          modulePackage,
+          parameters: { ...params },
+          name,
+          note
+        });
+        if (!result) return;
+        Object.assign(modulePackage, result.modulePackage);
+        refreshPresetOptions(result.presetId);
+      }
+    });
+  });
+
+  controlRow.append(input, createButton);
+  row.append(label, controlRow);
+  container.prepend(row);
+
+  return {
+    syncFromParams: () => {
+      api.syncFromParams();
+    },
+    isAutoFitEnabled: () => api.isAutoFitEnabled(),
+    highlightParamKeys: (keys) => api.highlightParamKeys(keys),
+    clearHighlights: () => api.clearHighlights()
+  };
+}
+
+function openCreatePresetDialog(args: { onSave: (values: { name: string; note: string }) => Promise<void> }) {
+  const backdrop = document.createElement("div");
+  backdrop.style.position = "fixed";
+  backdrop.style.inset = "0";
+  backdrop.style.zIndex = "9999";
+  backdrop.style.background = "rgba(15, 23, 42, 0.35)";
+  backdrop.style.display = "grid";
+  backdrop.style.placeItems = "center";
+
+  const panel = document.createElement("form");
+  panel.style.width = "min(420px, calc(100vw - 32px))";
+  panel.style.background = "#ffffff";
+  panel.style.border = "1px solid rgba(15, 23, 42, 0.12)";
+  panel.style.borderRadius = "8px";
+  panel.style.boxShadow = "0 22px 70px rgba(15, 23, 42, 0.24)";
+  panel.style.padding = "18px";
+  panel.style.display = "grid";
+  panel.style.gap = "12px";
+
+  const title = document.createElement("strong");
+  title.textContent = "Create preset";
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.required = true;
+  name.placeholder = "Name";
+
+  const note = document.createElement("textarea");
+  note.required = true;
+  note.placeholder = "Note";
+  note.rows = 4;
+  note.style.resize = "vertical";
+
+  const error = document.createElement("div");
+  error.style.color = "#b42318";
+  error.style.fontSize = "12px";
+  error.style.minHeight = "16px";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.justifyContent = "flex-end";
+  actions.style.gap = "8px";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Cancel";
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "Save";
+  actions.append(cancel, save);
+
+  panel.append(title, name, note, error, actions);
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+  name.focus();
+
+  const close = () => backdrop.remove();
+  cancel.addEventListener("click", close);
+  backdrop.addEventListener("pointerdown", (event) => {
+    if (event.target === backdrop) close();
+  });
+  panel.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = {
+      name: name.value.trim(),
+      note: note.value.trim()
+    };
+    if (!values.name || !values.note) {
+      error.textContent = "Name and note are required.";
+      return;
+    }
+    save.disabled = true;
+    error.textContent = "";
+    try {
+      await args.onSave(values);
+      close();
+    } catch (saveError) {
+      save.disabled = false;
+      error.textContent = saveError instanceof Error ? saveError.message : "Preset save failed.";
+    }
+  });
+}
+
 export function findModulePackageForParams(
   modulePackages: readonly FurnQuoteModulePackage[],
   params: Record<string, unknown>
@@ -79,6 +257,20 @@ export function findModulePackageForParams(
   }
   const moduleType = typeof params.type === "string" ? params.type : typeof params.moduleType === "string" ? params.moduleType : null;
   return moduleType ? modulePackages.find((modulePackage) => modulePackage.module.moduleType === moduleType) ?? null : null;
+}
+
+export function resolveModuleControlStrategy(
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>
+): ModuleControlStrategy {
+  const tags = new Set((modulePackage.module.tags ?? []).map((tag) => tag.toLowerCase()));
+  if (tags.has("revit-export-preview")) return "module_package";
+  if (hasComposedHostSlotControls(modulePackage)) return "module_package";
+  const moduleType =
+    typeof params.type === "string" && params.type.trim().length > 0
+      ? params.type.trim()
+      : modulePackage.module.moduleType;
+  return getModuleDescriptor(moduleType as Parameters<typeof getModuleDescriptor>[0]) ? "module_descriptor" : "module_package";
 }
 
 export function createModulePackageControls(
@@ -159,7 +351,7 @@ export function createModulePackageControls(
     records.push({ key: parameter.key, input, row, sync });
   }
 
-  return {
+  const api: ModuleControlsApi = {
     syncFromParams: () => records.forEach((record) => record.sync()),
     isAutoFitEnabled: () => Boolean(params.shelfAutoFit),
     highlightParamKeys: (keys) => {
@@ -168,4 +360,23 @@ export function createModulePackageControls(
     },
     clearHighlights: () => records.forEach((record) => record.row.classList.remove("is-highlighted"))
   };
+  return withParameterPresetControl(container, modulePackage, params, args, api);
+}
+
+export function createResolvedModuleControls(
+  container: HTMLElement,
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>,
+  args: ModuleControlsArgs
+): ModuleControlsApi {
+  const strategy = resolveModuleControlStrategy(modulePackage, params);
+  if (strategy === "module_descriptor") {
+    const moduleType =
+      typeof params.type === "string" && params.type.trim().length > 0
+        ? params.type.trim()
+        : modulePackage.module.moduleType;
+    const descriptor = getModuleDescriptor(moduleType as Parameters<typeof getModuleDescriptor>[0]);
+    if (descriptor) return withParameterPresetControl(container, modulePackage, params, args, descriptor.createControls(container, params as never, args));
+  }
+  return createModulePackageControls(container, modulePackage, params, args);
 }

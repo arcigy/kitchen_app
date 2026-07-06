@@ -10,6 +10,7 @@ import {
 import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
 import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
+import type { KitchenContext } from "./kitchenContext";
 import type { EditorPropsApi } from "../app/editorModeApis";
 
 const ghostCursorSkipDistanceSq = 0.0025 * 0.0025;
@@ -69,6 +70,7 @@ export interface PlacementHelpers {
   setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
   finalizePlacedInstance?: (inst: LayoutInstance) => void;
   syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
+  rebuildKitchenGroupWorktops?: (groupId: string) => void;
   catalog: ClientCatalog;
   modulePackages?: readonly FurnQuoteModulePackage[];
   resolvePlacementConstraint?: (
@@ -231,6 +233,7 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
 
   helpers.layoutRoot.add(inst.root);
   S.instances.push(inst);
+  if (inst.kitchenGroupId) helpers.rebuildKitchenGroupWorktops?.(inst.kitchenGroupId);
 
   cancelPlacement(S, helpers);
 
@@ -238,6 +241,21 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   helpers.updateLayoutPanel();
   commitHistory(S);
   helpers.setUnderlayStatus("Placement: placed.");
+  return true;
+};
+
+export const rotateActivePlacement = (S: AppState, helpers: PlacementHelpers, deltaRad = Math.PI / 2) => {
+  if (!S.placement.active) return false;
+  const ghost = S.placement.ghost;
+  if (!ghost) return false;
+  if (ghost.kitchenPlacement) {
+    helpers.setUnderlayStatus("Placement: tento modul je naviazany na worktop, rotaciu urcuje vlozenie.");
+    return true;
+  }
+  ghost.root.rotation.y += deltaRad;
+  rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
+  const deg = Math.round(THREE.MathUtils.radToDeg(ghost.root.rotation.y));
+  helpers.setUnderlayStatus(`Placement: rotacia ${deg}°. Space = +90°.`);
   return true;
 };
 
@@ -280,37 +298,45 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
   const hint = document.createElement("div");
   hint.className = "muted";
   hint.style.marginTop = "8px";
-  hint.textContent = "Move cursor in 2D plan. Click to place. Esc to cancel.";
+  hint.textContent = "Move cursor in 2D plan. Click to place. Space rotates free modules. Esc to cancel.";
   s.appendChild(hint);
 
-  const applyRot = (delta: number) => {
-    const g = S.placement.ghost;
-    if (!g) return;
-    g.root.rotation.y += delta;
-    rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
-  };
-
-  rotL.addEventListener("click", () => applyRot(-Math.PI / 2));
-  rotR.addEventListener("click", () => applyRot(Math.PI / 2));
+  rotL.addEventListener("click", () => rotateActivePlacement(S, helpers, -Math.PI / 2));
+  rotR.addEventListener("click", () => rotateActivePlacement(S, helpers, Math.PI / 2));
   cancel.addEventListener("click", () => cancelPlacement(S, helpers));
   commit.addEventListener("click", () => commitPlacement(S, helpers));
 };
 
-export const addInstance = (S: AppState, helpers: PlacementHelpers, type: ModuleParams["type"]) => {
+export function getActivePlacementKitchenContext(S: AppState): KitchenContext {
+  if (!S.kitchenEditMode || !S.activeKitchenGroupId) return S.kitchenCtx;
+  return S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId)?.ctx ?? S.kitchenCtx;
+}
+
+export const addInstance = (
+  S: AppState,
+  helpers: PlacementHelpers,
+  type: ModuleParams["type"],
+  opts: { modulePackageId?: string; initialParams?: ModuleParams } = {}
+) => {
   if (S.placement.active) cancelPlacement(S, helpers);
 
   const modulePackage = getEnabledModulePackageDefinitions(helpers.catalog, helpers.modulePackages ?? [])
-    .find((candidate) => candidate.module.moduleType === type) ?? null;
+    .find((candidate) =>
+      opts.modulePackageId
+        ? candidate.module.modulePackageId === opts.modulePackageId
+        : candidate.module.moduleType === type
+    ) ?? null;
   if (!modulePackage) {
     helpers.setUnderlayStatus(`Placement: module package missing or disabled for ${type}.`);
     return;
   }
 
   const defaults = createModulePackageDefaultParams({ modulePackage, catalog: helpers.catalog }) as ModuleParams;
-  const nextParams = structuredClone(helpers.getBuildParams(type) ?? defaults) as ModuleParams;
+  const previousBuildParams = opts.modulePackageId ? null : helpers.getBuildParams(type);
+  const nextParams = structuredClone(opts.initialParams ?? previousBuildParams ?? defaults) as ModuleParams;
 
   if (S.kitchenEditMode && S.activeKitchenGroupId) {
-    applyKitchenContextToModuleParams(nextParams, S.kitchenCtx, helpers.catalog, modulePackage);
+    applyKitchenContextToModuleParams(nextParams, getActivePlacementKitchenContext(S), helpers.catalog, modulePackage);
   }
 
   helpers.setSelectedModule(null);
@@ -318,6 +344,6 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
   S.placement.params = nextParams;
   S.placement.ghostValid = false;
 
-  helpers.setUnderlayStatus("Placement: move cursor, click to place. Esc cancels.");
+  helpers.setUnderlayStatus("Placement: move cursor, click to place. Space rotates free modules. Esc cancels.");
   mountPlacementControls(S, helpers);
 };

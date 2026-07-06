@@ -194,7 +194,11 @@ Zoom must not depend on selected entity kind.
 - `S` clears selection.
 - Marquee/selection rectangle uses the same pick registry as click selection.
 - Multi-selection must support different entity kinds in the same selection.
+- Shift/Ctrl additive selection must be supported by selectable entities where interaction context allows it. Properties for multi-selection should merge editable parameters without duplicate rows: equal values show normally, mixed values show a clear mixed state such as `rozdielne`, and committing a mixed value writes it to every selected entity that owns that parameter.
 - Selection highlight must be a unified system driven by selected editor entity ids.
+- Hover over a selectable object must show a semi-highlight: visible blue edges only, no face fill.
+- Active selection must show a full highlight: visible blue edges plus transparent blue face fill.
+- Hover and selection visuals must use each entity's real `visualTarget` geometry. Do not use a 2D footprint-only highlight for 3D objects unless the entity itself is inherently 2D.
 - Helper/generated visuals are not selectable unless explicitly user-created and registered as selectable entities.
 - Selection state must not require a Three.js object as the source of truth.
 
@@ -324,7 +328,40 @@ Temporary dimensions should work for walls, modules, floors, custom furniture, w
 
 Open decision: exact hover vs selected priority and density rules.
 
-## 12. Editor Mode Shell
+## 12. Universal Snapping Rules
+
+Snapping is a global editor service. It must not be implemented as separate wall snapping, module snapping, floor snapping, or kitchen snapping.
+
+Every snap-capable entity exports snap geometry through a provider:
+
+- point candidates: endpoints, vertices, centers, insertion points, opening centers, guide anchors,
+- segment candidates: wall axes, visible/object edges, section lines, worktop paths, module footprint edges, floor boundaries, guide lines,
+- optional plane/face candidates for 3D workflows,
+- bindings that can resolve back to current domain state after the object changes.
+
+Snap result priority must be deterministic:
+
+1. explicit intersections and real corners,
+2. endpoints and vertices,
+3. centers and insertion points,
+4. perpendicular projections from the active source point,
+5. midpoints,
+6. nearest point on object edge/segment,
+7. alignment axes and temporary guide lines,
+8. grid/length increment fallback.
+
+Tool profiles may narrow or reorder this priority, but they must use the same shared candidates. Examples:
+
+- wall drawing prefers endpoint, intersection, perpendicular, midpoint, then edge,
+- measure tools prefer exact points and associative bindings,
+- move tools compare selected source anchors against target candidates,
+- kitchen placement may add worktop/module adjacency constraints after generic snap candidates.
+
+Snap bindings are part of the contract. A snap that creates an associative measurement or persistent relation must store a binding to the domain object, not just a world coordinate. If the object moves or changes size, resolving the binding must return the updated point.
+
+New editable entities are not snap-complete until they provide snap candidates and binding resolution, or explicitly declare that they are not snap targets.
+
+## 13. Editor Mode Shell
 
 Large editor modes must use a reusable editor mode shell:
 
@@ -357,7 +394,7 @@ The shared shell owns:
 
 Mode-specific behavior should be configuration and adapters, not a separate UI and command system.
 
-## 13. Capability Matrix
+## 14. Capability Matrix
 
 | Entity type | pickable | selectable | marqueeSelectable | deletable | movable | alignable | trimmable | extendable | resizable | dimensionable | temporaryDimensions | undoable |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -375,7 +412,7 @@ Mode-specific behavior should be configuration and adapters, not a separate UI a
 | Section line | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
 | Helper/generated visual | yes | no by default | no by default | no | no | no | no | no | no | no | no | no |
 
-## 14. Current Code Mapping
+## 15. Current Code Mapping
 
 ### Selection
 
@@ -554,7 +591,7 @@ Current source of truth is custom furniture controller and custom geometry types
 
 Centralization is partial. Risk is medium-high because custom boards should share selection/move/align/dimension contracts.
 
-## 15. Future Implementation Plan
+## 16. Future Implementation Plan
 
 ### Faza 0: document and capability matrix
 
@@ -600,7 +637,7 @@ Replace pair-specific align logic with `AlignReference[]` providers.
 
 Move shared mode UI into a reusable shell. Migrate modes one at a time.
 
-## 16. Non-goals
+## 17. Non-goals
 
 This document does not require immediate runtime changes.
 

@@ -7,6 +7,17 @@ import {
   getFwmSystemFamily,
   type FwmFurnitureModuleType
 } from "./definitions";
+import {
+  DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
+  DEFAULT_FWM_DRAWER_SYSTEM_SIZE,
+  resolveFwmDrawerSystemPreset,
+  resolveFwmDrawerSystemPresetForFrontHeight
+} from "./drawerSystemPresets";
+
+const MAX_INDEXED_DRAWER_PARAMS = 5;
+const MAX_TALL_STACK_SLOTS = 12;
+const TALL_STACK_SLOT_TYPES = ["empty", "drawer", "shelf", "oven", "sink", "microwave", "door"] as const;
+const DEFAULT_TALL_STACK_SLOTS: Array<{ type: (typeof TALL_STACK_SLOT_TYPES)[number]; height: number }> = [];
 
 export type FwmFurnitureParams = {
   type: FwmFurnitureModuleType;
@@ -32,13 +43,67 @@ function count(value: unknown, fallback: number, max: number) {
   return clamp(Math.round(num(value, fallback)), 0, max);
 }
 
+function parsePositiveCsvNumbers(value: unknown) {
+  return typeof value === "string"
+    ? value.split(",").map((entry) => Number(entry.trim())).filter((entry) => Number.isFinite(entry) && entry > 0)
+    : [];
+}
+
+function indexedDrawerFrontHeights(params: Record<string, PortableJsonValue>, drawerCount: number) {
+  const values = Array.from({ length: drawerCount }, (_, index) => num(params[`drawer${index + 1}FrontHeightMm`], 0));
+  return values.length === drawerCount && values.every((value) => value > 0) ? values : [];
+}
+
+function resolveDrawerFrontHeights(params: Record<string, PortableJsonValue>, drawerCount: number) {
+  if (drawerCount <= 0) return [];
+  const height = num(params.height, 720);
+  const plinth = num(params.plinthHeight, 0);
+  const gap = num(params.frontGap, 2);
+  const frontAreaHeight = Math.max(80, height - plinth - gap * 2);
+  const availableHeight = Math.max(40, frontAreaHeight - gap * (drawerCount - 1));
+  const rawHeights = indexedDrawerFrontHeights(params, drawerCount).length > 0
+    ? indexedDrawerFrontHeights(params, drawerCount)
+    : parsePositiveCsvNumbers(params.drawerFrontHeightsMm);
+  const requestedSum = rawHeights.length === drawerCount ? rawHeights.reduce((sum, entry) => sum + entry, 0) : 0;
+  return requestedSum > 0
+    ? rawHeights.map((entry) => Math.max(40, (entry / requestedSum) * availableHeight))
+    : Array.from({ length: drawerCount }, () => Math.max(40, availableHeight / drawerCount));
+}
+
+function drawerSystemSizeOverride(value: unknown) {
+  const size = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return size === "M" || size === "D" || size === "E" || size === "F" ? size : null;
+}
+
 function nearestStep(value: number, step: number) {
   return Math.round(value / step) * step;
+}
+
+function isWallCornerVariant(spec: ReturnType<typeof getFwmFurnitureSpec>, params: Record<string, PortableJsonValue>) {
+  const variant = text(params.variant, spec.variantOptions?.[0] ?? "");
+  return spec.moduleType === "fwm_catalog_wall_cabinet" && variant.startsWith("corner_");
+}
+
+function usesUnifiedCornerDepth(spec: ReturnType<typeof getFwmFurnitureSpec>, params: Record<string, PortableJsonValue>) {
+  return spec.moduleType === "fwm_catalog_base_corner" || isWallCornerVariant(spec, params);
+}
+
+function hasNoBackPanel(spec: ReturnType<typeof getFwmFurnitureSpec>) {
+  return ["cladding", "worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind);
+}
+
+function isSurfaceLike(spec: ReturnType<typeof getFwmFurnitureSpec>) {
+  return ["cladding", "worktop", "shelf_surface", "trim", "front_component"].includes(spec.geometryKind);
+}
+
+function requiresExternalKitchenWorktop(spec: ReturnType<typeof getFwmFurnitureSpec>, params: FwmFurnitureParams) {
+  return spec.geometryKind !== "worktop" && params.requiresWorktop !== false && (spec.hasWorktop === true || spec.moduleType === "fwm_catalog_base_corner");
 }
 
 export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): FwmFurnitureParams {
   const spec = getFwmFurnitureSpec(type);
   const typeId = `${type}__type`;
+  const requiresWorktop = spec.geometryKind !== "worktop" && (spec.hasWorktop === true || type === "fwm_catalog_base_corner");
   return normalizeFwmFurnitureParams({
     typeId,
     type,
@@ -52,7 +117,9 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     assemblyContext: getFwmAssemblyContext(spec),
     roomCategory: getFwmRoomCategory(spec),
     kitchenModuleRole: spec.kitchenRole ?? null,
-    requiresWorktop: spec.hasWorktop === true,
+    requiresWorktop,
+    hasWorktop: spec.geometryKind === "worktop",
+    hasPlinth: spec.hasPlinth === true,
     frontSide: "FRONT",
     backSide: "BACK",
     leftSide: "LEFT",
@@ -89,28 +156,114 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     ifcTag: typeId,
     classificationCode: null,
     classificationSystem: null,
-    bodyMaterialGroup: "body",
+    bodyMaterialGroup: "corpus",
     frontMaterialGroup: "front",
     backMaterialGroup: "back",
-    shelfMaterialGroup: "shelf",
+    shelfMaterialGroup: "corpus",
     worktopMaterialGroup: "worktop",
     drawerBoxMaterialGroup: "drawer_box",
     width: spec.width,
     height: spec.height,
     depth: spec.depth,
     drawerCount: spec.drawers ?? 0,
+    drawerSystem: DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
+    drawerSystemBrand: DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
+    drawerSystemSize: DEFAULT_FWM_DRAWER_SYSTEM_SIZE,
+    drawerSystemSizes: "M,M,M",
+    drawerSystemLabels: "MERIVOBOX M,MERIVOBOX M,MERIVOBOX M",
+    drawerSystemMinFrontHeightsMm: "136,136,136",
+    drawerSystemDepthMm: 500,
+    drawerBottomDepthDeductionMm: 26,
+    drawerBottomWidthDeductionMm: 51,
+    drawerBackWidthDeductionMm: 51,
+    drawerBackHeightDeductionMm: 83,
+    drawerSystemBackHeightsMm: "83,83,83",
+    cutleryInsertWidthDeductionMm: -3,
+    cutleryInsertDepthDeductionMm: 0,
+    innerDrawerFrontDeductionMm: 126,
+    innerDrawerCrossRailDeductionMm: 111,
+    hasCutleryInnerDrawer: false,
+    cutleryInnerDrawerAllowed: false,
+    cutleryInnerDrawerStatus: "disabled",
+    cutleryInnerDrawerTargetIndex: 0,
+    cutleryInnerDrawerWidthMm: 0,
+    cutleryInnerDrawerDepthMm: 0,
+    cutleryInnerDrawerFrontWidthMm: 0,
+    cutleryInnerDrawerCrossRailWidthMm: 0,
+    drawerSystemPricePerSet: 669,
+    drawerSystemPriceWithMargin: 1338,
+    drawerSystemCodeLabel: "kod merivo M",
     drawerFrontHeightsMm: "",
+    drawer1FrontHeightMm: 40,
+    drawer2FrontHeightMm: 40,
+    drawer3FrontHeightMm: 40,
+    drawer4FrontHeightMm: 40,
+    drawer5FrontHeightMm: 40,
+    drawer1SystemSize: "",
+    drawer2SystemSize: "",
+    drawer3SystemSize: "",
+    drawer4SystemSize: "",
+    drawer5SystemSize: "",
+    drawer1SystemLabel: "",
+    drawer2SystemLabel: "",
+    drawer3SystemLabel: "",
+    drawer4SystemLabel: "",
+    drawer5SystemLabel: "",
     doorCount: spec.doors ?? 0,
     shelfCount: spec.shelves ?? 0,
+    shelfGaps: "",
+    tallStackMode: type === "fwm_catalog_tall_cabinet" ? "builder" : "fixed",
+    tallSlotCount: type === "fwm_catalog_tall_cabinet" ? DEFAULT_TALL_STACK_SLOTS.length : 0,
+    tallSlot1Type: "empty",
+    tallSlot1HeightMm: 0,
+    tallSlot1OffsetMm: 0,
+    tallSlot2Type: "empty",
+    tallSlot2HeightMm: 0,
+    tallSlot2OffsetMm: 0,
+    tallSlot3Type: "empty",
+    tallSlot3HeightMm: 0,
+    tallSlot3OffsetMm: 0,
+    tallSlot4Type: "empty",
+    tallSlot4HeightMm: 0,
+    tallSlot4OffsetMm: 0,
+    tallSlot5Type: "empty",
+    tallSlot5HeightMm: 0,
+    tallSlot5OffsetMm: 0,
+    tallSlot6Type: "empty",
+    tallSlot6HeightMm: 0,
+    tallSlot6OffsetMm: 0,
+    tallSlot7Type: "empty",
+    tallSlot7HeightMm: 0,
+    tallSlot7OffsetMm: 0,
+    tallSlot8Type: "empty",
+    tallSlot8HeightMm: 0,
+    tallSlot8OffsetMm: 0,
+    tallSlot9Type: "empty",
+    tallSlot9HeightMm: 0,
+    tallSlot9OffsetMm: 0,
+    tallSlot10Type: "empty",
+    tallSlot10HeightMm: 0,
+    tallSlot10OffsetMm: 0,
+    tallSlot11Type: "empty",
+    tallSlot11HeightMm: 0,
+    tallSlot11OffsetMm: 0,
+    tallSlot12Type: "empty",
+    tallSlot12HeightMm: 0,
+    tallSlot12OffsetMm: 0,
+    tallDoorOpeningMode: "lift_up",
     boardThickness: 18,
     backThickness: spec.geometryKind === "cladding" ? 0 : 8,
     frontThicknessMm: spec.glassFronts ? 6 : 18,
     shelfThickness: 18,
-    worktopThicknessMm: spec.hasWorktop ? 38 : 0,
+    worktopThicknessMm: requiresWorktop || spec.geometryKind === "worktop" ? 38 : 0,
     plinthHeight: spec.hasPlinth ? 100 : 0,
     plinthSetbackMm: spec.hasPlinth ? 60 : 0,
     frontGap: 2,
     sideGap: 2,
+    side: spec.geometryKind === "corner" ? "left" : "none",
+    endingSide: "none",
+    endingShape: type === "fwm_catalog_wall_open_end" ? "chamfered" : "none",
+    cornerShape: type === "fwm_catalog_base_corner" ? "chamfered" : spec.geometryKind === "corner" ? "l_shape" : "none",
     handleType: spec.drawers || spec.doors ? "bar" : "none",
     handleLengthMm: 160,
     handleProjectionMm: 28,
@@ -149,9 +302,14 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
   next.version = text(next.version, "1.0.0");
   next.assemblyContext = text(next.assemblyContext, getFwmAssemblyContext(spec));
   next.roomCategory = text(next.roomCategory, getFwmRoomCategory(spec));
-  const suppressWorktop = params.requiresWorktop === false || num(params.worktopThicknessMm, spec.hasWorktop ? 38 : 0) <= 0;
+  const explicitRequiresWorktop = params.requiresWorktop === true;
+  const externalKitchenWorktop = requiresExternalKitchenWorktop(spec, params);
+  const ownsWorktopGeometry = spec.geometryKind === "worktop";
+  const suppressWorktop = (!ownsWorktopGeometry && params.requiresWorktop === false) || num(params.worktopThicknessMm, spec.hasWorktop ? 38 : 0) <= 0;
+  const suppressPlinth = params.hasPlinth === false;
   next.kitchenModuleRole = spec.kitchenRole ?? null;
-  next.requiresWorktop = spec.hasWorktop === true && !suppressWorktop;
+  next.requiresWorktop = explicitRequiresWorktop || externalKitchenWorktop || (ownsWorktopGeometry && params.requiresWorktop !== false);
+  next.hasWorktop = ownsWorktopGeometry && !suppressWorktop;
   next.frontSide = "FRONT";
   next.backSide = "BACK";
   next.leftSide = "LEFT";
@@ -188,37 +346,158 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
   next.ifcTag = text(next.ifcTag, typeId);
   next.classificationCode = typeof next.classificationCode === "string" ? next.classificationCode : null;
   next.classificationSystem = typeof next.classificationSystem === "string" ? next.classificationSystem : null;
-  next.bodyMaterialGroup = "body";
+  next.bodyMaterialGroup = "corpus";
   next.frontMaterialGroup = "front";
   next.backMaterialGroup = "back";
-  next.shelfMaterialGroup = "shelf";
+  next.shelfMaterialGroup = "corpus";
   next.worktopMaterialGroup = "worktop";
   next.drawerBoxMaterialGroup = "drawer_box";
 
-  const widthMax = spec.geometryKind === "cladding" ? 3000 : spec.geometryKind === "wall_unit" ? 5000 : 3600;
-  const heightMax = spec.geometryKind === "cladding" || spec.geometryKind === "wardrobe" || spec.geometryKind === "tall" ? 3200 : spec.geometryKind === "bed" ? 1400 : 2600;
-  const depthMax = spec.geometryKind === "bed" ? 2600 : spec.geometryKind === "island" ? 1400 : 1200;
+  const widthMax = spec.geometryKind === "worktop" || spec.geometryKind === "accessory" || spec.geometryKind === "trim" || spec.geometryKind === "cladding" || spec.geometryKind === "wall_unit" ? 5000 : 3600;
+  const heightMax = spec.geometryKind === "worktop" || spec.geometryKind === "shelf_surface" || spec.geometryKind === "trim" || spec.geometryKind === "accessory"
+    ? 1200
+    : spec.geometryKind === "cladding" || spec.geometryKind === "wardrobe" || spec.geometryKind === "tall" || (spec.geometryKind === "open_end" && spec.kitchenRole === "tall")
+      ? 3200
+      : spec.geometryKind === "bed"
+        ? 1400
+        : 2600;
+  const minHeight = spec.geometryKind === "worktop" || spec.geometryKind === "shelf_surface" || spec.geometryKind === "trim" || spec.geometryKind === "front_component" || spec.geometryKind === "accessory" ? 1 : 50;
+  const depthMax = spec.geometryKind === "worktop" ? 2600 : spec.geometryKind === "bed" ? 2600 : spec.geometryKind === "island" ? 1400 : 1200;
 
   next.width = nearestStep(clamp(num(next.width, spec.width), 100, widthMax), 1);
-  next.height = nearestStep(clamp(num(next.height, spec.height), 50, heightMax), 1);
+  next.height = nearestStep(clamp(num(next.height, spec.height), minHeight, heightMax), 1);
   next.depth = nearestStep(clamp(num(next.depth, spec.depth), 10, depthMax), 1);
+  if (usesUnifiedCornerDepth(spec, next)) {
+    next.width = next.depth;
+  }
   next.widthMm = next.width;
   next.heightMm = next.height;
   next.depthMm = next.depth;
-  next.boardThickness = clamp(Math.round(num(next.boardThickness, 18)), 8, 60);
-  next.backThickness = clamp(num(next.backThickness, spec.geometryKind === "cladding" ? 0 : 8), 0, Math.min(30, Math.max(0, num(next.depth, spec.depth) - 1)));
+  next.boardThickness = clamp(Math.round(num(next.boardThickness, isSurfaceLike(spec) ? num(next.height, spec.height) : 18)), 4, 100);
+  next.backThickness = hasNoBackPanel(spec) ? 0 : clamp(num(next.backThickness, 8), 0, Math.min(30, Math.max(0, num(next.depth, spec.depth) - 1)));
   next.drawerBackGapMm = clamp(num(next.drawerBackGapMm, 10), 0, 80);
   next.frontThicknessMm = clamp(Math.round(num(next.frontThicknessMm, spec.glassFronts ? 6 : 18)), 4, 50);
   next.shelfThickness = clamp(Math.round(num(next.shelfThickness, num(next.boardThickness, 18))), 8, 50);
-  next.worktopThicknessMm = spec.hasWorktop && !suppressWorktop ? clamp(Math.round(num(next.worktopThicknessMm, 38)), 10, 100) : 0;
-  next.plinthHeight = spec.hasPlinth ? clamp(Math.round(num(next.plinthHeight, 100)), 0, Math.max(0, num(next.height, spec.height) - 120)) : 0;
-  next.plinthSetbackMm = spec.hasPlinth ? clamp(Math.round(num(next.plinthSetbackMm, 60)), 0, Math.max(0, num(next.depth, spec.depth) / 2)) : 0;
+  next.worktopThicknessMm = (next.requiresWorktop || ownsWorktopGeometry) && !suppressWorktop ? clamp(Math.round(num(next.worktopThicknessMm, 38)), 10, 100) : 0;
+  next.plinthHeight = spec.hasPlinth && !suppressPlinth ? clamp(Math.round(num(next.plinthHeight, 100)), 0, Math.max(0, num(next.height, spec.height) - 120)) : 0;
+  next.plinthSetbackMm = spec.hasPlinth && !suppressPlinth ? clamp(Math.round(num(next.plinthSetbackMm, 60)), 0, Math.max(0, num(next.depth, spec.depth) / 2)) : 0;
+  next.hasPlinth = spec.hasPlinth === true && next.plinthHeight > 0;
   next.frontGap = clamp(num(next.frontGap, 2), 0, 12);
   next.sideGap = clamp(num(next.sideGap, 2), 0, 20);
+  next.side = spec.geometryKind === "corner"
+    ? (text(next.side, "left") === "right" ? "right" : "left")
+    : spec.moduleType === "fwm_catalog_wall_open_end"
+      ? (text(next.side, "right") === "left" ? "left" : "right")
+      : text(next.side, "none");
+  next.endingSide = spec.moduleType === "fwm_catalog_wall_open_end" ? next.side : text(next.endingSide, "none");
+  const endingShape = text(next.endingShape, "");
+  const variantShape = text(next.variant, spec.variantOptions?.[0] ?? "").includes("rounded") ? "rounded" : "chamfered";
+  next.endingShape = spec.moduleType === "fwm_catalog_wall_open_end"
+    ? endingShape === "rounded" ? "rounded" : endingShape === "chamfered" ? "chamfered" : variantShape
+    : text(next.endingShape, "none");
+  const variantValue = text(next.variant, spec.variantOptions?.[0] ?? "default");
+  next.cornerShape = spec.moduleType === "fwm_catalog_base_corner"
+    ? variantValue.includes("chamfered") ? "chamfered" : variantValue.includes("90") ? "l_shape" : "blind"
+    : isWallCornerVariant(spec, next)
+      ? variantValue.includes("chamfered") ? "chamfered" : variantValue.includes("90") ? "l_shape" : "blind"
+      : text(next.cornerShape, spec.geometryKind === "corner" ? "l_shape" : "none");
+  next.handleType = ["none", "bar", "knob", "profile", "push"].includes(text(next.handleType, "none")) ? text(next.handleType, "none") : "none";
   next.drawerCount = count(next.drawerCount, spec.drawers ?? 0, 12);
   next.drawerFrontHeightsMm = typeof next.drawerFrontHeightsMm === "string" ? next.drawerFrontHeightsMm.trim() : "";
+  const drawerHeights = resolveDrawerFrontHeights(next, next.drawerCount as number);
+  const drawerPresets = drawerHeights.map((height, index) => {
+    const override = drawerSystemSizeOverride(next[`drawer${index + 1}SystemSize`]);
+    return override
+      ? resolveFwmDrawerSystemPreset(next.drawerSystemBrand ?? next.drawerSystem, override)
+      : resolveFwmDrawerSystemPresetForFrontHeight(next.drawerSystemBrand ?? next.drawerSystem, height);
+  });
+  const drawerPreset = drawerPresets[0] ?? resolveFwmDrawerSystemPreset(next.drawerSystemBrand ?? next.drawerSystem, next.drawerSystemSize);
+  next.drawerSystem = drawerPreset.brand;
+  next.drawerSystemBrand = drawerPreset.brand;
+  next.drawerSystemSize = drawerPreset.size;
+  next.drawerSystemSizes = drawerPresets.map((presetValue) => presetValue.size).join(",");
+  next.drawerSystemLabels = drawerPresets.map((presetValue) => presetValue.label).join(",");
+  next.drawerSystemMinFrontHeightsMm = drawerPresets.map((presetValue) => String(presetValue.minFrontHeightMm)).join(",");
+  next.drawerSystemDepthMm = drawerPreset.systemDepthMm;
+  next.drawerBottomDepthDeductionMm = drawerPreset.bottomDepthDeductionMm;
+  next.drawerBottomWidthDeductionMm = drawerPreset.bottomWidthDeductionMm;
+  next.drawerBackWidthDeductionMm = drawerPreset.backWidthDeductionMm;
+  next.drawerBackHeightDeductionMm = drawerPreset.backHeightDeductionMm;
+  next.drawerSystemBackHeightsMm = drawerPresets.map((presetValue) => String(presetValue.backHeightDeductionMm)).join(",");
+  next.cutleryInsertWidthDeductionMm = drawerPreset.cutleryInsertWidthDeductionMm;
+  next.cutleryInsertDepthDeductionMm = drawerPreset.cutleryInsertDepthDeductionMm;
+  next.innerDrawerFrontDeductionMm = drawerPreset.innerDrawerFrontDeductionMm;
+  next.innerDrawerCrossRailDeductionMm = drawerPreset.innerDrawerCrossRailDeductionMm;
+  next.drawerSystemPricePerSet = drawerPreset.pricePerSet;
+  next.drawerSystemPriceWithMargin = drawerPreset.priceWithMargin;
+  next.drawerSystemCodeLabel = drawerPreset.codeLabel;
+  for (let index = 0; index < MAX_INDEXED_DRAWER_PARAMS; index += 1) {
+    const drawerIndex = index + 1;
+    const activePreset = drawerPresets[index];
+    const sizeOverride = drawerSystemSizeOverride(next[`drawer${drawerIndex}SystemSize`]);
+    next[`drawer${drawerIndex}FrontHeightMm`] = activePreset ? Math.round((drawerHeights[index] ?? 0) * 1000) / 1000 : 0;
+    next[`drawer${drawerIndex}SystemSize`] = activePreset ? sizeOverride ?? "" : "";
+    next[`drawer${drawerIndex}SystemLabel`] = activePreset?.label ?? "";
+    next[`drawer${drawerIndex}SystemMinFrontHeightMm`] = activePreset?.minFrontHeightMm ?? 0;
+    next[`drawer${drawerIndex}SystemBackHeightMm`] = activePreset?.backHeightDeductionMm ?? 0;
+  }
+  const topDrawerIndex = next.drawerCount as number;
+  const topDrawerPreset = topDrawerIndex > 0 ? drawerPresets[topDrawerIndex - 1] : null;
+  const supportsCutleryInnerDrawer = spec.moduleType === "fwm_catalog_base_drawers";
+  const cutleryAllowed = supportsCutleryInnerDrawer && topDrawerPreset?.size === "M";
+  const cabinetInnerWidth = Math.max(60, num(next.width, spec.width) - num(next.boardThickness, 18) * 2);
+  const cutleryDepthDeduction = topDrawerPreset?.cutleryInsertDepthDeductionMm ?? 0;
+  const cutleryBaseDepth = topDrawerPreset ? topDrawerPreset.systemDepthMm - cutleryDepthDeduction : 0;
+  next.hasCutleryInnerDrawer = supportsCutleryInnerDrawer ? bool(next.hasCutleryInnerDrawer, false) : false;
+  next.cutleryInnerDrawerAllowed = cutleryAllowed;
+  next.cutleryInnerDrawerStatus = !next.hasCutleryInnerDrawer
+    ? "disabled"
+    : cutleryAllowed
+      ? "enabled"
+      : "disabled_top_drawer_not_medium";
+  next.cutleryInnerDrawerTargetIndex = cutleryAllowed ? topDrawerIndex : 0;
+  next.cutleryInnerDrawerWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.cutleryInsertWidthDeductionMm ?? 0)) * 1000) / 1000 : 0;
+  next.cutleryInnerDrawerDepthMm = cutleryAllowed && topDrawerPreset
+    ? Math.round(Math.max(100, Math.min(topDrawerPreset.systemDepthMm - 44, cutleryBaseDepth)) * 1000) / 1000
+    : 0;
+  next.cutleryInnerDrawerFrontWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.innerDrawerFrontDeductionMm ?? 0)) * 1000) / 1000 : 0;
+  next.cutleryInnerDrawerCrossRailWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.innerDrawerCrossRailDeductionMm ?? 0)) * 1000) / 1000 : 0;
+  next.drawerFrontHeightsMm = drawerHeights.map((height) => String(Math.round(height * 1000) / 1000)).join(",");
   next.doorCount = count(next.doorCount, spec.doors ?? 0, 12);
   next.shelfCount = count(next.shelfCount, spec.shelves ?? 0, 16);
+  if (spec.moduleType === "fwm_catalog_tall_cabinet") {
+    next.tallStackMode = ["fixed", "builder"].includes(text(next.tallStackMode, "builder")) ? text(next.tallStackMode, "builder") : "builder";
+    next.tallSlotCount = count(next.tallSlotCount, DEFAULT_TALL_STACK_SLOTS.length, MAX_TALL_STACK_SLOTS);
+    for (let index = 0; index < MAX_TALL_STACK_SLOTS; index += 1) {
+      const slotIndex = index + 1;
+      const fallback = DEFAULT_TALL_STACK_SLOTS[index] ?? { type: "empty", height: 0 };
+      const typeKey = `tallSlot${slotIndex}Type`;
+      const heightKey = `tallSlot${slotIndex}HeightMm`;
+      const drawerSystemSizeKey = `tallSlot${slotIndex}DrawerSystemSize`;
+      const doorLeafCountKey = `tallSlot${slotIndex}DoorLeafCount`;
+      const doorOpeningModeKey = `tallSlot${slotIndex}DoorOpeningMode`;
+      const offsetKey = `tallSlot${slotIndex}OffsetMm`;
+      const slotType = text(next[typeKey], fallback.type);
+      next[typeKey] = TALL_STACK_SLOT_TYPES.includes(slotType as (typeof TALL_STACK_SLOT_TYPES)[number]) ? slotType : fallback.type;
+      next[heightKey] = clamp(Math.round(num(next[heightKey], fallback.height)), 0, 1400);
+      next[drawerSystemSizeKey] = drawerSystemSizeOverride(next[drawerSystemSizeKey]) ?? "";
+      next[doorLeafCountKey] = count(next[doorLeafCountKey], 1, 2);
+      next[doorLeafCountKey] = Math.max(1, Math.min(2, next[doorLeafCountKey] as number));
+      next[doorOpeningModeKey] = ["hinged", "lift_up"].includes(text(next[doorOpeningModeKey], "hinged")) ? text(next[doorOpeningModeKey], "hinged") : "hinged";
+      next[offsetKey] = clamp(Math.round(num(next[offsetKey], 0)), -3000, 3000);
+    }
+    next.tallDoorOpeningMode = ["left", "right", "lift_up"].includes(text(next.tallDoorOpeningMode, "lift_up")) ? text(next.tallDoorOpeningMode, "lift_up") : "lift_up";
+  }
+  if (Array.isArray(next.shelfGaps)) {
+    next.shelfGaps = next.shelfGaps
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .slice(0, (next.shelfCount as number) + 1);
+  } else if (typeof next.shelfGaps === "string") {
+    next.shelfGaps = next.shelfGaps.trim();
+  } else {
+    next.shelfGaps = "";
+  }
   next.handleLengthMm = clamp(Math.round(num(next.handleLengthMm, 160)), 40, Math.max(40, num(next.width, spec.width) - 80));
   next.handleProjectionMm = clamp(Math.round(num(next.handleProjectionMm, 28)), 0, 80);
   next.handleSizeMm = clamp(Math.round(num(next.handleSizeMm, 16)), 4, 60);
@@ -242,11 +521,18 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
 
 export function validateFwmFurniture(params: FwmFurnitureParams): string[] {
   const normalized = normalizeFwmFurnitureParams(params);
+  const spec = getFwmFurnitureSpec(normalized.type);
   const errors: string[] = [];
   const width = normalized.width as number;
   const height = normalized.height as number;
   const depth = normalized.depth as number;
   const board = normalized.boardThickness as number;
+  if (hasNoBackPanel(spec)) {
+    if (width <= 0) errors.push("Width must be greater than zero.");
+    if (height <= 0) errors.push("Height must be greater than zero.");
+    if (depth <= 0) errors.push("Depth must be greater than zero.");
+    return errors;
+  }
   if (width <= board * 2 + 40) errors.push("Width is too small for side panels and internal clearance.");
   if (height <= board * 2 + 40) errors.push("Height is too small for top/bottom boards and usable interior.");
   if (depth <= board + 30) errors.push("Depth is too small for a manufacturable module.");

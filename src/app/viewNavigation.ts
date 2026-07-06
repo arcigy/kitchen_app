@@ -71,16 +71,16 @@ type CreateViewNavigationArgs = {
 };
 
 const NAV_KEY_CODES = new Set([
-  "KeyW",
-  "KeyA",
-  "KeyS",
-  "KeyD",
   "KeyQ",
   "KeyE",
   "ShiftLeft",
   "ShiftRight",
   "Space"
 ]);
+
+export function isNavigationKeyboardCode(code: string) {
+  return NAV_KEY_CODES.has(code);
+}
 
 const MIN_3D_DISTANCE = 0.18;
 const MAX_3D_DISTANCE = 80;
@@ -530,7 +530,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
 
   const onKeyDown = (ev: KeyboardEvent) => {
     if (ev.defaultPrevented) return;
-    if (!NAV_KEY_CODES.has(ev.code)) return;
+    if (!isNavigationKeyboardCode(ev.code)) return;
     if (args.isTypingTarget(ev.target) && ev.code !== "Space") return;
     if (!shouldAcceptKeyboardNav()) return;
     navKeys.add(ev.code);

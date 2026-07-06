@@ -1,5 +1,18 @@
 import * as THREE from "three";
+import polygonClipping from "polygon-clipping";
 import type { FloorBoundaryPoint, KitchenWorktopParams } from "./appState";
+
+type PolygonPoint = [number, number];
+type PolygonRing = PolygonPoint[];
+type Polygon = PolygonRing[];
+type MultiPolygon = Polygon[];
+type PolygonClipper = {
+  union: (...polygons: MultiPolygon[]) => MultiPolygon;
+};
+
+const polygonClipper = polygonClipping as PolygonClipper;
+
+export type KitchenWorktopCoveragePolygon = THREE.Vector3[];
 
 function lineIntersectionXZPoints(
   a1: THREE.Vector3,
@@ -103,6 +116,40 @@ export function offsetKitchenWorktopPath(path: THREE.Vector3[], signedOffsetM: n
   return pts;
 }
 
+export function offsetClosedKitchenWorktopPolygon(points: THREE.Vector3[], outwardOffsetM: number) {
+  if (points.length < 3 || Math.abs(outwardOffsetM) < 1e-8) return points.map((point) => point.clone());
+
+  const signedArea = getSignedPolygonAreaM2(points);
+  if (Math.abs(signedArea) < 1e-8) return points.map((point) => point.clone());
+
+  const edges = points.map((point, index) => {
+    const next = points[(index + 1) % points.length]!;
+    const dir = next.clone().sub(point).setY(0);
+    if (dir.lengthSq() < 1e-10) return null;
+    dir.normalize();
+    const outwardNormal = signedArea >= 0
+      ? new THREE.Vector3(dir.z, 0, -dir.x)
+      : new THREE.Vector3(-dir.z, 0, dir.x);
+    return {
+      a: point.clone().addScaledVector(outwardNormal, outwardOffsetM),
+      b: next.clone().addScaledVector(outwardNormal, outwardOffsetM)
+    };
+  });
+
+  const offset: THREE.Vector3[] = [];
+  for (let index = 0; index < edges.length; index += 1) {
+    const prev = edges[(index - 1 + edges.length) % edges.length];
+    const current = edges[index];
+    if (!prev || !current) {
+      offset.push(points[index]!.clone());
+      continue;
+    }
+    offset.push(lineIntersectionXZPoints(prev.a, prev.b, current.a, current.b) ?? current.a.clone());
+  }
+  if (getSignedPolygonAreaM2(offset) < 0) offset.reverse();
+  return offset;
+}
+
 export function getKitchenWorktopPolygon(params: KitchenWorktopParams) {
   const path = sanitizeKitchenWorktopPath(params.path);
   if (path.length < 2) return [] as THREE.Vector3[];
@@ -143,6 +190,77 @@ export function getSignedPolygonAreaM2(points: THREE.Vector3[]) {
     area += current.x * next.z - next.x * current.z;
   }
   return area / 2;
+}
+
+function getSignedRingAreaM2(ring: PolygonRing) {
+  let area = 0;
+  for (let index = 0; index < ring.length; index += 1) {
+    const current = ring[index]!;
+    const next = ring[(index + 1) % ring.length]!;
+    area += current[0] * next[1] - next[0] * current[1];
+  }
+  return area / 2;
+}
+
+function toClipperPolygon(points: THREE.Vector3[]): MultiPolygon | null {
+  const clean: PolygonRing = [];
+  for (const point of points) {
+    const next: PolygonPoint = [point.x, point.z];
+    const prev = clean[clean.length - 1];
+    if (prev && Math.hypot(prev[0] - next[0], prev[1] - next[1]) < 1e-7) continue;
+    clean.push(next);
+  }
+  if (clean.length < 3) return null;
+  const first = clean[0]!;
+  const last = clean[clean.length - 1]!;
+  if (Math.hypot(first[0] - last[0], first[1] - last[1]) >= 1e-7) {
+    clean.push([first[0], first[1]]);
+  }
+  if (Math.abs(getSignedRingAreaM2(clean)) < 1e-8) return null;
+  return [[clean]];
+}
+
+function getLargestOuterRingPolygon(result: MultiPolygon) {
+  let best: PolygonRing | null = null;
+  let bestArea = 0;
+  for (const polygon of result) {
+    const outer = polygon[0];
+    if (!outer || outer.length < 4) continue;
+    const area = Math.abs(getSignedRingAreaM2(outer));
+    if (area > bestArea) {
+      bestArea = area;
+      best = outer;
+    }
+  }
+  if (!best) return [] as THREE.Vector3[];
+  const points = best.map(([x, z]) => new THREE.Vector3(x, 0, z));
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  if (points.length > 1 && first.distanceToSquared(last) < 1e-12) points.pop();
+  if (getSignedPolygonAreaM2(points) < 0) points.reverse();
+  return points;
+}
+
+export function getKitchenWorktopCoveredPolygon(
+  params: KitchenWorktopParams,
+  coveragePolygons: KitchenWorktopCoveragePolygon[] = []
+) {
+  const basePolygon = getKitchenWorktopPolygon(params);
+  if (basePolygon.length < 3 || coveragePolygons.length === 0) return basePolygon;
+
+  const clippingInputs = [
+    toClipperPolygon(basePolygon),
+    ...coveragePolygons.map((polygon) => toClipperPolygon(polygon))
+  ].filter((polygon): polygon is MultiPolygon => !!polygon);
+  if (clippingInputs.length <= 1) return basePolygon;
+
+  try {
+    const union = polygonClipper.union(...clippingInputs);
+    const covered = getLargestOuterRingPolygon(union);
+    return covered.length >= 3 ? covered : basePolygon;
+  } catch {
+    return basePolygon;
+  }
 }
 
 export function getKitchenWorktopAreaM2(params: KitchenWorktopParams) {

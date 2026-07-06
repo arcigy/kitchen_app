@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFileClientCatalogRepository } from "../catalog/catalog-file-repository";
 import { getEnabledModulePackageDefinitions } from "../catalog/module-catalog";
@@ -251,7 +252,7 @@ describe("FurnQuote module package validation", () => {
     ].sort());
     for (const modulePackage of systemModulePackageTemplates) {
       const validated = validateFurnQuoteModulePackage(modulePackage);
-      expect(validated.geometry.mode).toBe("trusted-runtime");
+      expect(["trusted-runtime", "declarative"]).toContain(validated.geometry.mode);
       expect(validated.parameters.parameters.some((parameter) => parameter.key === "type")).toBe(true);
     }
   });
@@ -349,6 +350,38 @@ describe("tenant module package import", () => {
     expect(JSON.parse(await readFile(storedManifestPath, "utf-8"))).toMatchObject({ format: "furnquote-module" });
   }, 30_000);
 
+  it("keeps sibling package variants with the same moduleType as separate catalog modules", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const leftVariant = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "drawer_low_left_variant",
+        displayName: "Drawer Low Left"
+      }
+    });
+    const rightVariant = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "drawer_low_right_variant",
+        displayName: "Drawer Low Right"
+      }
+    });
+
+    await serviceA.importPackage({ package: leftVariant });
+    await serviceA.importPackage({ package: rightVariant });
+
+    const catalogA = await catalogRepository.getCatalog(ctxA);
+    const variants = catalogA.modules.filter((module) =>
+      module.modulePackageId === "drawer_low_left_variant" ||
+      module.modulePackageId === "drawer_low_right_variant"
+    );
+    expect(variants.map((module) => module.id).sort()).toEqual(["drawer_low_left_variant", "drawer_low_right_variant"]);
+    expect(variants.map((module) => module.moduleType)).toEqual(["drawer_low", "drawer_low"]);
+    expect(variants.every((module) => module.enabled)).toBe(true);
+  }, 30_000);
+
   it("imports a real .fqm file, stores the envelope, runtime manifest, meta, and assets", async () => {
     const bytes = Buffer.from("preview-bytes");
     const modulePackage = makePackage({
@@ -384,6 +417,45 @@ describe("tenant module package import", () => {
     });
     expect(await readFile(path.join(moduleDir, "assets", "preview.png"), "utf-8")).toBe("preview-bytes");
     expect(imported.catalogModule.modulePackageId).toBe("drawer_low_fqm_import");
+  }, 30_000);
+
+  it("creates tenant parameter presets from current module parameters without storing free dimensions", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const imported = await serviceA.importPackage({ package: makePackage() });
+    const beforeHash = imported.catalogModule.packageHash;
+
+    const result = await serviceA.createParameterPreset({
+      modulePackageId: imported.modulePackage.module.modulePackageId,
+      name: "Tri sufliky",
+      note: "Preset ulozeny z aktualnych parametrov modulu.",
+      parameters: {
+        width: 900,
+        height: 920,
+        depth: 580,
+        front: "mat.board.front.oak.18",
+        handle: "component.handle.bar"
+      }
+    });
+
+    expect(result.preset).toMatchObject({
+      presetId: "tri_sufliky",
+      label: "Tri sufliky",
+      note: "Preset ulozeny z aktualnych parametrov modulu."
+    });
+    expect(result.preset.parameterValues).toMatchObject({ handle: "component.handle.bar" });
+    expect(result.preset.parameterValues).not.toHaveProperty("front");
+    expect(result.preset.parameterValues).not.toHaveProperty("width");
+    expect(result.preset.parameterValues).not.toHaveProperty("height");
+    expect(result.preset.parameterValues).not.toHaveProperty("depth");
+    expect(result.modulePackage.parameterPresets?.freeParameterKeys).toEqual(expect.arrayContaining(["width", "height", "depth", "front"]));
+    const stored = await packageRepository.getPackage(ctxA, imported.modulePackage.module.modulePackageId);
+    expect(stored?.parameterPresets?.presets.some((preset) => preset.presetId === "tri_sufliky")).toBe(true);
+    const catalogA = await catalogRepository.getCatalog(ctxA);
+    const catalogModule = catalogA.modules.find((module) => module.modulePackageId === imported.modulePackage.module.modulePackageId);
+    expect(catalogModule?.packageHash).toBe(result.modulePackage.integrity.packageHash);
+    expect(catalogModule?.packageHash).not.toBe(beforeHash);
   }, 30_000);
 
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
@@ -438,7 +510,7 @@ describe("tenant module package import", () => {
     expect(packagesB).toHaveLength(systemModulePackageTemplates.length);
     expect(getEnabledModulePackageDefinitions(catalogA, packagesA)).toHaveLength(systemModulePackageTemplates.length);
     expect(getEnabledModulePackageDefinitions(catalogB, packagesB)).toHaveLength(systemModulePackageTemplates.length);
-    expect(catalogA.modules.every((module) => module.modulePackageId && module.runtimeBuilderKey)).toBe(true);
+    expect(catalogA.modules.every((module) => module.modulePackageId)).toBe(true);
 
     const clientAPath = path.join(root, "storage", "clients", ctxA.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
     const clientBPath = path.join(root, "storage", "clients", ctxB.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
@@ -632,6 +704,115 @@ describe("runtime and project save integration", () => {
       front: catalog.kitchenDefaults.frontMaterialId
     });
     expect(resolveModulePackageComponentAssignments({ modulePackage, catalog }).handle).toBe(catalog.kitchenDefaults.defaultHandleComponentId);
+  });
+
+  it("builds declarative Revit package geometry without a trusted runtime builder", () => {
+    const modulePackage = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "revit_mesh_preview",
+        moduleType: "revit_mesh_preview",
+        familyName: "Revit Mesh Preview",
+        displayName: "Revit Mesh Preview",
+        tags: ["revit", "revit-export-preview"]
+      },
+      geometry: {
+        mode: "declarative",
+        primitives: [
+          {
+            primitiveType: "mesh",
+            id: "revit-solid-1",
+            params: {
+              verticesMm: [
+                { x: 0, y: 0, z: 0 },
+                { x: 1000, y: 0, z: 0 },
+                { x: 0, y: 500, z: 0 }
+              ],
+              indices: [0, 1, 2]
+            }
+          }
+        ]
+      },
+      compatibility: { requiredCatalogFeatures: ["materials"] }
+    });
+    const catalog = makeCatalog();
+    const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog });
+
+    expect(group.userData.geometryMode).toBe("declarative");
+    expect(group.userData.runtimeBuilderKey).toBeUndefined();
+    expect(group.children).toHaveLength(1);
+  });
+
+  it("preserves declarative Revit mesh material color and source metadata", () => {
+    const modulePackage = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "revit_mesh_metadata_preview",
+        moduleType: "revit_mesh_metadata_preview",
+        familyName: "Revit Mesh Metadata Preview",
+        displayName: "Revit Mesh Metadata Preview",
+        tags: ["revit", "revit-export-preview"]
+      },
+      geometry: {
+        mode: "declarative",
+        primitives: [
+          {
+            primitiveType: "mesh",
+            id: "revit-solid-1",
+            params: {
+              verticesMm: [
+                { x: 0, y: 0, z: 0 },
+                { x: 1000, y: 0, z: 0 },
+                { x: 0, y: 500, z: 0 }
+              ],
+              indices: [0, 1, 2],
+              boardName: "door_front_z",
+              materialGroup: "front",
+              materialSlotId: "front",
+              materialName: "Arcigy front",
+              materialColorHex: "#aabbcc",
+              materialParameterName: "Arcigy_MaterialByGroup_Front",
+              materialParameterValue: "mat.front",
+              revitMaterialElementId: "123",
+              materialSource: "group",
+              sourceElementId: 456,
+              sourceUniqueId: "unique-456",
+              sourceName: "Front extrusion",
+              sourceClass: "Extrusion",
+              revitCategory: "Generic Models",
+              revitProperties: {
+                Comments: { storageType: "String", value: "ARCIGY_BOARD", displayValue: "ARCIGY_BOARD", isReadOnly: false }
+              }
+            }
+          }
+        ]
+      }
+    });
+    const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog: makeCatalog() });
+    const mesh = group.children[0] as THREE.Mesh;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+
+    expect(mesh.name).toBe("revit-solid-1");
+    expect(mesh.userData).toMatchObject({
+      boardName: "door_front_z",
+      materialGroup: "front",
+      materialSlotId: "front",
+      materialName: "Arcigy front",
+      materialColorHex: "#aabbcc",
+      sourceElementId: 456,
+      sourceUniqueId: "unique-456",
+      revitCategory: "Generic Models",
+      revitProperties: {
+        Comments: expect.objectContaining({ displayValue: "ARCIGY_BOARD" })
+      }
+    });
+    expect(material.color.getHexString()).toBe("aabbcc");
+    expect(material.userData).toMatchObject({
+      materialName: "Arcigy front",
+      materialColorHex: "#aabbcc",
+      renderColorHex: "#aabbcc",
+      revitMaterialElementId: "123"
+    });
   });
 
   it("uses package parameter defaults and UI labels as runtime source data", () => {

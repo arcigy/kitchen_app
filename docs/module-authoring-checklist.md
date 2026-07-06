@@ -6,6 +6,7 @@ Use this checklist before saying a new module is ready.
 
 - [ ] `modulePackageId` is unique and stable.
 - [ ] `moduleType` matches the trusted runtime builder expectation.
+- [ ] IDs use normalized product naming: lowercase snake case, no client/supplier prefix, no `family`, no version suffix.
 - [ ] `familyName` and `displayName` are human-readable.
 - [ ] `category` is one of the allowed package categories.
 - [ ] `version` is set.

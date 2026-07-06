@@ -43,6 +43,16 @@ export interface HistoryHelpers {
   setSelectedSection?: (id: string | null) => void;
 }
 
+const stableJson = (value: unknown): string => {
+  if (value == null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(",")}}`;
+};
+
 export const snapshotSignature = (s: LayoutSnapshot) => {
   // Compact-ish signature to skip duplicates
   const w = s.walls
@@ -51,7 +61,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const mods = (s.instances ?? [])
     .map(
       (m) =>
-        `${m.id}:${m.params?.type ?? "?"}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.kind ?? "segment"}:${m.kitchenPlacement?.segmentIndex ?? -1}:${m.kitchenPlacement?.cornerIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.y ?? 0},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
+        `${m.id}:${stableJson(m.params ?? {})}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.kind ?? "segment"}:${m.kitchenPlacement?.segmentIndex ?? -1}:${m.kitchenPlacement?.cornerIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.y ?? 0},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
     )
     .join("|");
   const floors = (s.floors ?? [])
@@ -71,12 +81,18 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
           .join(";")}`
     )
     .join("|");
+  const alignLocks = (s.alignLocks ?? [])
+    .map(
+      (lock) =>
+        `${lock.id}:${lock.locked ? 1 : 0}:${JSON.stringify(lock.a)}:${JSON.stringify(lock.b)}:${lock.pointMm.x},${lock.pointMm.z}`
+    )
+    .join("|");
   const customFurniture = (s.customFurniture ?? [])
     .map((item) => `${item.id}:${JSON.stringify(item.params)}`)
     .join("|");
   const wardrobe = s.wardrobe ? JSON.stringify(s.wardrobe) : "";
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${customFurniture}::${wardrobe}::${mods}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${wardrobe}::${mods}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -118,6 +134,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   S.columnCounter = snap.columnCounter ?? S.columnCounter;
   S.sectionCounter = snap.sectionCounter ?? S.sectionCounter;
   S.worktopCounter = snap.worktopCounter ?? S.worktopCounter;
+  S.alignLockCounter = snap.alignLockCounter ?? S.alignLockCounter;
+  S.alignLocks = structuredClone(snap.alignLocks ?? []);
   S.customFurnitureCounter = snap.customFurnitureCounter ?? S.customFurnitureCounter;
   S.instanceCounter = snap.instanceCounter ?? S.instanceCounter;
 
@@ -227,6 +245,8 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       kitchenGroupId: worktop.kitchenGroupId,
       params: copyWorktopParams(worktop.params)
     })),
+    alignLockCounter: S.alignLockCounter,
+    alignLocks: structuredClone(S.alignLocks),
     customFurnitureCounter: S.customFurnitureCounter,
     customFurniture: S.customFurniture.map((item) => ({ id: item.id, params: JSON.parse(JSON.stringify(item.params)) })),
     wardrobe: S.wardrobeHistory?.getSaveState() ?? null,

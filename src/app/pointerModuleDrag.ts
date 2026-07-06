@@ -29,6 +29,7 @@ type UpdateModuleDragFromGroundHitParams = {
   defaultWorktopBackOffsetMm: number;
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
   updateLayoutPanel: () => void;
+  isModuleAlignLocked?: (id: string) => boolean;
 };
 
 type ResolvePointerModuleDragFinalPositionParams = {
@@ -76,15 +77,18 @@ export function rollbackPointerModuleDragOverlap(params: RollbackPointerModuleDr
 }
 
 export function refreshPointerModuleDragKitchenPlacement(params: RefreshPointerModuleDragKitchenPlacementParams): void {
-  refreshModuleKitchenPlacement({
-    instance: params.instance,
-    kitchenGroups: params.kitchenGroups,
-    defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
-    inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
-  });
+  if (params.instance.kitchenPlacement) {
+    refreshModuleKitchenPlacement({
+      instance: params.instance,
+      kitchenGroups: params.kitchenGroups,
+      defaultWorktopBackOffsetMm: params.defaultWorktopBackOffsetMm,
+      inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
+    });
+  }
   for (const item of params.pushed) {
     const neighbor = params.findInstance(item.id);
     if (!neighbor) continue;
+    if (!neighbor.kitchenPlacement) continue;
     refreshModuleKitchenPlacement({
       instance: neighbor,
       kitchenGroups: params.kitchenGroups,
@@ -100,6 +104,7 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
 
   const inst = params.findInstance(instanceId);
   if (!inst) return false;
+  if (params.isModuleAlignLocked?.(instanceId)) return true;
 
   const finalPos = resolvePointerModuleDragFinalPosition({
     dragState: params.dragState,

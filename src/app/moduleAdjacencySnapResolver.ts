@@ -3,6 +3,7 @@ import type { AppState } from "../layout/appState";
 import type { ModuleAdjacencyLink } from "./moduleAdjacency";
 import type { KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
 import { resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { SNAP_DISTANCE_M } from "./snapToolProfiles";
 
 type SnapPositionDetailedOptions = {
   stickyNeighborId?: string | null;
@@ -49,7 +50,7 @@ export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolv
     const effectiveGroupId = moving.kitchenGroupId ?? (ctx.S.kitchenEditMode ? ctx.S.activeKitchenGroupId : null);
     const result = ctx.snapPositionDetailed(moving, desired, {
       stickyNeighborId: opts?.stickyNeighborId ?? null,
-      snapDistanceM: effectiveGroupId ? 2.4 : undefined,
+      snapDistanceM: effectiveGroupId ? SNAP_DISTANCE_M.kitchenModulePlacement : undefined,
       enforceWallConstraints: !effectiveGroupId,
       enforceWallOverlap: !effectiveGroupId
     });

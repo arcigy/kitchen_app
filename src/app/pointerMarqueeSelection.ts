@@ -262,6 +262,7 @@ export function applyResolvedMarqueeSelection(args: {
 
 export function finishActivePointerMarquee(args: {
   additive: boolean;
+  applyCustomSelection?: (selectionRect: ScreenRect, additive: boolean) => boolean;
   collectHitIds: (selectionRect: ScreenRect) => { hitInstanceIds: string[]; hitWallIds: string[] };
   currentInstanceId: string | null;
   currentWallId: string | null;
@@ -285,6 +286,11 @@ export function finishActivePointerMarquee(args: {
   const h = selectionRect.y1 - selectionRect.y0;
 
   if (w >= 6 && h >= 6 && args.layoutTool === "select") {
+    if (args.applyCustomSelection?.(selectionRect, args.additive)) {
+      args.releasePointerCapture(args.pointerId);
+      return;
+    }
+
     const { hitInstanceIds, hitWallIds } = args.collectHitIds(selectionRect);
     const resolvedSelection = resolveMarqueeSelection({
       additive: args.additive,

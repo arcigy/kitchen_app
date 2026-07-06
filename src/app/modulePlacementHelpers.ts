@@ -7,6 +7,7 @@ import type { KitchenWorktopInstance, LayoutInstance, WallInstance } from "./loc
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { getLockedModuleNeighborIdsForSide, getLockedResizeAnchorSide, isProtectedAlignModule } from "./alignLocks";
 
 type PolygonPoint = [number, number];
 type PolygonRing = PolygonPoint[];
@@ -34,7 +35,7 @@ export type ModulePlacementHelpersContext = {
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   walls: WallInstance[];
-  S: Pick<AppState, "kitchenCtx" | "kitchenGroups">;
+  S: Pick<AppState, "kitchenCtx" | "kitchenGroups" | "alignLocks">;
   roomBounds: { halfW: number; halfD: number };
   wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
   moduleAdjacencyGroup: THREE.Group;
@@ -323,10 +324,20 @@ function collectPinnedPushChain(startId: string, side: ResizeAnchorSide) {
     const current = findInstance(currentId);
     if (!current) continue;
     const currentBox = instanceWorldBox(current);
+    for (const neighborId of getLockedModuleNeighborIdsForSide(S.alignLocks, currentId, side)) {
+      if (visited.has(neighborId)) continue;
+      const neighbor = findInstance(neighborId);
+      if (!neighbor) continue;
+      if (current.kitchenGroupId && neighbor.kitchenGroupId !== current.kitchenGroupId) continue;
+      visited.add(neighborId);
+      result.push(neighborId);
+      queue.push(neighborId);
+    }
 
     for (const other of instances) {
       if (other.id === currentId || visited.has(other.id)) continue;
       if (current.kitchenGroupId && other.kitchenGroupId !== current.kitchenGroupId) continue;
+      if (isProtectedAlignModule(S.alignLocks, other.id)) continue;
       const info = detectModuleAdjacencyInfo(currentBox, instanceWorldBox(other), other.id);
       if (!info || info.side !== side) continue;
       visited.add(other.id);
@@ -352,10 +363,21 @@ function collectPinnedPushChainFromBoxes(
     const currentId = queue.shift()!;
     const currentBox = boxesById.get(currentId);
     if (!currentBox) continue;
+    for (const neighborId of getLockedModuleNeighborIdsForSide(S.alignLocks, currentId, side)) {
+      if (visited.has(neighborId)) continue;
+      const neighbor = instances.find((item) => item.id === neighborId) ?? null;
+      if (!neighbor) continue;
+      if (kitchenGroupId && neighbor.kitchenGroupId !== kitchenGroupId) continue;
+      if (!boxesById.has(neighborId)) continue;
+      visited.add(neighborId);
+      result.push(neighborId);
+      queue.push(neighborId);
+    }
 
     for (const other of instances) {
       if (other.id === currentId || visited.has(other.id)) continue;
       if (kitchenGroupId && other.kitchenGroupId !== kitchenGroupId) continue;
+      if (isProtectedAlignModule(S.alignLocks, other.id)) continue;
       const otherBox = boxesById.get(other.id);
       if (!otherBox) continue;
       const info = detectModuleAdjacencyInfo(currentBox, otherBox, other.id);
@@ -381,7 +403,9 @@ function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanc
   return infos;
 }
 
-function chooseResizeAnchorSide(_inst: LayoutInstance, infos: AdjacentModuleInfo[]) {
+function chooseResizeAnchorSide(inst: LayoutInstance, infos: AdjacentModuleInfo[]) {
+  const lockedSide = getLockedResizeAnchorSide(S.alignLocks, inst.id);
+  if (lockedSide) return lockedSide;
   if (infos.length === 0) return null;
 
   const bySide = new Map<ResizeAnchorSide, Array<(typeof infos)[number]>>();

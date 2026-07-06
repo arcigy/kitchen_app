@@ -51,30 +51,10 @@ export function clearClientSession(): void {
 }
 
 export async function requireClientSession(root: HTMLElement): Promise<AuthenticatedClientSession> {
-  const devSession = getLocalDevSession();
-  if (devSession) return devSession;
-
   const serverSession = await readServerSession();
   if (serverSession) return serverSession;
 
   return await renderLogin(root);
-}
-
-function getLocalDevSession(): AuthenticatedClientSession | null {
-  if (!import.meta.env.DEV) return null;
-  if (typeof window === "undefined") return null;
-  if (window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") return null;
-  const issuedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
-  return {
-    version: 1,
-    userId: "user_arcigy_owner",
-    clientId: "client_arcigy_demo",
-    role: "owner",
-    displayName: "Arcigy",
-    issuedAt,
-    expiresAt
-  };
 }
 
 async function readServerSession(): Promise<AuthenticatedClientSession | null> {
@@ -148,6 +128,10 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       <img src="/organization/andrej.png" alt="" />
       <span><strong>Andrej</strong><small>Technicky tvorca</small></span>
     </button>
+    <button type="button" class="auth-profile-card" data-auth-user="pino_nobilia" aria-label="Vybrat PINO Nobilia">
+      <img src="/organization/pino-nobilia.png" alt="" />
+      <span><strong>PINO</strong><small>Tenant katalog VKH 2026</small></span>
+    </button>
   `;
 
   const form = document.createElement("form");
@@ -182,7 +166,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const hint = document.createElement("p");
   hint.className = "auth-hint";
-  hint.innerHTML = `<strong>Demo pristupy</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span>`;
+  hint.innerHTML = `<strong>Dostupne ucty</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span><span>pino_nobilia / tenant heslo</span>`;
 
   form.append(usernameLabel, passwordLabel, hint, error, submit);
   content.append(heading, profiles, form);

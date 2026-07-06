@@ -10,6 +10,7 @@ import { planarDistanceMm } from "./sharedUtils";
 import { shiftPolylinePoint, shiftPolylineSegment } from "./alignTool";
 import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 import { refreshSelectionHighlights } from "./selectionController";
+import { isObjectInLockedAlignLock } from "./alignLocks";
 import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 type MeasureSelectionActionsContext = {
@@ -93,6 +94,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   const translateWallByMeasure = (wallId: string, dxMm: number, dzMm: number) => {
     const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
     if (!wall) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "wall", wallId)) return false;
     const oldA = { ...wall.params.aMm };
     const oldB = { ...wall.params.bMm };
     wall.params.aMm = { x: wall.params.aMm.x + dxMm, z: wall.params.aMm.z + dzMm };
@@ -116,6 +118,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   const translateModuleByMeasure = (instanceId: string, dxMm: number, dzMm: number) => {
     const inst = ctx.findInstance(instanceId);
     if (!inst) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "module", instanceId)) return false;
     const prevPos = inst.root.position.clone();
     inst.root.position.x += dxMm / 1000;
     inst.root.position.z += dzMm / 1000;
@@ -181,6 +184,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     if (picked.targetKind !== "worktop" || !picked.worktopId || picked.segmentIndex == null) return false;
     const worktop = ctx.findKitchenWorktop(picked.worktopId);
     if (!worktop) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "worktop", picked.worktopId)) return false;
     const prevPath = structuredClone(worktop.params.path);
     const groupId = worktop.kitchenGroupId;
     const pointIndex = picked.lineRole === "endB" ? picked.segmentIndex + 1 : picked.segmentIndex;

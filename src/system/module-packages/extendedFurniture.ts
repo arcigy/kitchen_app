@@ -14,8 +14,355 @@ import {
   getFwmSystemFamily,
   type FwmFurnitureSpec
 } from "../../modules/fwmFurniture/definitions";
+import { FWM_DRAWER_SYSTEM_BRAND_OPTIONS } from "../../modules/fwmFurniture/drawerSystemPresets";
+import { createModuleInternalEditingDefinition } from "../../layout/moduleInternalEditing";
 
 const now = "2026-06-09T00:00:00.000Z";
+const BASE_CORNER_NOTES = "Parametric lower catalog corner cabinet. The variant selects blind 1D, 90-degree or chamfered geometry. Depth controls both corner legs, plinthHeight stays independent from height, plinthSetbackMm moves the plinth zone, and chamfer controls are used only by chamfered variants.";
+
+type UiVisibility = NonNullable<ModuleParameterDefinition["uiVisibility"]>;
+
+const MODULE_PRESET_FREE_PARAMETER_KEYS = [
+  "width",
+  "height",
+  "depth",
+  "plinthHeight",
+  "plinthSetbackMm",
+  "bodyMaterialId",
+  "frontMaterialId",
+  "backMaterialId",
+  "shelfMaterialId",
+  "drawerBottomMaterialId",
+  "plinthMaterialId",
+  "worktopMaterialId",
+  "boardThickness",
+  "frontThicknessMm",
+  "backThickness",
+  "shelfThickness",
+  "drawerBackGapMm",
+  "materialAssignments",
+  "commercialSelections"
+];
+
+const TALL_STACK_SLOT_DEFAULTS: Array<{ type: "empty" | "drawer" | "shelf" | "oven" | "sink" | "microwave" | "door"; height: number }> = [];
+
+function requiresExternalKitchenWorktop(spec: FwmFurnitureSpec) {
+  return spec.geometryKind !== "worktop" && (spec.hasWorktop === true || spec.moduleType === "fwm_catalog_base_corner");
+}
+
+const INTERNAL_PARAMETER_KEYS = new Set([
+  "catalogCode",
+  "componentAssignments",
+  "cornerRadiusMm",
+  "cutoutDepthMm",
+  "cutoutWidthMm",
+  "doorCount",
+  "drawerCount",
+  "handleLengthMm",
+  "handleProjectionMm",
+  "handleSizeMm",
+  "hasWorktop",
+  "quantity",
+  "reserveModule",
+  "rowHeight",
+  "runnerComponentId",
+  "shape",
+  "updatedAt",
+  "validationErrors",
+  "variant",
+  "worktopMaterialId",
+  "powerW"
+]);
+
+const TECHNICAL_PARAMETER_KEYS = new Set([
+  "applianceKind",
+  "applianceWidthMm",
+  "assemblyContext",
+  "backFaceCount",
+  "code",
+  "cornerShape",
+  "createdAt",
+  "cutleryInsertDepthDeductionMm",
+  "cutleryInsertWidthDeductionMm",
+  "cutleryInnerDrawerAllowed",
+  "cutleryInnerDrawerCrossRailWidthMm",
+  "cutleryInnerDrawerDepthMm",
+  "cutleryInnerDrawerFrontWidthMm",
+  "cutleryInnerDrawerStatus",
+  "cutleryInnerDrawerTargetIndex",
+  "cutleryInnerDrawerWidthMm",
+  "drawerBackHeightDeductionMm",
+  "drawerBackWidthDeductionMm",
+  "drawerBottomDepthDeductionMm",
+  "drawerBottomWidthDeductionMm",
+  "drawerSystem",
+  "drawerSystemBackHeightsMm",
+  "drawerSystemCodeLabel",
+  "drawerSystemDepthMm",
+  "drawerFrontHeightsMm",
+  "drawerSystemLabels",
+  "drawerSystemMinFrontHeightsMm",
+  "drawerSystemPricePerSet",
+  "drawerSystemPriceWithMargin",
+  "drawerSystemSize",
+  "drawerSystemSizes",
+  "endingSide",
+  "heightCarcass",
+  "frontFaceCount",
+  "frontChamferReferenceMm",
+  "innerDrawerCrossRailDeductionMm",
+  "innerDrawerFrontDeductionMm",
+  "isCorner",
+  "kitchenModuleRole",
+  "notes",
+  "openingMode",
+  "requiresWorktop",
+  "roomCategory",
+  "typeId",
+  "version"
+]);
+
+const INTERNAL_PARAMETER_GROUPS = new Set(["state"]);
+const TECHNICAL_PARAMETER_GROUPS = new Set(["ifc", "orientation", "placement"]);
+
+function isIndexedDrawerFrontHeightParameter(key: string) {
+  return /^drawer[1-5]FrontHeightMm$/.test(key);
+}
+
+function isIndexedDrawerSystemParameter(key: string) {
+  return /^drawer[1-5]System(Size|Label|MinFrontHeightMm|BackHeightMm)$/.test(key);
+}
+
+function isIndexedDrawerSystemSizeParameter(key: string) {
+  return /^drawer[1-5]SystemSize$/.test(key);
+}
+
+function withUiVisibility(parameter: ModuleParameterDefinition, uiVisibility: UiVisibility): ModuleParameterDefinition {
+  return { ...parameter, uiVisibility };
+}
+
+function isDrawerOnlyParameter(key: string) {
+  const normalizedKey = key.toLowerCase();
+  return normalizedKey.includes("drawer") || normalizedKey.includes("cutlery") || key === "runnerComponentId";
+}
+
+function isSinkOnlyParameter(key: string) {
+  return key === "sinkBowlWidthMm" || key === "sinkBowlDepthMm";
+}
+
+const TALL_HOST_USER_PARAMETER_KEYS = new Set([
+  "width",
+  "height",
+  "depth",
+  "plinthHeight",
+  "plinthSetbackMm",
+  "bodyMaterialId",
+  "frontMaterialId",
+  "backMaterialId",
+  "shelfMaterialId",
+  "drawerBottomMaterialId",
+  "plinthMaterialId",
+  "handleComponentId",
+  "hingeComponentId",
+  "legComponentId",
+  "clipComponentId",
+  "drawerSystemBrand",
+  "handleType",
+  "hasCutleryInnerDrawer",
+  "boardThickness",
+  "frontThicknessMm",
+  "backThickness",
+  "shelfThickness",
+  "frontGap",
+  "sideGap",
+  "opened",
+  "tallStackMode",
+  "tallSlotCount",
+  "tallDoorOpeningMode"
+]);
+
+function isTallSlotParameter(key: string) {
+  return /^tallSlot\d+(Type|HeightMm|OffsetMm|DrawerSystemSize)$/.test(key);
+}
+
+function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParameterDefinition): UiVisibility {
+  if (INTERNAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "internal";
+  if (TECHNICAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "technical";
+  if (spec.moduleType === "fwm_catalog_base_doors" && parameter.key === "doorCount") return "user";
+  if (spec.moduleType === "fwm_catalog_base_doors" && parameter.key === "side") return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "drawerCount") return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "drawerSystemBrand") return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "hasCutleryInnerDrawer") return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerFrontHeightParameter(parameter.key)) return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemSizeParameter(parameter.key)) return "user";
+  if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemParameter(parameter.key)) return "technical";
+  if (spec.moduleType === "fwm_catalog_wall_open_end") {
+    if (["width", "height", "depth", "side", "endingShape", "cornerRadiusMm", "chamferMm", "shelfCount", "shelfGaps", "boardThickness", "backThickness", "shelfThickness", "bodyMaterialId", "backMaterialId", "shelfMaterialId"].includes(parameter.key)) return "user";
+    if (["variant", "endingSide", "shape", "cornerShape", "requiresWorktop", "hasWorktop", "hasPlinth", "plinthHeight", "plinthSetbackMm"].includes(parameter.key)) return "technical";
+  }
+  if (spec.geometryKind === "open_end") {
+    if (["width", "height", "depth", "plinthHeight", "plinthSetbackMm", "shelfCount", "shelfGaps", "shape", "endingSide", "cornerRadiusMm", "chamferMm", "boardThickness", "backThickness", "shelfThickness", "bodyMaterialId", "backMaterialId", "shelfMaterialId", "plinthMaterialId", "legComponentId", "clipComponentId"].includes(parameter.key)) return "user";
+    if (["variant", "cornerShape"].includes(parameter.key)) return "technical";
+  }
+  if (spec.moduleType === "fwm_catalog_tall_cabinet") {
+    if (isTallSlotParameter(parameter.key) || TALL_HOST_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
+    if (isIndexedDrawerSystemParameter(parameter.key)) return "technical";
+    return "internal";
+  }
+  if (INTERNAL_PARAMETER_KEYS.has(parameter.key)) return "internal";
+  if (isDrawerOnlyParameter(parameter.key) && (spec.drawers ?? 0) <= 0) return "internal";
+  if (isSinkOnlyParameter(parameter.key) && spec.geometryKind !== "sink" && spec.geometryKind !== "bathroom") return "internal";
+  if (TECHNICAL_PARAMETER_KEYS.has(parameter.key)) return "technical";
+  if (parameter.key === "family" || parameter.key === "widthMm" || parameter.key === "heightMm" || parameter.key === "depthMm") return "internal";
+  if (spec.moduleType === "fwm_catalog_base_corner" && parameter.key === "width") return "internal";
+  if ((parameter.key === "handleComponentId" || parameter.key === "hingeComponentId") && (spec.doors ?? 0) <= 0 && (spec.drawers ?? 0) <= 0) return "internal";
+  if (parameter.key === "frontMaterialId" && (spec.doors ?? 0) <= 0 && (spec.drawers ?? 0) <= 0 && spec.geometryKind !== "front_component") return "internal";
+  return "user";
+}
+
+function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleParameterDefinition[]) {
+  return parameters.map((parameter) => {
+    const next = { ...parameter };
+    if (spec.moduleType === "fwm_catalog_base_corner") {
+      if (next.key === "displayName") next.defaultValue = "Spodna rohova skrinka";
+      if (next.key === "notes") next.defaultValue = BASE_CORNER_NOTES;
+      if (next.key === "requiresWorktop") next.defaultValue = true;
+      if (next.key === "side") {
+        next.defaultValue = "left";
+        next.options = [
+          { label: "left", value: "left" },
+          { label: "right", value: "right" }
+        ];
+      }
+      if (next.key === "cornerShape") {
+        next.defaultValue = "blind";
+        next.options = [
+          { label: "blind", value: "blind" },
+          { label: "l shape", value: "l_shape" },
+          { label: "chamfered", value: "chamfered" }
+        ];
+      }
+    }
+    if (spec.moduleType === "fwm_catalog_base_doors") {
+      if (next.key === "doorCount") {
+        next.defaultValue = 1;
+        next.min = 1;
+        next.max = 2;
+      }
+      if (next.key === "side") {
+        next.defaultValue = "left";
+        next.options = [
+          { label: "left", value: "left" },
+          { label: "right", value: "right" }
+        ];
+      }
+      if (next.key === "shelfCount") next.defaultValue = 1;
+      if (next.key === "depth") next.defaultValue = 530;
+      if (next.key === "height") next.defaultValue = 722;
+    }
+    if (spec.moduleType === "fwm_catalog_base_drawers") {
+      if (next.key === "drawerCount") {
+        next.defaultValue = 3;
+        next.min = 1;
+        next.max = 5;
+      }
+      if (next.key === "drawerSystem") next.defaultValue = "merivobox";
+      if (next.key === "drawerSystemBrand") {
+        next.defaultValue = "merivobox";
+        next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
+      }
+      if (next.key === "drawerSystemSize") {
+        next.defaultValue = "M";
+        next.options = [
+          { label: "M - derived low drawer", value: "M" },
+          { label: "D - derived high drawer", value: "D" },
+          { label: "E - derived MERIVOBOX high", value: "E" },
+          { label: "F - derived LEGRABOX high", value: "F" }
+        ];
+      }
+      if (isIndexedDrawerSystemSizeParameter(next.key)) {
+        next.defaultValue = "";
+        next.options = [
+          { label: "Auto", value: "" },
+          { label: "M", value: "M" },
+          { label: "D", value: "D" },
+          { label: "E", value: "E" },
+          { label: "F", value: "F" }
+        ];
+      }
+      if (next.key === "drawerFrontHeightsMm") next.defaultValue = "";
+      if (next.key === "depth") next.defaultValue = 530;
+      if (next.key === "height") next.defaultValue = 722;
+    }
+    if (spec.moduleType === "fwm_catalog_wall_open_end") {
+      if (next.key === "displayName") next.defaultValue = "Horny koncovy otvoreny modul";
+      if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky v znizenej vyske. Pouziva jeden parametricy tvar konca: skoseny alebo obly; nema vlastnu pracovnu dosku, sokel, dvierka ani zasuvky.";
+      if (next.key === "variant") next.defaultValue = "chamfered_end";
+      if (next.key === "height") next.defaultValue = 300;
+      if (next.key === "depth") next.defaultValue = 330;
+      if (next.key === "doorCount" || next.key === "drawerCount" || next.key === "plinthHeight" || next.key === "plinthSetbackMm") next.defaultValue = 0;
+      if (next.key === "requiresWorktop" || next.key === "hasWorktop" || next.key === "hasPlinth") next.defaultValue = false;
+      if (next.key === "openingMode") next.defaultValue = "open";
+      if (next.key === "side" || next.key === "endingSide") {
+        next.defaultValue = "right";
+        next.options = [
+          { label: "left", value: "left" },
+          { label: "right", value: "right" }
+        ];
+      }
+      if (next.key === "endingShape") {
+        next.defaultValue = "chamfered";
+        next.options = [
+          { label: "Skoseny", value: "chamfered" },
+          { label: "Obly", value: "rounded" }
+        ];
+      }
+      if (next.key === "shape") next.defaultValue = "chamfered";
+      if (next.key === "cornerRadiusMm") next.defaultValue = 120;
+      if (next.key === "chamferMm") next.defaultValue = 120;
+      if (next.key === "shelfCount") next.defaultValue = 0;
+    }
+    if (spec.geometryKind === "open_end") {
+      if (next.key === "displayName") next.defaultValue = spec.displayName;
+      if (next.key === "notes") next.defaultValue = "Open shelf/niche cabinet. Shape controls whether the ending side is straight, rounded or chamfered; shelfCount creates real shelves; width, height and depth remain normal free dimensions.";
+      if (next.key === "requiresWorktop") next.defaultValue = spec.hasWorktop === true;
+      if (next.key === "doorCount" || next.key === "drawerCount") next.defaultValue = 0;
+      if (next.key === "shape") {
+        next.defaultValue = "straight";
+        next.options = [
+          { label: "straight", value: "straight" },
+          { label: "rounded", value: "rounded" },
+          { label: "chamfered", value: "chamfered" }
+        ];
+      }
+      if (next.key === "endingSide") {
+        next.defaultValue = "none";
+        next.options = [
+          { label: "none", value: "none" },
+          { label: "left", value: "left" },
+          { label: "right", value: "right" }
+        ];
+      }
+      if (next.key === "cornerShape") next.defaultValue = "none";
+      if (next.key === "cornerRadiusMm") next.defaultValue = 120;
+      if (next.key === "chamferMm") next.defaultValue = 120;
+    }
+    if (spec.moduleType === "fwm_catalog_tall_cabinet") {
+      if (next.key === "displayName") next.defaultValue = "Custom tall module";
+      if (next.key === "notes") next.defaultValue = "Empty tall host cabinet with only the corpus shell. Users enter the module editor and insert submodules such as drawers, shelves, appliances and doors into ordered slots.";
+      if (next.key === "variant") next.defaultValue = "custom_tall_builder";
+      if (next.key === "width") next.defaultValue = 600;
+      if (next.key === "height") next.defaultValue = 2080;
+      if (next.key === "depth") next.defaultValue = 560;
+      if (next.key === "drawerCount") next.defaultValue = 0;
+      if (next.key === "doorCount") next.defaultValue = 0;
+      if (next.key === "shelfCount") next.defaultValue = 0;
+      if (next.key === "applianceKind") next.defaultValue = "none";
+      if (next.key === "applianceWidthMm") next.defaultValue = 0;
+    }
+    return withUiVisibility(next, parameterUiVisibility(spec, next));
+  });
+}
 
 function numberParam(
   key: string,
@@ -104,6 +451,7 @@ function systemParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
   const typeId = `${spec.moduleType}__type`;
   const assemblyContext = getFwmAssemblyContext(spec);
   const family = getFwmSystemFamily(spec);
+  const minHeight = ["worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind) ? 1 : 50;
   return [
     stringParam("typeId", "Type ID", typeId, "system"),
     stringParam("displayName", "Display name", spec.displayName, "system"),
@@ -111,12 +459,17 @@ function systemParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
     stringParam("code", "Code", null, "system"),
     stringParam("version", "Version", "1.0.0", "system"),
     numberParam("widthMm", "System width", spec.width, 100, 5000, "system", "export", 1),
-    numberParam("heightMm", "System height", spec.height, 50, 3200, "system", "export", 1),
+    numberParam("heightMm", "System height", spec.height, minHeight, 3200, "system", "export", 1),
     numberParam("depthMm", "System depth", spec.depth, 10, 2600, "system", "export", 1),
     selectParam("assemblyContext", "Assembly context", assemblyContext, ["kitchen", "generic", "wardrobe", "bathroom", "laundry"], "system", "placement"),
     selectParam("roomCategory", "Room category", getFwmRoomCategory(spec), ["kitchen", "living", "bedroom", "bathroom", "wardrobe", "office", "reception", "interior_cladding", "room"], "system", "placement"),
-    selectParam("kitchenModuleRole", "Kitchen module role", spec.kitchenRole ?? null, ["base", "top", "wall", "tall"], "system", "placement", assemblyContext === "kitchen"),
-    booleanParam("requiresWorktop", "Requires worktop", spec.hasWorktop === true, "system", "placement"),
+    selectParam("kitchenModuleRole", "Kitchen module role", spec.kitchenRole ?? null, ["low", "top", "tall"], "system", "placement", assemblyContext === "kitchen"),
+    booleanParam("isCorner", "Is corner module", spec.geometryKind === "corner", "system", "placement"),
+    numberParam("frontFaceCount", "Front face count", spec.geometryKind === "corner" ? 0 : 1, 0, 8, "system", "placement", 1),
+    numberParam("backFaceCount", "Back face count", spec.geometryKind === "corner" ? 2 : 1, 0, 8, "system", "placement", 1),
+    booleanParam("requiresWorktop", "Requires worktop", requiresExternalKitchenWorktop(spec), "system", "placement"),
+    booleanParam("hasWorktop", "Has worktop", spec.geometryKind === "worktop", "system", "geometry"),
+    booleanParam("hasPlinth", "Has plinth", spec.hasPlinth === true, "system", "geometry"),
     selectParam("frontSide", "Front side", "FRONT", ["FRONT"], "orientation", "placement"),
     selectParam("backSide", "Back side", "BACK", ["BACK"], "orientation", "placement"),
     selectParam("leftSide", "Left side", "LEFT", ["LEFT"], "orientation", "placement"),
@@ -164,7 +517,19 @@ function systemParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
 
 function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
   const variants = spec.variantOptions ?? ["default"];
-  const heightMax = spec.geometryKind === "wardrobe" || spec.geometryKind === "cladding" || spec.geometryKind === "tall" ? 3200 : 2600;
+  const heightMax = spec.geometryKind === "worktop" || spec.geometryKind === "shelf_surface" || spec.geometryKind === "trim" || spec.geometryKind === "accessory"
+    ? 1200
+    : spec.geometryKind === "wardrobe" || spec.geometryKind === "cladding" || spec.geometryKind === "tall" || (spec.geometryKind === "open_end" && spec.kitchenRole === "tall")
+      ? 3200
+      : 2600;
+  const widthMax = spec.geometryKind === "worktop" || spec.geometryKind === "accessory" || spec.geometryKind === "trim" || spec.geometryKind === "cladding" || spec.geometryKind === "wall_unit" ? 5000 : 3600;
+  const depthMax = spec.geometryKind === "worktop" || spec.geometryKind === "bed" ? 2600 : 1400;
+  const hasNoBackPanel = ["cladding", "worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind);
+  const frontChamferDefault = spec.moduleType === "fwm_catalog_base_corner" ? 200 : 420;
+  const backChamferDefault = spec.moduleType === "fwm_catalog_base_corner" ? 0 : 200;
+  const sideDefault = spec.geometryKind === "corner" ? "left" : spec.moduleType === "fwm_catalog_wall_open_end" ? "right" : "none";
+  const sideOptions = spec.geometryKind === "corner" || spec.moduleType === "fwm_catalog_wall_open_end" ? ["left", "right"] : ["none", "left", "right"];
+  const cornerShapeDefault = spec.moduleType === "fwm_catalog_base_corner" ? "chamfered" : spec.geometryKind === "corner" ? "l_shape" : "none";
   const params: ModuleParameterDefinition[] = [
     ...systemParameters(spec),
     {
@@ -176,10 +541,11 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
       group: "general",
       affects: "all"
     },
-    numberParam("width", "Width", spec.width, 100, spec.geometryKind === "wall_unit" ? 5000 : 3600, "dimensions", "geometry", 10),
-    numberParam("height", "Height", spec.height, 50, heightMax, "dimensions", "geometry", 10),
-    numberParam("heightCarcass", "Carcass height", Math.max(50, spec.height - (spec.hasWorktop ? 38 : 0)), 50, 3200, "dimensions", "geometry", 10),
-    numberParam("depth", "Depth", spec.depth, 10, spec.geometryKind === "bed" ? 2600 : 1400, "dimensions", "geometry", 10),
+    numberParam("width", "Width", spec.width, 100, widthMax, "dimensions", "geometry", 10),
+    numberParam("height", "Height", spec.height, ["worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind) ? 1 : 50, heightMax, "dimensions", "geometry", 10),
+    numberParam("rowHeight", "Row height", spec.height, ["worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind) ? 1 : 50, heightMax, "dimensions", "geometry", 10),
+    numberParam("heightCarcass", "Carcass height", Math.max(50, spec.height - (requiresExternalKitchenWorktop(spec) ? 38 : 0)), 50, 3200, "dimensions", "geometry", 10),
+    numberParam("depth", "Depth", spec.depth, 10, depthMax, "dimensions", "geometry", 10),
     {
       key: "variant",
       label: "Variant",
@@ -190,20 +556,115 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
       group: "general",
       affects: "all"
     },
+    stringParam("catalogCode", "Catalog code", "", "metadata", "export", false),
+    selectParam("side", "Side", sideDefault, sideOptions, "general", "geometry", false),
+    selectParam("endingSide", "Ending side", "none", ["none", "left", "right"], "general", "geometry", false),
+    selectParam("endingShape", "Ending shape", spec.moduleType === "fwm_catalog_wall_open_end" ? "chamfered" : "none", ["none", "chamfered", "rounded"], "geometry", "geometry", false),
+    selectParam("cornerShape", "Corner shape", cornerShapeDefault, ["none", "l_shape", "blind", "diagonal", "chamfered"], "general", "geometry", false),
+    selectParam("frontType", "Front type", spec.glassFronts ? "glass" : "solid", ["solid", "glass", "aluminium_frame", "profiled", "decor"], "components", "geometry", false),
+    selectParam("openingMode", "Opening mode", spec.drawers ? "drawer" : spec.doors ? "hinged" : "open", ["open", "hinged", "lift_up", "drawer", "sliding"], "components", "geometry", false),
+    selectParam("applianceKind", "Appliance kind", spec.appliance ?? "none", ["none", "cooking", "dishwasher", "fridge", "oven", "sink", "microwave", "oven_microwave"], "components", "geometry", false),
+    selectParam("shape", "Shape", spec.geometryKind === "worktop" || spec.geometryKind === "shelf_surface" ? "straight" : "none", ["none", "straight", "corner", "rounded", "chamfered", "notched", "round", "half_round", "octagonal"], "geometry", "geometry", false),
+    selectParam("mountingMode", "Mounting mode", spec.wallMounted ? "wall" : "floor", ["floor", "wall", "suspended", "worktop", "free"], "placement", "placement", false),
+    numberParam("angleDeg", "Angle", 90, 0, 180, "geometry", "geometry", 1),
+    numberParam("cornerRadiusMm", "Corner radius", 120, 0, 1200, "geometry", "geometry", 1),
+    numberParam("chamferMm", "Chamfer", 120, 0, 1200, "geometry", "geometry", 1),
+    numberParam("frontChamferMm", "Front chamfer", frontChamferDefault, 1, 1200, "geometry", "geometry", 1),
+    ...(spec.moduleType === "fwm_catalog_base_corner"
+      ? [numberParam("frontChamferReferenceMm", "Front chamfer reference", frontChamferDefault, 1, 1200, "geometry", "geometry", 1)]
+      : []),
+    numberParam("backChamferMm", "Back chamfer", backChamferDefault, 0, 1200, "geometry", "geometry", 1),
+    numberParam("cutoutWidthMm", "Cutout width", 0, 0, 2400, "geometry", "geometry", 1),
+    numberParam("cutoutDepthMm", "Cutout depth", 0, 0, 1600, "geometry", "geometry", 1),
+    numberParam("powerW", "Power", 0, 0, 5000, "components", "bom", 1),
     numberParam("drawerCount", "Drawer count", spec.drawers ?? 0, 0, 12, "components", "geometry"),
+    selectParam("drawerSystemBrand", "Drawer brand", "merivobox", FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => option.value), "components", "geometry", false),
+    selectParam("drawerSystemSize", "Derived first drawer size", "M", ["M", "D", "E", "F"], "components", "geometry", false),
+    stringParam("drawerSystemSizes", "Derived drawer sizes", "M,M,M", "components", "geometry", false),
+    stringParam("drawerSystemLabels", "Derived drawer systems", "MERIVOBOX M,MERIVOBOX M,MERIVOBOX M", "components", "geometry", false),
+    stringParam("drawerSystemMinFrontHeightsMm", "Drawer system min front heights", "136,136,136", "components", "geometry", false),
+    selectParam("drawerSystem", "Drawer system", "merivobox", FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => option.value), "components", "geometry", false),
+    numberParam("drawerSystemDepthMm", "Drawer system depth", 500, 0, 1200, "components", "geometry"),
+    numberParam("drawerBottomDepthDeductionMm", "Drawer bottom depth deduction", 26, -200, 400, "components", "bom"),
+    numberParam("drawerBottomWidthDeductionMm", "Drawer bottom width deduction", 51, -200, 400, "components", "bom"),
+    numberParam("drawerBackWidthDeductionMm", "Drawer back width deduction", 51, -200, 400, "components", "bom"),
+    numberParam("drawerBackHeightDeductionMm", "Drawer back height deduction", 83, 0, 400, "components", "geometry"),
+    stringParam("drawerSystemBackHeightsMm", "Drawer system back heights", "83,83,83", "components", "geometry", false),
+    numberParam("cutleryInsertWidthDeductionMm", "Cutlery insert width deduction", -3, -200, 400, "components", "bom"),
+    numberParam("cutleryInsertDepthDeductionMm", "Cutlery insert depth deduction", 0, -200, 400, "components", "bom"),
+    numberParam("innerDrawerFrontDeductionMm", "Inner drawer front deduction", 126, -200, 400, "components", "bom"),
+    numberParam("innerDrawerCrossRailDeductionMm", "Inner drawer cross rail deduction", 111, -200, 400, "components", "bom"),
+    booleanParam("hasCutleryInnerDrawer", "Cutlery inner drawer", false, "components", "geometry"),
+    booleanParam("cutleryInnerDrawerAllowed", "Cutlery inner drawer allowed", false, "components", "geometry"),
+    stringParam("cutleryInnerDrawerStatus", "Cutlery inner drawer status", "disabled", "components", "geometry", false),
+    numberParam("cutleryInnerDrawerTargetIndex", "Cutlery inner drawer target", 0, 0, 5, "components", "geometry"),
+    numberParam("cutleryInnerDrawerWidthMm", "Cutlery inner drawer width", 0, 0, 1600, "components", "geometry"),
+    numberParam("cutleryInnerDrawerDepthMm", "Cutlery inner drawer depth", 0, 0, 1200, "components", "geometry"),
+    numberParam("cutleryInnerDrawerFrontWidthMm", "Cutlery inner drawer front width", 0, 0, 1600, "components", "geometry"),
+    numberParam("cutleryInnerDrawerCrossRailWidthMm", "Cutlery inner drawer cross rail width", 0, 0, 1600, "components", "geometry"),
+    numberParam("drawerSystemPricePerSet", "Drawer system price per set", 669, 0, 100000, "pricing", "pricing"),
+    numberParam("drawerSystemPriceWithMargin", "Drawer system price with margin", 1338, 0, 100000, "pricing", "pricing"),
+    stringParam("drawerSystemCodeLabel", "Drawer system code label", "kod merivo M", "components", "bom", false),
     stringParam("drawerFrontHeightsMm", "Drawer front heights", "", "components", "geometry", false),
+    numberParam("drawer1FrontHeightMm", "Drawer 1 front height", 40, 40, 1200, "components", "geometry", 1),
+    numberParam("drawer2FrontHeightMm", "Drawer 2 front height", 40, 40, 1200, "components", "geometry", 1),
+    numberParam("drawer3FrontHeightMm", "Drawer 3 front height", 40, 40, 1200, "components", "geometry", 1),
+    numberParam("drawer4FrontHeightMm", "Drawer 4 front height", 40, 40, 1200, "components", "geometry", 1),
+    numberParam("drawer5FrontHeightMm", "Drawer 5 front height", 40, 40, 1200, "components", "geometry", 1),
+    selectParam("drawer1SystemSize", "Drawer 1 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
+    selectParam("drawer2SystemSize", "Drawer 2 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
+    selectParam("drawer3SystemSize", "Drawer 3 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
+    selectParam("drawer4SystemSize", "Drawer 4 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
+    selectParam("drawer5SystemSize", "Drawer 5 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
+    stringParam("drawer1SystemLabel", "Drawer 1 system", "", "components", "geometry", false),
+    stringParam("drawer2SystemLabel", "Drawer 2 system", "", "components", "geometry", false),
+    stringParam("drawer3SystemLabel", "Drawer 3 system", "", "components", "geometry", false),
+    stringParam("drawer4SystemLabel", "Drawer 4 system", "", "components", "geometry", false),
+    stringParam("drawer5SystemLabel", "Drawer 5 system", "", "components", "geometry", false),
+    numberParam("drawer1SystemMinFrontHeightMm", "Drawer 1 system min front", 0, 0, 1200, "components", "geometry", 1),
+    numberParam("drawer2SystemMinFrontHeightMm", "Drawer 2 system min front", 0, 0, 1200, "components", "geometry", 1),
+    numberParam("drawer3SystemMinFrontHeightMm", "Drawer 3 system min front", 0, 0, 1200, "components", "geometry", 1),
+    numberParam("drawer4SystemMinFrontHeightMm", "Drawer 4 system min front", 0, 0, 1200, "components", "geometry", 1),
+    numberParam("drawer5SystemMinFrontHeightMm", "Drawer 5 system min front", 0, 0, 1200, "components", "geometry", 1),
+    numberParam("drawer1SystemBackHeightMm", "Drawer 1 system back height", 0, 0, 400, "components", "geometry", 1),
+    numberParam("drawer2SystemBackHeightMm", "Drawer 2 system back height", 0, 0, 400, "components", "geometry", 1),
+    numberParam("drawer3SystemBackHeightMm", "Drawer 3 system back height", 0, 0, 400, "components", "geometry", 1),
+    numberParam("drawer4SystemBackHeightMm", "Drawer 4 system back height", 0, 0, 400, "components", "geometry", 1),
+    numberParam("drawer5SystemBackHeightMm", "Drawer 5 system back height", 0, 0, 400, "components", "geometry", 1),
     numberParam("doorCount", "Door count", spec.doors ?? 0, 0, 12, "components", "geometry"),
     numberParam("shelfCount", "Shelf count", spec.shelves ?? 0, 0, 16, "components", "geometry"),
+    stringParam("shelfGaps", "Shelf gaps", "", "components", "geometry", false),
+    ...(spec.moduleType === "fwm_catalog_tall_cabinet"
+      ? [
+        selectParam("tallStackMode", "Tall stack mode", "builder", ["builder", "fixed"], "tall_stack", "geometry"),
+        numberParam("tallSlotCount", "Tall slot count", TALL_STACK_SLOT_DEFAULTS.length, 0, 12, "tall_stack", "geometry", 1),
+        ...Array.from({ length: 12 }, (_, index) => {
+          const slotIndex = index + 1;
+          const defaults = TALL_STACK_SLOT_DEFAULTS[index] ?? { type: "empty", height: 0 };
+          return [
+            selectParam(`tallSlot${slotIndex}Type`, `Slot ${slotIndex} type`, defaults.type, ["empty", "drawer", "shelf", "oven", "sink", "microwave", "door"], "tall_stack", "geometry"),
+            numberParam(`tallSlot${slotIndex}HeightMm`, `Slot ${slotIndex} height`, defaults.height, 0, 1400, "tall_stack", "geometry", 1),
+            selectParam(`tallSlot${slotIndex}DrawerSystemSize`, `Slot ${slotIndex} drawer system size`, "", ["", "M", "D", "E", "F"], "tall_stack", "geometry", false),
+            numberParam(`tallSlot${slotIndex}DoorLeafCount`, `Slot ${slotIndex} door leaves`, 1, 1, 2, "tall_stack", "geometry", 1),
+            selectParam(`tallSlot${slotIndex}DoorOpeningMode`, `Slot ${slotIndex} door opening`, "hinged", ["hinged", "lift_up"], "tall_stack", "geometry"),
+            numberParam(`tallSlot${slotIndex}OffsetMm`, `Slot ${slotIndex} vertical offset`, 0, -3000, 3000, "tall_stack", "geometry", 1)
+          ];
+        }).flat(),
+        selectParam("tallDoorOpeningMode", "Tall door opening", "lift_up", ["lift_up", "left", "right"], "tall_stack", "geometry")
+      ]
+      : []),
     numberParam("boardThickness", "Body board thickness", 18, 8, 60, "materials", "geometry"),
     numberParam("frontThicknessMm", "Front thickness", spec.glassFronts ? 6 : 18, 4, 50, "materials", "geometry"),
-    numberParam("backThickness", "Back thickness", spec.geometryKind === "cladding" ? 0 : 8, 0, 30, "materials", "geometry"),
+    numberParam("backThickness", "Back thickness", hasNoBackPanel ? 0 : 8, 0, 30, "materials", "geometry"),
     numberParam("drawerBackGapMm", "Drawer back gap", 10, 0, 80, "advanced", "geometry"),
     numberParam("shelfThickness", "Shelf thickness", 18, 8, 50, "materials", "geometry"),
-    numberParam("worktopThicknessMm", "Worktop thickness", spec.hasWorktop ? 38 : 0, 0, 100, "materials", "geometry"),
+    numberParam("worktopThicknessMm", "Worktop thickness", requiresExternalKitchenWorktop(spec) || spec.geometryKind === "worktop" ? 38 : 0, 0, 100, "materials", "geometry"),
     numberParam("plinthHeight", "Plinth height", spec.hasPlinth ? 100 : 0, 0, 300, "dimensions", "geometry"),
     numberParam("plinthSetbackMm", "Plinth setback", spec.hasPlinth ? 60 : 0, 0, 300, "dimensions", "geometry"),
     numberParam("frontGap", "Front gap", 2, 0, 12, "advanced", "geometry"),
     numberParam("sideGap", "Side gap", 2, 0, 20, "advanced", "geometry"),
+    booleanParam("opened", "Opened", false, "runtime", "geometry"),
+    selectParam("handleType", "Handle type", spec.drawers || spec.doors ? "bar" : "none", ["none", "bar", "knob", "profile", "push"], "components", "geometry", false),
     numberParam("handleLengthMm", "Handle length", 160, 40, 1200, "components", "geometry"),
     numberParam("handleProjectionMm", "Handle projection", 28, 0, 80, "components", "geometry"),
     numberParam("handleSizeMm", "Handle size", 16, 4, 60, "components", "geometry"),
@@ -346,14 +807,14 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
       affects: "all"
     }
   ];
-  return params;
+  return applyParameterSurfacePolicy(spec, params);
 }
 
 function materialSlots(spec: FwmFurnitureSpec): ModuleMaterialSlot[] {
   const slots: ModuleMaterialSlot[] = [
     {
-      slotId: "carcass",
-      label: "Carcass",
+      slotId: "corpus",
+      label: "Corpus",
       required: true,
       defaultFrom: "catalog.kitchenDefaults.carcassMaterialId",
       allowedMaterialTags: ["body", "board"],
@@ -376,22 +837,6 @@ function materialSlots(spec: FwmFurnitureSpec): ModuleMaterialSlot[] {
       affects: ["geometry", "visual", "bom", "pricing"]
     },
     {
-      slotId: "shelf",
-      label: "Shelves",
-      required: false,
-      defaultFrom: "catalog.kitchenDefaults.carcassMaterialId",
-      allowedMaterialTags: ["body", "shelf", "board"],
-      affects: ["geometry", "visual", "bom", "pricing"]
-    },
-    {
-      slotId: "drawer_bottom",
-      label: "Drawer bottoms",
-      required: false,
-      defaultFrom: "catalog.kitchenDefaults.drawerBottomMaterialId",
-      allowedMaterialTags: ["drawer_bottom", "board"],
-      affects: ["geometry", "visual", "bom", "pricing"]
-    },
-    {
       slotId: "plinth",
       label: "Plinth",
       required: false,
@@ -400,7 +845,17 @@ function materialSlots(spec: FwmFurnitureSpec): ModuleMaterialSlot[] {
       affects: ["geometry", "visual", "bom", "pricing"]
     }
   ];
-  if (spec.hasWorktop || spec.geometryKind === "table") {
+  if ((spec.drawers ?? 0) > 0) {
+    slots.push({
+      slotId: "drawer_bottom",
+      label: "Drawer bottoms",
+      required: false,
+      defaultFrom: "catalog.kitchenDefaults.drawerBottomMaterialId",
+      allowedMaterialTags: ["drawer_bottom", "board"],
+      affects: ["geometry", "visual", "bom", "pricing"]
+    });
+  }
+  if (spec.geometryKind === "table" || spec.geometryKind === "worktop") {
     slots.push({
       slotId: "worktop",
       label: "Worktop / top",
@@ -469,15 +924,26 @@ function componentSlots(spec: FwmFurnitureSpec): ModuleComponentSlot[] {
 }
 
 function placement(spec: FwmFurnitureSpec): ModulePlacementRules {
+  const freeSurface = ["worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind);
+  const corner = spec.geometryKind === "corner";
+  const wallBound = spec.wallMounted || spec.placementContexts.includes("kitchen_wall");
   return {
-    allowedContexts: [...spec.placementContexts],
-    requiredAnchors: spec.wallMounted ? ["wall"] : spec.geometryKind === "corner" ? ["two_perpendicular_walls", "floor"] : ["floor"],
-    requiresCorner: spec.geometryKind === "corner",
-    requiresWall: spec.wallMounted || spec.placementContexts.includes("kitchen_wall"),
-    requiresFloor: !spec.wallMounted && spec.geometryKind !== "cladding",
-    allowFreePlacement: !spec.placementContexts.includes("kitchen_wall") || spec.placementContexts.includes("free_standing"),
-    corner: spec.geometryKind === "corner" ? { required: true, allowedAngles: [90], toleranceDeg: 3, mustTouchBothWalls: true } : undefined,
-    wall: spec.wallMounted || spec.placementContexts.includes("kitchen_wall") ? { mustAttachToWall: true, minWallLengthMm: Math.min(spec.width, 600) } : undefined,
+    allowedContexts: corner ? ["kitchen_corner"] : [...spec.placementContexts],
+    requiredAnchors: spec.wallMounted
+      ? ["wall"]
+      : corner
+        ? ["two_perpendicular_walls", "corner", "floor"]
+        : freeSurface
+          ? []
+          : wallBound
+            ? ["wall", "floor"]
+            : ["floor"],
+    requiresCorner: corner,
+    requiresWall: corner || wallBound,
+    requiresFloor: !spec.wallMounted && spec.geometryKind !== "cladding" && !freeSurface,
+    allowFreePlacement: corner ? false : !wallBound || spec.placementContexts.includes("free_standing"),
+    corner: corner ? { required: true, allowedAngles: [90], toleranceDeg: 3, mustTouchBothWalls: true } : undefined,
+    wall: corner || wallBound ? { mustAttachToWall: true } : undefined,
     clearance: {
       frontMm: spec.geometryKind === "appliance" ? 900 : spec.geometryKind === "bed" ? 700 : 500,
       leftMm: spec.geometryKind === "bed" ? 500 : 0,
@@ -488,6 +954,7 @@ function placement(spec: FwmFurnitureSpec): ModulePlacementRules {
 }
 
 function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
+  const parameterDefinitions = baseParameters(spec);
   const groups = [
     { id: "general", label: "General", order: 0 },
     { id: "dimensions", label: "Dimensions", order: 1 },
@@ -499,12 +966,40 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
   ];
   const keys = [
     "variant",
+    "catalogCode",
     "width",
     "height",
     "depth",
+    "side",
+    "endingSide",
+    "endingShape",
+    "cornerShape",
+    "frontType",
+    "openingMode",
+    "applianceKind",
+    "shape",
+    "mountingMode",
+    "angleDeg",
+    "cornerRadiusMm",
+    "chamferMm",
+    "frontChamferMm",
+    "frontChamferReferenceMm",
+    "backChamferMm",
+    "cutoutWidthMm",
+    "cutoutDepthMm",
+    "powerW",
     "drawerCount",
+    "drawerSystemBrand",
+    "hasCutleryInnerDrawer",
+    "drawerFrontHeightsMm",
+    "drawerSystem",
     "doorCount",
     "shelfCount",
+    "shelfGaps",
+    "tallStackMode",
+    "tallSlotCount",
+    ...Array.from({ length: 12 }, (_, index) => [`tallSlot${index + 1}Type`, `tallSlot${index + 1}HeightMm`, `tallSlot${index + 1}DrawerSystemSize`, `tallSlot${index + 1}OffsetMm`]).flat(),
+    "tallDoorOpeningMode",
     "bodyMaterialId",
     "frontMaterialId",
     "backMaterialId",
@@ -527,36 +1022,41 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
     "plinthSetbackMm",
     "frontGap",
     "sideGap",
+    "opened",
+    "handleType",
     "applianceWidthMm",
     "sinkBowlWidthMm",
     "sinkBowlDepthMm",
     "wallMounted",
     "glassFronts"
   ];
-  const parameterGroup = new Map(baseParameters(spec).map((param) => [param.key, param.group ?? "general"]));
-  const controls = keys.map((key, index) => {
-    const groupId = parameterGroup.get(key) ?? "general";
+  const parameterByKey = new Map(parameterDefinitions.map((param) => [param.key, param]));
+  const controls = keys.flatMap((key, index) => {
+    const parameter = parameterByKey.get(key);
+    if (!parameter || parameter.uiVisibility !== "user") return [];
+    const groupId = parameter.group ?? "general";
     const controlType =
       key.endsWith("MaterialId") ? "materialPicker" :
       key.endsWith("ComponentId") ? "componentPicker" :
-      key === "variant" ? "select" :
-      key === "wallMounted" || key === "glassFronts" ? "checkbox" :
+      /^tallSlot\d+(Type|DrawerSystemSize)$/.test(key) || /^drawer[1-5]SystemSize$/.test(key) || ["variant", "side", "endingSide", "endingShape", "cornerShape", "frontType", "openingMode", "applianceKind", "shape", "mountingMode", "handleType", "drawerSystemBrand", "drawerSystemSize", "drawerSystem", "tallStackMode", "tallDoorOpeningMode"].includes(key) ? "select" :
+      key === "wallMounted" || key === "glassFronts" || key === "opened" || key === "hasCutleryInnerDrawer" ? "checkbox" :
+      parameter.type === "string" ? "text" :
       "number";
-    return { parameterKey: key, controlType, groupId, order: index };
+    return [{ parameterKey: key, controlType, groupId, order: index }];
   }) satisfies ModuleUiDefinition["controls"];
   return { icon: "box", groups, controls };
 }
 
 function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavior"] | undefined {
   if (!spec.kitchenRole) return undefined;
+  const requiresWorktop = requiresExternalKitchenWorktop(spec);
   const materialSync = [
-    { targetSlot: "carcass" as const, targetParameter: "bodyMaterialId", source: "ctx.corpusMaterialId", family: "body" as const, thicknessParameter: "boardThickness", aliases: ["body" as const] },
+    { targetSlot: "corpus" as const, targetParameter: "bodyMaterialId", source: "ctx.corpusMaterialId", family: "body" as const, thicknessParameter: "boardThickness", aliases: ["body" as const] },
     { targetSlot: "front" as const, targetParameter: "frontMaterialId", source: "ctx.frontsMaterialId", family: "front" as const, thicknessParameter: "frontThicknessMm", aliases: ["front" as const] },
     { targetSlot: "back" as const, targetParameter: "backMaterialId", source: "ctx.backMaterialId", family: "back" as const, thicknessParameter: "backThickness", aliases: ["back" as const] },
-    { targetSlot: "shelf" as const, targetParameter: "shelfMaterialId", source: "ctx.corpusMaterialId", family: "shelf" as const, thicknessParameter: "shelfThickness", aliases: ["shelf" as const] },
-    { targetSlot: "drawer_bottom" as const, targetParameter: "drawerBottomMaterialId", source: "ctx.drawerBottomMaterialId", family: "drawer_bottom" as const, aliases: ["drawer_bottom" as const] },
+    { targetSlot: "corpus" as const, targetParameter: "shelfMaterialId", source: "ctx.corpusMaterialId", family: "body" as const, thicknessParameter: "shelfThickness", aliases: ["shelf" as const] },
+    ...((spec.drawers ?? 0) > 0 ? [{ targetSlot: "drawer_bottom" as const, targetParameter: "drawerBottomMaterialId", source: "ctx.drawerBottomMaterialId", family: "drawer_bottom" as const, aliases: ["drawer_bottom" as const] }] : []),
     ...(spec.hasPlinth ? [{ targetSlot: "plinth" as const, targetParameter: "plinthMaterialId", source: "catalog.kitchenDefaults.plinthMaterialId", family: "body" as const }] : []),
-    ...(spec.hasWorktop ? [{ targetSlot: "worktop" as const, targetParameter: "worktopMaterialId", source: "ctx.worktopMaterialId", family: "worktop" as const, thicknessParameter: "worktopThicknessMm", aliases: ["worktop" as const] }] : [])
   ];
   const componentSync = (spec.drawers ?? 0) > 0 || (spec.doors ?? 0) > 0
     ? [{ targetSlot: "handle" as const, targetParameter: "handleComponentId", source: "ctx.handleComponentId", componentType: "handle" as const, transforms: ["handleGeometryKind" as const, "componentNominalLength" as const] }]
@@ -565,21 +1065,22 @@ function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavi
     contextBindings: [
       {
         contextType: "kitchenGroup",
-        required: false,
-        scope: "optional",
+        required: true,
+        scope: "single",
         autoAssign: "activeKitchenGroup",
         liveSync: true,
+        forbidCrossContextAdjacency: true,
         parameterSync: [
           { targetParameter: "height", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.wallHeightMm" : "ctx.heightMm", transform: "identity", mode: "live" },
           { targetParameter: "heightCarcass", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.wallHeightMm" : "ctx.moduleHeightMm", transform: "identity", mode: "live" },
-          { targetParameter: "depth", source: spec.kitchenRole === "top" ? "ctx.upperDepthMm" : "ctx.moduleDepthMm", transform: "identity", mode: "live" },
+          { targetParameter: "depth" as const, source: spec.kitchenRole === "top" ? "ctx.upperDepthMm" as const : "ctx.moduleDepthMm" as const, transform: "identity" as const, mode: "live" as const },
           ...(spec.hasPlinth
             ? [
                 { targetParameter: "plinthHeight" as const, source: "ctx.plinthHeightMm", transform: "identity" as const, mode: "live" as const },
                 { targetParameter: "plinthSetbackMm" as const, source: "ctx.plinthDepthMm", transform: "identity" as const, mode: "live" as const }
               ]
             : []),
-          ...(spec.hasWorktop ? [{ targetParameter: "worktopThicknessMm" as const, source: "ctx.worktopThicknessMm", transform: "resolvedWorktopThickness" as const, mode: "live" as const }] : [])
+          ...(requiresWorktop ? [{ targetParameter: "worktopThicknessMm" as const, source: "ctx.worktopThicknessMm", transform: "resolvedWorktopThickness" as const, mode: "live" as const }] : [])
         ],
         materialSync,
         componentSync,
@@ -589,8 +1090,115 @@ function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavi
   };
 }
 
+function drawerStackPreset(args: {
+  presetId: string;
+  label: string;
+  ratiosBottomUp: number[];
+  sourceLabels: string[];
+  note: string;
+  tags?: string[];
+}): NonNullable<FurnQuoteModulePackage["parameterPresets"]>["presets"][number] {
+  return {
+    presetId: args.presetId,
+    label: args.label,
+    description: args.note,
+    note: args.note,
+    tags: ["drawer-stack", ...(args.tags ?? [])],
+    sourceLabels: args.sourceLabels,
+    parameterValues: {
+      drawerCount: args.ratiosBottomUp.length
+    },
+    ratioParameters: [
+      {
+        parameterKey: "drawerFrontHeightsMm",
+        countParameter: "drawerCount",
+        ratios: args.ratiosBottomUp,
+        order: "bottom-up",
+        indexedParameterPrefix: "drawer",
+        indexedParameterSuffix: "FrontHeightMm"
+      }
+    ]
+  };
+}
+
+function parameterPresets(spec: FwmFurnitureSpec): FurnQuoteModulePackage["parameterPresets"] {
+  const presets: NonNullable<FurnQuoteModulePackage["parameterPresets"]>["presets"] = [];
+  if (spec.moduleType === "fwm_catalog_base_drawers") {
+    presets.push(
+      drawerStackPreset({
+        presetId: "drawers_1_full_height",
+        label: "1x zasuvka",
+        ratiosBottomUp: [1],
+        sourceLabels: ["1X ZASUVKA", "Spod. 1K"],
+        note: "Jeden vysoky suflik cez celu dostupnu vysku frontu. Preset nastavuje iba drawerCount a pomer frontu; sirka, vyska, hlbka, sokel a materialy ostavaju volne."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_2_equal",
+        label: "2x zasuvka",
+        ratiosBottomUp: [1, 1],
+        sourceLabels: ["2X ZASUVKA", "Spod. 2K", "ZAKONCOVACI 2X ZASUVKA"],
+        note: "Dve rovnako vysoke zasuvkove cela. Preset nastavuje iba pocet zasuviek a pomer ciel; sirka, vyska, hlbka, sokel a materialy ostavaju volne."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_2_top_shallow",
+        label: "2x zasuvka - horna mala",
+        ratiosBottomUp: [3, 1],
+        sourceLabels: ["2X ZASUVKA horna plytka", "Spod. 1K 1Z"],
+        note: "Dve zasuvky s plytkym hornym celom a vysokym spodnym celom. Pomer sa prepocita z aktualnej vysky modulu."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_3_equal",
+        label: "3x zasuvka",
+        ratiosBottomUp: [1, 1, 1],
+        sourceLabels: ["3X ZASUVKA", "ZAKONCOVACI 3X ZASUVKA"],
+        note: "Tri rovnake zasuvkove cela, kazde 1/3 dostupnej vysky. Preset neprepisuje rozmery kuchyne ani materialy."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_3_top_shallow",
+        label: "3x zasuvka - horna mala",
+        ratiosBottomUp: [3, 2, 1],
+        sourceLabels: ["3X ZASUVKA horna plytka", "Spod. 1K 2Z"],
+        note: "Tri zasuvky s najmensim hornym celom a vacsimi spodnymi celami. AI ho ma pouzit pre katalogovy variant s plytkou hornou zasuvkou."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_3_top_shallow_two_high",
+        label: "3x zasuvka - 2K 1Z",
+        ratiosBottomUp: [2, 2, 1],
+        sourceLabels: ["Spod. 2K 1Z"],
+        note: "Tri zasuvky: dve spodne rovnako vysoke kuchynske zasuvky a jedna plytka horna zasuvka. Rozmery su ulozene ako pomer, nie pevne milimetre."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_4_three_shallow_one_high",
+        label: "4x zasuvka - 3 male + 1 velka",
+        ratiosBottomUp: [3, 1, 1, 1],
+        sourceLabels: ["4X ZASUVKA", "4 X ZASUVKA", "Spod. 1K 3Z", "ZAKONCOVACI 4 X ZASUVKA", "S8-BL1113-xxx", "S8-BA 1113-xxx", "S8-VT1113-xxx"],
+        note: "Styri zasuvky s pomerom od vrchu 1/6, 1/6, 1/6, 1/2. V spodnom poradi parametrov je to 1/2, 1/6, 1/6, 1/6."
+      }),
+      drawerStackPreset({
+        presetId: "drawers_5_equal",
+        label: "5x zasuvka",
+        ratiosBottomUp: [1, 1, 1, 1, 1],
+        sourceLabels: ["Spod. 5Z"],
+        note: "Pat rovnako vysokych zasuvkovych ciel. Pouziva sa pre katalogovy variant Spod. 5Z."
+      })
+    );
+  }
+  return {
+    freeParameterKeys: MODULE_PRESET_FREE_PARAMETER_KEYS,
+    presets
+  };
+}
+
 function makePackage(spec: FwmFurnitureSpec): FurnQuoteModulePackage {
   const runtimeBuilderKey = getFwmRuntimeBuilderKey(spec.moduleType);
+  const widthMax = spec.geometryKind === "worktop" || spec.geometryKind === "accessory" || spec.geometryKind === "trim" || spec.geometryKind === "cladding" || spec.geometryKind === "wall_unit" ? 5000 : 3600;
+  const heightMax = spec.geometryKind === "worktop" || spec.geometryKind === "shelf_surface" || spec.geometryKind === "trim" || spec.geometryKind === "accessory"
+      ? 1200
+      : spec.geometryKind === "wardrobe" || spec.geometryKind === "cladding" || spec.geometryKind === "tall" || (spec.geometryKind === "open_end" && spec.kitchenRole === "tall")
+        ? 3200
+        : 2600;
+  const depthMax = spec.geometryKind === "worktop" || spec.geometryKind === "bed" ? 2600 : 1400;
+  const panelStrategy = ["cladding", "worktop", "shelf_surface", "trim", "front_component"].includes(spec.geometryKind);
   return {
     format: "furnquote-module",
     packageVersion: 1,
@@ -609,9 +1217,9 @@ function makePackage(spec: FwmFurnitureSpec): FurnQuoteModulePackage {
     placement: placement(spec),
     constraints: {
       dimensionRules: {
-        width: { min: 100, max: spec.geometryKind === "wall_unit" ? 5000 : 3600, step: 10 },
-        height: { min: 50, max: spec.geometryKind === "wardrobe" || spec.geometryKind === "cladding" || spec.geometryKind === "tall" ? 3200 : 2600, step: 10 },
-        depth: { min: 10, max: spec.geometryKind === "bed" ? 2600 : 1400, step: 10 }
+        width: { min: 100, max: widthMax, step: 10 },
+        height: { min: 50, max: heightMax, step: 10 },
+        depth: { min: 10, max: depthMax, step: 10 }
       },
       validationRules: [
         {
@@ -651,13 +1259,20 @@ function makePackage(spec: FwmFurnitureSpec): FurnQuoteModulePackage {
     materials: { slots: materialSlots(spec) },
     components: { slots: componentSlots(spec) },
     behavior: kitchenBehavior(spec),
+    internalEditing: createModuleInternalEditingDefinition({
+      moduleType: spec.moduleType,
+      geometryKind: spec.geometryKind,
+      kitchenRole: spec.kitchenRole,
+      tags: spec.tags,
+      hasWorktop: spec.geometryKind === "worktop"
+    }),
     bom: {
       rules: [
         {
           id: "carcass-board-area",
           itemType: "material",
           source: "materialSlot",
-          sourceKey: "carcass",
+          sourceKey: "corpus",
           quantityFormula: { type: "area", widthParam: "width", heightParam: "height", multiplier: 2 }
         },
         {
@@ -674,13 +1289,14 @@ function makePackage(spec: FwmFurnitureSpec): FurnQuoteModulePackage {
       quoteGroup: spec.tags.includes("kitchen") ? "kitchen" : "furniture"
     },
     ui: ui(spec),
+    parameterPresets: parameterPresets(spec),
     exports: {
       exportTags: [...spec.tags, "fwm"],
       manufacturingCode: spec.moduleType.toUpperCase(),
       notes: ["Generated system FWM package for trusted runtime furniture modules."]
     },
     manufacturing: {
-      cncStrategy: spec.geometryKind === "cladding" ? "panel_cladding" : "panel_furniture",
+      cncStrategy: panelStrategy ? "panel_component" : spec.geometryKind === "accessory" ? "component_accessory" : "panel_furniture",
       edgeBandingStrategy: "visible_edges_abs",
       notes: [
         "Board thickness follows selected catalog materials where kitchen context sync is active.",

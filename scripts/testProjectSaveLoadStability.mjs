@@ -114,6 +114,14 @@ function entityFingerprint(snapshot) {
   };
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function assertFingerprintContains(actual, expected, label) {
   for (const [key, expectedItems] of Object.entries(expected)) {
     const actualItems = actual[key] || [];
@@ -121,9 +129,9 @@ function assertFingerprintContains(actual, expected, label) {
     for (const expectedItem of expectedItems) {
       const actualItem = actualItems.find((item) => item.id === expectedItem.id);
       assert(!!actualItem, `${label}: ${key} lost ${expectedItem.id}`, { expectedItem, actualItems });
-      assert(JSON.stringify(actualItem.params) === JSON.stringify(expectedItem.params), `${label}: ${key} params changed for ${expectedItem.id}`, { expectedItem, actualItem });
+      assert(stableJson(actualItem.params) === stableJson(expectedItem.params), `${label}: ${key} params changed for ${expectedItem.id}`, { expectedItem, actualItem });
       assert(actualItem.kitchenGroupId === expectedItem.kitchenGroupId, `${label}: ${key} group changed for ${expectedItem.id}`, { expectedItem, actualItem });
-      assert(JSON.stringify(actualItem.kitchenPlacement) === JSON.stringify(expectedItem.kitchenPlacement), `${label}: ${key} placement changed for ${expectedItem.id}`, { expectedItem, actualItem });
+      assert(stableJson(actualItem.kitchenPlacement) === stableJson(expectedItem.kitchenPlacement), `${label}: ${key} placement changed for ${expectedItem.id}`, { expectedItem, actualItem });
     }
   }
 }
@@ -132,11 +140,7 @@ async function planPointToViewport(page, pointMm) {
   return await page.evaluate((point) => {
     const api = window.__kitchenDebug;
     if (!api) throw new Error("Missing __kitchenDebug");
-    const relative = api.projectPlanPoint(point);
-    const canvas = document.querySelector("#viewer canvas") ?? document.querySelector("canvas");
-    if (!canvas) throw new Error("Missing viewer canvas.");
-    const rect = canvas.getBoundingClientRect();
-    return { x: rect.left + relative.x, y: rect.top + relative.y };
+    return api.projectPlanPoint(point);
   }, pointMm);
 }
 

@@ -4,6 +4,7 @@ import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { CornerShelfLowerParams } from "./cornerShelfLower/types";
 import { buildCornerShelfLower } from "./cornerShelfLower/geometry";
 import { createCornerShelfLowerControls } from "./cornerShelfLower/controls";
@@ -20,6 +21,10 @@ import type { FridgeTallParams } from "./fridgeTall/types";
 import { buildFridgeTall } from "./fridgeTall/geometry";
 import { createFridgeTallControls } from "./fridgeTall/controls";
 import { calculateBOM as calculateFridgeTallBOM } from "./fridgeTall/calculation";
+import type { PinoSideCabinetParams } from "./pinoSideCabinet/types";
+import { buildPinoSideCabinet } from "./pinoSideCabinet/geometry";
+import { createPinoSideCabinetControls } from "./pinoSideCabinet/controls";
+import { calculateBOM as calculatePinoSideCabinetBOM } from "./pinoSideCabinet/calculation";
 import type { SwingShelvesLowParams } from "./swingShelvesLow/types";
 import { buildSwingShelvesLow } from "./swingShelvesLow/geometry";
 import { createSwingShelvesLowControls } from "./swingShelvesLow/controls";
@@ -44,6 +49,12 @@ export type ModuleControlsArgs = {
   clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
+  createParameterPreset?: (args: {
+    modulePackage: FurnQuoteModulePackage;
+    parameters: Record<string, unknown>;
+    name: string;
+    note: string;
+  }) => Promise<{ modulePackage: FurnQuoteModulePackage; presetId: string } | null>;
 };
 
 export type ModuleCapabilityFlags = {
@@ -146,6 +157,21 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     build: (params, catalog) => buildFridgeTall(params as FridgeTallParams, catalog),
     createControls: (container, params, args) => createFridgeTallControls(container, params as FridgeTallParams, args),
     calculateBOM: (params, ctx, catalog) => calculateFridgeTallBOM(params as FridgeTallParams, ctx, catalog),
+    capabilities: {
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  },
+  {
+    type: "pino_side_cabinet",
+    folder: "pinoSideCabinet",
+    label: "PINO boční skříňka",
+    packageName: "module-builder-pino_side_cabinet",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("pino_side_cabinet"),
+    build: (params, catalog) => buildPinoSideCabinet(params as PinoSideCabinetParams, catalog),
+    createControls: (container, params, args) => createPinoSideCabinetControls(container, params as PinoSideCabinetParams, args),
+    calculateBOM: (params, ctx, catalog) => calculatePinoSideCabinetBOM(params as PinoSideCabinetParams, ctx, catalog),
     capabilities: {
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true

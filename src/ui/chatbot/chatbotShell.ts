@@ -1,3 +1,11 @@
+import type {
+  AssistantClientContext,
+  AssistantToolCall,
+  AssistantToolDefinition,
+  AssistantToolResult,
+  AssistantTurnResponse
+} from "../../assistant/types";
+
 type ChatbotDockArgs = {
   appRoot: HTMLElement;
 };
@@ -75,8 +83,8 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
         <button type="button" data-chatbot-popout role="menuitem">Otvoriť v novom okne</button>
       </div>
     </header>
-    <main class="chatbot-body">
-      <div class="chatbot-empty">
+    <main class="chatbot-body" data-chatbot-body>
+      <div class="chatbot-empty" data-chatbot-empty>
         <div class="chatbot-mark" aria-hidden="true">
           <i></i><i></i><i></i>
         </div>
@@ -131,9 +139,179 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
     url.hash = "";
     window.open(url.toString(), "arcigy-chatbot", "popup,width=460,height=860");
   });
-  shell.querySelector<HTMLFormElement>(".chatbot-composer")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-  });
+  bindAssistantChat(shell);
   document.addEventListener("click", closeMenu);
   return shell;
+}
+
+type ChatbotState = {
+  pendingCalls: AssistantToolCall[];
+  pendingPlan: AssistantTurnResponse["plan"];
+  conversation: Array<{ role: "user" | "assistant" | "tool"; content: string }>;
+  busy: boolean;
+};
+
+function fallbackContext(): AssistantClientContext {
+  return {
+    projectId: null,
+    phaseId: null,
+    viewMode: "unknown",
+    activeViewerTab: "unknown",
+    layoutTool: "select",
+    selectedKind: null,
+    selectedKitchenGroupId: null,
+    activeKitchenGroupId: null,
+    selectedInstanceIds: [],
+    selectedWallIds: [],
+    selectedParams: [],
+    catalogSummary: { materialCount: 0, componentCount: 0, moduleCount: 0, moduleTypes: [] }
+  };
+}
+
+function bridge() {
+  return window.__arcigyAssistant ?? null;
+}
+
+function getToolDefinitions(): AssistantToolDefinition[] {
+  return bridge()?.getToolDefinitions() ?? [];
+}
+
+function getContextSnapshot(): AssistantClientContext {
+  return bridge()?.getContextSnapshot() ?? fallbackContext();
+}
+
+function appendMessage(body: HTMLElement, role: "user" | "assistant" | "tool", text: string): HTMLElement {
+  body.querySelector("[data-chatbot-empty]")?.remove();
+  const message = document.createElement("div");
+  message.className = `chatbot-message ${role}`;
+  message.textContent = text;
+  body.appendChild(message);
+  body.scrollTop = body.scrollHeight;
+  return message;
+}
+
+function renderPlan(body: HTMLElement, response: AssistantTurnResponse, onApply: () => void): void {
+  if (!response.plan) return;
+  const card = document.createElement("section");
+  card.className = "chatbot-plan";
+  const list = response.plan.steps.map((step) => `<li>${escapeHtml(step.label)}</li>`).join("");
+  card.innerHTML = `
+    <strong>${escapeHtml(response.plan.goal)}</strong>
+    <ul>${list}</ul>
+    ${response.requiresConfirmation ? `<button type="button" data-chatbot-apply>Apply</button>` : ""}
+  `;
+  card.querySelector<HTMLButtonElement>("[data-chatbot-apply]")?.addEventListener("click", onApply);
+  body.appendChild(card);
+  body.scrollTop = body.scrollHeight;
+}
+
+async function postAssistantTurn(pathname: "/api/assistant/turn" | "/api/assistant/continue", state: ChatbotState, message: string, toolResults?: AssistantToolResult[]) {
+  const response = await fetch(pathname, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      message,
+      clientContext: getContextSnapshot(),
+      conversation: state.conversation.slice(-12),
+      toolResults,
+      toolDefinitions: getToolDefinitions()
+    })
+  });
+  const data = await response.json() as AssistantTurnResponse | { ok: false; error?: string };
+  if (!response.ok || !data.ok) throw new Error(!data.ok ? data.error ?? `HTTP ${response.status}` : `HTTP ${response.status}`);
+  return data;
+}
+
+async function executeToolCalls(calls: AssistantToolCall[]): Promise<AssistantToolResult[]> {
+  const activeBridge = bridge();
+  if (!activeBridge) {
+    return calls.map((call) => ({ ok: false, toolId: call.toolId, error: "Live editor bridge is not available." }));
+  }
+  const results: AssistantToolResult[] = [];
+  for (const call of calls) {
+    results.push(await activeBridge.executeToolCall(call));
+  }
+  return results;
+}
+
+function setBusy(shell: HTMLElement, busy: boolean): void {
+  const form = shell.querySelector<HTMLFormElement>(".chatbot-composer");
+  const textarea = shell.querySelector<HTMLTextAreaElement>("textarea");
+  const send = shell.querySelector<HTMLButtonElement>(".chatbot-send");
+  if (textarea) textarea.disabled = busy;
+  if (send) send.disabled = busy;
+  form?.classList.toggle("is-busy", busy);
+}
+
+function bindAssistantChat(shell: HTMLElement): void {
+  const body = shell.querySelector<HTMLElement>("[data-chatbot-body]");
+  const form = shell.querySelector<HTMLFormElement>(".chatbot-composer");
+  const textarea = shell.querySelector<HTMLTextAreaElement>("textarea");
+  if (!body || !form || !textarea) return;
+
+  const state: ChatbotState = { pendingCalls: [], pendingPlan: null, conversation: [], busy: false };
+
+  const continueWithTools = async (message: string, calls: AssistantToolCall[]) => {
+    setBusy(shell, true);
+    appendMessage(body, "tool", "Vykonávam kroky v editore...");
+    const results = await executeToolCalls(calls);
+    for (const result of results) {
+      appendMessage(body, "tool", result.ok ? result.stateDeltaSummary ?? `${result.toolId}: OK` : `${result.toolId}: ${result.error ?? "failed"}`);
+    }
+    const next = await postAssistantTurn("/api/assistant/continue", state, message, results);
+    state.conversation.push({ role: "assistant", content: next.assistantMessage });
+    appendMessage(body, "assistant", next.assistantMessage);
+    setBusy(shell, false);
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (state.busy) return;
+    const message = textarea.value.trim();
+    if (!message) return;
+    textarea.value = "";
+    state.conversation.push({ role: "user", content: message });
+    appendMessage(body, "user", message);
+    setBusy(shell, true);
+    state.busy = true;
+    appendMessage(body, "tool", "Analyzujem kontext...");
+
+    void postAssistantTurn("/api/assistant/turn", state, message)
+      .then(async (response) => {
+        state.conversation.push({ role: "assistant", content: response.assistantMessage });
+        appendMessage(body, "assistant", response.assistantMessage);
+        state.pendingCalls = response.toolCalls;
+        state.pendingPlan = response.plan;
+        renderPlan(body, response, () => {
+          const calls = [...state.pendingCalls];
+          state.pendingCalls = [];
+          void continueWithTools(message, calls).catch((error: unknown) => {
+            appendMessage(body, "assistant", error instanceof Error ? error.message : String(error));
+            setBusy(shell, false);
+            state.busy = false;
+          });
+        });
+        if (!response.requiresConfirmation && response.toolCalls.length > 0) {
+          await continueWithTools(message, response.toolCalls);
+        }
+      })
+      .catch((error: unknown) => {
+        appendMessage(body, "assistant", error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        setBusy(shell, false);
+        state.busy = false;
+      });
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[char] ?? char));
 }

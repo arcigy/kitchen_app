@@ -6,8 +6,8 @@ import { detectModuleAdjacencyInfo } from "./moduleAdjacency";
 import { getSelectionMeasureBindings } from "./measureEditing";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "../layout/kitchenContext";
-import { createRequestedUKitchenPlan } from "../layout/kitchenAutoLayout";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
 import { cancelPlacement, type PlacementHelpers } from "../layout/placementManager";
@@ -35,6 +35,13 @@ import type {
 import type { createKitchenEditMode } from "../layout/kitchenEditMode";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 import { refreshSelectionHighlights } from "./selectionController";
+import type { ProjectActions } from "./project/projectActions";
+import { buildPinoVendorKitchenCatalog } from "../layout/pinoVendorKitchenCatalog";
+import {
+  buildPinoShowroomPlan,
+  createPinoShowroomKitchenContext,
+  createPinoShowroomSeedEntries
+} from "./pinoVendorShowroom";
 
 type KitchenGuideSegmentInfo = {
   start: THREE.Vector3;
@@ -173,6 +180,7 @@ type KitchenDebugApiContext = {
   getViewMode: () => AppState["viewMode"];
   getLastRebuildDebug: () => unknown;
   catalog: ClientCatalog;
+  projectActions?: ProjectActions;
 };
 
 declare global {
@@ -249,6 +257,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     getSceneDebugState,
     ctl
   } = ctx;
+  const projectActions = ctx.projectActions;
 
   const getDebugModuleSnapshot = (inst: LayoutInstance) => {
     const box = instanceVisualWorldBox(inst);
@@ -544,51 +553,154 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return getDebugKitchenSnapshot(groupId);
   };
 
-  const debugCreateRequestedUKitchen = () => {
+  const debugCreatePinoVendorShowroomProject = async (opts?: {
+    projectName?: string;
+    createProject?: boolean;
+    saveProject?: boolean;
+  }) => {
     const startedAt = performance.now();
     debugResetKitchenScenario();
     ensureLayoutMode();
 
-    const plan = createRequestedUKitchenPlan(catalog, modulePackages);
-    const groupId = `dbg_u_kg_${Date.now()}`;
-    S.kitchenCtx = structuredClone(plan.ctx);
-    S.kitchenGroups.push({
-      id: groupId,
-      name: plan.groupName,
-      ctx: structuredClone(plan.ctx),
-      instanceIds: []
-    });
+    const vendorCatalog = buildPinoVendorKitchenCatalog(catalog);
+    const showroomEntries = createPinoShowroomSeedEntries(vendorCatalog.entries);
+    const plan = buildPinoShowroomPlan(showroomEntries);
+    if (plan.entries.length === 0 || plan.placements.length === 0) {
+      throw new Error("PINO showroom plan is empty.");
+    }
 
-    plan.worktops.forEach((worktop, index) => {
-      createKitchenWorktop(structuredClone(worktop), groupId, { skipHistory: true, id: `dbg_u_wt${index + 1}` });
-    });
+    const floorMaterialId =
+      catalog.materials.find((material) => material.isActive !== false)?.id ??
+      catalog.kitchenDefaults.carcassMaterialId ??
+      catalog.kitchenDefaults.frontMaterialId ??
+      "mat.default";
+    createFloor(
+      {
+        name: "PINO showroom floor",
+        heightMm: 0,
+        thicknessMm: 40,
+        materialId: floorMaterialId,
+        boundary: structuredClone(plan.floorBoundary)
+      },
+      { skipHistory: true }
+    );
 
-    for (const modulePlan of plan.modules) {
-      const inst = createInstance(structuredClone(modulePlan.params));
+    const entryById = new Map(plan.entries.map((entry) => [entry.id, entry] as const));
+    const rowGroupIdByRowId = new Map<string, string>();
+    const rowContextByRowId = new Map<string, KitchenContext>();
+    const rowWorktopByRowId = new Map<string, KitchenWorktopInstance>();
+
+    for (const row of plan.rows) {
+      const groupId = `dbg_pino_row_${row.rowId}`;
+      rowGroupIdByRowId.set(row.rowId, groupId);
+      const nextCtx = createPinoShowroomKitchenContext(catalog);
+      rowContextByRowId.set(row.rowId, structuredClone(nextCtx));
+      S.kitchenGroups.push({
+        id: groupId,
+        name: row.label,
+        ctx: structuredClone(nextCtx),
+        instanceIds: []
+      });
+      if (row.role === "low") {
+        const worktop = createKitchenWorktop(
+          {
+            path: [
+              { x: Math.round(row.minXMm - 20), z: Math.round(row.zMm) },
+              { x: Math.round(row.maxXMm + 20), z: Math.round(row.zMm) }
+            ],
+            justification: "back",
+            mirrored: false,
+            depthMm: nextCtx.worktopDepthMm,
+            thicknessMm: nextCtx.worktopThicknessMm,
+            heightMm: nextCtx.heightMm,
+            overhangSideMm: nextCtx.worktopOverhangSideMm,
+            materialId: nextCtx.worktopMaterialId
+          },
+          groupId,
+          { skipHistory: true, id: `dbg_pino_wt_${row.rowId}` }
+        );
+        rowWorktopByRowId.set(row.rowId, worktop);
+      }
+    }
+
+    for (const placement of plan.placements) {
+      const entry = entryById.get(placement.entryId);
+      const groupId = rowGroupIdByRowId.get(placement.rowId);
+      const groupCtx = rowContextByRowId.get(placement.rowId);
+      if (!entry || !groupId || !groupCtx) continue;
+      const seededParams = structuredClone(entry.params);
+      applyKitchenContextToModuleParams(seededParams, groupCtx, catalog);
+      const inst = createInstance(seededParams);
       inst.kitchenGroupId = groupId;
-      inst.root.position.set(modulePlan.xMm / 1000, modulePlan.yMm / 1000, modulePlan.zMm / 1000);
-      inst.root.rotation.y = (modulePlan.rotationYDeg * Math.PI) / 180;
+      const worktop = rowWorktopByRowId.get(placement.rowId) ?? null;
+      let placedOnWorktop = false;
+      if (worktop && entry.role === "low") {
+        const segmentInfo = getKitchenGuideSegmentInfo(worktop, 0, groupCtx.worktopBackOffsetMm);
+        if (segmentInfo) {
+          const targetPoint = new THREE.Vector3(placement.xMm / 1000, 0, placement.zMm / 1000);
+          const projected = clampNumber(targetPoint.clone().sub(segmentInfo.start).dot(segmentInfo.dir), 0, segmentInfo.length);
+          inst.kitchenPlacement = {
+            worktopId: worktop.id,
+            segmentIndex: 0,
+            offsetAlongM: projected
+          };
+          placedOnWorktop = applyKitchenPlacementBinding(inst, inst.kitchenPlacement, groupCtx.worktopBackOffsetMm);
+        }
+      }
+      if (!placedOnWorktop) {
+        inst.kitchenPlacement = null;
+        inst.root.position.set(placement.xMm / 1000, getKitchenModulePlacementY(inst, groupId), placement.zMm / 1000);
+        inst.root.rotation.y = (placement.rotationYDeg * Math.PI) / 180;
+      }
       inst.root.updateMatrixWorld(true);
       layoutRoot.add(inst.root);
       instances.push(inst);
     }
 
-    const group = S.kitchenGroups.find((item: any) => item.id === groupId);
-    if (group) group.instanceIds = instances.filter((item: any) => item.kitchenGroupId === groupId).map((item: any) => item.id);
-    setSelectedKitchenGroup(groupId);
+    for (const group of S.kitchenGroups) {
+      group.instanceIds = instances.filter((item) => item.kitchenGroupId === group.id).map((item) => item.id);
+      rebuildKitchenGroupLayout(group.id, structuredClone(group.ctx), structuredClone(group.ctx));
+    }
+
+    const firstGroupId = S.kitchenGroups[0]?.id ?? null;
+    if (firstGroupId) setSelectedKitchenGroup(firstGroupId);
     updateLayoutPanel();
     mountProps();
     commitHistory(S);
 
+    let project = projectActions?.getState().currentProject ?? null;
+    const shouldCreateProject = (opts?.createProject ?? true) && !!projectActions && !project;
+    if (shouldCreateProject) {
+      project = await projectActions!.create({
+        name: opts?.projectName?.trim() || "PINO showroom vsetky moduly",
+        address: "Arcigy local dev showroom",
+        contactName: "PINO/Nobilia",
+        notes: "Auto-generated PINO showroom project. Review/staging only."
+      });
+    }
+
+    let save = null as Awaited<ReturnType<ProjectActions["save"]>> | null;
+    if ((opts?.saveProject ?? true) && projectActions && projectActions.getState().currentProject) {
+      save = await projectActions.save();
+      project = save.project;
+    }
+
     return {
       createdInMs: Math.round(performance.now() - startedAt),
-      plan: {
-        groupName: plan.groupName,
-        moduleCount: plan.modules.length,
-        validation: plan.validation,
-        missingTools: plan.missingTools
-      },
-      snapshot: getDebugKitchenSnapshot(groupId)
+      entryCount: plan.entries.length,
+      placementCount: plan.placements.length,
+      rowCount: plan.rows.length,
+      groupCount: S.kitchenGroups.length,
+      projectId: project?.projectId ?? null,
+      projectName: project?.name ?? null,
+      savedAt: save?.integrity.savedAt ?? null,
+      rows: plan.rows.map((row) => ({
+        label: row.label,
+        role: row.role,
+        itemCount: row.itemCount,
+        groups: row.groupLabels
+      })),
+      snapshot: getDebugKitchenSnapshot(firstGroupId)
     };
   };
 
@@ -652,7 +764,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const rect = renderer.domElement.getBoundingClientRect();
     const aRaw = new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000);
     const bRaw = new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000);
-    const snappedA = snapPoint2D(aRaw, rect, cam(), 24);
+    const snappedA = snapPoint2D(aRaw, rect, cam(), SNAP_DISTANCE_PX.measure2d);
     const a = snappedA.kind === "none" ? aRaw : snappedA.point;
     const aBinding = bindingFromPlanSnap(snappedA, a);
 
@@ -680,7 +792,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       );
     }
 
-    const snappedB = snapPoint2D(bRaw, rect, cam(), 24, {
+    const snappedB = snapPoint2D(bRaw, rect, cam(), SNAP_DISTANCE_PX.measure2d, {
       perpendicularFrom: snappedA.point
     });
     const b = snappedB.kind === "none" ? bRaw : snappedB.point;
@@ -823,7 +935,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
     const rect = renderer.domElement.getBoundingClientRect();
     const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
-    return { x: screen.x, y: screen.y };
+    return { x: rect.left + screen.x, y: rect.top + screen.y };
   };
 
   const debugPickAlignLine = (pointMm: { x: number; z: number }) => {
@@ -885,7 +997,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     options?: { perpendicularFromMm?: { x: number; z: number } | null }
   ) => {
     const rect = renderer.domElement.getBoundingClientRect();
-    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), 24, {
+    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), SNAP_DISTANCE_PX.measure2d, {
       perpendicularFrom: options?.perpendicularFromMm
         ? new THREE.Vector3(options.perpendicularFromMm.x / 1000, 0, options.perpendicularFromMm.z / 1000)
         : null
@@ -960,7 +1072,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     reset: debugResetKitchenScenario,
     selectKitchenGroup: debugSelectKitchenGroup,
     createKitchenScenario: debugCreateKitchenScenario,
-    createRequestedUKitchen: debugCreateRequestedUKitchen,
+    createPinoVendorShowroomProject: debugCreatePinoVendorShowroomProject,
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,

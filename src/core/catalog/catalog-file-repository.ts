@@ -24,6 +24,7 @@ export function getCatalogFileNames() {
     modules: "modules.json",
     pricing: "pricing.json",
     kitchenDefaults: "kitchenDefaults.json",
+    vendorCatalog: "vendorCatalog.json",
     meta: "catalog.meta.json"
   } as const;
 }
@@ -56,7 +57,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   }
 
   async function readCatalog(ctx: ClientContext): Promise<ClientCatalog | null> {
-    const [materials, hardware, components, componentGeometry, modules, priceList, kitchenDefaults, meta] = await Promise.all([
+    const [materials, hardware, components, componentGeometry, modules, priceList, kitchenDefaults, vendorCatalog, meta] = await Promise.all([
       readJson<ClientCatalog["materials"]>(ctx, names.materials),
       readJson<ClientCatalog["hardware"]>(ctx, names.hardware),
       readJson<ClientCatalog["components"]>(ctx, names.components),
@@ -64,6 +65,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       readJson<ClientCatalog["modules"]>(ctx, names.modules),
       readJson<ClientCatalog["priceList"]>(ctx, names.pricing),
       readJson<ClientCatalog["kitchenDefaults"]>(ctx, names.kitchenDefaults),
+      readJson<ClientCatalog["vendorCatalog"]>(ctx, names.vendorCatalog),
       readJson<ClientCatalog["meta"]>(ctx, names.meta)
     ]);
     if (!materials || !hardware || !components || !componentGeometry || !modules || !priceList || !kitchenDefaults) return null;
@@ -78,6 +80,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       modules,
       priceList,
       kitchenDefaults,
+      vendorCatalog: vendorCatalog ?? undefined,
       meta: meta ?? seed.meta
     });
   }
@@ -93,6 +96,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       writeJson(ctx, names.modules, validated.modules),
       writeJson(ctx, names.pricing, validated.priceList),
       writeJson(ctx, names.kitchenDefaults, validated.kitchenDefaults),
+      writeJson(ctx, names.vendorCatalog, validated.vendorCatalog ?? null),
       writeJson(ctx, names.meta, validated.meta)
     ]);
   }
@@ -119,7 +123,8 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
         module.modulePackageId &&
         module.modulePackageId !== persisted.module.modulePackageId
       );
-      if (existingIndex < 0 && hasClientOverrideForType) continue;
+      const templateTags = new Set((persisted.module.tags ?? []).map((tag) => tag.toLowerCase()));
+      if (existingIndex < 0 && hasClientOverrideForType && !templateTags.has("revit-export-preview")) continue;
 
       const previous = existingIndex >= 0 ? nextModules[existingIndex] : null;
       const nextDefinition = {
@@ -128,7 +133,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
           enabled: previous?.enabled ?? true,
           packageHash
         }),
-        id: previous?.id ?? persisted.module.moduleType
+        ...(previous?.id && !previous.modulePackageId ? { id: previous.id } : {})
       };
       if (previous && JSON.stringify(previous) === JSON.stringify(nextDefinition)) continue;
       if (existingIndex >= 0) nextModules[existingIndex] = nextDefinition;

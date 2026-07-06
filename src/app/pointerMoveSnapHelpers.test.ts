@@ -6,6 +6,7 @@ import {
   collectMoveObjectSnapResults,
   collectOpeningMoveKeypointsForWall,
   constrainMoveDeltaToAxis,
+  isSelectedMoveSnapBinding,
   moveWallAxisInfo,
   moveObjectSnapKey,
   isOpeningMoveWithinSmartSnapBounds,
@@ -200,6 +201,21 @@ describe("pointer move snap helpers", () => {
         binding: { type: "wallEndpoint", wallId: "wall-1", endpoint: "b" }
       })
     ).toBe('endpoint|1234|-2346|wall|{"type":"wallEndpoint","wallId":"wall-1","endpoint":"b"}');
+  });
+
+  it("ignores move snap bindings that belong to the selected moving objects", () => {
+    expect(isSelectedMoveSnapBinding({ type: "wallEndpoint", wallId: "wall-1", endpoint: "a" }, { wallIds: ["wall-1"] })).toBe(true);
+    expect(isSelectedMoveSnapBinding({ type: "moduleEdge", instanceId: "module-1", segmentIndex: 0, t: 0.5 }, { instanceIds: ["module-1"] })).toBe(true);
+    expect(isSelectedMoveSnapBinding({ type: "sectionLine", sectionId: "section-1", t: 0.5 }, { sectionIds: ["section-1"] })).toBe(true);
+    expect(
+      isSelectedMoveSnapBinding(
+        { type: "openingEndpoint", openingKind: "window", openingId: "window-1", endpoint: "left" },
+        { windowIds: ["window-1"] }
+      )
+    ).toBe(true);
+    expect(isSelectedMoveSnapBinding({ type: "openingCenter", openingKind: "door", openingId: "door-1" }, { doorIds: ["door-1"] })).toBe(true);
+    expect(isSelectedMoveSnapBinding({ type: "openingCenter", openingKind: "door", openingId: "door-1" }, { windowIds: ["door-1"] })).toBe(false);
+    expect(isSelectedMoveSnapBinding({ type: "customFurnitureVertex", furnitureId: "cf1", vertexIndex: 0 }, { wallIds: ["cf1"] })).toBe(false);
   });
 
   it("collects move object snap results with current cycle clamp and dedupe behavior", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDatabaseUrl,
   resolveDatabaseConfig,
   resolveObjectStoragePrefix,
   quotePgIdentifier
@@ -47,6 +48,22 @@ describe("database environment config", () => {
       DATABASE_SCHEMA: "dev",
       DATABASE_URL: "postgres://same-db"
     })).toEqual({ appEnv: "dev", schema: "dev", connectionString: "postgres://same-db" });
+  });
+
+  it("builds a database url from CapRover-style Postgres env parts", () => {
+    expect(getDatabaseUrl({
+      POSTGRES_HOST: "srv-captain--kitchenapp-db",
+      POSTGRES_USER: "kitchenapp",
+      POSTGRES_PASSWORD: "p@ss word",
+      POSTGRES_DB: "kitchenapp"
+    })).toBe("postgresql://kitchenapp:p%40ss%20word@srv-captain--kitchenapp-db:5432/kitchenapp");
+  });
+
+  it("rejects incomplete Postgres env parts", () => {
+    expect(() => getDatabaseUrl({
+      POSTGRES_HOST: "srv-captain--kitchenapp-db",
+      POSTGRES_USER: "kitchenapp"
+    })).toThrow("POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB");
   });
 
   it("quotes only safe schema identifiers", () => {

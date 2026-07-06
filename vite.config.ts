@@ -41,7 +41,6 @@ export default defineConfig({
           ) {
             return "feature-editor-tools";
           }
-          if (normalized.includes("/src/features/pdf-intake/") || normalized.includes("/src/pdfDemo/")) return "feature-pdf";
           if (normalized.includes("/src/ui/bomDevPanel") || normalized.includes("/src/layout/bom/")) return "feature-bom";
           if (normalized.includes("/src/app/materialProofMode")) return "feature-material-proof";
           if (normalized.includes("/src/app/project/") || normalized.includes("/src/ui/project/") || normalized.includes("/src/core/project")) return "feature-project";
@@ -79,4 +78,3 @@ export default defineConfig({
     }
   }
 });
-

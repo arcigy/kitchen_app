@@ -13,6 +13,7 @@ type InstanceActionsContext = {
   instances: LayoutInstance[];
   layoutRoot: THREE.Group;
   clientCatalog: ClientCatalog;
+  buildModule?: (params: ModuleParams) => THREE.Group;
   getMode: () => "build" | "layout";
   getInstanceCounter: () => number;
   setInstanceCounter: (next: number) => void;
@@ -25,6 +26,7 @@ type InstanceActionsContext = {
     groupId: string,
     worktopBackOffsetMm: number
   ) => KitchenPlacementBinding | null;
+  rebuildKitchenGroupWorktops?: (groupId: string) => void;
   setSelectedModule: (id: string | null) => void;
   updateLayoutPanel: () => void;
 };
@@ -54,7 +56,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     const root = new THREE.Group();
     root.name = `module_${id}`;
 
-    const module = buildModule(nextParams, ctx.clientCatalog);
+    const module = ctx.buildModule ? ctx.buildModule(nextParams) : buildModule(nextParams, ctx.clientCatalog);
     module.name = `moduleGeom_${id}`;
     tagModuleGeometry(module, id);
     root.add(module);
@@ -115,6 +117,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
       defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
       inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
     });
+    if (next.kitchenGroupId) ctx.rebuildKitchenGroupWorktops?.(next.kitchenGroupId);
     ctx.setSelectedModule(next.id);
     ctx.updateLayoutPanel();
   };
@@ -128,6 +131,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     ctx.layoutRoot.remove(inst.root);
     disposeObject3D(inst.root);
     ctx.instances.splice(idx, 1);
+    if (inst.kitchenGroupId) ctx.rebuildKitchenGroupWorktops?.(inst.kitchenGroupId);
     ctx.updateLayoutPanel();
   };
 

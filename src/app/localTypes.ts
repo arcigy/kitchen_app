@@ -3,6 +3,9 @@ import type { DoorSwingDirection, DoorSwingSide, FloorBoundaryPoint, OpeningHand
 
 export type {
   AlignPickedLine,
+  AlignLock,
+  AlignLockEndpoint,
+  AlignLockModuleSide,
   ColumnInstance,
   ColumnJustifyX,
   ColumnJustifyY,

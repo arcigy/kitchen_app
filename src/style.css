@@ -3708,6 +3708,48 @@ textarea {
   pointer-events: none;
 }
 
+.align-lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+}
+
+.align-lock-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.align-lock-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.align-lock-button.is-unlocked {
+  color: #4f8cff;
+}
+
+.align-lock-button.is-locked {
+  color: #d86b6b;
+}
+
 
 /* Button-hover cursor handoff: the UI control becomes the pointer target. */
 .archux-app button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
@@ -8804,6 +8846,268 @@ canvas.material-modify-picking {
 .archux-main {
   width: 100%;
   max-width: 100vw;
+}
+
+.archux-main.archux-has-module-catalog {
+  grid-template-columns: 78px 320px minmax(640px, 1fr) minmax(292px, 320px) !important;
+  grid-template-areas:
+    "nav catalog viewer props"
+    "nav bottom bottom bottom" !important;
+}
+
+.archux-module-catalog {
+  grid-area: catalog;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(213, 220, 235, 0.86);
+  box-shadow: 0 18px 45px rgba(28, 34, 53, 0.07);
+  overflow: hidden;
+}
+
+.archux-module-catalog[hidden] {
+  display: none !important;
+}
+
+.module-catalog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.module-catalog-header strong {
+  display: block;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.module-catalog-header span {
+  display: block;
+  margin-top: 3px;
+  color: #647087;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.module-catalog-primary {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(124, 97, 255, 0.34);
+  border-radius: 8px;
+  background: #6c55ff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.module-catalog-primary:disabled {
+  background: #eef1f7;
+  border-color: rgba(207, 214, 228, 0.9);
+  color: #8792a5;
+  cursor: default;
+}
+
+.module-catalog-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid #d7dfef;
+  border-radius: 8px;
+  background: #f8faff;
+  color: #172033;
+  font-size: 12px;
+  outline: none;
+}
+
+.module-catalog-search:focus {
+  border-color: #6c55ff;
+  box-shadow: 0 0 0 3px rgba(108, 85, 255, 0.14);
+}
+
+.module-catalog-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.module-catalog-disabled {
+  opacity: 0.52;
+}
+
+.module-catalog-section {
+  margin: 0 0 16px;
+}
+
+.module-catalog-section h3 {
+  margin: 0 0 8px;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.module-catalog-subcategory {
+  margin-bottom: 12px;
+}
+
+.module-catalog-subcategory h4 {
+  margin: 0 0 6px;
+  color: #6b7588;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.module-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.module-catalog-grid-vendor {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.module-catalog-card,
+.module-catalog-worktop {
+  min-width: 0;
+  border: 1px solid #dbe3f1;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  cursor: pointer;
+}
+
+.module-catalog-card {
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  padding: 4px;
+  display: grid;
+  grid-template-rows: 24px minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 2px;
+  font-size: 8.5px;
+  font-weight: 720;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.module-catalog-card-vendor {
+  aspect-ratio: auto;
+  min-height: 76px;
+  padding: 8px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: start;
+  justify-items: stretch;
+  column-gap: 8px;
+  row-gap: 4px;
+  text-align: left;
+}
+
+.module-catalog-card-icon {
+  width: 100%;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: #1f2937;
+}
+
+.module-catalog-card svg {
+  width: 27px;
+  height: 22px;
+  display: block;
+}
+
+.module-catalog-card-label {
+  width: 100%;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.module-catalog-card-meta {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.module-catalog-card-vendor .module-catalog-card-icon {
+  width: 38px;
+  height: 38px;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.module-catalog-card-vendor svg {
+  width: 34px;
+  height: 28px;
+}
+
+.module-catalog-card-vendor .module-catalog-card-label {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.15;
+  -webkit-line-clamp: 3;
+}
+
+.module-catalog-card-vendor .module-catalog-card-meta {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.module-catalog-card:hover:not(:disabled),
+.module-catalog-worktop:hover:not(:disabled) {
+  border-color: #6c55ff;
+  box-shadow: 0 0 0 3px rgba(108, 85, 255, 0.12);
+}
+
+.module-catalog-card:disabled,
+.module-catalog-worktop:disabled {
+  background: #eef1f6;
+  color: #8d98aa;
+  border-color: #d9e0ec;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.module-catalog-worktop {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+.module-catalog-worktop svg {
+  width: 18px;
+  height: 18px;
 }
 
 .revit-chrome {

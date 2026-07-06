@@ -23,6 +23,35 @@ export function moveObjectSnapKey(snap: PlanSnapResult): string {
   ].join("|");
 }
 
+export type MoveSnapIgnoredSelection = {
+  wallIds?: readonly string[];
+  instanceIds?: readonly string[];
+  sectionIds?: readonly string[];
+  windowIds?: readonly string[];
+  doorIds?: readonly string[];
+};
+
+export function isSelectedMoveSnapBinding(binding: PlanSnapBinding | null | undefined, selection: MoveSnapIgnoredSelection): boolean {
+  if (!binding) return false;
+  if ((binding.type === "wallEndpoint" || binding.type === "wallCenterline") && (selection.wallIds ?? []).includes(binding.wallId)) {
+    return true;
+  }
+  if ((binding.type === "moduleVertex" || binding.type === "moduleEdge") && (selection.instanceIds ?? []).includes(binding.instanceId)) {
+    return true;
+  }
+  if ((binding.type === "sectionEndpoint" || binding.type === "sectionLine") && (selection.sectionIds ?? []).includes(binding.sectionId)) {
+    return true;
+  }
+  if (
+    (binding.type === "openingCenter" || binding.type === "openingEndpoint") &&
+    ((binding.openingKind === "window" && (selection.windowIds ?? []).includes(binding.openingId)) ||
+      (binding.openingKind === "door" && (selection.doorIds ?? []).includes(binding.openingId)))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function collectMoveObjectSnapResults(snapAtCycleIndex: (cycleIndex?: number) => PlanSnapResult): PlanSnapResult[] {
   const first = snapAtCycleIndex();
   if (first.kind === "none") return [];

@@ -48,11 +48,13 @@ function makeTransformContext(overrides: Partial<TransformControllerContext> = {
     windows: [],
     doors: [],
     instances: [],
+    kitchenWorktops: [],
     sections: [],
     pinnedWallIds: new Set<string>(),
     wallJoinTolMm: 1,
     transformState: makeTransformState(),
     setUnderlayStatus: vi.fn(),
+    clearToolHud: vi.fn(),
     mountProps: vi.fn(),
     rebuildWall: vi.fn(),
     rebuildWallPlanMesh: vi.fn(),
@@ -75,6 +77,8 @@ function makeTransformContext(overrides: Partial<TransformControllerContext> = {
     anyOverlap: () => false,
     moduleOverlapsWalls: () => false,
     moduleOverlapsKitchenWorktops: () => false,
+    applyKitchenPlacementBinding: vi.fn(() => true),
+    getKitchenGuideSegmentInfo: vi.fn(() => null),
     inferKitchenPlacementBinding: (instance: LayoutInstance) => instance.kitchenPlacement,
     fromMmPoint: (point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000),
     toMmPoint: (point) => ({ x: Math.round(point.x * 1000), z: Math.round(point.z * 1000) })
@@ -235,7 +239,7 @@ describe("transform move tool", () => {
     expect(transformState.step).toBe("selectElements");
     expect(transformState.stickyMove).toBe(false);
     expect(transformState.moveSnapDisabled).toBe(false);
-    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): select elements, then press Enter. N = free movement.");
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): vyber objekty, potom Enter. N = volny pohyb.");
     expect(mountProps).toHaveBeenCalledExactlyOnceWith();
     expect(clearTransform.mock.invocationCallOrder[0]).toBeLessThan(setUnderlayStatus.mock.invocationCallOrder[0]);
     expect(setUnderlayStatus.mock.invocationCallOrder[0]).toBeLessThan(mountProps.mock.invocationCallOrder[0]);
@@ -251,7 +255,7 @@ describe("transform move tool", () => {
 
     expect(transformState.stickyMove).toBe(true);
     expect(transformState.moveSnapDisabled).toBe(true);
-    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Move: select element to move. Click Move again to exit. N = free movement.");
+    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Move: vyber objekt, ktory chces posunut. Klikni Move znova pre vypnutie. N = volny pohyb.");
   });
 
   it("initializes transform state from resolved selection ids", () => {
@@ -303,7 +307,7 @@ describe("transform move tool", () => {
 
     completeSelectedTransformStart({ kind: "move", mountProps, setUnderlayStatus });
 
-    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): click base point. N = free movement.");
+    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Move (M): zvol pociatocny bod. Snapping je aktivny. N = volny pohyb.");
     expect(mountProps).toHaveBeenCalledExactlyOnceWith();
     expect(setUnderlayStatus.mock.invocationCallOrder[0]).toBeLessThan(mountProps.mock.invocationCallOrder[0]);
 
@@ -327,6 +331,26 @@ describe("transform move tool", () => {
     ).toEqual({
       wallIds: ["w1", "w2"],
       instIds: ["m1", "m2"],
+      sectionIds: [],
+      windowIds: [],
+      doorIds: []
+    });
+  });
+
+  it("does not treat kitchen group member ids as a Move preselection", () => {
+    expect(
+      resolveTransformSelectionIds({
+        kind: "move",
+        selectedWallIds: new Set(),
+        selectedInstanceIds: new Set(["m1", "m2"]),
+        selectedKind: "kitchenGroup",
+        selectedWallId: null,
+        selectedInstanceId: null,
+        selectedSectionId: null
+      })
+    ).toEqual({
+      wallIds: [],
+      instIds: [],
       sectionIds: [],
       windowIds: [],
       doorIds: []
@@ -526,6 +550,8 @@ describe("transform move tool", () => {
     const inGroup = moduleInstance("m1", new THREE.Vector3(), "kg1");
     const fallbackGroup = moduleInstance("m2", new THREE.Vector3(), "missing-group");
     const loose = moduleInstance("m3", new THREE.Vector3(), null);
+    inGroup.kitchenPlacement = { worktopId: "old-1", segmentIndex: 0, offsetAlongM: 0 };
+    fallbackGroup.kitchenPlacement = { worktopId: "old-2", segmentIndex: 0, offsetAlongM: 0 };
     const inferKitchenPlacementBinding = vi.fn((instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => ({
       worktopId: `${instance.id}-${kitchenGroupId}-${backOffsetMm}`,
       segmentIndex: 0,
@@ -725,11 +751,28 @@ describe("transform move tool", () => {
     expect(instance.root.rotation.y).toBe(0.25);
     expect(transformState.kind).toBeNull();
     expect(ctx.rebuildWall).toHaveBeenCalledWith(wall);
+    expect(ctx.clearToolHud).toHaveBeenCalledTimes(1);
     expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledTimes(1);
     expect(ctx.updateLayoutPanel).toHaveBeenCalledTimes(1);
     expect(ctx.updateSelectionHighlights).toHaveBeenCalledTimes(1);
     expect(ctx.mountProps).toHaveBeenCalledTimes(1);
     expect(ctx.setUnderlayStatus).toHaveBeenCalledWith("Canceled.");
+  });
+
+  it("clearTransform clears transient tool HUD even without restore", () => {
+    const transformState = makeTransformState();
+    transformState.kind = "move";
+    transformState.step = "pickTarget";
+    const clearToolHud = vi.fn();
+    const controller = createTestTransformController({
+      transformState,
+      clearToolHud
+    });
+
+    controller.clearTransform({ status: "Move: done." });
+
+    expect(clearToolHud).toHaveBeenCalledOnce();
+    expect(transformState.kind).toBeNull();
   });
 
   it("starts from a single wall selected after controller creation", () => {
@@ -1099,5 +1142,132 @@ describe("transform move tool", () => {
     ]);
     expect(transformState.lastValidDelta.toArray()).toEqual([0.2, 0, 0.3]);
     expect(updateLayoutPanel).toHaveBeenCalled();
+  });
+
+  it("keeps worktop-pinned kitchen modules constrained to their current worktop while moving", () => {
+    const instance = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
+    instance.kitchenPlacement = { worktopId: "wt1", segmentIndex: 0, offsetAlongM: 1 };
+    const transformState = makeTransformState();
+    const snapPositionDetailed = vi.fn((_item: LayoutInstance, desired: THREE.Vector3) => ({ position: desired.clone() }));
+    const autoOrientModuleToRoomWallIfSnapped = vi.fn();
+    const applyKitchenPlacementBinding = vi.fn((inst: LayoutInstance, binding: NonNullable<LayoutInstance["kitchenPlacement"]>) => {
+      inst.kitchenPlacement = structuredClone(binding);
+      inst.root.position.set(binding.offsetAlongM, 0, 0);
+      return true;
+    });
+
+    const controller = createTestTransformController({
+      S: { kitchenCtx: makeDefaultKitchenContext(), kitchenGroups: [{ id: "kg1", ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 55 } }] },
+      selectedKind: "module",
+      selectedInstanceId: "m1",
+      instances: [instance],
+      kitchenWorktops: [{ id: "wt1", kitchenGroupId: "kg1" } as TransformControllerContext["kitchenWorktops"][number]],
+      transformState,
+      snapPositionDetailed,
+      autoOrientModuleToRoomWallIfSnapped,
+      applyKitchenPlacementBinding,
+      getKitchenGuideSegmentInfo: vi.fn(() => ({ start: new THREE.Vector3(), dir: new THREE.Vector3(1, 0, 0), length: 4 }))
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    controller.applyMoveDelta(new THREE.Vector3(0.25, 0, 0.4));
+
+    expect(instance.root.position.toArray()).toEqual([1.25, 0, 0]);
+    expect(instance.kitchenPlacement).toEqual({ worktopId: "wt1", segmentIndex: 0, offsetAlongM: 1.25 });
+    expect(snapPositionDetailed).not.toHaveBeenCalled();
+    expect(autoOrientModuleToRoomWallIfSnapped).not.toHaveBeenCalled();
+    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, { worktopId: "wt1", segmentIndex: 0, offsetAlongM: 1.25 }, 55);
+  });
+
+  it("lets unpinned kitchen modules move freely without rebinding to the worktop", () => {
+    const instance = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
+    const transformState = makeTransformState();
+    const inferKitchenPlacementBinding = vi.fn(() => ({ worktopId: "wt1", segmentIndex: 0, offsetAlongM: 0 }));
+
+    const controller = createTestTransformController({
+      selectedKind: "module",
+      selectedInstanceId: "m1",
+      instances: [instance],
+      transformState,
+      inferKitchenPlacementBinding
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(true);
+    controller.applyMoveDelta(new THREE.Vector3(0.2, 0, 0.3));
+
+    expect(instance.root.position.toArray()).toEqual([1.2, 0, 1.3]);
+    expect(instance.kitchenPlacement).toBeNull();
+    expect(inferKitchenPlacementBinding).not.toHaveBeenCalled();
+  });
+
+  it("does not start Move for a module locked by align", () => {
+    const instance = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
+    const setUnderlayStatus = vi.fn();
+    const mountProps = vi.fn();
+    const controller = createTestTransformController({
+      S: {
+        kitchenCtx: makeDefaultKitchenContext(),
+        kitchenGroups: [],
+        alignLocks: [
+          {
+            id: "lock-1",
+            locked: true,
+            a: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "right" },
+            b: { targetKind: "module", targetId: "m2", lineRole: "edge", moduleSide: "left" },
+            pointMm: { x: 0, z: 0 }
+          }
+        ]
+      },
+      selectedKind: "module",
+      selectedInstanceId: "m1",
+      instances: [instance],
+      setUnderlayStatus,
+      mountProps
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(false);
+
+    expect(setUnderlayStatus).toHaveBeenCalledWith("Move: selected module is locked by Align. Unlock the joint first.");
+    expect(mountProps).toHaveBeenCalledOnce();
+  });
+
+  it("does not start Move for a wall locked by align", () => {
+    const wall = {
+      id: "wall-1",
+      params: {
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 1000, z: 0 },
+        thicknessMm: 100,
+        heightMm: 2600,
+        materialId: "wall"
+      }
+    } as WallInstance;
+    const setUnderlayStatus = vi.fn();
+    const mountProps = vi.fn();
+    const controller = createTestTransformController({
+      S: {
+        kitchenCtx: makeDefaultKitchenContext(),
+        kitchenGroups: [],
+        alignLocks: [
+          {
+            id: "lock-1",
+            locked: true,
+            a: { targetKind: "wall", targetId: "wall-1", lineRole: "edge" },
+            b: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "back" },
+            pointMm: { x: 0, z: 0 }
+          }
+        ]
+      },
+      selectedKind: "wall",
+      selectedWallId: "wall-1",
+      walls: [wall],
+      setUnderlayStatus,
+      mountProps
+    });
+
+    expect(controller.startTransformFromSelection("move")).toBe(false);
+
+    expect(setUnderlayStatus).toHaveBeenCalledWith("Move: selected wall is locked by Align. Unlock the joint first.");
+    expect(mountProps).toHaveBeenCalledOnce();
   });
 });

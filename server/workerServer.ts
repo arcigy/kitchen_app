@@ -4,20 +4,19 @@ import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { requireClientContextFromCookie } from "../src/core/client/session-cookie";
-import { createUserService } from "../src/core/auth/user-service";
-import { createInMemoryUserRepository } from "../src/core/auth/user-repository";
-import { createFileClientCatalogRepository } from "../src/core/catalog/catalog-file-repository";
 import { createStorageService, readScopedStorageFile } from "../src/core/storage/storageService";
 import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "../src/server/authEndpoint";
+import { handleClientProfileApi } from "../src/server/clientEndpoint";
 import { handleModulePackageApi } from "../src/server/modulePackageEndpoint";
 import { handleProjectApi } from "../src/server/projectEndpoint";
+import { handleAssistantApi } from "../src/server/assistantEndpoint";
+import { createServerCatalogRepository, createServerUserService } from "../src/server/serverRepositories";
 import { handleDemosMaterialImage, handleDemosMaterialLookup } from "../src/server/demosMaterialLookup";
+import { createClientCatalogService } from "../src/core/catalog/catalog-service";
 import { runBlenderExport } from "./blender/runBlenderExport";
-import { handlePageVisionValidator } from "./pageVisionValidatorEndpoint";
-import { handleRoomDetailVision } from "./roomDetailVisionEndpoint";
 
 const PROJECT_ROOT = process.cwd();
-const serverUserService = createUserService(createInMemoryUserRepository());
+const serverUserService = createServerUserService();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -40,6 +39,12 @@ const sendText = (res: http.ServerResponse, status: number, text: string) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(text);
+};
+
+const getOptionalFiniteNumber = (value: string | null): number | undefined => {
+  if (value == null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 };
 
 const STATIC_MIME_TYPES: Record<string, string> = {
@@ -345,7 +350,7 @@ const handleOpenBlenderOutput = async (req: http.IncomingMessage, res: http.Serv
 
 const handleCatalog = async (req: http.IncomingMessage, res: http.ServerResponse) => {
   const context = await getValidatedClientContext(req.headers.cookie);
-  const repository = createFileClientCatalogRepository(PROJECT_ROOT);
+  const repository = createServerCatalogRepository(PROJECT_ROOT);
   const catalog = await repository.ensureCatalogExists(context);
   return sendJson(res, 200, { ok: true, catalog });
 };
@@ -353,13 +358,13 @@ const handleCatalog = async (req: http.IncomingMessage, res: http.ServerResponse
 const handleCatalogLookup = async (req: http.IncomingMessage, reqUrl: URL, res: http.ServerResponse) => {
   const context = await getValidatedClientContext(req.headers.cookie);
   const kind = reqUrl.searchParams.get("kind");
-  const id = (reqUrl.searchParams.get("id") ?? "").trim();
-  if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
-
-  const repository = createFileClientCatalogRepository(PROJECT_ROOT);
+  const repository = createServerCatalogRepository(PROJECT_ROOT);
+  const service = createClientCatalogService({ context, repository });
   const catalog = await repository.ensureCatalogExists(context);
 
   if (kind === "material") {
+    const id = (reqUrl.searchParams.get("id") ?? "").trim();
+    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
     const family = reqUrl.searchParams.get("family") ?? "";
     const material =
       catalog.materials.find(
@@ -373,6 +378,8 @@ const handleCatalogLookup = async (req: http.IncomingMessage, reqUrl: URL, res: 
   }
 
   if (kind === "component") {
+    const id = (reqUrl.searchParams.get("id") ?? "").trim();
+    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
     const componentType = reqUrl.searchParams.get("componentType") ?? "";
     const component =
       catalog.components.find(
@@ -381,7 +388,73 @@ const handleCatalogLookup = async (req: http.IncomingMessage, reqUrl: URL, res: 
     return sendJson(res, component ? 200 : 404, { ok: !!component, component });
   }
 
-  return sendJson(res, 400, { ok: false, error: "kind must be material or component." });
+  if (kind === "vendor_product") {
+    const resolution = await service.resolveVendorProductVariant({
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_module") {
+    const resolution = await service.resolveVendorModulePackage({
+      moduleType: reqUrl.searchParams.get("moduleType") ?? undefined,
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_module_seed") {
+    const resolution = await service.resolveVendorModuleSeed({
+      moduleType: reqUrl.searchParams.get("moduleType") ?? undefined,
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence")),
+      applianceCategory: reqUrl.searchParams.get("applianceCategory") ?? undefined,
+      applianceWidthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceWidthMm")),
+      applianceHeightMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceHeightMm")),
+      applianceDepthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceDepthMm"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_catalog_groups") {
+    const groups = await service.listVendorCatalogGroups({
+      includeNeedsReview: reqUrl.searchParams.get("includeNeedsReview") === "true",
+      placementZone: (reqUrl.searchParams.get("placementZone") as "low" | "corner_low" | "tall" | "tall_appliance" | "accessory" | "unknown" | "any" | null) ?? "any",
+      kitchenModuleRole: (reqUrl.searchParams.get("kitchenModuleRole") as "base" | "top" | "tall" | "accessory" | "unknown" | "any" | null) ?? "any",
+      moduleClass: (reqUrl.searchParams.get("moduleClass") as "base" | "corner_base" | "tall" | "appliance_tall" | "accessory" | "unknown" | "any" | null) ?? "any"
+    });
+    return sendJson(res, 200, { ok: true, groups });
+  }
+
+  if (kind === "vendor_catalog_templates") {
+    const templates = await service.listVendorCatalogTemplates({
+      groupId: reqUrl.searchParams.get("groupId") ?? undefined,
+      includeNeedsReview: reqUrl.searchParams.get("includeNeedsReview") === "true",
+      placementZone: (reqUrl.searchParams.get("placementZone") as "low" | "corner_low" | "tall" | "tall_appliance" | "accessory" | "unknown" | "any" | null) ?? "any",
+      kitchenModuleRole: (reqUrl.searchParams.get("kitchenModuleRole") as "base" | "top" | "tall" | "accessory" | "unknown" | "any" | null) ?? "any",
+      moduleClass: (reqUrl.searchParams.get("moduleClass") as "base" | "corner_base" | "tall" | "appliance_tall" | "accessory" | "unknown" | "any" | null) ?? "any"
+    });
+    return sendJson(res, 200, { ok: true, templates });
+  }
+
+  return sendJson(res, 400, { ok: false, error: "kind must be material, component, vendor_product, vendor_module, vendor_module_seed, vendor_catalog_groups, or vendor_catalog_templates." });
 };
 
 const readProjectJson = async (relativePath: string) => {
@@ -697,11 +770,18 @@ export function startWorkerServer() {
 
       if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
 
-      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson);
+      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService: serverUserService });
 
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson);
+      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson, { userService: serverUserService });
 
       if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
+
+      if (
+        await handleClientProfileApi(req, res, url, {
+          getContext: getValidatedClientContext,
+          sendJson
+        })
+      ) return;
 
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res);
 
@@ -740,21 +820,21 @@ export function startWorkerServer() {
         })
       ) return;
 
+      if (
+        await handleAssistantApi(req, res, url, {
+          projectRoot: PROJECT_ROOT,
+          getContext: getValidatedClientContext,
+          getCatalog: async (context) => createServerCatalogRepository(PROJECT_ROOT).ensureCatalogExists(context),
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
       if (req.method === "GET" && url.pathname.startsWith("/storage/")) return await serveStorageFile(req, url, res);
 
       if (req.method === "POST" && url.pathname === "/api/blender/export") return await handleExport(req, res);
 
       if (req.method === "POST" && url.pathname === "/api/blender/open-output") return await handleOpenBlenderOutput(req, res);
-
-      if (req.method === "POST" && url.pathname === "/api/room-detail-vision") {
-        await getValidatedClientContext(req.headers.cookie);
-        return await handleRoomDetailVision(req, res, readJsonBody, sendJson);
-      }
-
-      if (req.method === "POST" && url.pathname === "/api/page-vision-validator") {
-        await getValidatedClientContext(req.headers.cookie);
-        return await handlePageVisionValidator(req, res, readJsonBody, sendJson);
-      }
 
       if (await serveStaticApp(req, res, url)) return;
 

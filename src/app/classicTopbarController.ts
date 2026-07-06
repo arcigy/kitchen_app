@@ -40,6 +40,7 @@ import {
   runToolbarTrimCommand,
   runToolbarUndoCommand,
   runToolbarUnderlayCommand,
+  runToolbarUnpinFromWorktopCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
   runToolbarWardrobeCommand,
@@ -49,6 +50,7 @@ import {
 type KitchenModeActions = {
   enterNew: () => void;
   mountTopbar: (row: HTMLElement) => void;
+  mountModuleCatalog: (host: HTMLElement | null) => void;
 };
 
 type WardrobeModeActions = {
@@ -106,6 +108,8 @@ type ClassicTopbarControllerContext = {
   };
   deleteSelected: () => void;
   duplicateSelected: () => void;
+  canUnpinSelectedModulesFromWorktop: () => boolean;
+  unpinSelectedModulesFromWorktop: () => void;
   enterFloorBoundaryEdit: () => void;
   ensureFloorplanViewerTab: () => void;
   ensureLayoutMode: () => void;
@@ -113,7 +117,6 @@ type ClassicTopbarControllerContext = {
   helpers: HistoryHelpers;
   customFurnitureMode: CustomFurnitureModeActions | null;
   kitchenMode: KitchenModeActions | null;
-  createRequestedUKitchen: () => void;
   fitSelectedKitchenModuleToGap: () => void;
   clientCatalog: ClientCatalog;
   modulePackages: readonly FurnQuoteModulePackage[];
@@ -159,6 +162,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   let hideBtn: HTMLButtonElement | null = null;
   let isolateBtn: HTMLButtonElement | null = null;
   let moveBtn: HTMLButtonElement | null = null;
+  let unpinWorktopBtn: HTMLButtonElement | null = null;
   let unhideAllBtn: HTMLButtonElement | null = null;
   let activeTab: TopbarTab = "architecture";
   let tabHandlersInstalled = false;
@@ -198,6 +202,11 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       unhideAllBtn.disabled = !visible;
     }
     moveBtn?.classList.toggle("active", ctx.transformState.kind === "move" && !!ctx.transformState.stickyMove);
+    setToolButton(unpinWorktopBtn, {
+      title: "Unpin from Worktop",
+      label: "Unpin Worktop",
+      disabled: !ctx.canUnpinSelectedModulesFromWorktop()
+    });
   };
 
   const syncTopbarTabs = () => {
@@ -262,9 +271,9 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   };
 
   const addKitchenTab = (row: HTMLElement) => {
+    ctx.kitchenMode?.mountModuleCatalog(document.getElementById("moduleCatalog"));
     ctx.kitchenMode?.mountTopbar(row);
     const auto = ctx.tb.addGroup("Auto", { row });
-    addButton(auto, { title: "Create U kitchen", label: "Auto U", iconSvg: ctx.I_CABINET, onClick: ctx.createRequestedUKitchen });
     addButton(auto, { title: "Fit selected module into gap", label: "Fit gap", iconSvg: ctx.I_ALIGN, onClick: ctx.fitSelectedKitchenModuleToGap });
   };
 
@@ -307,6 +316,12 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(edit, { title: "Trim", label: "Trim", iconSvg: ctx.I_TRIM, onClick: () => runToolbarTrimCommand(ctx) });
     addButton(edit, { title: "Dimension", label: "Dimension", iconSvg: ctx.I_DIM, onClick: () => runToolbarDimensionCommand(ctx) });
     addButton(edit, { title: "Duplicate", label: "Duplicate", iconSvg: ctx.I_DUP, onClick: () => runToolbarDuplicateCommand(ctx) });
+    unpinWorktopBtn = addButton(edit, {
+      title: "Unpin from Worktop",
+      label: "Unpin Worktop",
+      iconSvg: ctx.I_UNDERLAY,
+      onClick: () => runToolbarUnpinFromWorktopCommand(ctx)
+    });
     hideBtn = ctx.tb.toolButton(edit, {
       title: "Hide",
       label: "Hide",
@@ -386,9 +401,11 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     hideBtn = null;
     isolateBtn = null;
     moveBtn = null;
+    unpinWorktopBtn = null;
     unhideAllBtn = null;
 
     const row = ctx.tb.addRow({ className: "topbar-classic-ribbon" });
+    if (activeTab !== "kitchen") ctx.kitchenMode?.mountModuleCatalog(null);
     if (activeTab === "architecture") addArchitectureTab(row);
     else if (activeTab === "kitchen") addKitchenTab(row);
     else if (activeTab === "livingWall") addLivingWallTab(row);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanSnapBinding } from "./planSnap";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import {
   clearMeasure2DPointerMoveHover,
   clearMeasure3DPointerMoveHover,
@@ -206,6 +207,8 @@ describe("pointer measure click helpers", () => {
     const distance3dMm = vi.fn(() => 2000);
     const setReadout = vi.fn();
     const setFirstPointMarker = vi.fn();
+    const snapPoint3D = vi.fn(() => ({ point: new THREE.Vector3(1, 0, 0), kind: "free" as const }));
+    const applyMeasureAxisAssist3D = vi.fn(() => ({ point: assistedPoint, distancePx: 4 }));
 
     updateMeasure3DPointerMoveHover({
       hit: { point: new THREE.Vector3(1, 0, 0), object },
@@ -213,8 +216,8 @@ describe("pointer measure click helpers", () => {
       measureState,
       cam: () => camera,
       getMeasure3DSnapTargetObject: () => null,
-      snapPoint3D: vi.fn(() => ({ point: new THREE.Vector3(1, 0, 0), kind: "free" as const })),
-      applyMeasureAxisAssist3D: vi.fn(() => ({ point: assistedPoint, distancePx: 4 })),
+      snapPoint3D,
+      applyMeasureAxisAssist3D,
       worldToScreen: vi.fn(() => new THREE.Vector2(10, 20)),
       updateHoverCursor: vi.fn(),
       hideHoverCursor: vi.fn(),
@@ -231,6 +234,8 @@ describe("pointer measure click helpers", () => {
     });
 
     expect(measureState.hoverPoint).toEqual(assistedPoint);
+    expect(snapPoint3D).toHaveBeenCalledWith(new THREE.Vector3(1, 0, 0), object, camera, rect, SNAP_DISTANCE_PX.measure3d);
+    expect(applyMeasureAxisAssist3D).toHaveBeenCalledWith(firstPoint, new THREE.Vector3(1, 0, 0), camera, rect, SNAP_DISTANCE_PX.measure3dAxis);
     expect(measureState.hoverPoint).not.toBe(assistedPoint);
     expect(measureState.hoverSnap).toBe("axis");
     expect(updateHudLine).toHaveBeenCalledWith(hudHoverLine, firstPoint, assistedPoint, 3.5);

@@ -11,12 +11,14 @@ const allowedSystemSeedCatalogFiles = new Set([
   "scripts/testPricingContract.ts",
   "scripts/testModulePropertiesUi.mjs",
   "src/core/catalog/catalog-boundary.test.ts",
+  "src/core/catalog/client-module-assignment.test.ts",
   "src/app/kitchenWorktopVisuals.test.ts",
   "src/core/catalog/catalog-repository.ts",
   "src/core/catalog/catalog-service.test.ts",
+  "src/layout/kitchenMaterialSync.test.ts",
+  "src/layout/placementManager.test.ts",
   "src/core/project-save/project-save.test.ts",
   "src/lib/materials/rendering.test.ts",
-  "src/layout/kitchenAutoLayout.test.ts",
   "src/modules/fwmFurniture/fwmFurniture.test.ts",
   "src/modules/runtime/runtimeCatalog.test.ts"
 ]);

@@ -43,6 +43,7 @@ function readSource(source: string, context: Record<string, unknown>, catalog: C
 }
 
 function matchesFamily(material: MaterialDefinition, family: ModuleContextMaterialFamily) {
+  if (family === "corpus") return material.boardFamily === "body";
   if (family === "shelf") return material.boardFamily === "body";
   return material.boardFamily === family;
 }
@@ -158,7 +159,7 @@ function applyCommercialSelections(
       family === "front" ? "frontsMaterialId" :
       family === "back" ? "backMaterialId" :
       family === "drawer_bottom" ? "drawerBottomMaterialId" :
-      family === "body" || family === "shelf" ? "corpusMaterialId" :
+      family === "corpus" || family === "body" || family === "shelf" ? "corpusMaterialId" :
       null;
     return getMaterialForFamily(sourceField ? context[sourceField] : undefined, family, catalog);
   };

@@ -3,6 +3,7 @@ import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { MeasureState } from "./measureTools";
 import type { PlanSnapBinding } from "./planSnap";
 import { resolveNormalGuideSegment } from "./measureGeometryHelpers";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 export type PointerMeasureViewMode = "2d" | "3d";
 
@@ -98,11 +99,11 @@ export function updateMeasure3DPointerMoveHover(params: {
   }
 
   const snapTarget = params.getMeasure3DSnapTargetObject(params.hit.object);
-  const snapped = params.snapPoint3D(params.hit.point, snapTarget ?? params.hit.object, params.cam(), params.rect, 32);
+  const snapped = params.snapPoint3D(params.hit.point, snapTarget ?? params.hit.object, params.cam(), params.rect, SNAP_DISTANCE_PX.measure3d);
   let kind: MeasureState["hoverSnap"] = snapped.kind;
   let point = snapped.point.clone();
   if (!params.measureState.axisLock && snapped.kind === "free") {
-    const axisAssist = params.applyMeasureAxisAssist3D(params.measureState.firstPoint, point, params.cam(), params.rect, 12);
+    const axisAssist = params.applyMeasureAxisAssist3D(params.measureState.firstPoint, point, params.cam(), params.rect, SNAP_DISTANCE_PX.measure3dAxis);
     if (axisAssist) {
       point = axisAssist.point;
       kind = "axis";
@@ -136,7 +137,7 @@ export function updateLegacySurfaceMeasurePointerMoveHover(params: {
   hit: { point: THREE.Vector3; object: THREE.Mesh } | null;
   rect: DOMRect;
   measureState: Pick<MeasureState, "axisLock" | "firstPoint" | "hoverPoint" | "hoverSnap">;
-  snapPointXZ: (point: THREE.Vector3, object: THREE.Mesh) => { point: THREE.Vector3; kind: MeasureState["hoverSnap"] };
+  snapPointXZ: (point: THREE.Vector3, object: THREE.Mesh, threshold?: number) => { point: THREE.Vector3; kind: MeasureState["hoverSnap"] };
   cam: () => THREE.Camera;
   worldToScreen: (point: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) => THREE.Vector2;
   updateHoverCursor: (point: THREE.Vector2, kind: MeasureState["hoverSnap"]) => void;

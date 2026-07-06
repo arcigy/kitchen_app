@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createMeasureSelectionActions } from "./measureSelectionActions";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
-import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance } from "./localTypes";
+import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 
@@ -25,8 +25,9 @@ function makeMeasureSelectionActionsContext(overrides: Partial<Parameters<typeof
   return {
     S: {
       kitchenGroups: [{ id: "kg1", ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 45 } }],
-      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 }
-    } as AppState,
+      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 },
+      alignLocks: []
+    } as unknown as AppState,
     measureState: { measures: [] } as unknown as MeasureState,
     walls: [],
     floors: [],
@@ -77,6 +78,54 @@ describe("measure selection actions", () => {
     expect(instance.root.position.z).toBe(0.05);
     expect(ctx.inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, "kg1", 45);
     expect(instance.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+  });
+
+  it("blocks measure translation for a module in a locked align joint", () => {
+    const ctx = makeMeasureSelectionActionsContext();
+    ctx.S.alignLocks = [
+      {
+        id: "lock-1",
+        locked: true,
+        a: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "right" },
+        b: { targetKind: "module", targetId: "m2", lineRole: "edge", moduleSide: "left" },
+        pointMm: { x: 0, z: 0 }
+      }
+    ];
+    const instance = ctx.instances[0];
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(actions.translateModuleByMeasure(instance.id, 100, 50)).toBe(false);
+
+    expect(instance.root.position.x).toBe(0);
+    expect(instance.root.position.z).toBe(0);
+    expect(ctx.inferKitchenPlacementBinding).not.toHaveBeenCalled();
+  });
+
+  it("blocks measure translation for a wall in a locked align joint", () => {
+    const wall = {
+      id: "wall-1",
+      params: {
+        aMm: { x: 0, z: 0 },
+        bMm: { x: 1000, z: 0 }
+      }
+    } as WallInstance;
+    const ctx = makeMeasureSelectionActionsContext({ walls: [wall] });
+    ctx.S.alignLocks = [
+      {
+        id: "lock-1",
+        locked: true,
+        a: { targetKind: "wall", targetId: "wall-1", lineRole: "edge" },
+        b: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "back" },
+        pointMm: { x: 0, z: 0 }
+      }
+    ];
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(actions.translateWallByMeasure(wall.id, 100, 50)).toBe(false);
+
+    expect(wall.params.aMm).toEqual({ x: 0, z: 0 });
+    expect(wall.params.bMm).toEqual({ x: 1000, z: 0 });
+    expect(ctx.rebuildWall).not.toHaveBeenCalled();
   });
 
   it("rebuilds floor and refreshes selection highlights after a valid measure translation", () => {
@@ -144,5 +193,43 @@ describe("measure selection actions", () => {
     expect(ctx.applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, instance.kitchenPlacement, 80);
     expect(ctx.updateSelectionHighlights).toHaveBeenCalledOnce();
     expect(ctx.updateLayoutPanel).toHaveBeenCalledOnce();
+  });
+
+  it("blocks worktop align movement for a worktop in a locked align joint", () => {
+    const worktop = {
+      id: "w1",
+      kitchenGroupId: "kg1",
+      params: { path: [{ x: 0, z: 0 }, { x: 1000, z: 0 }] }
+    } as KitchenWorktopInstance;
+    const ctx = makeMeasureSelectionActionsContext({
+      kitchenWorktops: [worktop],
+      findKitchenWorktop: vi.fn((id: string) => (id === worktop.id ? worktop : null))
+    });
+    ctx.S.alignLocks = [
+      {
+        id: "lock-1",
+        locked: true,
+        a: { targetKind: "worktop", targetId: "w1", lineRole: "edge", segmentIndex: 0 },
+        b: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "back" },
+        pointMm: { x: 0, z: 0 }
+      }
+    ];
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(
+      actions.alignKitchenWorktopLine(
+        {
+          targetKind: "worktop",
+          worktopId: worktop.id,
+          segmentIndex: 0,
+          lineRole: "edge"
+        } as AlignPickedLine,
+        100,
+        0
+      )
+    ).toBe(false);
+
+    expect(worktop.params.path).toEqual([{ x: 0, z: 0 }, { x: 1000, z: 0 }]);
+    expect(ctx.rebuildKitchenWorktop).not.toHaveBeenCalled();
   });
 });

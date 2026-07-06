@@ -2,6 +2,7 @@ import { Pool, type PoolClient } from "pg";
 import type { ClientContext } from "../client/client-context";
 import { quotePgIdentifier } from "../database/database-config";
 import { REQUIRED_DATABASE_MIGRATION_VERSION } from "../database/migration-version";
+import { attachPostgresPoolErrorHandler } from "../database/postgres-pool-error-handler";
 import { sanitizeStorageId } from "../storage/storage-types";
 import type { CreateProjectInput, ProjectMetadata, ProjectVersionMetadata } from "./project-types";
 import { createProjectMetadata } from "./project-metadata";
@@ -28,6 +29,7 @@ function getPool(connectionString: string, schema: string): Pool {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000
   });
+  attachPostgresPoolErrorHandler(pool, "project-db", schema);
   pools.set(key, pool);
   return pool;
 }
@@ -35,6 +37,7 @@ function getPool(connectionString: string, schema: string): Pool {
 export async function closePostgresProjectPools(): Promise<void> {
   const openPools = [...pools.values()];
   pools.clear();
+  verifiedSchemas.clear();
   await Promise.all(openPools.map((pool) => pool.end()));
 }
 

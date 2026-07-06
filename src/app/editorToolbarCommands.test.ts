@@ -37,6 +37,7 @@ import {
   runToolbarToggle2dCommand,
   runToolbarUndoCommand,
   runToolbarUnderlayCommand,
+  runToolbarUnpinFromWorktopCommand,
   runToolbarUnhideAllCommand,
   runToolbarWallCommand,
   runToolbarWardrobeCommand,
@@ -179,6 +180,16 @@ describe("editor toolbar commands", () => {
 
     expect(ctx.duplicateSelected).toHaveBeenCalledExactlyOnceWith();
     expect(ctx.deleteSelected).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("routes unpin from worktop through current selection command", () => {
+    const ctx = {
+      unpinSelectedModulesFromWorktop: vi.fn()
+    };
+
+    runToolbarUnpinFromWorktopCommand(ctx);
+
+    expect(ctx.unpinSelectedModulesFromWorktop).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("routes hide toggle through hideSelected and refreshes toolbar visibility", () => {

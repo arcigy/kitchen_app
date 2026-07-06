@@ -73,7 +73,10 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
   };
 
   const getInstanceGeometryMeshes = (inst: LayoutInstance) =>
-    getInstanceGeometryMeshesBase(inst, ctx.getViewMode());
+    getInstanceGeometryMeshesBase(
+      inst,
+      ctx.getViewMode() === "2d" && ctx.getActiveViewerTab() === "floorplan" ? "2d" : "3d"
+    );
 
   const getAllInstanceGeometryMeshes = () => ctx.instances.flatMap((inst) => getInstanceGeometryMeshes(inst));
 

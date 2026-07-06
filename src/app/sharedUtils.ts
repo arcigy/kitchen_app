@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { GrainAlong, OverlapRow } from "../ui/createPartPanel";
+import { SNAP_DISTANCE_M } from "./snapToolProfiles";
 
 export function copyM16(out: Float32Array, m: THREE.Matrix4) {
   const e = m.elements;
@@ -34,8 +35,11 @@ export function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[
   return { point: h.point.clone(), object: h.object as THREE.Mesh };
 }
 
-export function snapPointXZ(point: THREE.Vector3, mesh: THREE.Mesh): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
-  const threshold = 0.015;
+export function snapPointXZ(
+  point: THREE.Vector3,
+  mesh: THREE.Mesh,
+  threshold: number = SNAP_DISTANCE_M.legacySurfaceMeasure
+): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
   const box = new THREE.Box3().setFromObject(mesh);
 
   const cornerCount = 4;

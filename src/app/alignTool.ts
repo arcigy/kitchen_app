@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { AlignPickedLine, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import { worldToScreen } from "./sharedUtils";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 function distPxPointToSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
   const abx = bx - ax;
@@ -20,7 +21,7 @@ export function pickBestAlignLine(
   rect: DOMRect,
   camera: THREE.Camera,
   candidates: AlignPickedLine[],
-  maxPx = 12
+  maxPx: number = SNAP_DISTANCE_PX.alignPick
 ) {
   let best: { line: AlignPickedLine; px: number } | null = null;
   for (const candidate of candidates) {
@@ -31,6 +32,38 @@ export function pickBestAlignLine(
   }
   if (!best || best.px > maxPx) return null;
   return best.line;
+}
+
+function sameVector3(a: THREE.Vector3, b: THREE.Vector3) {
+  return a.distanceToSquared(b) < 1e-10;
+}
+
+export function isSameAlignReference(a: AlignPickedLine, b: AlignPickedLine) {
+  const sameTarget =
+    a.targetKind === b.targetKind &&
+    (a.wallId ?? "") === (b.wallId ?? "") &&
+    (a.instanceId ?? "") === (b.instanceId ?? "") &&
+    (a.worktopId ?? "") === (b.worktopId ?? "") &&
+    a.lineRole === b.lineRole &&
+    (a.segmentIndex ?? -1) === (b.segmentIndex ?? -1);
+  return sameTarget && sameVector3(a.segA, b.segA) && sameVector3(a.segB, b.segB);
+}
+
+export function pickBestCompatibleAlignLine(
+  mousePx: { x: number; y: number },
+  rect: DOMRect,
+  camera: THREE.Camera,
+  candidates: AlignPickedLine[],
+  reference: AlignPickedLine,
+  maxPx: number = SNAP_DISTANCE_PX.alignPick
+) {
+  return pickBestAlignLine(
+    mousePx,
+    rect,
+    camera,
+    candidates.filter((candidate) => areAlignLinesParallel(reference, candidate) && !isSameAlignReference(reference, candidate)),
+    maxPx
+  );
 }
 
 export function buildWallAlignCandidates(args: {

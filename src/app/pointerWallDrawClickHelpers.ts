@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { PlanSnapResult } from "./planSnap";
 import { findParallelWallEndAlignmentGuide, type WallEndAlignmentGuide, type WallAlignmentGuideWall } from "./wallAlignmentGuide";
+import { SNAP_DISTANCE_M, SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 export type PointerWallDrawState = {
   active: boolean;
@@ -34,9 +35,12 @@ function wallDrawAlignmentSnapDistanceM(rect: DOMRect, camera: THREE.Camera) {
   if (camera instanceof THREE.OrthographicCamera) {
     const visibleWidthM = Math.abs(camera.right - camera.left) / Math.max(1e-6, camera.zoom);
     const worldPerPx = visibleWidthM / Math.max(1, rect.width);
-    return Math.min(0.24, Math.max(0.035, worldPerPx * 28));
+    return Math.min(
+      SNAP_DISTANCE_M.wallDrawAlignmentMax,
+      Math.max(SNAP_DISTANCE_M.wallDrawAlignmentMin, worldPerPx * SNAP_DISTANCE_PX.wallDrawAlignmentPx)
+    );
   }
-  return 0.11;
+  return SNAP_DISTANCE_M.wallDrawAlignmentPerspective;
 }
 
 function shouldUseWallAlignmentSnap(params: {
@@ -48,7 +52,7 @@ function shouldUseWallAlignmentSnap(params: {
 }) {
   if (!params.guide) return false;
   const distance = Math.hypot(params.cursor.x - params.guide.snapPoint.x, params.cursor.z - params.guide.snapPoint.z);
-  const limit = params.precisionMm ? 0.0015 : wallDrawAlignmentSnapDistanceM(params.rect, params.camera);
+  const limit = params.precisionMm ? SNAP_DISTANCE_M.wallDrawAlignmentPrecision : wallDrawAlignmentSnapDistanceM(params.rect, params.camera);
   return distance <= limit;
 }
 
@@ -169,12 +173,12 @@ export function resolveWallDrawActiveSnap(params: {
     thresholdPx: number
   ) => PlanSnapResult | null;
 }): PlanSnapResult | null {
-  const snapped = params.snapPoint2D(params.hitPoint, params.rect, params.camera, 14, {
+  const snapped = params.snapPoint2D(params.hitPoint, params.rect, params.camera, SNAP_DISTANCE_PX.wallDraw, {
     sticky: params.sticky
   });
   return snapped.kind !== "none"
     ? snapped
-    : params.keepStickyPlanSnap(params.hitPoint, params.sticky, params.camera, params.rect, 18);
+    : params.keepStickyPlanSnap(params.hitPoint, params.sticky, params.camera, params.rect, SNAP_DISTANCE_PX.wallDrawSticky);
 }
 
 export function updateActiveWallDrawPointerMoveHover(params: {

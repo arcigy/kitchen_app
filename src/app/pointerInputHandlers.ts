@@ -12,7 +12,7 @@ import type {
   WallInstance,
   WindowInstance
 } from "./localTypes";
-import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
+import type { PlanSnapBinding, PlanSnapOwner, PlanSnapResult } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { AppState, ColumnParams, LayoutTool, SelectedKind, WallParams } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
@@ -20,6 +20,7 @@ import type { MeasureState, MarqueeState, WallEditHud } from "./measureTools";
 import type { AssociativeMeasureKind } from "./measureAssociative";
 import type { TechnicalDimensionRecord } from "./technicalDimensions";
 import type { PointerTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
+import { continueMoveAfterObjectSelection } from "./moveToolSelectionFlow";
 import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
 import {
   finishTrimNoChange,
@@ -37,12 +38,20 @@ import { updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { resolveTrimCornerEdit, resolveTrimSingleWallEdit } from "./pointerTrimGeometryHelpers";
 import { createDimensionEditInput, parseDimensionMillimeters, showDimensionInputForPointerEvent } from "./pointerDimensionInputControls";
 import {
+  SNAP_DISTANCE_PX,
+  SNAP_KIND_SCORE,
+  SNAP_PRIORITY_MOVE_OBJECT_LINES,
+  SNAP_PRIORITY_MOVE_OBJECT_POINTS,
+  SNAP_PRIORITY_MOVE_TARGET
+} from "./snapToolProfiles";
+import {
   collectLineMoveKeypoints,
   collectModuleMoveKeypoints,
   collectMoveObjectSnapResults,
   collectOpeningMoveKeypointsForWall,
   constrainMoveDeltaToAxis,
   isOpeningMoveWithinSmartSnapBounds,
+  isSelectedMoveSnapBinding,
   openingMoveBoundsForWall,
   prepareMoveDeltaForSnapMode,
   snapBindingWallId
@@ -50,9 +59,12 @@ import {
 import { applyOpeningSwingControlEdit, handleOpeningSelectionControlClick } from "./pointerOpeningSwingControls";
 import {
   beginPointerMarquee,
+  boundsContainedInRect,
+  boundsOverlapsRect,
   cancelPendingPointerMarqueeHit,
   finishActivePointerMarquee,
   finishPendingPointerMarquee,
+  type ScreenRect,
   updatePointerMarqueePointerMove
 } from "./pointerMarqueeSelection";
 import {
@@ -75,6 +87,7 @@ import {
 import { handleSectionDrawPointClick, updateSectionDrawPointerMoveHover } from "./pointerSectionDrawClickHelpers";
 import { handleKitchenWorktopDrawPointClick, updateKitchenWorktopDrawPointerMoveHover } from "./pointerKitchenWorktopDrawClickHelpers";
 import { handleWallDrawEndClick, handleWallDrawStartClick, updateActiveWallDrawPointerMoveHover, updateWallToolPointerMoveHover } from "./pointerWallDrawClickHelpers";
+import type { SelectionHighlightTarget } from "./layoutVisuals";
 import {
   finishWallEditHudDragPointerUp,
   updateWallEditHudDragPointerMove
@@ -101,6 +114,74 @@ import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./po
 import { finishPointerDragState } from "./pointerDragFinish";
 import { buildModuleMarqueeScreenBounds, buildWallMarqueeScreenPolygon, collectMarqueeHitIds } from "./pointerMarqueeHitGeometry";
 import { clearNonFloorplanFloorSelection } from "./selectionController";
+
+export type KitchenGroupEditTarget = {
+  groupId: string;
+  focusInstanceId: string | null;
+};
+
+export type KitchenDoubleClickAction =
+  | { type: "open-group"; target: KitchenGroupEditTarget }
+  | { type: "open-module-editor"; instanceId: string }
+  | null;
+
+export function resolveKitchenGroupEditTarget(args: {
+  moduleGroupId: string | null | undefined;
+  moduleInstanceId: string | null | undefined;
+  worktopGroupId: string | null | undefined;
+  isKnownGroup: (groupId: string) => boolean;
+}): KitchenGroupEditTarget | null {
+  const moduleGroupId = args.moduleGroupId ?? null;
+  const moduleInstanceId = args.moduleInstanceId ?? null;
+  if (moduleGroupId && moduleInstanceId && args.isKnownGroup(moduleGroupId)) {
+    return { groupId: moduleGroupId, focusInstanceId: moduleInstanceId };
+  }
+  const worktopGroupId = args.worktopGroupId ?? null;
+  if (worktopGroupId && args.isKnownGroup(worktopGroupId)) {
+    return { groupId: worktopGroupId, focusInstanceId: null };
+  }
+  return null;
+}
+
+export function resolveKitchenDoubleClickAction(args: {
+  target: KitchenGroupEditTarget | null;
+  kitchenEditMode: boolean;
+  activeKitchenGroupId: string | null | undefined;
+  moduleEditorActive: boolean;
+}): KitchenDoubleClickAction {
+  if (!args.target) return null;
+  if (!args.kitchenEditMode) return { type: "open-group", target: args.target };
+  if (args.moduleEditorActive) return null;
+  if (args.target.groupId !== args.activeKitchenGroupId) return null;
+  if (!args.target.focusInstanceId) return null;
+  return { type: "open-module-editor", instanceId: args.target.focusInstanceId };
+}
+
+export function shouldStartLayoutMarqueeSelection(args: {
+  button: number;
+  floorEditActive: boolean;
+  isColumnPlacementActive: boolean;
+  isDoorPlacementActive: boolean;
+  isWindowPlacementActive: boolean;
+  layoutTool: string;
+  measureEnabled: boolean;
+  mode: string;
+  placementActive: boolean;
+  transformActive: boolean;
+}) {
+  return (
+    args.mode === "layout" &&
+    args.layoutTool === "select" &&
+    !args.isWindowPlacementActive &&
+    !args.isDoorPlacementActive &&
+    !args.isColumnPlacementActive &&
+    !args.floorEditActive &&
+    !args.transformActive &&
+    !args.placementActive &&
+    !args.measureEnabled &&
+    args.button === 0
+  );
+}
 
 type FloorEditState = {
   active: boolean;
@@ -146,7 +227,7 @@ type PointerPlanSnapOptions = {
   stickyThresholdPx?: number;
   preferNearest?: boolean;
   cycleIndex?: number;
-  ignoreBinding?: (binding: PlanSnapBinding | null | undefined, owner?: "wall" | "module" | "worktop" | "floor" | "measureGuide") => boolean;
+  ignoreBinding?: (binding: PlanSnapBinding | null | undefined, owner?: PlanSnapOwner) => boolean;
 };
 
 type PointerMeasureAxisAssist = { point: THREE.Vector3; distancePx: number };
@@ -214,7 +295,9 @@ type PointerInputHandlersDataContext = {
   autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
   autoJoinAtMmPoint: (point: FloorBoundaryPoint) => void;
   beginKitchenWorktopSelection: (worktopId: string, ev: PointerEvent) => boolean;
+  findSelectableFloorplanWorktopAtPoint: (pointMm: { x: number; z: number }) => string | null;
   beginModuleSelection: (selectableId: string, ev: PointerEvent) => boolean;
+  updateSelectionHover: (target: SelectionHighlightTarget | null) => void;
   bindingFromPlanSnap: (snapped: PlanSnapResult | null, fallbackPoint: THREE.Vector3) => PlanSnapBinding;
   cam: () => THREE.Camera;
   clearDoorPlacementPreview: () => void;
@@ -239,6 +322,7 @@ type PointerInputHandlersDataContext = {
   floorPointToWorld: (point: FloorBoundaryPoint, y?: number) => THREE.Vector3;
   formatMm: (value: THREE.Vector3) => string;
   findInstance: (id: string) => LayoutInstance | null;
+  findKitchenWorktop: (id: string) => { id: string; kitchenGroupId: string } | null;
   findSelectableFloorplanModuleAtPoint: (pointMm: { x: number; z: number }, mousePx: { x: number; y: number }, rect: DOMRect) => string | null;
   fromMmPoint: (point: FloorBoundaryPoint) => THREE.Vector3;
   groundPlane: THREE.Plane;
@@ -246,7 +330,18 @@ type PointerInputHandlersDataContext = {
   hudWallEndAlignmentGuide: THREE.Line;
   hudPickLine1: THREE.Mesh;
   hudPickLine2: THREE.Mesh;
-  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  kitchenMode: {
+    enterExisting?: (groupId: string, focusInstanceId?: string | null) => void;
+    enterModuleEditor?: (instanceId: string) => boolean;
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    findKitchenGroup?: (groupId: string) => { id: string } | null;
+    isTallModuleEditorActive?: () => boolean;
+    getActiveTallEditorInstanceId?: () => string | null;
+    selectTallSubmoduleFromObject?: (instanceId: string | null, object: THREE.Object3D | null | undefined, options?: { additive?: boolean }) => boolean;
+    selectTallSubmodulesFromObjects?: (instanceId: string | null, objects: THREE.Object3D[], options?: { additive?: boolean }) => boolean;
+    getTallSubmoduleHighlightTargetFromObject?: (instanceId: string, object: THREE.Object3D | null | undefined) => SelectionHighlightTarget | null;
+    clearTallSubmoduleSelection?: () => void;
+  } | null;
   getLayoutMeasureMeshes3d: () => THREE.Mesh[];
   getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
   getAllInstanceGeometryMeshes: () => THREE.Mesh[];
@@ -278,6 +373,7 @@ type PointerInputHandlersDataContext = {
   openQuickActionMenu?: (x: number, y: number) => void;
   hudLineThicknessM: (rect: DOMRect) => number;
   isColumnPlacementActive: () => boolean;
+  isModuleAlignLocked: (id: string) => boolean;
   isDoorPlacementActive: () => boolean;
   isObjectPickable: (object: THREE.Object3D | null | undefined) => boolean;
   isVisibilityTargetPickable: (key: string | null | undefined) => boolean;
@@ -355,6 +451,7 @@ type PointerInputHandlersDataContext = {
   setSelectedSection: (id: string | null) => void;
   setSelectedUnderlay: () => void;
   setSelectedWall: (id: string | null) => void;
+  setToolSelect: () => void;
   setSelectedWindow: () => void;
   setUnderlayStatus: (message: string) => void;
   selectMesh: (mesh: THREE.Mesh | null) => void;
@@ -376,7 +473,7 @@ type PointerInputHandlersDataContext = {
     rect: DOMRect,
     thresholdPx?: number
   ) => PointerMeasure3DSnap;
-  snapPointXZ: (point: THREE.Vector3, mesh: THREE.Mesh) => PointerPointSnapXZ;
+  snapPointXZ: (point: THREE.Vector3, mesh: THREE.Mesh, threshold?: number) => PointerPointSnapXZ;
   snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
   startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => boolean;
   syncSelectionState: () => void;
@@ -421,6 +518,7 @@ type PointerInputHandlersDataContext = {
     resetDraft: () => void;
   };
   pickAlignLineAt: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
+  pickCompatibleAlignLineAt: (reference: AlignPickedLine, hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
   pickFloorEditElement: (mouse: { x: number; y: number }, rect: DOMRect) => PickedFloorEditElement | null;
   transformState: PointerTransformState;
   trimState: {
@@ -475,21 +573,6 @@ type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
 type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
 type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
-const MOVE_SNAP_PRIORITY = ["endpoint", "midpoint", "corner", "perpendicular", "edge", "axis"] satisfies Array<
-  Exclude<PlanSnapResult["kind"], "none">
->;
-const MOVE_OBJECT_POINT_SNAP_PRIORITY = ["endpoint", "corner", "midpoint", "perpendicular"] satisfies Array<
-  Exclude<PlanSnapResult["kind"], "none">
->;
-const MOVE_OBJECT_LINE_SNAP_PRIORITY = ["edge", "axis"] satisfies Array<Exclude<PlanSnapResult["kind"], "none">>;
-const MOVE_OBJECT_KIND_SCORE: Partial<Record<Exclude<PlanSnapResult["kind"], "none">, number>> = {
-  endpoint: 0.42,
-  corner: 0.48,
-  midpoint: 0.7,
-  perpendicular: 0.82,
-  edge: 1,
-  axis: 1.08
-};
 
 type MoveKeyPoint = {
   point: THREE.Vector3;
@@ -513,6 +596,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const hasTallSubmodulePickData = (object: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = object;
+    while (current) {
+      if (typeof current.userData?.selectableSubmoduleId === "string" && current.userData.selectableSubmoduleId.trim()) return true;
+      current = current.parent;
+    }
+    return false;
+  };
   const makeNoSnapResult = (point: THREE.Vector3) => ({ point, kind: "none" } satisfies PlanSnapResult);
   const syncKitchenDragBindings = (instanceId: string | null) => {
     if (!instanceId) return;
@@ -526,7 +617,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
     }
   };
-  const updateRaycasterFromPointer = (ev: PointerEvent, rect: DOMRect) => {
+  const updateRaycasterFromPointer = (ev: Pick<PointerEvent, "clientX" | "clientY">, rect: DOMRect) => {
     setPointerNdcFromEvent(ctx.pointerNdc, ev, rect);
     ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
   };
@@ -535,13 +626,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.selectPlanSnap = null;
       return makeNoSnapResult(raw);
     }
-    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 28, {
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), SNAP_DISTANCE_PX.moveTarget, {
       perpendicularFrom: perpendicularFrom ?? null,
-      kindPriority: MOVE_SNAP_PRIORITY,
+      kindPriority: SNAP_PRIORITY_MOVE_TARGET,
       sticky: ctx.selectPlanSnap,
       ignoreBinding: isIgnoredMoveSnapBinding
     });
-    const stickySnap = ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 30);
+    const stickySnap = ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, SNAP_DISTANCE_PX.moveSticky);
     const activeSnap =
       snapped.kind !== "none"
         ? snapped
@@ -567,14 +658,13 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     ctx.hudHoverLine.visible = false;
   };
   const isIgnoredMoveSnapBinding = (binding: PlanSnapBinding | null | undefined) => {
-    if (!binding) return false;
-    if ((binding.type === "wallEndpoint" || binding.type === "wallCenterline") && ctx.transformState.selectedWallIds.includes(binding.wallId)) {
-      return true;
-    }
-    if ((binding.type === "moduleVertex" || binding.type === "moduleEdge") && ctx.transformState.selectedInstanceIds.includes(binding.instanceId)) {
-      return true;
-    }
-    return false;
+    return isSelectedMoveSnapBinding(binding, {
+      wallIds: ctx.transformState.selectedWallIds,
+      instanceIds: ctx.transformState.selectedInstanceIds,
+      sectionIds: ctx.transformState.selectedSectionIds,
+      windowIds: ctx.transformState.selectedWindowIds,
+      doorIds: ctx.transformState.selectedDoorIds
+    });
   };
   const openingMoveBounds = (
     params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number },
@@ -665,9 +755,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const resolveMoveObjectSnap = (delta: THREE.Vector3, rect: DOMRect): MoveObjectSnap | null => {
     const keypoints = collectMoveKeypoints(delta);
     if (keypoints.length === 0) return null;
-    const maxPx = ctx.transformState.moveSnapDisabled ? 18 : 26;
+    const maxPx = ctx.transformState.moveSnapDisabled ? SNAP_DISTANCE_PX.moveObjectFree : SNAP_DISTANCE_PX.moveObject;
     let best: { snap: MoveObjectSnap; score: number } | null = null;
-    const priorityGroups = [MOVE_OBJECT_POINT_SNAP_PRIORITY, MOVE_OBJECT_LINE_SNAP_PRIORITY];
+    const priorityGroups = [SNAP_PRIORITY_MOVE_OBJECT_POINTS, SNAP_PRIORITY_MOVE_OBJECT_LINES];
 
     for (const keypoint of keypoints) {
       for (const kindPriority of priorityGroups) {
@@ -694,7 +784,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
           const sameHostWall = !!keypoint.hostWallId && snapBindingWallId(snap.binding) === keypoint.hostWallId;
           const score =
-            distancePx * (MOVE_OBJECT_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
+            distancePx * (SNAP_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
             (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
             (keypoint.hostWallId && !sameHostWall ? 2 : 0);
           const candidate = {
@@ -724,15 +814,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     ctx.transformState.step = "pickTarget";
     ctx.transformState.typed = "";
     ctx.transformState.lastValidDelta.set(0, 0, 0);
-    ctx.setUnderlayStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
+    ctx.setUnderlayStatus("Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm. Shift = os, N = volny pohyb.");
   };
   const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
-    if (ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements") {
-      if (!ctx.startTransformFromSelection("move", { sticky: true })) return true;
-      armMoveTargetFromBase(basePoint);
-      return true;
-    }
-    return false;
+    void basePoint;
+    return continueMoveAfterObjectSelection(ctx);
   };
   const hasMoveSelection = () =>
     (ctx.selectedWallIds?.size ?? 0) > 0 ||
@@ -755,10 +841,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return constrainMoveDeltaToAxis(delta, firstWall);
   };
   const windowPlacementWallSnapPx = 34;
+  const floorplanWallHoverSnapPx = 6;
   const windowSelectionSnapPx = 20;
-  const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) =>
+  const pickFloorplanWallId = (
+    pMm: { x: number; z: number },
+    mouse: { x: number; y: number },
+    rect: DOMRect,
+    axisSnapPx = windowPlacementWallSnapPx
+  ) =>
     pickResolvedFloorplanWallId({
-      axisSnapPx: windowPlacementWallSnapPx,
+      axisSnapPx,
       cam: ctx.cam(),
       isWallPickable: (id) => isPickableKey(`wall:${id}`),
       mouse,
@@ -800,12 +892,286 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       worldToScreen: ctx.worldToScreen
     });
 
+  const moduleHoverTarget = (id: string | null): SelectionHighlightTarget | null => {
+    if (!id) return null;
+    const selectableId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+    if (!selectableId) return null;
+    const inst = ctx.findInstance(selectableId);
+    if (!ctx.S.kitchenEditMode && inst?.kitchenGroupId && ctx.S.kitchenGroups.some((group) => group.id === inst.kitchenGroupId)) {
+      return { kind: "kitchenGroup", id: inst.kitchenGroupId };
+    }
+    return { kind: "module", id: selectableId };
+  };
+
+  const worktopHoverTarget = (id: string | null): SelectionHighlightTarget | null => {
+    if (!id) return null;
+    const worktop = ctx.findKitchenWorktop(id);
+    if (!worktop) return null;
+    if (ctx.S.kitchenEditMode && worktop.kitchenGroupId !== ctx.S.activeKitchenGroupId) return null;
+    return worktop.kitchenGroupId && ctx.S.kitchenGroups.some((group) => group.id === worktop.kitchenGroupId)
+      ? { kind: "kitchenGroup", id: worktop.kitchenGroupId }
+      : { kind: "worktop", id };
+  };
+
+  const isKnownKitchenGroup = (groupId: string | null | undefined) => {
+    return !!groupId && !!(ctx.kitchenMode?.findKitchenGroup?.(groupId) ?? ctx.S.kitchenGroups.find((group) => group.id === groupId) ?? null);
+  };
+
+  const kitchenGroupIdForModule = (id: string | null | undefined) => {
+    if (!id) return null;
+    const groupId = ctx.findInstance(id)?.kitchenGroupId ?? null;
+    return isKnownKitchenGroup(groupId) ? groupId : null;
+  };
+
+  const kitchenGroupIdForWorktop = (id: string | null | undefined) => {
+    if (!id) return null;
+    const groupId = ctx.findKitchenWorktop(id)?.kitchenGroupId ?? null;
+    return isKnownKitchenGroup(groupId) ? groupId : null;
+  };
+
+  const kitchenGroupTargetForModule = (id: string | null | undefined) => {
+    return resolveKitchenGroupEditTarget({
+      moduleGroupId: kitchenGroupIdForModule(id),
+      moduleInstanceId: id,
+      worktopGroupId: null,
+      isKnownGroup: isKnownKitchenGroup
+    });
+  };
+
+  const kitchenGroupTargetForWorktop = (id: string | null | undefined) => {
+    return resolveKitchenGroupEditTarget({
+      moduleGroupId: null,
+      moduleInstanceId: null,
+      worktopGroupId: kitchenGroupIdForWorktop(id),
+      isKnownGroup: isKnownKitchenGroup
+    });
+  };
+
+  const targetFromPickedObject = (object: THREE.Object3D | null | undefined): SelectionHighlightTarget | null => {
+    if (!object) return null;
+    const windowId = getWindowIdFromObject(object);
+    if (windowId) return { kind: "window", id: windowId };
+    const doorId = getDoorIdFromObject(object);
+    if (doorId) return { kind: "door", id: doorId };
+    const directModuleId = ctx.getInstanceIdFromObject(object);
+    if (directModuleId) {
+      const submoduleTarget = ctx.kitchenMode?.getTallSubmoduleHighlightTargetFromObject?.(directModuleId, object) ?? null;
+      if (submoduleTarget) return submoduleTarget;
+    }
+    const moduleTarget = moduleHoverTarget(directModuleId);
+    if (moduleTarget) return moduleTarget;
+    const worktopTarget = worktopHoverTarget(ctx.getWorktopIdFromObject(object));
+    if (worktopTarget) return worktopTarget;
+    const columnId = ctx.getColumnIdFromObject(object);
+    if (columnId) return { kind: "column", id: columnId };
+    const sectionId = ctx.getSectionIdFromObject(object);
+    if (sectionId) return { kind: "section", id: sectionId };
+    const wallId = (object.userData?.wallId as string | undefined) ?? null;
+    if (wallId) return { kind: "wall", id: wallId };
+    const floorId = (object.userData?.floorId as string | undefined) ?? null;
+    if (floorId) return { kind: "floor", id: floorId };
+    return null;
+  };
+
+  const getProjectedObjectBounds = (objects: THREE.Object3D[], rect: DOMRect) => {
+    const box = new THREE.Box3();
+    for (const object of objects) box.expandByObject(object);
+    if (box.isEmpty()) return null;
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+    ].map((point) => ctx.worldToScreen(point, ctx.cam(), rect));
+    return {
+      minX: Math.min(...corners.map((point) => point.x)),
+      maxX: Math.max(...corners.map((point) => point.x)),
+      minY: Math.min(...corners.map((point) => point.y)),
+      maxY: Math.max(...corners.map((point) => point.y))
+    };
+  };
+
+  const collectTallSubmoduleObjectsInMarquee = (selectionRect: ScreenRect, rect: DOMRect) => {
+    const activeHostId = ctx.kitchenMode?.getActiveTallEditorInstanceId?.() ?? null;
+    const inst = activeHostId ? ctx.findInstance(activeHostId) : null;
+    if (!inst) return null;
+
+    const hits: THREE.Object3D[] = [];
+    const seenSlots = new Set<number>();
+    inst.module.traverse((object) => {
+      const rawId = object.userData?.selectableSubmoduleId;
+      if (typeof rawId !== "string" || !rawId.trim()) return;
+      if (object.parent?.userData?.selectableSubmoduleId === rawId) return;
+
+      const rawSlotIndex = object.userData?.hostSlotIndex;
+      const slotIndex = typeof rawSlotIndex === "number" && Number.isFinite(rawSlotIndex) ? Math.round(rawSlotIndex) : 0;
+      if (slotIndex <= 0 || seenSlots.has(slotIndex)) return;
+
+      const bounds = getProjectedObjectBounds([object], rect);
+      if (!bounds) return;
+      const isHit = ctx.marquee.mode === "contain"
+        ? boundsContainedInRect(bounds, selectionRect)
+        : boundsOverlapsRect(bounds, selectionRect);
+      if (!isHit) return;
+
+      seenSlots.add(slotIndex);
+      hits.push(object);
+    });
+
+    return { activeHostId, hits };
+  };
+
+  const resolveDetailModuleIdFromScreenBounds = (mouse: { x: number; y: number }, rect: DOMRect) => {
+    if (!(ctx.viewMode === "2d" && ctx.activeViewerTab !== "floorplan")) return null;
+    let best: { id: string; area: number; centerDistance: number } | null = null;
+    const tolerancePx = 4;
+
+    for (const inst of ctx.instances) {
+      if (!isPickableKey(`module:${inst.id}`)) continue;
+      if (ctx.kitchenMode && !ctx.kitchenMode.filterSelectableInstanceId(inst.id)) continue;
+      const bounds = getProjectedObjectBounds(ctx.getInstanceGeometryMeshes(inst), rect);
+      if (!bounds) continue;
+      if (
+        mouse.x < bounds.minX - tolerancePx ||
+        mouse.x > bounds.maxX + tolerancePx ||
+        mouse.y < bounds.minY - tolerancePx ||
+        mouse.y > bounds.maxY + tolerancePx
+      ) continue;
+      const area = Math.max(1, (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY));
+      const centerDistance = Math.hypot(mouse.x - (bounds.minX + bounds.maxX) / 2, mouse.y - (bounds.minY + bounds.maxY) / 2);
+      if (!best || area < best.area || (area === best.area && centerDistance < best.centerDistance)) {
+        best = { id: inst.id, area, centerDistance };
+      }
+    }
+
+    return best?.id ?? null;
+  };
+
+  const resolveFloorplanHoverTarget = (ev: PointerEvent): SelectionHighlightTarget | null => {
+    const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    if (!hitPoint) return null;
+    const pMm = ctx.toMmPoint(hitPoint);
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+    if (ctx.S.kitchenEditMode) {
+      const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+      const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+      const directModuleId = ctx.getInstanceIdFromObject(moduleHit);
+      if (directModuleId) {
+        const submoduleTarget = ctx.kitchenMode?.getTallSubmoduleHighlightTargetFromObject?.(directModuleId, moduleHit) ?? null;
+        if (submoduleTarget) return submoduleTarget;
+      }
+      const moduleTarget = moduleHoverTarget(directModuleId ?? (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) ? fallbackModuleId : null));
+      if (moduleTarget) return moduleTarget;
+      const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+      const fallbackWorktopId = ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+      return worktopHoverTarget(ctx.getWorktopIdFromObject(worktopHit) ?? (fallbackWorktopId && isPickableKey(`worktop:${fallbackWorktopId}`) ? fallbackWorktopId : null));
+    }
+    const pickedWindow = pickFloorplanWindow(pMm, mouse, rect);
+    if (pickedWindow) return { kind: "window", id: pickedWindow.id };
+    const pickedDoor = pickFloorplanDoor(pMm, mouse, rect);
+    if (pickedDoor) return { kind: "door", id: pickedDoor.id };
+    const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
+    const sectionId = ctx.getSectionIdFromObject(sectionHit);
+    if (sectionId) return { kind: "section", id: sectionId };
+    const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+    const columnId = ctx.getColumnIdFromObject(columnHit);
+    if (columnId) return { kind: "column", id: columnId };
+    const moduleHits = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false);
+    const moduleHit = moduleHits[0]?.object;
+    const tallSubmoduleModuleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+      ? moduleHits.find((hit) => hasTallSubmodulePickData(hit.object))?.object
+      : null;
+    const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const moduleTarget = moduleHoverTarget(ctx.getInstanceIdFromObject(moduleHit) ?? (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) ? fallbackModuleId : null));
+    if (moduleTarget) return moduleTarget;
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const fallbackWorktopId = ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+    const worktopTarget = worktopHoverTarget(ctx.getWorktopIdFromObject(worktopHit) ?? (fallbackWorktopId && isPickableKey(`worktop:${fallbackWorktopId}`) ? fallbackWorktopId : null));
+    if (worktopTarget) return worktopTarget;
+    const floorId = pickFloorplanFloorBoundary({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      floors: ctx.floors,
+      floorPointToWorld: ctx.floorPointToWorld,
+      isFloorPickable: (id) => isPickableKey(`floor:${id}`),
+      mouse,
+      rect,
+      snapPx: 12,
+      worldToScreen: ctx.worldToScreen
+    });
+    if (floorId) return { kind: "floor", id: floorId };
+    const wallId = pickFloorplanWallId(pMm, mouse, rect, floorplanWallHoverSnapPx);
+    return wallId ? { kind: "wall", id: wallId } : null;
+  };
+
+  const resolveKitchenGroupTargetFromPointer = (ev: Pick<PointerEvent, "clientX" | "clientY">): KitchenGroupEditTarget | null => {
+    if (ctx.S.kitchenEditMode) return null;
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+
+    if (ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan") {
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      if (!hitPoint) return null;
+      const pMm = ctx.toMmPoint(hitPoint);
+      const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+      const moduleId = ctx.getInstanceIdFromObject(moduleHit) ?? ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+      const moduleTarget = kitchenGroupTargetForModule(moduleId);
+      if (moduleTarget) return moduleTarget;
+
+      const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+      return kitchenGroupTargetForWorktop(ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm));
+    }
+
+    updateRaycasterFromPointer(ev, rect);
+    const picks: THREE.Object3D[] = [];
+    picks.push(...ctx.getAllInstanceGeometryMeshes());
+    picks.push(...ctx.getKitchenWorktopGeometryMeshes());
+    const first = ctx.raycaster.intersectObjects(pickableObjects(picks), false)[0]?.object;
+    const moduleId = ctx.getInstanceIdFromObject(first) ?? resolveDetailModuleIdFromScreenBounds(mouse, rect);
+    const moduleTarget = kitchenGroupTargetForModule(moduleId);
+    if (moduleTarget) return moduleTarget;
+    return kitchenGroupTargetForWorktop(ctx.getWorktopIdFromObject(first));
+  };
+
+  const resolve3dHoverTarget = (ev: PointerEvent): SelectionHighlightTarget | null => {
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+    const picks: THREE.Object3D[] = [];
+    picks.push(...ctx.getAllInstanceGeometryMeshes());
+    picks.push(...ctx.getKitchenWorktopGeometryMeshes());
+    picks.push(...ctx.windows.map((inst) => inst.pick));
+    picks.push(...ctx.doors.map((inst) => inst.pick));
+    picks.push(...ctx.getColumnPickMeshes());
+    picks.push(...ctx.getSectionPickMeshes());
+    for (const wall of ctx.walls) picks.push(wall.mesh);
+    for (const floor of ctx.floors) picks.push(floor.mesh);
+    const first = ctx.raycaster.intersectObjects(pickableObjects(picks), false)[0]?.object;
+    const directTarget = targetFromPickedObject(first);
+    if (ctx.S.kitchenEditMode) {
+      if (ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        return directTarget?.kind === "submodule" ? directTarget : null;
+      }
+      const detailModuleTarget = moduleHoverTarget(resolveDetailModuleIdFromScreenBounds(mouse, rect));
+      if (directTarget?.kind === "submodule") return directTarget;
+      if (directTarget?.kind === "module" || directTarget?.kind === "kitchenGroup" || directTarget?.kind === "worktop") return directTarget;
+      return detailModuleTarget;
+    }
+    if (directTarget && directTarget.kind !== "wall" && directTarget.kind !== "floor") return directTarget;
+    return moduleHoverTarget(resolveDetailModuleIdFromScreenBounds(mouse, rect)) ?? directTarget;
+  };
+
   const resolveColumnPlacementPoint = (raw: THREE.Vector3, rect: DOMRect) => {
-    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 24, {
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), SNAP_DISTANCE_PX.columnPlacement, {
       sticky: ctx.selectPlanSnap
     });
     const activeSnap =
-      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 28);
+      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, SNAP_DISTANCE_PX.columnPlacementSticky);
     ctx.selectPlanSnap = activeSnap;
     if (activeSnap && activeSnap.kind !== "none") {
       ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
@@ -906,6 +1272,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
   const cancelPendingMarquee = (pointerId: number) => {
     cancelPendingPointerMarqueeHit(ctx.marquee, ctx.marqueeEl, pointerId);
+  };
+
+  const markPendingMarqueeHit = (pointerId: number) => {
+    if (!ctx.marquee.pending || ctx.marquee.pointerId !== pointerId) return false;
+    ctx.marquee.hitSomething = true;
+    return true;
   };
 
   const pickWindowDimensionParam = (): WindowDimensionParam | null => {
@@ -1038,9 +1410,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
     const columnId = ctx.getColumnIdFromObject(columnHit);
 
-    const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+    const moduleHits = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false);
+    const moduleHit = moduleHits[0]?.object;
+    const tallSubmoduleModuleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+      ? moduleHits.find((hit) => hasTallSubmodulePickData(hit.object))?.object
+      : null;
     const moduleId = ctx.getInstanceIdFromObject(moduleHit);
-    const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const rawFallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const fallbackModuleId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(rawFallbackModuleId) : rawFallbackModuleId;
     const modulePick = resolveFloorplanModulePickCandidates({
       directModuleId: moduleId,
       fallbackModuleId,
@@ -1049,7 +1426,69 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     });
 
     const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
-    const worktopId = ctx.getWorktopIdFromObject(worktopHit);
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+
+    if (ctx.S.kitchenEditMode) {
+      const directSelectableModuleId = modulePick.selectableModuleId ?? null;
+      if (ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, tallSubmoduleModuleHit ?? moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          markPendingMarqueeHit(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return true;
+        }
+        ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
+      if (directSelectableModuleId && ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+        cancelPendingMarquee(ev.pointerId);
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
+      if (modulePick.selectableModuleId || modulePick.fallbackModuleId) ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+      handleFloorplanSelection({
+        execution: {
+          beginModuleSelection: (id) => ctx.beginModuleSelection(id, ev),
+          beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev),
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          continueMoveAfterSelection,
+          hitPoint,
+          pickedDoor: null,
+          pickedWindow: null,
+          selectColumn: ctx.setSelectedColumn,
+          selectDoor: (door) => {
+            ctx.doorInst = door;
+            ctx.setSelectedDoor();
+          },
+          selectFloor: ctx.setSelectedFloor,
+          selectModule: ctx.setSelectedModule,
+          selectSection: ctx.setSelectedSection,
+          selectWall: ctx.setSelectedWall,
+          selectWindow: (window) => {
+            ctx.windowInst = window;
+            ctx.setSelectedWindow();
+          }
+        },
+        selection: {
+          axisWallId: null,
+          columnId: null,
+          fallbackModuleId: modulePick.fallbackModuleId,
+          fallbackModulePickable: modulePick.fallbackModulePickable,
+          floorId: null,
+          pickedDoor: false,
+          pickedWindow: false,
+          polygonWallId: null,
+          sectionId: null,
+          selectableModuleId: modulePick.selectableModuleId,
+          transformSelectElements: ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements",
+          worktopId
+        }
+      });
+      return true;
+    }
 
     const floorId = pickFloorplanFloorBoundary({
       cam: ctx.cam(),
@@ -1117,27 +1556,46 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     });
   };
 
+  ctx.renderer.domElement.addEventListener("dblclick", (ev) => {
+    if (ctx.mode !== "layout" || ctx.layoutTool !== "select") return;
+    const target = resolveKitchenGroupTargetFromPointer(ev);
+    const action = resolveKitchenDoubleClickAction({
+      target,
+      kitchenEditMode: !!ctx.S.kitchenEditMode,
+      activeKitchenGroupId: ctx.S.activeKitchenGroupId,
+      moduleEditorActive: !!ctx.kitchenMode?.isTallModuleEditorActive?.()
+    });
+    if (!action) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (action.type === "open-group") {
+      ctx.kitchenMode?.enterExisting?.(action.target.groupId, action.target.focusInstanceId);
+    } else {
+      ctx.kitchenMode?.enterModuleEditor?.(action.instanceId);
+    }
+  });
+
   ctx.renderer.domElement.addEventListener("pointerdown", (ev) => {
     if (ctx.viewNavigation.handlePointerDown(ev)) {
       return;
     }
 
-    // Marquee selection in layout select tool: left in floorplan, right in any layout view.
-    const startsMarquee =
-      ctx.mode === "layout" &&
-      ctx.layoutTool === "select" &&
-      !ctx.isWindowPlacementActive?.() &&
-      !ctx.isDoorPlacementActive?.() &&
-      !ctx.isColumnPlacementActive?.() &&
-      !ctx.floorEdit.active &&
-      !ctx.transformState.kind &&
-      !ctx.placement.active &&
-      !ctx.measureState.enabled &&
-      ((ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ev.button === 0) || ev.button === 2);
+    // Marquee selection in layout select tool uses the primary button in every layout view.
+    const startsMarquee = shouldStartLayoutMarqueeSelection({
+      button: ev.button,
+      floorEditActive: ctx.floorEdit.active,
+      isColumnPlacementActive: !!ctx.isColumnPlacementActive?.(),
+      isDoorPlacementActive: !!ctx.isDoorPlacementActive?.(),
+      isWindowPlacementActive: !!ctx.isWindowPlacementActive?.(),
+      layoutTool: ctx.layoutTool,
+      measureEnabled: ctx.measureState.enabled,
+      mode: ctx.mode,
+      placementActive: ctx.placement.active,
+      transformActive: !!ctx.transformState.kind
+    });
     if (
       startsMarquee
     ) {
-      if (ev.button === 2) ev.preventDefault();
       const rect = ctx.renderer.domElement.getBoundingClientRect();
       const point = pointerClientPointInRect(ev, rect);
       beginPointerMarquee(ctx.marquee, ctx.marqueeEl, {
@@ -1259,7 +1717,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const snapped =
           ctx.transformState.kind === "move"
             ? (moveSnap ?? makeNoSnapResult(hitPoint))
-            : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
+            : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), SNAP_DISTANCE_PX.transformRotate);
         const p = snapped.kind !== "none" ? snapped.point : hitPoint;
 
         if (
@@ -1269,7 +1727,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
               ctx.selectPlanSnap = null;
               ctx.drawSnapOverlay.hide();
               ctx.hideHoverCursor();
-              ctx.hudHoverLine.visible = false;
+              ctx.clearToolHud();
             },
             clearTransform: ctx.clearTransform,
             commitHistory: () => ctx.commitHistory(ctx.S),
@@ -1324,7 +1782,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const mouse = pointerClientPointInRect(ev, rect2);
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
+        const picked = ctx.alignState.ref
+          ? ctx.pickCompatibleAlignLineAt(ctx.alignState.ref, hitPoint, mouse, rect2)
+          : ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
         handleAlignToolClick({
           picked,
@@ -1334,6 +1794,15 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           commitHistory: () => ctx.commitHistory(ctx.S),
           setStatus: ctx.setUnderlayStatus,
           mountProps: ctx.mountProps,
+          finishAlignTool: () => {
+            ctx.alignState.ref = null;
+            ctx.alignState.hover = null;
+            ctx.alignState.lastA = null;
+            ctx.alignState.lastB = null;
+            ctx.alignState.lastUntilMs = 0;
+            ctx.clearToolHud();
+            ctx.setToolSelect();
+          },
           now: performance.now()
         });
         return;
@@ -1465,7 +1934,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           point = snapped.kind !== "none" ? snapped.point : hitPoint;
           binding = ctx.bindingFromPlanSnap(snapped, point);
           if (!ctx.measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
-            const axisAssist = ctx.applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
+            const axisAssist = ctx.applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.cam(), rect, SNAP_DISTANCE_PX.measure2dAxis);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
@@ -1476,12 +1945,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           const hit = ctx.pickSurfacePoint(ctx.raycaster, ctx.getLayoutMeasureMeshes3d());
           if (!hit) return;
           const snapTarget = ctx.getMeasure3DSnapTargetObject(hit.object);
-          const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, 32);
+          const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, SNAP_DISTANCE_PX.measure3d);
           kind = snapped.kind;
           point = snapped.point;
           binding = ctx.toFreePlanBinding(point);
           if (!ctx.measureState.axisLock && snapped.kind === "free") {
-            const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
+            const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, SNAP_DISTANCE_PX.measure3dAxis);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
@@ -1607,6 +2076,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       if (handleFloorplanSelectPointerDown(ev)) return;
 
+      const pointerRect = ctx.renderer.domElement.getBoundingClientRect();
+      const pointerMouse = pointerClientPointInRect(ev, pointerRect);
       const picks: THREE.Object3D[] = ctx.getAllInstanceGeometryMeshes();
       const windowPicks = ctx.windows.map((inst) => inst.pick);
       const doorPicks = ctx.doors.map((inst) => inst.pick);
@@ -1624,8 +2095,31 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           : doorHit ?? windowHit;
       const firstHit = openingHit && (!hits[0] || openingHit.distance <= hits[0].distance + 0.25) ? openingHit : hits[0];
       const first = firstHit?.object as THREE.Mesh | undefined;
+      const tallSubmoduleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+        ? hits.find((hit) => hasTallSubmodulePickData(hit.object)) ?? null
+        : null;
+      const tallSubmoduleObject = tallSubmoduleHit?.object as THREE.Mesh | undefined;
       const worktopHit3d = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object as THREE.Mesh | undefined;
-      const kind = (first?.userData?.kind as string | undefined) ?? "module";
+      const pickedKind = (first?.userData?.kind as string | undefined) ?? "module";
+      const detailFallbackModuleId = resolveDetailModuleIdFromScreenBounds(pointerMouse, pointerRect);
+      const directModuleId = ctx.getInstanceIdFromObject(first);
+      const shouldUseDetailModuleFallback = !!detailFallbackModuleId && (!first || pickedKind === "wall" || pickedKind === "floor");
+      const id = directModuleId ?? (shouldUseDetailModuleFallback ? detailFallbackModuleId : null);
+      const kind = id ? "module" : pickedKind;
+
+      if (ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        const activeHostId = ctx.getInstanceIdFromObject(tallSubmoduleObject) ?? directModuleId ?? detailFallbackModuleId ?? null;
+        if (tallSubmoduleObject && ctx.kitchenMode.selectTallSubmoduleFromObject?.(activeHostId, tallSubmoduleObject, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          markPendingMarqueeHit(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        ctx.kitchenMode.clearTallSubmoduleSelection?.();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
 
       if (kind === "window") {
         const pickedWindow = findWindowFromObject(first);
@@ -1674,11 +2168,27 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         return;
       }
 
-      const id = ctx.getInstanceIdFromObject(first);
       const columnId = ctx.getColumnIdFromObject(first);
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       const floorId = (first?.userData?.floorId as string | undefined) ?? null;
       const worktopId = ctx.getWorktopIdFromObject(first) ?? ctx.getWorktopIdFromObject(worktopHit3d);
+      if (ctx.S.kitchenEditMode && kind !== "module") {
+        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
+        return;
+      }
+      if (ctx.S.kitchenEditMode && kind === "module" && id && !ctx.kitchenMode?.filterSelectableInstanceId(id)) {
+        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
+        return;
+      }
+      if (ctx.S.kitchenEditMode && kind === "module" && id) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(id, first, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+      }
 
       if (
         executeFallbackPickSelection({
@@ -1918,7 +2428,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           rect,
           resolveMoveDelta: (delta) => resolveMoveDeltaWithObjectSnap(prepareMoveDeltaForSnapMode(delta, ctx.transformState.moveSnapDisabled), rect),
           resolveMoveSnap,
-          resolveRotateSnap: (point, targetRect) => ctx.snapPoint2D(point, targetRect, ctx.cam(), 24, {
+          resolveRotateSnap: (point, targetRect) => ctx.snapPoint2D(point, targetRect, ctx.cam(), SNAP_DISTANCE_PX.transformRotate, {
             sticky: ctx.selectPlanSnap
           }),
           setSelectPlanSnap: (snap) => {
@@ -2000,7 +2510,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         rect,
         alignState: ctx.alignState,
         trimState: ctx.trimState,
-        pickAlignLineAt: ctx.pickAlignLineAt,
+        pickAlignLineAt: ctx.layoutTool === "align" && ctx.alignState.ref
+          ? (hitPoint, mouse, rect) => ctx.pickCompatibleAlignLineAt(ctx.alignState.ref!, hitPoint, mouse, rect)
+          : ctx.pickAlignLineAt,
         hudHoverLine: ctx.hudHoverLine,
         hudPickLine1: ctx.hudPickLine1,
         hudPickLine2: ctx.hudPickLine2,
@@ -2151,6 +2663,30 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       });
     }
 
+    const canShowSelectionHover =
+      ctx.mode === "layout" &&
+      ctx.layoutTool === "select" &&
+      !ctx.placement.active &&
+      !ctx.transformState.kind &&
+      !ctx.dragState.active &&
+      !ctx.windowDragState.active &&
+      !ctx.doorDragState.active &&
+      !ctx.wallEditHud.drag &&
+      !ctx.marquee.active &&
+      !ctx.measureState.enabled &&
+      !ctx.floorEdit.active;
+
+    if (canShowSelectionHover) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const target = ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan"
+        ? resolveFloorplanHoverTarget(ev)
+        : resolve3dHoverTarget(ev);
+      ctx.updateSelectionHover(target);
+    } else {
+      ctx.updateSelectionHover(null);
+    }
+
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && !ctx.dragState.active && !ctx.windowDragState.active && !ctx.doorDragState.active && !ctx.wallEditHud.drag && !ctx.marquee.active) {
       ctx.selectPlanSnap = null;
       ctx.drawSnapOverlay.hide();
@@ -2203,7 +2739,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         kitchenGroups: ctx.S.kitchenGroups,
         defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
         inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding,
-        updateLayoutPanel: ctx.updateLayoutPanel
+        updateLayoutPanel: ctx.updateLayoutPanel,
+        isModuleAlignLocked: ctx.isModuleAlignLocked
       });
       return;
     }
@@ -2231,6 +2768,10 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       planarDistanceMm: ctx.planarDistanceMm,
       formatMm: ctx.formatMm
     });
+  });
+
+  ctx.renderer.domElement.addEventListener("pointerleave", () => {
+    ctx.updateSelectionHover(null);
   });
 
   ctx.renderer.domElement.addEventListener("pointerup", (ev) => {
@@ -2319,6 +2860,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       finishActivePointerMarquee({
         additive: ev.shiftKey,
+        applyCustomSelection: (selectionRect, additive) => {
+          if (!ctx.S.kitchenEditMode || !ctx.kitchenMode?.isTallModuleEditorActive?.()) return false;
+          if (!ctx.kitchenMode.selectTallSubmodulesFromObjects) return false;
+          const submoduleHits = collectTallSubmoduleObjectsInMarquee(selectionRect, rect);
+          if (!submoduleHits) return false;
+          ctx.kitchenMode.selectTallSubmodulesFromObjects(submoduleHits.activeHostId, submoduleHits.hits, { additive });
+          return true;
+        },
         collectHitIds: (selectionRect) => {
           const instBounds = (id: string) => {
             const inst = ctx.findInstance(id);

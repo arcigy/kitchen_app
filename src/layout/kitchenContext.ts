@@ -47,7 +47,7 @@ export interface KitchenContext {
 }
 
 const FALLBACK_KITCHEN_DEFAULTS = {
-  carcassMaterialId: "mat.board.body.dtd.grey.18",
+  carcassMaterialId: "mat.board.body.dtd.white.18",
   frontMaterialId: "mat.board.front.veneer.oak_natural.19",
   worktopMaterialId: "mat.board.worktop.laminate_oak.38",
   backPanelMaterialId: "mat.board.back.hdf.grey.6",

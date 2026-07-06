@@ -3,11 +3,14 @@ import type { LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallP
 import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import type { PlacementHelpers } from "../layout/placementManager";
+import { rotateActivePlacement } from "../layout/placementManager";
 import type { KeyboardTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
 import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 import { resolveSelectedIds } from "./selectionController";
+import { SNAP_DISTANCE_M } from "./snapToolProfiles";
+import { hasLockedAlignModule } from "./alignLocks";
 
 type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thicknessMm" | "typeId"> & {
   justification: NonNullable<WallParams["justification"]>;
@@ -28,6 +31,7 @@ type KeyboardInputHandlersContext = {
   cancelPlacement: (state: AppState, helpers: PlacementHelpers) => void;
   cancelWindowPlacement?: () => void;
   clearTransform: (opts?: TransformClearOptions) => void;
+  clearSelection: () => void;
   clearWallDrawState: () => void;
   commitHistory: (state: AppState) => void;
   commitKitchenWorktopTypedLength: () => boolean;
@@ -231,6 +235,7 @@ type LayoutSpaceShortcutCommandContext = Pick<
 >;
 
 type DeleteSelectionShortcutCommandContext = Pick<KeyboardInputHandlersContext, "deleteSelected">;
+type ClearSelectionShortcutCommandContext = Pick<KeyboardInputHandlersContext, "clearSelection">;
 
 type KeyboardShortcutLike = Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey">;
 type KeyboardKeyLike = Pick<KeyboardEvent, "key">;
@@ -258,7 +263,7 @@ type PlacementShortcutCommandContext = Pick<
   | "isDoorPlacementActive"
   | "isWindowPlacementActive"
   | "rotateDoorPlacement"
->;
+> & Partial<Pick<KeyboardInputHandlersContext, "placement" | "placementHelpers" | "S">>;
 
 type FloorEditEscapeCommandContext = Pick<
   KeyboardInputHandlersContext,
@@ -289,7 +294,7 @@ type TransformRotateTypedAngleCommandContext = Pick<
 
 type TransformMoveTypedDistanceCommandContext = Pick<
   KeyboardInputHandlersContext,
-  "applyMoveDelta" | "clearTransform" | "commitHistory" | "mountProps" | "S" | "setUnderlayStatus" | "transformState"
+  "applyMoveDelta" | "clearTransform" | "commitHistory" | "mountProps" | "S" | "setUnderlayStatus" | "transformState" | "wallTypedHud"
 >;
 
 type TransformMoveSelectElementsCommandContext = Pick<
@@ -309,6 +314,7 @@ type LayoutKeyboardCommandContext = ActivePlacementEscapeCommandContext &
   LayoutToolShortcutCommandContext &
   LayoutSpaceShortcutCommandContext &
   WallTypedLengthCommandContext &
+  ClearSelectionShortcutCommandContext &
   DeleteSelectionShortcutCommandContext &
   Pick<KeyboardInputHandlersContext, "handleLayoutEscape" | "mode" | "viewMode">;
 
@@ -507,6 +513,7 @@ export function nudgeSelectedModulesByDeltaMm(args: {
   defaultWorktopBackOffsetMm: number;
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
   updateLayoutPanel: () => void;
+  alignLocks?: AppState["alignLocks"];
 }) {
   const instanceIds = resolveSelectedIds({
     selectedIds: args.selectedInstanceIds,
@@ -515,6 +522,7 @@ export function nudgeSelectedModulesByDeltaMm(args: {
     singleKind: "module"
   });
   if (instanceIds.length === 0) return false;
+  if (hasLockedAlignModule(instanceIds, args.alignLocks)) return false;
 
   let moved = false;
   for (const id of instanceIds) {
@@ -542,7 +550,7 @@ export function nudgeSelectedModulesByDeltaMm(args: {
       instanceIds.length === 1
         ? args.snapPositionDetailed(instance, desiredPlaced, {
             stickyNeighborId: null,
-            snapDistanceM: instance.kitchenGroupId ? 0.12 : undefined
+            snapDistanceM: instance.kitchenGroupId ? SNAP_DISTANCE_M.kitchenKeyboardPlacement : undefined
           }).position
         : desiredPlaced;
     instance.root.position.copy(snapped);
@@ -621,7 +629,8 @@ export function runKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionComm
       kitchenGroups: ctx.S.kitchenGroups,
       defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
       inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding,
-      updateLayoutPanel: ctx.updateLayoutPanel
+      updateLayoutPanel: ctx.updateLayoutPanel,
+      alignLocks: ctx.S.alignLocks
     }) || moved;
 
   moved =
@@ -751,6 +760,12 @@ export function runDeleteSelectionShortcutCommand(ctx: DeleteSelectionShortcutCo
   return ctx.deleteSelected();
 }
 
+export function runClearSelectionShortcutCommand(ctx: ClearSelectionShortcutCommandContext, ev: KeyboardKeyLike) {
+  if (ev.key !== "Escape") return false;
+  ctx.clearSelection();
+  return true;
+}
+
 export function runDrawingSpaceShortcutCommand(ctx: DrawingSpaceShortcutCommandContext, ev: KeyboardSpaceLike) {
   if (ev.key !== " " && ev.code !== "Space") return false;
   if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.mode === "layout" && ctx.viewMode === "2d") {
@@ -783,6 +798,9 @@ export function runPlacementShortcutCommand(
   }
   if ((ev.key === " " || ev.code === "Space") && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
     return true;
+  }
+  if ((ev.key === " " || ev.code === "Space") && !ev.shiftKey && ctx.placement?.active && ctx.S && ctx.placementHelpers) {
+    return rotateActivePlacement(ctx.S, ctx.placementHelpers);
   }
   return false;
 }
@@ -921,7 +939,7 @@ export function runTransformMoveSnapToggleCommand(ctx: TransformMoveSnapToggleCo
     ctx.transformState.moveSnapDisabled
       ? "Move: free movement in 1 mm steps. Snapping off. N = snapping on."
       : ctx.transformState.step === "pickTarget"
-        ? "Move: snapping on. Click target point, or move mouse and type distance. N = free movement."
+        ? "Move: snapping on. Zvol cielovy bod, alebo namier smer a napis vzdialenost. N = free movement."
         : "Move: snapping on. N = free movement."
   );
   return true;
@@ -961,11 +979,16 @@ export function runTransformRotateTypedAngleCommand(ctx: TransformRotateTypedAng
 export function runTransformMoveTypedDistanceCommand(ctx: TransformMoveTypedDistanceCommandContext, ev: KeyboardKeyLike) {
   if (ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickTarget") return false;
 
+  const updateMoveTypedHud = () =>
+    updatePointerTypedHud(ctx.wallTypedHud, ctx.transformState.typed, ctx.transformState.lastPointerPx ?? { x: 0, y: 0 });
+  const hideMoveTypedHud = () => updatePointerTypedHud(ctx.wallTypedHud, "", ctx.transformState.lastPointerPx ?? { x: 0, y: 0 });
+
   const isNumberChar = ev.key.length === 1 && ((ev.key >= "0" && ev.key <= "9") || ev.key === "," || ev.key === ".");
   if (isNumberChar) {
     const next = `${ctx.transformState.typed}${ev.key}`.replace(/,/g, ".");
     if (/^\d*\.?\d*$/.test(next)) {
       ctx.transformState.typed = next.slice(0, 8);
+      updateMoveTypedHud();
       ctx.setUnderlayStatus(`Move: ${ctx.transformState.typed} mm (Enter)`);
     }
     return true;
@@ -973,7 +996,8 @@ export function runTransformMoveTypedDistanceCommand(ctx: TransformMoveTypedDist
 
   if (ev.key === "Backspace") {
     ctx.transformState.typed = ctx.transformState.typed.slice(0, -1);
-    ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Move: ${ctx.transformState.typed} mm (Enter)` : "Move: click target point, or move mouse for direction and type distance.");
+    updateMoveTypedHud();
+    ctx.setUnderlayStatus(ctx.transformState.typed.length ? `Move: ${ctx.transformState.typed} mm (Enter)` : "Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm.");
     return true;
   }
 
@@ -982,6 +1006,7 @@ export function runTransformMoveTypedDistanceCommand(ctx: TransformMoveTypedDist
     const direction = ctx.transformState.lastValidDelta.clone();
     if (!Number.isFinite(distanceMm) || distanceMm <= 0) {
       ctx.transformState.typed = "";
+      hideMoveTypedHud();
       ctx.setUnderlayStatus("Move: type a positive distance in mm.");
       return true;
     }
@@ -993,6 +1018,7 @@ export function runTransformMoveTypedDistanceCommand(ctx: TransformMoveTypedDist
     const continueMove = !!ctx.transformState.stickyMove;
     ctx.applyMoveDelta(requestedDelta);
     if (ctx.transformState.lastValidDelta.distanceTo(requestedDelta) > 1e-6) {
+      hideMoveTypedHud();
       ctx.clearTransform({
         restore: true,
         continueMove,
@@ -1002,6 +1028,7 @@ export function runTransformMoveTypedDistanceCommand(ctx: TransformMoveTypedDist
       return true;
     }
     ctx.commitHistory(ctx.S);
+    hideMoveTypedHud();
     ctx.clearTransform({
       continueMove,
       status: continueMove ? "Move: done. Select next element, or click Move again to exit." : "Move: done."
@@ -1089,6 +1116,11 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
     return true;
   }
 
+  if (runClearSelectionShortcutCommand(ctx, ev)) {
+    ev.preventDefault();
+    return true;
+  }
+
   if (runDeleteSelectionShortcutCommand(ctx, ev)) {
     ev.preventDefault();
     return true;
@@ -1101,6 +1133,11 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
   if (handleGlobalUndoRedoShortcut(ctx, ev)) return true;
   if (ev.defaultPrevented) return true;
   if (ctx.isTypingTarget(ev.target) && ev.key !== "Escape") return true;
+
+  if (ev.key === "Delete" && runDeleteSelectionShortcutCommand(ctx, ev)) {
+    ev.preventDefault();
+    return true;
+  }
 
   if (runPlacementShortcutCommand(ctx, ev)) {
     ev.preventDefault();
@@ -1115,6 +1152,15 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
   }
 
   if (runKitchenWorktopTypedInputCommand(ctx, ev)) {
+    ev.preventDefault();
+    return true;
+  }
+
+  if (runLayoutTransformKeyboardCommand(ctx, ev)) {
+    return true;
+  }
+
+  if (ev.key === "Escape" && runClearSelectionShortcutCommand(ctx, ev)) {
     ev.preventDefault();
     return true;
   }

@@ -90,6 +90,8 @@ export type LayoutSnapshot = {
   sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
   worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
+  alignLockCounter?: number;
+  alignLocks?: AlignLock[];
   customFurnitureCounter?: number;
   customFurniture?: Array<{ id: string; params: CustomFurnitureParams }>;
   wardrobe?: WardrobeEditSaveState | null;
@@ -243,6 +245,24 @@ export type AlignPickedLine = {
   segmentIndex?: number;
 };
 
+export type AlignLockModuleSide = "left" | "right" | "front" | "back";
+
+export type AlignLockEndpoint = {
+  targetKind: AlignPickedLine["targetKind"];
+  targetId: string;
+  lineRole: AlignPickedLine["lineRole"];
+  segmentIndex?: number;
+  moduleSide?: AlignLockModuleSide;
+};
+
+export type AlignLock = {
+  id: string;
+  locked: boolean;
+  a: AlignLockEndpoint;
+  b: AlignLockEndpoint;
+  pointMm: { x: number; z: number };
+};
+
 export interface AppState {
   // Scene & rendering
   mode: AppMode;
@@ -281,6 +301,8 @@ export interface AppState {
   kitchenEditMode: boolean;
   activeKitchenGroupId: string | null;
   kitchenGroups: KitchenGroup[];
+  alignLocks: AlignLock[];
+  alignLockCounter: number;
 
   // Selection
   layoutTool: LayoutTool;
@@ -372,6 +394,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     kitchenEditMode: false,
     activeKitchenGroupId: null,
     kitchenGroups: [],
+    alignLocks: [],
+    alignLockCounter: 1,
 
     layoutTool: "select",
     selectedKind: null,

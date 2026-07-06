@@ -51,7 +51,8 @@ function darken(hex: string, amount = 0.42): string {
 }
 
 function tokens(material: MaterialDefinition): string {
-  return `${material.id} ${material.displayName} ${material.name} ${material.decor} ${material.color} ${material.finish} ${material.category} ${material.tags.join(" ")}`.toLowerCase();
+  const tags = Array.isArray(material.tags) ? material.tags.join(" ") : "";
+  return `${material.id} ${material.displayName} ${material.name} ${material.decor} ${material.color} ${material.finish} ${material.category} ${tags}`.toLowerCase();
 }
 
 function internalMaterialIdFor(material: MaterialDefinition): string {

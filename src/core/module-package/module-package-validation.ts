@@ -57,7 +57,7 @@ const VALID_CONTEXT_TRANSFORMS = new Set<ModuleContextBindingTransform>([
   "handleGeometryKind",
   "componentNominalLength"
 ]);
-const VALID_CONTEXT_MATERIAL_FAMILIES = new Set(["body", "front", "back", "drawer_box", "drawer_bottom", "worktop", "shelf"]);
+const VALID_CONTEXT_MATERIAL_FAMILIES = new Set(["corpus", "body", "front", "back", "drawer_box", "drawer_bottom", "worktop", "shelf"]);
 const SAFE_CONTEXT_SOURCE = /^(ctx|catalog|constant)\.[A-Za-z0-9_.-]+$/;
 const ARBITRARY_CODE_KEYS = new Set(["code", "script", "sourceCode", "js", "ts", "eval", "dynamicImport", "modulePath"]);
 const SAFE_ASSET_MIME = new Set(["image/png", "image/jpeg", "image/webp", "application/json"]);
@@ -264,6 +264,66 @@ function validateBehavior(modulePackage: FurnQuoteModulePackage, errors: string[
   }
 }
 
+function validateParameterPresets(modulePackage: FurnQuoteModulePackage, errors: string[]) {
+  const parameterPresets = modulePackage.parameterPresets;
+  if (!parameterPresets) return;
+  if (!Array.isArray(parameterPresets.freeParameterKeys)) {
+    errors.push("parameterPresets.freeParameterKeys must be an array");
+    return;
+  }
+  const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
+  const freeKeys = new Set(parameterPresets.freeParameterKeys);
+  for (const duplicate of findDuplicates(parameterPresets.freeParameterKeys)) {
+    errors.push(`duplicate free preset parameter key: ${duplicate}`);
+  }
+  for (const key of freeKeys) {
+    if (!parameterKeys.has(key) && !["materialAssignments", "commercialSelections"].includes(key)) {
+      errors.push(`preset free parameter does not exist: ${key}`);
+    }
+  }
+  if (!Array.isArray(parameterPresets.presets)) {
+    errors.push("parameterPresets.presets must be an array");
+    return;
+  }
+  for (const duplicate of findDuplicates(parameterPresets.presets.map((preset) => preset.presetId))) {
+    errors.push(`duplicate parameter preset id: ${duplicate}`);
+  }
+  for (const preset of parameterPresets.presets) {
+    if (!preset.presetId?.trim()) errors.push("parameter preset id is required");
+    if (!preset.label?.trim()) errors.push(`parameter preset ${preset.presetId || "(missing)"} label is required`);
+    if (!preset.note?.trim()) errors.push(`parameter preset ${preset.presetId || "(missing)"} note is required`);
+    if (!isRecord(preset.parameterValues)) {
+      errors.push(`parameter preset ${preset.presetId || "(missing)"} parameterValues must be an object`);
+      continue;
+    }
+    for (const key of Object.keys(preset.parameterValues)) {
+      if (freeKeys.has(key)) errors.push(`parameter preset ${preset.presetId} must not write free parameter ${key}`);
+      if (!parameterKeys.has(key)) errors.push(`parameter preset ${preset.presetId} writes missing parameter ${key}`);
+    }
+    for (const ratio of preset.ratioParameters ?? []) {
+      if (!parameterKeys.has(ratio.parameterKey)) errors.push(`parameter preset ${preset.presetId} ratio parameter does not exist: ${ratio.parameterKey}`);
+      if (!parameterKeys.has(ratio.countParameter)) errors.push(`parameter preset ${preset.presetId} ratio count parameter does not exist: ${ratio.countParameter}`);
+      if (freeKeys.has(ratio.parameterKey)) errors.push(`parameter preset ${preset.presetId} must not ratio-write free parameter ${ratio.parameterKey}`);
+      if (!Array.isArray(ratio.ratios) || ratio.ratios.length === 0) {
+        errors.push(`parameter preset ${preset.presetId} ratio ${ratio.parameterKey} must define ratios`);
+      }
+      for (const value of ratio.ratios) {
+        if (!Number.isFinite(value) || value <= 0) errors.push(`parameter preset ${preset.presetId} ratio ${ratio.parameterKey} must contain positive numbers`);
+      }
+      if (ratio.order && !["bottom-up", "top-down"].includes(ratio.order)) {
+        errors.push(`parameter preset ${preset.presetId} ratio ${ratio.parameterKey} has invalid order`);
+      }
+      if (ratio.indexedParameterPrefix && ratio.indexedParameterSuffix) {
+        for (let index = 1; index <= ratio.ratios.length; index += 1) {
+          const key = `${ratio.indexedParameterPrefix}${index}${ratio.indexedParameterSuffix}`;
+          if (!parameterKeys.has(key)) errors.push(`parameter preset ${preset.presetId} indexed ratio parameter does not exist: ${key}`);
+          if (freeKeys.has(key)) errors.push(`parameter preset ${preset.presetId} must not ratio-write free parameter ${key}`);
+        }
+      }
+    }
+  }
+}
+
 export function validateFurnQuoteModulePackage(
   input: FurnQuoteModulePackage,
   options: ModulePackageValidationOptions = {}
@@ -288,6 +348,7 @@ export function validateFurnQuoteModulePackage(
   validateGeometry(input, errors);
   validateAssets(input, errors);
   validateBehavior(input, errors);
+  validateParameterPresets(input, errors);
   validateCompatibility(input, options, errors);
 
   if (input.integrity?.packageHash) {

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { worldToScreen } from "./sharedUtils";
 import { distPxPointToSeg } from "./screenGeometry";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import {
   floorPointToWorld,
   makeFloorCirclePoints
@@ -109,7 +110,7 @@ export function pickFloorEditElement(opts: {
       const p = floorEdit.segments[i][endpoint];
       const s = worldToScreen(floorPointToWorld(p), camera, rect);
       const px = Math.hypot(mousePx.x - s.x, mousePx.y - s.y);
-      if (px <= 12 && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: i, endpoint }, px };
+      if (px <= SNAP_DISTANCE_PX.floorEditVertex && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: i, endpoint }, px };
     }
   }
   if (bestVertex) return { kind: "vertex" as const, ref: bestVertex.ref };
@@ -120,7 +121,7 @@ export function pickFloorEditElement(opts: {
     const a = worldToScreen(floorPointToWorld(segment.a), camera, rect);
     const b = worldToScreen(floorPointToWorld(segment.b), camera, rect);
     const px = distPxPointToSeg(mousePx.x, mousePx.y, a.x, a.y, b.x, b.y);
-    if (px <= 10 && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: i, px };
+    if (px <= SNAP_DISTANCE_PX.floorEditSegment && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: i, px };
   }
   if (bestSegment) return { kind: "segment" as const, segmentIndex: bestSegment.segmentIndex };
   return null;

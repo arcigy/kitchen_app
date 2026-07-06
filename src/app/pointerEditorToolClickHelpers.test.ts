@@ -247,6 +247,27 @@ describe("pointer editor tool click helpers", () => {
     expect(setStatus).toHaveBeenCalledWith("Aligned.");
   });
 
+  it("finishes the align tool after one successful align when requested", () => {
+    const ref = line("ref");
+    const picked = line("picked");
+    const state = { ref, lastA: null, lastB: null, lastUntilMs: 0 };
+    const finishAlignTool = vi.fn();
+
+    handleAlignToolClick({
+      picked,
+      alignState: state,
+      applyAlignBetweenPickedLines: () => ({ ok: true, reason: "Aligned." }),
+      updateSelectionHighlights: vi.fn(),
+      commitHistory: vi.fn(),
+      setStatus: vi.fn(),
+      mountProps: vi.fn(),
+      finishAlignTool,
+      now: 100
+    });
+
+    expect(finishAlignTool).toHaveBeenCalledOnce();
+  });
+
   it("stores align recent feedback lines for the current feedback window", () => {
     const ref = line("ref");
     const picked = line("picked");

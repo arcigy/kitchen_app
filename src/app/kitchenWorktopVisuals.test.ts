@@ -40,11 +40,13 @@ describe("kitchenWorktopVisuals", () => {
     const catalog = getSystemSeedCatalog();
     const solid = makeKitchenWorktopMaterial(sampleWorktop.materialId, { catalog });
     const preview = makeKitchenWorktopMaterial(sampleWorktop.materialId, { preview: true, catalog });
+    const empty = makeKitchenWorktopMaterial("", { catalog });
 
     expect(solid.transparent).toBe(false);
     expect(solid.opacity).toBe(1);
     expect(preview.transparent).toBe(true);
     expect(preview.opacity).toBe(0.52);
+    expect(solid.color.getHex()).not.toBe(empty.color.getHex());
     expect(kitchenWorktopOutlineColor(sampleWorktop.materialId, catalog)).toBeTypeOf("number");
   });
 
@@ -64,6 +66,26 @@ describe("kitchenWorktopVisuals", () => {
     expect(positions.getX(0)).toBe(positions.getX(positions.count - 1));
     expect(positions.getZ(0)).toBe(positions.getZ(positions.count - 1));
     expect(guide.getAttribute("position").count).toBe(2);
+  });
+
+  it("extends the rendered worktop outline with real module coverage polygons", () => {
+    const outline = makeKitchenWorktopOutlineGeometry(sampleWorktop, true, {
+      coveragePolygons: [
+        [
+          new Vector3(900 / 1000, 0, 480 / 1000),
+          new Vector3(1500 / 1000, 0, 480 / 1000),
+          new Vector3(1500 / 1000, 0, 980 / 1000),
+          new Vector3(900 / 1000, 0, 980 / 1000)
+        ]
+      ]
+    });
+    const positions = outline.getAttribute("position");
+    let maxZ = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < positions.count; index += 1) {
+      maxZ = Math.max(maxZ, positions.getZ(index));
+    }
+
+    expect(maxZ).toBeGreaterThan(0.9);
   });
 
   it("creates back guide geometry from provided path", () => {

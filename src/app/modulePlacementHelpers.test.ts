@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
-import type { AppState } from "../layout/appState";
+import type { AlignLock, AppState } from "../layout/appState";
 import { createModulePlacementHelpers, type ModulePlacementHelpersContext } from "./modulePlacementHelpers";
 import type { KitchenWorktopInstance, LayoutInstance } from "./localTypes";
 
@@ -50,9 +50,10 @@ function makeContext(instance: LayoutInstance, getKitchenGuideSegmentInfo = vi.f
     kitchenWorktops: [worktop(instance.kitchenGroupId ?? "missing")],
     walls: [],
     S: {
-      kitchenGroups: [{ id: "kg1", ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 45 } }],
-      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 }
-    } as Pick<AppState, "kitchenCtx" | "kitchenGroups">,
+      kitchenGroups: [{ id: "kg1", name: "Kitchen", instanceIds: [], ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 45 } }],
+      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 },
+      alignLocks: [] as AlignLock[]
+    },
     roomBounds: { halfW: 10, halfD: 10 },
     wallSolvedOutlines: new Map(),
     moduleAdjacencyGroup: new THREE.Group(),
@@ -124,4 +125,113 @@ describe("module placement helpers", () => {
     expect(getKitchenCornerArmBindingInfo).toHaveBeenCalledExactlyOnceWith(corner, 45);
     expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(neighbor, neighbor.kitchenPlacement, 45);
   });
+
+  it("does not push the protected moved-to-anchor module when the anchor width changes", () => {
+    const left = moduleInstance("kg1");
+    left.id = "drawer";
+    left.params = { type: "drawer_low", width: 600 } as LayoutInstance["params"];
+    const right = moduleInstance("kg1");
+    right.id = "shelf";
+    right.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
+      ["shelf", new THREE.Box3(new THREE.Vector3(0.08, 0, -0.3), new THREE.Vector3(0.68, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0.2, 0.8, 0.3)));
+    const ctx = makeContext(left);
+    ctx.instances = [left, right];
+    ctx.S.alignLocks = [lockedModulePair("drawer", "right", "shelf", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(left, prevBoxes.get("drawer")!, prevBoxes).movedIds).toEqual([]);
+    expect(right.root.position.x).toBeCloseTo(0);
+
+    right.root.position.set(0, 0, 0);
+    currentBoxes.set("drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(-0.1, 0.8, 0.3)));
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(left, prevBoxes.get("drawer")!, prevBoxes).movedIds).toEqual([]);
+    expect(right.root.position.x).toBeCloseTo(0);
+  });
+
+  it("does not push a protected shelf from a locked corner anchor resize", () => {
+    const corner = cornerModule();
+    const shelf = moduleInstance("kg1");
+    shelf.id = "shelf";
+    shelf.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["corner", new THREE.Box3(new THREE.Vector3(-0.8, 0, -0.8), new THREE.Vector3(0, 0.8, 0))],
+      ["shelf", new THREE.Box3(new THREE.Vector3(0.12, 0, -0.3), new THREE.Vector3(0.72, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("corner", new THREE.Box3(new THREE.Vector3(-0.8, 0, -0.8), new THREE.Vector3(0.25, 0.8, 0)));
+    const ctx = makeContext(corner);
+    ctx.instances = [corner, shelf];
+    ctx.S.alignLocks = [lockedModulePair("corner", "right", "shelf", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(corner, prevBoxes.get("corner")!, prevBoxes).movedIds).toEqual([]);
+    expect(shelf.root.position.x).toBeCloseTo(0);
+  });
+
+  it("lets the protected moved-to-anchor module push the weaker anchor if needed", () => {
+    const a = moduleInstance("kg1");
+    a.id = "shelf-a";
+    a.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const b = moduleInstance("kg1");
+    b.id = "shelf-b";
+    b.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["shelf-a", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
+      ["shelf-b", new THREE.Box3(new THREE.Vector3(0.1, 0, -0.3), new THREE.Vector3(0.7, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("shelf-b", new THREE.Box3(new THREE.Vector3(-0.05, 0, -0.3), new THREE.Vector3(0.7, 0.8, 0.3)));
+    const ctx = makeContext(b);
+    ctx.instances = [a, b];
+    ctx.S.alignLocks = [lockedModulePair("shelf-a", "right", "shelf-b", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(b, prevBoxes.get("shelf-b")!, prevBoxes).movedIds).toEqual(["shelf-a"]);
+    expect(a.root.position.x).toBeCloseTo(-0.15);
+  });
+
+  it("uses a locked shelf to worktop end as the resize anchor side", () => {
+    const shelf = moduleInstance("kg1");
+    shelf.id = "shelf";
+    const ctx = makeContext(shelf);
+    ctx.S.alignLocks = [
+      {
+        id: "lock-worktop",
+        locked: true,
+        a: { targetKind: "module", targetId: "shelf", lineRole: "edge", moduleSide: "right" },
+        b: { targetKind: "worktop", targetId: "w1", lineRole: "endB", segmentIndex: 0 },
+        pointMm: { x: 1000, z: 0 }
+      }
+    ];
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.chooseResizeAnchorSide(shelf, [])).toBe("right");
+  });
 });
+
+function lockedModulePair(
+  aId: string,
+  aSide: "left" | "right" | "front" | "back",
+  bId: string,
+  bSide: "left" | "right" | "front" | "back"
+): AlignLock {
+  return {
+    id: `${aId}-${bId}`,
+    locked: true,
+    a: { targetKind: "module", targetId: aId, lineRole: "edge", moduleSide: aSide },
+    b: { targetKind: "module", targetId: bId, lineRole: "edge", moduleSide: bSide },
+    pointMm: { x: 0, z: 0 }
+  };
+}

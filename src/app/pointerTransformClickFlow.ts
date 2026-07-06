@@ -38,7 +38,7 @@ export function handleTransformClickPointerDown(args: {
         transformState,
         pickedPoint: args.pickedPoint
       });
-      args.setStatus("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
+      args.setStatus("Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm. Shift = os, N = volny pohyb.");
       return true;
     }
 

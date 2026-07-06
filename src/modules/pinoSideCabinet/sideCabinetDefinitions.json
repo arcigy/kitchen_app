@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "pino-side-cabinet-system.v1",
+  "sourcePdf": "VKH_2026_CZ.pdf",
+  "sourcePage": 243,
+  "systemId": "pino_nobilia_side_cabinet_vkh_2026",
+  "displayName": "PINO/Nobilia boční skříňky",
+  "commonDimensionsMm": {
+    "height": 2195,
+    "depth": 560,
+    "plinthHeight": 110,
+    "boardThickness": 18,
+    "frontThickness": 19,
+    "backThickness": 8
+  },
+  "componentLibrary": {
+    "flap_door": {
+      "kind": "flap_door",
+      "label": "Sklápěcí dvířka"
+    },
+    "swing_door": {
+      "kind": "swing_door",
+      "label": "Otočná dvířka"
+    },
+    "fixed_shelf": {
+      "kind": "fixed_shelf",
+      "label": "Pevná police"
+    },
+    "adjustable_shelf": {
+      "kind": "adjustable_shelf",
+      "label": "Přestavitelná police"
+    },
+    "drawer": {
+      "kind": "drawer",
+      "label": "Zásuvka"
+    },
+    "pullout": {
+      "kind": "pullout",
+      "label": "Výsuv"
+    },
+    "wire_shelf": {
+      "kind": "wire_shelf",
+      "label": "Drátěná police"
+    },
+    "broom_hook": {
+      "kind": "broom_hook",
+      "label": "Háček pro smetáky"
+    },
+    "cable_holder": {
+      "kind": "cable_holder",
+      "label": "Univerzální držák"
+    }
+  },
+  "definitions": [
+    {
+      "definitionId": "pino_side_cabinet_s_gk_page243",
+      "productTemplateName": "Boční skříňka",
+      "moduleLabel": "Boční skříňka",
+      "articleFamily": "S",
+      "variantCode": "GK",
+      "catalogKeys": ["S-45-GK", "S-50-GK", "S-60-GK"],
+      "sourcePage": 243,
+      "sourceImagePath": "output/debug/side_cabinets/page_243.png",
+      "dimensionsMm": {
+        "height": 2195,
+        "depth": 560,
+        "availableWidths": [450, 500, 600],
+        "defaultWidth": 450
+      },
+      "frontStackTopDown": [
+        {
+          "componentId": "flap_door",
+          "heightMm": 285,
+          "count": 1,
+          "nameRaw": "1 sklápěcí dvířka"
+        },
+        {
+          "componentId": "swing_door",
+          "heightMm": 1181,
+          "count": 1,
+          "nameRaw": "1 otočná dvířka"
+        },
+        {
+          "componentId": "swing_door",
+          "heightMm": 717,
+          "count": 1,
+          "nameRaw": "spodní dvířkový diel podľa obrázka"
+        }
+      ],
+      "interiorComponents": [
+        {
+          "componentId": "fixed_shelf",
+          "count": 1,
+          "placement": "between_upper_and_lower_door",
+          "nameRaw": "1 pevná police"
+        }
+      ],
+      "catalogRows": [
+        {
+          "catalogKey": "S-45-GK",
+          "widthCm": 45,
+          "priceIndex": 3,
+          "pricingReferenceRaw": "03 GK",
+          "priceGroupValues": {
+            "0": 881,
+            "1": 955,
+            "2": 991,
+            "3": 1065,
+            "4": 1267,
+            "5": 1456
+          }
+        },
+        {
+          "catalogKey": "S-50-GK",
+          "widthCm": 50,
+          "priceIndex": 3,
+          "pricingReferenceRaw": "03 GK",
+          "priceGroupValues": {
+            "0": 936,
+            "1": 1016,
+            "2": 1028,
+            "3": 1108,
+            "4": 1316,
+            "5": 1505
+          }
+        },
+        {
+          "catalogKey": "S-60-GK",
+          "widthCm": 60,
+          "priceIndex": 3,
+          "pricingReferenceRaw": "03 GK",
+          "priceGroupValues": {
+            "0": 973,
+            "1": 1053,
+            "2": 1120,
+            "3": 1205,
+            "4": 1358,
+            "5": 1548
+          }
+        }
+      ],
+      "sourceNotes": [
+        "Výška korpusu 2195 mm.",
+        "Hloubka korpusu 560 mm.",
+        "Dělené čelo se může odlišovat od obrázku.",
+        "Staging/review data, nepoužívať na produkčný import bez ručnej kontroly."
+      ]
+    }
+  ]
+}

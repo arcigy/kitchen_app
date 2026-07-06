@@ -88,6 +88,8 @@ describe("pointer module drag", () => {
   it("refreshes dragged and existing pushed module kitchen placement", () => {
     const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
     const neighbor = moduleInstance("m2", new THREE.Vector3(2, 0, 2), "kg2");
+    inst.kitchenPlacement = { worktopId: "old-1", segmentIndex: 0, offsetAlongM: 0 };
+    neighbor.kitchenPlacement = { worktopId: "old-2", segmentIndex: 0, offsetAlongM: 0 };
     const inferKitchenPlacementBinding = vi.fn((instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => ({
       worktopId: `${instance.id}-${kitchenGroupId}-${backOffsetMm}`,
       segmentIndex: 0,
@@ -150,6 +152,36 @@ describe("pointer module drag", () => {
     expect(updateLayoutPanel).toHaveBeenCalledTimes(1);
   });
 
+  it("does not move a dragged module while it is locked by align", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
+    inst.root.position.copy(new THREE.Vector3(1, 0, 1));
+    const updateLayoutPanel = vi.fn();
+    const nudgePinnedModuleChain = vi.fn();
+
+    const didUpdate = updateModuleDragFromGroundHit({
+      dragState: dragState(),
+      hitPoint: new THREE.Vector3(2, 0, 3),
+      findInstance: (id) => (id === inst.id ? inst : null),
+      applyWallConstraints: (_instance, desired) => desired.clone(),
+      snapPosition: (_instance, desired) => desired.clone(),
+      autoOrientModuleToRoomWallIfSnapped: vi.fn(),
+      nudgePinnedModuleChain,
+      anyOverlap: () => false,
+      moduleOverlapsWalls: () => false,
+      moduleOverlapsKitchenWorktops: () => false,
+      kitchenGroups: [],
+      defaultWorktopBackOffsetMm: 0,
+      inferKitchenPlacementBinding: () => null,
+      updateLayoutPanel,
+      isModuleAlignLocked: () => true
+    });
+
+    expect(didUpdate).toBe(true);
+    expect(inst.root.position.toArray()).toEqual([1, 0, 1]);
+    expect(nudgePinnedModuleChain).not.toHaveBeenCalled();
+    expect(updateLayoutPanel).not.toHaveBeenCalled();
+  });
+
   it("rolls back dragged and pushed modules when overlap validation fails", () => {
     const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
     inst.root.position.copy(new THREE.Vector3(1, 0, 1));
@@ -184,8 +216,10 @@ describe("pointer module drag", () => {
   it("refreshes kitchen placement for dragged and pushed kitchen modules", () => {
     const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
     inst.root.position.copy(new THREE.Vector3(1, 0, 1));
+    inst.kitchenPlacement = { worktopId: "old-1", segmentIndex: 0, offsetAlongM: 0 };
     const neighbor = moduleInstance("m2", new THREE.Vector3(2, 0, 2), "kg2");
     neighbor.root.position.copy(new THREE.Vector3(2, 0, 2));
+    neighbor.kitchenPlacement = { worktopId: "old-2", segmentIndex: 0, offsetAlongM: 0 };
     const inferKitchenPlacementBinding = vi.fn((instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => ({
       worktopId: `${instance.id}-${kitchenGroupId}-${backOffsetMm}`,
       segmentIndex: 0,
@@ -211,6 +245,25 @@ describe("pointer module drag", () => {
 
     expect(inst.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
     expect(neighbor.kitchenPlacement).toEqual({ worktopId: "m2-kg2-80", segmentIndex: 0, offsetAlongM: 0 });
+  });
+
+  it("does not rebind unpinned kitchen modules during pointer drag refresh", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(1, 0, 1), "kg1");
+    const neighbor = moduleInstance("m2", new THREE.Vector3(2, 0, 2), "kg2");
+    const inferKitchenPlacementBinding = vi.fn(() => ({ worktopId: "new", segmentIndex: 0, offsetAlongM: 0 }));
+
+    refreshPointerModuleDragKitchenPlacement({
+      instance: inst,
+      pushed: [{ id: "m2", prev: new THREE.Vector3(2, 0, 2) }],
+      findInstance: (id) => (id === "m2" ? neighbor : null),
+      kitchenGroups: [{ id: "kg1", ctx: { worktopBackOffsetMm: 45 } }],
+      defaultWorktopBackOffsetMm: 80,
+      inferKitchenPlacementBinding
+    });
+
+    expect(inst.kitchenPlacement).toBeNull();
+    expect(neighbor.kitchenPlacement).toBeNull();
+    expect(inferKitchenPlacementBinding).not.toHaveBeenCalled();
   });
 
   it("returns false without mutation when hit point or dragged instance is missing", () => {

@@ -9,7 +9,20 @@ export type ArcigyDatabaseConfig = {
 const SCHEMA_RE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 
 export function getDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  return env.DATABASE_URL || env.KITCHEN_PROJECT_DATABASE_URL || env.PROJECT_DATABASE_URL || null;
+  return env.DATABASE_URL || env.KITCHEN_PROJECT_DATABASE_URL || env.PROJECT_DATABASE_URL || buildPostgresUrlFromParts(env);
+}
+
+function buildPostgresUrlFromParts(env: NodeJS.ProcessEnv): string | null {
+  const host = env.KITCHEN_POSTGRES_HOST || env.POSTGRES_HOST;
+  const user = env.KITCHEN_POSTGRES_USER || env.POSTGRES_USER;
+  const password = env.KITCHEN_POSTGRES_PASSWORD || env.POSTGRES_PASSWORD;
+  const database = env.KITCHEN_POSTGRES_DB || env.POSTGRES_DB;
+  if (!host && !user && !password && !database) return null;
+  if (!host || !user || !password || !database) {
+    throw new Error("POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB are required when using Postgres component env vars.");
+  }
+  const port = env.KITCHEN_POSTGRES_PORT || env.POSTGRES_PORT || "5432";
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
 }
 
 export function normalizeAppEnvironment(value: string | undefined, nodeEnv = process.env.NODE_ENV): ArcigyAppEnvironment {

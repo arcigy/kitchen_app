@@ -1,12 +1,52 @@
 import * as THREE from "three";
 import type { ClientCatalog, ComponentDefinition, ComponentType } from "../../core/catalog/catalog-types";
+import type { ModuleGeometryPrimitive } from "../../core/module-package/module-package-types";
+import {
+  buildApplianceSubmodule,
+  makeDefaultApplianceSubmoduleParams,
+  type ApplianceSubmoduleType
+} from "../../submodules/appliances";
+import { buildCornerShelfLower } from "../cornerShelfLower/geometry";
 import { createModuleRuntimeCatalogContext, type MaterialFallbackKind } from "../runtime/runtimeCatalog";
-import { getFwmAssemblyContext, getFwmFurnitureSpec, getFwmRoomCategory, getFwmSystemFamily } from "./definitions";
+import { mapFwmCatalogCornerToCornerShelfLowerParams } from "./catalogCornerAdapter";
+import baseCornerChamferedGroundTruth from "./data/baseCornerChamferedGroundTruth.compact.json";
+import { getFwmAssemblyContext, getFwmFurnitureSpec, getFwmRoomCategory, getFwmSystemFamily, type FwmFurnitureSpec } from "./definitions";
 import { resolveBackPanelDepthLayout, resolveDrawerDepthLayout } from "./depthLayout";
+import { resolveFwmDrawerSystemPreset, resolveFwmDrawerSystemPresetForFrontHeight } from "./drawerSystemPresets";
 import { normalizeFwmFurnitureParams, type FwmFurnitureParams } from "./types";
 
 const MM = 0.001;
 const FWM_MATERIAL_CACHE = Symbol("fwmMaterialCache");
+const BASE_CORNER_CHAMFERED_GROUND_TRUTH_PACKAGE = baseCornerChamferedGroundTruth as { primitives: ModuleGeometryPrimitive[] };
+const kitchenCornerAnchorName = "__kitchen_corner_anchor";
+const kitchenCornerXAnchorName = "__kitchen_corner_x_anchor";
+const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
+const BASE_CORNER_CHAMFERED_SOURCE = {
+  xMin: 33.3,
+  xMax: 933.3,
+  zMin: 0,
+  zMax: 900,
+  yMin: 0,
+  plinthTop: 100,
+  yMax: 722,
+  width: 900,
+  depth: 900,
+  chamferMm: 420,
+  backChamferMm: 200,
+  plinthSetbackMm: 60
+} as const;
+const BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE = {
+  minX: 15.3,
+  maxX: 471.3,
+  minZ: 462,
+  maxZ: 918
+} as const;
+const BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE = {
+  minX: 15.28,
+  maxX: 596.702,
+  minZ: 336.578,
+  maxZ: 918
+} as const;
 
 type MatRole = "body" | "front" | "back" | "shelf" | "drawer_bottom" | "plinth" | "worktop" | "hardware" | "glass" | "appliance" | "soft";
 type SideRole = "FRONT" | "BACK" | "LEFT" | "RIGHT" | "TOP" | "BOTTOM";
@@ -17,13 +57,71 @@ type FwmMaterialCache = {
   materials: Map<string, THREE.Material>;
 };
 
+function drawerSystemSizeOverride(value: unknown) {
+  const size = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return size === "M" || size === "D" || size === "E" || size === "F" ? size : null;
+}
+
+function resolveDrawerPresetForIndex(params: FwmFurnitureParams, frontHeightMm: number, drawerIndex: number, slotIndex?: number) {
+  const slotOverride = slotIndex ? drawerSystemSizeOverride(params[`tallSlot${slotIndex}DrawerSystemSize`]) : null;
+  const drawerOverride = drawerSystemSizeOverride(params[`drawer${drawerIndex}SystemSize`]);
+  const override = slotOverride ?? drawerOverride;
+  return override
+    ? resolveFwmDrawerSystemPreset(params.drawerSystemBrand ?? params.drawerSystem, override)
+    : resolveFwmDrawerSystemPresetForFrontHeight(params.drawerSystemBrand ?? params.drawerSystem, frontHeightMm);
+}
+
 function num(params: Record<string, unknown>, key: string, fallback: number) {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function bool(params: Record<string, unknown>, key: string, fallback: boolean) {
+  const value = params[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function rec(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function canonicalFwmMaterialGroup(value: unknown): string {
+  const group = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (group === "body" || group === "carcass" || group === "shelf") return "corpus";
+  return group;
+}
+
+function normalizeFwmMaterialMetadata(group: THREE.Group): THREE.Group {
+  group.traverse((object) => {
+    const data = object.userData as Record<string, unknown>;
+    const materialGroup = canonicalFwmMaterialGroup(data.materialGroup);
+    const materialSlotId = canonicalFwmMaterialGroup(data.materialSlotId);
+    if (materialGroup) data.materialGroup = materialGroup;
+    if (materialSlotId) data.materialSlotId = materialSlotId;
+    if (data.materialRole === "body" || data.materialRole === "shelf") data.materialRole = "corpus";
+
+    if (object instanceof THREE.Mesh) {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        const materialData = material.userData as Record<string, unknown>;
+        const itemGroup = canonicalFwmMaterialGroup(materialData.materialGroup);
+        const itemSlot = canonicalFwmMaterialGroup(materialData.materialSlotId);
+        if (itemGroup) materialData.materialGroup = itemGroup;
+        if (itemSlot) materialData.materialSlotId = itemSlot;
+        if (materialData.materialRole === "body" || materialData.materialRole === "shelf") materialData.materialRole = "corpus";
+      }
+    }
+  });
+  group.userData.materialGroups = {
+    corpus: "corpus",
+    front: "front",
+    back: "back",
+    plinth: "plinth",
+    worktop: "worktop",
+    drawerBottom: "drawer_bottom",
+    hardware: "hardware"
+  };
+  return group;
 }
 
 function materialCacheFor(params: Record<string, unknown>, catalog: ClientCatalog): FwmMaterialCache {
@@ -133,12 +231,20 @@ function makeMaterial(params: Record<string, unknown>, catalog: ClientCatalog, r
   const slotKey =
     role === "front" ? "front" :
     role === "back" ? "back" :
-    role === "shelf" ? "shelf" :
+    role === "shelf" ? "corpus" :
     role === "drawer_bottom" ? "drawer_bottom" :
     role === "plinth" ? "plinth" :
     role === "worktop" ? "worktop" :
-    "carcass";
-  const selectedMaterialId = typeof params[paramKey] === "string" && params[paramKey] ? params[paramKey] as string : assignments[slotKey] as string | undefined;
+    "corpus";
+  const assignedMaterialId =
+    typeof assignments[slotKey] === "string" ? assignments[slotKey] as string :
+    slotKey === "corpus" && typeof assignments.carcass === "string" ? assignments.carcass as string :
+    undefined;
+  const explicitMaterialId = typeof params[paramKey] === "string" && params[paramKey] ? params[paramKey] as string : undefined;
+  const explicitCorpusMaterialId = slotKey === "corpus" && typeof params.corpusMaterialId === "string" && params.corpusMaterialId
+    ? params.corpusMaterialId as string
+    : undefined;
+  const selectedMaterialId = explicitMaterialId ?? explicitCorpusMaterialId ?? assignedMaterialId;
   const cacheKey = `catalog:${role}:${selectedMaterialId ?? ""}`;
   if (cache.materials.has(cacheKey)) return cache.materials.get(cacheKey)!;
   const fallback: MaterialFallbackKind =
@@ -158,7 +264,9 @@ function makeMaterial(params: Record<string, unknown>, catalog: ClientCatalog, r
   });
   material.userData.catalogMaterialId = resolved.id;
   material.userData.catalogMaterialName = resolved.displayName;
-  material.userData.materialRole = role;
+  material.userData.materialRole = canonicalFwmMaterialGroup(role);
+  material.userData.materialGroup = canonicalFwmMaterialGroup(role);
+  material.userData.materialSlotId = slotKey;
   material.userData.materialSource = resolved.source;
   material.userData.renderColorHex = visualColorHex;
   cache.materials.set(cacheKey, material);
@@ -168,7 +276,7 @@ function makeMaterial(params: Record<string, unknown>, catalog: ClientCatalog, r
 function resolveComponentForParam(
   params: Record<string, unknown>,
   catalog: ClientCatalog,
-  key: "legComponentId" | "clipComponentId",
+  key: "legComponentId" | "clipComponentId" | "runnerComponentId",
   componentType: ComponentType
 ) {
   const cache = materialCacheFor(params, catalog);
@@ -207,6 +315,10 @@ function markComponent(mesh: THREE.Mesh, component: ComponentDefinition | undefi
 }
 
 function inferSideRole(name: string): SideRole | null {
+  if (name.includes("drawer_left_side")) return "LEFT";
+  if (name.includes("drawer_right_side")) return "RIGHT";
+  if (name.includes("drawer_back")) return "BACK";
+  if (name.includes("drawer_front_inner")) return "FRONT";
   if (name.includes("left_side")) return "LEFT";
   if (name.includes("right_side")) return "RIGHT";
   if (name.includes("back")) return "BACK";
@@ -216,14 +328,451 @@ function inferSideRole(name: string): SideRole | null {
   return null;
 }
 
+function inferGrainAlong(name: string, materialGroup: string | null | undefined, dimensionsMm: { width: number; height: number; depth: number }) {
+  const group = (materialGroup ?? "").toLowerCase();
+  const normalizedName = name.toLowerCase();
+  if (group === "hardware" || group === "appliance") return "none";
+  if (group === "front" || group === "back") return "height";
+  if (normalizedName.includes("side_panel") || normalizedName.includes("left_side") || normalizedName.includes("right_side")) return "height";
+  if (group === "plinth") return "width";
+  if (group === "shelf" || normalizedName.includes("shelf") || normalizedName.includes("top") || normalizedName.includes("bottom")) {
+    return dimensionsMm.width >= dimensionsMm.depth ? "width" : "depth";
+  }
+  if (dimensionsMm.height >= dimensionsMm.width && dimensionsMm.height >= dimensionsMm.depth) return "height";
+  return dimensionsMm.width >= dimensionsMm.depth ? "width" : "depth";
+}
+
+function readMeshDimensionsMm(mesh: THREE.Mesh) {
+  const stored = mesh.userData.dimensionsMm as { width?: unknown; height?: unknown; depth?: unknown } | undefined;
+  if (
+    typeof stored?.width === "number" && Number.isFinite(stored.width) &&
+    typeof stored.height === "number" && Number.isFinite(stored.height) &&
+    typeof stored.depth === "number" && Number.isFinite(stored.depth)
+  ) {
+    return { width: stored.width, height: stored.height, depth: stored.depth };
+  }
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  if (!box) return { width: 0, height: 0, depth: 0 };
+  return {
+    width: (box.max.x - box.min.x) / MM,
+    height: (box.max.y - box.min.y) / MM,
+    depth: (box.max.z - box.min.z) / MM
+  };
+}
+
 function inferMaterialGroup(name: string): string {
+  if (name.includes("cutlery_inner_drawer_front")) return "front";
+  if (name.includes("cutlery_inner_drawer_bottom") || name.includes("cutlery_inner_drawer_cross_rail")) return "drawer_bottom";
+  if (name.includes("cutlery_inner_drawer_system") || name.includes("cutlery_inner_drawer_runner")) return "hardware";
+  if (name.includes("drawer_bottom")) return "drawer_bottom";
+  if (name.includes("drawer_system") || name.includes("drawer_runner") || name.includes("runner")) return "hardware";
+  if (name.includes("drawer_left_side") || name.includes("drawer_right_side") || name.includes("drawer_back") || name.includes("drawer_front_inner")) {
+    return "body";
+  }
   if (name.includes("back")) return "back";
-  if (name.includes("front") || name.includes("door") || name.includes("drawer")) return "front";
   if (name.includes("shelf")) return "shelf";
+  if (name.includes("plinth")) return "plinth";
   if (name.includes("worktop") || name.includes("table_top")) return "worktop";
-  if (name.includes("handle") || name.includes("faucet") || name.includes("leg") || name.includes("foot") || name.includes("clip")) return "hardware";
+  if (name.includes("handle") || name.includes("hinge") || name.includes("faucet") || name.includes("leg") || name.includes("foot") || name.includes("clip")) return "hardware";
   if (name.includes("appliance") || name.includes("sink") || name.includes("basin")) return "appliance";
+  if (name.includes("front") || name.includes("door") || name.includes("drawer")) return "front";
   return "body";
+}
+
+function markDrawerSubmodulePart(mesh: THREE.Mesh, args: {
+  submoduleKind: "drawer" | "cutlery_inner_drawer";
+  drawerIndex: number;
+  drawerSystemLabel?: string;
+  drawerSystemBrand?: string;
+  drawerSystemSize?: string;
+  materialGroup?: string;
+  materialSlotId?: string;
+}) {
+  mesh.userData.submoduleKind = args.submoduleKind;
+  mesh.userData.parentDrawerIndex = args.drawerIndex;
+  if (args.drawerSystemLabel) mesh.userData.drawerSystem = args.drawerSystemLabel;
+  if (args.drawerSystemBrand) mesh.userData.drawerSystemBrand = args.drawerSystemBrand;
+  if (args.drawerSystemSize) mesh.userData.drawerSystemSize = args.drawerSystemSize;
+  if (args.materialGroup) mesh.userData.materialGroup = args.materialGroup;
+  if (args.materialSlotId) mesh.userData.materialSlotId = args.materialSlotId;
+  const dimensions = mesh.userData.dimensionsMm as { width: number; height: number; depth: number } | undefined;
+  mesh.userData.grainAlong = inferGrainAlong(mesh.name, args.materialGroup ?? mesh.userData.materialGroup, dimensions ?? { width: 0, height: 0, depth: 0 });
+}
+
+function addCutleryInnerDrawerSubmodule(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  args: {
+    prefix: string;
+    index: number;
+    frontHeightMm: number;
+    boxDepthMm: number;
+    cabinetInnerWidthMm: number;
+    bottomCenterY: number;
+    runnerComponent: ComponentDefinition | undefined;
+    drawerSystemMaterial: THREE.Material;
+  }
+) {
+  const enabled = bool(params, "hasCutleryInnerDrawer", false);
+  if (!enabled) return;
+  const targetIndex = Math.round(num(params, "drawerCount", 0));
+  if (args.index !== targetIndex) return;
+  const drawerPreset = resolveDrawerPresetForIndex(params, args.frontHeightMm, args.index);
+  if (drawerPreset.size !== "M") return;
+
+  const drawerBottomMat = makeMaterial(params, catalog, "drawer_bottom");
+  const frontMat = makeMaterial(params, catalog, "front");
+  const frontT = num(params, "frontThicknessMm", 18);
+  const innerFrontDepth = Math.max(12, Math.min(frontT, 22));
+  const innerFrontHeight = Math.max(44, Math.min(72, args.frontHeightMm - 70));
+  const innerBottomThickness = Math.max(8, Math.min(num(params, "boardThickness", 18), 18));
+  const innerWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.cutleryInsertWidthDeductionMm);
+  const innerDepth = Math.max(100, Math.min(args.boxDepthMm - 40, drawerPreset.systemDepthMm - drawerPreset.cutleryInsertDepthDeductionMm));
+  const innerFrontWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.innerDrawerFrontDeductionMm);
+  const crossRailWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.innerDrawerCrossRailDeductionMm);
+  const frontMaxY = args.frontHeightMm * 0.5;
+  const innerFrontCenterY = frontMaxY - 10 - innerFrontHeight * 0.5;
+  const innerBottomCenterY = innerFrontCenterY - innerFrontHeight * 0.5 + innerBottomThickness * 0.5 + 14;
+  const innerFrontCenterZ = -frontT - 9 - innerFrontDepth * 0.5;
+  const innerBottomCenterZ = innerFrontCenterZ - innerFrontDepth * 0.5 - innerDepth * 0.5;
+  const crossRailCenterZ = innerBottomCenterZ - innerDepth * 0.5 + 9;
+  const paramKeys = [
+    "hasCutleryInnerDrawer",
+    "cutleryInnerDrawerAllowed",
+    "cutleryInnerDrawerStatus",
+    "cutleryInnerDrawerTargetIndex",
+    "cutleryInnerDrawerWidthMm",
+    "cutleryInnerDrawerDepthMm",
+    "cutleryInnerDrawerFrontWidthMm",
+    "cutleryInnerDrawerCrossRailWidthMm",
+    "cutleryInsertWidthDeductionMm",
+    "cutleryInsertDepthDeductionMm",
+    "innerDrawerFrontDeductionMm",
+    "innerDrawerCrossRailDeductionMm",
+    "drawerSystemBrand",
+    "drawerSystemSizes",
+    "drawerFrontHeightsMm",
+    "width",
+    "depth"
+  ];
+  const submoduleMeta = {
+    submoduleKind: "cutlery_inner_drawer" as const,
+    drawerIndex: args.index,
+    drawerSystemLabel: drawerPreset.label,
+    drawerSystemBrand: drawerPreset.brand,
+    drawerSystemSize: drawerPreset.size
+  };
+
+  const innerFront = addBox(
+    group,
+    `${args.prefix}cutlery_inner_drawer_front_${args.index}`,
+    { width: innerFrontWidth, height: innerFrontHeight, depth: innerFrontDepth },
+    { x: 0, y: innerFrontCenterY, z: innerFrontCenterZ },
+    frontMat,
+    paramKeys
+  );
+  markDrawerSubmodulePart(innerFront, { ...submoduleMeta, materialGroup: "front", materialSlotId: "front" });
+
+  const innerBottom = addBox(
+    group,
+    `${args.prefix}cutlery_inner_drawer_bottom_${args.index}`,
+    { width: innerWidth, height: innerBottomThickness, depth: innerDepth },
+    { x: 0, y: innerBottomCenterY, z: innerBottomCenterZ },
+    drawerBottomMat,
+    [...paramKeys, "drawerBottomMaterialId"]
+  );
+  markDrawerSubmodulePart(innerBottom, { ...submoduleMeta, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
+
+  const crossRail = addBox(
+    group,
+    `${args.prefix}cutlery_inner_drawer_cross_rail_${args.index}`,
+    { width: crossRailWidth, height: 36, depth: 18 },
+    { x: 0, y: innerBottomCenterY + 22, z: crossRailCenterZ },
+    drawerBottomMat,
+    [...paramKeys, "drawerBottomMaterialId"]
+  );
+  markDrawerSubmodulePart(crossRail, { ...submoduleMeta, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
+
+  const baseBackHeight = resolveFwmDrawerSystemPreset(drawerPreset.brand, "M").backHeightDeductionMm;
+  const sideRailHeight = Math.max(32.688, 32.688 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5);
+  const sideTopFlangeHeight = 7.873;
+  const outerRunnerHeight = 13.362;
+  const sideX = Math.max(30, innerWidth * 0.5 + 2.5);
+  const outerRunnerX = Math.max(40, innerWidth * 0.5 + 5.5);
+  const innerFrontMinY = innerFrontCenterY - innerFrontHeight * 0.5;
+  const sideRailCenterY = innerFrontMinY + 28 + sideRailHeight * 0.5;
+  const sideTopFlangeCenterY = innerFrontMinY + 81.439 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5;
+  const outerRunnerLowerCenterY = innerFrontMinY + 34.681;
+  const outerRunnerUpperCenterY = innerFrontMinY + 56.211;
+
+  for (const side of [-1, 1] as const) {
+    const systemSide = side < 0 ? "left" : "right";
+    const sideRail = addBox(
+      group,
+      `${args.prefix}cutlery_inner_drawer_system_${systemSide}_${args.index}`,
+      { width: 5, height: sideRailHeight, depth: innerDepth },
+      { x: side * sideX, y: sideRailCenterY, z: innerBottomCenterZ },
+      args.drawerSystemMaterial,
+      paramKeys
+    );
+    markComponent(sideRail, args.runnerComponent, "runnerComponentId");
+    markDrawerSubmodulePart(sideRail, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
+    sideRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+
+    const topFlange = addBox(
+      group,
+      `${args.prefix}cutlery_inner_drawer_system_${systemSide}_top_flange_${args.index}`,
+      { width: 5, height: sideTopFlangeHeight, depth: innerDepth },
+      { x: side * sideX, y: sideTopFlangeCenterY, z: innerBottomCenterZ },
+      args.drawerSystemMaterial,
+      paramKeys
+    );
+    markComponent(topFlange, args.runnerComponent, "runnerComponentId");
+    markDrawerSubmodulePart(topFlange, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
+    topFlange.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+
+    for (const [runnerKey, yCenter] of [["outer_lower", outerRunnerLowerCenterY], ["outer_upper", outerRunnerUpperCenterY]] as const) {
+      const outerRunner = addBox(
+        group,
+        `${args.prefix}cutlery_inner_drawer_system_${systemSide}_${runnerKey}_${args.index}`,
+        { width: 5, height: outerRunnerHeight, depth: Math.max(80, innerDepth - 16) },
+        { x: side * outerRunnerX, y: yCenter, z: innerBottomCenterZ - 8 },
+        args.drawerSystemMaterial,
+        paramKeys
+      );
+      markComponent(outerRunner, args.runnerComponent, "runnerComponentId");
+      markDrawerSubmodulePart(outerRunner, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
+      outerRunner.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+    }
+  }
+}
+
+function addDrawerSubmodule(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  args: {
+    prefix: string;
+    index: number;
+    widthMm: number;
+    frontHeightMm: number;
+    drawerCenterZMm: number;
+    drawerDepthMm: number;
+  }
+) {
+  const body = makeMaterial(params, catalog, "body");
+  const drawerBottomMat = makeMaterial(params, catalog, "drawer_bottom");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const runnerComponent = resolveComponentForParam(params, catalog, "runnerComponentId", "runner");
+  const drawerSystemMat = makeComponentMaterial(params, catalog, runnerComponent, hardware);
+  const drawerPreset = resolveDrawerPresetForIndex(params, args.frontHeightMm, args.index);
+  const drawerSystemParamKeys = [
+    "drawerCount",
+    "drawerSystemBrand",
+    "drawerSystemSize",
+    "drawerSystemSizes",
+    "drawerSystemLabels",
+    "drawerSystemMinFrontHeightsMm",
+    "drawerSystem",
+    "drawerSystemDepthMm",
+    "drawerBottomWidthDeductionMm",
+    "drawerBackWidthDeductionMm",
+    "drawerBackHeightDeductionMm",
+    "drawerSystemBackHeightsMm",
+    "drawerFrontHeightsMm",
+    "runnerComponentId",
+    "hasCutleryInnerDrawer",
+    "width",
+    "depth"
+  ];
+  const usesMetalDrawerSystem = params.type === "fwm_catalog_base_drawers";
+  const boxThickness = Math.max(10, Math.min(16, num(params, "boardThickness", 18) - 2));
+  const bottomThickness = usesMetalDrawerSystem ? num(params, "boardThickness", 18) : Math.max(6, num(params, "drawerBottomThickness", 8));
+  const outerWidth = Math.max(90, args.widthMm - 48);
+  const sideHeight = Math.max(70, Math.min(180, args.frontHeightMm - 28));
+  const cabinetInnerWidth = Math.max(60, num(params, "width", args.widthMm + 4) - num(params, "boardThickness", 18) * 2);
+  const innerWidth = usesMetalDrawerSystem ? Math.max(60, cabinetInnerWidth - drawerPreset.bottomWidthDeductionMm) : Math.max(60, outerWidth - boxThickness * 2);
+  const backRailWidth = usesMetalDrawerSystem ? Math.max(60, cabinetInnerWidth - drawerPreset.backWidthDeductionMm) : innerWidth;
+  const boxDepth = usesMetalDrawerSystem ? Math.max(160, drawerPreset.systemDepthMm - 4) : Math.max(160, args.drawerDepthMm);
+  const bottomDepth = Math.max(100, boxDepth - boxThickness);
+  const bottomCenterZ = usesMetalDrawerSystem
+    ? args.drawerCenterZMm + (boxDepth - bottomDepth) * 0.5
+    : args.drawerCenterZMm - boxThickness * 0.5;
+  const localBottomCenterY = -args.frontHeightMm * 0.5 + (usesMetalDrawerSystem ? 27 : 22);
+  const bodyCenterY = localBottomCenterY + (sideHeight - bottomThickness) * 0.5;
+  const innerFrontZ = args.drawerCenterZMm + boxDepth * 0.5 - boxThickness * 0.5;
+  const innerBackZ = args.drawerCenterZMm - boxDepth * 0.5 + boxThickness * 0.5;
+  const runnerHeight = Math.max(32, sideHeight - 20);
+  const runnerInsetX = outerWidth * 0.5 + 8;
+
+  if (usesMetalDrawerSystem) {
+    const sideX = Math.max(30, innerWidth * 0.5 + 2.5);
+    const outerRunnerX = Math.max(40, outerWidth * 0.5 + 5.5);
+    const sideCenterZ = args.drawerCenterZMm;
+    const runnerCenterZ = args.drawerCenterZMm - 8;
+    const frontMinY = -args.frontHeightMm * 0.5;
+    const baseBackHeight = resolveFwmDrawerSystemPreset(drawerPreset.brand, "M").backHeightDeductionMm;
+    const sideRailHeight = Math.max(32.688, 32.688 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5);
+    const sideTopFlangeHeight = 7.873;
+    const outerRunnerHeight = 13.362;
+    const sideRailCenterY = frontMinY + 28 + sideRailHeight * 0.5;
+    const sideTopFlangeCenterY = frontMinY + 81.439 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5;
+    const outerRunnerLowerCenterY = frontMinY + 34.681;
+    const outerRunnerUpperCenterY = frontMinY + 56.211;
+    for (const side of [-1, 1] as const) {
+      const systemSide = side < 0 ? "left" : "right";
+      const sideRail = addBox(
+        group,
+        `${args.prefix}drawer_system_${systemSide}_${args.index}`,
+        { width: 5, height: sideRailHeight, depth: boxDepth },
+        { x: side * sideX, y: sideRailCenterY, z: sideCenterZ },
+        drawerSystemMat,
+        drawerSystemParamKeys
+      );
+      markComponent(sideRail, runnerComponent, "runnerComponentId");
+      markDrawerSubmodulePart(sideRail, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size });
+      sideRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+      const topFlange = addBox(
+        group,
+        `${args.prefix}drawer_system_${systemSide}_top_flange_${args.index}`,
+        { width: 5, height: sideTopFlangeHeight, depth: boxDepth },
+        { x: side * sideX, y: sideTopFlangeCenterY, z: sideCenterZ },
+        drawerSystemMat,
+        drawerSystemParamKeys
+      );
+      markComponent(topFlange, runnerComponent, "runnerComponentId");
+      markDrawerSubmodulePart(topFlange, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size });
+      topFlange.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+      for (const [runnerKey, yCenter] of [["outer_lower", outerRunnerLowerCenterY], ["outer_upper", outerRunnerUpperCenterY]] as const) {
+        const outerRunner = addBox(
+          group,
+          `${args.prefix}drawer_system_${systemSide}_${runnerKey}_${args.index}`,
+          { width: 5, height: outerRunnerHeight, depth: Math.max(100, boxDepth - 16) },
+          { x: side * outerRunnerX, y: yCenter, z: runnerCenterZ },
+          drawerSystemMat,
+          drawerSystemParamKeys
+        );
+        markComponent(outerRunner, runnerComponent, "runnerComponentId");
+        markDrawerSubmodulePart(outerRunner, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size });
+        outerRunner.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+      }
+    }
+    const backRail = addBox(
+      group,
+      `${args.prefix}drawer_system_back_rail_${args.index}`,
+      { width: backRailWidth, height: drawerPreset.backHeightDeductionMm, depth: 18 },
+      { x: 0, y: frontMinY + 18 + drawerPreset.backHeightDeductionMm * 0.5, z: args.drawerCenterZMm - boxDepth * 0.5 + 7 },
+      drawerBottomMat,
+      [...drawerSystemParamKeys, "drawerBottomMaterialId"]
+    );
+    backRail.userData.materialGroup = "drawer_bottom";
+    backRail.userData.materialSlotId = "drawer_bottom";
+    backRail.userData.boardName = backRail.userData.boardName ?? `${args.prefix}drawer_system_back_rail_${args.index}`;
+    backRail.userData.partName = backRail.userData.partName ?? backRail.userData.boardName;
+    markDrawerSubmodulePart(backRail, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
+    backRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
+  } else {
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_left_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: -outerWidth * 0.5 + boxThickness * 0.5, y: bodyCenterY, z: args.drawerCenterZMm }, body, ["drawerCount", "width", "depth"]), { submoduleKind: "drawer", drawerIndex: args.index });
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_right_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: outerWidth * 0.5 - boxThickness * 0.5, y: bodyCenterY, z: args.drawerCenterZMm }, body, ["drawerCount", "width", "depth"]), { submoduleKind: "drawer", drawerIndex: args.index });
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_back_${args.index}`, { width: innerWidth, height: sideHeight, depth: boxThickness }, { x: 0, y: bodyCenterY, z: innerBackZ }, body, ["drawerCount", "depth", "backThickness"]), { submoduleKind: "drawer", drawerIndex: args.index });
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_front_inner_${args.index}`, { width: innerWidth, height: Math.max(48, sideHeight - 18), depth: boxThickness }, { x: 0, y: bodyCenterY + 6, z: innerFrontZ }, body, ["drawerCount", "frontThicknessMm"]), { submoduleKind: "drawer", drawerIndex: args.index });
+  }
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_bottom_${args.index}`, { width: innerWidth, height: bottomThickness, depth: bottomDepth }, { x: 0, y: localBottomCenterY, z: bottomCenterZ }, drawerBottomMat, ["drawerCount", "drawerBottomMaterialId", "depth", "backThickness", "drawerBackGapMm", "frontThicknessMm"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
+  if (!usesMetalDrawerSystem) {
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_left_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: -runnerInsetX, y: bodyCenterY, z: args.drawerCenterZMm }, hardware, ["drawerCount", "runnerComponentId"]), { submoduleKind: "drawer", drawerIndex: args.index, materialGroup: "hardware", materialSlotId: "hardware" });
+    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_right_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: runnerInsetX, y: bodyCenterY, z: args.drawerCenterZMm }, hardware, ["drawerCount", "runnerComponentId"]), { submoduleKind: "drawer", drawerIndex: args.index, materialGroup: "hardware", materialSlotId: "hardware" });
+  } else {
+    addCutleryInnerDrawerSubmodule(group, params, catalog, {
+      prefix: args.prefix,
+      index: args.index,
+      frontHeightMm: args.frontHeightMm,
+      boxDepthMm: boxDepth,
+      cabinetInnerWidthMm: cabinetInnerWidth,
+      bottomCenterY: localBottomCenterY,
+      runnerComponent,
+      drawerSystemMaterial: drawerSystemMat
+    });
+  }
+}
+
+function addSwingDoorLeaf(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  material: THREE.Material,
+  hardware: THREE.Material,
+  args: {
+    name: string;
+    widthMm: number;
+    heightMm: number;
+    xCenterMm: number;
+    yCenterMm: number;
+    zCenterMm: number;
+    doorIndex: number;
+    doorCount: number;
+  }
+) {
+  const requestedSide = String(params.side ?? "left").toLowerCase();
+  const hingeSide = args.doorCount === 1
+    ? requestedSide === "right" ? "right" : "left"
+    : args.doorIndex % 2 === 0 ? "left" : "right";
+  const pivot = new THREE.Group();
+  pivot.name = `${args.name}_pivot`;
+  pivot.position.set(
+    (hingeSide === "left" ? args.xCenterMm - args.widthMm * 0.5 : args.xCenterMm + args.widthMm * 0.5) * MM,
+    args.yCenterMm * MM,
+    args.zCenterMm * MM
+  );
+  pivot.rotation.y = bool(params, "opened", false) ? (hingeSide === "left" ? -Math.PI * 0.38 : Math.PI * 0.38) : 0;
+  group.add(pivot);
+  addBox(
+    pivot,
+    args.name,
+    { width: args.widthMm, height: args.heightMm, depth: num(params, "frontThicknessMm", 18) },
+    { x: hingeSide === "left" ? args.widthMm * 0.5 : -args.widthMm * 0.5, y: 0, z: 0 },
+    material,
+    ["doorCount", "frontThicknessMm", "frontGap", "handleComponentId", "opened"]
+  );
+  const frontThicknessMm = num(params, "frontThicknessMm", 18);
+  const hingePlateX = hingeSide === "left" ? 12 : -12;
+  const hingePlateZ = -frontThicknessMm * 0.5 - 3;
+  const hingeYPositions = [
+    { suffix: "lower", y: -args.heightMm * 0.28 },
+    { suffix: "upper", y: args.heightMm * 0.28 }
+  ];
+  for (const hinge of hingeYPositions) {
+    const plate = addBox(
+      pivot,
+      `${args.name}_hinge_${hinge.suffix}`,
+      { width: 24, height: 64, depth: 6 },
+      { x: hingePlateX, y: hinge.y, z: hingePlateZ },
+      hardware,
+      ["doorCount", "hingeComponentId", "opened", "side"]
+    );
+    plate.userData.componentType = "hinge";
+    if (typeof params.hingeComponentId === "string" && params.hingeComponentId.trim()) {
+      plate.userData.componentId = params.hingeComponentId.trim();
+      plate.userData.catalogComponentId = params.hingeComponentId.trim();
+      plate.userData.componentParamKey = "hingeComponentId";
+    }
+  }
+  const handleProjectionMm = num(params, "handleProjectionMm", 28);
+  const handleLengthMm = Math.min(num(params, "handleLengthMm", 160), args.heightMm * 0.45);
+  addCylinder(
+    pivot,
+    `${args.name}_handle`,
+    5,
+    handleLengthMm,
+    {
+      x: hingeSide === "left" ? args.widthMm - 45 : -args.widthMm + 45,
+      y: args.heightMm * 0.08,
+      z: num(params, "frontThicknessMm", 18) * 0.5 + handleProjectionMm * 0.5
+    },
+    hardware,
+    "y"
+  );
+  return pivot;
 }
 
 function mark(mesh: THREE.Mesh, dimensionsMm: { width: number; height: number; depth: number }, paramKeys: string[], sideRole: SideRole | null, materialGroup: string) {
@@ -232,6 +781,7 @@ function mark(mesh: THREE.Mesh, dimensionsMm: { width: number; height: number; d
   mesh.userData.paramKeys = paramKeys;
   mesh.userData.sideRole = sideRole;
   mesh.userData.materialGroup = materialGroup;
+  mesh.userData.grainAlong = inferGrainAlong(mesh.name, materialGroup, dimensionsMm);
   const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
   if (material?.userData?.materialRole) {
     mesh.userData.catalogMaterialId = material.userData.catalogMaterialId;
@@ -260,6 +810,236 @@ function addBox(
   mark(mesh, sizeMm, paramKeys, inferSideRole(name), inferMaterialGroup(name));
   group.add(mesh);
   return mesh;
+}
+
+function doubleSidedMaterial(material: THREE.Material | THREE.Material[]) {
+  if (Array.isArray(material)) {
+    return material.map((entry) => {
+      const clone = entry.clone();
+      clone.side = THREE.DoubleSide;
+      return clone;
+    });
+  }
+  const clone = material.clone();
+  clone.side = THREE.DoubleSide;
+  return clone;
+}
+
+function addPlanPrism(
+  group: THREE.Group,
+  name: string,
+  pointsMm: Array<{ x: number; z: number }>,
+  yMinMm: number,
+  yMaxMm: number,
+  material: THREE.Material | THREE.Material[],
+  paramKeys: string[] = []
+) {
+  const vertices: number[] = [];
+  for (const point of pointsMm) vertices.push(point.x * MM, yMinMm * MM, point.z * MM);
+  for (const point of pointsMm) vertices.push(point.x * MM, yMaxMm * MM, point.z * MM);
+
+  const indices: number[] = [];
+  const count = pointsMm.length;
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    indices.push(index, next, count + next, index, count + next, count + index);
+  }
+  for (let index = 1; index < count - 1; index += 1) {
+    indices.push(0, index, index + 1);
+    indices.push(count, count + index + 1, count + index);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, doubleSidedMaterial(material));
+  mesh.name = name;
+  const minX = Math.min(...pointsMm.map((point) => point.x));
+  const maxX = Math.max(...pointsMm.map((point) => point.x));
+  const minZ = Math.min(...pointsMm.map((point) => point.z));
+  const maxZ = Math.max(...pointsMm.map((point) => point.z));
+  mark(
+    mesh,
+    { width: maxX - minX, height: yMaxMm - yMinMm, depth: maxZ - minZ },
+    paramKeys,
+    inferSideRole(name),
+    inferMaterialGroup(name)
+  );
+  mesh.userData.revitPlanProfileMm = pointsMm.map((point) => ({ x: point.x, y: 0, z: point.z }));
+  mesh.userData.revitExtrusionAxis = "Y";
+  mesh.userData.revitExtrusionStartMm = yMinMm;
+  mesh.userData.revitExtrusionEndMm = yMaxMm;
+  group.add(mesh);
+  return mesh;
+}
+
+function addBoardBetweenPlanPoints(
+  group: THREE.Group,
+  name: string,
+  startMm: { x: number; z: number },
+  endMm: { x: number; z: number },
+  yCenterMm: number,
+  heightMm: number,
+  thicknessMm: number,
+  material: THREE.Material,
+  paramKeys: string[] = []
+) {
+  const dx = endMm.x - startMm.x;
+  const dz = endMm.z - startMm.z;
+  const length = Math.hypot(dx, dz);
+  const center = { x: (startMm.x + endMm.x) / 2, y: yCenterMm, z: (startMm.z + endMm.z) / 2 };
+  const mesh = addBox(group, name, { width: length, height: heightMm, depth: thicknessMm }, center, material, paramKeys);
+  mesh.rotation.y = -Math.atan2(dz, dx);
+  if (length > 0) {
+    const nx = -dz / length;
+    const nz = dx / length;
+    const halfThickness = thicknessMm * 0.5;
+    mesh.userData.revitPlanProfileMm = [
+      { x: startMm.x + nx * halfThickness, y: 0, z: startMm.z + nz * halfThickness },
+      { x: endMm.x + nx * halfThickness, y: 0, z: endMm.z + nz * halfThickness },
+      { x: endMm.x - nx * halfThickness, y: 0, z: endMm.z - nz * halfThickness },
+      { x: startMm.x - nx * halfThickness, y: 0, z: startMm.z - nz * halfThickness }
+    ];
+    mesh.userData.revitExtrusionAxis = "Y";
+    mesh.userData.revitExtrusionStartMm = yCenterMm - heightMm * 0.5;
+    mesh.userData.revitExtrusionEndMm = yCenterMm + heightMm * 0.5;
+  }
+  return mesh;
+}
+
+function insetPlanSegmentTowardCenter(
+  startMm: { x: number; z: number },
+  endMm: { x: number; z: number },
+  thicknessMm: number,
+  centerMm: { x: number; z: number } = { x: 0, z: 0 }
+) {
+  const dx = endMm.x - startMm.x;
+  const dz = endMm.z - startMm.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 0) return { start: startMm, end: endMm };
+  const leftNormal = { x: -dz / length, z: dx / length };
+  const mid = { x: (startMm.x + endMm.x) / 2, z: (startMm.z + endMm.z) / 2 };
+  const toCenter = { x: centerMm.x - mid.x, z: centerMm.z - mid.z };
+  const normal = leftNormal.x * toCenter.x + leftNormal.z * toCenter.z >= 0
+    ? leftNormal
+    : { x: -leftNormal.x, z: -leftNormal.z };
+  const offset = thicknessMm / 2;
+  return {
+    start: { x: startMm.x + normal.x * offset, z: startMm.z + normal.z * offset },
+    end: { x: endMm.x + normal.x * offset, z: endMm.z + normal.z * offset }
+  };
+}
+
+function addInsetBoardBetweenPlanPoints(
+  group: THREE.Group,
+  name: string,
+  startMm: { x: number; z: number },
+  endMm: { x: number; z: number },
+  yCenterMm: number,
+  heightMm: number,
+  thicknessMm: number,
+  material: THREE.Material,
+  paramKeys: string[] = [],
+  centerMm: { x: number; z: number } = { x: 0, z: 0 }
+) {
+  const inset = insetPlanSegmentTowardCenter(startMm, endMm, thicknessMm, centerMm);
+  return addBoardBetweenPlanPoints(group, name, inset.start, inset.end, yCenterMm, heightMm, thicknessMm, material, paramKeys);
+}
+
+function tagVisibleEdges(mesh: THREE.Mesh, edgeIds: string[]) {
+  if (edgeIds.length <= 0) return mesh;
+  mesh.userData.edgeBandingStrategy = "explicit_visible_edges";
+  mesh.userData.edgeBanding = edgeIds.map((edgeId) => ({
+    edgeId,
+    role: "visible",
+    materialSlotId: canonicalFwmMaterialGroup(mesh.userData.materialSlotId) || canonicalFwmMaterialGroup(mesh.userData.materialGroup) || "corpus"
+  }));
+  return mesh;
+}
+
+function tagBoardIdentity(mesh: THREE.Mesh, boardName: string, materialSlotId: string) {
+  mesh.userData.boardName = boardName;
+  mesh.userData.partName = boardName;
+  mesh.userData.materialGroup = materialSlotId;
+  mesh.userData.materialSlotId = materialSlotId;
+  mesh.userData.grainAlong = inferGrainAlong(boardName, materialSlotId, readMeshDimensionsMm(mesh));
+  return mesh;
+}
+
+function wallOpenEndShapePath(width: number, depth: number, shape: string, side: string, amount: number) {
+  const sign = side === "left" ? -1 : 1;
+  const halfW = width / 2;
+  const backZ = -depth / 2;
+  const frontZ = depth / 2;
+  const cut = Math.max(20, Math.min(amount, width - 30, depth - 30));
+  const fixedBack = { x: -sign * halfW, z: backZ };
+  const fixedFront = { x: -sign * halfW, z: frontZ };
+  const shapedBack = { x: sign * halfW, z: backZ };
+  const shapedPath = [shapedBack];
+
+  if (shape === "rounded") {
+    const radius = cut;
+    const centerX = sign * (halfW - radius);
+    const centerZ = frontZ - radius;
+    shapedPath.push({ x: sign * halfW, z: centerZ });
+    const steps = 8;
+    for (let index = 1; index <= steps; index += 1) {
+      const angle = (index / steps) * (Math.PI / 2);
+      shapedPath.push({
+        x: centerX + sign * Math.cos(angle) * radius,
+        z: centerZ + Math.sin(angle) * radius
+      });
+    }
+  } else {
+    shapedPath.push(
+      { x: sign * halfW, z: frontZ - cut },
+      { x: sign * (halfW - cut), z: frontZ }
+    );
+  }
+
+  return sign === 1
+    ? [fixedBack, ...shapedPath, fixedFront]
+    : [...shapedPath, fixedFront, fixedBack];
+}
+
+function wallOpenEndPanelSegments(width: number, depth: number, shape: string, side: string, amount: number) {
+  const sign = side === "left" ? -1 : 1;
+  const halfW = width / 2;
+  const backZ = -depth / 2;
+  const frontZ = depth / 2;
+  const cut = Math.max(20, Math.min(amount, width - 30, depth - 30));
+  const fixed = {
+    start: { x: -sign * halfW, z: backZ },
+    end: { x: -sign * halfW, z: frontZ }
+  };
+  const shapedPath = [{ x: sign * halfW, z: backZ }];
+
+  if (shape === "rounded") {
+    const radius = cut;
+    const centerX = sign * (halfW - radius);
+    const centerZ = frontZ - radius;
+    shapedPath.push({ x: sign * halfW, z: centerZ });
+    const steps = 8;
+    for (let index = 1; index <= steps; index += 1) {
+      const angle = (index / steps) * (Math.PI / 2);
+      shapedPath.push({
+        x: centerX + sign * Math.cos(angle) * radius,
+        z: centerZ + Math.sin(angle) * radius
+      });
+    }
+  } else {
+    shapedPath.push(
+      { x: sign * halfW, z: frontZ - cut },
+      { x: sign * (halfW - cut), z: frontZ }
+    );
+  }
+
+  const shaped = shapedPath.slice(0, -1).map((point, index) => ({
+    start: point,
+    end: shapedPath[index + 1]
+  }));
+  return { fixed, shaped };
 }
 
 function addCylinder(
@@ -341,6 +1121,13 @@ function addCornerStylePlinthClipSet(
   markComponent(arm, component, "clipComponentId");
 }
 
+function tagChamferedRuntimeHardware(mesh: THREE.Mesh, boardName: string, materialSlotId = "hardware") {
+  mesh.userData.boardName = boardName;
+  mesh.userData.partName = boardName;
+  mesh.userData.materialGroup = "hardware";
+  mesh.userData.materialSlotId = materialSlotId;
+}
+
 function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width: number; depth: number; plinth: number; setback: number; boardDepth: number; prefix: string }) {
   const legHeight = Math.max(1, opts.plinth);
   const hardware = makeMaterial(params, catalog, "hardware");
@@ -377,7 +1164,7 @@ function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catal
   }
 }
 
-function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { openFront?: boolean; topOpen?: boolean; width?: number; height?: number; depth?: number; namePrefix?: string } = {}) {
+function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { openFront?: boolean; topOpen?: boolean; topRails?: boolean; width?: number; height?: number; depth?: number; namePrefix?: string } = {}) {
   const width = opts.width ?? num(params, "width", 800);
   const height = opts.height ?? num(params, "height", 720);
   const depth = opts.depth ?? num(params, "depth", 560);
@@ -399,14 +1186,33 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
   addBox(group, `${prefix}left_side`, { width: t, height: cabinetHeight, depth }, { x: -width / 2 + t / 2, y: baseY + cabinetHeight / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
   addBox(group, `${prefix}right_side`, { width: t, height: cabinetHeight, depth }, { x: width / 2 - t / 2, y: baseY + cabinetHeight / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
   addBox(group, `${prefix}bottom`, { width: innerW, height: t, depth }, { x: 0, y: baseY + t / 2, z: 0 }, body, ["width", "depth", "boardThickness"]);
-  if (!opts.topOpen) addBox(group, `${prefix}top`, { width: innerW, height: t, depth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
+  if (!opts.topOpen && opts.topRails) {
+    const railDepth = Math.max(50, Math.min(90, depth * 0.14));
+    addBox(group, `${prefix}top_back_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: -depth / 2 + railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
+    addBox(group, `${prefix}top_front_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: depth / 2 - railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
+  } else if (!opts.topOpen) {
+    addBox(group, `${prefix}top`, { width: innerW, height: t, depth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
+  }
   if (backLayout.thicknessMm > 0) addBox(group, `${prefix}back`, { width: innerW, height: innerH, depth: backLayout.thicknessMm }, { x: 0, y: baseY + t + innerH / 2, z: backLayout.centerZ }, backMat, ["width", "height", "depth", "backThickness"]);
 
   const shelves = Math.round(num(params, "shelfCount", 0));
   const shelfT = num(params, "shelfThickness", t);
+  const availableShelfGapHeight = Math.max(1, innerH - shelves * shelfT);
+  const requestedShelfGaps = readShelfGapValues(params, shelves + 1);
+  const shelfGaps = requestedShelfGaps.length > 0
+    ? Array.from(
+      { length: shelves + 1 },
+      (_, index) => requestedShelfGaps[index] ?? requestedShelfGaps[requestedShelfGaps.length - 1] ?? (availableShelfGapHeight / (shelves + 1))
+    )
+    : Array.from({ length: shelves + 1 }, () => availableShelfGapHeight / (shelves + 1));
+  const shelfGapTotal = shelfGaps.reduce((sum, value) => sum + value, 0);
+  const shelfGapScale = shelfGapTotal > availableShelfGapHeight ? availableShelfGapHeight / shelfGapTotal : 1;
+  let shelfCursorY = baseY + t;
   for (let index = 0; index < shelves; index += 1) {
-    const y = baseY + t + ((index + 1) * innerH) / (shelves + 1);
-    addBox(group, `${prefix}shelf_${index + 1}`, { width: innerW, height: shelfT, depth: innerD }, { x: 0, y, z: back / 2 }, shelfMat, ["shelfCount", "shelfThickness", "height", "shelfMaterialId"]);
+    shelfCursorY += shelfGaps[index] * shelfGapScale;
+    const y = shelfCursorY + shelfT / 2;
+    addBox(group, `${prefix}shelf_${index + 1}`, { width: innerW, height: shelfT, depth: innerD }, { x: 0, y, z: back / 2 }, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "shelfMaterialId"]);
+    shelfCursorY += shelfT;
   }
 
   if (plinth > 0) {
@@ -418,6 +1224,1662 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
   }
 }
 
+type OpenEndSide = "none" | "left" | "right";
+type OpenEndShape = "straight" | "rounded" | "chamfered";
+
+function tagOpenEndBoard(mesh: THREE.Mesh, boardName: string, materialGroup: "corpus" | "back" | "plinth" | "hardware", edgeBanding: Array<Record<string, unknown>> = []) {
+  mesh.userData.boardName = boardName;
+  mesh.userData.partName = boardName;
+  mesh.userData.materialGroup = materialGroup;
+  mesh.userData.materialSlotId = materialGroup;
+  if (edgeBanding.length > 0) {
+    mesh.userData.edgeBandingStrategy = "explicit_visible_edges";
+    mesh.userData.edgeBanding = edgeBanding;
+  }
+}
+
+function openEndShape(params: FwmFurnitureParams): OpenEndShape {
+  const variant = String(params.variant ?? "");
+  const shape = String(params.shape ?? "").toLowerCase();
+  if (variant.includes("rounded") || shape === "rounded") return "rounded";
+  if (variant.includes("chamfered") || shape === "chamfered") return "chamfered";
+  return "straight";
+}
+
+function openEndSide(params: FwmFurnitureParams, shape: OpenEndShape): OpenEndSide {
+  const variant = String(params.variant ?? "");
+  const endingSide = String(params.endingSide ?? "").toLowerCase();
+  if (variant.includes("ending_left") || endingSide === "left") return "left";
+  if (variant.includes("ending_right") || endingSide === "right") return "right";
+  return shape === "straight" ? "none" : "right";
+}
+
+function openEndFootprintPoints(args: {
+  width: number;
+  depth: number;
+  side: OpenEndSide;
+  shape: OpenEndShape;
+  radiusMm: number;
+  chamferMm: number;
+}): Array<{ x: number; z: number }> {
+  const hw = args.width / 2;
+  const hd = args.depth / 2;
+  if (args.side === "none" || args.shape === "straight") {
+    return [
+      { x: -hw, z: -hd },
+      { x: hw, z: -hd },
+      { x: hw, z: hd },
+      { x: -hw, z: hd }
+    ];
+  }
+
+  const cut = Math.min(Math.max(args.shape === "rounded" ? args.radiusMm : args.chamferMm, 20), Math.max(20, Math.min(args.width, args.depth) - 20));
+  if (args.shape === "chamfered") {
+    return args.side === "right"
+      ? [
+          { x: -hw, z: -hd },
+          { x: hw, z: -hd },
+          { x: hw, z: hd - cut },
+          { x: hw - cut, z: hd },
+          { x: -hw, z: hd }
+        ]
+      : [
+          { x: -hw, z: -hd },
+          { x: hw, z: -hd },
+          { x: hw, z: hd },
+          { x: -hw + cut, z: hd },
+          { x: -hw, z: hd - cut }
+        ];
+  }
+
+  const segmentCount = 8;
+  if (args.side === "right") {
+    const center = { x: hw - cut, z: hd - cut };
+    const arc = Array.from({ length: segmentCount + 1 }, (_, index) => {
+      const angle = (index / segmentCount) * (Math.PI / 2);
+      return { x: center.x + Math.cos(angle) * cut, z: center.z + Math.sin(angle) * cut };
+    });
+    return [
+      { x: -hw, z: -hd },
+      { x: hw, z: -hd },
+      ...arc,
+      { x: -hw, z: hd }
+    ];
+  }
+
+  const center = { x: -hw + cut, z: hd - cut };
+  const arc = Array.from({ length: segmentCount + 1 }, (_, index) => {
+    const angle = Math.PI / 2 + (index / segmentCount) * (Math.PI / 2);
+    return { x: center.x + Math.cos(angle) * cut, z: center.z + Math.sin(angle) * cut };
+  });
+  return [
+    { x: -hw, z: -hd },
+    { x: hw, z: -hd },
+    { x: hw, z: hd },
+    ...arc
+  ];
+}
+
+function openEndEdgeSegments(points: Array<{ x: number; z: number }>) {
+  return points.map((start, index) => ({
+    start,
+    end: points[(index + 1) % points.length],
+    index
+  }));
+}
+
+function isOpenFrontEdge(segment: { start: { x: number; z: number }; end: { x: number; z: number } }, frontZ: number) {
+  return Math.abs(segment.start.z - frontZ) < 0.001 && Math.abs(segment.end.z - frontZ) < 0.001;
+}
+
+function isBackEdge(segment: { start: { x: number; z: number }; end: { x: number; z: number } }, backZ: number) {
+  return Math.abs(segment.start.z - backZ) < 0.001 && Math.abs(segment.end.z - backZ) < 0.001;
+}
+
+function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const width = num(params, "width", 300);
+  const height = num(params, "height", 722);
+  const depth = num(params, "depth", 530);
+  const t = num(params, "boardThickness", 18);
+  const back = num(params, "backThickness", 8);
+  const plinth = num(params, "plinthHeight", 0);
+  const cabinetHeight = Math.max(t * 2 + 20, height - plinth);
+  const baseY = plinth;
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const shelfMat = makeMaterial(params, catalog, "shelf");
+  const plinthMat = makeMaterial(params, catalog, "plinth");
+  const shape = openEndShape(params);
+  const side = openEndSide(params, shape);
+  const radius = num(params, "cornerRadiusMm", Math.min(width, depth) * 0.45);
+  const chamfer = num(params, "chamferMm", Math.min(width, depth) * 0.42);
+  const footprint = openEndFootprintPoints({ width, depth, side, shape, radiusMm: radius, chamferMm: chamfer });
+  const innerWidth = Math.max(1, width - 2 * t);
+  const innerDepth = Math.max(1, depth - back);
+  const innerFootprint = openEndFootprintPoints({
+    width: innerWidth,
+    depth: innerDepth,
+    side,
+    shape,
+    radiusMm: Math.max(10, radius - t),
+    chamferMm: Math.max(10, chamfer - t)
+  }).map((point) => ({ x: point.x, z: point.z + back / 2 }));
+  const paramKeys = ["width", "height", "depth", "shelfCount", "shape", "endingSide", "cornerRadiusMm", "chamferMm", "boardThickness"];
+  const frontZ = depth / 2;
+  const backZ = -depth / 2;
+
+  for (const segment of openEndEdgeSegments(footprint)) {
+    if (isOpenFrontEdge(segment, frontZ)) continue;
+    const boardName = isBackEdge(segment, backZ)
+      ? "open_niche_back_panel"
+      : shape === "straight"
+        ? `open_niche_side_panel_${segment.index + 1}`
+        : `open_niche_${shape}_ending_panel_${segment.index + 1}`;
+    const mesh = addBoardBetweenPlanPoints(
+      group,
+      boardName,
+      segment.start,
+      segment.end,
+      baseY + cabinetHeight / 2,
+      cabinetHeight,
+      isBackEdge(segment, backZ) ? back : t,
+      isBackEdge(segment, backZ) ? backMat : body,
+      paramKeys
+    );
+    tagOpenEndBoard(
+      mesh,
+      boardName,
+      isBackEdge(segment, backZ) ? "back" : "corpus",
+      isBackEdge(segment, backZ) ? [] : [{ edgeId: "front_or_side_visible_edge", role: "visible_open_end", axis: "Y", materialSlotId: "corpus" }]
+    );
+  }
+
+  const bottom = addPlanPrism(group, "open_niche_bottom_panel", innerFootprint, baseY, baseY + t, body, paramKeys);
+  tagOpenEndBoard(bottom, "open_niche_bottom_panel", "corpus", [{ edgeId: "front_visible_edge", role: "visible_front", axis: "XZ", materialSlotId: "corpus" }]);
+  const top = addPlanPrism(group, "open_niche_top_panel", innerFootprint, baseY + cabinetHeight - t, baseY + cabinetHeight, body, paramKeys);
+  tagOpenEndBoard(top, "open_niche_top_panel", "corpus", [{ edgeId: "front_visible_edge", role: "visible_front", axis: "XZ", materialSlotId: "corpus" }]);
+
+  const shelves = Math.max(0, Math.min(16, Math.round(num(params, "shelfCount", 0))));
+  const shelfT = num(params, "shelfThickness", t);
+  const innerH = Math.max(1, cabinetHeight - 2 * t);
+  const availableShelfGapHeight = Math.max(1, innerH - shelves * shelfT);
+  const requestedShelfGaps = readShelfGapValues(params, shelves + 1);
+  const shelfGaps = requestedShelfGaps.length > 0
+    ? Array.from({ length: shelves + 1 }, (_, index) => requestedShelfGaps[index] ?? requestedShelfGaps[requestedShelfGaps.length - 1] ?? (availableShelfGapHeight / (shelves + 1)))
+    : Array.from({ length: shelves + 1 }, () => availableShelfGapHeight / (shelves + 1));
+  const shelfGapTotal = shelfGaps.reduce((sum, value) => sum + value, 0);
+  const shelfGapScale = shelfGapTotal > availableShelfGapHeight ? availableShelfGapHeight / shelfGapTotal : 1;
+  let shelfCursorY = baseY + t;
+  for (let index = 0; index < shelves; index += 1) {
+    shelfCursorY += shelfGaps[index] * shelfGapScale;
+    const yMin = shelfCursorY;
+    const shelf = addPlanPrism(group, `open_niche_shelf_${index + 1}`, innerFootprint, yMin, yMin + shelfT, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "depth"]);
+    tagOpenEndBoard(shelf, `open_niche_shelf_${index + 1}`, "corpus", [{ edgeId: "front_visible_edge", role: "visible_shelf_front", axis: "XZ", materialSlotId: "corpus" }]);
+    shelfCursorY += shelfT;
+  }
+
+  if (plinth > 0) {
+    const boardDepth = Math.max(8, Math.min(t, 24));
+    let plinthIndex = 1;
+    for (const segment of openEndEdgeSegments(footprint)) {
+      if (isBackEdge(segment, backZ)) continue;
+      const shapedFrontEdge =
+        shape !== "straight" &&
+        !isOpenFrontEdge(segment, frontZ) &&
+        Math.max(segment.start.z, segment.end.z) > frontZ - Math.max(radius, chamfer, 80) + 0.001;
+      if (!isOpenFrontEdge(segment, frontZ) && !shapedFrontEdge) continue;
+      const mesh = addBoardBetweenPlanPoints(
+        group,
+        `open_niche_plinth_front_${plinthIndex}`,
+        segment.start,
+        segment.end,
+        plinth / 2,
+        plinth,
+        boardDepth,
+        plinthMat,
+        ["plinthHeight", "plinthSetbackMm", "plinthMaterialId", "shape", "endingSide"]
+      );
+      tagOpenEndBoard(mesh, `open_niche_plinth_front_${plinthIndex}`, "plinth");
+      plinthIndex += 1;
+    }
+    addAdjustableLegs(group, params, catalog, { width, depth, plinth, setback: num(params, "plinthSetbackMm", 60), boardDepth, prefix: "open_niche_" });
+  }
+}
+
+function buildCatalogWallOpenEnd(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const width = num(params, "width", 300);
+  const height = num(params, "height", 300);
+  const depth = num(params, "depth", 330);
+  const t = num(params, "boardThickness", 18);
+  const back = num(params, "backThickness", 8);
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const shelfMat = makeMaterial(params, catalog, "shelf");
+  const shape = String(params.endingShape ?? params.variant ?? "").includes("rounded") ? "rounded" : "chamfered";
+  const side = String(params.side ?? "right") === "left" ? "left" : "right";
+  const shapeAmount = shape === "rounded"
+    ? num(params, "cornerRadiusMm", 120)
+    : num(params, "chamferMm", 120);
+  const footprint = wallOpenEndShapePath(width, depth, shape, side, shapeAmount);
+  const innerFootprint = wallOpenEndShapePath(
+    Math.max(1, width - 2 * t),
+    Math.max(1, depth - back),
+    shape,
+    side,
+    Math.max(10, shapeAmount - t)
+  ).map((point) => ({ x: point.x, z: point.z + back / 2 }));
+  const panels = wallOpenEndPanelSegments(width, depth, shape, side, shapeAmount);
+  const paramKeys = ["width", "height", "depth", "side", "endingShape", "cornerRadiusMm", "chamferMm", "boardThickness", "backThickness"];
+  const innerHeight = Math.max(1, height - 2 * t);
+
+  const backPanel = addInsetBoardBetweenPlanPoints(
+    group,
+    "wall_open_end_back_panel",
+    { x: -width / 2, z: -depth / 2 },
+    { x: width / 2, z: -depth / 2 },
+    height / 2,
+    height,
+    back,
+    backMat,
+    paramKeys
+  );
+  tagBoardIdentity(backPanel, "wall_open_end_back_panel", "back");
+
+  const fixedSide = addInsetBoardBetweenPlanPoints(
+    group,
+    "wall_open_end_fixed_side_panel",
+    panels.fixed.start,
+    panels.fixed.end,
+    height / 2,
+    height,
+    t,
+    body,
+    paramKeys
+  );
+  tagVisibleEdges(tagBoardIdentity(fixedSide, "wall_open_end_fixed_side_panel", "corpus"), ["front_vertical_edge"]);
+
+  panels.shaped.forEach((segment, index) => {
+    const panel = addInsetBoardBetweenPlanPoints(
+      group,
+      `wall_open_end_${shape}_side_panel_${index + 1}`,
+      segment.start,
+      segment.end,
+      height / 2,
+      height,
+      t,
+      body,
+      paramKeys
+    );
+    tagVisibleEdges(tagBoardIdentity(panel, `wall_open_end_${shape}_side_panel_${index + 1}`, "corpus"), ["exposed_ending_vertical_edge"]);
+  });
+
+  const bottom = addPlanPrism(group, "wall_open_end_bottom_panel", footprint, 0, t, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(bottom, "wall_open_end_bottom_panel", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
+  const top = addPlanPrism(group, "wall_open_end_top_panel", footprint, height - t, height, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(top, "wall_open_end_top_panel", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
+
+  const shelves = Math.max(0, Math.min(8, Math.round(num(params, "shelfCount", 0))));
+  const shelfT = num(params, "shelfThickness", t);
+  const availableShelfGapHeight = Math.max(1, innerHeight - shelves * shelfT);
+  const requestedShelfGaps = readShelfGapValues(params, shelves + 1);
+  const shelfGaps = requestedShelfGaps.length > 0
+    ? Array.from({ length: shelves + 1 }, (_, index) => requestedShelfGaps[index] ?? requestedShelfGaps[requestedShelfGaps.length - 1] ?? (availableShelfGapHeight / (shelves + 1)))
+    : Array.from({ length: shelves + 1 }, () => availableShelfGapHeight / (shelves + 1));
+  const shelfGapTotal = shelfGaps.reduce((sum, value) => sum + value, 0);
+  const shelfGapScale = shelfGapTotal > availableShelfGapHeight ? availableShelfGapHeight / shelfGapTotal : 1;
+  let shelfCursorY = t;
+  for (let index = 0; index < shelves; index += 1) {
+    shelfCursorY += shelfGaps[index] * shelfGapScale;
+    const yMin = shelfCursorY;
+    const shelf = addPlanPrism(
+      group,
+      `wall_open_end_shelf_${index + 1}`,
+      innerFootprint,
+      yMin,
+      yMin + shelfT,
+      shelfMat,
+      ["shelfCount", "shelfGaps", "shelfThickness", "height", "depth", "side", "endingShape"]
+    );
+    tagVisibleEdges(tagBoardIdentity(shelf, `wall_open_end_shelf_${index + 1}`, "corpus"), ["front_visible_edge", "ending_visible_edge"]);
+    shelfCursorY += shelfT;
+  }
+
+  group.userData.isOpenEnd = true;
+  group.userData.endingShape = shape;
+  group.userData.endingSide = side;
+}
+
+function tagWallCornerBoard(
+  mesh: THREE.Mesh,
+  boardName: string,
+  materialGroup: "corpus" | "front" | "back" | "hardware",
+  edgeBanding: Array<Record<string, unknown>> = []
+) {
+  mesh.userData.boardName = boardName;
+  mesh.userData.partName = boardName;
+  mesh.userData.materialGroup = materialGroup;
+  mesh.userData.materialSlotId = materialGroup;
+  mesh.userData.grainAlong = inferGrainAlong(boardName, materialGroup, readMeshDimensionsMm(mesh));
+  if (edgeBanding.length > 0) {
+    mesh.userData.edgeBandingStrategy = "explicit_visible_edges";
+    mesh.userData.edgeBanding = edgeBanding;
+  }
+}
+
+function wallCornerFootprint(variant: string, depth: number, chamferMm: number) {
+  const half = depth / 2;
+  if (variant === "corner_90" || variant === "corner_90_1p") {
+    const notch = Math.max(80, Math.min(depth * 0.42, depth - 80));
+    return {
+      points: [
+        { x: -half, z: -half },
+        { x: half, z: -half },
+        { x: half, z: half },
+        { x: -half + notch, z: half },
+        { x: -half + notch, z: -half + notch },
+        { x: -half, z: -half + notch }
+      ],
+      frontSegments: [
+        { start: { x: -half + notch, z: half }, end: { x: half, z: half }, name: "front_leaf_x" },
+        { start: { x: -half + notch, z: -half + notch }, end: { x: -half + notch, z: half }, name: "front_leaf_z" }
+      ]
+    };
+  }
+
+  const chamfer = Math.max(80, Math.min(chamferMm, depth - 80));
+  const diagonalStart = { x: -half + chamfer, z: half };
+  const diagonalEnd = { x: -half, z: half - chamfer };
+  return {
+    points: [
+      { x: -half, z: -half },
+      { x: half, z: -half },
+      { x: half, z: half },
+      diagonalStart,
+      diagonalEnd
+    ],
+    frontSegments: [{ start: diagonalStart, end: diagonalEnd, name: "diagonal_front" }]
+  };
+}
+
+function insetWallCornerFootprint(points: Array<{ x: number; z: number }>, inset: number) {
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minZ = Math.min(...points.map((point) => point.z));
+  const maxZ = Math.max(...points.map((point) => point.z));
+  return points.map((point) => {
+    const x = point.x <= minX + 0.001 ? point.x + inset : point.x >= maxX - 0.001 ? point.x - inset : point.x;
+    const z = point.z <= minZ + 0.001 ? point.z + inset : point.z >= maxZ - 0.001 ? point.z - inset : point.z;
+    return { x, z };
+  });
+}
+
+function addWallCornerHandle(
+  group: THREE.Group,
+  name: string,
+  segment: { start: { x: number; z: number }; end: { x: number; z: number } },
+  yCenterMm: number,
+  material: THREE.Material
+) {
+  const inset = insetPlanSegmentTowardCenter(segment.start, segment.end, 24);
+  const dx = inset.end.x - inset.start.x;
+  const dz = inset.end.z - inset.start.z;
+  const length = Math.max(1, Math.hypot(dx, dz));
+  const center = {
+    x: (inset.start.x + inset.end.x) / 2,
+    y: yCenterMm,
+    z: (inset.start.z + inset.end.z) / 2
+  };
+  const handle = addBox(group, name, { width: 55, height: 8, depth: 10 }, center, material, ["handleComponentId", "opened"]);
+  handle.rotation.y = -Math.atan2(dz, dx);
+  tagWallCornerBoard(handle, name, "hardware");
+  return handle;
+}
+
+function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const variant = String(params.variant ?? "corner_chamfered");
+  const depth = num(params, "depth", 330);
+  const width = depth;
+  const height = num(params, "height", 450);
+  const t = num(params, "boardThickness", 18);
+  const back = num(params, "backThickness", 8);
+  const shelfT = num(params, "shelfThickness", t);
+  const frontT = num(params, "frontThicknessMm", 18);
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const shelfMat = makeMaterial(params, catalog, "shelf");
+  const frontMat = makeMaterial(params, catalog, "front");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const openNiche = variant === "corner_open_chamfered" || variant === "open_niche";
+  const chamfer = num(params, "frontChamferMm", num(params, "chamferMm", Math.max(120, depth * 0.58)));
+  const footprint = wallCornerFootprint(variant, depth, chamfer);
+  const innerFootprint = insetWallCornerFootprint(footprint.points, t);
+  const innerH = Math.max(1, height - 2 * t);
+  const paramKeys = ["width", "depth", "height", "variant", "cornerShape", "frontChamferMm", "chamferMm", "boardThickness"];
+
+  const bottom = addPlanPrism(group, "wall_corner_bottom_panel", innerFootprint, 0, t, body, paramKeys);
+  tagWallCornerBoard(bottom, "bottom_panel", "corpus", [{ edgeId: "visible_front_edges", role: "visible_corner_bottom", axis: "XZ", materialSlotId: "corpus" }]);
+  const top = addPlanPrism(group, "wall_corner_top_panel", innerFootprint, height - t, height, body, paramKeys);
+  tagWallCornerBoard(top, "top_panel", "corpus", [{ edgeId: "visible_front_edges", role: "visible_corner_top", axis: "XZ", materialSlotId: "corpus" }]);
+
+  const minX = -width / 2;
+  const maxX = width / 2;
+  const minZ = -depth / 2;
+  const maxZ = depth / 2;
+  const verticalEdges = [
+    { name: "back_panel_x", start: { x: minX + t, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
+    { name: "back_panel_z", start: { x: minX, z: minZ + t }, end: { x: minX, z: maxZ - t }, group: "back" as const, thickness: back },
+    { name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: maxZ }, group: "corpus" as const, thickness: t }
+  ];
+  if (!openNiche && (variant === "corner_chamfered" || variant === "corner_chamfered_1p")) {
+    verticalEdges.push({ name: "left_short_side_panel", start: { x: minX, z: minZ }, end: { x: minX, z: maxZ - chamfer }, group: "corpus" as const, thickness: t });
+  }
+  for (const edge of verticalEdges) {
+    const mesh = addInsetBoardBetweenPlanPoints(
+      group,
+      `wall_corner_${edge.name}`,
+      edge.start,
+      edge.end,
+      height / 2,
+      height,
+      edge.thickness,
+      edge.group === "back" ? backMat : body,
+      paramKeys
+    );
+    tagWallCornerBoard(mesh, edge.name, edge.group);
+  }
+
+  const shelves = Math.max(0, Math.min(12, Math.round(num(params, "shelfCount", openNiche ? 2 : 1))));
+  for (let index = 0; index < shelves; index += 1) {
+    const yMin = t + ((innerH - shelfT) * (index + 1)) / (shelves + 1);
+    const shelf = addPlanPrism(group, `wall_corner_shelf_${index + 1}`, innerFootprint, yMin, yMin + shelfT, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "depth"]);
+    tagWallCornerBoard(shelf, `shelf_${index + 1}`, "corpus", [{ edgeId: "visible_shelf_front_edges", role: "visible_shelf_front", axis: "XZ", materialSlotId: "corpus" }]);
+  }
+
+  if (!openNiche) {
+    const opened = bool(params, "opened", false);
+    const doorOffset = opened ? Math.min(180, depth * 0.42) : 0;
+    for (const segment of footprint.frontSegments) {
+      const dx = segment.end.x - segment.start.x;
+      const dz = segment.end.z - segment.start.z;
+      const length = Math.max(1, Math.hypot(dx, dz));
+      const nx = dz / length;
+      const nz = -dx / length;
+      const shifted = {
+        start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
+        end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
+      };
+      const door = addInsetBoardBetweenPlanPoints(
+        group,
+        `wall_corner_${segment.name}_door`,
+        shifted.start,
+        shifted.end,
+        height / 2,
+        Math.max(80, height - 2 * t),
+        frontT,
+        frontMat,
+        ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
+      );
+      tagWallCornerBoard(door, `${segment.name}_door`, "front", [{ edgeId: "front_visible_edges", role: "visible_front", axis: "Y", materialSlotId: "front" }]);
+      addWallCornerHandle(group, `wall_corner_${segment.name}_handle`, shifted, height * 0.48, hardware);
+    }
+  }
+
+  group.userData.catalogWallCornerVariant = variant;
+  group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
+  group.userData.kitchenCornerFootprintMm = footprint.points;
+}
+
+function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const width = num(params, "width", 900);
+  const height = num(params, "height", 722);
+  const depth = num(params, "depth", 782);
+  const t = num(params, "boardThickness", 18);
+  const back = num(params, "backThickness", 8);
+  const plinth = num(params, "plinthHeight", 100);
+  const shelfT = num(params, "shelfThickness", t);
+  const frontT = num(params, "frontThicknessMm", 18);
+  const plinthSetback = num(params, "plinthSetbackMm", 50);
+  const openedOffset = params.opened ? Math.min(260, Math.max(160, depth * 0.24)) : 0;
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const shelfMat = makeMaterial(params, catalog, "shelf");
+  const frontMat = makeMaterial(params, catalog, "front");
+  const plinthMat = makeMaterial(params, catalog, "plinth");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const legComponent = resolveComponentForParam(params, catalog, "legComponentId", "leg");
+  const clipComponent = resolveComponentForParam(params, catalog, "clipComponentId", "plinth_clip");
+  const legMaterial = makeComponentMaterial(params, catalog, legComponent, hardware);
+  const clipMaterial = makeComponentMaterial(params, catalog, clipComponent, hardware);
+
+  const source = { width: 1000.077, height: 722, depth: 782, plinth: 100 };
+  const sourcePlinthSetback = 50;
+  const plinthSetbackDelta = plinthSetback - sourcePlinthSetback;
+  const materialByRole: Record<"body" | "back" | "shelf" | "front" | "plinth", THREE.Material> = {
+    body,
+    back: backMat,
+    shelf: shelfMat,
+    front: frontMat,
+    plinth: plinthMat
+  };
+
+  type GroundTruthPart = {
+    name: string;
+    role: "body" | "back" | "shelf" | "front" | "plinth";
+    size: { width: number; height: number; depth: number };
+    center: { x: number; y: number; z: number };
+    paramKeys: string[];
+  };
+
+  const parts: GroundTruthPart[] = [
+    { name: "corner_left_side", role: "body", size: { width: 18, height: 622, depth: 694 }, center: { x: -491.038, y: 411, z: -44 }, paramKeys: ["width", "height", "depth", "boardThickness"] },
+    { name: "corner_right_side", role: "body", size: { width: 18, height: 622, depth: 694 }, center: { x: 390.962, y: 411, z: -44 }, paramKeys: ["width", "height", "depth", "boardThickness"] },
+    { name: "corner_back_panel", role: "back", size: { width: 864, height: 586, depth: 8 }, center: { x: -50.038, y: 411, z: -369 }, paramKeys: ["width", "height", "depth", "backThickness", "boardThickness"] },
+    { name: "corner_bottom_panel", role: "body", size: { width: 864, height: 18, depth: 694 }, center: { x: -50.038, y: 109, z: -44 }, paramKeys: ["width", "depth", "boardThickness"] },
+    { name: "corner_top_back_rail", role: "body", size: { width: 864, height: 18, depth: 70 }, center: { x: -50.038, y: 713, z: -356 }, paramKeys: ["width", "height", "depth", "boardThickness"] },
+    { name: "corner_blind_divider", role: "front", size: { width: 18, height: 618, depth: 70 }, center: { x: -39.038, y: 411, z: 356 }, paramKeys: ["width", "height", "frontThicknessMm"] },
+    { name: "corner_plinth_front_board", role: "plinth", size: { width: 468, height: 100, depth: 18 }, center: { x: -264.038, y: 50, z: 312 }, paramKeys: ["plinthHeight", "plinthSetbackMm", "plinthMaterialId", "width", "depth"] },
+    { name: "corner_blind_front_filler", role: "front", size: { width: 340, height: 618, depth: 18 }, center: { x: -328.038, y: 411, z: 312 }, paramKeys: ["width", "height", "frontThicknessMm", "frontMaterialId"] },
+    { name: "corner_right_door", role: "front", size: { width: 656.077, height: 618, depth: 18 }, center: { x: 172, y: 411, z: 312 }, paramKeys: ["width", "height", "doorCount", "frontThicknessMm", "frontMaterialId", "opened"] },
+    { name: "corner_front_top_rail", role: "body", size: { width: 864, height: 18, depth: 70 }, center: { x: -50.038, y: 713, z: 268 }, paramKeys: ["width", "height", "depth", "boardThickness"] }
+  ];
+
+  for (const part of parts) {
+    const size = scaleGroundTruthSize(part.size, part.role, { width, height, depth, plinth, t, back, shelfT, frontT }, source);
+    const center = scaleGroundTruthCenter(part.center, source, { width, height, depth, plinth });
+    if (part.name === "corner_plinth_front_board") center.z -= plinthSetbackDelta;
+    if (part.name === "corner_right_door") center.z += openedOffset;
+    const mesh = addBox(group, part.name, size, center, materialByRole[part.role], part.paramKeys);
+    mesh.userData.materialGroup = part.role;
+  }
+
+  const shelfCount = Math.max(0, Math.min(16, Math.round(num(params, "shelfCount", 1))));
+  const shelfSize = scaleGroundTruthSize(
+    { width: 862, height: 18, depth: 686 },
+    "shelf",
+    { width, height, depth, plinth, t, back, shelfT, frontT },
+    source
+  );
+  const shelfSourceBottomY = 109 + 18;
+  const shelfSourceTopY = 713 - 18;
+  const shelfBottomY = scaleGroundTruthY(shelfSourceBottomY, source, { height, plinth });
+  const shelfTopY = scaleGroundTruthY(shelfSourceTopY, source, { height, plinth });
+  const shelfX = (-51.038 / source.width) * width;
+  const shelfZ = (-40 / source.depth) * depth;
+  for (let index = 0; index < shelfCount; index += 1) {
+    const ratio = (index + 1) / (shelfCount + 1);
+    const y = shelfBottomY + (shelfTopY - shelfBottomY) * ratio;
+    const mesh = addBox(
+      group,
+      `corner_right_shelf_${index + 1}`,
+      shelfSize,
+      { x: shelfX, y, z: shelfZ },
+      shelfMat,
+      ["shelfCount", "shelfThickness", "height", "shelfMaterialId", "width", "depth"]
+    );
+    mesh.userData.materialGroup = "shelf";
+  }
+
+  const handleCenter = scaleGroundTruthCenter({ x: -459.159, y: 439.9, z: 326 }, source, { width, height, depth, plinth });
+  addCylinder(
+    group,
+    "corner_right_door_handle",
+    5,
+    Math.min(num(params, "handleLengthMm", 160), Math.max(40, height * 0.28)),
+    {
+      x: handleCenter.x,
+      y: handleCenter.y,
+      z: handleCenter.z + openedOffset + num(params, "handleProjectionMm", 28) * 0.5
+    },
+    hardware,
+    "y",
+    ["handleComponentId", "handleLengthMm", "handleProjectionMm", "width", "height", "depth", "opened"]
+  );
+
+  const legCenters = [
+    { name: "corner_leg_front_left", x: -405.038, y: 50, z: 273, plinthClipIndex: 1 },
+    { name: "corner_leg_front_middle", x: -41.038, y: 50, z: 273, plinthClipIndex: 2 },
+    { name: "corner_leg_front_right", x: 304.962, y: 50, z: 231 },
+    { name: "corner_leg_rear_left", x: -405.038, y: 50, z: -291 },
+    { name: "corner_leg_rear_right", x: 304.962, y: 50, z: -291 }
+  ];
+  if (plinth > 0) {
+    for (const leg of legCenters) {
+      const center = scaleGroundTruthCenter(leg, source, { width, height, depth, plinth });
+      center.z += leg.name.includes("_rear_") ? plinthSetbackDelta : -plinthSetbackDelta;
+      const mesh = addCornerStyleLeg(group, leg.name, plinth, center, legMaterial, ["legComponentId", "plinthHeight", "plinthSetbackMm", "width", "depth"]);
+      markComponent(mesh, legComponent, "legComponentId");
+      if (leg.plinthClipIndex) {
+        addCornerStylePlinthClipSet(group, "corner_", leg.plinthClipIndex, { x: center.x, z: center.z }, clipMaterial, clipComponent);
+      }
+    }
+  }
+
+  for (const [index, sourceCenter] of [
+    { x: -131.618, y: 652.4, z: 302 },
+    { x: -131.618, y: 157.4, z: 302 }
+  ].entries()) {
+    const center = scaleGroundTruthCenter(sourceCenter, source, { width, height, depth, plinth });
+    const hinge = addBox(
+      group,
+      `corner_hinge_${index + 1}`,
+      { width: 25, height: 25, depth: 2 },
+      center,
+      hardware,
+      ["hingeComponentId", "width", "height", "depth"]
+    );
+    hinge.userData.materialGroup = "hardware";
+    hinge.userData.componentType = "hinge";
+  }
+}
+
+function readGroundTruthString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readGroundTruthColorHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+}
+
+function readGroundTruthVectorMm(value: unknown): THREE.Vector3 | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const vector = value as Record<string, unknown>;
+  const x = vector.x;
+  const y = vector.y;
+  const z = vector.z;
+  if (
+    typeof x !== "number" || !Number.isFinite(x) ||
+    typeof y !== "number" || !Number.isFinite(y) ||
+    typeof z !== "number" || !Number.isFinite(z)
+  ) {
+    return null;
+  }
+  return new THREE.Vector3(x, y, z);
+}
+
+type ChamferedGroundTruthParametricContext = {
+  width: number;
+  depth: number;
+  height: number;
+  frontChamferMm: number;
+  frontChamferReferenceMm: number;
+  backChamferMm: number;
+  plinthHeight: number;
+  plinthSetbackMm: number;
+};
+
+const TOP_PANEL_OUTER_FOOTPRINT_OFFSETS = [
+  { x: 33.3, z: 0, dx: -18, dz: -18 },
+  { x: 733.3, z: 0, dx: -18, dz: -18 },
+  { x: 933.3, z: 200, dx: 18, dz: 18 },
+  { x: 933.3, z: 900, dx: 18, dz: 18 },
+  { x: 453.3, z: 900, dx: 18, dz: 18 },
+  { x: 33.3, z: 480, dx: -18, dz: -18 }
+] as const;
+
+function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams): ChamferedGroundTruthParametricContext {
+  const width = Math.max(100, num(params, "width", BASE_CORNER_CHAMFERED_SOURCE.width));
+  const depth = Math.max(100, num(params, "depth", BASE_CORNER_CHAMFERED_SOURCE.depth));
+  const height = Math.max(50, num(params, "height", BASE_CORNER_CHAMFERED_SOURCE.yMax));
+  const frontFallback = num(params, "chamferMm", BASE_CORNER_CHAMFERED_SOURCE.chamferMm);
+  const requestedFrontChamfer = num(params, "frontChamferMm", frontFallback);
+  const requestedFrontChamferReference = num(params, "frontChamferReferenceMm", 200);
+  const requestedBackChamfer = num(params, "backChamferMm", 0);
+  const frontChamferMm = Math.min(
+    Math.max(requestedFrontChamfer, 1),
+    Math.max(1, Math.min(width, depth) - 72)
+  );
+  const frontChamferReferenceMm = Math.min(
+    Math.max(requestedFrontChamferReference, 1),
+    Math.max(1, Math.min(width, depth) - 72)
+  );
+  const backChamferMm = Math.min(
+    Math.max(0, requestedBackChamfer),
+    Math.max(0, Math.min(width, depth) - 72)
+  );
+  const plinthHeight = Math.max(0, Math.min(height - 1, num(params, "plinthHeight", BASE_CORNER_CHAMFERED_SOURCE.plinthTop)));
+  const plinthSetbackMm = Math.max(0, num(params, "plinthSetbackMm", BASE_CORNER_CHAMFERED_SOURCE.plinthSetbackMm));
+  return { width, depth, height, frontChamferMm, frontChamferReferenceMm, backChamferMm, plinthHeight, plinthSetbackMm };
+}
+
+function chamferedDepthIsStraightSegment(context: ChamferedGroundTruthParametricContext) {
+  return Math.abs(context.frontChamferReferenceMm - BASE_CORNER_CHAMFERED_SOURCE.chamferMm) > 0.001;
+}
+
+function chamferedReferenceTotalSpan(context: ChamferedGroundTruthParametricContext) {
+  return chamferedDepthIsStraightSegment(context)
+    ? Math.max(1, context.depth + context.frontChamferReferenceMm)
+    : Math.max(1, context.depth);
+}
+
+function chamferedReferenceStraightSpan(context: ChamferedGroundTruthParametricContext) {
+  return Math.max(1, chamferedReferenceTotalSpan(context) - context.frontChamferReferenceMm);
+}
+
+function mapChamferedGroundTruthAxis(value: number, sourceMin: number, sourceMax: number, targetSpan: number) {
+  const sourceSpan = Math.max(1, sourceMax - sourceMin);
+  if (value <= sourceMin) return sourceMin + (value - sourceMin);
+  if (value >= sourceMax) return sourceMin + targetSpan + (value - sourceMax);
+  return sourceMin + ((value - sourceMin) / sourceSpan) * targetSpan;
+}
+
+function mapChamferedGroundTruthX(value: number, context: ChamferedGroundTruthParametricContext) {
+  const sourceMin = BASE_CORNER_CHAMFERED_SOURCE.xMin;
+  const sourceMax = BASE_CORNER_CHAMFERED_SOURCE.xMax;
+  const sourceCut = sourceMin + BASE_CORNER_CHAMFERED_SOURCE.chamferMm;
+  const targetCut = sourceMin + context.frontChamferReferenceMm;
+  const targetMax = targetCut + chamferedReferenceStraightSpan(context);
+  if (value <= sourceMin) return sourceMin + (value - sourceMin);
+  if (value >= sourceMax) return targetMax + (value - sourceMax);
+  if (value <= sourceCut) {
+    return sourceMin + ((value - sourceMin) / Math.max(1, sourceCut - sourceMin)) * context.frontChamferReferenceMm;
+  }
+  return targetCut + ((value - sourceCut) / Math.max(1, sourceMax - sourceCut)) * chamferedReferenceStraightSpan(context);
+}
+
+function mapChamferedGroundTruthZ(value: number, context: ChamferedGroundTruthParametricContext) {
+  const sourceMin = BASE_CORNER_CHAMFERED_SOURCE.zMin;
+  const sourceMax = BASE_CORNER_CHAMFERED_SOURCE.zMax;
+  const sourceCut = sourceMax - BASE_CORNER_CHAMFERED_SOURCE.chamferMm;
+  const targetCut = sourceMin + chamferedReferenceStraightSpan(context);
+  const targetMax = targetCut + context.frontChamferReferenceMm;
+  if (value <= sourceMin) return sourceMin + (value - sourceMin);
+  if (value >= sourceMax) return targetMax + (value - sourceMax);
+  if (value <= sourceCut) {
+    return sourceMin + ((value - sourceMin) / Math.max(1, sourceCut - sourceMin)) * chamferedReferenceStraightSpan(context);
+  }
+  return targetCut + ((value - sourceCut) / Math.max(1, sourceMax - sourceCut)) * context.frontChamferReferenceMm;
+}
+
+function mapChamferedGroundTruthY(value: number, context: ChamferedGroundTruthParametricContext) {
+  if (value <= BASE_CORNER_CHAMFERED_SOURCE.plinthTop) {
+    return (value / BASE_CORNER_CHAMFERED_SOURCE.plinthTop) * context.plinthHeight;
+  }
+  const sourceBody = Math.max(1, BASE_CORNER_CHAMFERED_SOURCE.yMax - BASE_CORNER_CHAMFERED_SOURCE.plinthTop);
+  const targetBody = Math.max(1, context.height - context.plinthHeight);
+  return context.plinthHeight + ((value - BASE_CORNER_CHAMFERED_SOURCE.plinthTop) / sourceBody) * targetBody;
+}
+
+function groundTruthPrimitiveSourceBoundsMm(primitive: ModuleGeometryPrimitive) {
+  const vertices = Array.isArray(primitive.params.verticesMm) ? primitive.params.verticesMm : [];
+  const xs: number[] = [];
+  const zs: number[] = [];
+  for (const vertex of vertices) {
+    const vector = readGroundTruthVectorMm(vertex);
+    if (!vector) continue;
+    xs.push(vector.x);
+    zs.push(vector.z);
+  }
+  if (xs.length === 0 || zs.length === 0) return null;
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minZ: Math.min(...zs),
+    maxZ: Math.max(...zs)
+  };
+}
+
+function applyFrontChamferedHardwareCoordinateOffset(
+  vector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext
+) {
+  if (readGroundTruthString(primitive.params.materialGroup) !== "hardware") return null;
+  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
+  if (!/(leg_back_right|leg_front_right|leg_diagonal|diagonal_handle|hinge)/i.test(boardName)) return vector;
+
+  const delta = context.frontChamferMm - context.frontChamferReferenceMm;
+  if (Math.abs(delta) < 0.001 && !/leg_diagonal/i.test(boardName)) return vector;
+
+  if (boardName === "leg_back_right") {
+    return new THREE.Vector3(vector.x + delta, vector.y, vector.z);
+  }
+  if (boardName === "leg_front_right") {
+    return new THREE.Vector3(vector.x + delta, vector.y, vector.z + delta);
+  }
+
+  const bounds = groundTruthPrimitiveSourceBoundsMm(primitive);
+  if (!bounds) return vector;
+
+  const sourceCenterX = (bounds.minX + bounds.maxX) / 2;
+  const sourceCenterZ = (bounds.minZ + bounds.maxZ) / 2;
+  const mappedCenterX = mapChamferedGroundTruthX(sourceCenterX, context);
+  const mappedCenterZ = mapChamferedGroundTruthZ(sourceCenterZ, context);
+  const anchorX = mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE.minX, context);
+  const anchorZ = mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE.minZ, context);
+  const mappedSpanX = mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE.maxX, context) - anchorX;
+  const mappedSpanZ = mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE.maxZ, context) - anchorZ;
+  const targetSpanX = Math.max(1, mappedSpanX + delta);
+  const targetSpanZ = Math.max(1, mappedSpanZ + delta);
+  let targetCenterX = anchorX + (mappedCenterX - anchorX) * (targetSpanX / Math.max(1, mappedSpanX));
+  let targetCenterZ = anchorZ + (mappedCenterZ - anchorZ) * (targetSpanZ / Math.max(1, mappedSpanZ));
+  if (/leg_diagonal/i.test(boardName)) {
+    const alongDiagonal = targetCenterX + targetCenterZ;
+    const plinthFrontLine =
+      mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxZ, context) -
+      mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxX, context);
+    const legBehindPlinthMm = 55;
+    const targetOffsetBehindPlinth = plinthFrontLine - legBehindPlinthMm;
+    targetCenterX = (alongDiagonal - targetOffsetBehindPlinth) / 2;
+    targetCenterZ = (alongDiagonal + targetOffsetBehindPlinth) / 2;
+  }
+
+  return new THREE.Vector3(
+    vector.x + (targetCenterX - mappedCenterX),
+    vector.y,
+    vector.z + (targetCenterZ - mappedCenterZ)
+  );
+}
+
+function applyChamferedCutCoordinateOffset(
+  vector: THREE.Vector3,
+  sourceVector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const materialGroup = readGroundTruthString(primitive.params.materialGroup);
+  if (materialGroup === "hardware") {
+    const hardware = applyFrontChamferedHardwareCoordinateOffset(vector, primitive, context);
+    return hardware ?? vector;
+  }
+
+  const delta = context.frontChamferMm - context.frontChamferReferenceMm;
+  if (Math.abs(delta) < 0.001) return vector;
+
+  const sourceCutX = BASE_CORNER_CHAMFERED_SOURCE.xMin + BASE_CORNER_CHAMFERED_SOURCE.chamferMm;
+  const sourceCutZ = BASE_CORNER_CHAMFERED_SOURCE.zMax - BASE_CORNER_CHAMFERED_SOURCE.chamferMm;
+  const tolerance = 40;
+  const frontZThreshold = sourceCutZ + tolerance;
+  const shiftX = sourceVector.x >= sourceCutX - tolerance ? delta : 0;
+  const shiftZ = sourceVector.z >= frontZThreshold ? delta : 0;
+  if (Math.abs(shiftX) < 0.001 && Math.abs(shiftZ) < 0.001) return vector;
+
+  return new THREE.Vector3(
+    vector.x + shiftX,
+    vector.y,
+    vector.z + shiftZ
+  );
+}
+
+function applyBackChamferedCutCoordinateOffset(
+  vector: THREE.Vector3,
+  sourceVector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const materialGroup = readGroundTruthString(primitive.params.materialGroup);
+  if (materialGroup === "hardware") return vector;
+
+  const sourceBackCutX = BASE_CORNER_CHAMFERED_SOURCE.xMax - BASE_CORNER_CHAMFERED_SOURCE.backChamferMm;
+  const sourceBackCutZ = BASE_CORNER_CHAMFERED_SOURCE.zMin + BASE_CORNER_CHAMFERED_SOURCE.backChamferMm;
+  const tolerance = 40;
+  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
+  const frontDelta = context.frontChamferMm - context.frontChamferReferenceMm;
+  const targetBackRightInnerX = mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_SOURCE.xMax, context) + frontDelta;
+  const targetBackInnerZ = mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_SOURCE.zMin, context);
+  const targetBackCutX = targetBackRightInnerX - context.backChamferMm;
+  const targetBackCutZ = targetBackInnerZ + context.backChamferMm;
+
+  const closesBackLeftEdge =
+    /^(back_left_panel|back_corner_panel|top_panel|bottom_panel)$/i.test(boardName) &&
+    sourceVector.x >= sourceBackCutX - tolerance &&
+    sourceVector.x <= sourceBackCutX + tolerance &&
+    sourceVector.z <= sourceBackCutZ + tolerance;
+  const closesRightBackEdge =
+    /^(right_side_panel|back_corner_panel|top_panel|bottom_panel)$/i.test(boardName) &&
+    sourceVector.x >= sourceBackCutX + tolerance &&
+    sourceVector.z >= sourceBackCutZ - tolerance &&
+    sourceVector.z <= sourceBackCutZ + tolerance;
+
+  if (!closesBackLeftEdge && !closesRightBackEdge) return vector;
+
+  const adjusted = vector.clone();
+  if (closesBackLeftEdge) adjusted.x = targetBackCutX + (sourceVector.x - sourceBackCutX);
+  if (closesRightBackEdge) adjusted.z = targetBackCutZ + (sourceVector.z - sourceBackCutZ);
+  return adjusted;
+}
+
+function applyChamferedPlinthSetbackCoordinateOffset(
+  vector: THREE.Vector3,
+  sourceVector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
+  const materialGroup = readGroundTruthString(primitive.params.materialGroup);
+  const movesWithDiagonalPlinth =
+    materialGroup === "plinth" ||
+    /leg_diagonal/i.test(boardName);
+  if (!movesWithDiagonalPlinth) return vector;
+  const delta = context.plinthSetbackMm - BASE_CORNER_CHAMFERED_SOURCE.plinthSetbackMm;
+  if (Math.abs(delta) < 0.001) return vector;
+
+  if (/leg_diagonal/i.test(boardName)) {
+    const bounds = groundTruthPrimitiveSourceBoundsMm(primitive);
+    if (!bounds) return vector;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const xRange = 596.702 - 15.28;
+    const zRange = 918 - 336.578;
+    const alongX = Math.max(0, Math.min(1, (centerX - 15.28) / Math.max(1, xRange)));
+    const alongZ = Math.max(0, Math.min(1, (centerZ - 336.578) / Math.max(1, zRange)));
+    return new THREE.Vector3(
+      vector.x + delta * (1 - alongX),
+      vector.y,
+      vector.z - delta * alongZ
+    );
+  }
+
+  const xRange = 596.702 - 15.28;
+  const zRange = 918 - 336.578;
+  const alongX = Math.max(0, Math.min(1, (sourceVector.x - 15.28) / Math.max(1, xRange)));
+  const alongZ = Math.max(0, Math.min(1, (sourceVector.z - 336.578) / Math.max(1, zRange)));
+
+  // Coordinate setback for a 45-degree plinth: do not use perpendicular/diagonal length.
+  return new THREE.Vector3(
+    vector.x + delta * (1 - alongX),
+    vector.y,
+    vector.z - delta * alongZ
+  );
+}
+
+function trimChamferedStraightPanelMeasurementOverlap(
+  vector: THREE.Vector3,
+  sourceVector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive
+) {
+  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
+  const sourceFrontCutX = BASE_CORNER_CHAMFERED_SOURCE.xMin + BASE_CORNER_CHAMFERED_SOURCE.chamferMm;
+  if (boardName === "front_right_panel" && sourceVector.x < sourceFrontCutX + 0.5) {
+    return new THREE.Vector3(vector.x + 18, vector.y, vector.z);
+  }
+  if (boardName === "left_side_panel" && sourceVector.z < BASE_CORNER_CHAMFERED_SOURCE.zMin - 0.5) {
+    return new THREE.Vector3(vector.x, vector.y, vector.z + 18);
+  }
+  return vector;
+}
+
+function alignVerticalBackPanelBottom(vector: THREE.Vector3, primitive: ModuleGeometryPrimitive) {
+  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
+  if (!/back_(left|corner)_panel/i.test(boardName)) return vector;
+  if (Math.abs(vector.y - 118.05) > 0.1) return vector;
+  return new THREE.Vector3(vector.x, 118, vector.z);
+}
+
+function alignTopPanelFootprintToVerticalPanels(vector: THREE.Vector3, primitive: ModuleGeometryPrimitive) {
+  if (readGroundTruthString(primitive.params.boardName) !== "top_panel") return vector;
+  const match = TOP_PANEL_OUTER_FOOTPRINT_OFFSETS.find((offset) =>
+    Math.abs(vector.x - offset.x) < 0.05 &&
+    Math.abs(vector.z - offset.z) < 0.05
+  );
+  if (!match) return vector;
+  return new THREE.Vector3(vector.x + match.dx, vector.y, vector.z + match.dz);
+}
+
+function transformChamferedGroundTruthVertexMm(
+  vector: THREE.Vector3,
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const sourceVector = alignTopPanelFootprintToVerticalPanels(alignVerticalBackPanelBottom(vector, primitive), primitive);
+  const mapped = new THREE.Vector3(
+    mapChamferedGroundTruthX(sourceVector.x, context),
+    mapChamferedGroundTruthY(sourceVector.y, context),
+    mapChamferedGroundTruthZ(sourceVector.z, context)
+  );
+  const chamfered = applyChamferedCutCoordinateOffset(mapped, sourceVector, primitive, context);
+  const backChamfered = applyBackChamferedCutCoordinateOffset(chamfered, sourceVector, primitive, context);
+  const plinthSetback = applyChamferedPlinthSetbackCoordinateOffset(backChamfered, sourceVector, primitive, context);
+  return trimChamferedStraightPanelMeasurementOverlap(plinthSetback, sourceVector, primitive);
+}
+
+function fallbackGroundTruthColorForMaterialGroup(group: unknown): string {
+  const value = canonicalFwmMaterialGroup(group);
+  if (value.includes("front")) return "#d7d2c7";
+  if (value.includes("worktop")) return "#9b846a";
+  if (value.includes("plinth")) return "#4f4f4f";
+  if (value.includes("back")) return "#c8ccd1";
+  if (value.includes("hardware")) return "#464646";
+  return "#eeeae0";
+}
+
+function roleFromMaterialGroup(group: string): MatRole {
+  if (group === "front" || group === "back" || group === "drawer_bottom" || group === "plinth" || group === "worktop" || group === "hardware") return group;
+  return "body";
+}
+
+function makeGroundTruthMaterial(primitive: ModuleGeometryPrimitive, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const materialGroup = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialGroup) ?? "corpus") || "corpus";
+  const material = makeMaterial(params, catalog, roleFromMaterialGroup(materialGroup)).clone();
+  material.side = THREE.DoubleSide;
+  const materialColorHex = typeof material.userData.renderColorHex === "string"
+    ? material.userData.renderColorHex
+    : fallbackGroundTruthColorForMaterialGroup(materialGroup);
+  material.userData.materialGroup = materialGroup;
+  material.userData.materialSlotId = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialSlotId) ?? materialGroup) || materialGroup;
+  material.userData.materialName = readGroundTruthString(primitive.params.materialName);
+  material.userData.materialColorHex = materialColorHex;
+  material.userData.renderColorHex = materialColorHex;
+  material.userData.revitMaterialElementId = readGroundTruthString(primitive.params.revitMaterialElementId);
+  material.userData.materialSource = readGroundTruthString(primitive.params.materialSource) ?? "revit-ground-truth";
+  return material;
+}
+
+function chamferedCornerVisibleEdgeBanding(boardName: string | null | undefined, materialSlotId: string | null | undefined) {
+  const slot = canonicalFwmMaterialGroup(materialSlotId ?? "corpus") || "corpus";
+  switch (boardName) {
+    case "front_right_panel":
+      return [{ edgeId: "front_outer_edge", role: "visible_front", axis: "X", materialSlotId: slot }];
+    case "left_side_panel":
+      return [{ edgeId: "front_outer_edge", role: "visible_front", axis: "Z", materialSlotId: slot }];
+    case "top_panel":
+      return [{ edgeId: "front_chamfer_edge", role: "visible_chamfer", axis: "XZ", materialSlotId: slot }];
+    case "bottom_panel":
+      return [{ edgeId: "front_chamfer_edge", role: "visible_chamfer", axis: "XZ", materialSlotId: slot }];
+    case "diagonal_front":
+      return [{ edgeId: "front_chamfer_door_edge", role: "visible_chamfer", axis: "XZ", materialSlotId: slot }];
+    default:
+      return [];
+  }
+}
+
+function tagGroundTruthMesh(mesh: THREE.Mesh, primitive: ModuleGeometryPrimitive) {
+  const boardName = readGroundTruthString(primitive.params.boardName);
+  const materialGroup = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialGroup) ?? "corpus") || "corpus";
+  const materialSlotId = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialSlotId) ?? materialGroup) || materialGroup;
+  const materialColorHex = readGroundTruthColorHex(primitive.params.materialColorHex) ?? fallbackGroundTruthColorForMaterialGroup(materialGroup);
+  mesh.name = boardName
+    ? `corner_chamfered_${boardName.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "").toLowerCase()}_${primitive.id}`
+    : primitive.id;
+  mesh.userData.selectable = true;
+  mesh.userData.tags = ["module", "revit-ground-truth", primitive.primitiveType];
+  mesh.userData.primitiveId = primitive.id;
+  mesh.userData.boardName = boardName;
+  mesh.userData.partName = boardName ?? primitive.id;
+  mesh.userData.materialGroup = materialGroup;
+  mesh.userData.materialSlotId = materialSlotId;
+  mesh.userData.materialId = readGroundTruthString(primitive.params.materialId);
+  mesh.userData.materialName = readGroundTruthString(primitive.params.materialName);
+  mesh.userData.materialColorHex = materialColorHex;
+  mesh.userData.renderColorHex = materialColorHex;
+  mesh.userData.materialParameterName = readGroundTruthString(primitive.params.materialParameterName);
+  mesh.userData.materialParameterValue = readGroundTruthString(primitive.params.materialParameterValue);
+  mesh.userData.revitMaterialElementId = readGroundTruthString(primitive.params.revitMaterialElementId);
+  mesh.userData.materialSource = readGroundTruthString(primitive.params.materialSource);
+  mesh.userData.sourceElementId = primitive.params.sourceElementId;
+  mesh.userData.sourceUniqueId = readGroundTruthString(primitive.params.sourceUniqueId);
+  mesh.userData.sourceName = readGroundTruthString(primitive.params.sourceName);
+  mesh.userData.sourceClass = readGroundTruthString(primitive.params.sourceClass);
+  mesh.userData.revitCategory = readGroundTruthString(primitive.params.revitCategory);
+  if (Array.isArray(primitive.params.paramKeys)) mesh.userData.paramKeys = primitive.params.paramKeys;
+  if (primitive.params.revitProperties && typeof primitive.params.revitProperties === "object" && !Array.isArray(primitive.params.revitProperties)) {
+    mesh.userData.revitProperties = primitive.params.revitProperties;
+  }
+  const box = mesh.geometry.boundingBox;
+  if (box) {
+    mesh.userData.dimensionsMm = {
+      width: (box.max.x - box.min.x) / MM,
+      height: (box.max.y - box.min.y) / MM,
+      depth: (box.max.z - box.min.z) / MM
+    };
+    mesh.userData.grainAlong = inferGrainAlong(mesh.name, materialGroup, mesh.userData.dimensionsMm);
+  } else {
+    mesh.userData.grainAlong = inferGrainAlong(mesh.name, materialGroup, { width: 0, height: 0, depth: 0 });
+  }
+  const visibleEdgeBanding = chamferedCornerVisibleEdgeBanding(boardName, materialSlotId);
+  if (visibleEdgeBanding.length > 0) {
+    mesh.userData.edgeBandingStrategy = "explicit_visible_edges";
+    mesh.userData.edgeBanding = visibleEdgeBanding;
+  }
+}
+
+function buildGroundTruthMesh(
+  primitive: ModuleGeometryPrimitive,
+  context: ChamferedGroundTruthParametricContext,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog
+) {
+  const boardName = readGroundTruthString(primitive.params.boardName);
+  if (boardName === "back_corner_panel" && context.backChamferMm <= 0.001) return null;
+
+  const vertices = Array.isArray(primitive.params.verticesMm) ? primitive.params.verticesMm : [];
+  const indices = Array.isArray(primitive.params.indices) ? primitive.params.indices : [];
+  const positions: number[] = [];
+  for (const vertex of vertices) {
+    const vector = readGroundTruthVectorMm(vertex);
+    if (!vector) continue;
+    const transformed = transformChamferedGroundTruthVertexMm(vector, primitive, context);
+    positions.push(transformed.x * MM, transformed.y * MM, transformed.z * MM);
+  }
+  const indexValues = indices.filter((value): value is number => Number.isInteger(value) && value >= 0);
+  if (positions.length < 9 || indexValues.length < 3) return null;
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indexValues);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+
+  const mesh = new THREE.Mesh(geometry, makeGroundTruthMaterial(primitive, params, catalog));
+  tagGroundTruthMesh(mesh, primitive);
+  return mesh;
+}
+
+function findGroundTruthMeshByBoardName(group: THREE.Group, boardName: string): THREE.Mesh | null {
+  let found: THREE.Mesh | null = null;
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || found) return;
+    if (mesh.userData.boardName === boardName) found = mesh;
+  });
+  return found;
+}
+
+function readShelfGapValues(params: FwmFurnitureParams, count: number) {
+  const raw = params.shelfGaps;
+  const values = Array.isArray(raw)
+    ? raw.map((value) => Number(value))
+    : typeof raw === "string"
+      ? raw.split(/[,;\s]+/g).map((value) => Number(value.trim()))
+      : [];
+  return values.filter((value) => Number.isFinite(value) && value > 0).slice(0, count);
+}
+
+function createChamferedShelfFootprintMm(context: ChamferedGroundTruthParametricContext, insetMm: number) {
+  const bottomPrimitive = BASE_CORNER_CHAMFERED_GROUND_TRUTH_PACKAGE.primitives.find(
+    (primitive) => readGroundTruthString(primitive.params.boardName) === "bottom_panel"
+  );
+  const vertices = Array.isArray(bottomPrimitive?.params.verticesMm) ? bottomPrimitive.params.verticesMm : [];
+  const byPoint = new Map<string, { x: number; z: number }>();
+  for (const vertex of vertices) {
+    const vector = readGroundTruthVectorMm(vertex);
+    if (!vector) continue;
+    const transformed = transformChamferedGroundTruthVertexMm(vector, bottomPrimitive!, context);
+    byPoint.set(`${transformed.x.toFixed(3)}:${transformed.z.toFixed(3)}`, { x: transformed.x, z: transformed.z });
+  }
+  const points = [...byPoint.values()];
+  if (points.length < 3) return null;
+  const center = points.reduce((acc, point) => ({ x: acc.x + point.x / points.length, z: acc.z + point.z / points.length }), { x: 0, z: 0 });
+  return points.map((point) => {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    const length = Math.hypot(dx, dz);
+    if (length <= insetMm) return { x: point.x, z: point.z };
+    return {
+      x: point.x - (dx / length) * insetMm,
+      z: point.z - (dz / length) * insetMm
+    };
+  });
+}
+
+function addChamferedGroundTruthShelves(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const shelfCount = Math.max(0, Math.min(16, Math.round(num(params, "shelfCount", 0))));
+  if (shelfCount <= 0) return;
+  const shelfThickness = Math.max(8, Math.min(50, num(params, "shelfThickness", num(params, "boardThickness", 18))));
+  const boardInset = Math.max(12, num(params, "boardThickness", 18));
+  const footprint = createChamferedShelfFootprintMm(context, boardInset);
+  if (!footprint) return;
+  const shelfMaterial = makeMaterial(params, catalog, "shelf");
+  const bottomPanel = findGroundTruthMeshByBoardName(group, "bottom_panel");
+  const topPanel = findGroundTruthMeshByBoardName(group, "top_panel");
+  if (!bottomPanel || !topPanel) return;
+  bottomPanel.updateMatrixWorld(true);
+  topPanel.updateMatrixWorld(true);
+  const bottomBounds = new THREE.Box3().setFromObject(bottomPanel);
+  const topBounds = new THREE.Box3().setFromObject(topPanel);
+  const interiorMinY = bottomBounds.max.y / MM;
+  const interiorMaxY = topBounds.min.y / MM;
+  const available = Math.max(1, interiorMaxY - interiorMinY - shelfCount * shelfThickness);
+  const requestedGaps = readShelfGapValues(params, shelfCount + 1);
+  const gaps = requestedGaps.length > 0
+    ? Array.from({ length: shelfCount + 1 }, (_, index) => requestedGaps[index] ?? requestedGaps[requestedGaps.length - 1] ?? (available / (shelfCount + 1)))
+    : Array.from({ length: shelfCount + 1 }, () => available / (shelfCount + 1));
+  const gapTotal = gaps.reduce((sum, value) => sum + value, 0);
+  const scale = gapTotal > available ? available / gapTotal : 1;
+  let cursorY = interiorMinY;
+  for (let index = 0; index < shelfCount; index += 1) {
+    cursorY += gaps[index] * scale;
+    const yMin = cursorY;
+    const yMax = yMin + shelfThickness;
+    const shelf = addPlanPrism(
+      group,
+      `corner_chamfered_shelf_${index + 1}`,
+      footprint,
+      yMin,
+      yMax,
+      shelfMaterial,
+      ["shelfCount", "shelfGaps", "shelfThickness", "height", "shelfMaterialId", "width", "depth", "frontChamferMm", "backChamferMm"]
+    );
+    shelf.userData.boardName = `shelf_${index + 1}`;
+    shelf.userData.partName = `shelf_${index + 1}`;
+    shelf.userData.materialGroup = "shelf";
+    shelf.userData.materialSlotId = "shelf";
+    cursorY = yMax;
+  }
+}
+
+function addChamferedDiagonalPlinthClipSet(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  legBoardName: "leg_diagonal_left" | "leg_diagonal_right",
+  label: "left" | "right"
+) {
+  const leg = findGroundTruthMeshByBoardName(group, legBoardName);
+  if (!leg) return;
+
+  leg.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(leg);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3()).multiplyScalar(1000);
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const clipComponent = resolveComponentForParam(params, catalog, "clipComponentId", "plinth_clip");
+  const clipMaterial = makeComponentMaterial(params, catalog, clipComponent, hardware);
+  const clipGroup = new THREE.Group();
+  clipGroup.name = `corner_chamfered_diagonal_plinth_clip_${label}`;
+  clipGroup.position.set(center.x * MM, 0, center.z * MM);
+  clipGroup.rotation.y = -Math.PI / 4;
+  group.add(clipGroup);
+
+  const paramKeys = ["clipComponentId", "legComponentId", "frontChamferMm", "plinthHeight", "plinthSetbackMm", "depth"];
+  const collar = addCornerStyleClipCollar(clipGroup, `${clipGroup.name}_collar`, { x: 0, y: 40, z: 1.768 }, clipMaterial, paramKeys);
+  const pad = addBox(clipGroup, `${clipGroup.name}_pad`, { width: 30, height: 35, depth: 25 }, { x: 0, y: 40, z: 7 }, clipMaterial, paramKeys);
+  const arm = addBox(clipGroup, `${clipGroup.name}_arm`, { width: 30, height: 35, depth: 48 }, { x: 0, y: 39, z: 38 }, clipMaterial, paramKeys);
+
+  for (const [mesh, suffix] of [[collar, "collar"], [pad, "pad"], [arm, "arm"]] as const) {
+    tagChamferedRuntimeHardware(mesh, `diagonal_plinth_clip_${label}_${suffix}`);
+    markComponent(mesh, clipComponent, "clipComponentId");
+  }
+}
+
+function buildCatalogBaseCornerChamferedGroundTruth(group: THREE.Group, catalog: ClientCatalog) {
+  const primitives = BASE_CORNER_CHAMFERED_GROUND_TRUTH_PACKAGE.primitives;
+  const params = group.userData.groundTruthBuildParams as FwmFurnitureParams | undefined;
+  const buildParams = params ?? ({} as FwmFurnitureParams);
+  const context = createChamferedGroundTruthParametricContext(buildParams);
+  for (const primitive of primitives) {
+    if (primitive.primitiveType !== "mesh") continue;
+    const mesh = buildGroundTruthMesh(primitive, context, buildParams, catalog);
+    if (mesh) group.add(mesh);
+  }
+  addChamferedGroundTruthShelves(group, buildParams, catalog, context);
+  addChamferedDiagonalPlinthClipSet(group, buildParams, catalog, "leg_diagonal_left", "left");
+  addChamferedDiagonalPlinthClipSet(group, buildParams, catalog, "leg_diagonal_right", "right");
+  group.userData.sourceGeometry = "revit-ground-truth-baked";
+  group.userData.groundTruthPackageId = "base_corner_chamfered";
+  group.userData.groundTruthPrimitiveCount = primitives.length;
+  group.userData.groundTruthParametricContext = context;
+  group.userData.kitchenCornerRotationOffsetRad = Math.PI / 2;
+  attachChamferedCornerKitchenAnchors(group);
+}
+
+function attachChamferedCornerKitchenAnchors(group: THREE.Group) {
+  group.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(group);
+
+  const cornerAnchor = new THREE.Object3D();
+  cornerAnchor.name = kitchenCornerAnchorName;
+  cornerAnchor.position.set(box.min.x, 0, box.min.z);
+  cornerAnchor.visible = false;
+  group.add(cornerAnchor);
+
+  const xAnchor = new THREE.Object3D();
+  xAnchor.name = kitchenCornerXAnchorName;
+  xAnchor.position.set(box.max.x, 0, box.min.z);
+  xAnchor.visible = false;
+  group.add(xAnchor);
+
+  const zAnchor = new THREE.Object3D();
+  zAnchor.name = kitchenCornerZAnchorName;
+  zAnchor.position.set(box.min.x, 0, box.max.z);
+  zAnchor.visible = false;
+  group.add(zAnchor);
+}
+
+function buildCatalogBaseCornerChamfered(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  group.userData.groundTruthBuildParams = params;
+  buildCatalogBaseCornerChamferedGroundTruth(group, catalog);
+  group.userData.catalogCornerVariant = String(params.variant ?? "corner_chamfered");
+}
+
+function buildCatalogBaseCornerChamferedProcedural(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const width = num(params, "width", 900);
+  const height = num(params, "height", 722);
+  const depth = num(params, "depth", 900);
+  const t = num(params, "boardThickness", 18);
+  const back = num(params, "backThickness", 8);
+  const plinth = num(params, "plinthHeight", 100);
+  const shelfT = num(params, "shelfThickness", t);
+  const frontT = num(params, "frontThicknessMm", 18);
+  const chamfer = Math.min(
+    Math.max(num(params, "chamferMm", 420), Math.min(width, depth) * 0.34),
+    Math.min(width, depth) - t * 4
+  );
+  const bodyHeight = Math.max(1, height - plinth);
+  const baseY = plinth;
+  const innerBottomY = baseY + t;
+  const innerTopY = baseY + bodyHeight - t;
+  const innerHeight = Math.max(1, innerTopY - innerBottomY);
+  const supportHeight = Math.max(70, Math.min(130, bodyHeight * 0.16));
+  const supportDepth = Math.max(36, Math.min(72, t * 3));
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const shelfMat = makeMaterial(params, catalog, "shelf");
+  const frontMat = makeMaterial(params, catalog, "front");
+  const plinthMat = makeMaterial(params, catalog, "plinth");
+  const hardware = makeMaterial(params, catalog, "hardware");
+
+  const minX = -width / 2;
+  const maxX = width / 2;
+  const backZ = -depth / 2;
+  const frontZ = depth / 2;
+  const frontAfterChamfer = minX + chamfer;
+  const leftBeforeChamfer = frontZ - chamfer;
+  const footprint = [
+    { x: minX, z: backZ },
+    { x: maxX, z: backZ },
+    { x: maxX, z: frontZ },
+    { x: frontAfterChamfer, z: frontZ },
+    { x: minX, z: leftBeforeChamfer }
+  ];
+  const innerFootprint = [
+    { x: minX + t, z: backZ + back },
+    { x: maxX - t, z: backZ + back },
+    { x: maxX - t, z: frontZ - t },
+    { x: frontAfterChamfer + t * 0.5, z: frontZ - t },
+    { x: minX + t, z: leftBeforeChamfer - t * 0.5 }
+  ];
+
+  const bottom = addPlanPrism(group, "corner_chamfered_bottom_panel", footprint, baseY, baseY + t, body, ["width", "depth", "boardThickness", "chamferMm"]);
+  bottom.userData.materialGroup = "body";
+  const top = addPlanPrism(
+    group,
+    "corner_chamfered_top_panel",
+    footprint,
+    baseY + bodyHeight - t,
+    baseY + bodyHeight,
+    body,
+    ["width", "depth", "height", "boardThickness", "chamferMm"]
+  );
+  top.userData.materialGroup = "body";
+
+  const backPanel = addBox(
+    group,
+    "corner_chamfered_back_panel",
+    { width: Math.max(1, width - 2 * t), height: Math.max(1, bodyHeight - 2 * t), depth: back },
+    { x: 0, y: innerBottomY + innerHeight / 2, z: backZ + back / 2 },
+    backMat,
+    ["width", "height", "backThickness", "boardThickness"]
+  );
+  backPanel.userData.materialGroup = "back";
+  const backCorner = addBox(
+    group,
+    "corner_chamfered_back_corner_panel",
+    { width: back, height: Math.max(1, bodyHeight - 2 * t), depth: Math.max(1, leftBeforeChamfer - backZ - t) },
+    { x: minX + t + back / 2, y: innerBottomY + innerHeight / 2, z: (backZ + leftBeforeChamfer - t) / 2 },
+    backMat,
+    ["depth", "height", "backThickness", "boardThickness", "chamferMm"]
+  );
+  backCorner.userData.materialGroup = "back";
+
+  addBox(
+    group,
+    "corner_chamfered_left_side",
+    { width: t, height: bodyHeight, depth: Math.max(1, leftBeforeChamfer - backZ) },
+    { x: minX + t / 2, y: baseY + bodyHeight / 2, z: (backZ + leftBeforeChamfer) / 2 },
+    body,
+    ["height", "depth", "boardThickness", "chamferMm"]
+  ).userData.materialGroup = "body";
+  addBox(
+    group,
+    "corner_chamfered_right_side",
+    { width: t, height: bodyHeight, depth },
+    { x: maxX - t / 2, y: baseY + bodyHeight / 2, z: 0 },
+    body,
+    ["height", "depth", "boardThickness"]
+  ).userData.materialGroup = "body";
+
+  addBox(
+    group,
+    "corner_chamfered_support_front",
+    { width: Math.max(1, maxX - frontAfterChamfer - t), height: supportHeight, depth: supportDepth },
+    { x: (frontAfterChamfer + maxX) / 2, y: baseY + bodyHeight - t - supportHeight / 2, z: frontZ - t - supportDepth / 2 },
+    body,
+    ["width", "height", "boardThickness", "chamferMm"]
+  ).userData.materialGroup = "body";
+  addBox(
+    group,
+    "corner_chamfered_support_back",
+    { width: Math.max(1, width - 2 * t), height: supportHeight, depth: supportDepth },
+    { x: 0, y: baseY + bodyHeight - t - supportHeight / 2, z: backZ + back + supportDepth / 2 },
+    body,
+    ["width", "height", "boardThickness"]
+  ).userData.materialGroup = "body";
+  addBoardBetweenPlanPoints(
+    group,
+    "corner_chamfered_support_diagonal",
+    { x: minX + t, z: leftBeforeChamfer - t },
+    { x: frontAfterChamfer + t, z: frontZ - t },
+    baseY + bodyHeight - t - supportHeight / 2,
+    supportHeight,
+    supportDepth,
+    body,
+    ["width", "depth", "height", "boardThickness", "chamferMm"]
+  ).userData.materialGroup = "body";
+  addBox(
+    group,
+    "corner_chamfered_lower_front_support",
+    { width: Math.max(1, maxX - frontAfterChamfer - t), height: supportHeight, depth: supportDepth },
+    { x: (frontAfterChamfer + maxX) / 2, y: baseY + t + supportHeight / 2, z: frontZ - t - supportDepth / 2 },
+    body,
+    ["width", "height", "boardThickness", "chamferMm"]
+  ).userData.materialGroup = "body";
+
+  addBoardBetweenPlanPoints(
+    group,
+    "corner_chamfered_diagonal_front",
+    { x: minX - t * 1.5, z: leftBeforeChamfer + t },
+    { x: frontAfterChamfer - t * 0.5, z: frontZ + t * 1.5 },
+    baseY + bodyHeight / 2,
+    Math.max(1, bodyHeight - 4),
+    frontT,
+    frontMat,
+    ["width", "depth", "height", "frontThicknessMm", "frontMaterialId", "chamferMm"]
+  ).userData.materialGroup = "front";
+
+  const shelfCount = Math.max(0, Math.min(16, Math.round(num(params, "shelfCount", 1))));
+  for (let index = 0; index < shelfCount; index += 1) {
+    const ratio = (index + 1) / (shelfCount + 1);
+    const centerY = innerBottomY + innerHeight * ratio;
+    const shelf = addPlanPrism(
+      group,
+      `corner_chamfered_shelf_${index + 1}`,
+      innerFootprint,
+      centerY - shelfT / 2,
+      centerY + shelfT / 2,
+      shelfMat,
+      ["shelfCount", "shelfThickness", "height", "width", "depth", "chamferMm", "shelfMaterialId"]
+    );
+    shelf.userData.materialGroup = "shelf";
+  }
+
+  if (plinth > 0) {
+    addBoardBetweenPlanPoints(
+      group,
+      "corner_chamfered_plinth_diagonal",
+      { x: minX + 70, z: leftBeforeChamfer - 45 },
+      { x: frontAfterChamfer - 45, z: frontZ - 70 },
+      plinth / 2,
+      plinth,
+      Math.max(8, Math.min(t, 24)),
+      plinthMat,
+      ["plinthHeight", "plinthSetbackMm", "plinthMaterialId", "width", "depth", "chamferMm"]
+    ).userData.materialGroup = "plinth";
+    const legCenters = [
+      { name: "corner_chamfered_leg_back_left", x: minX + 85, z: backZ + 95 },
+      { name: "corner_chamfered_leg_back_right", x: maxX - 85, z: backZ + 95 },
+      { name: "corner_chamfered_leg_front_right", x: maxX - 85, z: frontZ - 95 },
+      { name: "corner_chamfered_leg_diagonal_left", x: minX + chamfer * 0.28, z: leftBeforeChamfer + chamfer * 0.12 },
+      { name: "corner_chamfered_leg_diagonal_right", x: frontAfterChamfer - chamfer * 0.12, z: frontZ - chamfer * 0.28 }
+    ];
+    for (const leg of legCenters) {
+      addCornerStyleLeg(group, leg.name, plinth, { x: leg.x, y: plinth / 2, z: leg.z }, hardware, ["legComponentId", "plinthHeight", "width", "depth", "chamferMm"]);
+    }
+  }
+
+  const handleMid = { x: minX + chamfer * 0.52, z: leftBeforeChamfer + chamfer * 0.48 };
+  const handle = addCylinder(
+    group,
+    "corner_chamfered_diagonal_handle",
+    5,
+    Math.min(num(params, "handleLengthMm", 160), Math.max(40, bodyHeight * 0.28)),
+    { x: handleMid.x + 18, y: baseY + bodyHeight * 0.55, z: handleMid.z + 18 },
+    hardware,
+    "y",
+    ["handleComponentId", "handleLengthMm", "handleProjectionMm", "width", "height", "depth", "chamferMm"]
+  );
+  handle.userData.componentType = "handle";
+
+  for (const [index, hingeY] of [baseY + bodyHeight * 0.22, baseY + bodyHeight * 0.78].entries()) {
+    const hinge = addBox(
+      group,
+      `corner_chamfered_hinge_${index + 1}`,
+      { width: 24, height: 24, depth: 4 },
+      { x: minX + chamfer * 0.18, y: hingeY, z: leftBeforeChamfer + chamfer * 0.18 },
+      hardware,
+      ["hingeComponentId", "height", "chamferMm"]
+    );
+    hinge.rotation.y = Math.PI / 4;
+    hinge.userData.componentType = "hinge";
+    hinge.userData.materialGroup = "hardware";
+  }
+}
+
+function buildCatalogBaseCorner90(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const source = buildCornerShelfLower(mapFwmCatalogCornerToCornerShelfLowerParams(params), catalog);
+  source.name = "corner_fwm_runtime_source";
+  annotateCopiedCornerFwmRuntime(source, params, catalog);
+  group.add(source);
+  group.userData.catalogCornerVariant = String(params.variant ?? "corner_90");
+  group.userData.sourceModuleType = "corner_shelf_lower";
+}
+
+function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const bodyMaterial = makeMaterial(params, catalog, "body");
+  const materialByGroup: Record<string, THREE.Material> = {
+    body: bodyMaterial,
+    front: makeMaterial(params, catalog, "front"),
+    back: hasCopiedCornerMaterialOverride(params, "back") ? makeMaterial(params, catalog, "back") : bodyMaterial,
+    shelf: hasCopiedCornerMaterialOverride(params, "shelf") ? makeMaterial(params, catalog, "shelf") : bodyMaterial,
+    plinth: hasCopiedCornerMaterialOverride(params, "plinth") ? makeMaterial(params, catalog, "plinth") : bodyMaterial,
+    hardware: makeMaterial(params, catalog, "hardware")
+  };
+  source.traverse((object) => {
+    const data = object.userData as Record<string, unknown>;
+    const name = object.name.toLowerCase();
+    const tags = Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [];
+    const hasTag = (tag: string) => tags.includes(tag);
+    const group =
+      name.startsWith("kick_") ? "plinth" :
+      name.startsWith("leg_") || name.startsWith("kickclip_") || name.startsWith("hinge_") || name.startsWith("doorhandle_") ? "hardware" :
+      hasTag("front") || name.includes("door_front") ? "front" :
+      hasTag("shelf") || name.startsWith("shelf_") ? "shelf" :
+      hasTag("back") || name.startsWith("back_") ? "back" :
+      hasTag("body") || name.startsWith("side_") || name.startsWith("bottom_") || name.startsWith("top_") ? "body" :
+      "";
+    if (group) data.materialGroup = group;
+    if (!data.sourceModuleType) data.sourceModuleType = "corner_shelf_lower";
+    if (!data.boardName && object.name) data.boardName = object.name;
+    const material = materialByGroup[group];
+    if (material && (object as THREE.Mesh).isMesh) {
+      const mesh = object as THREE.Mesh;
+      mesh.material = material;
+      data.grainAlong = inferGrainAlong(object.name, group, readMeshDimensionsMm(mesh));
+      data.catalogMaterialId = material.userData.catalogMaterialId;
+      data.catalogMaterialName = material.userData.catalogMaterialName;
+      data.materialRole = material.userData.materialRole;
+      data.materialSource = material.userData.materialSource;
+      data.renderColorHex = material.userData.renderColorHex;
+      delete data.materialRequest;
+    }
+    if (group === "hardware" && !data.componentType) {
+      data.componentType = name.startsWith("hinge_") ? "hinge" : name.startsWith("doorhandle_") ? "handle" : name.startsWith("leg_") ? "leg" : "plinth_clip";
+    }
+  });
+}
+
+function hasCopiedCornerMaterialOverride(params: FwmFurnitureParams, role: "back" | "shelf" | "plinth") {
+  const paramKey =
+    role === "back" ? "backMaterialId" :
+    role === "shelf" ? "shelfMaterialId" :
+    "plinthMaterialId";
+  if (typeof params[paramKey] === "string" && params[paramKey]) return true;
+  const assignments = rec(params.materialAssignments);
+  return typeof assignments[role] === "string" && Boolean(assignments[role]);
+}
+
+function scaleGroundTruthCenter(
+  center: { x: number; y: number; z: number },
+  source: { width: number; height: number; depth: number; plinth: number },
+  target: { width: number; height: number; depth: number; plinth: number }
+) {
+  return {
+    x: (center.x / source.width) * target.width,
+    y: scaleGroundTruthY(center.y, source, target),
+    z: (center.z / source.depth) * target.depth
+  };
+}
+
+function scaleGroundTruthSize(
+  size: { width: number; height: number; depth: number },
+  role: "body" | "back" | "shelf" | "front" | "plinth",
+  target: { width: number; height: number; depth: number; plinth: number; t: number; back: number; shelfT: number; frontT: number },
+  source: { width: number; height: number; depth: number; plinth: number }
+) {
+  const thin = (axis: "x" | "y" | "z", value: number) => {
+    if (value > 30) return null;
+    if (role === "back") return target.back;
+    if (role === "shelf") return target.shelfT;
+    if (role === "front") return target.frontT;
+    if (role === "plinth" && axis !== "y") return Math.max(8, Math.min(target.t, 24));
+    return target.t;
+  };
+  const xThin = thin("x", size.width);
+  const yThin = thin("y", size.height);
+  const zThin = thin("z", size.depth);
+  return {
+    width: Math.max(1, xThin ?? (size.width / source.width) * target.width),
+    height: Math.max(1, role === "plinth" ? target.plinth : yThin ?? scaleGroundTruthYSize(size.height, source, target)),
+    depth: Math.max(1, zThin ?? (size.depth / source.depth) * target.depth)
+  };
+}
+
+function scaleGroundTruthY(
+  y: number,
+  source: { height: number; plinth: number },
+  target: { height: number; plinth: number }
+) {
+  if (source.plinth <= 0 || target.plinth <= 0 || y <= source.plinth) {
+    return source.plinth > 0 ? (y / Math.max(1, source.plinth)) * target.plinth : y;
+  }
+  const sourceBody = Math.max(1, source.height - source.plinth);
+  const targetBody = Math.max(1, target.height - target.plinth);
+  return target.plinth + ((y - source.plinth) / sourceBody) * targetBody;
+}
+
+function scaleGroundTruthYSize(
+  height: number,
+  source: { height: number; plinth: number },
+  target: { height: number; plinth: number }
+) {
+  if (height <= source.plinth) return (height / Math.max(1, source.plinth)) * target.plinth;
+  return (height / Math.max(1, source.height - source.plinth)) * Math.max(1, target.height - target.plinth);
+}
+
 function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width?: number; height?: number; depth?: number; yOffset?: number; prefix?: string } = {}) {
   const width = opts.width ?? num(params, "width", 800);
   const height = opts.height ?? num(params, "height", 720);
@@ -426,11 +2888,12 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
   const gap = num(params, "frontGap", 2);
   const sideGap = num(params, "sideGap", 2);
   const frontT = num(params, "frontThicknessMm", 18);
-  const frontMat = makeMaterial(params, catalog, params.glassFronts ? "glass" : "front");
-  const drawerBottomMat = makeMaterial(params, catalog, "drawer_bottom");
+  const frontType = String(params.frontType ?? "");
+  const frontMat = makeMaterial(params, catalog, params.glassFronts || frontType === "glass" ? "glass" : "front");
   const hardware = makeMaterial(params, catalog, "hardware");
   const drawerCount = Math.round(num(params, "drawerCount", 0));
   const doorCount = Math.round(num(params, "doorCount", 0));
+  const opened = bool(params, "opened", false);
   const prefix = opts.prefix ? `${opts.prefix}_` : "";
   const z = depth / 2 + frontT / 2 + 1;
   const frontAreaHeight = Math.max(80, height - plinth - gap * 2);
@@ -449,15 +2912,36 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
       requestedSum > 0
         ? rawHeights.map((entry) => Math.max(40, (entry / requestedSum) * availableHeight))
         : Array.from({ length: drawerCount }, () => Math.max(40, availableHeight / drawerCount));
-    let y = plinth + gap;
+    const usesRevitDrawerFrontStack = params.type === "fwm_catalog_base_drawers" && !mixedWithDoors;
+    let y = usesRevitDrawerFrontStack ? plinth + gap * 3 : plinth + gap;
     for (let index = 0; index < drawerCount; index += 1) {
       const drawerH = drawerHeights[index] ?? Math.max(40, availableHeight / drawerCount);
       y += drawerH / 2;
-      addBox(group, `${prefix}drawer_front_${index + 1}`, { width: width - sideGap * 2, height: drawerH, depth: frontT }, { x: 0, y, z }, frontMat, ["drawerCount", "frontThicknessMm", "frontGap", "handleComponentId"]);
       const drawerDepth = resolveDrawerDepthLayout(depth, num(params, "backThickness", 8), num(params, "drawerBackGapMm", 10));
-      addBox(group, `${prefix}drawer_bottom_${index + 1}`, { width: Math.max(60, width - sideGap * 2 - 70), height: Math.max(6, num(params, "drawerBottomThickness", 8)), depth: drawerDepth.depthMm }, { x: 0, y: Math.max(plinth + 20, y - drawerH / 2 + 22), z: drawerDepth.centerZ }, drawerBottomMat, ["drawerCount", "drawerBottomMaterialId", "depth", "backThickness", "drawerBackGapMm"]);
-      addCylinder(group, `${prefix}drawer_handle_${index + 1}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: y + drawerH * 0.28, z: z + frontT / 2 + num(params, "handleProjectionMm", 28) / 2 }, hardware, "x");
-      y += drawerH / 2 + gap;
+      const openOffset = opened ? Math.min(220, depth * 0.42) : 0;
+      const drawerGroup = new THREE.Group();
+      drawerGroup.name = `${prefix}drawer_front_${index + 1}_group`;
+      drawerGroup.position.set(0, y * MM, (z + openOffset) * MM);
+      group.add(drawerGroup);
+      addBox(drawerGroup, `${prefix}drawer_front_${index + 1}`, { width: width - sideGap * 2, height: drawerH, depth: frontT }, { x: 0, y: 0, z: 0 }, frontMat, ["drawerCount", "drawerFrontHeightsMm", "frontThicknessMm", "frontGap", "handleComponentId", "opened"]);
+      const drawerPreset = resolveDrawerPresetForIndex(params, drawerH, index + 1);
+      const metalDrawerDepth = Math.max(160, drawerPreset.systemDepthMm - 4);
+      const drawerCenterWorldZ = params.type === "fwm_catalog_base_drawers"
+        ? -depth / 2 + metalDrawerDepth / 2 + 35
+        : drawerDepth.centerZ;
+      addDrawerSubmodule(drawerGroup, params, catalog, {
+        prefix,
+        index: index + 1,
+        widthMm: width - sideGap * 2,
+        frontHeightMm: drawerH,
+        drawerCenterZMm: drawerCenterWorldZ - z,
+        drawerDepthMm: params.type === "fwm_catalog_base_drawers" ? metalDrawerDepth : drawerDepth.depthMm
+      });
+      const handleZ = params.type === "fwm_catalog_base_drawers"
+        ? frontT / 2 + 0.789 + 6
+        : frontT / 2 + num(params, "handleProjectionMm", 28) / 2;
+      addCylinder(drawerGroup, `${prefix}drawer_handle_${index + 1}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: drawerH * 0.28, z: handleZ }, hardware, "x");
+      y += drawerH / 2 + (usesRevitDrawerFrontStack ? 0 : gap);
     }
     if (!mixedWithDoors) return;
 
@@ -466,9 +2950,16 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
     const eachW = Math.max(40, (width - sideGap * 2 - gap * (doorCount - 1)) / doorCount);
     for (let index = 0; index < doorCount; index += 1) {
       const x = -width / 2 + sideGap + eachW / 2 + index * (eachW + gap);
-      addBox(group, `${prefix}door_${index + 1}`, { width: eachW, height: doorZoneHeight, depth: frontT }, { x, y: doorZoneStart + doorZoneHeight / 2, z }, frontMat, ["doorCount", "frontThicknessMm", "frontGap", "handleComponentId"]);
-      const handleX = x + (index % 2 === 0 ? eachW / 2 - 45 : -eachW / 2 + 45);
-      addCylinder(group, `${prefix}door_handle_${index + 1}`, 5, Math.min(num(params, "handleLengthMm", 160), doorZoneHeight * 0.45), { x: handleX, y: doorZoneStart + doorZoneHeight * 0.58, z: z + frontT / 2 + num(params, "handleProjectionMm", 28) / 2 }, hardware, "y");
+      addSwingDoorLeaf(group, params, frontMat, hardware, {
+        name: `${prefix}door_${index + 1}`,
+        widthMm: eachW,
+        heightMm: doorZoneHeight,
+        xCenterMm: x,
+        yCenterMm: doorZoneStart + doorZoneHeight / 2,
+        zCenterMm: z,
+        doorIndex: index,
+        doorCount
+      });
     }
     return;
   }
@@ -477,28 +2968,362 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
     const eachW = Math.max(40, (width - sideGap * 2 - gap * (doorCount - 1)) / doorCount);
     for (let index = 0; index < doorCount; index += 1) {
       const x = -width / 2 + sideGap + eachW / 2 + index * (eachW + gap);
-      addBox(group, `${prefix}door_${index + 1}`, { width: eachW, height: frontAreaHeight, depth: frontT }, { x, y: plinth + frontAreaHeight / 2 + gap, z }, frontMat, ["doorCount", "frontThicknessMm", "frontGap", "handleComponentId"]);
-      const handleX = x + (index % 2 === 0 ? eachW / 2 - 45 : -eachW / 2 + 45);
-      addCylinder(group, `${prefix}door_handle_${index + 1}`, 5, Math.min(num(params, "handleLengthMm", 160), frontAreaHeight * 0.45), { x: handleX, y: plinth + frontAreaHeight * 0.58, z: z + frontT / 2 + num(params, "handleProjectionMm", 28) / 2 }, hardware, "y");
+      addSwingDoorLeaf(group, params, frontMat, hardware, {
+        name: `${prefix}door_${index + 1}`,
+        widthMm: eachW,
+        heightMm: frontAreaHeight,
+        xCenterMm: x,
+        yCenterMm: plinth + frontAreaHeight / 2 + gap,
+        zCenterMm: z,
+        doorIndex: index,
+        doorCount
+      });
     }
   }
 }
 
 function addWorktop(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width?: number; depth?: number; height?: number; prefix?: string } = {}) {
-  const thickness = num(params, "worktopThicknessMm", 0);
-  if (thickness <= 0) return;
-  const width = opts.width ?? num(params, "width", 800);
-  const depth = opts.depth ?? num(params, "depth", 560);
-  const height = opts.height ?? num(params, "height", 720);
-  const mat = makeMaterial(params, catalog, "worktop");
-  const prefix = opts.prefix ? `${opts.prefix}_` : "";
-  addBox(group, `${prefix}worktop`, { width: width + 30, height: thickness, depth: depth + 40 }, { x: 0, y: height + thickness / 2, z: 10 }, mat, ["width", "depth", "worktopThicknessMm", "worktopMaterialId"]);
+  void group;
+  void params;
+  void catalog;
+  void opts;
+}
+
+function paramsForExternalKitchenWorktop(params: FwmFurnitureParams, spec: FwmFurnitureSpec): FwmFurnitureParams {
+  if (spec.geometryKind === "worktop") return params;
+  const worktopThicknessMm = num(params, "worktopThicknessMm", 0);
+  const heightCarcassMm = num(params, "heightCarcass", Number.NaN);
+  const requiresWorktop = params.requiresWorktop !== false && worktopThicknessMm > 0;
+  if (!requiresWorktop || !Number.isFinite(heightCarcassMm) || heightCarcassMm <= 0) return params;
+  return {
+    ...params,
+    height: heightCarcassMm,
+    heightMm: heightCarcassMm,
+    hasWorktop: false
+  } as FwmFurnitureParams;
 }
 
 function addAppliance(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, name: string, y: number, h: number) {
   const width = Math.min(num(params, "applianceWidthMm", 560), num(params, "width", 600) - 70);
   const depth = Math.max(160, num(params, "depth", 560) - 70);
   addBox(group, name, { width, height: h, depth }, { x: 0, y, z: 20 }, makeMaterial(params, catalog, "appliance"), ["applianceWidthMm", "width", "height", "depth"]);
+}
+
+type TallStackSlotType = "empty" | "drawer" | "shelf" | "oven" | "sink" | "microwave" | "door";
+
+const TALL_STACK_SLOT_TYPES: readonly TallStackSlotType[] = ["empty", "drawer", "shelf", "oven", "sink", "microwave", "door"];
+const DEFAULT_TALL_STACK: Array<{ type: TallStackSlotType; height: number }> = [];
+
+function tallSlotType(params: FwmFurnitureParams, index: number): TallStackSlotType {
+  const fallback = DEFAULT_TALL_STACK[index - 1]?.type ?? "empty";
+  const value = String(params[`tallSlot${index}Type`] ?? fallback);
+  return TALL_STACK_SLOT_TYPES.includes(value as TallStackSlotType) ? value as TallStackSlotType : fallback;
+}
+
+function tallSlotHeight(params: FwmFurnitureParams, index: number) {
+  return Math.max(0, num(params, `tallSlot${index}HeightMm`, DEFAULT_TALL_STACK[index - 1]?.height ?? 0));
+}
+
+function tallSlotOffset(params: FwmFurnitureParams, index: number) {
+  return num(params, `tallSlot${index}OffsetMm`, 0);
+}
+
+function markTallSelectableSubmodule(group: THREE.Object3D, args: { id: string; label: string; kind: string; slotIndex: number }) {
+  group.traverse((child) => {
+    child.userData.selectableSubmoduleId = args.id;
+    child.userData.selectableSubmoduleLabel = args.label;
+    child.userData.selectableSubmoduleKind = args.kind;
+    child.userData.submoduleKind = child.userData.submoduleKind ?? args.kind;
+    child.userData.hostSlotIndex = args.slotIndex;
+  });
+}
+
+function visibleObjectBounds(object: THREE.Object3D) {
+  object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3();
+  let hasVisiblePart = false;
+  object.traverse((child) => {
+    if (!(child as THREE.Mesh).isMesh || child.visible === false || child.userData.hiddenByDefault === true) return;
+    bounds.union(new THREE.Box3().setFromObject(child));
+    hasVisiblePart = true;
+  });
+  return hasVisiblePart ? bounds : new THREE.Box3().setFromObject(object);
+}
+
+function addTallApplianceSubmodule(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  type: Extract<ApplianceSubmoduleType, "oven" | "sink" | "microwave">,
+  slotIndex: number,
+  bottomY: number,
+  slotHeight: number
+) {
+  const cabinetWidth = num(params, "width", 600);
+  const cabinetDepth = num(params, "depth", 560);
+  const defaults = makeDefaultApplianceSubmoduleParams(type);
+  const applianceParams = {
+    ...defaults,
+    width: Math.min(defaults.width, Math.max(120, cabinetWidth - 5)),
+    height: Math.max(80, slotHeight - 4),
+    depth: Math.min(defaults.depth, Math.max(120, cabinetDepth - 20)),
+    hostOpeningWidthMm: Math.max(defaults.hostOpeningWidthMm, cabinetWidth),
+    hostOpeningHeightMm: Math.max(defaults.hostOpeningHeightMm, slotHeight),
+    hostOpeningDepthMm: Math.max(defaults.hostOpeningDepthMm, cabinetDepth)
+  };
+  const submodule = buildApplianceSubmodule(applianceParams, catalog);
+  submodule.name = `tower_${type}_submodule_${slotIndex}`;
+  const submoduleBounds = visibleObjectBounds(submodule);
+  const submoduleCenterX = ((submoduleBounds.min.x + submoduleBounds.max.x) / 2) / MM;
+  const submoduleMinY = submoduleBounds.min.y / MM;
+  submodule.position.set(
+    -submoduleCenterX * MM,
+    (bottomY - submoduleMinY) * MM,
+    (cabinetDepth / 2 - applianceParams.depth / 2 - 3) * MM
+  );
+  submodule.traverse((child) => {
+    child.userData.hostModuleType = params.type;
+    child.userData.hostSlotIndex = slotIndex;
+    child.userData.paramKeys = Array.from(new Set([...(child.userData.paramKeys ?? []), `tallSlot${slotIndex}Type`, `tallSlot${slotIndex}HeightMm`, `tallSlot${slotIndex}OffsetMm`, "width", "depth"]));
+  });
+  markTallSelectableSubmodule(submodule, {
+    id: `tower_${type}_${slotIndex}`,
+    label: `Slot ${slotIndex} ${type}`,
+    kind: "appliance",
+    slotIndex
+  });
+  group.add(submodule);
+}
+
+function addTallDrawerSlot(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  slotIndex: number,
+  drawerIndex: number,
+  bottomY: number,
+  slotHeight: number,
+  coverBottomMm = 0,
+  coverTopMm = 0
+) {
+  const width = num(params, "width", 600);
+  const depth = num(params, "depth", 560);
+  const gap = num(params, "frontGap", 2);
+  const sideGap = num(params, "sideGap", 2);
+  const frontT = num(params, "frontThicknessMm", 18);
+  const frontBottomY = bottomY - coverBottomMm + (coverBottomMm > 0 ? 0 : gap / 2);
+  const frontTopY = bottomY + slotHeight + coverTopMm - (coverTopMm > 0 ? 0 : gap / 2);
+  const frontHeight = Math.max(40, frontTopY - frontBottomY);
+  const drawerGroup = new THREE.Group();
+  drawerGroup.name = `tower_drawer_front_${drawerIndex}_group`;
+  const frontWorldZ = depth / 2 + frontT / 2 + 1;
+  drawerGroup.position.set(0, (frontBottomY + frontHeight / 2) * MM, frontWorldZ * MM);
+  group.add(drawerGroup);
+  addBox(drawerGroup, `tower_drawer_front_${drawerIndex}`, { width: width - sideGap * 2, height: frontHeight, depth: frontT }, { x: 0, y: 0, z: 0 }, makeMaterial(params, catalog, "front"), ["tallStackMode", `tallSlot${slotIndex}Type`, `tallSlot${slotIndex}HeightMm`, `tallSlot${slotIndex}OffsetMm`, "frontMaterialId"]);
+  const drawerPreset = resolveDrawerPresetForIndex(params, frontHeight, drawerIndex, slotIndex);
+  const backLayout = resolveBackPanelDepthLayout(depth, num(params, "backThickness", 8));
+  const drawerBackGap = Math.max(0, num(params, "drawerBackGapMm", 10));
+  const drawerRearFaceZ = Math.min(depth / 2 - 1, backLayout.innerFaceZ + drawerBackGap);
+  const drawerDepth = Math.min(Math.max(160, drawerPreset.systemDepthMm - 4), Math.max(160, depth / 2 - drawerRearFaceZ - 1));
+  const drawerCenterWorldZ = drawerRearFaceZ + drawerDepth / 2;
+  const slotDrawerSystemSize = drawerSystemSizeOverride(params[`tallSlot${slotIndex}DrawerSystemSize`]) ?? "";
+  addDrawerSubmodule(drawerGroup, {
+    ...params,
+    type: "fwm_catalog_base_drawers",
+    [`drawer${drawerIndex}SystemSize`]: slotDrawerSystemSize
+  } as FwmFurnitureParams, catalog, {
+    prefix: "tower_",
+    index: drawerIndex,
+    widthMm: width - sideGap * 2,
+    frontHeightMm: frontHeight,
+    drawerCenterZMm: drawerCenterWorldZ - frontWorldZ,
+    drawerDepthMm: drawerDepth
+  });
+  addCylinder(drawerGroup, `tower_drawer_handle_${drawerIndex}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: Math.max(18, frontHeight * 0.26), z: frontT / 2 + num(params, "handleProjectionMm", 28) / 2 }, makeMaterial(params, catalog, "hardware"), "x");
+  markTallSelectableSubmodule(drawerGroup, {
+    id: `tower_drawer_${drawerIndex}`,
+    label: `Slot ${slotIndex} drawer ${drawerIndex}`,
+    kind: "drawer",
+    slotIndex
+  });
+}
+
+function addTallShelfSlot(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, slotIndex: number, bottomY: number, slotHeight: number, hiddenUnderPreviousDrawer = false) {
+  const width = num(params, "width", 600);
+  const depth = num(params, "depth", 560);
+  const t = num(params, "boardThickness", 18);
+  const shelfT = Math.max(8, Math.min(slotHeight || num(params, "shelfThickness", t), num(params, "shelfThickness", t)));
+  const back = num(params, "backThickness", 8);
+  const shelfBottomY = hiddenUnderPreviousDrawer ? bottomY - shelfT : bottomY;
+  const shelf = addBox(group, `tower_shelf_${slotIndex}`, { width: Math.max(1, width - t * 2), height: shelfT, depth: Math.max(1, depth - back) }, { x: 0, y: shelfBottomY + shelfT / 2, z: back / 2 }, makeMaterial(params, catalog, "shelf"), ["tallStackMode", `tallSlot${slotIndex}Type`, `tallSlot${slotIndex}HeightMm`, `tallSlot${slotIndex}OffsetMm`, "shelfMaterialId"]);
+  markTallSelectableSubmodule(shelf, {
+    id: `tower_shelf_${slotIndex}`,
+    label: `Slot ${slotIndex} shelf`,
+    kind: "shelf",
+    slotIndex
+  });
+}
+
+function addTallDoorSlot(
+  group: THREE.Group,
+  params: FwmFurnitureParams,
+  catalog: ClientCatalog,
+  slotIndex: number,
+  bottomY: number,
+  slotHeight: number,
+  coverBottomMm = 0,
+  coverTopMm = 0
+) {
+  const width = num(params, "width", 600);
+  const depth = num(params, "depth", 560);
+  const frontT = num(params, "frontThicknessMm", 18);
+  const sideGap = num(params, "sideGap", 2);
+  const gap = num(params, "frontGap", 2);
+  const leafCount = Math.max(1, Math.min(2, Math.round(num(params, `tallSlot${slotIndex}DoorLeafCount`, 1))));
+  const openingMode = String(params[`tallSlot${slotIndex}DoorOpeningMode`] ?? "hinged") === "lift_up" ? "lift_up" : "hinged";
+  const frontBottomY = bottomY - coverBottomMm + (coverBottomMm > 0 ? 0 : gap);
+  const frontTopY = bottomY + slotHeight + coverTopMm - (coverTopMm > 0 ? 0 : gap);
+  const frontHeight = Math.max(60, frontTopY - frontBottomY);
+  const fullFrontWidth = Math.max(60, width - sideGap * 2);
+  const leafGap = leafCount > 1 ? gap : 0;
+  const leafWidth = Math.max(40, (fullFrontWidth - leafGap * (leafCount - 1)) / leafCount);
+  const material = makeMaterial(params, catalog, "front");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const doorGroup = new THREE.Group();
+  doorGroup.name = `tower_door_submodule_${slotIndex}`;
+  group.add(doorGroup);
+  for (let index = 0; index < leafCount; index += 1) {
+    const xCenter = -fullFrontWidth / 2 + leafWidth / 2 + index * (leafWidth + leafGap);
+    const leafName = leafCount === 1 ? `tower_door_${slotIndex}` : `tower_door_${slotIndex}_${index + 1}`;
+    if (openingMode === "lift_up") {
+      const pivot = new THREE.Group();
+      pivot.name = `${leafName}_lift_pivot`;
+      pivot.position.set(xCenter * MM, frontTopY * MM, (depth / 2 + frontT / 2 + 1) * MM);
+      pivot.rotation.x = bool(params, "opened", false) ? -Math.PI * 0.42 : 0;
+      doorGroup.add(pivot);
+      addBox(
+        pivot,
+        leafName,
+        { width: leafWidth, height: frontHeight, depth: frontT },
+        { x: 0, y: -frontHeight / 2, z: 0 },
+        material,
+        ["tallStackMode", `tallSlot${slotIndex}Type`, `tallSlot${slotIndex}HeightMm`, `tallSlot${slotIndex}DoorLeafCount`, `tallSlot${slotIndex}DoorOpeningMode`, "frontThicknessMm", "frontGap", "handleComponentId", "opened"]
+      );
+      for (const hingeX of [-leafWidth * 0.3, leafWidth * 0.3]) {
+        const plate = addBox(
+          pivot,
+          `${leafName}_hinge_top_${hingeX < 0 ? "left" : "right"}`,
+          { width: 64, height: 24, depth: 6 },
+          { x: hingeX, y: -12, z: -frontT / 2 - 3 },
+          hardware,
+          ["tallStackMode", `tallSlot${slotIndex}DoorOpeningMode`, "hingeComponentId", "opened"]
+        );
+        plate.userData.componentType = "hinge";
+      }
+      addCylinder(
+        pivot,
+        `${leafName}_handle`,
+        5,
+        Math.min(num(params, "handleLengthMm", 160), leafWidth * 0.55),
+        { x: 0, y: -frontHeight + Math.max(38, frontHeight * 0.12), z: frontT * 0.5 + num(params, "handleProjectionMm", 28) * 0.5 },
+        hardware,
+        "x"
+      );
+      continue;
+    }
+    const leaf = addSwingDoorLeaf(doorGroup, params, material, hardware, {
+      name: leafName,
+      widthMm: leafWidth,
+      heightMm: frontHeight,
+      xCenterMm: xCenter,
+      yCenterMm: frontBottomY + frontHeight / 2,
+      zCenterMm: depth / 2 + frontT / 2 + 1,
+      doorIndex: index,
+      doorCount: leafCount
+    });
+    leaf.userData.paramKeys = Array.from(new Set([...(leaf.userData.paramKeys ?? []), `tallSlot${slotIndex}DoorLeafCount`, `tallSlot${slotIndex}DoorOpeningMode`]));
+  }
+  markTallSelectableSubmodule(doorGroup, {
+    id: `tower_door_${slotIndex}`,
+    label: `Slot ${slotIndex} door`,
+    kind: "door",
+    slotIndex
+  });
+}
+
+function buildCatalogTallStackBuilder(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const width = num(params, "width", 600);
+  const height = num(params, "height", 2080);
+  const depth = num(params, "depth", 560);
+  const t = num(params, "boardThickness", 18);
+  const plinth = num(params, "plinthHeight", 100);
+  addCarcass(group, { ...params, doorCount: 0, drawerCount: 0, shelfCount: 0, applianceKind: "none" } as FwmFurnitureParams, catalog, { width, height, depth, namePrefix: "tower" });
+
+  const slotCount = Math.max(0, Math.min(12, Math.round(num(params, "tallSlotCount", DEFAULT_TALL_STACK.length))));
+  const slots = Array.from({ length: slotCount }, (_, index) => ({
+    index: index + 1,
+    type: tallSlotType(params, index + 1),
+    height: tallSlotHeight(params, index + 1),
+    offset: tallSlotOffset(params, index + 1)
+  }));
+  const nonShelfSlots = slots.filter((slot) => slot.type !== "shelf" && slot.type !== "empty");
+  const usableBottom = plinth + t;
+  const usableHeight = Math.max(80, height - plinth - t * 2);
+  const fixedTotal = slots.reduce((sum, slot) => sum + (slot.type !== "shelf" && slot.type !== "empty" && slot.height > 0 ? slot.height : 0), 0);
+  const fillSlots = slots.filter((slot) => slot.type !== "shelf" && slot.type !== "empty" && slot.height <= 0).length;
+  const fillHeight = fillSlots > 0 ? Math.max(60, (usableHeight - fixedTotal) / fillSlots) : 0;
+  const shouldScaleOverflow = String(params.tallStackMode ?? "builder") !== "builder";
+  const scale = shouldScaleOverflow && fillSlots === 0 && fixedTotal > usableHeight ? usableHeight / fixedTotal : 1;
+  let cursor = usableBottom;
+  let drawerIndex = 1;
+  let previousSlotType: TallStackSlotType | null = null;
+  let previousNonShelfType: TallStackSlotType | null = null;
+  let lastShelfTopY: number | null = null;
+  let shelfAtCurrentBoundary = false;
+  for (const slot of slots) {
+    const slotHeight = slot.height > 0 ? Math.max(8, slot.height * scale) : fillHeight;
+    const slotBottomY = cursor + slot.offset;
+    const isMoved = Math.abs(slot.offset) > 0.001;
+    if (slot.type === "drawer") {
+      addTallDrawerSlot(group, params, catalog, slot.index, drawerIndex, slotBottomY, slotHeight, drawerIndex === 1 || shelfAtCurrentBoundary ? t : 0, 0);
+      drawerIndex += 1;
+      cursor += slotHeight;
+      previousNonShelfType = slot.type;
+      shelfAtCurrentBoundary = false;
+    } else if (slot.type === "shelf") {
+      const nextNonShelf = slots.slice(slot.index).find((candidate) => candidate.type !== "shelf" && candidate.type !== "empty")?.type ?? null;
+      const topY = previousNonShelfType === "drawer" && !isMoved && (nextNonShelf === "oven" || nextNonShelf === "sink" || nextNonShelf === "microwave")
+        ? cursor - num(params, "frontGap", 2) / 2
+        : slotBottomY;
+      if (lastShelfTopY == null || Math.abs(lastShelfTopY - topY) > 0.01) {
+        addTallShelfSlot(group, params, catalog, slot.index, topY, slotHeight, true);
+        lastShelfTopY = topY;
+      }
+      if (!isMoved) cursor = topY;
+      shelfAtCurrentBoundary = !isMoved;
+    } else if (slot.type === "oven" || slot.type === "sink" || slot.type === "microwave") {
+      if (!shelfAtCurrentBoundary) {
+        addTallShelfSlot(group, params, catalog, slot.index, cursor, num(params, "shelfThickness", t), true);
+        shelfAtCurrentBoundary = true;
+      }
+      addTallApplianceSubmodule(group, params, catalog, slot.type, slot.index, slotBottomY, slotHeight);
+      cursor += slotHeight;
+      previousNonShelfType = slot.type;
+      shelfAtCurrentBoundary = false;
+    } else if (slot.type === "door") {
+      const remainingFrontSlots = nonShelfSlots.filter((candidate) => candidate.index > slot.index && (candidate.type === "door" || candidate.type === "drawer"));
+      const coverTop = remainingFrontSlots.length === 0 ? t + num(params, "frontGap", 2) / 2 : 0;
+      addTallDoorSlot(group, params, catalog, slot.index, slotBottomY, slotHeight, shelfAtCurrentBoundary ? t : 0, coverTop);
+      cursor += slotHeight;
+      previousNonShelfType = slot.type;
+      shelfAtCurrentBoundary = false;
+    } else if (slot.type === "empty") {
+      cursor += Math.max(0, slot.height);
+      shelfAtCurrentBoundary = false;
+    }
+    previousSlotType = slot.type;
+  }
+  group.userData.tallStackSlots = slots;
 }
 
 function addDishwasherFront(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
@@ -573,11 +3398,124 @@ function buildTable(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
   }
 }
 
+function buildCatalogWorktopSurface(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const w = num(params, "width", 1000);
+  const d = num(params, "depth", 600);
+  const t = Math.max(10, num(params, "worktopThicknessMm", num(params, "height", 38)));
+  const mat = makeMaterial(params, catalog, "worktop");
+  const shape = String(params.shape ?? "none");
+  const variant = shape !== "none" ? shape : String(params.variant ?? "straight");
+  const radius = Math.max(50, num(params, "cornerRadiusMm", Math.min(w, d) * 0.5));
+  if (variant === "round") {
+    addCylinder(group, "worktop_round_surface", Math.min(radius, Math.min(w, d) * 0.5), t, { x: 0, y: t / 2, z: 0 }, mat, "y", ["width", "depth", "worktopThicknessMm", "worktopMaterialId", "shape", "cornerRadiusMm"]);
+    return;
+  }
+  if (variant === "half_round") {
+    addBox(group, "worktop_half_round_rect", { width: w, height: t, depth: d * 0.55 }, { x: 0, y: t / 2, z: -d * 0.225 }, mat, ["width", "depth", "worktopThicknessMm", "worktopMaterialId", "variant"]);
+    addCylinder(group, "worktop_half_round_front", Math.min(radius, Math.max(50, w * 0.5)), t, { x: 0, y: t / 2, z: d * 0.05 }, mat, "y", ["width", "depth", "worktopThicknessMm", "worktopMaterialId", "shape", "cornerRadiusMm"]);
+    return;
+  }
+  addBox(group, "worktop_surface", { width: w, height: t, depth: d }, { x: 0, y: t / 2, z: 0 }, mat, ["width", "depth", "worktopThicknessMm", "worktopMaterialId", "variant"]);
+  if (variant.includes("corner")) {
+    addBox(group, "worktop_corner_return", { width: Math.max(120, d), height: t, depth: Math.max(120, w * 0.45) }, { x: -w / 2 + Math.max(120, d) / 2, y: t / 2, z: -d / 2 - Math.max(120, w * 0.45) / 2 }, mat, ["width", "depth", "worktopThicknessMm", "variant"]);
+  }
+  const cutoutW = num(params, "cutoutWidthMm", variant.includes("cutout") ? Math.min(520, w * 0.45) : 0);
+  const cutoutD = num(params, "cutoutDepthMm", variant.includes("cutout") ? Math.min(400, d * 0.45) : 0);
+  if (cutoutW > 0 && cutoutD > 0) {
+    addBox(group, "worktop_cutout_marker", { width: Math.min(cutoutW, w - 80), height: 4, depth: Math.min(cutoutD, d - 80) }, { x: 0, y: t + 2, z: 0 }, makeMaterial(params, catalog, "hardware"), ["shape", "cutoutWidthMm", "cutoutDepthMm", "width", "depth"]);
+  }
+  if (variant === "chamfered" || String(params.variant ?? "").includes("chamfered")) {
+    const chamfer = Math.min(num(params, "chamferMm", 120), w * 0.35, d * 0.35);
+    addBox(group, "worktop_chamfer_marker", { width: chamfer, height: 5, depth: chamfer }, { x: w / 2 - chamfer / 2, y: t + 4, z: d / 2 - chamfer / 2 }, makeMaterial(params, catalog, "hardware"), ["shape", "chamferMm"]);
+  }
+}
+
+function buildCatalogShelfSurface(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const w = num(params, "width", 600);
+  const d = num(params, "depth", 300);
+  const t = Math.max(4, num(params, "shelfThickness", num(params, "height", 18)));
+  const count = Math.max(1, Math.round(num(params, "shelfCount", 1)));
+  const mat = String(params.variant ?? "").includes("glass") || String(params.frontType ?? "") === "glass" || bool(params, "glassFronts", false)
+    ? makeMaterial(params, catalog, "glass")
+    : makeMaterial(params, catalog, "shelf");
+  for (let index = 0; index < count; index += 1) {
+    const y = t / 2 + index * Math.max(90, t + 80);
+    addBox(group, `free_shelf_${index + 1}`, { width: w, height: t, depth: d }, { x: 0, y, z: 0 }, mat, ["width", "depth", "shelfThickness", "shelfCount", "shelfMaterialId", "variant"]);
+  }
+}
+
+function buildCatalogTrim(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const w = num(params, "width", 600);
+  const h = num(params, "height", 100);
+  const d = num(params, "depth", 18);
+  const mat = makeMaterial(params, catalog, String(params.variant ?? "").includes("plinth") ? "plinth" : "body");
+  addBox(group, "trim_panel", { width: w, height: h, depth: d }, { x: 0, y: h / 2, z: 0 }, mat, ["width", "height", "depth", "variant", "bodyMaterialId", "plinthMaterialId"]);
+}
+
+function buildCatalogFrontComponent(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const w = num(params, "width", 450);
+  const h = num(params, "height", 722);
+  const t = num(params, "frontThicknessMm", num(params, "depth", 20));
+  const frontType = String(params.frontType ?? "solid");
+  const variant = frontType !== "solid" ? frontType : String(params.variant ?? "base_1d");
+  const isGlass = variant.includes("glass") || bool(params, "glassFronts", false);
+  const frontMat = makeMaterial(params, catalog, isGlass ? "glass" : "front");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  if (variant.includes("aluminium_frame") || variant.includes("aluminum_frame")) {
+    const frame = Math.max(32, Math.min(70, w * 0.12));
+    addBox(group, "front_frame_left", { width: frame, height: h, depth: t }, { x: -w / 2 + frame / 2, y: h / 2, z: 0 }, hardware, ["width", "height", "frontThicknessMm", "variant"]);
+    addBox(group, "front_frame_right", { width: frame, height: h, depth: t }, { x: w / 2 - frame / 2, y: h / 2, z: 0 }, hardware, ["width", "height", "frontThicknessMm", "variant"]);
+    addBox(group, "front_frame_top", { width: w, height: frame, depth: t }, { x: 0, y: h - frame / 2, z: 0 }, hardware, ["width", "height", "frontThicknessMm", "variant"]);
+    addBox(group, "front_frame_bottom", { width: w, height: frame, depth: t }, { x: 0, y: frame / 2, z: 0 }, hardware, ["width", "height", "frontThicknessMm", "variant"]);
+    addBox(group, "front_glass_insert", { width: Math.max(1, w - frame * 2), height: Math.max(1, h - frame * 2), depth: Math.max(4, t * 0.35) }, { x: 0, y: h / 2, z: 1 }, makeMaterial(params, catalog, "glass"), ["width", "height", "variant"]);
+    return;
+  }
+  addBox(group, "front_component_panel", { width: w, height: h, depth: t }, { x: 0, y: h / 2, z: 0 }, frontMat, ["width", "height", "frontThicknessMm", "frontMaterialId", "variant"]);
+  if (variant.includes("profiled")) {
+    addBox(group, "front_profile_center", { width: Math.max(20, w - 80), height: 16, depth: 6 }, { x: 0, y: h * 0.5, z: t / 2 + 3 }, hardware, ["variant", "width"]);
+  }
+}
+
+function buildCatalogAccessory(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const w = num(params, "width", 380);
+  const h = num(params, "height", 100);
+  const d = num(params, "depth", 300);
+  const variant = String(params.variant ?? "generic_accessory");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  if (variant.includes("conical_leg")) {
+    addCylinder(group, "conical_leg", Math.max(12, Math.min(w, d) * 0.12), h, { x: 0, y: h / 2, z: 0 }, hardware, "y", ["width", "height", "depth", "variant"]);
+    return;
+  }
+  if (variant.includes("wire_basket")) {
+    const rod = 8;
+    addBox(group, "wire_basket_front", { width: w, height: rod, depth: rod }, { x: 0, y: h, z: d / 2 }, hardware, ["width", "height", "depth", "variant"]);
+    addBox(group, "wire_basket_back", { width: w, height: rod, depth: rod }, { x: 0, y: h, z: -d / 2 }, hardware, ["width", "height", "depth", "variant"]);
+    addBox(group, "wire_basket_left", { width: rod, height: rod, depth: d }, { x: -w / 2, y: h, z: 0 }, hardware, ["width", "height", "depth", "variant"]);
+    addBox(group, "wire_basket_right", { width: rod, height: rod, depth: d }, { x: w / 2, y: h, z: 0 }, hardware, ["width", "height", "depth", "variant"]);
+    for (let index = 0; index < 4; index += 1) {
+      addBox(group, `wire_basket_floor_rod_${index + 1}`, { width: w, height: rod, depth: rod }, { x: 0, y: rod / 2, z: -d / 2 + ((index + 1) * d) / 5 }, hardware, ["variant", "width", "depth"]);
+    }
+    return;
+  }
+  if (variant.includes("point_light")) {
+    addCylinder(group, "point_light", Math.max(20, Math.min(w, d) * 0.22), Math.max(8, h), { x: 0, y: h / 2, z: 0 }, hardware, "y", ["width", "height", "depth", "variant"]);
+    return;
+  }
+  if (variant.includes("lumina") || variant.includes("sada") || variant.includes("light")) {
+    addBox(group, "light_bar", { width: w, height: h, depth: d }, { x: 0, y: h / 2, z: 0 }, hardware, ["width", "height", "depth", "variant"]);
+    return;
+  }
+  addBox(group, "accessory_body", { width: w, height: h, depth: d }, { x: 0, y: h / 2, z: 0 }, hardware, ["width", "height", "depth", "variant"]);
+}
+
 export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCatalog): THREE.Group {
-  const p = normalizeFwmFurnitureParams(params);
-  const spec = getFwmFurnitureSpec(p.type);
+  const normalized = normalizeFwmFurnitureParams(params);
+  const spec = getFwmFurnitureSpec(normalized.type);
+  const p = paramsForExternalKitchenWorktop(normalized, spec);
   const group = new THREE.Group();
-  group.name = `${p.type}_module`;
+  group.name = `${normalized.type}_module`;
+  group.userData.modulePackageBuildParameters = { ...normalized };
+  group.userData.moduleRenderableBuildParameters = { ...p };
   group.userData.fwmModuleType = p.type;
   group.userData.moduleDisplayName = spec.displayName;
   group.userData.assemblyContext = getFwmAssemblyContext(spec);
@@ -597,12 +3535,13 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     rotatesWithModule: true
   };
   group.userData.materialGroups = {
-    body: "body",
+    corpus: "corpus",
     front: "front",
     back: "back",
-    shelf: "shelf",
+    shelf: "corpus",
     worktop: "worktop",
-    drawerBox: "drawer_box"
+    drawerBottom: "drawer_bottom",
+    hardware: "hardware"
   };
   group.userData.systemParameters = {
     typeId: `${spec.moduleType}__type`,
@@ -612,19 +3551,43 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     assemblyContext: getFwmAssemblyContext(spec),
     roomCategory: getFwmRoomCategory(spec),
     kitchenModuleRole: spec.kitchenRole ?? null,
-    requiresWorktop: spec.hasWorktop === true,
+    requiresWorktop: spec.geometryKind !== "worktop" && (spec.hasWorktop === true || spec.moduleType === "fwm_catalog_base_corner"),
     ifcClass: "IfcFurniture",
     ifcObjectType: getFwmSystemFamily(spec),
     ifcTag: `${spec.moduleType}__type`
   };
+  const finish = () => {
+    group.updateMatrixWorld(true);
+    return normalizeFwmMaterialMetadata(group);
+  };
 
   if (spec.geometryKind === "bed") {
     buildBed(group, p, catalog);
-    return group;
+    return finish();
   }
   if (spec.geometryKind === "table") {
     buildTable(group, p, catalog);
-    return group;
+    return finish();
+  }
+  if (spec.geometryKind === "worktop") {
+    buildCatalogWorktopSurface(group, p, catalog);
+    return finish();
+  }
+  if (spec.geometryKind === "shelf_surface") {
+    buildCatalogShelfSurface(group, p, catalog);
+    return finish();
+  }
+  if (spec.geometryKind === "trim") {
+    buildCatalogTrim(group, p, catalog);
+    return finish();
+  }
+  if (spec.geometryKind === "front_component") {
+    buildCatalogFrontComponent(group, p, catalog);
+    return finish();
+  }
+  if (spec.geometryKind === "accessory") {
+    buildCatalogAccessory(group, p, catalog);
+    return finish();
   }
   if (spec.geometryKind === "cladding") {
     addBox(group, "cladding_panel", { width: num(p, "width", spec.width), height: num(p, "height", spec.height), depth: num(p, "depth", spec.depth) }, { x: 0, y: num(p, "height", spec.height) / 2, z: 0 }, makeMaterial(p, catalog, "front"), ["width", "height", "depth", "frontMaterialId", "variant"]);
@@ -633,7 +3596,7 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
       const x = -num(p, "width", spec.width) / 2 + ((index + 0.5) * num(p, "width", spec.width)) / slatCount;
       addBox(group, `relief_${index + 1}`, { width: 12, height: num(p, "height", spec.height), depth: 10 }, { x, y: num(p, "height", spec.height) / 2, z: num(p, "depth", spec.depth) / 2 + 5 }, makeMaterial(p, catalog, "body"), ["variant"]);
     }
-    return group;
+    return finish();
   }
 
   if (spec.geometryKind === "island") {
@@ -641,7 +3604,42 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     addFronts(group, p, catalog);
     addFronts(group, { ...p, drawerCount: 0, doorCount: Math.max(2, num(p, "doorCount", 2)) } as FwmFurnitureParams, catalog, { prefix: "back", depth: num(p, "depth", spec.depth), height: num(p, "height", spec.height) });
     addWorktop(group, p, catalog);
-    return group;
+    return finish();
+  }
+
+  if (spec.moduleType === "fwm_catalog_base_corner") {
+    const variant = String(p.variant ?? "corner_1d");
+    if (variant === "corner_90" || variant === "corner_90_1p") {
+      buildCatalogBaseCorner90(group, p, catalog);
+    } else if (variant === "corner_chamfered" || variant === "corner_chamfered_1p") {
+      buildCatalogBaseCornerChamfered(group, p, catalog);
+    } else {
+      buildCatalogBaseCorner1D(group, p, catalog);
+    }
+    return finish();
+  }
+
+  if (spec.moduleType === "fwm_catalog_wall_cabinet") {
+    const variant = String(p.variant ?? "");
+    if (variant === "corner_90" || variant === "corner_90_1p" || variant === "corner_chamfered" || variant === "corner_chamfered_1p" || variant === "corner_open_chamfered") {
+      buildCatalogWallCornerCabinet(group, p, catalog);
+      return finish();
+    }
+  }
+
+  if (spec.moduleType === "fwm_catalog_wall_open_end") {
+    buildCatalogWallOpenEnd(group, p, catalog);
+    return finish();
+  }
+
+  if (spec.geometryKind === "open_end") {
+    buildOpenEndCabinet(group, p, catalog);
+    return finish();
+  }
+
+  if (spec.moduleType === "fwm_catalog_tall_cabinet") {
+    buildCatalogTallStackBuilder(group, p, catalog);
+    return finish();
   }
 
   if (spec.geometryKind === "corner") {
@@ -654,7 +3652,7 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     group.add(branch);
     addFronts(group, p, catalog, { width: Math.min(num(p, "width", spec.width), 720), prefix: "corner" });
     addWorktop(group, p, catalog);
-    return group;
+    return finish();
   }
 
   if (spec.geometryKind === "wall_unit") {
@@ -668,7 +3666,7 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     upperGroup.position.y = 1250 * MM;
     group.add(upperGroup);
     addBox(group, "media_void_marker", { width: 1100, height: 620, depth: 30 }, { x: 0, y: 1200, z: num(p, "depth", 450) / 2 + 20 }, makeMaterial(p, catalog, "back"), ["width", "height"]);
-    return group;
+    return finish();
   }
 
   if (spec.geometryKind === "vanity" || spec.geometryKind === "bathroom") {
@@ -679,7 +3677,7 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     if (num(p, "sinkBowlWidthMm", 0) > 0) {
       addBox(group, "basin", { width: num(p, "sinkBowlWidthMm", 520), height: 90, depth: num(p, "sinkBowlDepthMm", 360) }, { x: 0, y: num(p, "height", spec.height) + 55, z: 35 }, makeMaterial(p, catalog, "appliance"), ["sinkBowlWidthMm", "sinkBowlDepthMm"]);
     }
-    return group;
+    return finish();
   }
 
   if (spec.geometryKind === "counter" || spec.geometryKind === "office") {
@@ -689,17 +3687,20 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     const privacyH = spec.geometryKind === "counter" ? 320 : 0;
     if (privacyH > 0) addBox(group, "raised_front_panel", { width: num(p, "width", spec.width), height: privacyH, depth: num(p, "frontThicknessMm", 18) }, { x: 0, y: num(p, "height", spec.height) - privacyH / 2, z: num(p, "depth", spec.depth) / 2 + 18 }, makeMaterial(p, catalog, "front"), ["height", "frontMaterialId"]);
     if (spec.geometryKind === "office") buildTable(group, { ...p, width: num(p, "width", spec.width) * 0.55, height: 740, depth: 700 } as FwmFurnitureParams, catalog);
-    return group;
+    return finish();
   }
 
-  addCarcass(group, p, catalog, { topOpen: spec.geometryKind === "sink" });
-  if (spec.appliance) addAppliance(group, p, catalog, spec.appliance, num(p, "height", spec.height) * 0.48, spec.appliance === "microwave" ? 380 : spec.appliance === "oven" ? 600 : num(p, "height", spec.height) * 0.58);
+  addCarcass(group, p, catalog, { topOpen: spec.geometryKind === "sink", topRails: spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers" });
+  const applianceKind = (spec.appliance ?? (typeof p.applianceKind === "string" && p.applianceKind !== "none" ? p.applianceKind : null)) as string | null;
+  if (applianceKind) {
+    addAppliance(group, p, catalog, applianceKind, num(p, "height", spec.height) * 0.48, applianceKind === "microwave" ? 380 : applianceKind === "oven" ? 600 : num(p, "height", spec.height) * 0.58);
+  }
   if (spec.geometryKind === "sink") {
     addBox(group, "sink_bowl", { width: num(p, "sinkBowlWidthMm", 520), height: 160, depth: num(p, "sinkBowlDepthMm", 400) }, { x: 0, y: num(p, "height", spec.height) + 10, z: 40 }, makeMaterial(p, catalog, "appliance"), ["sinkBowlWidthMm", "sinkBowlDepthMm"]);
     addCylinder(group, "faucet_arc", 12, 220, { x: 0, y: num(p, "height", spec.height) + 170, z: -120 }, makeMaterial(p, catalog, "hardware"), "y");
   }
-  if (spec.appliance === "dishwasher") addDishwasherFront(group, p, catalog);
+  if (applianceKind === "dishwasher") addDishwasherFront(group, p, catalog);
   else addFronts(group, p, catalog);
   addWorktop(group, p, catalog);
-  return group;
+  return finish();
 }

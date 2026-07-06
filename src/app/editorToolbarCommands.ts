@@ -35,6 +35,7 @@ export type ToolbarHistoryCommandContext = {
 export type ToolbarSelectionEditCommandContext = {
   deleteSelected: () => void;
   duplicateSelected: () => void;
+  unpinSelectedModulesFromWorktop?: () => void;
 };
 
 export type ToolbarVisibilityCommandContext = {
@@ -151,6 +152,10 @@ export function runToolbarHistoryActionCommand(
 
 export function runToolbarDuplicateCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "duplicateSelected">) {
   runToolbarActionCommand(ctx.duplicateSelected);
+}
+
+export function runToolbarUnpinFromWorktopCommand(ctx: Required<Pick<ToolbarSelectionEditCommandContext, "unpinSelectedModulesFromWorktop">>) {
+  runToolbarActionCommand(ctx.unpinSelectedModulesFromWorktop);
 }
 
 export function runToolbarDeleteCommand(ctx: Pick<ToolbarSelectionEditCommandContext, "deleteSelected">) {

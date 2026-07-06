@@ -4,13 +4,20 @@ import { createUserService, type UserService } from "../core/auth/user-service";
 import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
 import { createPostgresClientCatalogRepository } from "../core/catalog/catalog-postgres-repository";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
-import { resolveDatabaseConfig } from "../core/database/database-config";
+import { loadPostgresClientProfile } from "../core/client/client-postgres-repository";
+import { getSeededClientProfile } from "../core/client/client-repository";
+import type { ClientProfile } from "../core/client/client-types";
+import { getDatabaseUrl, resolveDatabaseConfig } from "../core/database/database-config";
 import { createFileModulePackageRepository, type ModulePackageRepository } from "../core/module-package/module-package-repository";
 import { createPostgresModulePackageRepository } from "../core/module-package/module-package-postgres-repository";
 
-function shouldUseDatabase(): boolean {
-  const storage = process.env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
-  return storage !== "file" && !!resolveDatabaseConfig();
+export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
+  const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
+  if (storage === "file") return false;
+  if (storage === "postgres" && !getDatabaseUrl(env)) {
+    throw new Error("DATABASE_URL, KITCHEN_PROJECT_DATABASE_URL, or complete POSTGRES_* env vars are required when KITCHEN_PROJECT_STORAGE=postgres.");
+  }
+  return !!resolveDatabaseConfig(env);
 }
 
 export function createServerUserService(): UserService {
@@ -32,4 +39,16 @@ export function createServerModulePackageRepository(projectRoot: string): Module
   return databaseConfig
     ? createPostgresModulePackageRepository(databaseConfig)
     : createFileModulePackageRepository(projectRoot);
+}
+
+export async function loadServerClientProfile(clientId: string): Promise<ClientProfile | null> {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  if (databaseConfig) {
+    return loadPostgresClientProfile({
+      connectionString: databaseConfig.connectionString,
+      schema: databaseConfig.schema,
+      clientId
+    });
+  }
+  return getSeededClientProfile(clientId);
 }

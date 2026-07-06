@@ -5,6 +5,24 @@ import { getKitchenDefaults } from "./kitchen-defaults";
 import { createMaterialCatalog } from "./material-catalog";
 import { getEnabledClientModules } from "./module-catalog";
 import { createPricingCatalog } from "./pricing-catalog";
+import {
+  listVendorCatalogGroupSummaries,
+  listVendorCatalogTemplateSummaries,
+  type VendorCatalogGroupRequest,
+  type VendorCatalogTemplateRequest
+} from "./vendor-catalog-browser";
+import {
+  resolveVendorModulePackage,
+  type VendorModulePackageResolutionRequest
+} from "./vendor-module-package-resolver";
+import {
+  resolveVendorModuleSeed,
+  type VendorModuleSeedResolutionRequest
+} from "./vendor-module-seed-resolver";
+import {
+  resolveVendorProductVariant,
+  type VendorProductResolutionRequest
+} from "./vendor-product-resolver";
 import type { ClientCatalogRepository } from "./catalog-repository";
 import { validateClientCatalog } from "./catalog-validation";
 
@@ -27,6 +45,26 @@ export function createClientCatalogService(args: {
     getPricingCatalog: () => createPricingCatalog(getCatalog()),
     getKitchenDefaults: () => getKitchenDefaults(getCatalog()),
     getEnabledModules: () => getEnabledClientModules(getCatalog()),
+    async resolveVendorProductVariant(request: VendorProductResolutionRequest) {
+      const catalog = await args.repository.ensureCatalogExists(args.context);
+      return resolveVendorProductVariant(catalog, request);
+    },
+    async resolveVendorModulePackage(request: VendorModulePackageResolutionRequest) {
+      const catalog = await args.repository.ensureCatalogExists(args.context);
+      return resolveVendorModulePackage(catalog, request);
+    },
+    async resolveVendorModuleSeed(request: VendorModuleSeedResolutionRequest) {
+      const catalog = await args.repository.ensureCatalogExists(args.context);
+      return resolveVendorModuleSeed(catalog, request);
+    },
+    async listVendorCatalogGroups(request: VendorCatalogGroupRequest = {}) {
+      const catalog = await args.repository.ensureCatalogExists(args.context);
+      return listVendorCatalogGroupSummaries(catalog, request);
+    },
+    async listVendorCatalogTemplates(request: VendorCatalogTemplateRequest = {}) {
+      const catalog = await args.repository.ensureCatalogExists(args.context);
+      return listVendorCatalogTemplateSummaries(catalog, request);
+    },
     getReadonlyCatalogForUi: () => structuredClone(getCatalog()),
     async updateMaterial(material: MaterialDefinition) {
       const catalog = await args.repository.ensureCatalogExists(args.context);

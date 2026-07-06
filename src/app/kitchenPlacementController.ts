@@ -2,19 +2,37 @@ import * as THREE from "three";
 import { createPlanSnapper, type PlanSnapBinding, type PlanSnapResult } from "./planSnap";
 import { buildMeasureGuides, type AssociativeMeasureContext } from "./measureAssociative";
 import { pointInPolygonXZ } from "./sharedUtils";
-import type { FloorInstance, KitchenPlacementBinding, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
+import type {
+  ColumnInstance,
+  DoorInstance,
+  FloorInstance,
+  KitchenPlacementBinding,
+  KitchenWorktopInstance,
+  LayoutInstance,
+  SectionInstance,
+  WallInstance,
+  WindowInstance
+} from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-import type { FurnQuoteModulePackage, ModuleContextBindingSource } from "../core/module-package/module-package-types";
+import type { FurnQuoteModulePackage, ModuleContextBindingSource, ModulePlacementContext } from "../core/module-package/module-package-types";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutTool } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 import { validateKitchenModulePackagePlacement } from "../layout/modulePackagePlacementIntegration";
-import { getKitchenModuleRole, staysOutsideKitchenWorktopFootprint } from "../layout/kitchenModuleRules";
+import { getKitchenModuleRole, isKitchenCornerModule, staysOutsideKitchenWorktopFootprint } from "../layout/kitchenModuleRules";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
+import { getVendorPreferredPlacementContext, validateVendorPlacementCandidate } from "../layout/vendorPlacementRules";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import { toFreePlanBinding } from "./measureAssociative";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import {
+  createPinoSideCabinetPlacementCandidate,
+  getPinoSideCabinetPreferredPlacementContext,
+  validatePinoSideCabinetPlacementCandidate
+} from "../modules/pinoSideCabinet/rules";
+import type { PinoSideCabinetParams } from "../modules/pinoSideCabinet/types";
 
 type KitchenGroupState = {
   id: string;
@@ -84,6 +102,11 @@ export type KitchenPlacementControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
   floors: FloorInstance[];
+  columns?: ColumnInstance[];
+  sections?: SectionInstance[];
+  getWindows?: () => WindowInstance[];
+  getDoors?: () => DoorInstance[];
+  customFurniture?: CustomFurnitureInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
   getKitchenWorktopBackGuidePath: (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
@@ -139,6 +162,36 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const firstPlacementError = (result: { errors: Array<{ message: string }> }) =>
     result.errors[0]?.message ?? "Placement does not match module package rules.";
 
+  const getPreferredPlacementContext = (modulePackage: FurnQuoteModulePackage | null, params: ModuleParams): ModulePlacementContext => {
+    if (params.type === "pino_side_cabinet") {
+      return getPinoSideCabinetPreferredPlacementContext(params as PinoSideCabinetParams);
+    }
+    const vendorPreferred = getVendorPreferredPlacementContext(params as unknown as Record<string, unknown>, null);
+    if (vendorPreferred) return vendorPreferred;
+    const allowed = modulePackage?.placement.allowedContexts ?? [];
+    if (allowed.includes("kitchen_wall")) return "kitchen_wall";
+    if (allowed.includes("appliance_zone")) return "appliance_zone";
+    if (allowed.includes("floor")) return "floor";
+    return "kitchen_wall";
+  };
+
+  const describePlacementTarget = (placementContext: ModulePlacementContext) =>
+    placementContext === "appliance_zone" ? "appliance zone beside the worktop" : "beside the worktop";
+
+  const getPinoPlacementValidation = (params: ModuleParams, placementContext: ModulePlacementContext) => {
+    if (params.type !== "pino_side_cabinet") return null;
+    const pinoParams = params as PinoSideCabinetParams;
+    return validatePinoSideCabinetPlacementCandidate(
+      pinoParams,
+      createPinoSideCabinetPlacementCandidate(pinoParams, placementContext)
+    );
+  };
+
+  const getVendorPlacementValidation = (params: ModuleParams, placementContext: ModulePlacementContext) => {
+    if (params.type === "pino_side_cabinet") return null;
+    return validateVendorPlacementCandidate(params as unknown as Record<string, unknown>, placementContext);
+  };
+
   const normalizeAngleRad = (angle: number) => {
     let next = angle;
     while (next <= -Math.PI) next += Math.PI * 2;
@@ -159,12 +212,10 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
   const isCornerKitchenModule = (instOrParams: LayoutInstance | ModuleParams) => {
     const maybeParams = "params" in instOrParams ? instOrParams.params : instOrParams;
-    return (
-      maybeParams !== null &&
-      typeof maybeParams === "object" &&
-      "type" in maybeParams &&
-      maybeParams.type === "corner_shelf_lower"
-    );
+    const modulePackage = "root" in instOrParams && "params" in instOrParams
+      ? getModulePackageForInstance(instOrParams as LayoutInstance)
+      : null;
+    return isKitchenCornerModule(maybeParams as Record<string, unknown>, modulePackage);
   };
 
   const moduleStaysOutsideKitchenWorktop = (instOrParams: LayoutInstance | ModuleParams) =>
@@ -218,6 +269,48 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     };
   };
 
+  const getModuleKitchenCornerRotationOffset = (inst: LayoutInstance) => {
+    const raw = inst.module.userData.kitchenCornerRotationOffsetRad ?? inst.root.userData.kitchenCornerRotationOffsetRad;
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
+  };
+
+  const getProjectedKitchenCornerFootprintPlacement = (
+    inst: LayoutInstance,
+    corner: THREE.Vector3,
+    rotationY: number,
+    xDir: THREE.Vector3,
+    zDir: THREE.Vector3
+  ) => {
+    const { min, max } = inst.localBox;
+    const values = [min.x, min.z, max.x, max.z];
+    if (values.some((value) => !Number.isFinite(value))) return null;
+    const euler = new THREE.Euler(0, rotationY, 0);
+    const points = [
+      new THREE.Vector3(min.x, 0, min.z),
+      new THREE.Vector3(max.x, 0, min.z),
+      new THREE.Vector3(max.x, 0, max.z),
+      new THREE.Vector3(min.x, 0, max.z)
+    ].map((point) => point.applyEuler(euler));
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const point of points) {
+      const x = point.dot(xDir);
+      const z = point.dot(zDir);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) return null;
+    return {
+      position: corner.clone().sub(xDir.clone().multiplyScalar(minX)).sub(zDir.clone().multiplyScalar(minZ)),
+      xLength: Math.max(0.001, maxX - minX),
+      zLength: Math.max(0.001, maxZ - minZ)
+    };
+  };
+
   const getModuleLocalKitchenAnchor = (inst: LayoutInstance) =>
     isCornerKitchenModule(inst) ? getModuleLocalKitchenCornerAnchor(inst) : getModuleLocalBackCenter(inst);
 
@@ -249,6 +342,11 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     walls,
     instances,
     floors,
+    columns: ctx.columns ?? [],
+    sections: ctx.sections ?? [],
+    windows: ctx.getWindows?.() ?? [],
+    doors: ctx.getDoors?.() ?? [],
+    customFurniture: ctx.customFurniture ?? [],
     worktops: kitchenWorktops,
     measures: (measureStateRef?.measures ?? []).map((item) => ({
       id: item.id,
@@ -267,6 +365,11 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     getWalls: () => walls,
     getInstances: () => instances,
     getFloors: () => floors,
+    getColumns: () => ctx.columns ?? [],
+    getSections: () => ctx.sections ?? [],
+    getWindows: () => ctx.getWindows?.() ?? [],
+    getDoors: () => ctx.getDoors?.() ?? [],
+    getCustomFurniture: () => ctx.customFurniture ?? [],
     getKitchenWorktops: () => kitchenWorktops,
     getMeasureGuides: () => buildMeasureGuides(getAssociativeMeasureContext()),
     getWallSolvedOutlines: () => wallSolvedOutlines,
@@ -325,13 +428,18 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
     const cornerExtents = getModuleKitchenCornerExtents(inst);
     const localCorner = cornerExtents.corner;
+    const rotationOffset = getModuleKitchenCornerRotationOffset(inst);
     const tryAssignment = (xDir: THREE.Vector3, zDir: THREE.Vector3, xLength: number, zLength: number) => {
-      const rotationY = Math.atan2(zDir.x, zDir.z);
-      const rotatedX = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, rotationY, 0)).normalize();
-      const rotatedZ = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, rotationY, 0)).normalize();
+      const axisRotationY = Math.atan2(zDir.x, zDir.z);
+      const rotatedX = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
+      const rotatedZ = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
       if (rotatedX.dot(xDir) < 0.999 || rotatedZ.dot(zDir) < 0.999) return null;
+      const rotationY = axisRotationY + rotationOffset;
+      const projectedPlacement = Math.abs(rotationOffset) > 1e-9
+        ? getProjectedKitchenCornerFootprintPlacement(inst, corner, rotationY, xDir, zDir)
+        : null;
       const rotatedCorner = localCorner.clone().applyEuler(new THREE.Euler(0, rotationY, 0));
-      const position = corner.clone().sub(rotatedCorner);
+      const position = projectedPlacement?.position ?? corner.clone().sub(rotatedCorner);
       position.y = getKitchenModulePlacementY(inst, worktop.kitchenGroupId);
       return {
         binding: {
@@ -344,7 +452,9 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
         corner,
         position,
         rotationY,
-        valid: xLength + 1e-6 >= cornerExtents.xLength && zLength + 1e-6 >= cornerExtents.zLength
+        valid:
+          xLength + 1e-6 >= (projectedPlacement?.xLength ?? cornerExtents.xLength) &&
+          zLength + 1e-6 >= (projectedPlacement?.zLength ?? cornerExtents.zLength)
       };
     };
 
@@ -623,6 +733,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     backOffsetMm: number
   ) => {
     if (!moduleStaysOutsideKitchenWorktop(ghost)) return null;
+    const modulePackage = getModulePackageForInstance(ghost);
+    const placementContext = getPreferredPlacementContext(modulePackage, ghost.params);
 
     const localBackCenter = getModuleLocalBackCenter(ghost);
     const halfModuleWidthM = Math.max(0.001, (ghost.localBox.max.x - ghost.localBox.min.x) * 0.5);
@@ -689,14 +801,45 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     if (!best) return null;
     if (!cursorOnWorktop && Math.sqrt(closestGuideDistanceSq) > 0.45) return null;
 
+    const packageValidation = modulePackage
+      ? validateKitchenModulePackagePlacement({
+          modulePackage,
+          candidate: {
+            placementContext,
+            hasWall: true,
+            hasFloor: true,
+            hasCorner: false,
+            hasTwoPerpendicularWalls: false,
+            touchesBothWalls: false
+          }
+        })
+      : null;
+    const validByPackage = packageValidation?.valid ?? true;
+    const pinoPlacementValidation = getPinoPlacementValidation(ghost.params, placementContext);
+    const vendorPlacementValidation = getVendorPlacementValidation(ghost.params, placementContext);
+    const validByPino = pinoPlacementValidation?.valid ?? true;
+    const validByVendor = vendorPlacementValidation?.valid ?? true;
+    const pinoPlacementIssue = pinoPlacementValidation?.errors[0] ?? pinoPlacementValidation?.warnings[0] ?? null;
+    const vendorPlacementIssue = vendorPlacementValidation?.errors[0] ?? vendorPlacementValidation?.warnings[0] ?? null;
+
     return {
       kitchenPlacement: null,
       position: best.position,
       rotationY: best.rotationY,
-      valid: true,
+      valid: validByPackage && validByPino && validByVendor,
       enforceRoomBounds: true,
       enforceWallOverlap: true,
-      statusText: "Placement: Tall module snaps beside the worktop."
+      statusText: !validByPino && pinoPlacementIssue
+        ? `Placement: ${pinoPlacementIssue}`
+        : !validByVendor && vendorPlacementIssue
+        ? `Placement: ${vendorPlacementIssue}`
+        : !validByPackage && packageValidation
+        ? `Placement: ${firstPlacementError(packageValidation)}`
+        : pinoPlacementIssue
+        ? `Placement: ${pinoPlacementIssue}`
+        : vendorPlacementIssue
+        ? `Placement: ${vendorPlacementIssue}`
+        : `Placement: Tall module snaps ${describePlacementTarget(placementContext)}.`
     };
   };
 
@@ -801,12 +944,14 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
           ? `Placement: ${firstPlacementError(packageValidation)}`
           : best.valid
           ? "Placement: Corner module binds only to the worktop back-line corner."
-          : "Placement: Corner module needs a corner with long enough sides."
+        : "Placement: Corner module needs a worktop corner."
       };
     }
 
     const localBackCenter = getModuleLocalBackCenter(ghost);
     const halfModuleWidthM = Math.max(0.001, (ghost.localBox.max.x - ghost.localBox.min.x) * 0.5);
+    const modulePackage = getModulePackageForInstance(ghost);
+    const placementContext = getPreferredPlacementContext(modulePackage, ghost.params);
 
     let best:
       | {
@@ -857,17 +1002,48 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     }
 
     if (!best) return null;
+    const packageValidation = modulePackage
+      ? validateKitchenModulePackagePlacement({
+          modulePackage,
+          candidate: {
+            placementContext,
+            hasWall: true,
+            hasFloor: true,
+            hasCorner: false,
+            hasTwoPerpendicularWalls: false,
+            touchesBothWalls: false,
+            snapPosition: best.position,
+            snapRotation: best.rotationY
+          }
+        })
+      : null;
+    const pinoPlacementValidation = getPinoPlacementValidation(ghost.params, placementContext);
+    const vendorPlacementValidation = getVendorPlacementValidation(ghost.params, placementContext);
+    const validByPackage = packageValidation?.valid ?? true;
+    const validByPino = pinoPlacementValidation?.valid ?? true;
+    const validByVendor = vendorPlacementValidation?.valid ?? true;
+    const placementIssue =
+      pinoPlacementValidation?.errors[0] ??
+      vendorPlacementValidation?.errors[0] ??
+      packageValidation?.errors[0]?.message ??
+      pinoPlacementValidation?.warnings[0] ??
+      vendorPlacementValidation?.warnings[0] ??
+      null;
     best.position.y = getKitchenModulePlacementY(ghost, S.activeKitchenGroupId);
     return {
       kitchenPlacement: best.binding,
       position: best.position,
       rotationY: best.rotationY,
-      valid: best.valid,
+      valid: best.valid && validByPackage && validByPino && validByVendor,
       enforceRoomBounds: false,
       enforceWallOverlap: false,
-      statusText: best.valid
-        ? "Placement: module moves along the back line under the worktop."
-        : "Placement: module is too wide for the selected worktop segment."
+      statusText: !best.valid
+        ? "Placement: module is too wide for the selected worktop segment."
+        : placementIssue
+        ? `Placement: ${placementIssue}`
+        : placementContext === "appliance_zone"
+        ? "Placement: module moves along the appliance zone aligned to the worktop back line."
+        : "Placement: module moves along the back line under the worktop."
     };
   };
 

@@ -75,6 +75,17 @@ describe("resolveFloorplanWallPick", () => {
     expect(result.axisWallId).toBeNull();
   });
 
+  it("supports tight wall hover thresholds so nearby empty space does not highlight", () => {
+    const result = resolveFloorplanWallPick(
+      createContext({
+        axisSnapPx: 6,
+        mouse: { x: 507, y: 0 }
+      })
+    );
+
+    expect(result.axisWallId).toBeNull();
+  });
+
   it("ignores walls that are not pickable", () => {
     const isWallPickable = vi.fn((id: string) => id !== "wall-a" && id !== "wall-b");
 

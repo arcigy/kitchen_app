@@ -48,11 +48,7 @@ async function planPointToViewport(page, pointMm) {
   return await page.evaluate((point) => {
     const api = window.__kitchenDebug;
     if (!api) throw new Error("Missing __kitchenDebug");
-    const relative = api.projectPlanPoint(point);
-    const canvas = document.querySelector("#viewer canvas") ?? document.querySelector("canvas");
-    if (!canvas) throw new Error("Missing viewer canvas.");
-    const rect = canvas.getBoundingClientRect();
-    return { x: rect.left + relative.x, y: rect.top + relative.y };
+    return api.projectPlanPoint(point);
   }, pointMm);
 }
 

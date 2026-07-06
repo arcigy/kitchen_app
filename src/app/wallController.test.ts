@@ -662,7 +662,21 @@ describe("wall plan fill", () => {
     }
   });
 
-  it("temporarily shows solved green outlines for every wall, not just the selected wall", () => {
+  it("does not show all solved wall outlines unless diagnostics explicitly enable them", () => {
+    const ctx = createTestWallContext();
+    ctx.getShowAllWallSolvedOutlines = undefined;
+    ctx.walls.push(
+      createTestWallInstance("left", { x: 0, z: 0 }, { x: 0, z: 3000 }),
+      createTestWallInstance("top", { x: 0, z: 3000 }, { x: 5000, z: 3000 })
+    );
+    const controller = createWallController(ctx);
+
+    controller.rebuildWallPlanMesh();
+
+    expect([...ctx.wallPlanMeshes.values()].some((line) => line.userData.kind === "wallPlanAllSolvedFaces")).toBe(false);
+  });
+
+  it("shows solved neutral diagnostic outlines only when explicitly enabled", () => {
     const ctx = createTestWallContext();
     ctx.getShowAllWallSolvedOutlines = () => true;
     ctx.walls.push(
@@ -683,6 +697,7 @@ describe("wall plan fill", () => {
     expect(solvedDiagonal).toHaveLength(4);
     expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[0]!, solvedDiagonal[1]!)).toBe(true);
     expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[2]!, solvedDiagonal[3]!)).toBe(true);
+    expect(((diagonalAllFaces.material as THREE.LineBasicMaterial).color.getHex())).toBe(0x4f4f4f);
     expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[1]!, solvedDiagonal[2]!)).toBe(false);
     expect(lineHasSegment(diagonalAllFaces, solvedDiagonal[3]!, solvedDiagonal[0]!)).toBe(false);
     expect(lineHasSegment(diagonalAllFaces, { x: 0.075, z: 0.1619905496203105 }, { x: 0.22303654935386175, z: 0.075 })).toBe(false);

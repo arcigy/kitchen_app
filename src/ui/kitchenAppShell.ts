@@ -66,6 +66,8 @@ export function renderKitchenAppShell(root: HTMLElement): void {
           .join("")}
       </nav>
 
+      <aside id="moduleCatalog" class="archux-module-catalog" aria-label="Module catalog" hidden></aside>
+
       <div id="viewer" aria-label="3D viewer">
         <button id="resetViewBtn" type="button" title="Reset view">Reset view</button>
         <div class="archux-view-tools" role="toolbar" aria-label="Viewer navigation tools">

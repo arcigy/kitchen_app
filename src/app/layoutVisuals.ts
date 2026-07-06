@@ -1,12 +1,19 @@
 import * as THREE from "three";
-import type { FloorInstance, SelectedKind, WallInstance } from "../layout/appState";
-import type { LayoutInstance } from "./localTypes";
-import { getModulePlanPolygon } from "./planSnap";
+import type { ColumnInstance, FloorInstance, KitchenWorktopInstance, SelectedKind, WallInstance, WindowInstance } from "../layout/appState";
+import type { DoorInstance, LayoutInstance, SectionInstance } from "./localTypes";
 
 type GetCamera = () => THREE.Camera;
 type WallUnionRing = Array<[number, number]>;
 type WallUnionPolygon = WallUnionRing[];
 type WallUnionMultiPolygon = WallUnionPolygon[];
+export type SelectionHighlightTargetKind = "module" | "kitchenGroup" | "worktop" | "wall" | "floor" | "column" | "section" | "window" | "door" | "submodule";
+export type SelectionHighlightTarget =
+  | { kind: Exclude<SelectionHighlightTargetKind, "submodule">; id: string }
+  | { kind: "submodule"; id: string; hostInstanceId: string };
+
+const HOVER_EDGE_COLOR = 0x1f6fff;
+const SELECTED_EDGE_COLOR = 0x0f5eff;
+const SELECTED_FILL_COLOR = 0x1f6fff;
 
 export function createToolHud(args: {
   layoutRoot: THREE.Group;
@@ -190,9 +197,21 @@ export function createSelectionHighlights(args: {
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
   getWallUnionPolys?: () => WallUnionMultiPolygon | null;
   getSelectedKind: () => SelectedKind;
+  getSelectedKitchenGroupId?: () => string | null;
   getSelectedFloorId: () => string | null;
   getFloors: () => FloorInstance[];
   getInstances: () => LayoutInstance[];
+  getKitchenWorktops?: () => KitchenWorktopInstance[];
+  getSelectedColumnId?: () => string | null;
+  getColumns?: () => ColumnInstance[];
+  getSelectedSectionId?: () => string | null;
+  getSections?: () => SectionInstance[];
+  getSelectedWindow?: () => WindowInstance | null;
+  getWindows?: () => WindowInstance[];
+  getSelectedDoor?: () => DoorInstance | null;
+  getDoors?: () => DoorInstance[];
+  getSelectedSubmoduleHighlightTarget?: () => SelectionHighlightTarget | null;
+  getSelectedSubmoduleHighlightTargets?: () => SelectionHighlightTarget[];
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
 }) {
   const selectionHighlights = new THREE.Group();
@@ -200,9 +219,16 @@ export function createSelectionHighlights(args: {
   selectionHighlights.visible = false;
   args.layoutRoot.add(selectionHighlights);
 
-  const updateSelectionHighlights = () => {
-    for (const ch of [...selectionHighlights.children]) {
-      selectionHighlights.remove(ch);
+  const hoverHighlights = new THREE.Group();
+  hoverHighlights.name = "hoverHighlights";
+  hoverHighlights.visible = false;
+  args.layoutRoot.add(hoverHighlights);
+
+  let activeHoverKey: string | null = null;
+
+  const disposeHighlightChildren = (group: THREE.Group) => {
+    for (const ch of [...group.children]) {
+      group.remove(ch);
       if ("geometry" in ch && ch.geometry instanceof THREE.BufferGeometry) ch.geometry.dispose();
       if ("material" in ch) {
         const material = ch.material as THREE.Material | THREE.Material[] | undefined;
@@ -210,197 +236,221 @@ export function createSelectionHighlights(args: {
         else material?.dispose();
       }
     }
+  };
+
+  const transformGeometryToLayout = (geometry: THREE.BufferGeometry, source: THREE.Object3D) => {
+    args.layoutRoot.updateMatrixWorld(true);
+    source.updateMatrixWorld(true);
+    const localGeometry = geometry.clone();
+    const toLayout = new THREE.Matrix4().copy(args.layoutRoot.matrixWorld).invert().multiply(source.matrixWorld);
+    localGeometry.applyMatrix4(toLayout);
+    return localGeometry;
+  };
+
+  const shouldSkipHighlightMesh = (mesh: THREE.Mesh) => {
+    if (mesh.userData?.viewDisplaySkipMaterialRestore) return true;
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    const materials = Array.isArray(material) ? material : material ? [material] : [];
+    return materials.some((item) => item.transparent && item.opacity <= 0.01);
+  };
+
+  const addObjectHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
+    target.updateMatrixWorld(true);
+    target.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      if (!(object.geometry instanceof THREE.BufferGeometry)) return;
+      if (shouldSkipHighlightMesh(object)) return;
+
+      if (mode === "selected") {
+        const fill = new THREE.Mesh(
+          transformGeometryToLayout(object.geometry, object),
+          new THREE.MeshBasicMaterial({
+            color: SELECTED_FILL_COLOR,
+            transparent: true,
+            opacity: 0.2,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          })
+        );
+        fill.name = "selectedFillHighlight";
+        fill.renderOrder = 88;
+        group.add(fill);
+      }
+
+      const edgeSource = new THREE.EdgesGeometry(object.geometry, 1);
+      const edgeGeometry = transformGeometryToLayout(edgeSource, object);
+      edgeSource.dispose();
+      const edges = new THREE.LineSegments(
+        edgeGeometry,
+        new THREE.LineBasicMaterial({
+          color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+          transparent: true,
+          opacity: mode === "hover" ? 0.98 : 1,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+      edges.name = mode === "hover" ? "hoverEdgeHighlight" : "selectedEdgeHighlight";
+      edges.renderOrder = mode === "hover" ? 96 : 90;
+      group.add(edges);
+    });
+  };
+
+  const addLineLikeHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
+    target.updateMatrixWorld(true);
+    target.traverse((object) => {
+      if (!(object instanceof THREE.Line || object instanceof THREE.LineSegments)) return;
+      if (!(object.geometry instanceof THREE.BufferGeometry) || !object.visible) return;
+      const line = object instanceof THREE.LineSegments
+        ? new THREE.LineSegments(
+            transformGeometryToLayout(object.geometry, object),
+            new THREE.LineBasicMaterial({
+              color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+              transparent: true,
+              opacity: mode === "hover" ? 0.98 : 1,
+              depthTest: false,
+              depthWrite: false
+            })
+          )
+        : new THREE.Line(
+            transformGeometryToLayout(object.geometry, object),
+            new THREE.LineBasicMaterial({
+              color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+              transparent: true,
+              opacity: mode === "hover" ? 0.98 : 1,
+              depthTest: false,
+              depthWrite: false
+            })
+          );
+      line.name = mode === "hover" ? "hoverLineHighlight" : "selectedLineHighlight";
+      line.renderOrder = mode === "hover" ? 96 : 90;
+      group.add(line);
+    });
+  };
+
+  const getWorktopById = (id: string) => (args.getKitchenWorktops?.() ?? []).find((worktop) => worktop.id === id) ?? null;
+  const getWindowById = (id: string) => (args.getWindows?.() ?? []).find((window) => window.id === id) ?? null;
+  const getDoorById = (id: string) => (args.getDoors?.() ?? []).find((door) => door.id === id) ?? null;
+
+  const getSubmoduleHighlightRoots = (hostInstanceId: string, submoduleId: string) => {
+    const inst = args.getInstances().find((item) => item.id === hostInstanceId) ?? null;
+    if (!inst) return [];
+    const roots: THREE.Object3D[] = [];
+    inst.module.traverse((object) => {
+      if (object.userData?.selectableSubmoduleId !== submoduleId) return;
+      if (object.parent?.userData?.selectableSubmoduleId === submoduleId) return;
+      roots.push(object);
+    });
+    return roots;
+  };
+
+  const getHighlightTargets = (target: SelectionHighlightTarget): THREE.Object3D[] => {
+    if (target.kind === "module") {
+      const inst = args.getInstances().find((item) => item.id === target.id) ?? null;
+      return inst ? [inst.module] : [];
+    }
+    if (target.kind === "kitchenGroup") {
+      return [
+        ...args.getInstances().filter((inst) => inst.kitchenGroupId === target.id).map((inst) => inst.module),
+        ...(args.getKitchenWorktops?.() ?? []).filter((worktop) => worktop.kitchenGroupId === target.id).map((worktop) => worktop.mesh)
+      ];
+    }
+    if (target.kind === "worktop") {
+      const worktop = getWorktopById(target.id);
+      return worktop ? [worktop.mesh] : [];
+    }
+    if (target.kind === "wall") {
+      const wall = args.getWalls().find((item) => item.id === target.id) ?? null;
+      return wall ? [wall.mesh] : [];
+    }
+    if (target.kind === "floor") {
+      const floor = args.getFloors().find((item) => item.id === target.id) ?? null;
+      return floor ? [floor.mesh] : [];
+    }
+    if (target.kind === "column") {
+      const column = (args.getColumns?.() ?? []).find((item) => item.id === target.id) ?? null;
+      return column ? [column.mesh] : [];
+    }
+    if (target.kind === "section") {
+      const section = (args.getSections?.() ?? []).find((item) => item.id === target.id) ?? null;
+      return section ? [section.line, section.arrows] : [];
+    }
+    if (target.kind === "window") {
+      const window = getWindowById(target.id) ?? args.getSelectedWindow?.() ?? null;
+      return window ? [window.root] : [];
+    }
+    if (target.kind === "door") {
+      const door = getDoorById(target.id) ?? args.getSelectedDoor?.() ?? null;
+      return door ? [door.root] : [];
+    }
+    if (target.kind === "submodule") {
+      return getSubmoduleHighlightRoots(target.hostInstanceId, target.id);
+    }
+    return [];
+  };
+
+  const addTargetsHighlight = (group: THREE.Group, targets: SelectionHighlightTarget[], mode: "hover" | "selected") => {
+    for (const target of targets) {
+      for (const object of getHighlightTargets(target)) {
+        addObjectHighlight(group, object, mode);
+        addLineLikeHighlight(group, object, mode);
+      }
+    }
+  };
+
+  const selectedTargets = (): SelectionHighlightTarget[] => {
+    const targets: SelectionHighlightTarget[] = [];
+    const selectedInstanceIds = args.getSelectedInstanceIds();
+    const fallbackSubmoduleTarget = args.getSelectedSubmoduleHighlightTarget?.() ?? null;
+    const selectedSubmoduleTargets = args.getSelectedSubmoduleHighlightTargets?.() ?? (fallbackSubmoduleTarget ? [fallbackSubmoduleTarget] : []);
+    const selectedSubmoduleHostIds = new Set(selectedSubmoduleTargets.filter((target) => target.kind === "submodule").map((target) => target.hostInstanceId));
+    for (const id of args.getSelectedWallIds()) targets.push({ kind: "wall", id });
+    for (const id of selectedInstanceIds) {
+      if (!selectedSubmoduleHostIds.has(id)) targets.push({ kind: "module", id });
+    }
+    targets.push(...selectedSubmoduleTargets.filter((target) => target.kind === "submodule"));
+    const selectedKitchenGroupId = args.getSelectedKind() === "kitchenGroup" ? args.getSelectedKitchenGroupId?.() ?? null : null;
+    if (selectedKitchenGroupId) targets.push({ kind: "kitchenGroup", id: selectedKitchenGroupId });
+    const selectedFloorId = args.getSelectedKind() === "floor" ? args.getSelectedFloorId() : null;
+    if (selectedFloorId) targets.push({ kind: "floor", id: selectedFloorId });
+    const selectedColumnId = args.getSelectedKind() === "column" ? args.getSelectedColumnId?.() ?? null : null;
+    if (selectedColumnId) targets.push({ kind: "column", id: selectedColumnId });
+    const selectedSectionId = args.getSelectedKind() === "section" ? args.getSelectedSectionId?.() ?? null : null;
+    if (selectedSectionId) targets.push({ kind: "section", id: selectedSectionId });
+    const selectedWindow = args.getSelectedKind() === "window" ? args.getSelectedWindow?.() ?? null : null;
+    if (selectedWindow) targets.push({ kind: "window", id: selectedWindow.id });
+    const selectedDoor = args.getSelectedKind() === "door" ? args.getSelectedDoor?.() ?? null : null;
+    if (selectedDoor) targets.push({ kind: "door", id: selectedDoor.id });
+    return targets;
+  };
+
+  const updateSelectionHover = (target: SelectionHighlightTarget | null) => {
+    const nextKey = target ? `${target.kind}:${target.id}` : null;
+    if (nextKey === activeHoverKey) return;
+    activeHoverKey = nextKey;
+    disposeHighlightChildren(hoverHighlights);
+    if (!target || args.getMode() !== "layout") {
+      hoverHighlights.visible = false;
+      return;
+    }
+    addTargetsHighlight(hoverHighlights, [target], "hover");
+    hoverHighlights.visible = hoverHighlights.children.length > 0;
+  };
+
+  const updateSelectionHighlights = () => {
+    disposeHighlightChildren(selectionHighlights);
 
     if (args.getMode() !== "layout") {
       selectionHighlights.visible = false;
       return;
     }
 
-    const pointOnSegment = (
-      point: { x: number; z: number },
-      a: { x: number; z: number },
-      b: { x: number; z: number },
-      eps = 0.004
-    ) => {
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const lenSq = dx * dx + dz * dz;
-      if (lenSq < 1e-10) return Math.hypot(point.x - a.x, point.z - a.z) <= eps;
-      const t = ((point.x - a.x) * dx + (point.z - a.z) * dz) / lenSq;
-      if (t < -eps || t > 1 + eps) return false;
-      const px = a.x + dx * t;
-      const pz = a.z + dz * t;
-      return Math.hypot(point.x - px, point.z - pz) <= eps;
-    };
-
-    const pointInOrOnPolygon = (point: { x: number; z: number }, poly: Array<{ x: number; z: number }>) => {
-      if (poly.length < 3) return false;
-      let inside = false;
-      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
-        const pi = poly[i]!;
-        const pj = poly[j]!;
-        if (pointOnSegment(point, pi, pj)) return true;
-        const crosses = pi.z > point.z !== pj.z > point.z;
-        if (crosses) {
-          const xAtZ = ((pj.x - pi.x) * (point.z - pi.z)) / (pj.z - pi.z) + pi.x;
-          if (point.x < xAtZ) inside = !inside;
-        }
-      }
-      return inside;
-    };
-
-    const selectedWallEdgeIsCoveredByAnotherWall = (
-      wallId: string,
-      a: { x: number; z: number },
-      b: { x: number; z: number },
-      wallThicknessM: number
-    ) => {
-      if (Math.hypot(b.x - a.x, b.z - a.z) > Math.max(0.18, wallThicknessM * 2.25)) return false;
-      const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      for (const [otherId, otherOutline] of args.getWallSolvedOutlines()) {
-        if (otherId === wallId) continue;
-        if (pointInOrOnPolygon(mid, otherOutline)) return true;
-      }
-      return false;
-    };
-    const segmentOverlapSpan = (
-      a: { x: number; z: number },
-      b: { x: number; z: number },
-      c: { x: number; z: number },
-      d: { x: number; z: number },
-      eps = 0.004
-    ): [number, number] | null => {
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const lenSq = dx * dx + dz * dz;
-      if (lenSq < 1e-12) return null;
-      const lineDist = (p: { x: number; z: number }) => Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.sqrt(lenSq);
-      if (lineDist(c) > eps || lineDist(d) > eps) return null;
-      const tc = ((c.x - a.x) * dx + (c.z - a.z) * dz) / lenSq;
-      const td = ((d.x - a.x) * dx + (d.z - a.z) * dz) / lenSq;
-      const start = Math.max(0, Math.min(tc, td));
-      const end = Math.min(1, Math.max(tc, td));
-      return end - start > 1e-5 ? [start, end] : null;
-    };
-    const boundarySpansOnUnion = (a: { x: number; z: number }, b: { x: number; z: number }) => {
-      const union = args.getWallUnionPolys?.() ?? null;
-      if (!union || union.length === 0) return null;
-      const spans: Array<[number, number]> = [];
-      for (const polygon of union) {
-        for (const ring of polygon) {
-          const pts = ring.length > 1 ? ring.slice(0, -1) : ring;
-          for (let i = 0; i < pts.length; i += 1) {
-            const cRaw = pts[i];
-            const dRaw = pts[(i + 1) % pts.length];
-            if (!cRaw || !dRaw) continue;
-            const span = segmentOverlapSpan(a, b, { x: cRaw[0], z: cRaw[1] }, { x: dRaw[0], z: dRaw[1] });
-            if (span) spans.push(span);
-          }
-        }
-      }
-      return spans;
-    };
-    const segmentPartsFromSpans = (
-      a: { x: number; z: number },
-      b: { x: number; z: number },
-      spans: Array<[number, number]>
-    ) => {
-      const merged = spans
-        .map(([start, end]) => [Math.max(0, start), Math.min(1, end)] as [number, number])
-        .filter(([start, end]) => end - start > 1e-5)
-        .sort((left, right) => left[0] - right[0]);
-      const compact: Array<[number, number]> = [];
-      for (const span of merged) {
-        const last = compact[compact.length - 1];
-        if (last && span[0] <= last[1] + 1e-5) last[1] = Math.max(last[1], span[1]);
-        else compact.push([...span]);
-      }
-      const pointAt = (t: number) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
-      return compact.map(([start, end]) => [pointAt(start), pointAt(end)] as [{ x: number; z: number }, { x: number; z: number }]);
-    };
-
-    for (const id of args.getSelectedWallIds()) {
-      const wall = args.getWalls().find((item) => item.id === id) ?? null;
-      if (!wall) continue;
-      const solvedOutline = args.getWallSolvedOutlines().get(id) ?? null;
-      let pts: THREE.Vector3[];
-      if (solvedOutline && solvedOutline.length >= 3) {
-        pts = [];
-        const thicknessM = Math.max(1, wall.params.thicknessMm) / 1000;
-        for (let i = 0; i < solvedOutline.length; i += 1) {
-          const a = solvedOutline[i]!;
-          const b = solvedOutline[(i + 1) % solvedOutline.length]!;
-          const unionSpans = boundarySpansOnUnion(a, b);
-          if (unionSpans) {
-            for (const [start, end] of segmentPartsFromSpans(a, b, unionSpans)) {
-              pts.push(new THREE.Vector3(start.x, 0.018, start.z), new THREE.Vector3(end.x, 0.018, end.z));
-            }
-            continue;
-          }
-          if (selectedWallEdgeIsCoveredByAnotherWall(id, a, b, thicknessM)) continue;
-          pts.push(new THREE.Vector3(a.x, 0.018, a.z), new THREE.Vector3(b.x, 0.018, b.z));
-        }
-      } else {
-        const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0.018, wall.params.aMm.z / 1000);
-        const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0.018, wall.params.bMm.z / 1000);
-        const d = b.clone().sub(a);
-        if (d.lengthSq() < 1e-10) continue;
-        d.normalize();
-        const n = new THREE.Vector3(-d.z, 0, d.x);
-        const half = Math.max(1, wall.params.thicknessMm / 2) / 1000;
-        pts = [
-          a.clone().addScaledVector(n, half),
-          a.clone().addScaledVector(n, -half),
-          b.clone().addScaledVector(n, -half),
-          b.clone().addScaledVector(n, half),
-          a.clone().addScaledVector(n, half)
-        ];
-      }
-      if (pts.length < 2) continue;
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.LineSegments(
-        geom,
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-      );
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
-    }
-
-    for (const id of args.getSelectedInstanceIds()) {
-      const inst = args.getInstances().find((item) => item.id === id) ?? null;
-      if (!inst) continue;
-      const poly = getModulePlanPolygon(inst, args.getModuleLocalBackCenter);
-      if (poly.length < 3) continue;
-      const pts = poly.map((p) => p.clone().setY(0.016));
-      pts.push(poly[0]!.clone().setY(0.016));
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(
-        geom,
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-      );
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
-    }
-
-    if (args.getSelectedKind() === "floor" && args.getSelectedFloorId()) {
-      const floor = args.getFloors().find((x) => x.id === args.getSelectedFloorId()) ?? null;
-      if (floor && floor.params.boundary.length >= 3) {
-        const pts = floor.params.boundary.map((p) => new THREE.Vector3(p.x / 1000, 0.018, p.z / 1000));
-        pts.push(new THREE.Vector3(floor.params.boundary[0].x / 1000, 0.018, floor.params.boundary[0].z / 1000));
-        const geom = new THREE.BufferGeometry().setFromPoints(pts);
-        const line = new THREE.Line(
-          geom,
-          new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-        );
-        line.renderOrder = 61;
-        selectionHighlights.add(line);
-      }
-    }
-
+    addTargetsHighlight(selectionHighlights, selectedTargets(), "selected");
     selectionHighlights.visible = selectionHighlights.children.length > 0;
   };
 
-  return { selectionHighlights, updateSelectionHighlights };
+  return { selectionHighlights, hoverHighlights, updateSelectionHighlights, updateSelectionHover };
 }
 
 export function createUnderlayController(args: {

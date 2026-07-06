@@ -358,6 +358,40 @@ describe("pointer marquee selection helpers", () => {
     expect(releasePointerCapture).toHaveBeenCalledExactlyOnceWith(7);
   });
 
+  it("lets an active editor scope apply custom marquee selection before module and wall hits", () => {
+    const state = makeState();
+    const element = makeElement();
+    beginPointerMarquee(state, element, { pointerId: 7, x: 10, y: 10 });
+    updatePointerMarqueeDrag(state, element, { pointerId: 7, x: 30, y: 30 });
+    const applyCustomSelection = vi.fn(() => true);
+    const collectHitIds = vi.fn(() => ({ hitInstanceIds: ["m1"], hitWallIds: ["w1"] }));
+    const releasePointerCapture = vi.fn();
+
+    finishActivePointerMarquee({
+      additive: true,
+      applyCustomSelection,
+      collectHitIds,
+      currentInstanceId: null,
+      currentWallId: null,
+      endPoint: { x: 40, y: 50 },
+      layoutTool: "select",
+      marquee: state,
+      marqueeEl: element,
+      mountProps: vi.fn(),
+      pointerId: 7,
+      releasePointerCapture,
+      selectedInstanceIds: new Set(),
+      selectedWallIds: new Set(),
+      setSelectedModule: vi.fn(),
+      setSelectedWall: vi.fn(),
+      updateSelectionHighlights: vi.fn()
+    });
+
+    expect(applyCustomSelection).toHaveBeenCalledExactlyOnceWith({ x0: 10, y0: 10, x1: 40, y1: 50 }, true);
+    expect(collectHitIds).not.toHaveBeenCalled();
+    expect(releasePointerCapture).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
   it("finishes active marquee without applying selection for click-sized drags", () => {
     const state = makeState();
     const element = makeElement();

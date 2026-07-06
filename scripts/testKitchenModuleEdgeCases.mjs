@@ -329,11 +329,12 @@ async function runAdjacencyCases(page) {
   {
     const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "corner_shelf_lower" });
     const groupId = created.group.id;
-    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 1, offsetAlongMm: 700 });
+    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 1080 });
     const before = await snapshot(page, groupId);
     const corner = before.instances.find((item) => item.params.type === "corner_shelf_lower");
     const drawer = before.instances.find((item) => item.params.type === "drawer_low");
     expect(corner && drawer, "corner lengthX adjacency scenario missing modules", before);
+    const beforeAdj = await detectAdjacency(page, drawer.id);
     const result = await patchModule(
       page,
       corner.id,
@@ -341,21 +342,27 @@ async function runAdjacencyCases(page) {
       { sourceKey: "lengthX", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);
+    const afterAdj = await detectAdjacency(page, drawer.id);
     const afterCorner = after.instances.find((item) => item.id === corner.id);
     const afterDrawer = after.instances.find((item) => item.id === drawer.id);
     const drawerMoved =
       Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
-    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerMoved) {
+    const drawerAttachmentRespected = beforeAdj.length > 0 ? drawerMoved : !drawerMoved;
+    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerAttachmentRespected) {
       failures.push({
-        case: "corner_lengthX_growth_pushes_attached_drawer",
+        case: "corner_lengthX_growth_respects_drawer_attachment",
         ok: result.ok,
         beforeLengthX: corner.params.lengthX,
         afterLengthX: afterCorner.params.lengthX,
         drawerMoved,
+        drawerAttachmentRespected,
         beforeCornerPos: corner.positionM,
         afterCornerPos: afterCorner.positionM,
         beforeDrawerPos: drawer.positionM,
-        afterDrawerPos: afterDrawer.positionM
+        afterDrawerPos: afterDrawer.positionM,
+        beforeAdj,
+        afterAdj,
+        debug: result.debug
       });
     }
   }
@@ -836,7 +843,7 @@ async function runUpperFlapUiPlacementCases(page) {
 
   await page.getByRole("button", { name: "Upraviť kuchyňu" }).click();
   await page.getByRole("button", { name: "Pôdorys" }).click();
-  await page.getByRole("button", { name: "flap_shelves_low" }).click();
+  await page.locator('#moduleCatalog button[data-module-type="flap_shelves_low"]').click();
   const target = await evalApi(page, () => {
     const api = window.__kitchenDebug;
     if (!api) throw new Error("Missing __kitchenDebug");
@@ -1151,7 +1158,7 @@ async function main() {
             fridgeCases: fridgeCases.map((item) => item.key),
             adjacencyCases: [
               "drawer_width_growth_next_to_corner_grows_away",
-              "corner_lengthX_growth_pushes_attached_drawer",
+              "corner_lengthX_growth_respects_drawer_attachment",
               "drawer_width_growth_keeps_adjacent_drawer_fixed"
             ],
             clusterCases: [

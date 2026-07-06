@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { captureLayoutSnapshot, clearSelectionBeforeSnapshotRestore, snapshotSignature } from "./historyManager";
-import type { AppState } from "./appState";
+import type { AppState, LayoutSnapshot } from "./appState";
 import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 
 const createWardrobeState = (widthMm: number): WardrobeEditSaveState => ({
@@ -68,6 +68,84 @@ describe("layout history wardrobe snapshots", () => {
     expect(first.wardrobe?.groups[0]?.params.widthMm).toBe(1000);
     expect(second.wardrobe?.groups[0]?.params.widthMm).toBe(1200);
     expect(snapshotSignature(first)).not.toBe(snapshotSignature(second));
+  });
+});
+
+describe("layout history align lock snapshots", () => {
+  it("captures align locks and includes locked state in the snapshot signature", () => {
+    const state = createState(null);
+    state.alignLockCounter = 2;
+    state.alignLocks = [
+      {
+        id: "align-lock-1",
+        locked: false,
+        a: { targetKind: "module", targetId: "m1", lineRole: "edge", moduleSide: "right" },
+        b: { targetKind: "module", targetId: "m2", lineRole: "edge", moduleSide: "left" },
+        pointMm: { x: 600, z: 0 }
+      }
+    ];
+    const unlocked = captureLayoutSnapshot(state);
+    state.alignLocks[0]!.locked = true;
+    const locked = captureLayoutSnapshot(state);
+
+    expect(unlocked.alignLocks?.[0]?.locked).toBe(false);
+    expect(locked.alignLocks?.[0]?.locked).toBe(true);
+    expect(snapshotSignature(unlocked)).not.toBe(snapshotSignature(locked));
+  });
+});
+
+describe("layout history module params", () => {
+  const snapshotWithModuleParams = (params: Record<string, unknown>): LayoutSnapshot => ({
+    wallCounter: 1,
+    walls: [],
+    floorCounter: 1,
+    floors: [],
+    columnCounter: 1,
+    columns: [],
+    sectionCounter: 1,
+    sections: [],
+    worktopCounter: 1,
+    worktops: [],
+    alignLockCounter: 1,
+    alignLocks: [],
+    customFurnitureCounter: 1,
+    customFurniture: [],
+    wardrobe: null,
+    instanceCounter: 2,
+    instances: [{
+      id: "m1",
+      params: {
+        type: "fwm_catalog_tall_cabinet",
+        width: 600,
+        tallSlotCount: 1,
+        tallSlot1Type: "drawer",
+        ...params
+      } as LayoutSnapshot["instances"][number]["params"],
+      kitchenGroupId: "kg1",
+      kitchenPlacement: null,
+      positionMm: { x: 0, y: 0, z: 0 },
+      rotationYDeg: 0
+    }],
+    pinnedWallIds: [],
+    pinnedInstanceIds: [],
+    underlayPinned: false,
+    selected: {
+      kind: null,
+      wallId: null,
+      wallIds: [],
+      floorId: null,
+      columnId: null,
+      sectionId: null,
+      instId: null,
+      instIds: []
+    }
+  });
+
+  it("includes full module parameters so submodule edits create undo steps", () => {
+    const before = snapshotWithModuleParams({ tallSlot1HeightMm: 190 });
+    const after = snapshotWithModuleParams({ tallSlot1HeightMm: 500 });
+
+    expect(snapshotSignature(before)).not.toBe(snapshotSignature(after));
   });
 });
 

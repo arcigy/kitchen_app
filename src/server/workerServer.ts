@@ -7,12 +7,15 @@ import { requireClientContextFromCookie } from "../core/client/session-cookie";
 import type { UserService } from "../core/auth/user-service";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
 import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
+import { handleClientProfileApi } from "./clientEndpoint";
 import { handleModulePackageApi } from "./modulePackageEndpoint";
 import { handleProjectApi } from "./projectEndpoint";
+import { handleAssistantApi } from "./assistantEndpoint";
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository, createServerUserService } from "./serverRepositories";
 import { handleDemosMaterialImage, handleDemosMaterialLookup } from "./demosMaterialLookup";
 import { runBlenderExport } from "./blender/runBlenderExport";
+import { createClientCatalogService } from "../core/catalog/catalog-service";
 
 const PROJECT_ROOT = process.cwd();
 const DEFAULT_PROJECT_ROOT = process.cwd();
@@ -52,6 +55,12 @@ const getRequiredStringField = (value: unknown, field: string): string => {
   const record = getStringField(value, field);
   if (!record) throw new Error(`${field} is required.`);
   return record;
+};
+
+const getOptionalFiniteNumber = (value: string | null): number | undefined => {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 };
 
 const getField = (value: unknown, field: string): unknown => {
@@ -164,12 +173,13 @@ const handleCatalogLookup = async (
 ) => {
   const context = await getValidatedClientContext(req.headers.cookie, userService);
   const kind = reqUrl.searchParams.get("kind");
-  const id = (reqUrl.searchParams.get("id") ?? "").trim();
-  if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
   const repository = createServerCatalogRepository(projectRoot);
-  const catalog = await repository.ensureCatalogExists(context);
+  const service = createClientCatalogService({ context, repository });
+  const catalog = await service.loadCatalog();
 
   if (kind === "material") {
+    const id = (reqUrl.searchParams.get("id") ?? "").trim();
+    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
     const family = reqUrl.searchParams.get("family") ?? "";
     const material = catalog.materials.find(
       (item) =>
@@ -182,6 +192,8 @@ const handleCatalogLookup = async (
   }
 
   if (kind === "component") {
+    const id = (reqUrl.searchParams.get("id") ?? "").trim();
+    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
     const componentType = reqUrl.searchParams.get("componentType") ?? "";
     const component = catalog.components.find(
       (item) => item.id === id && item.isActive && (!componentType || item.componentType === componentType)
@@ -189,7 +201,73 @@ const handleCatalogLookup = async (
     return sendJson(res, component ? 200 : 404, { ok: !!component, component });
   }
 
-  return sendJson(res, 400, { ok: false, error: "kind must be material or component." });
+  if (kind === "vendor_product") {
+    const resolution = await service.resolveVendorProductVariant({
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_module") {
+    const resolution = await service.resolveVendorModulePackage({
+      moduleType: reqUrl.searchParams.get("moduleType") ?? undefined,
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_module_seed") {
+    const resolution = await service.resolveVendorModuleSeed({
+      moduleType: reqUrl.searchParams.get("moduleType") ?? undefined,
+      articleFamily: reqUrl.searchParams.get("articleFamily") ?? undefined,
+      widthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthMm")),
+      widthCm: getOptionalFiniteNumber(reqUrl.searchParams.get("widthCm")),
+      variantCode: reqUrl.searchParams.get("variantCode") ?? undefined,
+      productTemplateName: reqUrl.searchParams.get("productTemplateName") ?? undefined,
+      catalogKey: reqUrl.searchParams.get("catalogKey") ?? undefined,
+      minConfidence: getOptionalFiniteNumber(reqUrl.searchParams.get("minConfidence")),
+      applianceCategory: reqUrl.searchParams.get("applianceCategory") ?? undefined,
+      applianceWidthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceWidthMm")),
+      applianceHeightMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceHeightMm")),
+      applianceDepthMm: getOptionalFiniteNumber(reqUrl.searchParams.get("applianceDepthMm"))
+    });
+    return sendJson(res, resolution.status === "missing" ? 404 : 200, { ok: resolution.status !== "missing", resolution });
+  }
+
+  if (kind === "vendor_catalog_groups") {
+    const groups = await service.listVendorCatalogGroups({
+      includeNeedsReview: reqUrl.searchParams.get("includeNeedsReview") === "true",
+      placementZone: (reqUrl.searchParams.get("placementZone") as "low" | "corner_low" | "tall" | "tall_appliance" | "accessory" | "unknown" | "any" | null) ?? "any",
+      kitchenModuleRole: (reqUrl.searchParams.get("kitchenModuleRole") as "base" | "top" | "tall" | "accessory" | "unknown" | "any" | null) ?? "any",
+      moduleClass: (reqUrl.searchParams.get("moduleClass") as "base" | "corner_base" | "tall" | "appliance_tall" | "accessory" | "unknown" | "any" | null) ?? "any"
+    });
+    return sendJson(res, 200, { ok: true, groups });
+  }
+
+  if (kind === "vendor_catalog_templates") {
+    const templates = await service.listVendorCatalogTemplates({
+      groupId: reqUrl.searchParams.get("groupId") ?? undefined,
+      includeNeedsReview: reqUrl.searchParams.get("includeNeedsReview") === "true",
+      placementZone: (reqUrl.searchParams.get("placementZone") as "low" | "corner_low" | "tall" | "tall_appliance" | "accessory" | "unknown" | "any" | null) ?? "any",
+      kitchenModuleRole: (reqUrl.searchParams.get("kitchenModuleRole") as "base" | "top" | "tall" | "accessory" | "unknown" | "any" | null) ?? "any",
+      moduleClass: (reqUrl.searchParams.get("moduleClass") as "base" | "corner_base" | "tall" | "appliance_tall" | "accessory" | "unknown" | "any" | null) ?? "any"
+    });
+    return sendJson(res, 200, { ok: true, templates });
+  }
+
+  return sendJson(res, 400, { ok: false, error: "kind must be material, component, vendor_product, vendor_module, vendor_module_seed, vendor_catalog_groups, or vendor_catalog_templates." });
 };
 
 const readProjectJson = async (projectRoot: string, relativePath: string) => {
@@ -520,6 +598,13 @@ export function startWorkerServer(
 
       if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
 
+      if (
+        await handleClientProfileApi(req, res, url, {
+          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          sendJson
+        })
+      ) return;
+
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res, userService, projectRoot);
 
       if (req.method === "GET" && url.pathname === "/api/catalog/lookup")
@@ -547,6 +632,16 @@ export function startWorkerServer(
         await handleProjectApi(req, res, url, {
           projectRoot,
           getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
+      if (
+        await handleAssistantApi(req, res, url, {
+          projectRoot,
+          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          getCatalog: async (context) => createServerCatalogRepository(projectRoot).ensureCatalogExists(context),
           readJsonBody,
           sendJson
         })

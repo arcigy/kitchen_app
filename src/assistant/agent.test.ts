@@ -1,0 +1,168 @@
+import { describe, expect, it } from "vitest";
+import { runAssistantTurn } from "./agent";
+import type { AssistantClientContext } from "./types";
+import type { ClientCatalog, ClientModuleDefinition, VendorProductVariant } from "../core/catalog/catalog-types";
+import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
+
+const baseContext: AssistantClientContext = {
+  projectId: "project_a",
+  phaseId: "phase_a",
+  viewMode: "2d",
+  activeViewerTab: "floorplan",
+  layoutTool: "select",
+  selectedKind: null,
+  selectedKitchenGroupId: null,
+  activeKitchenGroupId: null,
+  selectedInstanceIds: [],
+  selectedWallIds: [],
+  selectedParams: [],
+  catalogSummary: { materialCount: 2, componentCount: 1, moduleCount: 3, moduleTypes: ["drawer_low"] }
+};
+
+function moduleDef(overrides: Partial<ClientModuleDefinition>): ClientModuleDefinition {
+  return {
+    id: overrides.modulePackageId ?? overrides.moduleType ?? "pino_side_cabinet",
+    moduleType: overrides.moduleType ?? "pino_side_cabinet",
+    modulePackageId: overrides.modulePackageId ?? "pino_nobilia_side_cabinet_vkh_2026_v1",
+    packageVersion: "1.0.0",
+    packageHash: "hash",
+    name: overrides.name ?? "Module",
+    enabled: overrides.enabled ?? true,
+    runtimeBuilderKey: overrides.runtimeBuilderKey ?? "pinoSideCabinet.v1",
+    category: overrides.category ?? "tall_cabinet",
+    ...overrides
+  };
+}
+
+function variant(overrides: Partial<VendorProductVariant>): VendorProductVariant {
+  return attachVendorModuleIntent({
+    productTemplateId: "pino_side_cabinet_gbs_fb_page245",
+    sourcePdf: "VKH_2026_CZ.pdf",
+    sourcePage: 245,
+    articleCode: "GBS03FB",
+    articleFamily: "GBS",
+    widthCm: null,
+    widthMm: 600,
+    variantCode: "FB",
+    variantCodeStatus: "extracted",
+    catalogKey: "GBS-FB",
+    productTemplateName: "Bocni skrinka pro vestavne spotrebice",
+    notes: ["1 zasuvka", "Vyska vyklenku 590 mm", "2 prestavitelne police"],
+    confidence: 0.99,
+    needsReview: false,
+    ...overrides
+  });
+}
+
+function tenantCatalog(): Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults"> {
+  return {
+    clientId: "client_pino_nobilia_vkh_2026",
+    modules: [moduleDef({})],
+    kitchenDefaults: {
+      carcassMaterialId: "mat.body",
+      frontMaterialId: "mat.front",
+      drawerBottomMaterialId: "mat.drawer.bottom",
+      defaultHandleComponentId: "cmp.handle",
+      defaultHingeComponentId: "cmp.hinge",
+      defaultDrawerSystemComponentId: "cmp.runner",
+      defaultWorktopThicknessMm: 38,
+      defaultPlinthHeightMm: 100
+    },
+    vendorCatalog: {
+      vendorId: "pino_nobilia",
+      displayName: "PINO/Nobilia VKH 2026 CZ",
+      source: "vkh_2026_cz_pdf",
+      productVariants: [variant({})],
+      productTemplates: [],
+      pricingReferences: [],
+      extractionMeta: {
+        sourcePdf: "VKH_2026_CZ.pdf",
+        pages: [245],
+        productVariants: 1,
+        productTemplates: 0,
+        pricingReferences: 0,
+        importedAt: "2026-06-17T00:00:00.000Z",
+        importStatus: "review_staging",
+        productionImportApproved: false,
+        notes: []
+      }
+    }
+  };
+}
+
+describe("assistant agent fallback", () => {
+  it("does not create a full-kitchen generation tool call", async () => {
+    const response = await runAssistantTurn({
+      message: "vytvor celu kuchynu podla zadania",
+      clientContext: baseContext,
+      ragChunks: []
+    });
+
+    expect(response.requiresConfirmation).toBe(false);
+    expect(response.plan).toBeNull();
+    expect(response.toolCalls).toEqual([]);
+  });
+
+  it("creates a module patch tool call for selected module dimensions", async () => {
+    const response = await runAssistantTurn({
+      message: "nastav sirka 800 a sufliky 3",
+      clientContext: {
+        ...baseContext,
+        selectedKind: "module",
+        selectedInstanceIds: ["m1"],
+        selectedParams: [{ id: "m1", kind: "module", label: "drawer_low", params: { type: "drawer_low", widthMm: 600 } }]
+      },
+      ragChunks: []
+    });
+
+    expect(response.requiresConfirmation).toBe(false);
+    expect(response.toolCalls[0]?.toolId).toBe("module.patchSelectedParams");
+    expect(response.toolCalls[0]?.input).toMatchObject({ instanceIds: ["m1"], patch: { width: 800, drawerCount: 3 } });
+  });
+
+  it("keeps how-to questions read-only even when they contain edit verbs", async () => {
+    const response = await runAssistantTurn({
+      message: "kde zmenim materialy?",
+      clientContext: baseContext,
+      ragChunks: [{ id: "docs_1", source: "docs/materials.md", title: "Materials", text: "Materialy sa menia v sekcii Materialy.", tags: ["docs"], updatedAt: new Date().toISOString() }]
+    });
+
+    expect(response.requiresConfirmation).toBe(false);
+    expect(response.toolCalls).toEqual([]);
+    expect(response.assistantMessage).toContain("Materialy");
+  });
+
+  it("validates tool results on continue", async () => {
+    const response = await runAssistantTurn({
+      message: "continue",
+      clientContext: baseContext,
+      ragChunks: [],
+      toolResults: [{ ok: true, toolId: "context.getSelection", stateDeltaSummary: "Read live context." }]
+    });
+
+    expect(response.validation?.done).toBe(true);
+    expect(response.toolCalls).toEqual([]);
+  });
+
+  it("creates a confirmed PINO insertion tool call from a verbal module description", async () => {
+    const response = await runAssistantTurn({
+      message: "vloz mi vysoky modul, dole dvierka, potom jeden suflik, nad tym mikrovlnku a hore policky",
+      clientContext: {
+        ...baseContext,
+        selectedKind: "kitchenGroup",
+        selectedKitchenGroupId: "kg1",
+        activeKitchenGroupId: "kg1"
+      },
+      ragChunks: [],
+      catalog: tenantCatalog()
+    });
+
+    expect(response.requiresConfirmation).toBe(true);
+    expect(response.toolCalls[0]?.toolId).toBe("vendorCatalog.insertResolvedModule");
+    expect(response.toolCalls[0]?.input).toMatchObject({
+      catalogKey: "GBS-FB",
+      moduleType: "pino_side_cabinet",
+      modulePackageId: "pino_nobilia_side_cabinet_vkh_2026_v1"
+    });
+  });
+});

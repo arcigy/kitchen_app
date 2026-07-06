@@ -83,7 +83,9 @@ Complex geometry uses `geometry.mode = "trusted-runtime"` with a `runtimeBuilder
 
 ## Storage
 
-Tenant packages are stored per client:
+Production tenant packages are stored per client in the online tenant database through `arcigy_module_packages`, and module visibility is stored in the tenant `ClientCatalog` row. Runtime must load them through `/api/modules` and `/api/catalog`.
+
+File-backed package folders are allowed only for seed/import/export artifacts, explicit local tests, or migration rehearsals:
 
 ```txt
 storage/
@@ -102,6 +104,19 @@ All repository reads and writes use `ClientContext.clientId`. Client A cannot li
 
 System source templates live under `src/system/module-packages/*.fqm.source.json`. They are seed inputs only. When a client catalog is created or repaired, source templates are packed through the `.fqm` codec, copied into that client's tenant storage, unpacked as `module.package.json`, and referenced from `catalog.modules`.
 
+## Naming
+
+New module identities must be product/domain names, not client names and not implementation history.
+
+- Use lowercase snake case.
+- Do not include a client, supplier, catalog, or project prefix such as `delfi`, `pino`, or `fwm`.
+- Do not include `family` in `modulePackageId` or `moduleType`; package identity already means a reusable module family.
+- Do not encode version suffixes such as `_v1` in `modulePackageId`; use `module.version` and `packageHash` for versioning.
+- Name by function and placement, for example `base_corner`, `base_doors`, `base_drawers`, `wall_cabinet`, `tall_cabinet`, `worktop_surface`.
+- Put catalog/vendor/client assignment in `ClientCatalog` and vendor mapping metadata, not in the module identity.
+
+Existing historical IDs may remain available through explicit migration aliases, but new packages must use the normalized naming convention.
+
 ## ClientCatalog Integration
 
 Admin/dev import flow:
@@ -116,7 +131,7 @@ Admin/dev import flow:
 8. Store `module.meta.json`.
 9. Add or update `catalog.modules` with `modulePackageId`, `packageVersion`, `packageHash`, `runtimeBuilderKey`, defaults, category, tags, and `enabled`.
 
-UI availability is driven by `ClientCatalog.modules.enabled`. A trusted runtime builder may exist globally, but a module is visible only when the client catalog enables that package/module.
+UI availability is driven by `ClientCatalog.modules.enabled` loaded from tenant storage/DB. A trusted runtime builder may exist globally, but a module is visible only when the client catalog enables that package/module. Do not add client-specific module whitelists in UI code; update the tenant catalog/DB assignment instead.
 
 App bootstrap flow:
 
@@ -190,9 +205,9 @@ This lets an old project reopen even if the current client catalog no longer has
 Current state:
 
 - `.fqm` framework: done
-- first real corner module fixture/package: done for `cornerShelfLower` as `corner_shelf_lower_family_v1`
+- first real corner module fixture/package: done historically for `cornerShelfLower`; new packages use normalized IDs such as `base_corner`
 - system `.fqm` templates: done for the current built-in kitchen modules
-- tenant package seeding: done for new file-backed client catalogs
+- tenant package seeding: done for DB-backed clients and explicit file-backed test catalogs
 - app bootstrap package loading: done through `/api/modules`
 - `.fqm` envelope codec: done with gzip/base64 payload and SHA-256 hash
 - API registration: done in `src/server/workerServer.ts` and root `server/workerServer.ts`

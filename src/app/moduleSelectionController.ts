@@ -25,8 +25,9 @@ type ModuleSelectionControllerContext = {
   getKitchenEditMode: () => boolean;
   getKitchenMode: () => KitchenModeSelectionApi | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  isModuleAlignLocked?: (id: string) => boolean;
   setSelectedKitchenGroup: (groupId: string | null) => void;
-  setSelectedModule: (id: string | null) => void;
+  setSelectedModule: (id: string | null, options?: { additive?: boolean }) => void;
 };
 
 export function createModuleSelectionController(ctx: ModuleSelectionControllerContext) {
@@ -52,18 +53,7 @@ export function createModuleSelectionController(ctx: ModuleSelectionControllerCo
     cancelPendingMarqueeHit(ev.pointerId);
 
     if (selectOwningKitchenGroup(inst.kitchenGroupId)) return true;
-    ctx.setSelectedModule(selectableId);
-
-    if (ctx.getViewMode() !== "2d") return true;
-    if (ctx.pinnedInstanceIds.has(selectableId)) return true;
-
-    const hitPoint = new THREE.Vector3();
-    if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return true;
-    ctx.dragState.active = true;
-    ctx.dragState.id = selectableId;
-    ctx.dragState.offset.set(hitPoint.x - inst.root.position.x, 0, hitPoint.z - inst.root.position.z);
-    ctx.dragState.lastValid.copy(inst.root.position);
-    ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+    ctx.setSelectedModule(selectableId, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey });
     return true;
   };
 

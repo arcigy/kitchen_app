@@ -3,6 +3,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { disposeObject3D } from "../core/dispose";
 import type { AppState } from "../layout/appState";
 import type { PlanSnapResult } from "./planSnap";
+import { SNAP_DISTANCE_PX, SNAP_PRIORITY_BOUNDARY_DRAW, SNAP_PRIORITY_EDGE_FIRST } from "./snapToolProfiles";
 import type { SnapOverlayKind } from "./snapOverlay";
 import { distPxPointToSeg } from "./screenGeometry";
 import { worldToScreen } from "./sharedUtils";
@@ -2219,7 +2220,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         const a = worldToScreen(pointToWorld(segment.a), args.getCamera(), rect);
         const b = worldToScreen(pointToWorld(segment.b), args.getCamera(), rect);
         const px = distPxPointToSeg(mouse.x, mouse.y, a.x, a.y, b.x, b.y);
-        if (px <= 12 && (!best || px < best.px)) best = { furniture, px };
+        if (px <= SNAP_DISTANCE_PX.customBoundaryPick && (!best || px < best.px)) best = { furniture, px };
       }
     }
     return best?.furniture ?? null;
@@ -2252,13 +2253,13 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   const resolveBoundaryPoint = (clientX: number, clientY: number, opts?: { base?: CustomFurniturePlanPoint | null; allowAxis?: boolean }) => {
     const hit = groundHit(clientX, clientY);
     if (!hit) return null;
-    const snapped = args.snapPoint2D(hit.point, hit.rect, args.getCamera(), 24, {
-      kindPriority: ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"],
+    const snapped = args.snapPoint2D(hit.point, hit.rect, args.getCamera(), SNAP_DISTANCE_PX.customBoundaryExternal, {
+      kindPriority: SNAP_PRIORITY_BOUNDARY_DRAW,
       sticky: boundarySnap,
       preferNearest: true
     });
     const externalSnap =
-      snapped.kind !== "none" ? snapped : args.keepStickyPlanSnap(hit.point, boundarySnap, args.getCamera(), hit.rect, 28);
+      snapped.kind !== "none" ? snapped : args.keepStickyPlanSnap(hit.point, boundarySnap, args.getCamera(), hit.rect, SNAP_DISTANCE_PX.customBoundarySticky);
     const localSnap = resolveBoundarySegmentSnap(hit.point, hit.rect, opts?.base ?? null);
     const snapDistance = (snap: PlanSnapResult | null) => {
       if (!snap || snap.kind === "none") return Number.POSITIVE_INFINITY;
@@ -2313,7 +2314,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       for (const endpoint of ["a", "b"] as const) {
         const screen = worldToScreen(pointToWorld(editableSegments[index]![endpoint]), args.getCamera(), rect);
         const px = Math.hypot(mouse.x - screen.x, mouse.y - screen.y);
-        if (px <= 12 && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: index, endpoint }, px };
+        if (px <= SNAP_DISTANCE_PX.customBoundaryPick && (!bestVertex || px < bestVertex.px)) bestVertex = { ref: { segmentIndex: index, endpoint }, px };
       }
     }
     if (bestVertex) return { kind: "vertex" as const, ref: bestVertex.ref };
@@ -2326,7 +2327,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         const a = worldToScreen(pointToWorld(points[pointIndex]!), args.getCamera(), rect);
         const b = worldToScreen(pointToWorld(points[pointIndex + 1]!), args.getCamera(), rect);
         const px = distPxPointToSeg(mouse.x, mouse.y, a.x, a.y, b.x, b.y);
-        if (px <= 10 && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: index, px };
+        if (px <= SNAP_DISTANCE_PX.customBoundarySegmentPick && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: index, px };
       }
     }
     return bestSegment ? { kind: "segment" as const, segmentIndex: bestSegment.segmentIndex } : null;
@@ -2344,7 +2345,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         const a = worldToScreen(pointToWorld(points[pointIndex]!), args.getCamera(), rect);
         const b = worldToScreen(pointToWorld(points[pointIndex + 1]!), args.getCamera(), rect);
         const px = distPxPointToSeg(mouse.x, mouse.y, a.x, a.y, b.x, b.y);
-        if (px <= 12 && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: index, px };
+        if (px <= SNAP_DISTANCE_PX.customBoundaryPick && (!bestSegment || px < bestSegment.px)) bestSegment = { segmentIndex: index, px };
       }
     }
     return bestSegment;
@@ -2359,13 +2360,13 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         const a = worldToScreen(pointToWorld(piece.a), args.getCamera(), rect);
         const b = worldToScreen(pointToWorld(piece.b), args.getCamera(), rect);
         const px = distPxPointToSeg(mouse.x, mouse.y, a.x, a.y, b.x, b.y);
-        if (px <= 12 && (!best || px < best.px)) best = { segment: cloneCustomFurnitureBoundarySegments([segment])[0]!, px };
+        if (px <= SNAP_DISTANCE_PX.customBoundaryPick && (!best || px < best.px)) best = { segment: cloneCustomFurnitureBoundarySegments([segment])[0]!, px };
       }
     }
     const hit = groundHit(clientX, clientY);
     if (hit) {
-      const snap = args.snapPoint2D(hit.point, hit.rect, args.getCamera(), 18, {
-        kindPriority: ["edge", "midpoint", "perpendicular", "endpoint", "corner"],
+      const snap = args.snapPoint2D(hit.point, hit.rect, args.getCamera(), SNAP_DISTANCE_PX.customBoundaryLocal, {
+        kindPriority: SNAP_PRIORITY_EDGE_FIRST,
         preferNearest: true
       });
       if (snap.kind !== "none" && snap.a && snap.b) {

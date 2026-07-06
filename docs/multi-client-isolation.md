@@ -40,9 +40,7 @@ uploads/
 
 | Path or script | Category | Status |
 | --- | --- | --- |
-| `scripts/exportPdfPageStrokeGroups.ts` default `public/debug-pdf/stroke-groups/...` | dev-only/debug | Guarded against production. |
 | `scripts/labelStrokeGroupsWithGemini.ts` output next to input summary | dev-only/debug | Safe only when input folder is dev/debug; keep out of production runtime. |
-| `src/pdfDemo/wallRectangleConsistency.test.ts` reads `public/debug-pdf/generated-debug.dxf` | test-only | Test fixture path only. |
 | `scripts/blender/fromJson.ts` | dev-only/debug | Uses tenant storage service with demo client context. |
 | repository `outputs/` folder | legacy/debug | No production code path should use it. Needs cleanup/migration if old artifacts matter. |
 

@@ -72,7 +72,7 @@ describe("pointerTransformClickFlow", () => {
     expect(state.step).toBe("pickTarget");
     expect(state.typed).toBe("");
     expect(state.lastValidDelta.toArray()).toEqual([0, 0, 0]);
-    expect(args.setStatus).toHaveBeenCalledExactlyOnceWith("Move: click target point, or move mouse and type distance. Shift = constrain, N = free movement.");
+    expect(args.setStatus).toHaveBeenCalledExactlyOnceWith("Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm. Shift = os, N = volny pohyb.");
     expect(args.commitHistory).not.toHaveBeenCalled();
   });
 
