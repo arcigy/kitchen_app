@@ -286,7 +286,7 @@ function makeMaterial(params: Record<string, unknown>, catalog: ClientCatalog, r
 function resolveComponentForParam(
   params: Record<string, unknown>,
   catalog: ClientCatalog,
-  key: "legComponentId" | "clipComponentId" | "runnerComponentId",
+  key: "legComponentId" | "clipComponentId" | "runnerComponentId" | "handleComponentId" | "hingeComponentId",
   componentType: ComponentType
 ) {
   const cache = materialCacheFor(params, catalog);
@@ -367,6 +367,21 @@ function readMeshDimensionsMm(mesh: THREE.Mesh) {
   const box = mesh.geometry.boundingBox;
   if (!box) return { width: 0, height: 0, depth: 0 };
   return {
+    width: (box.max.x - box.min.x) / MM,
+    height: (box.max.y - box.min.y) / MM,
+    depth: (box.max.z - box.min.z) / MM
+  };
+}
+
+function readObjectBoundsMm(object: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(object);
+  return {
+    minX: box.min.x / MM,
+    maxX: box.max.x / MM,
+    minY: box.min.y / MM,
+    maxY: box.max.y / MM,
+    minZ: box.min.z / MM,
+    maxZ: box.max.z / MM,
     width: (box.max.x - box.min.x) / MM,
     height: (box.max.y - box.min.y) / MM,
     depth: (box.max.z - box.min.z) / MM
@@ -1759,15 +1774,18 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   const shelfT = num(params, "shelfThickness", t);
   const frontT = num(params, "frontThicknessMm", 18);
   const plinthSetback = num(params, "plinthSetbackMm", 50);
-  const openedOffset = params.opened ? Math.min(260, Math.max(160, depth * 0.24)) : 0;
   const body = makeMaterial(params, catalog, "body");
   const backMat = makeMaterial(params, catalog, "back");
   const shelfMat = makeMaterial(params, catalog, "shelf");
   const frontMat = makeMaterial(params, catalog, "front");
   const plinthMat = makeMaterial(params, catalog, "plinth");
   const hardware = makeMaterial(params, catalog, "hardware");
+  const handleComponent = resolveComponentForParam(params, catalog, "handleComponentId", "handle");
+  const hingeComponent = resolveComponentForParam(params, catalog, "hingeComponentId", "hinge");
   const legComponent = resolveComponentForParam(params, catalog, "legComponentId", "leg");
   const clipComponent = resolveComponentForParam(params, catalog, "clipComponentId", "plinth_clip");
+  const handleMaterial = makeComponentMaterial(params, catalog, handleComponent, hardware);
+  const hingeMaterial = makeComponentMaterial(params, catalog, hingeComponent, hardware);
   const legMaterial = makeComponentMaterial(params, catalog, legComponent, hardware);
   const clipMaterial = makeComponentMaterial(params, catalog, clipComponent, hardware);
 
@@ -1811,7 +1829,6 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
       center.y = plinth + size.height / 2;
     }
     if (part.name === "corner_plinth_front_board") center.z -= plinthSetbackDelta;
-    if (part.name === "corner_right_door") center.z += openedOffset;
     const mesh = addBox(group, part.name, size, center, materialByRole[part.role], part.paramKeys);
     mesh.userData.materialGroup = part.role;
   }
@@ -1843,21 +1860,28 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     mesh.userData.materialGroup = "shelf";
   }
 
-  const handleCenter = scaleGroundTruthCenter({ x: -459.159, y: 439.9, z: 326 }, source, { width, height, depth, plinth });
-  addCylinder(
-    group,
-    "corner_right_door_handle",
-    5,
-    Math.min(num(params, "handleLengthMm", 160), Math.max(40, height * 0.28)),
-    {
-      x: handleCenter.x,
-      y: handleCenter.y,
-      z: handleCenter.z + openedOffset + num(params, "handleProjectionMm", 28) * 0.5
-    },
-    hardware,
-    "y",
-    ["handleComponentId", "handleLengthMm", "handleProjectionMm", "width", "height", "depth", "opened"]
-  );
+  const doorMesh = group.getObjectByName("corner_right_door") as THREE.Mesh | null;
+  if (doorMesh instanceof THREE.Mesh) {
+    const doorBounds = readObjectBoundsMm(doorMesh);
+    const handleProjection = num(params, "handleProjectionMm", 28);
+    const handleLength = Math.min(num(params, "handleLengthMm", 160), Math.max(40, doorBounds.height * 0.45));
+    const handle = addCylinder(
+      group,
+      "corner_right_door_handle",
+      5,
+      handleLength,
+      {
+        x: doorBounds.maxX - 45,
+        y: doorBounds.minY + doorBounds.height * 0.58,
+        z: doorBounds.maxZ + handleProjection * 0.5
+      },
+      handleMaterial,
+      "y",
+      ["handleComponentId", "handleLengthMm", "handleProjectionMm", "width", "height", "depth", "opened"]
+    );
+    handle.userData.componentType = "handle";
+    markComponent(handle, handleComponent, "handleComponentId");
+  }
 
   const legCenters = [
     { name: "corner_leg_front_left", x: -405.038, y: 50, z: 273, plinthClipIndex: 1 },
@@ -1888,12 +1912,33 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
       `corner_hinge_${index + 1}`,
       { width: 25, height: 25, depth: 2 },
       center,
-      hardware,
+      hingeMaterial,
       ["hingeComponentId", "width", "height", "depth"]
     );
     hinge.userData.materialGroup = "hardware";
     hinge.userData.componentType = "hinge";
+    markComponent(hinge, hingeComponent, "hingeComponentId");
   }
+
+  if (params.opened === true) openCatalogBaseCorner1DDoor(group);
+}
+
+function openCatalogBaseCorner1DDoor(group: THREE.Group) {
+  const door = group.getObjectByName("corner_right_door");
+  if (!door) return;
+  const bounds = readObjectBoundsMm(door);
+  const pivot = new THREE.Group();
+  pivot.name = "__corner_1d_door_pivot";
+  pivot.position.set(bounds.minX * MM, 0, ((bounds.minZ + bounds.maxZ) * 0.5) * MM);
+  group.add(pivot);
+  group.updateMatrixWorld(true);
+
+  for (const name of ["corner_right_door", "corner_right_door_handle", "corner_hinge_1", "corner_hinge_2"]) {
+    const object = group.getObjectByName(name);
+    if (object && object.parent !== pivot) pivot.attach(object);
+  }
+
+  pivot.rotation.y = -Math.PI * 0.38;
 }
 
 function readGroundTruthString(value: unknown): string | null {
@@ -2271,9 +2316,22 @@ function roleFromMaterialGroup(group: string): MatRole {
   return "body";
 }
 
+function groundTruthHardwareComponentInfo(boardName: string | null | undefined): { type: ComponentType; key: "handleComponentId" | "hingeComponentId" | "legComponentId" | "clipComponentId" } | null {
+  const name = (boardName ?? "").toLowerCase();
+  if (name.includes("handle")) return { type: "handle", key: "handleComponentId" };
+  if (name.includes("hinge")) return { type: "hinge", key: "hingeComponentId" };
+  if (name.includes("leg")) return { type: "leg", key: "legComponentId" };
+  if (name.includes("clip")) return { type: "plinth_clip", key: "clipComponentId" };
+  return null;
+}
+
 function makeGroundTruthMaterial(primitive: ModuleGeometryPrimitive, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const materialGroup = canonicalFwmMaterialGroup(readGroundTruthString(primitive.params.materialGroup) ?? "corpus") || "corpus";
-  const material = makeMaterial(params, catalog, roleFromMaterialGroup(materialGroup)).clone();
+  const boardName = readGroundTruthString(primitive.params.boardName);
+  const baseMaterial = makeMaterial(params, catalog, roleFromMaterialGroup(materialGroup));
+  const componentInfo = materialGroup === "hardware" ? groundTruthHardwareComponentInfo(boardName) : null;
+  const component = componentInfo ? resolveComponentForParam(params, catalog, componentInfo.key, componentInfo.type) : undefined;
+  const material = (component ? makeComponentMaterial(params, catalog, component, baseMaterial) : baseMaterial).clone();
   material.side = THREE.DoubleSide;
   const materialColorHex = typeof material.userData.renderColorHex === "string"
     ? material.userData.renderColorHex
@@ -2284,7 +2342,7 @@ function makeGroundTruthMaterial(primitive: ModuleGeometryPrimitive, params: Fwm
   material.userData.materialColorHex = materialColorHex;
   material.userData.renderColorHex = materialColorHex;
   material.userData.revitMaterialElementId = readGroundTruthString(primitive.params.revitMaterialElementId);
-  material.userData.materialSource = readGroundTruthString(primitive.params.materialSource) ?? "revit-ground-truth";
+  if (!component) material.userData.materialSource = readGroundTruthString(primitive.params.materialSource) ?? "revit-ground-truth";
   return material;
 }
 
@@ -2330,6 +2388,14 @@ function tagGroundTruthMesh(mesh: THREE.Mesh, primitive: ModuleGeometryPrimitive
   if (typeof materialData.catalogMaterialId === "string") mesh.userData.catalogMaterialId = materialData.catalogMaterialId;
   if (typeof materialData.catalogMaterialName === "string") mesh.userData.catalogMaterialName = materialData.catalogMaterialName;
   if (typeof materialData.materialRole === "string") mesh.userData.materialRole = materialData.materialRole;
+  if (typeof materialData.catalogComponentId === "string") {
+    mesh.userData.catalogComponentId = materialData.catalogComponentId;
+    mesh.userData.componentId = materialData.catalogComponentId;
+  }
+  if (typeof materialData.componentType === "string") mesh.userData.componentType = materialData.componentType;
+  if (typeof materialData.componentName === "string") mesh.userData.componentName = materialData.componentName;
+  const componentInfo = materialGroup === "hardware" ? groundTruthHardwareComponentInfo(boardName) : null;
+  if (componentInfo) mesh.userData.componentParamKey = componentInfo.key;
   mesh.userData.materialColorHex = materialColorHex;
   mesh.userData.renderColorHex = materialColorHex;
   mesh.userData.materialParameterName = readGroundTruthString(primitive.params.materialParameterName);
@@ -2801,13 +2867,22 @@ function buildCatalogBaseCorner90(group: THREE.Group, params: FwmFurnitureParams
 
 function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const bodyMaterial = makeMaterial(params, catalog, "body");
+  const hardwareMaterial = makeMaterial(params, catalog, "hardware");
+  const handleComponent = resolveComponentForParam(params, catalog, "handleComponentId", "handle");
+  const hingeComponent = resolveComponentForParam(params, catalog, "hingeComponentId", "hinge");
+  const legComponent = resolveComponentForParam(params, catalog, "legComponentId", "leg");
+  const clipComponent = resolveComponentForParam(params, catalog, "clipComponentId", "plinth_clip");
+  const handleMaterial = makeComponentMaterial(params, catalog, handleComponent, hardwareMaterial);
+  const hingeMaterial = makeComponentMaterial(params, catalog, hingeComponent, hardwareMaterial);
+  const legMaterial = makeComponentMaterial(params, catalog, legComponent, hardwareMaterial);
+  const clipMaterial = makeComponentMaterial(params, catalog, clipComponent, hardwareMaterial);
   const materialByGroup: Record<string, THREE.Material> = {
     body: bodyMaterial,
     front: makeMaterial(params, catalog, "front"),
     back: hasCopiedCornerMaterialOverride(params, "back") ? makeMaterial(params, catalog, "back") : bodyMaterial,
     shelf: hasCopiedCornerMaterialOverride(params, "shelf") ? makeMaterial(params, catalog, "shelf") : bodyMaterial,
     plinth: hasCopiedCornerMaterialOverride(params, "plinth") ? makeMaterial(params, catalog, "plinth") : bodyMaterial,
-    hardware: makeMaterial(params, catalog, "hardware")
+    hardware: hardwareMaterial
   };
   source.traverse((object) => {
     const data = object.userData as Record<string, unknown>;
@@ -2825,10 +2900,28 @@ function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurni
     if (group) data.materialGroup = group;
     if (!data.sourceModuleType) data.sourceModuleType = "corner_shelf_lower";
     if (!data.boardName && object.name) data.boardName = object.name;
-    const material = materialByGroup[group];
+    const component =
+      group === "hardware" && name.startsWith("doorhandle_") ? handleComponent :
+      group === "hardware" && name.startsWith("hinge_") ? hingeComponent :
+      group === "hardware" && name.startsWith("leg_") ? legComponent :
+      group === "hardware" && name.startsWith("kickclip_") ? clipComponent :
+      undefined;
+    const componentParamKey =
+      component === handleComponent ? "handleComponentId" :
+      component === hingeComponent ? "hingeComponentId" :
+      component === legComponent ? "legComponentId" :
+      component === clipComponent ? "clipComponentId" :
+      "";
+    const material =
+      group === "hardware" && name.startsWith("doorhandle_") ? handleMaterial :
+      group === "hardware" && name.startsWith("hinge_") ? hingeMaterial :
+      group === "hardware" && name.startsWith("leg_") ? legMaterial :
+      group === "hardware" && name.startsWith("kickclip_") ? clipMaterial :
+      materialByGroup[group];
     if (material && (object as THREE.Mesh).isMesh) {
       const mesh = object as THREE.Mesh;
       mesh.material = material;
+      if (component && componentParamKey) markComponent(mesh, component, componentParamKey);
       if (group === "front") fitCopiedCornerFrontPanelHeight(mesh, params);
       data.grainAlong = inferGrainAlong(object.name, group, readMeshDimensionsMm(mesh));
       data.catalogMaterialId = material.userData.catalogMaterialId;

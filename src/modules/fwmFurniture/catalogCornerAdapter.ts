@@ -68,7 +68,7 @@ export function mapFwmCatalogCornerToCornerShelfLowerParams(params: FwmFurniture
     shelfMaterialId: optionalText(source, "shelfMaterialId"),
     plinthMaterialId: optionalText(source, "plinthMaterialId"),
     worktopMaterialId: optionalText(source, "worktopMaterialId"),
-    handleComponentId: text(source, "handleComponentId", "cmp.handle.bar.160.inox"),
+    handleComponentId: text(source, "handleComponentId", "cmp.handle.bar.160.black"),
     hingeComponentId: text(source, "hingeComponentId", "cmp.hinge.corner.45.softclose"),
     legComponentId: text(source, "legComponentId", "cmp.leg.adjustable.100.black"),
     clipComponentId: text(source, "clipComponentId", "cmp.clip.plinth.standard"),

@@ -1708,11 +1708,19 @@ describe("FWM furniture module packages", () => {
     const frontMiddleLeg = getMeshNamed(group, "corner_leg_front_middle");
     const frontLeftClipArm = getMeshNamed(group, "corner_kickClip_front_1_arm");
     const frontMiddleClipArm = getMeshNamed(group, "corner_kickClip_front_2_arm");
+    const doorHandle = getMeshNamed(group, "corner_right_door_handle");
+    const doorHinge = getMeshNamed(group, "corner_hinge_1");
     expect(door?.userData.materialGroup).toBe("front");
     expect(divider?.userData.materialGroup).toBe("front");
     expect(backPanel?.userData.materialGroup).toBe("back");
     expect(leftSide).toBeTruthy();
     expect(frontPlinth).toBeTruthy();
+    expect(doorHandle?.userData.componentType).toBe("handle");
+    expect(doorHandle?.userData.catalogComponentId).toBeTruthy();
+    expect((doorHandle?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
+    expect(doorHinge?.userData.componentType).toBe("hinge");
+    expect(doorHinge?.userData.catalogComponentId).toBeTruthy();
+    expect((doorHinge?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
     expect(frontLeftLeg?.userData.componentType).toBe("leg");
     expect(frontMiddleLeg?.userData.componentType).toBe("leg");
     expect(frontLeftClipArm?.userData.componentType).toBe("plinth_clip");
@@ -1766,6 +1774,8 @@ describe("FWM furniture module packages", () => {
     const opened = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", opened: true, plinthHeight: 100, plinthSetbackMm: 50 }, catalog });
     expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door")!).maxZ + 150);
     expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door_handle")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door_handle")!).maxZ + 150);
+    expect(meshBoundsMm(getMeshNamed(opened, "corner_hinge_1")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_hinge_1")!).maxZ + 20);
+    expect(Math.abs(objectBoundsMm(getMeshNamed(opened, "corner_right_door")!).minZ - objectBoundsMm(getMeshNamed(opened, "corner_hinge_1")!).minZ)).toBeLessThan(25);
 
     const recessedPlinth = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", plinthHeight: 100, plinthSetbackMm: 120 }, catalog });
     expect(meshBoundsMm(getMeshNamed(group, "corner_plinth_front_board")!).maxZ - meshBoundsMm(getMeshNamed(recessedPlinth, "corner_plinth_front_board")!).maxZ).toBeCloseTo(70, 2);
@@ -2047,6 +2057,14 @@ describe("FWM furniture module packages", () => {
     expect(cornerXAnchor?.position.z ? cornerXAnchor.position.z * 1000 : 0).toBeCloseTo(baseBounds.minZ, 1);
     expect(cornerZAnchor?.position.x ? cornerZAnchor.position.x * 1000 : 0).toBeCloseTo(baseBounds.minX, 1);
     expect(cornerZAnchor?.position.z ? cornerZAnchor.position.z * 1000 : 0).toBeCloseTo(baseBounds.maxZ, 1);
+    const diagonalHandle = getMeshByBoardName(base, "diagonal_handle");
+    const diagonalHinge = getMeshByBoardName(base, "hinge_lower");
+    expect(diagonalHandle?.userData.componentType).toBe("handle");
+    expect(diagonalHandle?.userData.catalogComponentId).toBeTruthy();
+    expect((diagonalHandle?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
+    expect(diagonalHinge?.userData.componentType).toBe("hinge");
+    expect(diagonalHinge?.userData.catalogComponentId).toBeTruthy();
+    expect((diagonalHinge?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
 
     const widthIgnoredBounds = objectBoundsMm(widthIgnored);
     const deeperBounds = objectBoundsMm(deeper);
@@ -2276,6 +2294,14 @@ describe("FWM furniture module packages", () => {
     expect(getMeshNamed(group, "shelf_1_x")?.userData.catalogMaterialId).toBe(shelfMaterialId);
     expect(getMeshNamed(group, "kick_x")?.userData.catalogMaterialId).toBe(plinthMaterialId);
     expect(getMeshNamed(group, "door_front_z")?.userData.materialRequest).toBeUndefined();
+    const copiedHandle = getMeshNamed(group, "doorHandle_front_z");
+    const copiedHinge = getMeshNamed(group, "hinge_front_z_1_door_plate");
+    expect(copiedHandle?.userData.componentType).toBe("handle");
+    expect(copiedHandle?.userData.catalogComponentId).toBeTruthy();
+    expect((copiedHandle?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
+    expect(copiedHinge?.userData.componentType).toBe("hinge");
+    expect(copiedHinge?.userData.catalogComponentId).toBeTruthy();
+    expect((copiedHinge?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
 
     const bounds = new Box3().setFromObject(group);
     expect((bounds.max.x - bounds.min.x) * 1000).toBeGreaterThan(860);
@@ -2307,6 +2333,18 @@ describe("FWM furniture module packages", () => {
     expect(depth580DoorX.maxY).toBeCloseTo(722, 2);
     expect(depth580DoorZ.minY).toBeCloseTo(100, 2);
     expect(depth580DoorZ.maxY).toBeCloseTo(722, 2);
+
+    const openedCorner90 = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...params, opened: true, doorOpen: true, requiresWorktop: false, hasWorktop: false, worktopThicknessMm: 0 },
+      catalog
+    });
+    const openedDoorZ = objectBoundsMm(getMeshNamed(openedCorner90, "door_front_z")!);
+    const openedHandleZ = objectBoundsMm(getMeshNamed(openedCorner90, "doorHandle_front_z")!);
+    const openedDoorX = objectBoundsMm(getMeshNamed(openedCorner90, "door_front_x")!);
+    const openedHandleX = objectBoundsMm(getMeshNamed(openedCorner90, "doorHandle_front_x")!);
+    expect(Math.abs(openedHandleZ.maxX - openedDoorZ.minX)).toBeLessThan(5);
+    expect(Math.abs(openedHandleX.maxZ - openedDoorX.minZ)).toBeLessThan(5);
 
     const bom = calculateFwmFurnitureBOM(params, ctx, catalog);
     const ids = new Set(bom.quoteBom.items.map((item) => item.id));
