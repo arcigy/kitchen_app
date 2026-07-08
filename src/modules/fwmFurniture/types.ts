@@ -516,6 +516,11 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
 
   const variants = spec.variantOptions ?? ["default"];
   next.variant = variants.includes(text(next.variant, variants[0] ?? "default")) ? text(next.variant, variants[0] ?? "default") : variants[0] ?? "default";
+  if (spec.moduleType === "fwm_catalog_wall_cabinet" && text(next.variant, "").includes("corner_chamfered")) {
+    next.backThickness = next.boardThickness;
+    next.frontThicknessMm = next.boardThickness;
+    next.shelfThickness = next.boardThickness;
+  }
 
   return next;
 }

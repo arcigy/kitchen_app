@@ -1005,6 +1005,11 @@ describe("FWM furniture module packages", () => {
     const cornerDepth = 330;
     const cornerChamfer = cornerWidth - cornerDepth;
     expect(defaults.frontChamferMm).toBe(cornerChamfer);
+    const chamferedDefaults = normalizeFwmFurnitureParams({ ...(defaults as FwmFurnitureParams), variant: "corner_chamfered" });
+    expect(chamferedDefaults.boardThickness).toBe(18);
+    expect(chamferedDefaults.backThickness).toBe(18);
+    expect(chamferedDefaults.frontThicknessMm).toBe(18);
+    expect(chamferedDefaults.shelfThickness).toBe(18);
 
     const chamfered = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
@@ -1145,8 +1150,13 @@ describe("FWM furniture module packages", () => {
     const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "wall_corner_front_leaf_x_door")!);
     const closedDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_z_door")!);
     const corner90BackZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_back_panel_z")!);
+    const corner90RightSide = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_right_side_panel")!);
+    const corner90SideEndZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_side_end_z_panel")!);
+    const corner90TopProfile = meshPlanProfileMm(getMeshNamed(corner90Closed, "wall_corner_top_panel")!);
     const chamferedBackZ = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_z")!);
+    const chamferedBackX = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_x")!);
     const chamferedDoor = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
+    const chamferedDoorMesh = getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!;
     const chamferedFrontRightCorpus = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_front_right_corpus_panel")!);
     const chamferedTopProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_top_panel")!);
     const chamferedDoorProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
@@ -1155,15 +1165,30 @@ describe("FWM furniture module packages", () => {
     expect(chamferedDoorProfile.some((point) => Math.abs(point.x - topDiagonalA.x) < 0.001 && Math.abs(point.z - topDiagonalA.z) < 0.001)).toBe(true);
     expect(chamferedDoorProfile.some((point) => Math.abs(point.x - topDiagonalB.x) < 0.001 && Math.abs(point.z - topDiagonalB.z) < 0.001)).toBe(true);
     const frontInset = cornerWidth / 2 - cornerDepth;
-    expect(corner90BackZ.maxZ).toBeCloseTo(frontInset, 0);
+    expect(corner90TopProfile).toEqual([
+      { x: -292, z: -292 },
+      { x: 282, z: -292 },
+      { x: 282, z: frontInset },
+      { x: frontInset, z: frontInset },
+      { x: frontInset, z: 282 },
+      { x: -292, z: 282 }
+    ]);
+    expect(corner90BackZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
+    expect(corner90RightSide.maxZ).toBeCloseTo(frontInset, 0);
+    expect(corner90SideEndZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
     expect(chamferedBackZ.maxZ).toBeCloseTo(cornerWidth / 2 - cornerChamfer, 0);
-    expect(closedDoor.minZ).toBeGreaterThanOrEqual(cornerWidth / 2 - 0.5);
-    expect(closedDoorZ.maxX).toBeLessThanOrEqual(frontInset + 0.5);
-    expect(chamferedDoor.minX).toBeLessThan(-cornerWidth / 2);
+    expect(chamferedBackZ.width).toBeCloseTo(18, 0);
+    expect(chamferedBackX.depth).toBeCloseTo(18, 0);
+    expect((chamferedDoorMesh.userData.dimensionsMm as { depth?: number } | undefined)?.depth).toBeCloseTo(18, 0);
+    expect(closedDoor.minZ).toBeGreaterThanOrEqual(frontInset - 0.5);
+    expect(closedDoor.maxZ).toBeLessThanOrEqual(frontInset + 18.5);
+    expect(closedDoorZ.minX).toBeCloseTo(frontInset, 0);
+    expect(closedDoorZ.maxX).toBeCloseTo(frontInset + 18, 0);
+    expect(chamferedDoor.minX).toBeLessThan(topDiagonalB.x);
     expect(chamferedDoor.maxZ).toBeGreaterThan(topDiagonalA.z);
     expect(chamferedFrontRightCorpus.maxZ).toBeCloseTo(cornerWidth / 2, 0);
-    expect(closedDoor.width).toBeCloseTo(cornerDepth, 0);
-    expect(closedDoorZ.depth).toBeCloseTo(cornerDepth, 0);
+    expect(closedDoor.width).toBeCloseTo(cornerDepth - 36, 0);
+    expect(closedDoorZ.depth).toBeCloseTo(cornerDepth - 18, 0);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);
 
     const depthChangedBounds = boundsForMeshesMm(corner90DepthChanged, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
@@ -1173,10 +1198,11 @@ describe("FWM furniture module packages", () => {
     const changedFrontInset = cornerWidth / 2 - 360;
     expect(depthChangedBounds.width).toBeCloseTo(cornerWidth, 0);
     expect(depthChangedBounds.depth).toBeCloseTo(cornerWidth, 0);
-    expect(depthChangedBackZ.maxZ).toBeCloseTo(changedFrontInset, 0);
-    expect(depthChangedDoorX.width).toBeCloseTo(360, 0);
-    expect(depthChangedDoorZ.depth).toBeCloseTo(360, 0);
-    expect(depthChangedDoorZ.maxX).toBeLessThanOrEqual(changedFrontInset + 0.5);
+    expect(depthChangedBackZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
+    expect(depthChangedDoorX.width).toBeCloseTo(360 - 36, 0);
+    expect(depthChangedDoorZ.depth).toBeCloseTo(360 - 18, 0);
+    expect(depthChangedDoorZ.minX).toBeCloseTo(changedFrontInset, 0);
+    expect(depthChangedDoorZ.maxX).toBeCloseTo(changedFrontInset + 18, 0);
   });
 
   it("declares truthful internal-edit capabilities for composed and sink-capable modules", () => {

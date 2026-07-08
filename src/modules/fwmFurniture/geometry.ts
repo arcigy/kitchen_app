@@ -1647,14 +1647,14 @@ function wallCornerFootprint(variant: string, width: number, depth: number, cham
       points: [
         { x: -half, z: -half },
         { x: half, z: -half },
-        { x: half, z: half },
-        { x: frontInset, z: half },
+        { x: half, z: frontInset },
         { x: frontInset, z: frontInset },
-        { x: -half, z: frontInset }
+        { x: frontInset, z: half },
+        { x: -half, z: half }
       ],
       frontSegments: [
-        { start: { x: frontInset, z: half }, end: { x: half, z: half }, name: "front_leaf_x" },
-        { start: { x: frontInset, z: frontInset }, end: { x: frontInset, z: half }, name: "front_leaf_z" }
+        { start: { x: frontInset, z: frontInset }, end: { x: half, z: frontInset }, name: "front_leaf_x" },
+        { start: { x: frontInset, z: half }, end: { x: frontInset, z: frontInset }, name: "front_leaf_z" }
       ],
       frontCorpusSegments: [] as Array<{ start: { x: number; z: number }; end: { x: number; z: number }; name: string }>
     };
@@ -1783,13 +1783,19 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const maxZ = width / 2;
   const leftWallFrontZ = Math.max(...footprint.points.filter((point) => Math.abs(point.x - minX) < 0.001).map((point) => point.z));
   const chamferedCorner = !variant.includes("90");
+  const lCorner = variant.includes("90");
   const doorFrontSegments = chamferedCorner
     ? [{ start: innerFootprint[3]!, end: innerFootprint[4]!, name: "diagonal_front" }]
-    : footprint.frontSegments;
+    : [
+      { start: { x: innerFootprint[3]!.x + frontT, z: innerFootprint[3]!.z }, end: innerFootprint[2]!, name: "front_leaf_x" },
+      { start: innerFootprint[4]!, end: innerFootprint[3]!, name: "front_leaf_z" }
+    ];
+  const lCornerFrontInset = lCorner ? footprint.points[3]!.x : maxZ;
   const verticalEdges = [
     { name: "back_panel_x", start: { x: minX + back, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
     { name: "back_panel_z", start: { x: minX, z: minZ + back }, end: { x: minX, z: leftWallFrontZ }, group: "back" as const, thickness: back },
-    { name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: maxZ }, group: "corpus" as const, thickness: t }
+    { name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: lCorner ? lCornerFrontInset : maxZ }, group: "corpus" as const, thickness: t },
+    ...(lCorner ? [{ name: "side_end_z_panel", start: { x: minX + back, z: maxZ }, end: { x: lCornerFrontInset, z: maxZ }, group: "corpus" as const, thickness: t }] : [])
   ];
   for (const edge of verticalEdges) {
     const mesh = addInsetBoardBetweenPlanPoints(
@@ -1841,11 +1847,14 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
       const length = Math.max(1, Math.hypot(dx, dz));
       const nx = dz / length;
       const nz = -dx / length;
-      const shifted = {
-        start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
-        end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
-      };
-      const door = addOutsetBoardBetweenPlanPoints(
+      const shifted = lCorner
+        ? offsetPlanSegmentTowardCenter(segment.start, segment.end, doorOffset)
+        : {
+          start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
+          end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
+        };
+      const addFrontBoard = lCorner ? addInsetBoardBetweenPlanPoints : addOutsetBoardBetweenPlanPoints;
+      const door = addFrontBoard(
         group,
         `wall_corner_${segment.name}_door`,
         shifted.start,
