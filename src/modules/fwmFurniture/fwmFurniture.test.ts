@@ -177,6 +177,36 @@ function objectBoundsMm(object: Mesh | { updateMatrixWorld: (force?: boolean) =>
   };
 }
 
+function unapprovedBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
+  const toleranceMm = 2;
+  const boardMeshes = meshes(root).filter((mesh) => {
+    if (mesh.visible === false || mesh.userData.hiddenByDefault === true) return false;
+    return canonicalBoardMaterialGroups.includes(mesh.userData.materialGroup as typeof canonicalBoardMaterialGroups[number]);
+  });
+  const boxes = boardMeshes.map((mesh) => ({ mesh, box: new Box3().setFromObject(mesh) }));
+  const overlaps: string[] = [];
+
+  for (let index = 0; index < boxes.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < boxes.length; otherIndex += 1) {
+      const a = boxes[index]!;
+      const b = boxes[otherIndex]!;
+      const aAllow = (a.mesh.userData.allowOverlapWith as string[] | undefined) ?? [];
+      const bAllow = (b.mesh.userData.allowOverlapWith as string[] | undefined) ?? [];
+      if (aAllow.includes(b.mesh.name) || bAllow.includes(a.mesh.name)) continue;
+
+      const overlapMm = {
+        x: (Math.min(a.box.max.x, b.box.max.x) - Math.max(a.box.min.x, b.box.min.x)) * 1000,
+        y: (Math.min(a.box.max.y, b.box.max.y) - Math.max(a.box.min.y, b.box.min.y)) * 1000,
+        z: (Math.min(a.box.max.z, b.box.max.z) - Math.max(a.box.min.z, b.box.min.z)) * 1000
+      };
+      if (overlapMm.x <= toleranceMm || overlapMm.y <= toleranceMm || overlapMm.z <= toleranceMm) continue;
+      overlaps.push(`${a.mesh.name}/${b.mesh.name}:${Math.round(overlapMm.x)}x${Math.round(overlapMm.y)}x${Math.round(overlapMm.z)}mm`);
+    }
+  }
+
+  return overlaps;
+}
+
 function visibleObjectBoundsMm(object: Object3D) {
   object.updateMatrixWorld(true);
   const box = new Box3();
@@ -686,13 +716,26 @@ describe("FWM furniture module packages", () => {
     }
   });
 
+  it("has no unapproved board overlaps in active DELFI runtime modules", () => {
+    const catalog = getSystemSeedCatalog();
+    const packages = extendedFurnitureModulePackages.filter((modulePackage) =>
+      delfiActiveRuntimeModuleTypes.includes(modulePackage.module.moduleType as typeof delfiActiveRuntimeModuleTypes[number])
+    );
+
+    for (const modulePackage of packages) {
+      const params = normalizeFwmFurnitureParams(createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams);
+      const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog, parameters: params });
+      expect(unapprovedBoardOverlaps(group), modulePackage.module.moduleType).toEqual([]);
+    }
+  });
+
   it("builds the upper open end wall module as chamfered or rounded geometry", () => {
     const catalog = getSystemSeedCatalog();
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_wall_open_end");
     expect(modulePackage).toBeTruthy();
 
     const parameterKeys = new Set(modulePackage!.parameters.parameters.map((parameter) => parameter.key));
-    for (const key of ["drawerCount", "doorCount", "shelfGaps", "frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId", "handleComponentId", "hingeComponentId", "runnerComponentId", "plinthHeight", "plinthSetbackMm", "backThickness", "shelfThickness"]) {
+    for (const key of ["drawerCount", "doorCount", "hasPlinth", "hasWorktop", "frontChamferMm", "backChamferMm", "cutoutWidthMm", "cutoutDepthMm", "powerW", "opened", "drawerSystemPricePerSet", "drawerSystemPriceWithMargin", "shelfGaps", "frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId", "handleComponentId", "hingeComponentId", "runnerComponentId", "plinthHeight", "plinthSetbackMm", "backThickness", "shelfThickness"]) {
       expect(parameterKeys.has(key), `wall open end must not expose ${key}`).toBe(false);
     }
     expect(parameterKeys.has("shelfCount"), "wall open end must expose shelfCount").toBe(true);
@@ -713,7 +756,8 @@ describe("FWM furniture module packages", () => {
     const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
     expect(defaults.kitchenModuleRole).toBe("top");
     expect(defaults.requiresWorktop).toBe(false);
-    expect(defaults.hasPlinth).toBe(false);
+    expect(defaults.hasPlinth).toBeUndefined();
+    expect(defaults.hasWorktop).toBeUndefined();
     expect(defaults.endingShape).toBe("chamfered");
     expect(defaults.side).toBe("right");
     expect(defaults.shelfCount).toBe(2);

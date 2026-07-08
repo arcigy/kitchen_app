@@ -75,6 +75,21 @@ const WALL_OPEN_END_OWNED_PARAMETER_KEYS = new Set([
 
 const WALL_OPEN_END_PARAMETER_GROUPS = new Set(["system", "ifc", "orientation", "placement", "pricing", "state"]);
 
+const WALL_OPEN_END_FORBIDDEN_PARAMETER_KEYS = new Set([
+  "drawerCount",
+  "doorCount",
+  "hasPlinth",
+  "hasWorktop",
+  "frontChamferMm",
+  "backChamferMm",
+  "cutoutWidthMm",
+  "cutoutDepthMm",
+  "powerW",
+  "opened",
+  "drawerSystemPricePerSet",
+  "drawerSystemPriceWithMargin"
+]);
+
 const WALL_OPEN_END_FREE_PARAMETER_KEYS = [
   "width",
   "height",
@@ -407,8 +422,9 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
 function filterModuleSpecificParameters(spec: FwmFurnitureSpec, parameters: ModuleParameterDefinition[]) {
   if (spec.moduleType !== "fwm_catalog_wall_open_end") return parameters;
   return parameters.filter((parameter) =>
-    WALL_OPEN_END_OWNED_PARAMETER_KEYS.has(parameter.key) ||
-    WALL_OPEN_END_PARAMETER_GROUPS.has(parameter.group ?? "")
+    !WALL_OPEN_END_FORBIDDEN_PARAMETER_KEYS.has(parameter.key) &&
+    (WALL_OPEN_END_OWNED_PARAMETER_KEYS.has(parameter.key) ||
+      WALL_OPEN_END_PARAMETER_GROUPS.has(parameter.group ?? ""))
   );
 }
 

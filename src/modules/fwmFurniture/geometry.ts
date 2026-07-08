@@ -1405,6 +1405,19 @@ function isBackEdge(segment: { start: { x: number; z: number }; end: { x: number
   return Math.abs(segment.start.z - backZ) < 0.001 && Math.abs(segment.end.z - backZ) < 0.001;
 }
 
+function trimOpenEndSegmentBehindBack(
+  segment: { start: { x: number; z: number }; end: { x: number; z: number } },
+  backZ: number,
+  backThickness: number
+) {
+  const trimPoint = (point: { x: number; z: number }) =>
+    Math.abs(point.z - backZ) < 0.001 ? { ...point, z: backZ + backThickness } : point;
+  return {
+    start: trimPoint(segment.start),
+    end: trimPoint(segment.end)
+  };
+}
+
 function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const width = num(params, "width", 300);
   const height = num(params, "height", 722);
@@ -1444,11 +1457,12 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
       : shape === "straight"
         ? `open_niche_side_panel_${segment.index + 1}`
         : `open_niche_${shape}_ending_panel_${segment.index + 1}`;
+    const boardSegment = isBackEdge(segment, backZ) ? segment : trimOpenEndSegmentBehindBack(segment, backZ, back);
     const mesh = addInsetBoardBetweenPlanPoints(
       group,
       boardName,
-      segment.start,
-      segment.end,
+      boardSegment.start,
+      boardSegment.end,
       baseY + cabinetHeight / 2,
       cabinetHeight,
       isBackEdge(segment, backZ) ? back : t,
