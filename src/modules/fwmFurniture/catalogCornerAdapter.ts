@@ -51,7 +51,7 @@ export function mapFwmCatalogCornerToCornerShelfLowerParams(params: FwmFurniture
     shelfAutoFit: true,
     shelfGaps: Array.from({ length: shelfCount }, () => 123),
     doorDouble: true,
-    doorOpen: bool(source, "doorOpen", bool(source, "opened", false)),
+    doorOpen: bool(source, "opened", bool(source, "doorOpen", false)),
     hingeCountPerDoor: Math.max(1, Math.round(num(source, "hingeCountPerDoor", 2))),
     sideGap: num(source, "sideGap", 2),
     topGap: num(source, "topGap", 2),

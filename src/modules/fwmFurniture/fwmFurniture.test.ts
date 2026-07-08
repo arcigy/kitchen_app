@@ -1726,6 +1726,27 @@ describe("FWM furniture module packages", () => {
     expect(frontLeftClipArm?.userData.componentType).toBe("plinth_clip");
     expect(frontMiddleClipArm?.userData.componentType).toBe("plinth_clip");
 
+    const doorBounds = objectBoundsMm(door!);
+    const fillerBounds = objectBoundsMm(getMeshNamed(group, "corner_blind_front_filler")!);
+    const handleBounds = objectBoundsMm(doorHandle!);
+    const hingeBounds = objectBoundsMm(doorHinge!);
+    expect(doorBounds.maxX).toBeLessThan(fillerBounds.minX);
+    expect(handleBounds.minX - doorBounds.minX).toBeCloseTo(40, 1);
+    expect(Math.abs(hingeBounds.maxX - doorBounds.maxX)).toBeLessThan(12);
+
+    const rightHanded = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...defaults, variant: "corner_1d", side: "right", shelfCount: 1, plinthHeight: 100, plinthSetbackMm: 50 },
+      catalog
+    });
+    const rightDoorBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_right_door")!);
+    const rightFillerBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_blind_front_filler")!);
+    const rightHandleBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_right_door_handle")!);
+    const rightHingeBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_hinge_1")!);
+    expect(rightDoorBounds.minX).toBeGreaterThan(rightFillerBounds.maxX);
+    expect(rightDoorBounds.maxX - rightHandleBounds.maxX).toBeCloseTo(40, 1);
+    expect(Math.abs(rightHingeBounds.minX - rightDoorBounds.minX)).toBeLessThan(12);
+
     const frontPlinthBounds = meshBoundsMm(frontPlinth!);
     const frontLeftLegBounds = meshBoundsMm(frontLeftLeg!);
     const frontMiddleLegBounds = meshBoundsMm(frontMiddleLeg!);
@@ -2333,6 +2354,16 @@ describe("FWM furniture module packages", () => {
     expect(depth580DoorX.maxY).toBeCloseTo(722, 2);
     expect(depth580DoorZ.minY).toBeCloseTo(100, 2);
     expect(depth580DoorZ.maxY).toBeCloseTo(722, 2);
+
+    const staleInternalDoorOpen = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...params, opened: false, doorOpen: true, requiresWorktop: false, hasWorktop: false, worktopThicknessMm: 0 },
+      catalog
+    });
+    expect(staleInternalDoorOpen.getObjectByName("__corner_door_pivot_z")).toBeUndefined();
+    expect(staleInternalDoorOpen.getObjectByName("__corner_door_pivot_x")).toBeUndefined();
+    expect(objectBoundsMm(getMeshNamed(staleInternalDoorOpen, "door_front_z")!).depth).toBeCloseTo(18, 1);
+    expect(objectBoundsMm(getMeshNamed(staleInternalDoorOpen, "door_front_x")!).width).toBeCloseTo(18, 1);
 
     const openedCorner90 = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,

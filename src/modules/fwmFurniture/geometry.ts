@@ -1792,6 +1792,10 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   const source = { width: 1000.077, height: 722, depth: 782, plinth: 100 };
   const sourcePlinthSetback = 50;
   const plinthSetbackDelta = plinthSetback - sourcePlinthSetback;
+  const side = String(params.side ?? "left") === "right" ? "right" : "left";
+  const isLeftHand = side === "left";
+  const mirrorAxisX = (-50.038 / source.width) * width;
+  const handedX = (x: number) => isLeftHand ? mirrorAxisX * 2 - x : x;
   const materialByRole: Record<"body" | "back" | "shelf" | "front" | "plinth", THREE.Material> = {
     body,
     back: backMat,
@@ -1824,6 +1828,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   for (const part of parts) {
     const size = scaleGroundTruthSize(part.size, part.role, { width, height, depth, plinth, t, back, shelfT, frontT }, source);
     const center = scaleGroundTruthCenter(part.center, source, { width, height, depth, plinth });
+    center.x = handedX(center.x);
     if (part.role === "front") {
       size.height = Math.max(1, height - plinth);
       center.y = plinth + size.height / 2;
@@ -1844,7 +1849,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   const shelfSourceTopY = 713 - 18;
   const shelfBottomY = scaleGroundTruthY(shelfSourceBottomY, source, { height, plinth });
   const shelfTopY = scaleGroundTruthY(shelfSourceTopY, source, { height, plinth });
-  const shelfX = (-51.038 / source.width) * width;
+  const shelfX = handedX((-51.038 / source.width) * width);
   const shelfZ = (-40 / source.depth) * depth;
   for (let index = 0; index < shelfCount; index += 1) {
     const ratio = (index + 1) / (shelfCount + 1);
@@ -1871,7 +1876,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
       5,
       handleLength,
       {
-        x: doorBounds.maxX - 45,
+        x: isLeftHand ? doorBounds.minX + 45 : doorBounds.maxX - 45,
         y: doorBounds.minY + doorBounds.height * 0.58,
         z: doorBounds.maxZ + handleProjection * 0.5
       },
@@ -1893,6 +1898,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   if (plinth > 0) {
     for (const leg of legCenters) {
       const center = scaleGroundTruthCenter(leg, source, { width, height, depth, plinth });
+      center.x = handedX(center.x);
       center.z += leg.name.includes("_rear_") ? plinthSetbackDelta : -plinthSetbackDelta;
       const mesh = addCornerStyleLeg(group, leg.name, plinth, center, legMaterial, ["legComponentId", "plinthHeight", "plinthSetbackMm", "width", "depth"]);
       markComponent(mesh, legComponent, "legComponentId");
@@ -1907,6 +1913,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     { x: -131.618, y: 157.4, z: 302 }
   ].entries()) {
     const center = scaleGroundTruthCenter(sourceCenter, source, { width, height, depth, plinth });
+    center.x = handedX(center.x);
     const hinge = addBox(
       group,
       `corner_hinge_${index + 1}`,
@@ -1920,16 +1927,16 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     markComponent(hinge, hingeComponent, "hingeComponentId");
   }
 
-  if (params.opened === true) openCatalogBaseCorner1DDoor(group);
+  if (params.opened === true) openCatalogBaseCorner1DDoor(group, side);
 }
 
-function openCatalogBaseCorner1DDoor(group: THREE.Group) {
+function openCatalogBaseCorner1DDoor(group: THREE.Group, side: "left" | "right") {
   const door = group.getObjectByName("corner_right_door");
   if (!door) return;
   const bounds = readObjectBoundsMm(door);
   const pivot = new THREE.Group();
   pivot.name = "__corner_1d_door_pivot";
-  pivot.position.set(bounds.minX * MM, 0, ((bounds.minZ + bounds.maxZ) * 0.5) * MM);
+  pivot.position.set((side === "left" ? bounds.maxX : bounds.minX) * MM, 0, ((bounds.minZ + bounds.maxZ) * 0.5) * MM);
   group.add(pivot);
   group.updateMatrixWorld(true);
 
@@ -1938,7 +1945,7 @@ function openCatalogBaseCorner1DDoor(group: THREE.Group) {
     if (object && object.parent !== pivot) pivot.attach(object);
   }
 
-  pivot.rotation.y = -Math.PI * 0.38;
+  pivot.rotation.y = (side === "left" ? 1 : -1) * Math.PI * 0.38;
 }
 
 function readGroundTruthString(value: unknown): string | null {
