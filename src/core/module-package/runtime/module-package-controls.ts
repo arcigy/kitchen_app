@@ -18,6 +18,23 @@ function displayValue(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
+function hasOwnParameterValue(params: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(params, key);
+}
+
+function readParameterValue(params: Record<string, unknown>, parameter: ModuleParameterDefinition): unknown {
+  return hasOwnParameterValue(params, parameter.key) ? params[parameter.key] : parameter.defaultValue;
+}
+
+function createPackageParameterSnapshot(modulePackage: FurnQuoteModulePackage, params: Record<string, unknown>): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const parameter of modulePackage.parameters.parameters) {
+    const value = readParameterValue(params, parameter);
+    if (value !== undefined) snapshot[parameter.key] = value;
+  }
+  return snapshot;
+}
+
 function coerceInputValue(parameter: ModuleParameterDefinition, input: HTMLInputElement | HTMLSelectElement) {
   if (parameter.type === "number") {
     const value = Number(String(input.value).trim().replace(",", "."));
@@ -76,6 +93,10 @@ function hasComposedHostSlotControls(modulePackage: FurnQuoteModulePackage) {
   const uiControls = modulePackage.ui?.controls ?? [];
   if (uiControls.some((control) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(control.parameterKey))) return true;
   return modulePackage.parameters?.parameters?.some((parameter) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(parameter.key)) ?? false;
+}
+
+function isFwmCatalogPackage(modulePackage: FurnQuoteModulePackage) {
+  return modulePackage.module.moduleType.startsWith("fwm_catalog_");
 }
 
 function withParameterPresetControl(
@@ -138,7 +159,7 @@ function withParameterPresetControl(
       onSave: async ({ name, note }) => {
         const result = await args.createParameterPreset?.({
           modulePackage,
-          parameters: { ...params },
+          parameters: createPackageParameterSnapshot(modulePackage, params),
           name,
           note
         });
@@ -265,6 +286,7 @@ export function resolveModuleControlStrategy(
 ): ModuleControlStrategy {
   const tags = new Set((modulePackage.module.tags ?? []).map((tag) => tag.toLowerCase()));
   if (tags.has("revit-export-preview")) return "module_package";
+  if (isFwmCatalogPackage(modulePackage)) return "module_package";
   if (hasComposedHostSlotControls(modulePackage)) return "module_package";
   const moduleType =
     typeof params.type === "string" && params.type.trim().length > 0
@@ -319,21 +341,21 @@ export function createModulePackageControls(
     if (input instanceof HTMLInputElement) {
       if (control.controlType === "checkbox" || parameter.type === "boolean") {
         input.type = "checkbox";
-        input.checked = Boolean(params[parameter.key]);
+        input.checked = Boolean(readParameterValue(params, parameter));
       } else {
         input.type = parameter.type === "number" ? "number" : "text";
         if (parameter.min != null) input.min = String(parameter.min);
         if (parameter.max != null) input.max = String(parameter.max);
         if (parameter.step != null) input.step = String(parameter.step);
-        input.value = displayValue(params[parameter.key]);
+        input.value = displayValue(readParameterValue(params, parameter));
       }
     } else {
-      appendOptions(input, buildSelectOptions(parameter, args.clientCatalog), params[parameter.key]);
+      appendOptions(input, buildSelectOptions(parameter, args.clientCatalog), readParameterValue(params, parameter));
     }
 
     const sync = () => {
-      if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(params[parameter.key]);
-      else input.value = displayValue(params[parameter.key]);
+      if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(readParameterValue(params, parameter));
+      else input.value = displayValue(readParameterValue(params, parameter));
     };
 
     input.addEventListener("change", () => {

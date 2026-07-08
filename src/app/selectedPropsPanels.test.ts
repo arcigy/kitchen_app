@@ -17,6 +17,8 @@ import type { ColumnParams, DoorInstance, DoorParams, FloorInstance, LayoutInsta
 import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { extendedFurnitureModulePackages } from "../system/module-packages/extendedFurniture";
 
 function makeColumnParams(): ColumnParams {
   return {
@@ -114,6 +116,22 @@ function makeLayoutInstance(): LayoutInstance {
     pick: {},
     outline: {}
   } as unknown as LayoutInstance;
+}
+
+function collectFakeText(node: { textContent?: string; children?: Array<{ textContent?: string; children?: unknown[] }> }): string[] {
+  return [
+    node.textContent ?? "",
+    ...((node.children ?? []) as Array<{ textContent?: string; children?: Array<{ textContent?: string; children?: unknown[] }> }>).flatMap(collectFakeText)
+  ].filter((text) => text.length > 0);
+}
+
+function collectFakeElements(node: { children?: unknown[] }): Array<{ value?: string; children?: unknown[] }> {
+  const children = (node.children ?? []) as Array<{ value?: string; children?: unknown[] }>;
+  return [node as { value?: string; children?: unknown[] }, ...children.flatMap(collectFakeElements)];
+}
+
+function makeMinimalCatalog(): ClientCatalog {
+  return { materials: [], components: [] } as unknown as ClientCatalog;
 }
 
 describe("selected props panels", () => {
@@ -627,6 +645,75 @@ describe("selected props panels", () => {
     expect(rows[1]!.control.type).toBe("checkbox");
     expect(rows[1]!.control.checked).toBe(false);
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "module", instanceId: "module-1" });
+  });
+
+  it("renders FWM catalog wall open end properties from the package UI instead of stale instance params", () => {
+    installFakeDocument();
+    const { props, section } = makePropertiesPanelHarness();
+    const modulePackage = extendedFurnitureModulePackages.find(
+      (candidate) => candidate.module.moduleType === "fwm_catalog_wall_open_end"
+    );
+    expect(modulePackage).toBeDefined();
+    const inst = makeLayoutInstance();
+    inst.params = {
+      type: "fwm_catalog_wall_open_end",
+      moduleType: "fwm_catalog_wall_open_end",
+      modulePackageId: modulePackage!.module.modulePackageId,
+      width: 300,
+      height: 720,
+      depth: 320,
+      drawerCount: 0,
+      doorCount: 0,
+      hasPlinth: false,
+      hasWorktop: false,
+      frontChamferMm: 0,
+      backChamferMm: 0,
+      cutoutWidthMm: 0,
+      cutoutDepthMm: 0,
+      powerW: 0,
+      opened: false,
+      shelfCount: 2
+    } as LayoutInstance["params"];
+    const ctx = {
+      findInstance: vi.fn(() => inst),
+      showNoProps: vi.fn(),
+      props,
+      pinnedInstanceIds: new Set<string>(),
+      instanceFitsRoom: vi.fn(() => true),
+      anyOverlap: vi.fn(() => false),
+      moduleOverlapsWalls: vi.fn(() => false),
+      moduleOverlapsKitchenWorktops: vi.fn(() => false),
+      commitHistory: vi.fn(),
+      S: {} as AppState,
+      mountProps: vi.fn(),
+      modulePackages: [modulePackage],
+      args: { propertiesEl: section },
+      clientCatalog: makeMinimalCatalog(),
+      rebuildInstance: vi.fn(() => true),
+      appendLinkedMeasureInputs: vi.fn()
+    };
+
+    mountModulePropsPanel(ctx as unknown as Parameters<typeof mountModulePropsPanel>[0], "module-1");
+
+    const text = collectFakeText(section).join("\n");
+    for (const forbidden of [
+      "drawerCount",
+      "doorCount",
+      "hasPlinth",
+      "hasWorktop",
+      "frontChamferMm",
+      "backChamferMm",
+      "cutoutWidthMm",
+      "cutoutDepthMm",
+      "powerW",
+      "opened"
+    ]) {
+      expect(text).not.toContain(forbidden);
+    }
+    const selectValues = collectFakeElements(section).flatMap((element) => element.children ?? [])
+      .map((child) => (child as { value?: string }).value)
+      .filter(Boolean);
+    expect(selectValues).toEqual(expect.arrayContaining(["chamfered", "rounded"]));
   });
 
   it("keeps selected window and door wall info muted text", () => {

@@ -47,4 +47,25 @@ describe("module control strategy", () => {
     );
     expect(modulePackage!.parameterPresets?.presets).toEqual([]);
   });
+
+  it("uses package controls for FWM catalog packages so stale descriptor controls cannot reappear", () => {
+    const modulePackage = extendedFurnitureModulePackages.find(
+      (candidate) => candidate.module.moduleType === "fwm_catalog_wall_open_end"
+    );
+
+    expect(modulePackage).toBeDefined();
+    expect(resolveModuleControlStrategy(modulePackage!, { type: "fwm_catalog_wall_open_end" })).toBe("module_package");
+    expect(modulePackage!.ui.controls.map((control) => control.parameterKey)).toEqual([
+      "width",
+      "height",
+      "depth",
+      "side",
+      "endingShape",
+      "cornerRadiusMm",
+      "chamferMm",
+      "shelfCount",
+      "bodyMaterialId",
+      "boardThickness"
+    ]);
+  });
 });

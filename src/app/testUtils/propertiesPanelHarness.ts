@@ -77,6 +77,10 @@ export class FakeElement {
     return child;
   }
 
+  prepend(...children: FakeElement[]) {
+    this.children.unshift(...children);
+  }
+
   click() {
     this.clickCount += 1;
     this.dispatch("click");
@@ -115,10 +119,20 @@ export class FakeElement {
   }
 }
 
+export class FakeInputElement extends FakeElement {}
+
+export class FakeSelectElement extends FakeElement {}
+
 export function installFakeDocument() {
+  vi.stubGlobal("HTMLInputElement", FakeInputElement);
+  vi.stubGlobal("HTMLSelectElement", FakeSelectElement);
   vi.stubGlobal("document", {
     createElement: (tagName: string) => {
-      const element = new FakeElement();
+      const element = tagName === "input"
+        ? new FakeInputElement()
+        : tagName === "select"
+          ? new FakeSelectElement()
+          : new FakeElement();
       if (tagName === "input") element.type = "text";
       return element;
     },
