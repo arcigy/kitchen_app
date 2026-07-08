@@ -60,15 +60,15 @@ describe("kitchen module placement contract", () => {
     for (const parameter of topCornerPackage.parameters.parameters) {
       if (parameter.key === "variant") parameter.defaultValue = "corner_chamfered";
       if (parameter.key === "width") {
-        parameter.defaultValue = 330;
-        parameter.uiVisibility = "internal";
+        parameter.defaultValue = 600;
+        parameter.uiVisibility = "user";
       }
       if (parameter.key === "depth") parameter.defaultValue = 330;
       if (parameter.key === "height") parameter.defaultValue = 450;
       if (parameter.key === "heightCarcass") parameter.defaultValue = 450;
       if (parameter.key === "shelfCount") parameter.defaultValue = 1;
       if (parameter.key === "doorCount") parameter.defaultValue = 1;
-      if (parameter.key === "frontChamferMm") parameter.defaultValue = 180;
+      if (parameter.key === "frontChamferMm") parameter.defaultValue = 270;
       if (parameter.key === "isCorner") parameter.defaultValue = true;
       if (parameter.key === "frontFaceCount") parameter.defaultValue = 0;
       if (parameter.key === "backFaceCount") parameter.defaultValue = 2;

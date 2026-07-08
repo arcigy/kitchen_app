@@ -871,6 +871,14 @@ describe("FWM furniture module packages", () => {
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_wall_cabinet");
     expect(modulePackage).toBeTruthy();
     const defaults = createDefaultModulePackageParameters(modulePackage!);
+    const userControls = new Set(modulePackage!.ui.controls.map((control) => control.parameterKey));
+    for (const forbiddenTopControl of ["hasPlinth", "plinthHeight", "plinthSetbackMm", "plinthMaterialId", "legComponentId", "clipComponentId", "hasWorktop", "worktopThicknessMm", "worktopMaterialId"]) {
+      expect(userControls.has(forbiddenTopControl), `upper wall corner must not expose ${forbiddenTopControl}`).toBe(false);
+    }
+    const cornerWidth = 600;
+    const cornerDepth = 330;
+    const cornerChamfer = cornerWidth - cornerDepth;
+    expect(defaults.frontChamferMm).toBe(cornerChamfer);
 
     const chamfered = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
@@ -878,12 +886,12 @@ describe("FWM furniture module packages", () => {
       parameters: {
         ...defaults,
         variant: "corner_chamfered",
-        width: 900,
-        depth: 330,
+        width: cornerWidth,
+        depth: cornerDepth,
         height: 450,
         shelfCount: 1,
         doorCount: 1,
-        frontChamferMm: 180,
+        frontChamferMm: cornerChamfer,
         isCorner: true,
         cornerShape: "chamfered",
         frontFaceCount: 0,
@@ -900,12 +908,12 @@ describe("FWM furniture module packages", () => {
       parameters: {
         ...defaults,
         variant: "corner_open_chamfered",
-        width: 900,
-        depth: 330,
+        width: cornerWidth,
+        depth: cornerDepth,
         height: 450,
         shelfCount: 2,
         doorCount: 0,
-        frontChamferMm: 180,
+        frontChamferMm: cornerChamfer,
         isCorner: true,
         cornerShape: "chamfered",
         frontFaceCount: 0,
@@ -922,8 +930,8 @@ describe("FWM furniture module packages", () => {
       parameters: {
         ...defaults,
         variant: "corner_90",
-        width: 900,
-        depth: 330,
+        width: cornerWidth,
+        depth: cornerDepth,
         height: 450,
         shelfCount: 1,
         doorCount: 1,
@@ -943,8 +951,8 @@ describe("FWM furniture module packages", () => {
       parameters: {
         ...defaults,
         variant: "corner_90",
-        width: 900,
-        depth: 330,
+        width: cornerWidth,
+        depth: cornerDepth,
         height: 450,
         shelfCount: 1,
         doorCount: 1,
@@ -959,11 +967,32 @@ describe("FWM furniture module packages", () => {
         plinthHeight: 0
       }
     });
+    const corner90DepthChanged = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      catalog,
+      parameters: {
+        ...defaults,
+        variant: "corner_90",
+        width: cornerWidth,
+        depth: 360,
+        height: 450,
+        shelfCount: 1,
+        doorCount: 1,
+        isCorner: true,
+        cornerShape: "l_shape",
+        frontFaceCount: 0,
+        backFaceCount: 2,
+        requiresWorktop: false,
+        hasWorktop: false,
+        hasPlinth: false,
+        plinthHeight: 0
+      }
+    });
 
     for (const group of [chamfered, openNiche, corner90Closed]) {
       const bounds = objectBoundsMm(group);
-      expect(bounds.width).toBeCloseTo(330, 0);
-      expect(bounds.depth).toBeCloseTo(330, 0);
+      expect(bounds.width).toBeCloseTo(cornerWidth, 0);
+      expect(bounds.depth).toBeCloseTo(cornerWidth, 0);
       expect(bounds.height).toBeCloseTo(450, 0);
       expect(hasMeshNamed(group, /worktop/i)).toBe(false);
       expect(hasMeshNamed(group, /plinth/i)).toBe(false);
@@ -981,7 +1010,18 @@ describe("FWM furniture module packages", () => {
 
     const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_x_door")!);
     const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "wall_corner_front_leaf_x_door")!);
+    const closedDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_z_door")!);
+    expect(closedDoor.width).toBeCloseTo(cornerDepth, 0);
+    expect(closedDoorZ.depth).toBeCloseTo(cornerDepth, 0);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);
+
+    const depthChangedBounds = objectBoundsMm(corner90DepthChanged);
+    const depthChangedDoorX = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_x_door")!);
+    const depthChangedDoorZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_z_door")!);
+    expect(depthChangedBounds.width).toBeCloseTo(cornerWidth, 0);
+    expect(depthChangedBounds.depth).toBeCloseTo(cornerWidth, 0);
+    expect(depthChangedDoorX.width).toBeCloseTo(360, 0);
+    expect(depthChangedDoorZ.depth).toBeCloseTo(360, 0);
   });
 
   it("declares truthful internal-edit capabilities for composed and sink-capable modules", () => {

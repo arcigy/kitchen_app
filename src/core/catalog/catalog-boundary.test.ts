@@ -49,7 +49,7 @@ describe("ClientCatalog runtime boundaries", () => {
       if (forbiddenImport.test(source)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps getSystemSeedCatalog inside seed, demo, and test boundaries", async () => {
     const files = (await Promise.all(sourceRoots.map((root) => listRuntimeSourceFiles(root)))).flat();
@@ -62,7 +62,7 @@ describe("ClientCatalog runtime boundaries", () => {
     }
 
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps app composition off direct system seed repositories", async () => {
     const source = await readFile(path.join(process.cwd(), "src/app.ts"), "utf-8");

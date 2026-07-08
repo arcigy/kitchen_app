@@ -153,7 +153,7 @@ function auditPlacement(modulePackage: FurnQuoteModulePackage, role: KitchenModu
       add(issues, "error", "corner.touch", "Corner placement must require a 90-degree corner touching both walls.", "placement.corner");
     }
     const width = param(modulePackage, "width");
-    if (width?.uiVisibility === "user") {
+    if (role === "low" && width?.uiVisibility === "user") {
       add(issues, "error", "corner.width_visible", "Corner modules must not expose width as an independent user parameter; depth controls both legs.", "parameters.width.uiVisibility");
     }
     const cornerShape = defaultValue(modulePackage, "cornerShape");

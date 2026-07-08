@@ -1610,27 +1610,29 @@ function tagWallCornerBoard(
   }
 }
 
-function wallCornerFootprint(variant: string, depth: number, chamferMm: number) {
-  const half = depth / 2;
+function wallCornerFootprint(variant: string, width: number, depth: number, chamferMm: number) {
+  const size = Math.max(depth, width);
+  const half = size / 2;
+  const runDepth = Math.max(80, Math.min(depth, size));
+  const frontInset = half - runDepth;
   if (variant === "corner_90" || variant === "corner_90_1p") {
-    const notch = Math.max(80, Math.min(depth * 0.42, depth - 80));
     return {
       points: [
         { x: -half, z: -half },
         { x: half, z: -half },
         { x: half, z: half },
-        { x: -half + notch, z: half },
-        { x: -half + notch, z: -half + notch },
-        { x: -half, z: -half + notch }
+        { x: frontInset, z: half },
+        { x: frontInset, z: frontInset },
+        { x: -half, z: frontInset }
       ],
       frontSegments: [
-        { start: { x: -half + notch, z: half }, end: { x: half, z: half }, name: "front_leaf_x" },
-        { start: { x: -half + notch, z: -half + notch }, end: { x: -half + notch, z: half }, name: "front_leaf_z" }
+        { start: { x: frontInset, z: half }, end: { x: half, z: half }, name: "front_leaf_x" },
+        { start: { x: frontInset, z: frontInset }, end: { x: frontInset, z: half }, name: "front_leaf_z" }
       ]
     };
   }
 
-  const chamfer = Math.max(80, Math.min(chamferMm, depth - 80));
+  const chamfer = Math.max(80, Math.min(chamferMm, size - 80));
   const diagonalStart = { x: -half + chamfer, z: half };
   const diagonalEnd = { x: -half, z: half - chamfer };
   return {
@@ -1682,7 +1684,7 @@ function addWallCornerHandle(
 function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const variant = String(params.variant ?? "corner_chamfered");
   const depth = num(params, "depth", 330);
-  const width = depth;
+  const width = Math.max(depth, num(params, "width", 600));
   const height = num(params, "height", 450);
   const t = num(params, "boardThickness", 18);
   const back = num(params, "backThickness", 8);
@@ -1694,8 +1696,9 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const frontMat = makeMaterial(params, catalog, "front");
   const hardware = makeMaterial(params, catalog, "hardware");
   const openNiche = variant === "corner_open_chamfered" || variant === "open_niche";
-  const chamfer = num(params, "frontChamferMm", num(params, "chamferMm", Math.max(120, depth * 0.58)));
-  const footprint = wallCornerFootprint(variant, depth, chamfer);
+  const defaultChamfer = Math.max(80, width - depth);
+  const chamfer = num(params, "frontChamferMm", num(params, "chamferMm", defaultChamfer));
+  const footprint = wallCornerFootprint(variant, width, depth, chamfer);
   const innerFootprint = insetWallCornerFootprint(footprint.points, t);
   const innerH = Math.max(1, height - 2 * t);
   const paramKeys = ["width", "depth", "height", "variant", "cornerShape", "frontChamferMm", "chamferMm", "boardThickness"];
@@ -1707,8 +1710,8 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
 
   const minX = -width / 2;
   const maxX = width / 2;
-  const minZ = -depth / 2;
-  const maxZ = depth / 2;
+  const minZ = -width / 2;
+  const maxZ = width / 2;
   const verticalEdges = [
     { name: "back_panel_x", start: { x: minX + t, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
     { name: "back_panel_z", start: { x: minX, z: minZ + t }, end: { x: minX, z: maxZ - t }, group: "back" as const, thickness: back },

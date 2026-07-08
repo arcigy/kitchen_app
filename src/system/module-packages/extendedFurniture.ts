@@ -235,6 +235,18 @@ const TALL_HOST_USER_PARAMETER_KEYS = new Set([
   "tallDoorOpeningMode"
 ]);
 
+const TOP_MODULE_INTERNAL_PARAMETER_KEYS = new Set([
+  "hasPlinth",
+  "plinthHeight",
+  "plinthSetbackMm",
+  "plinthMaterialId",
+  "legComponentId",
+  "clipComponentId",
+  "hasWorktop",
+  "worktopThicknessMm",
+  "worktopMaterialId"
+]);
+
 function isTallSlotParameter(key: string) {
   return /^tallSlot\d+(Type|HeightMm|OffsetMm|DrawerSystemSize)$/.test(key);
 }
@@ -250,6 +262,7 @@ function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParamete
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerFrontHeightParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemSizeParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemParameter(parameter.key)) return "technical";
+  if (spec.kitchenRole === "top" && TOP_MODULE_INTERNAL_PARAMETER_KEYS.has(parameter.key)) return "internal";
   if (spec.moduleType === "fwm_catalog_wall_open_end") {
     if (WALL_OPEN_END_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
     if (["variant", "endingSide", "shape", "requiresWorktop", "hasWorktop", "hasPlinth", "mountingMode", "wallMounted"].includes(parameter.key)) return "technical";
@@ -589,7 +602,11 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
   const widthMax = spec.geometryKind === "worktop" || spec.geometryKind === "accessory" || spec.geometryKind === "trim" || spec.geometryKind === "cladding" || spec.geometryKind === "wall_unit" ? 5000 : 3600;
   const depthMax = spec.geometryKind === "worktop" || spec.geometryKind === "bed" ? 2600 : 1400;
   const hasNoBackPanel = ["cladding", "worktop", "shelf_surface", "trim", "front_component", "accessory"].includes(spec.geometryKind);
-  const frontChamferDefault = spec.moduleType === "fwm_catalog_base_corner" ? 200 : 420;
+  const frontChamferDefault = spec.moduleType === "fwm_catalog_base_corner"
+    ? 200
+    : spec.moduleType === "fwm_catalog_wall_cabinet"
+      ? Math.max(80, spec.width - spec.depth)
+      : 420;
   const backChamferDefault = spec.moduleType === "fwm_catalog_base_corner" ? 0 : 200;
   const sideDefault = spec.geometryKind === "corner" ? "left" : spec.moduleType === "fwm_catalog_wall_open_end" ? "right" : "none";
   const sideOptions = spec.geometryKind === "corner" || spec.moduleType === "fwm_catalog_wall_open_end" ? ["left", "right"] : ["none", "left", "right"];
