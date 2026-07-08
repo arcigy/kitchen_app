@@ -1373,16 +1373,20 @@ describe("top-level keyboard input command dispatcher", () => {
 
   it("mirrors selected side-aware modules on Space before kitchen edit mode swallows layout keys", () => {
     const ev = plainKeyEvent(" ", { code: "Space", preventDefault: vi.fn() });
+    const previousKitchenPlacement = { kind: "corner" as const, worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5, cornerIndex: 2 };
     const inst = {
       id: "m1",
       params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
       kitchenGroupId: "kg1",
-      kitchenPlacement: { kind: "corner", worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5, cornerIndex: 2 },
+      kitchenPlacement: structuredClone(previousKitchenPlacement),
       root: new THREE.Group(),
       module: new THREE.Group()
     } as unknown as LayoutInstance;
     const applyKitchenPlacementBinding = vi.fn(() => true);
-    const rebuildInstance = vi.fn(() => true);
+    const rebuildInstance = vi.fn(() => {
+      inst.kitchenPlacement = null;
+      return true;
+    });
     const commitHistory = vi.fn();
     const mountProps = vi.fn();
     const ctx = topLevelKeyboardContext({
@@ -1408,7 +1412,7 @@ describe("top-level keyboard input command dispatcher", () => {
       preserveBackAnchor: true,
       previousParams: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" }
     });
-    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(inst, inst.kitchenPlacement, 45);
+    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(inst, previousKitchenPlacement, 45);
     expect(commitHistory).toHaveBeenCalledOnce();
     expect(mountProps).toHaveBeenCalledOnce();
     expect(ev.preventDefault).toHaveBeenCalledOnce();
@@ -1497,6 +1501,20 @@ describe("top-level keyboard input command dispatcher", () => {
     expect((ctx.S.placement.params as unknown as { side: string }).side).toBe("right");
     expect(ev.stopPropagation).toHaveBeenCalledOnce();
     expect(ev.stopImmediatePropagation).toHaveBeenCalledOnce();
+  });
+
+  it("clears selected objects on Escape even when viewer navigation already consumed the key", () => {
+    const ev = plainKeyEvent("Escape", { defaultPrevented: true });
+    const clearSelection = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      clearSelection,
+      selectedInstanceId: "m1",
+      selectedKind: "module"
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(clearSelection).toHaveBeenCalledOnce();
   });
 
   it("routes Delete through global delete before active floor edit handling", () => {

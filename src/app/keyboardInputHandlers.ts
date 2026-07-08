@@ -759,19 +759,21 @@ export function runModuleSideMirrorShortcutCommand(ctx: ModuleSideMirrorShortcut
   const side = (inst?.params as Record<string, unknown> | undefined)?.side;
   if (!inst || (side !== "left" && side !== "right")) return false;
   const previousParams = structuredClone(inst.params);
+  const previousKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
   (inst.params as Record<string, unknown>).side = side === "left" ? "right" : "left";
   const accepted = ctx.rebuildInstance(inst, {
     preserveBackAnchor: !!inst.kitchenPlacement,
     previousParams
   });
   if (accepted) {
-    if (inst.kitchenGroupId && inst.kitchenPlacement && ctx.applyKitchenPlacementBinding) {
+    const binding = previousKitchenPlacement ?? inst.kitchenPlacement;
+    if (inst.kitchenGroupId && binding && ctx.applyKitchenPlacementBinding) {
       const backOffsetMm = resolveKitchenPlacementBackOffset({
         kitchenGroupId: inst.kitchenGroupId,
         kitchenGroups: ctx.S.kitchenGroups,
         defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
       });
-      ctx.applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
+      ctx.applyKitchenPlacementBinding(inst, binding, backOffsetMm);
     }
     ctx.commitHistory(ctx.S);
     ctx.mountProps();
@@ -1199,6 +1201,10 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
         return true;
       }
       if (runModuleSideMirrorShortcutCommand(ctx)) return true;
+    }
+    if (ev.key === "Escape") {
+      if (runPlacementShortcutCommand(ctx, ev)) return true;
+      if (runClearSelectionShortcutCommand(ctx, ev)) return true;
     }
     return true;
   }
