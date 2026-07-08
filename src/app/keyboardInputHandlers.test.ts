@@ -174,6 +174,7 @@ function keyboardNudgeCommandContext(overrides: Partial<Parameters<typeof runKey
     mountProps: vi.fn(),
     nudgePinnedModuleChain: vi.fn(),
     pinnedWallIds: new Set<string>(),
+    rebuildInstance: vi.fn(() => true),
     rebuildWall: vi.fn(),
     rebuildWallPlanMesh: vi.fn(),
     S: {
@@ -995,10 +996,15 @@ describe("layout space keyboard shortcut", () => {
     const mountProps = vi.fn();
     const setUnderlayStatus = vi.fn();
     const ctx = {
+      commitHistory: vi.fn(),
+      findInstance: vi.fn(() => null),
       layoutTool: "wall",
       mountProps,
       rebuildWall: vi.fn(),
       rebuildWallPlanMesh: vi.fn(),
+      rebuildInstance: vi.fn(() => true),
+      S: {} as Parameters<typeof runLayoutSpaceShortcutCommand>[0]["S"],
+      selectedInstanceId: null,
       selectedKind: null,
       selectedWallId: null,
       setToolSelect: vi.fn(),
@@ -1041,10 +1047,15 @@ describe("layout space keyboard shortcut", () => {
     const rebuildWallPlanMesh = vi.fn();
     const mountProps = vi.fn();
     const ctx = {
+      commitHistory: vi.fn(),
+      findInstance: vi.fn(() => null),
       layoutTool: "select",
       mountProps,
       rebuildWall,
       rebuildWallPlanMesh,
+      rebuildInstance: vi.fn(() => true),
+      S: {} as Parameters<typeof runLayoutSpaceShortcutCommand>[0]["S"],
+      selectedInstanceId: null,
       selectedKind: "wall",
       selectedWallId: "w1",
       setToolSelect: vi.fn(),
@@ -1086,10 +1097,15 @@ describe("layout space keyboard shortcut", () => {
     const setToolSelect = vi.fn();
     const mountProps = vi.fn();
     const ctx = {
+      commitHistory: vi.fn(),
+      findInstance: vi.fn(() => null),
       layoutTool: "select",
       mountProps,
       rebuildWall: vi.fn(),
       rebuildWallPlanMesh: vi.fn(),
+      rebuildInstance: vi.fn(() => true),
+      S: {} as Parameters<typeof runLayoutSpaceShortcutCommand>[0]["S"],
+      selectedInstanceId: null,
       selectedKind: null,
       selectedWallId: null,
       setToolSelect,
@@ -1352,6 +1368,45 @@ describe("top-level keyboard input command dispatcher", () => {
     expect(ev.preventDefault).toHaveBeenCalledOnce();
     expect(ev.stopPropagation).not.toHaveBeenCalled();
     expect(ev.stopImmediatePropagation).not.toHaveBeenCalled();
+  });
+
+  it("mirrors selected side-aware modules on Space before kitchen edit mode swallows layout keys", () => {
+    const ev = plainKeyEvent(" ", { code: "Space", preventDefault: vi.fn() });
+    const inst = {
+      id: "m1",
+      params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
+      kitchenPlacement: { worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5 },
+      root: new THREE.Group(),
+      module: new THREE.Group()
+    } as unknown as LayoutInstance;
+    const rebuildInstance = vi.fn(() => true);
+    const commitHistory = vi.fn();
+    const mountProps = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      commitHistory,
+      findInstance: vi.fn((id: string) => (id === "m1" ? inst : null)),
+      instances: [inst],
+      mountProps,
+      rebuildInstance,
+      selectedInstanceId: "m1",
+      selectedKind: "module",
+      S: {
+        kitchenEditMode: true,
+        kitchenCtx: { worktopBackOffsetMm: 20 },
+        kitchenGroups: []
+      }
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(inst.params.side).toBe("right");
+    expect(rebuildInstance).toHaveBeenCalledWith(inst, {
+      preserveBackAnchor: true,
+      previousParams: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" }
+    });
+    expect(commitHistory).toHaveBeenCalledOnce();
+    expect(mountProps).toHaveBeenCalledOnce();
+    expect(ev.preventDefault).toHaveBeenCalledOnce();
   });
 
   it("routes Delete through global delete before active floor edit handling", () => {
@@ -1721,6 +1776,66 @@ describe("placement keyboard shortcuts", () => {
     expect(runPlacementShortcutCommand(ctx, { ...plainKeyEvent(" "), shiftKey: false })).toBe(true);
     expect(ghost.root.rotation.y).toBeCloseTo(Math.PI / 2);
     expect(setUnderlayStatus).toHaveBeenCalledWith("Placement: rotacia 90°. Space = +90°.");
+  });
+
+  it("mirrors active side-aware module placement on Space instead of rotating it", () => {
+    const layoutRoot = new THREE.Group();
+    const oldRoot = new THREE.Group();
+    layoutRoot.add(oldRoot);
+    const ghost = {
+      kitchenPlacement: { worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5 },
+      root: oldRoot,
+      module: new THREE.Group(),
+      pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+      outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial()),
+      localBox: new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))
+    };
+    const nextGhost = {
+      ...ghost,
+      kitchenPlacement: null,
+      root: new THREE.Group(),
+      pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+      outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
+    };
+    const disposeObject3D = vi.fn();
+    const setUnderlayStatus = vi.fn();
+    const ctx = placementCtx({
+      S: {
+        placement: {
+          active: true,
+          ghost,
+          ghostValid: false,
+          params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
+          lastCursor: new THREE.Vector3(0.2, 0, 0.3),
+          lastGhostCursor: new THREE.Vector3(0.2, 0, 0.3),
+          pendingCursor: null,
+          ghostFrame: null
+        }
+      },
+      placement: { active: true },
+      placementHelpers: {
+        anyOverlap: vi.fn(() => false),
+        autoOrientModuleToRoomWallIfSnapped: vi.fn(),
+        createInstance: vi.fn(() => nextGhost),
+        disposeObject3D,
+        instanceWorldBox: vi.fn(() => new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))),
+        layoutRoot,
+        moduleOverlapsKitchenWorktops: vi.fn(() => false),
+        moduleOverlapsWalls: vi.fn(() => false),
+        mountProps: vi.fn(),
+        roomContainsBoxXZ: vi.fn(() => true),
+        setPlacementAdjacencyPreview: vi.fn(),
+        setUnderlayStatus
+      }
+    });
+
+    expect(runPlacementShortcutCommand(ctx, { ...plainKeyEvent(" "), shiftKey: false })).toBe(true);
+
+    const placementState = ctx.S!.placement;
+    expect((placementState.params as unknown as { side: string }).side).toBe("right");
+    expect(disposeObject3D).toHaveBeenCalledWith(oldRoot);
+    expect(nextGhost.root.rotation.y).toBe(0);
+    expect(setUnderlayStatus).toHaveBeenLastCalledWith("Placement: zrkadlene na right. Space = druha strana.");
   });
 
   it("ignores inactive placement shortcuts", () => {

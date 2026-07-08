@@ -86,6 +86,10 @@ type KeyboardInputHandlersContext = {
   placement: { active: boolean };
   placementHelpers: PlacementHelpers;
   rebuildWall: (wall: WallInstance) => void;
+  rebuildInstance: (
+    inst: LayoutInstance,
+    opts?: { preserveBackAnchor?: boolean; previousParams?: LayoutInstance["params"] }
+  ) => boolean;
   rebuildWallPlanMesh: () => void;
   redo: (state: AppState, helpers: HistoryHelpers) => void;
   renderFloorBoundaryEdit: () => void;
@@ -169,6 +173,7 @@ type KeyboardNudgeSelectionCommandContext = Pick<
   | "nudgePinnedModuleChain"
   | "pinnedWallIds"
   | "rebuildWall"
+  | "rebuildInstance"
   | "rebuildWallPlanMesh"
   | "S"
   | "sections"
@@ -220,10 +225,15 @@ type LayoutToolShortcutCommandContext = Pick<
 
 type LayoutSpaceShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
+  | "commitHistory"
+  | "findInstance"
   | "layoutTool"
   | "mountProps"
+  | "rebuildInstance"
   | "rebuildWall"
   | "rebuildWallPlanMesh"
+  | "S"
+  | "selectedInstanceId"
   | "selectedKind"
   | "selectedWallId"
   | "setToolSelect"
@@ -232,6 +242,18 @@ type LayoutSpaceShortcutCommandContext = Pick<
   | "wallDefault"
   | "wallDraw"
   | "walls"
+>;
+
+type ModuleSideMirrorShortcutCommandContext = Pick<
+  KeyboardInputHandlersContext,
+  | "commitHistory"
+  | "findInstance"
+  | "mountProps"
+  | "rebuildInstance"
+  | "S"
+  | "selectedInstanceId"
+  | "selectedKind"
+  | "setUnderlayStatus"
 >;
 
 type DeleteSelectionShortcutCommandContext = Pick<KeyboardInputHandlersContext, "deleteSelected">;
@@ -722,6 +744,25 @@ export function runLayoutToolShortcutCommand(ctx: LayoutToolShortcutCommandConte
   return false;
 }
 
+export function runModuleSideMirrorShortcutCommand(ctx: ModuleSideMirrorShortcutCommandContext) {
+  if (ctx.selectedKind !== "module" || !ctx.selectedInstanceId) return false;
+  const inst = ctx.findInstance(ctx.selectedInstanceId);
+  const side = (inst?.params as Record<string, unknown> | undefined)?.side;
+  if (!inst || (side !== "left" && side !== "right")) return false;
+  const previousParams = structuredClone(inst.params);
+  (inst.params as Record<string, unknown>).side = side === "left" ? "right" : "left";
+  const accepted = ctx.rebuildInstance(inst, {
+    preserveBackAnchor: !!inst.kitchenPlacement,
+    previousParams
+  });
+  if (accepted) {
+    ctx.commitHistory(ctx.S);
+    ctx.mountProps();
+    ctx.setUnderlayStatus(`Module: zrkadlene na ${(inst.params as Record<string, unknown>).side}. Space = druha strana.`);
+  }
+  return true;
+}
+
 export function runLayoutSpaceShortcutCommand(ctx: LayoutSpaceShortcutCommandContext) {
   if (ctx.layoutTool === "wall") {
     ctx.wallDefault.exteriorSign = ctx.wallDefault.exteriorSign === 1 ? -1 : 1;
@@ -750,6 +791,8 @@ export function runLayoutSpaceShortcutCommand(ctx: LayoutSpaceShortcutCommandCon
     }
     return true;
   }
+
+  if (runModuleSideMirrorShortcutCommand(ctx)) return true;
 
   ctx.setToolSelect();
   return true;
@@ -1157,6 +1200,11 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
   }
 
   if (runLayoutTransformKeyboardCommand(ctx, ev)) {
+    return true;
+  }
+
+  if ((ev.key === " " || ev.code === "Space") && runModuleSideMirrorShortcutCommand(ctx)) {
+    ev.preventDefault();
     return true;
   }
 

@@ -244,8 +244,34 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   return true;
 };
 
+function isSideMirrorablePlacement(params: ModuleParams | null): params is ModuleParams & { side: "left" | "right" } {
+  const side = (params as Record<string, unknown> | null)?.side;
+  return side === "left" || side === "right";
+}
+
+function disposePlacementGhost(S: AppState, helpers: PlacementHelpers) {
+  if (S.placement.ghostFrame != null) cancelAnimationFrame(S.placement.ghostFrame);
+  S.placement.ghostFrame = null;
+  S.placement.pendingCursor = null;
+  S.placement.lastGhostCursor = null;
+  if (!S.placement.ghost) return;
+  helpers.layoutRoot.remove(S.placement.ghost.root);
+  helpers.disposeObject3D(S.placement.ghost.root);
+  S.placement.ghost = null;
+}
+
+export const mirrorActivePlacementSide = (S: AppState, helpers: PlacementHelpers) => {
+  if (!S.placement.active || !isSideMirrorablePlacement(S.placement.params)) return false;
+  S.placement.params.side = S.placement.params.side === "left" ? "right" : "left";
+  disposePlacementGhost(S, helpers);
+  rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
+  helpers.setUnderlayStatus(`Placement: zrkadlene na ${S.placement.params.side}. Space = druha strana.`);
+  return true;
+};
+
 export const rotateActivePlacement = (S: AppState, helpers: PlacementHelpers, deltaRad = Math.PI / 2) => {
   if (!S.placement.active) return false;
+  if (mirrorActivePlacementSide(S, helpers)) return true;
   const ghost = S.placement.ghost;
   if (!ghost) return false;
   if (ghost.kitchenPlacement) {

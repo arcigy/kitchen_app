@@ -215,11 +215,17 @@ describe("module runtime catalog context", () => {
     const zHingeBox = getWorldBox(zHinge);
     const xDoorBox = getWorldBox(xDoor);
     const xHingeBox = getWorldBox(xHinge);
+    const sideEndXBox = getWorldBox(corner.getObjectByName("side_end_x") as Mesh);
+    const sideEndZBox = getWorldBox(corner.getObjectByName("side_end_z") as Mesh);
 
-    expect(zDoorBox.min.x * 1000).toBeCloseTo(541, 3);
-    expect(zDoorBox.max.x * 1000).toBeCloseTo(998, 3);
-    expect(xDoorBox.min.z * 1000).toBeCloseTo(560.2, 3);
-    expect(xDoorBox.max.z * 1000).toBeCloseTo(998, 3);
+    expect(zDoorBox.min.x).toBeGreaterThanOrEqual(sideEndZBox.max.x);
+    expect(zDoorBox.max.x).toBeLessThanOrEqual(sideEndXBox.min.x);
+    expect(xDoorBox.min.z).toBeGreaterThanOrEqual(sideEndXBox.max.z);
+    expect(xDoorBox.max.z).toBeLessThanOrEqual(sideEndZBox.min.z);
+    expect((zDoorBox.min.x - sideEndZBox.max.x) * 1000).toBeCloseTo(2, 3);
+    expect((sideEndXBox.min.x - zDoorBox.max.x) * 1000).toBeCloseTo(2, 3);
+    expect((xDoorBox.min.z - sideEndXBox.max.z) * 1000).toBeCloseTo(0.2, 3);
+    expect((sideEndZBox.min.z - xDoorBox.max.z) * 1000).toBeCloseTo(2, 3);
 
     expect(Math.abs(zHingeBox.max.z - zDoorBox.min.z)).toBeLessThan(0.002);
     expect(Math.abs(xHingeBox.max.x - xDoorBox.min.x)).toBeLessThan(0.002);

@@ -59,6 +59,47 @@ function createChamferedCornerInstance(): LayoutInstance {
   } as unknown as LayoutInstance;
 }
 
+function createAnchoredFwmCorner90Instance(): LayoutInstance {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.018, 0.58), new THREE.MeshBasicMaterial());
+  body.position.set(-0.05, 0, -0.21);
+  body.userData.boardName = "bottom_x";
+  module.add(body);
+
+  const corner = new THREE.Object3D();
+  corner.name = "__kitchen_corner_anchor";
+  corner.position.set(-0.5, 0, -0.5);
+  module.add(corner);
+  const xAnchor = new THREE.Object3D();
+  xAnchor.name = "__kitchen_corner_x_anchor";
+  xAnchor.position.set(0.4, 0, -0.5);
+  module.add(xAnchor);
+  const zAnchor = new THREE.Object3D();
+  zAnchor.name = "__kitchen_corner_z_anchor";
+  zAnchor.position.set(-0.5, 0, 0.4);
+  module.add(zAnchor);
+
+  root.add(module);
+  return {
+    id: "corner90",
+    params: {
+      type: "fwm_catalog_base_corner",
+      variant: "corner_90",
+      cornerShape: "l_shape",
+      width: 900,
+      depth: 580
+    },
+    root,
+    module,
+    kitchenGroupId: null,
+    kitchenPlacement: null,
+    localBox: new THREE.Box3().setFromObject(module),
+    pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+    outline: new THREE.LineSegments()
+  } as unknown as LayoutInstance;
+}
+
 describe("module plan geometry", () => {
   it("uses the real chamfered corner board silhouette in floorplan instead of a width-depth rectangle", () => {
     const inst = createChamferedCornerInstance();
@@ -75,5 +116,17 @@ describe("module plan geometry", () => {
     const pickBox = new THREE.Box3().setFromBufferAttribute(pick.getAttribute("position") as THREE.BufferAttribute);
     expect(pickBox.max.x - pickBox.min.x).toBeCloseTo(0.9);
     expect(pickBox.max.z - pickBox.min.z).toBeCloseTo(0.58);
+  });
+
+  it("uses anchored L-corner silhouette for FWM corner 90 instead of a bounding rectangle", () => {
+    const inst = createAnchoredFwmCorner90Instance();
+    const polygon = getModulePlanLocalPolygon(inst, () => new THREE.Vector3());
+
+    expect(polygon).toHaveLength(6);
+    expect(polygon.some((point) => Math.abs(point.x - 0.08) < 1e-6 && Math.abs(point.z - 0.08) < 1e-6)).toBe(true);
+    expect(polygon.some((point) => Math.abs(point.x - 0.4) < 1e-6 && Math.abs(point.z - 0.4) < 1e-6)).toBe(false);
+
+    const outline = buildModuleEdgeGeometry(inst, true, () => new THREE.Vector3());
+    expect(outline.getAttribute("position").count).toBe(12);
   });
 });

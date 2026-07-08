@@ -347,7 +347,12 @@ async function runAdjacencyCases(page) {
     const afterDrawer = after.instances.find((item) => item.id === drawer.id);
     const drawerMoved =
       Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
-    const drawerAttachmentRespected = beforeAdj.length > 0 ? drawerMoved : !drawerMoved;
+    const drawerAttachmentRespected =
+      beforeAdj.length > 0
+        ? afterAdj.length > 0 &&
+          Math.abs((afterAdj[0]?.gapMm ?? 0) - (beforeAdj[0]?.gapMm ?? 0)) <= 1 &&
+          Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1
+        : !drawerMoved;
     if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerAttachmentRespected) {
       failures.push({
         case: "corner_lengthX_growth_respects_drawer_attachment",

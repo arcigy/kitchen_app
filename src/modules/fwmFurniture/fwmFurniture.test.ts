@@ -1731,7 +1731,7 @@ describe("FWM furniture module packages", () => {
     const handleBounds = objectBoundsMm(doorHandle!);
     const hingeBounds = objectBoundsMm(doorHinge!);
     expect(doorBounds.maxX).toBeLessThan(fillerBounds.minX);
-    expect(handleBounds.minX - doorBounds.minX).toBeCloseTo(40, 1);
+    expect(doorBounds.maxX - handleBounds.maxX).toBeCloseTo(40, 1);
     expect(Math.abs(hingeBounds.maxX - doorBounds.maxX)).toBeLessThan(12);
 
     const rightHanded = buildModulePackageGeometryFromPackage({
@@ -1744,7 +1744,7 @@ describe("FWM furniture module packages", () => {
     const rightHandleBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_right_door_handle")!);
     const rightHingeBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_hinge_1")!);
     expect(rightDoorBounds.minX).toBeGreaterThan(rightFillerBounds.maxX);
-    expect(rightDoorBounds.maxX - rightHandleBounds.maxX).toBeCloseTo(40, 1);
+    expect(rightHandleBounds.minX - rightDoorBounds.minX).toBeCloseTo(40, 1);
     expect(Math.abs(rightHingeBounds.minX - rightDoorBounds.minX)).toBeLessThan(12);
 
     const frontPlinthBounds = meshBoundsMm(frontPlinth!);
@@ -1793,9 +1793,14 @@ describe("FWM furniture module packages", () => {
     expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_blind_front_filler")!).maxY).toBeCloseTo(722, 2);
 
     const opened = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", opened: true, plinthHeight: 100, plinthSetbackMm: 50 }, catalog });
-    expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door")!).maxZ + 150);
-    expect(meshBoundsMm(getMeshNamed(opened, "corner_right_door_handle")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door_handle")!).maxZ + 150);
-    expect(meshBoundsMm(getMeshNamed(opened, "corner_hinge_1")!).maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_hinge_1")!).maxZ + 20);
+    const openedDoor = meshBoundsMm(getMeshNamed(opened, "corner_right_door")!);
+    const openedHandle = meshBoundsMm(getMeshNamed(opened, "corner_right_door_handle")!);
+    const openedHinge = meshBoundsMm(getMeshNamed(opened, "corner_hinge_1")!);
+    expect(openedDoor.maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door")!).maxZ + 150);
+    expect(openedHandle.minZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door_handle")!).minZ + 20);
+    expect(openedHinge.maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_hinge_1")!).maxZ + 20);
+    expect(openedHandle.minZ).toBeGreaterThanOrEqual(openedDoor.minZ - 5);
+    expect(openedHandle.maxZ).toBeLessThanOrEqual(openedDoor.maxZ + 5);
     expect(Math.abs(objectBoundsMm(getMeshNamed(opened, "corner_right_door")!).minZ - objectBoundsMm(getMeshNamed(opened, "corner_hinge_1")!).minZ)).toBeLessThan(25);
 
     const recessedPlinth = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", plinthHeight: 100, plinthSetbackMm: 120 }, catalog });
@@ -2342,12 +2347,20 @@ describe("FWM furniture module packages", () => {
     const depth900BottomX = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "bottom_x")!);
     const depth580DoorX = objectBoundsMm(getMeshNamed(worktopDepthGroup, "door_front_x")!);
     const depth580DoorZ = objectBoundsMm(getMeshNamed(worktopDepthGroup, "door_front_z")!);
+    const depth580SideEndX = objectBoundsMm(getMeshNamed(worktopDepthGroup, "side_end_x")!);
+    const depth580SideEndZ = objectBoundsMm(getMeshNamed(worktopDepthGroup, "side_end_z")!);
     const depth900DoorX = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "door_front_x")!);
     const depth900DoorZ = objectBoundsMm(getMeshNamed(oversizedDepthGroup, "door_front_z")!);
     expect(depth580BottomX.width).toBeCloseTo(depth900BottomX.width, 1);
     expect(depth580BottomX.depth).toBeCloseTo(562, 1);
     expect(depth580DoorX.depth).toBeGreaterThan(250);
     expect(depth580DoorZ.width).toBeGreaterThan(250);
+    expect(depth580DoorZ.minX).toBeGreaterThanOrEqual(depth580SideEndZ.maxX - 1);
+    expect(depth580DoorZ.maxX).toBeLessThanOrEqual(depth580SideEndX.minX + 1);
+    expect(depth580DoorX.minZ).toBeGreaterThanOrEqual(depth580SideEndX.maxZ - 1);
+    expect(depth580DoorX.maxZ).toBeLessThanOrEqual(depth580SideEndZ.minZ + 1);
+    expect(depth580DoorZ.minZ).toBeCloseTo(depth580SideEndX.maxZ + 0.2, 1);
+    expect(depth580DoorX.minX).toBeCloseTo(depth580SideEndZ.maxX + 0.2, 1);
     expect(depth900DoorX.depth).toBeGreaterThan(200);
     expect(depth900DoorZ.width).toBeGreaterThan(200);
     expect(depth580DoorX.minY).toBeCloseTo(100, 2);

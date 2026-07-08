@@ -292,6 +292,15 @@ function isFwmChamferedCornerPlan(inst: LayoutInstance) {
   );
 }
 
+function isAnchoredLCornerPlan(inst: LayoutInstance) {
+  const moduleParams = inst.params as Record<string, unknown>;
+  if (moduleParams.type === "corner_shelf_lower") return true;
+  return (
+    moduleParams.type === "fwm_catalog_base_corner" &&
+    (String(moduleParams.variant ?? "") === "corner_90" || String(moduleParams.variant ?? "") === "corner_90_1p")
+  );
+}
+
 function findPlanBoardMesh(inst: LayoutInstance) {
   let best: THREE.Mesh | null = null;
   let bestRank = Number.POSITIVE_INFINITY;
@@ -341,13 +350,13 @@ export function getModulePlanLocalPolygon(
   const realPlanPolygon = getRealModulePlanLocalPolygon(inst);
   if (realPlanPolygon.length >= 3) return realPlanPolygon;
 
-  if (moduleParams.type === "corner_shelf_lower") {
+  if (isAnchoredLCornerPlan(inst)) {
     const corner = getModuleLocalAnchor(inst, KITCHEN_CORNER_ANCHOR_NAME);
     const xAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_X_ANCHOR_NAME);
     const zAnchor = getModuleLocalAnchor(inst, KITCHEN_CORNER_Z_ANCHOR_NAME);
     if (corner && xAnchor && zAnchor) {
-      const lengthX = Number(moduleParams.lengthX);
-      const lengthZ = Number(moduleParams.lengthZ);
+      const lengthX = Number(moduleParams.lengthX ?? moduleParams.width);
+      const lengthZ = Number(moduleParams.lengthZ ?? moduleParams.cornerLengthZMm ?? moduleParams.width);
       const xDir = xAnchor.clone().sub(corner).setY(0);
       const zDir = zAnchor.clone().sub(corner).setY(0);
       if (

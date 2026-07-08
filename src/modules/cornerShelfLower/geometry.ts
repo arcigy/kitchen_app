@@ -451,28 +451,35 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
 }
 
 function applyCornerDoorGroundTruth(group: THREE.Group, params: CornerShelfLowerParams) {
-  const lengthXMm = Math.max(400, Math.round(getNumber(params.lengthX, baseLengthXMm)));
-  const lengthZMm = Math.max(400, Math.round(getNumber(params.lengthZ, baseLengthZMm)));
-  const depthMm = Math.max(1, Math.round(getNumber(params.depth, baseDepthMm)));
   const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, baseFrontThicknessMm)));
   const sideGapMm = Math.max(0, Math.round(getNumber(params.sideGap, baseSideGapMm)));
+  const sideEndXBounds = getObjectBoundsMm(group.getObjectByName("side_end_x"));
+  const sideEndZBounds = getObjectBoundsMm(group.getObjectByName("side_end_z"));
+  if (!sideEndXBounds || !sideEndZBounds) return;
+
+  const sharedFrontXMm = sideEndZBounds.maxX;
+  const sharedFrontZMm = sideEndXBounds.maxZ;
+  const zDoorMinXMm = sharedFrontXMm + sideGapMm;
+  const zDoorMaxXMm = sideEndXBounds.minX - sideGapMm;
+  const xDoorMinZMm = sharedFrontZMm + cornerFrontRevealMm;
+  const xDoorMaxZMm = sideEndZBounds.minZ - sideGapMm;
+  const doorFrontZCenterZMm = sharedFrontZMm + cornerFrontRevealMm + frontThicknessMm * 0.5;
+  const doorFrontXCenterXMm = sharedFrontXMm + cornerFrontRevealMm + frontThicknessMm * 0.5;
 
   const doorFrontZ = group.getObjectByName("door_front_z") as THREE.Mesh | null;
   if (doorFrontZ instanceof THREE.Mesh) {
-    const targetMinXMm = depthMm - frontThicknessMm;
-    const targetMaxXMm = lengthXMm - sideGapMm;
-    const targetWidthMm = Math.max(1, targetMaxXMm - targetMinXMm);
+    const targetWidthMm = Math.max(1, zDoorMaxXMm - zDoorMinXMm);
     resizeMeshAxis(doorFrontZ, "x", targetWidthMm);
-    setObjectCenterX(doorFrontZ, targetMinXMm + targetWidthMm * 0.5);
+    setObjectCenterX(doorFrontZ, zDoorMinXMm + targetWidthMm * 0.5);
+    setObjectCenterZ(doorFrontZ, doorFrontZCenterZMm);
   }
 
   const doorFrontX = group.getObjectByName("door_front_x") as THREE.Mesh | null;
   if (doorFrontX instanceof THREE.Mesh) {
-    const targetMinZMm = depthMm + cornerFrontRevealMm;
-    const targetMaxZMm = lengthZMm - sideGapMm;
-    const targetDepthMm = Math.max(1, targetMaxZMm - targetMinZMm);
+    const targetDepthMm = Math.max(1, xDoorMaxZMm - xDoorMinZMm);
     resizeMeshAxis(doorFrontX, "z", targetDepthMm);
-    setObjectCenterZ(doorFrontX, targetMinZMm + targetDepthMm * 0.5);
+    setObjectCenterZ(doorFrontX, xDoorMinZMm + targetDepthMm * 0.5);
+    setObjectCenterX(doorFrontX, doorFrontXCenterXMm);
   }
 }
 

@@ -1876,7 +1876,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
       5,
       handleLength,
       {
-        x: isLeftHand ? doorBounds.minX + 45 : doorBounds.maxX - 45,
+        x: isLeftHand ? doorBounds.maxX - 45 : doorBounds.minX + 45,
         y: doorBounds.minY + doorBounds.height * 0.58,
         z: doorBounds.maxZ + handleProjection * 0.5
       },
