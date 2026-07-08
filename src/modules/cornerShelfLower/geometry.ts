@@ -242,6 +242,47 @@ function applyDoorAttachmentHeightAdjustments(
   }
 }
 
+function replaceHandleBoxWithRoundBar(group: THREE.Group, name: string, axis: "x" | "z") {
+  const existing = group.getObjectByName(name);
+  if (!(existing instanceof THREE.Mesh)) return;
+  const center = getObjectCenterMm(existing);
+  const dims = getMeshDimensionsMm(existing);
+  if (!center || !dims) return;
+
+  const lengthMm = Math.max(1, axis === "x" ? dims.width ?? 0 : dims.depth ?? 0);
+  const diameterMm = Math.max(4, Math.min(dims.height ?? 12, axis === "x" ? dims.depth ?? 12 : dims.width ?? 12));
+  const centerMm = { ...center };
+  if (axis === "x") centerMm.z -= Math.max(0, ((dims.depth ?? diameterMm) - diameterMm) * 0.5);
+  if (axis === "z") centerMm.x -= Math.max(0, ((dims.width ?? diameterMm) - diameterMm) * 0.5);
+  const parent = existing.parent ?? group;
+  const material = existing.material;
+  const userData = structuredClone(existing.userData ?? {});
+  parent.remove(existing);
+
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry((diameterMm * 0.5) / 1000, (diameterMm * 0.5) / 1000, lengthMm / 1000, 24),
+    material
+  );
+  handle.name = name;
+  if (axis === "x") handle.rotation.z = Math.PI / 2;
+  if (axis === "z") handle.rotation.x = Math.PI / 2;
+  handle.position.set(centerMm.x / 1000, centerMm.y / 1000, centerMm.z / 1000);
+  handle.userData = {
+    ...userData,
+    componentType: userData.componentType ?? "handle",
+    materialGroup: userData.materialGroup ?? "hardware",
+    dimensionsMm: axis === "x"
+      ? { width: lengthMm, height: diameterMm, depth: diameterMm }
+      : { width: diameterMm, height: diameterMm, depth: lengthMm }
+  };
+  parent.add(handle);
+}
+
+function replaceCornerHandlesWithSharedBarGeometry(group: THREE.Group) {
+  replaceHandleBoxWithRoundBar(group, "doorHandle_front_z", "x");
+  replaceHandleBoxWithRoundBar(group, "doorHandle_front_x", "z");
+}
+
 function getObjectBoundsMm(obj: THREE.Object3D | null | undefined) {
   if (!obj) return null;
   const box = new THREE.Box3().setFromObject(obj);
@@ -907,6 +948,7 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams, catalog: C
   applyCornerPlinthAdjustments(group, params);
   applyCornerFrontAdjustments(group, params);
   alignCornerFrontSupports(group);
+  replaceCornerHandlesWithSharedBarGeometry(group);
   attachKitchenCornerAnchors(group);
   applyCornerDoorOpenState(group, params);
 

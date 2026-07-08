@@ -1865,9 +1865,9 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     mesh.userData.materialGroup = "shelf";
   }
 
-  const doorMesh = group.getObjectByName("corner_right_door") as THREE.Mesh | null;
-  if (doorMesh instanceof THREE.Mesh) {
-    const doorBounds = readObjectBoundsMm(doorMesh);
+  const handleTargetMesh = group.getObjectByName("corner_blind_front_filler") as THREE.Mesh | null;
+  if (handleTargetMesh instanceof THREE.Mesh) {
+    const doorBounds = readObjectBoundsMm(handleTargetMesh);
     const handleProjection = num(params, "handleProjectionMm", 28);
     const handleLength = Math.min(num(params, "handleLengthMm", 160), Math.max(40, doorBounds.height * 0.45));
     const handle = addCylinder(
@@ -1885,6 +1885,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
       ["handleComponentId", "handleLengthMm", "handleProjectionMm", "width", "height", "depth", "opened"]
     );
     handle.userData.componentType = "handle";
+    handle.userData.attachedBoardName = "corner_blind_front_filler";
     markComponent(handle, handleComponent, "handleComponentId");
   }
 
@@ -1931,21 +1932,21 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
 }
 
 function openCatalogBaseCorner1DDoor(group: THREE.Group, side: "left" | "right") {
-  const door = group.getObjectByName("corner_right_door");
+  const door = group.getObjectByName("corner_blind_front_filler");
   if (!door) return;
   const bounds = readObjectBoundsMm(door);
   const pivot = new THREE.Group();
   pivot.name = "__corner_1d_door_pivot";
-  pivot.position.set((side === "left" ? bounds.maxX : bounds.minX) * MM, 0, ((bounds.minZ + bounds.maxZ) * 0.5) * MM);
+  pivot.position.set((side === "left" ? bounds.minX : bounds.maxX) * MM, 0, ((bounds.minZ + bounds.maxZ) * 0.5) * MM);
   group.add(pivot);
   group.updateMatrixWorld(true);
 
-  for (const name of ["corner_right_door", "corner_right_door_handle", "corner_hinge_1", "corner_hinge_2"]) {
+  for (const name of ["corner_blind_front_filler", "corner_right_door_handle", "corner_hinge_1", "corner_hinge_2"]) {
     const object = group.getObjectByName(name);
     if (object && object.parent !== pivot) pivot.attach(object);
   }
 
-  pivot.rotation.y = (side === "left" ? 1 : -1) * Math.PI * 0.38;
+  pivot.rotation.y = (side === "left" ? -1 : 1) * Math.PI * 0.38;
 }
 
 function readGroundTruthString(value: unknown): string | null {

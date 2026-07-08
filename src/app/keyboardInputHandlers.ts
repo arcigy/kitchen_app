@@ -263,6 +263,10 @@ type KeyboardShortcutLike = Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "
 type KeyboardKeyLike = Pick<KeyboardEvent, "key">;
 type KeyboardSpaceLike = Pick<KeyboardEvent, "code" | "key">;
 
+function isSpaceShortcut(ev: KeyboardSpaceLike) {
+  return ev.key === " " || ev.key === "Spacebar" || ev.code === "Space";
+}
+
 type DrawingSpaceShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
   | "activeViewerTab"
@@ -810,7 +814,7 @@ export function runClearSelectionShortcutCommand(ctx: ClearSelectionShortcutComm
 }
 
 export function runDrawingSpaceShortcutCommand(ctx: DrawingSpaceShortcutCommandContext, ev: KeyboardSpaceLike) {
-  if (ev.key !== " " && ev.code !== "Space") return false;
+  if (!isSpaceShortcut(ev)) return false;
   if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.mode === "layout" && ctx.viewMode === "2d") {
     ctx.mirrorKitchenWorktopDraw();
     return true;
@@ -836,13 +840,13 @@ export function runPlacementShortcutCommand(
     ctx.cancelWindowPlacement?.();
     return true;
   }
-  if ((ev.key === " " || ev.code === "Space") && ev.shiftKey && ctx.isDoorPlacementActive?.() && ctx.flipDoorPlacementSwingSide?.()) {
+  if (isSpaceShortcut(ev) && ev.shiftKey && ctx.isDoorPlacementActive?.() && ctx.flipDoorPlacementSwingSide?.()) {
     return true;
   }
-  if ((ev.key === " " || ev.code === "Space") && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
+  if (isSpaceShortcut(ev) && ctx.isDoorPlacementActive?.() && ctx.rotateDoorPlacement?.()) {
     return true;
   }
-  if ((ev.key === " " || ev.code === "Space") && !ev.shiftKey && ctx.placement?.active && ctx.S && ctx.placementHelpers) {
+  if (isSpaceShortcut(ev) && !ev.shiftKey && ctx.placement?.active && ctx.S && ctx.placementHelpers) {
     return rotateActivePlacement(ctx.S, ctx.placementHelpers);
   }
   return false;
@@ -1146,7 +1150,7 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
     return true;
   }
 
-  if (ev.key === " " || ev.code === "Space") {
+  if (isSpaceShortcut(ev)) {
     runLayoutSpaceShortcutCommand(ctx);
     ev.preventDefault();
     return true;
@@ -1174,7 +1178,17 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
 
 export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: KeyboardEvent) {
   if (handleGlobalUndoRedoShortcut(ctx, ev)) return true;
-  if (ev.defaultPrevented) return true;
+  if (ev.defaultPrevented) {
+    if (isSpaceShortcut(ev)) {
+      if (runPlacementShortcutCommand(ctx, ev)) {
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
+        return true;
+      }
+      if (runModuleSideMirrorShortcutCommand(ctx)) return true;
+    }
+    return true;
+  }
   if (ctx.isTypingTarget(ev.target) && ev.key !== "Escape") return true;
 
   if (ev.key === "Delete" && runDeleteSelectionShortcutCommand(ctx, ev)) {
@@ -1203,7 +1217,7 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     return true;
   }
 
-  if ((ev.key === " " || ev.code === "Space") && runModuleSideMirrorShortcutCommand(ctx)) {
+  if (isSpaceShortcut(ev) && runModuleSideMirrorShortcutCommand(ctx)) {
     ev.preventDefault();
     return true;
   }

@@ -1409,6 +1409,91 @@ describe("top-level keyboard input command dispatcher", () => {
     expect(ev.preventDefault).toHaveBeenCalledOnce();
   });
 
+  it("mirrors selected side-aware modules even when viewer navigation already consumed Space", () => {
+    const ev = plainKeyEvent(" ", { code: "Space", defaultPrevented: true });
+    const inst = {
+      id: "m1",
+      params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
+      kitchenPlacement: { worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5 },
+      root: new THREE.Group(),
+      module: new THREE.Group()
+    } as unknown as LayoutInstance;
+    const rebuildInstance = vi.fn(() => true);
+    const ctx = topLevelKeyboardContext({
+      findInstance: vi.fn((id: string) => (id === "m1" ? inst : null)),
+      instances: [inst],
+      rebuildInstance,
+      selectedInstanceId: "m1",
+      selectedKind: "module"
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect(inst.params.side).toBe("right");
+    expect(rebuildInstance).toHaveBeenCalledOnce();
+  });
+
+  it("routes active placement Space even when viewer navigation already consumed Space", () => {
+    const layoutRoot = new THREE.Group();
+    const oldRoot = new THREE.Group();
+    layoutRoot.add(oldRoot);
+    const nextGhost = {
+      kitchenPlacement: null,
+      root: new THREE.Group(),
+      module: new THREE.Group(),
+      pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+      outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial()),
+      localBox: new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))
+    };
+    const ev = {
+      ...plainKeyEvent(" ", { code: "Space", defaultPrevented: true }),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn()
+    } as unknown as KeyboardEvent;
+    const ctx = topLevelKeyboardContext({
+      S: {
+        placement: {
+          active: true,
+          ghost: {
+            kitchenPlacement: { worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5 },
+            root: oldRoot,
+            module: new THREE.Group(),
+            pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+            outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial()),
+            localBox: new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))
+          },
+          ghostValid: false,
+          params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
+          lastCursor: new THREE.Vector3(0.2, 0, 0.3),
+          lastGhostCursor: new THREE.Vector3(0.2, 0, 0.3),
+          pendingCursor: null,
+          ghostFrame: null
+        }
+      },
+      placement: { active: true },
+      placementHelpers: {
+        anyOverlap: vi.fn(() => false),
+        autoOrientModuleToRoomWallIfSnapped: vi.fn(),
+        createInstance: vi.fn(() => nextGhost),
+        disposeObject3D: vi.fn(),
+        instanceWorldBox: vi.fn(() => new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1))),
+        layoutRoot,
+        moduleOverlapsKitchenWorktops: vi.fn(() => false),
+        moduleOverlapsWalls: vi.fn(() => false),
+        mountProps: vi.fn(),
+        roomContainsBoxXZ: vi.fn(() => true),
+        setPlacementAdjacencyPreview: vi.fn(),
+        setUnderlayStatus: vi.fn()
+      }
+    });
+
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+
+    expect((ctx.S.placement.params as unknown as { side: string }).side).toBe("right");
+    expect(ev.stopPropagation).toHaveBeenCalledOnce();
+    expect(ev.stopImmediatePropagation).toHaveBeenCalledOnce();
+  });
+
   it("routes Delete through global delete before active floor edit handling", () => {
     const ev = {
       ...plainKeyEvent("Delete", { preventDefault: vi.fn() }),

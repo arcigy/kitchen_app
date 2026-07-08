@@ -1731,7 +1731,9 @@ describe("FWM furniture module packages", () => {
     const handleBounds = objectBoundsMm(doorHandle!);
     const hingeBounds = objectBoundsMm(doorHinge!);
     expect(doorBounds.maxX).toBeLessThan(fillerBounds.minX);
-    expect(doorBounds.maxX - handleBounds.maxX).toBeCloseTo(40, 1);
+    expect(doorHandle?.userData.attachedBoardName).toBe("corner_blind_front_filler");
+    expect(fillerBounds.maxX - handleBounds.maxX).toBeCloseTo(40, 1);
+    expect(handleBounds.minX).toBeGreaterThan(fillerBounds.minX);
     expect(Math.abs(hingeBounds.maxX - doorBounds.maxX)).toBeLessThan(12);
 
     const rightHanded = buildModulePackageGeometryFromPackage({
@@ -1744,7 +1746,8 @@ describe("FWM furniture module packages", () => {
     const rightHandleBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_right_door_handle")!);
     const rightHingeBounds = objectBoundsMm(getMeshNamed(rightHanded, "corner_hinge_1")!);
     expect(rightDoorBounds.minX).toBeGreaterThan(rightFillerBounds.maxX);
-    expect(rightHandleBounds.minX - rightDoorBounds.minX).toBeCloseTo(40, 1);
+    expect(rightHandleBounds.minX - rightFillerBounds.minX).toBeCloseTo(40, 1);
+    expect(rightHandleBounds.maxX).toBeLessThan(rightFillerBounds.maxX);
     expect(Math.abs(rightHingeBounds.minX - rightDoorBounds.minX)).toBeLessThan(12);
 
     const frontPlinthBounds = meshBoundsMm(frontPlinth!);
@@ -1793,15 +1796,18 @@ describe("FWM furniture module packages", () => {
     expect(objectBoundsMm(getMeshNamed(depthSynced, "corner_blind_front_filler")!).maxY).toBeCloseTo(722, 2);
 
     const opened = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", opened: true, plinthHeight: 100, plinthSetbackMm: 50 }, catalog });
-    const openedDoor = meshBoundsMm(getMeshNamed(opened, "corner_right_door")!);
+    const openedDoor = meshBoundsMm(getMeshNamed(opened, "corner_blind_front_filler")!);
     const openedHandle = meshBoundsMm(getMeshNamed(opened, "corner_right_door_handle")!);
     const openedHinge = meshBoundsMm(getMeshNamed(opened, "corner_hinge_1")!);
-    expect(openedDoor.maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door")!).maxZ + 150);
+    const openedDoorBounds = objectBoundsMm(getMeshNamed(opened, "corner_blind_front_filler")!);
+    const openedHingeBounds = objectBoundsMm(getMeshNamed(opened, "corner_hinge_1")!);
+    expect(openedDoor.maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_blind_front_filler")!).maxZ + 60);
     expect(openedHandle.minZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_right_door_handle")!).minZ + 20);
-    expect(openedHinge.maxZ).toBeGreaterThan(meshBoundsMm(getMeshNamed(group, "corner_hinge_1")!).maxZ + 20);
     expect(openedHandle.minZ).toBeGreaterThanOrEqual(openedDoor.minZ - 5);
     expect(openedHandle.maxZ).toBeLessThanOrEqual(openedDoor.maxZ + 5);
-    expect(Math.abs(objectBoundsMm(getMeshNamed(opened, "corner_right_door")!).minZ - objectBoundsMm(getMeshNamed(opened, "corner_hinge_1")!).minZ)).toBeLessThan(25);
+    expect(openedHingeBounds.minX).toBeGreaterThanOrEqual(openedDoorBounds.minX - 5);
+    expect(openedHingeBounds.maxX).toBeLessThanOrEqual(openedDoorBounds.maxX + 5);
+    expect(Math.abs(openedDoorBounds.minZ - openedHingeBounds.minZ)).toBeLessThan(45);
 
     const recessedPlinth = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: { ...defaults, variant: "corner_1d", plinthHeight: 100, plinthSetbackMm: 120 }, catalog });
     expect(meshBoundsMm(getMeshNamed(group, "corner_plinth_front_board")!).maxZ - meshBoundsMm(getMeshNamed(recessedPlinth, "corner_plinth_front_board")!).maxZ).toBeCloseTo(70, 2);
@@ -2321,10 +2327,13 @@ describe("FWM furniture module packages", () => {
     expect(getMeshNamed(group, "kick_x")?.userData.catalogMaterialId).toBe(plinthMaterialId);
     expect(getMeshNamed(group, "door_front_z")?.userData.materialRequest).toBeUndefined();
     const copiedHandle = getMeshNamed(group, "doorHandle_front_z");
+    const copiedHandleX = getMeshNamed(group, "doorHandle_front_x");
     const copiedHinge = getMeshNamed(group, "hinge_front_z_1_door_plate");
     expect(copiedHandle?.userData.componentType).toBe("handle");
     expect(copiedHandle?.userData.catalogComponentId).toBeTruthy();
     expect((copiedHandle?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
+    expect(copiedHandle?.geometry.type).toBe("CylinderGeometry");
+    expect(copiedHandleX?.geometry.type).toBe("CylinderGeometry");
     expect(copiedHinge?.userData.componentType).toBe("hinge");
     expect(copiedHinge?.userData.catalogComponentId).toBeTruthy();
     expect((copiedHinge?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
