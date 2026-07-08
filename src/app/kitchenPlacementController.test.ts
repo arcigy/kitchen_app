@@ -251,6 +251,31 @@ describe("kitchen placement controller", () => {
     }
   });
 
+  it("places zero-offset FWM upper L corner without adding an extra 90 degrees", () => {
+    const getKitchenWorktopBackGuidePath = vi.fn();
+    const ctx = makeContext(getKitchenWorktopBackGuidePath);
+    getKitchenWorktopBackGuidePath.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(1, 0, 1)
+    ]);
+    const controller = createKitchenPlacementController(ctx);
+
+    const inst = chamferedCornerModule(0);
+    inst.id = "fwm_upper_l_corner";
+    inst.params = {
+      type: "fwm_catalog_wall_cabinet",
+      variant: "corner_90",
+      kitchenModuleRole: "top",
+      isCorner: true,
+      cornerShape: "l_shape"
+    } as LayoutInstance["params"];
+    const result = controller.getKitchenPlacementConstraint(inst, new THREE.Vector3(1, 0, 0));
+
+    expect(result?.valid).toBe(true);
+    expect(result?.rotationY).toBeCloseTo(-Math.PI / 2);
+  });
+
   it("mirrors side-aware corner placement through the corner bisector instead of only changing side geometry", () => {
     const getKitchenWorktopBackGuidePath = vi.fn();
     const ctx = makeContext(getKitchenWorktopBackGuidePath);

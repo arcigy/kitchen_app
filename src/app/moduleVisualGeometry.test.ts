@@ -100,6 +100,41 @@ function createAnchoredFwmCorner90Instance(): LayoutInstance {
   } as unknown as LayoutInstance;
 }
 
+function createWallCorner90Instance(): LayoutInstance {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  const profile = [
+    { x: -0.292, z: -0.292 },
+    { x: 0.282, z: -0.292 },
+    { x: 0.282, z: 0.03 },
+    { x: 0.03, z: 0.03 },
+    { x: 0.03, z: 0.282 },
+    { x: -0.292, z: 0.282 }
+  ];
+  const topPanel = new THREE.Mesh(makePrismGeometry(profile), new THREE.MeshBasicMaterial());
+  topPanel.userData.boardName = "top_panel";
+  topPanel.userData.revitPlanProfileMm = profile.map((point) => ({ x: point.x * 1000, z: point.z * 1000 }));
+  module.add(topPanel);
+  root.add(module);
+  return {
+    id: "wallCorner90",
+    params: {
+      type: "fwm_catalog_wall_cabinet",
+      variant: "corner_90",
+      cornerShape: "l_shape",
+      width: 600,
+      depth: 330
+    },
+    root,
+    module,
+    kitchenGroupId: null,
+    kitchenPlacement: null,
+    localBox: new THREE.Box3().setFromObject(module),
+    pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+    outline: new THREE.LineSegments()
+  } as unknown as LayoutInstance;
+}
+
 describe("module plan geometry", () => {
   it("uses the real chamfered corner board silhouette in floorplan instead of a width-depth rectangle", () => {
     const inst = createChamferedCornerInstance();
@@ -125,6 +160,18 @@ describe("module plan geometry", () => {
     expect(polygon).toHaveLength(6);
     expect(polygon.some((point) => Math.abs(point.x - 0.08) < 1e-6 && Math.abs(point.z - 0.08) < 1e-6)).toBe(true);
     expect(polygon.some((point) => Math.abs(point.x - 0.4) < 1e-6 && Math.abs(point.z - 0.4) < 1e-6)).toBe(false);
+
+    const outline = buildModuleEdgeGeometry(inst, true, () => new THREE.Vector3());
+    expect(outline.getAttribute("position").count).toBe(12);
+  });
+
+  it("uses the real concave L profile for FWM upper wall corner 90", () => {
+    const inst = createWallCorner90Instance();
+    const polygon = getModulePlanLocalPolygon(inst, () => new THREE.Vector3());
+
+    expect(polygon).toHaveLength(6);
+    expect(polygon.some((point) => Math.abs(point.x - 0.03) < 1e-6 && Math.abs(point.z - 0.03) < 1e-6)).toBe(true);
+    expect(polygon.some((point) => Math.abs(point.x - 0.282) < 1e-6 && Math.abs(point.z - 0.282) < 1e-6)).toBe(false);
 
     const outline = buildModuleEdgeGeometry(inst, true, () => new THREE.Vector3());
     expect(outline.getAttribute("position").count).toBe(12);

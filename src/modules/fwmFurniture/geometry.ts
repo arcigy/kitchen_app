@@ -1641,7 +1641,7 @@ function wallCornerFootprint(variant: string, width: number, depth: number, cham
   const size = Math.max(depth, width);
   const half = size / 2;
   const runDepth = Math.max(80, Math.min(depth, size));
-  const frontInset = half - runDepth;
+  const frontInset = -half + runDepth;
   if (variant === "corner_90" || variant === "corner_90_1p") {
     return {
       points: [
@@ -1660,19 +1660,18 @@ function wallCornerFootprint(variant: string, width: number, depth: number, cham
     };
   }
 
-  const chamfer = Math.max(80, Math.min(chamferMm, size - 80));
-  const diagonalStart = { x: -half + chamfer, z: half };
-  const diagonalEnd = { x: -half, z: half - chamfer };
+  const diagonalStart = { x: half, z: frontInset };
+  const diagonalEnd = { x: frontInset, z: half };
   return {
     points: [
       { x: -half, z: -half },
       { x: half, z: -half },
-      { x: half, z: half },
       diagonalStart,
-      diagonalEnd
+      diagonalEnd,
+      { x: -half, z: half }
     ],
     frontSegments: [{ start: diagonalStart, end: diagonalEnd, name: "diagonal_front" }],
-    frontCorpusSegments: [{ start: diagonalStart, end: { x: half, z: half }, name: "front_right_corpus_panel" }]
+    frontCorpusSegments: []
   };
 }
 
@@ -1706,6 +1705,22 @@ function wallCornerHorizontalBoardFootprint(points: Array<{ x: number; z: number
         : point.z;
     return { x, z };
   });
+}
+
+function planLineIntersection(
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  c: { x: number; z: number },
+  d: { x: number; z: number }
+) {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const cdx = d.x - c.x;
+  const cdz = d.z - c.z;
+  const denominator = abx * cdz - abz * cdx;
+  if (Math.abs(denominator) < 1e-9) return { ...b };
+  const t = ((c.x - a.x) * cdz - (c.z - a.z) * cdx) / denominator;
+  return { x: a.x + abx * t, z: a.z + abz * t };
 }
 
 function attachWallCornerKitchenAnchors(group: THREE.Group, minX: number, maxX: number, minZ: number, maxZ: number) {
@@ -1785,16 +1800,20 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const chamferedCorner = !variant.includes("90");
   const lCorner = variant.includes("90");
   const doorFrontSegments = chamferedCorner
-    ? [{ start: innerFootprint[3]!, end: innerFootprint[4]!, name: "diagonal_front" }]
+    ? footprint.frontSegments
     : [
       { start: { x: innerFootprint[3]!.x + frontT, z: innerFootprint[3]!.z }, end: innerFootprint[2]!, name: "front_leaf_x" },
       { start: innerFootprint[4]!, end: innerFootprint[3]!, name: "front_leaf_z" }
     ];
   const lCornerFrontInset = lCorner ? footprint.points[3]!.x : maxZ;
+  const chamferedDoorOuter = chamferedCorner ? footprint.frontSegments[0] : null;
+  const chamferedDoorInner = chamferedDoorOuter
+    ? offsetPlanSegmentTowardCenter(chamferedDoorOuter.start, chamferedDoorOuter.end, frontT)
+    : null;
   const verticalEdges = [
     { name: "back_panel_x", start: { x: minX + back, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
+    ...(chamferedCorner ? [] : [{ name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: lCorner ? lCornerFrontInset : maxZ }, group: "corpus" as const, thickness: t }]),
     { name: "back_panel_z", start: { x: minX, z: minZ + back }, end: { x: minX, z: leftWallFrontZ }, group: "back" as const, thickness: back },
-    { name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: lCorner ? lCornerFrontInset : maxZ }, group: "corpus" as const, thickness: t },
     ...(lCorner ? [{ name: "side_end_z_panel", start: { x: minX + back, z: maxZ }, end: { x: lCornerFrontInset, z: maxZ }, group: "corpus" as const, thickness: t }] : [])
   ];
   for (const edge of verticalEdges) {
@@ -1811,24 +1830,49 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
     );
     tagWallCornerBoard(mesh, edge.name, edge.group);
   }
-  if (chamferedCorner && !openNiche) {
-    const frontRightSegment = {
-      start: footprint.frontCorpusSegments[0]?.start ?? innerFootprint[3]!,
-      end: { x: maxX - t, z: maxZ },
-      name: footprint.frontCorpusSegments[0]?.name ?? "front_right_corpus_panel"
-    };
-    const frontRight = addInsetBoardBetweenPlanPoints(
+  if (chamferedCorner && chamferedDoorOuter && chamferedDoorInner) {
+    const rightSideInnerFront = planLineIntersection(
+      chamferedDoorInner.start,
+      chamferedDoorInner.end,
+      { x: maxX - t, z: minZ },
+      { x: maxX - t, z: maxZ }
+    );
+    const rightSide = addPlanPrism(
       group,
-      `wall_corner_${frontRightSegment.name}`,
-      frontRightSegment.start,
-      frontRightSegment.end,
-      height / 2,
+      "wall_corner_front_right_corpus_panel",
+      [
+        { x: maxX, z: minZ },
+        chamferedDoorOuter.start,
+        rightSideInnerFront,
+        { x: maxX - t, z: minZ + back }
+      ],
+      0,
       height,
-      t,
       body,
       paramKeys
     );
-    tagWallCornerBoard(frontRight, frontRightSegment.name, "corpus", [{ edgeId: "front_right_visible_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
+    tagWallCornerBoard(rightSide, "front_right_corpus_panel", "corpus", [{ edgeId: "right_front_miter_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
+    const leftFrontInnerStart = planLineIntersection(
+      chamferedDoorInner.start,
+      chamferedDoorInner.end,
+      { x: minX, z: maxZ - t },
+      { x: maxX, z: maxZ - t }
+    );
+    const leftFront = addPlanPrism(
+      group,
+      "wall_corner_front_left_corpus_panel",
+      [
+        chamferedDoorOuter.end,
+        { x: minX + back, z: maxZ },
+        { x: minX + back, z: maxZ - t },
+        leftFrontInnerStart
+      ],
+      0,
+      height,
+      body,
+      paramKeys
+    );
+    tagWallCornerBoard(leftFront, "front_left_corpus_panel", "corpus", [{ edgeId: "left_front_miter_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
   }
 
   const shelves = Math.max(0, Math.min(12, Math.round(num(params, "shelfCount", openNiche ? 2 : 1))));
@@ -1853,18 +1897,32 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
           start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
           end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
         };
-      const addFrontBoard = lCorner ? addInsetBoardBetweenPlanPoints : addOutsetBoardBetweenPlanPoints;
-      const door = addFrontBoard(
-        group,
-        `wall_corner_${segment.name}_door`,
-        shifted.start,
-        shifted.end,
-        height / 2,
-        Math.max(80, height - 2 * t),
-        frontT,
-        frontMat,
-        ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
-      );
+      const door = chamferedCorner
+        ? addPlanPrism(
+          group,
+          `wall_corner_${segment.name}_door`,
+          [
+            shifted.start,
+            shifted.end,
+            offsetPlanSegmentTowardCenter(shifted.start, shifted.end, -frontT).end,
+            offsetPlanSegmentTowardCenter(shifted.start, shifted.end, -frontT).start
+          ],
+          0,
+          height,
+          frontMat,
+          ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
+        )
+        : addOutsetBoardBetweenPlanPoints(
+          group,
+          `wall_corner_${segment.name}_door`,
+          shifted.start,
+          shifted.end,
+          height / 2,
+          height,
+          frontT,
+          frontMat,
+          ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
+        );
       tagWallCornerBoard(door, `${segment.name}_door`, "front", [{ edgeId: "front_visible_edges", role: "visible_front", axis: "Y", materialSlotId: "front" }]);
       addWallCornerHandle(group, `wall_corner_${segment.name}_handle`, shifted, height * 0.48, hardware);
     }
@@ -1873,7 +1931,7 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   group.userData.catalogWallCornerVariant = variant;
   group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
   group.userData.kitchenCornerFootprintMm = footprint.points;
-  group.userData.kitchenCornerRotationOffsetRad = Math.PI / 2;
+  group.userData.kitchenCornerRotationOffsetRad = 0;
   attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
 }
 

@@ -286,18 +286,23 @@ function convexHullXZ(points: THREE.Vector3[]) {
 
 function isFwmChamferedCornerPlan(inst: LayoutInstance) {
   const moduleParams = inst.params as Record<string, unknown>;
+  const type = String(moduleParams.type ?? "");
+  const variant = String(moduleParams.variant ?? "");
+  if (type === "fwm_catalog_wall_cabinet" && variant.startsWith("corner_")) return true;
   return (
     moduleParams.type === "fwm_catalog_base_corner" &&
-    (String(moduleParams.variant ?? "").includes("chamfered") || moduleParams.cornerShape === "chamfered")
+    (variant.includes("chamfered") || moduleParams.cornerShape === "chamfered")
   );
 }
 
 function isAnchoredLCornerPlan(inst: LayoutInstance) {
   const moduleParams = inst.params as Record<string, unknown>;
+  const type = String(moduleParams.type ?? "");
+  const variant = String(moduleParams.variant ?? "");
   if (moduleParams.type === "corner_shelf_lower") return true;
   return (
-    moduleParams.type === "fwm_catalog_base_corner" &&
-    (String(moduleParams.variant ?? "") === "corner_90" || String(moduleParams.variant ?? "") === "corner_90_1p")
+    (type === "fwm_catalog_base_corner" || type === "fwm_catalog_wall_cabinet") &&
+    (variant === "corner_90" || variant === "corner_90_1p")
   );
 }
 
@@ -321,6 +326,14 @@ function findPlanBoardMesh(inst: LayoutInstance) {
 function getProjectedPlanPolygonFromMesh(inst: LayoutInstance, mesh: THREE.Mesh) {
   inst.root.updateMatrixWorld(true);
   mesh.updateMatrixWorld(true);
+  const profileMm = mesh.userData.revitPlanProfileMm as Array<{ x?: number; z?: number }> | undefined;
+  if (Array.isArray(profileMm) && profileMm.length >= 3) {
+    const rootInverse = new THREE.Matrix4().copy(inst.root.matrixWorld).invert();
+    return profileMm
+      .map((point) => new THREE.Vector3(Number(point.x) / 1000, 0, Number(point.z) / 1000))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z))
+      .map((point) => point.applyMatrix4(mesh.matrixWorld).applyMatrix4(rootInverse).setY(0));
+  }
   const position = mesh.geometry.getAttribute("position");
   if (!position) return [];
   const rootInverse = new THREE.Matrix4().copy(inst.root.matrixWorld).invert();
