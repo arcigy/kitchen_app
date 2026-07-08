@@ -158,6 +158,7 @@ function keyboardNudgeCommandContext(overrides: Partial<Parameters<typeof runKey
     doorDragState: { active: false },
     dragState: { active: false },
     findInstance: (id: string) => instances.find((item) => item.id === id) ?? null,
+    applyKitchenPlacementBinding: vi.fn(() => true),
     getKitchenPlacementConstraint: () => null,
     inferKitchenPlacementBinding: (_instance: LayoutInstance, _kitchenGroupId: string, backOffsetMm: number) => ({
       worktopId: "wt",
@@ -1375,14 +1376,17 @@ describe("top-level keyboard input command dispatcher", () => {
     const inst = {
       id: "m1",
       params: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" },
-      kitchenPlacement: { worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5 },
+      kitchenGroupId: "kg1",
+      kitchenPlacement: { kind: "corner", worktopId: "wt", segmentIndex: 1, offsetAlongM: 0.5, cornerIndex: 2 },
       root: new THREE.Group(),
       module: new THREE.Group()
     } as unknown as LayoutInstance;
+    const applyKitchenPlacementBinding = vi.fn(() => true);
     const rebuildInstance = vi.fn(() => true);
     const commitHistory = vi.fn();
     const mountProps = vi.fn();
     const ctx = topLevelKeyboardContext({
+      applyKitchenPlacementBinding,
       commitHistory,
       findInstance: vi.fn((id: string) => (id === "m1" ? inst : null)),
       instances: [inst],
@@ -1393,7 +1397,7 @@ describe("top-level keyboard input command dispatcher", () => {
       S: {
         kitchenEditMode: true,
         kitchenCtx: { worktopBackOffsetMm: 20 },
-        kitchenGroups: []
+        kitchenGroups: [{ id: "kg1", ctx: { worktopBackOffsetMm: 45 } }]
       }
     });
 
@@ -1404,6 +1408,7 @@ describe("top-level keyboard input command dispatcher", () => {
       preserveBackAnchor: true,
       previousParams: { type: "fwm_catalog_base_corner", variant: "corner_1d", side: "left" }
     });
+    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(inst, inst.kitchenPlacement, 45);
     expect(commitHistory).toHaveBeenCalledOnce();
     expect(mountProps).toHaveBeenCalledOnce();
     expect(ev.preventDefault).toHaveBeenCalledOnce();

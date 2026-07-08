@@ -7,7 +7,7 @@ import { rotateActivePlacement } from "../layout/placementManager";
 import type { KeyboardTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { applyTypedMillimeterKey, updatePointerTypedHud } from "./pointerTypedHudHelpers";
 import { finishWallDrawAfterAddedWall, resolveWallDrawTypedEndPoint } from "./pointerWallDrawClickHelpers";
-import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
+import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 import { resolveSelectedIds } from "./selectionController";
 import { SNAP_DISTANCE_M } from "./snapToolProfiles";
 import { hasLockedAlignModule } from "./alignLocks";
@@ -57,6 +57,11 @@ type KeyboardInputHandlersContext = {
     instance: LayoutInstance,
     desired: THREE.Vector3
   ) => { position: THREE.Vector3; rotationY: number; kitchenPlacement?: LayoutInstance["kitchenPlacement"] } | null;
+  applyKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    binding: NonNullable<LayoutInstance["kitchenPlacement"]>,
+    backOffsetMm: number
+  ) => boolean;
   handleLayoutEscape: (ev: KeyboardEvent) => boolean;
   helpers: HistoryHelpers;
   hideHoverCursor?: () => void;
@@ -254,7 +259,7 @@ type ModuleSideMirrorShortcutCommandContext = Pick<
   | "selectedInstanceId"
   | "selectedKind"
   | "setUnderlayStatus"
->;
+> & Partial<Pick<KeyboardInputHandlersContext, "applyKitchenPlacementBinding">>;
 
 type DeleteSelectionShortcutCommandContext = Pick<KeyboardInputHandlersContext, "deleteSelected">;
 type ClearSelectionShortcutCommandContext = Pick<KeyboardInputHandlersContext, "clearSelection">;
@@ -760,6 +765,14 @@ export function runModuleSideMirrorShortcutCommand(ctx: ModuleSideMirrorShortcut
     previousParams
   });
   if (accepted) {
+    if (inst.kitchenGroupId && inst.kitchenPlacement && ctx.applyKitchenPlacementBinding) {
+      const backOffsetMm = resolveKitchenPlacementBackOffset({
+        kitchenGroupId: inst.kitchenGroupId,
+        kitchenGroups: ctx.S.kitchenGroups,
+        defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+      });
+      ctx.applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
+    }
     ctx.commitHistory(ctx.S);
     ctx.mountProps();
     ctx.setUnderlayStatus(`Module: zrkadlene na ${(inst.params as Record<string, unknown>).side}. Space = druha strana.`);

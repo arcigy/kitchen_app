@@ -429,13 +429,15 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     const cornerExtents = getModuleKitchenCornerExtents(inst);
     const localCorner = cornerExtents.corner;
     const rotationOffset = getModuleKitchenCornerRotationOffset(inst);
-    const tryAssignment = (xDir: THREE.Vector3, zDir: THREE.Vector3, xLength: number, zLength: number) => {
-      const axisRotationY = Math.atan2(zDir.x, zDir.z);
-      const rotatedX = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
-      const rotatedZ = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
-      if (rotatedX.dot(xDir) < 0.999 || rotatedZ.dot(zDir) < 0.999) return null;
-      const rotationY = axisRotationY + rotationOffset;
-      const projectedPlacement = Math.abs(rotationOffset) > 1e-9
+    const makeCornerPlacement = (
+      xDir: THREE.Vector3,
+      zDir: THREE.Vector3,
+      xLength: number,
+      zLength: number,
+      rotationY: number,
+      forceProjectedFootprint = false
+    ) => {
+      const projectedPlacement = forceProjectedFootprint || Math.abs(rotationOffset) > 1e-9
         ? getProjectedKitchenCornerFootprintPlacement(inst, corner, rotationY, xDir, zDir)
         : null;
       const rotatedCorner = localCorner.clone().applyEuler(new THREE.Euler(0, rotationY, 0));
@@ -454,13 +456,42 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
         rotationY,
         valid:
           xLength + 1e-6 >= (projectedPlacement?.xLength ?? cornerExtents.xLength) &&
-          zLength + 1e-6 >= (projectedPlacement?.zLength ?? cornerExtents.zLength)
+          zLength + 1e-6 >= (projectedPlacement?.zLength ?? cornerExtents.zLength),
+        xDir,
+        zDir,
+        xLength,
+        zLength
       };
     };
 
-    return (
+    const tryAssignment = (xDir: THREE.Vector3, zDir: THREE.Vector3, xLength: number, zLength: number) => {
+      const axisRotationY = Math.atan2(zDir.x, zDir.z);
+      const rotatedX = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
+      const rotatedZ = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, axisRotationY, 0)).normalize();
+      if (rotatedX.dot(xDir) < 0.999 || rotatedZ.dot(zDir) < 0.999) return null;
+      return makeCornerPlacement(xDir, zDir, xLength, zLength, axisRotationY + rotationOffset);
+    };
+
+    const basePlacement =
       tryAssignment(prevDir, nextDir, prevLength, nextLength) ??
-      tryAssignment(nextDir, prevDir, nextLength, prevLength)
+      tryAssignment(nextDir, prevDir, nextLength, prevLength);
+    if (!basePlacement) return null;
+
+    const side = (inst.params as Record<string, unknown>).side;
+    if (side !== "right") return basePlacement;
+
+    const bisector = basePlacement.xDir.clone().add(basePlacement.zDir);
+    if (bisector.lengthSq() < 1e-9) return basePlacement;
+    bisector.normalize();
+    const bisectorAngleY = Math.atan2(bisector.x, bisector.z);
+    const mirroredRotationY = normalizeAngleRad(2 * bisectorAngleY - basePlacement.rotationY);
+    return makeCornerPlacement(
+      basePlacement.xDir,
+      basePlacement.zDir,
+      basePlacement.xLength,
+      basePlacement.zLength,
+      mirroredRotationY,
+      true
     );
   };
 

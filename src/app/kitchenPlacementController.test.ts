@@ -251,6 +251,31 @@ describe("kitchen placement controller", () => {
     }
   });
 
+  it("mirrors side-aware corner placement through the corner bisector instead of only changing side geometry", () => {
+    const getKitchenWorktopBackGuidePath = vi.fn();
+    const ctx = makeContext(getKitchenWorktopBackGuidePath);
+    getKitchenWorktopBackGuidePath.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(1, 0, 1)
+    ]);
+    const controller = createKitchenPlacementController(ctx);
+    const left = chamferedCornerModule(Math.PI / 2);
+    left.params = { ...left.params, side: "left" } as LayoutInstance["params"];
+    const right = chamferedCornerModule(Math.PI / 2);
+    right.params = { ...right.params, side: "right" } as LayoutInstance["params"];
+    const corner = new THREE.Vector3(1, 0, 0);
+
+    const leftResult = controller.getKitchenPlacementConstraint(left, corner);
+    const rightResult = controller.getKitchenPlacementConstraint(right, corner);
+
+    expect(leftResult?.valid).toBe(true);
+    expect(rightResult?.valid).toBe(true);
+    if (!leftResult || !rightResult) throw new Error("Expected both side-aware corner placement results");
+    expect(Math.abs(controller.normalizeAngleRad(rightResult.rotationY - leftResult.rotationY))).toBeCloseTo(Math.PI / 2);
+    expect(rightResult.position.distanceTo(leftResult.position)).toBeGreaterThan(0.5);
+  });
+
   it("describes appliance tall PINO side cabinets as appliance-zone placement targets", () => {
     const controller = createKitchenPlacementController(makeContext());
 

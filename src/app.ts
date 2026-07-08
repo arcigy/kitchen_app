@@ -3542,6 +3542,7 @@ export function startApp(initialArgs: AppArgs) {
     findInstance,
     drawSnapOverlay,
     floorEdit,
+    applyKitchenPlacementBinding,
     getKitchenPlacementConstraint,
     handleLayoutEscape,
     hideHoverCursor,
