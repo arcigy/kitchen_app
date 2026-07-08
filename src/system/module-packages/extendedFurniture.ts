@@ -44,6 +44,44 @@ const MODULE_PRESET_FREE_PARAMETER_KEYS = [
   "commercialSelections"
 ];
 
+const WALL_OPEN_END_USER_PARAMETER_KEYS = new Set([
+  "width",
+  "height",
+  "depth",
+  "side",
+  "endingShape",
+  "cornerRadiusMm",
+  "chamferMm",
+  "boardThickness",
+  "bodyMaterialId"
+]);
+
+const WALL_OPEN_END_OWNED_PARAMETER_KEYS = new Set([
+  ...WALL_OPEN_END_USER_PARAMETER_KEYS,
+  "type",
+  "rowHeight",
+  "heightCarcass",
+  "variant",
+  "catalogCode",
+  "notes",
+  "tags",
+  "createdAt",
+  "updatedAt",
+  "endingSide",
+  "shape",
+  "bodyMaterialGroup"
+]);
+
+const WALL_OPEN_END_PARAMETER_GROUPS = new Set(["system", "ifc", "orientation", "placement", "pricing", "state"]);
+
+const WALL_OPEN_END_FREE_PARAMETER_KEYS = [
+  "width",
+  "height",
+  "depth",
+  "bodyMaterialId",
+  "boardThickness"
+];
+
 const TALL_STACK_SLOT_DEFAULTS: Array<{ type: "empty" | "drawer" | "shelf" | "oven" | "sink" | "microwave" | "door"; height: number }> = [];
 
 function requiresExternalKitchenWorktop(spec: FwmFurnitureSpec) {
@@ -197,8 +235,9 @@ function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParamete
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemSizeParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemParameter(parameter.key)) return "technical";
   if (spec.moduleType === "fwm_catalog_wall_open_end") {
-    if (["width", "height", "depth", "side", "endingShape", "cornerRadiusMm", "chamferMm", "shelfCount", "shelfGaps", "boardThickness", "backThickness", "shelfThickness", "bodyMaterialId", "backMaterialId", "shelfMaterialId"].includes(parameter.key)) return "user";
-    if (["variant", "endingSide", "shape", "cornerShape", "requiresWorktop", "hasWorktop", "hasPlinth", "plinthHeight", "plinthSetbackMm"].includes(parameter.key)) return "technical";
+    if (WALL_OPEN_END_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
+    if (["variant", "endingSide", "shape", "requiresWorktop", "hasWorktop", "hasPlinth", "mountingMode", "wallMounted"].includes(parameter.key)) return "technical";
+    return "internal";
   }
   if (spec.geometryKind === "open_end") {
     if (["width", "height", "depth", "plinthHeight", "plinthSetbackMm", "shelfCount", "shelfGaps", "shape", "endingSide", "cornerRadiusMm", "chamferMm", "boardThickness", "backThickness", "shelfThickness", "bodyMaterialId", "backMaterialId", "shelfMaterialId", "plinthMaterialId", "legComponentId", "clipComponentId"].includes(parameter.key)) return "user";
@@ -296,7 +335,7 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
     }
     if (spec.moduleType === "fwm_catalog_wall_open_end") {
       if (next.key === "displayName") next.defaultValue = "Horny koncovy otvoreny modul";
-      if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky v znizenej vyske. Pouziva jeden parametricy tvar konca: skoseny alebo obly; nema vlastnu pracovnu dosku, sokel, dvierka ani zasuvky.";
+      if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky. Ma iba dve zvisle corpus dosky do L a hornu/dolnu zrezanu policu; nema pracovnu dosku, sokel, dvierka, zasuvky ani nastavitelne police.";
       if (next.key === "variant") next.defaultValue = "chamfered_end";
       if (next.key === "height") next.defaultValue = 300;
       if (next.key === "depth") next.defaultValue = 330;
@@ -320,7 +359,6 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
       if (next.key === "shape") next.defaultValue = "chamfered";
       if (next.key === "cornerRadiusMm") next.defaultValue = 120;
       if (next.key === "chamferMm") next.defaultValue = 120;
-      if (next.key === "shelfCount") next.defaultValue = 0;
     }
     if (spec.geometryKind === "open_end") {
       if (next.key === "displayName") next.defaultValue = spec.displayName;
@@ -362,6 +400,14 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
     }
     return withUiVisibility(next, parameterUiVisibility(spec, next));
   });
+}
+
+function filterModuleSpecificParameters(spec: FwmFurnitureSpec, parameters: ModuleParameterDefinition[]) {
+  if (spec.moduleType !== "fwm_catalog_wall_open_end") return parameters;
+  return parameters.filter((parameter) =>
+    WALL_OPEN_END_OWNED_PARAMETER_KEYS.has(parameter.key) ||
+    WALL_OPEN_END_PARAMETER_GROUPS.has(parameter.group ?? "")
+  );
 }
 
 function numberParam(
@@ -807,10 +853,22 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
       affects: "all"
     }
   ];
-  return applyParameterSurfacePolicy(spec, params);
+  return filterModuleSpecificParameters(spec, applyParameterSurfacePolicy(spec, params));
 }
 
 function materialSlots(spec: FwmFurnitureSpec): ModuleMaterialSlot[] {
+  if (spec.moduleType === "fwm_catalog_wall_open_end") {
+    return [
+      {
+        slotId: "corpus",
+        label: "Corpus",
+        required: true,
+        defaultFrom: "catalog.kitchenDefaults.carcassMaterialId",
+        allowedMaterialTags: ["body", "board"],
+        affects: ["geometry", "visual", "bom", "pricing"]
+      }
+    ];
+  }
   const slots: ModuleMaterialSlot[] = [
     {
       slotId: "corpus",
@@ -1050,7 +1108,9 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
 function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavior"] | undefined {
   if (!spec.kitchenRole) return undefined;
   const requiresWorktop = requiresExternalKitchenWorktop(spec);
-  const materialSync = [
+  const materialSync = spec.moduleType === "fwm_catalog_wall_open_end" ? [
+    { targetSlot: "corpus" as const, targetParameter: "bodyMaterialId", source: "ctx.corpusMaterialId", family: "body" as const, thicknessParameter: "boardThickness", aliases: ["body" as const] }
+  ] : [
     { targetSlot: "corpus" as const, targetParameter: "bodyMaterialId", source: "ctx.corpusMaterialId", family: "body" as const, thicknessParameter: "boardThickness", aliases: ["body" as const] },
     { targetSlot: "front" as const, targetParameter: "frontMaterialId", source: "ctx.frontsMaterialId", family: "front" as const, thicknessParameter: "frontThicknessMm", aliases: ["front" as const] },
     { targetSlot: "back" as const, targetParameter: "backMaterialId", source: "ctx.backMaterialId", family: "back" as const, thicknessParameter: "backThickness", aliases: ["back" as const] },
@@ -1184,7 +1244,7 @@ function parameterPresets(spec: FwmFurnitureSpec): FurnQuoteModulePackage["param
     );
   }
   return {
-    freeParameterKeys: MODULE_PRESET_FREE_PARAMETER_KEYS,
+    freeParameterKeys: spec.moduleType === "fwm_catalog_wall_open_end" ? WALL_OPEN_END_FREE_PARAMETER_KEYS : MODULE_PRESET_FREE_PARAMETER_KEYS,
     presets
   };
 }

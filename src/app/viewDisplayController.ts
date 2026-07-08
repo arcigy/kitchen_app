@@ -7,6 +7,9 @@ type MaterialDisplayState = {
   transparent: boolean;
   opacity: number;
   depthWrite: boolean;
+  polygonOffset: boolean;
+  polygonOffsetFactor: number;
+  polygonOffsetUnits: number;
   envMapIntensity?: number;
   metalness?: number;
   roughness?: number;
@@ -102,6 +105,9 @@ export function createViewDisplayController(scene: THREE.Scene) {
       transparent: material.transparent,
       opacity: material.opacity,
       depthWrite: material.depthWrite,
+      polygonOffset: material.polygonOffset,
+      polygonOffsetFactor: material.polygonOffsetFactor,
+      polygonOffsetUnits: material.polygonOffsetUnits,
       envMapIntensity: hasPbrControls(material) ? material.envMapIntensity : undefined,
       metalness: hasPbrControls(material) ? material.metalness : undefined,
       roughness: hasPbrControls(material) ? material.roughness : undefined
@@ -116,6 +122,9 @@ export function createViewDisplayController(scene: THREE.Scene) {
       if (hasWireframe(material)) material.wireframe = false;
       material.opacity = 1;
       material.depthWrite = true;
+      material.polygonOffset = false;
+      material.polygonOffsetFactor = 0;
+      material.polygonOffsetUnits = 0;
       material.needsUpdate = true;
       return;
     }
@@ -125,11 +134,22 @@ export function createViewDisplayController(scene: THREE.Scene) {
     material.transparent = state.transparent;
     material.opacity = state.opacity;
     material.depthWrite = state.depthWrite;
+    material.polygonOffset = state.polygonOffset;
+    material.polygonOffsetFactor = state.polygonOffsetFactor;
+    material.polygonOffsetUnits = state.polygonOffsetUnits;
     if (hasPbrControls(material)) {
       if (typeof state.envMapIntensity === "number") material.envMapIntensity = state.envMapIntensity;
       if (typeof state.metalness === "number") material.metalness = state.metalness;
       if (typeof state.roughness === "number") material.roughness = state.roughness;
     }
+    material.needsUpdate = true;
+  };
+
+  const offsetSolidSurfaceBehindEdges = (material: THREE.Material) => {
+    rememberMaterial(material);
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
     material.needsUpdate = true;
   };
 
@@ -214,7 +234,10 @@ export function createViewDisplayController(scene: THREE.Scene) {
     if (mesh.userData.viewDisplaySkipMaterialRestore) return;
     eachMaterial(mesh.material, (material) => {
       restoreMaterialDisplay(material);
-      if (mode === "solid") suppressRealisticMaterial(material);
+      if (mode === "solid") {
+        suppressRealisticMaterial(material);
+        offsetSolidSurfaceBehindEdges(material);
+      }
     });
   };
 
@@ -233,7 +256,10 @@ export function createViewDisplayController(scene: THREE.Scene) {
     eachMaterial(mesh.material, (material) => {
       if (mode === "wireframe") hideSurfaceForWireframe(material);
       else restoreMaterialDisplay(material);
-      if (mode === "solid") suppressRealisticMaterial(material);
+      if (mode === "solid") {
+        suppressRealisticMaterial(material);
+        offsetSolidSurfaceBehindEdges(material);
+      }
     });
 
     if (mode === "solid" || mode === "wireframe") {

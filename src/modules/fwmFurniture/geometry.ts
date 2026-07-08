@@ -1486,43 +1486,32 @@ function buildCatalogWallOpenEnd(group: THREE.Group, params: FwmFurnitureParams,
   const height = num(params, "height", 300);
   const depth = num(params, "depth", 330);
   const t = num(params, "boardThickness", 18);
-  const back = num(params, "backThickness", 8);
   const body = makeMaterial(params, catalog, "body");
-  const backMat = makeMaterial(params, catalog, "back");
-  const shelfMat = makeMaterial(params, catalog, "shelf");
   const shape = String(params.endingShape ?? params.variant ?? "").includes("rounded") ? "rounded" : "chamfered";
   const side = String(params.side ?? "right") === "left" ? "left" : "right";
   const shapeAmount = shape === "rounded"
     ? num(params, "cornerRadiusMm", 120)
     : num(params, "chamferMm", 120);
   const footprint = wallOpenEndShapePath(width, depth, shape, side, shapeAmount);
-  const innerFootprint = wallOpenEndShapePath(
-    Math.max(1, width - 2 * t),
-    Math.max(1, depth - back),
-    shape,
-    side,
-    Math.max(10, shapeAmount - t)
-  ).map((point) => ({ x: point.x, z: point.z + back / 2 }));
   const panels = wallOpenEndPanelSegments(width, depth, shape, side, shapeAmount);
-  const paramKeys = ["width", "height", "depth", "side", "endingShape", "cornerRadiusMm", "chamferMm", "boardThickness", "backThickness"];
-  const innerHeight = Math.max(1, height - 2 * t);
+  const paramKeys = ["width", "height", "depth", "side", "endingShape", "cornerRadiusMm", "chamferMm", "boardThickness"];
 
-  const backPanel = addInsetBoardBetweenPlanPoints(
+  const rearBoard = addInsetBoardBetweenPlanPoints(
     group,
-    "wall_open_end_back_panel",
+    "wall_open_end_rear_board",
     { x: -width / 2, z: -depth / 2 },
     { x: width / 2, z: -depth / 2 },
     height / 2,
     height,
-    back,
-    backMat,
+    t,
+    body,
     paramKeys
   );
-  tagBoardIdentity(backPanel, "wall_open_end_back_panel", "back");
+  tagVisibleEdges(tagBoardIdentity(rearBoard, "wall_open_end_rear_board", "corpus"), ["rear_top_edge"]);
 
-  const fixedSide = addInsetBoardBetweenPlanPoints(
+  const sideRearBoard = addInsetBoardBetweenPlanPoints(
     group,
-    "wall_open_end_fixed_side_panel",
+    "wall_open_end_side_rear_board",
     panels.fixed.start,
     panels.fixed.end,
     height / 2,
@@ -1531,53 +1520,12 @@ function buildCatalogWallOpenEnd(group: THREE.Group, params: FwmFurnitureParams,
     body,
     paramKeys
   );
-  tagVisibleEdges(tagBoardIdentity(fixedSide, "wall_open_end_fixed_side_panel", "corpus"), ["front_vertical_edge"]);
+  tagVisibleEdges(tagBoardIdentity(sideRearBoard, "wall_open_end_side_rear_board", "corpus"), ["front_vertical_edge"]);
 
-  panels.shaped.forEach((segment, index) => {
-    const panel = addInsetBoardBetweenPlanPoints(
-      group,
-      `wall_open_end_${shape}_side_panel_${index + 1}`,
-      segment.start,
-      segment.end,
-      height / 2,
-      height,
-      t,
-      body,
-      paramKeys
-    );
-    tagVisibleEdges(tagBoardIdentity(panel, `wall_open_end_${shape}_side_panel_${index + 1}`, "corpus"), ["exposed_ending_vertical_edge"]);
-  });
-
-  const bottom = addPlanPrism(group, "wall_open_end_bottom_panel", footprint, 0, t, body, paramKeys);
-  tagVisibleEdges(tagBoardIdentity(bottom, "wall_open_end_bottom_panel", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
-  const top = addPlanPrism(group, "wall_open_end_top_panel", footprint, height - t, height, body, paramKeys);
-  tagVisibleEdges(tagBoardIdentity(top, "wall_open_end_top_panel", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
-
-  const shelves = Math.max(0, Math.min(8, Math.round(num(params, "shelfCount", 0))));
-  const shelfT = num(params, "shelfThickness", t);
-  const availableShelfGapHeight = Math.max(1, innerHeight - shelves * shelfT);
-  const requestedShelfGaps = readShelfGapValues(params, shelves + 1);
-  const shelfGaps = requestedShelfGaps.length > 0
-    ? Array.from({ length: shelves + 1 }, (_, index) => requestedShelfGaps[index] ?? requestedShelfGaps[requestedShelfGaps.length - 1] ?? (availableShelfGapHeight / (shelves + 1)))
-    : Array.from({ length: shelves + 1 }, () => availableShelfGapHeight / (shelves + 1));
-  const shelfGapTotal = shelfGaps.reduce((sum, value) => sum + value, 0);
-  const shelfGapScale = shelfGapTotal > availableShelfGapHeight ? availableShelfGapHeight / shelfGapTotal : 1;
-  let shelfCursorY = t;
-  for (let index = 0; index < shelves; index += 1) {
-    shelfCursorY += shelfGaps[index] * shelfGapScale;
-    const yMin = shelfCursorY;
-    const shelf = addPlanPrism(
-      group,
-      `wall_open_end_shelf_${index + 1}`,
-      innerFootprint,
-      yMin,
-      yMin + shelfT,
-      shelfMat,
-      ["shelfCount", "shelfGaps", "shelfThickness", "height", "depth", "side", "endingShape"]
-    );
-    tagVisibleEdges(tagBoardIdentity(shelf, `wall_open_end_shelf_${index + 1}`, "corpus"), ["front_visible_edge", "ending_visible_edge"]);
-    shelfCursorY += shelfT;
-  }
+  const bottom = addPlanPrism(group, "wall_open_end_bottom_shelf", footprint, 0, t, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(bottom, "wall_open_end_bottom_shelf", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
+  const top = addPlanPrism(group, "wall_open_end_top_shelf", footprint, height - t, height, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(top, "wall_open_end_top_shelf", "corpus"), ["front_visible_edge", "ending_visible_edge"]);
 
   group.userData.isOpenEnd = true;
   group.userData.endingShape = shape;

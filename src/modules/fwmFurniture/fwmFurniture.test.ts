@@ -333,7 +333,10 @@ describe("FWM furniture module packages", () => {
       if (modulePackage.geometry.mode !== "trusted-runtime") throw new Error("FWM package must use trusted runtime geometry.");
       expect(modulePackage.compatibility.requiredRuntimeBuilderKeys).toContain(modulePackage.geometry.runtimeBuilderKey);
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
-      for (const key of [...requiredSystemParams, ...requiredIfcParams, ...requiredOrientationParams, ...requiredMaterialGroupParams]) {
+      const expectedRequiredKeys = modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
+        ? [...requiredSystemParams, ...requiredIfcParams, ...requiredOrientationParams, "bodyMaterialGroup"]
+        : [...requiredSystemParams, ...requiredIfcParams, ...requiredOrientationParams, ...requiredMaterialGroupParams];
+      for (const key of expectedRequiredKeys) {
         expect(parameterKeys.has(key), `${modulePackage.module.moduleType} missing ${key}`).toBe(true);
       }
       const defaults = createDefaultModulePackageParameters(modulePackage);
@@ -413,12 +416,17 @@ describe("FWM furniture module packages", () => {
     expect(catalogPackages).toHaveLength(18);
     for (const modulePackage of catalogPackages) {
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
-      for (const key of requiredCatalogParams) {
+      const expectedCatalogParams = modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
+        ? ["catalogCode", "side", "endingSide", "endingShape", "shape", "mountingMode", "cornerRadiusMm", "chamferMm"]
+        : requiredCatalogParams;
+      for (const key of expectedCatalogParams) {
         expect(parameterKeys.has(key), `${modulePackage.module.moduleType} missing ${key}`).toBe(true);
       }
       const defaults = normalizeFwmFurnitureParams(createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams);
       expect(defaults.catalogCode, modulePackage.module.moduleType).toBe("");
-      expect(defaults.frontType, modulePackage.module.moduleType).toBeTruthy();
+      if (modulePackage.module.moduleType !== "fwm_catalog_wall_open_end") {
+        expect(defaults.frontType, modulePackage.module.moduleType).toBeTruthy();
+      }
       expect(defaults.mountingMode, modulePackage.module.moduleType).toBeTruthy();
     }
   });
@@ -454,13 +462,25 @@ describe("FWM furniture module packages", () => {
 
     for (const modulePackage of extendedFurnitureModulePackages) {
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
-      for (const key of requiredMaterialParams) {
+      const expectedMaterialParams = modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
+        ? ["bodyMaterialId"]
+        : requiredMaterialParams;
+      for (const key of expectedMaterialParams) {
         expect(parameterKeys.has(key), `${modulePackage.module.moduleType} missing ${key}`).toBe(true);
+      }
+      if (modulePackage.module.moduleType === "fwm_catalog_wall_open_end") {
+        for (const key of ["frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId"]) {
+          expect(parameterKeys.has(key), `${modulePackage.module.moduleType} must not own ${key}`).toBe(false);
+        }
       }
 
       const slotIds = new Set(modulePackage.materials.slots.map((slot) => slot.slotId));
-      for (const slotId of requiredSlots) {
+      const expectedSlots = modulePackage.module.moduleType === "fwm_catalog_wall_open_end" ? ["corpus"] : requiredSlots;
+      for (const slotId of expectedSlots) {
         expect(slotIds.has(slotId), `${modulePackage.module.moduleType} missing material slot ${slotId}`).toBe(true);
+      }
+      if (modulePackage.module.moduleType === "fwm_catalog_wall_open_end") {
+        expect(slotIds).toEqual(new Set(["corpus"]));
       }
       expect(slotIds.has("carcass"), `${modulePackage.module.moduleType} must use canonical corpus slot`).toBe(false);
       expect(slotIds.has("shelf"), `${modulePackage.module.moduleType} shelves must use canonical corpus slot`).toBe(false);
@@ -671,6 +691,23 @@ describe("FWM furniture module packages", () => {
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_wall_open_end");
     expect(modulePackage).toBeTruthy();
 
+    const parameterKeys = new Set(modulePackage!.parameters.parameters.map((parameter) => parameter.key));
+    for (const key of ["drawerCount", "doorCount", "shelfCount", "shelfGaps", "frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId", "handleComponentId", "hingeComponentId", "runnerComponentId", "plinthHeight", "plinthSetbackMm", "backThickness", "shelfThickness"]) {
+      expect(parameterKeys.has(key), `wall open end must not expose ${key}`).toBe(false);
+    }
+    const userControls = new Set(modulePackage!.ui.controls.map((control) => control.parameterKey));
+    expect([...userControls].sort()).toEqual([
+      "boardThickness",
+      "bodyMaterialId",
+      "chamferMm",
+      "cornerRadiusMm",
+      "depth",
+      "endingShape",
+      "height",
+      "side",
+      "width"
+    ]);
+
     const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
     expect(defaults.kitchenModuleRole).toBe("top");
     expect(defaults.requiresWorktop).toBe(false);
@@ -679,30 +716,34 @@ describe("FWM furniture module packages", () => {
     expect(defaults.side).toBe("right");
 
     const slotIds = modulePackage!.materials.slots.map((slot) => slot.slotId);
-    expect(slotIds).toContain("corpus");
-    expect(slotIds).not.toContain("carcass");
-    expect(slotIds).not.toContain("shelf");
+    expect(slotIds).toEqual(["corpus"]);
 
     const chamfered = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
-      parameters: { ...defaults, endingShape: "chamfered", side: "right", shelfCount: 1, width: 300, height: 300, depth: 330 },
+      parameters: { ...defaults, endingShape: "chamfered", side: "right", width: 300, height: 300, depth: 330 },
       catalog
     });
     const rounded = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
-      parameters: { ...defaults, endingShape: "rounded", side: "right", shelfCount: 1, width: 300, height: 300, depth: 330 },
+      parameters: { ...defaults, endingShape: "rounded", side: "right", width: 300, height: 300, depth: 330 },
       catalog
     });
 
     expect(hasMeshNamed(chamfered, /worktop/i)).toBe(false);
     expect(hasMeshNamed(chamfered, /plinth/i)).toBe(false);
     expect(hasMeshNamed(chamfered, /door|drawer/i)).toBe(false);
-    expect(hasMeshNamed(chamfered, /wall_open_end_chamfered_side_panel/i)).toBe(true);
-    expect(hasMeshNamed(rounded, /wall_open_end_rounded_side_panel/i)).toBe(true);
-    expect(meshes(chamfered).filter((mesh) => /^wall_open_end_shelf_\d+$/.test(mesh.name))).toHaveLength(1);
+    expect(meshes(chamfered).map((mesh) => mesh.name).sort()).toEqual([
+      "wall_open_end_bottom_shelf",
+      "wall_open_end_rear_board",
+      "wall_open_end_side_rear_board",
+      "wall_open_end_top_shelf"
+    ]);
+    expect(hasMeshNamed(chamfered, /wall_open_end_chamfered_side_panel/i)).toBe(false);
+    expect(hasMeshNamed(rounded, /wall_open_end_rounded_side_panel/i)).toBe(false);
+    expect(meshes(chamfered).filter((mesh) => /^wall_open_end_shelf_\d+$/.test(mesh.name))).toHaveLength(0);
 
-    const chamferedTop = getMeshNamed(chamfered, "wall_open_end_top_panel");
-    const roundedTop = getMeshNamed(rounded, "wall_open_end_top_panel");
+    const chamferedTop = getMeshNamed(chamfered, "wall_open_end_top_shelf");
+    const roundedTop = getMeshNamed(rounded, "wall_open_end_top_shelf");
     expect(chamferedTop?.userData.materialGroup).toBe("corpus");
     expect(chamferedTop?.userData.materialSlotId).toBe("corpus");
     expect(chamferedTop?.userData.grainAlong).toBeTruthy();
@@ -716,6 +757,7 @@ describe("FWM furniture module packages", () => {
       { x: -150, y: 0, z: 165 }
     ]);
     expect(((roundedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length).toBeGreaterThan(((chamferedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length);
+    expect(meshes(chamfered).every((mesh) => mesh.userData.materialGroup === "corpus")).toBe(true);
     expect(objectBoundsMm(chamfered).height).toBeCloseTo(300, 0);
     expect(objectBoundsMm(chamfered).width).toBeCloseTo(300, 0);
     expect(objectBoundsMm(chamfered).depth).toBeCloseTo(330, 0);
@@ -2581,20 +2623,28 @@ describe("FWM furniture module packages", () => {
         }
       }
       expect(normalized.bodyMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
-      expect(normalized.frontMaterialId, modulePackage.module.moduleType).toBe(ctx.frontsMaterialId);
-      expect(normalized.shelfMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
-      if (Number(createDefaultModulePackageParameters(modulePackage).drawerCount ?? 0) > 0) {
-        expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBe(ctx.drawerBottomMaterialId);
-      }
-      if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
-        expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe(catalog.kitchenDefaults.plinthMaterialId);
+      if (modulePackage.module.moduleType === "fwm_catalog_wall_open_end") {
+        expect(normalized.frontMaterialId, modulePackage.module.moduleType).toBeUndefined();
+        expect(normalized.shelfMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
+        expect(normalized.backMaterialId, modulePackage.module.moduleType).toBeUndefined();
+        expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBeUndefined();
+        expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBeUndefined();
       } else {
-        expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe("");
+        expect(normalized.frontMaterialId, modulePackage.module.moduleType).toBe(ctx.frontsMaterialId);
+        expect(normalized.shelfMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
+        if (Number(createDefaultModulePackageParameters(modulePackage).drawerCount ?? 0) > 0) {
+          expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBe(ctx.drawerBottomMaterialId);
+        }
+        if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
+          expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe(catalog.kitchenDefaults.plinthMaterialId);
+        } else {
+          expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe("");
+        }
+        expect(typeof normalized.backMaterialId, modulePackage.module.moduleType).toBe("string");
+        const backMaterial = catalog.materials.find((material) => material.id === normalized.backMaterialId);
+        expect(backMaterial?.boardFamily, modulePackage.module.moduleType).toBe("back");
+        expect(normalized.backThickness, modulePackage.module.moduleType).toBe(backMaterial?.defaultThicknessMm);
       }
-      expect(typeof normalized.backMaterialId, modulePackage.module.moduleType).toBe("string");
-      const backMaterial = catalog.materials.find((material) => material.id === normalized.backMaterialId);
-      expect(backMaterial?.boardFamily, modulePackage.module.moduleType).toBe("back");
-      expect(normalized.backThickness, modulePackage.module.moduleType).toBe(backMaterial?.defaultThicknessMm);
     }
   }, 30_000);
 
