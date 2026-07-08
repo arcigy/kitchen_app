@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Box3, type Mesh, type Object3D } from "three";
+import { Box3, ShapeUtils, Vector2, type Mesh, type Object3D } from "three";
 import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
 import { validateFurnQuoteModulePackage } from "../../core/module-package/module-package-validation";
 import { applyModuleParameterPreset, buildModulePackageGeometryFromPackage, createDefaultModulePackageParameters } from "../../core/module-package/runtime/module-runtime-adapter";
@@ -227,6 +227,109 @@ function unapprovedBoardOverlaps(root: { traverse: (visitor: (object: unknown) =
     }
   }
 
+  return overlaps;
+}
+
+type PlanPoint = { x: number; z: number };
+
+function meshPlanProfileMm(mesh: Mesh): PlanPoint[] {
+  const profile = mesh.userData.revitPlanProfileMm as Array<{ x?: number; z?: number }> | undefined;
+  if (!Array.isArray(profile)) return [];
+  return profile
+    .map((point) => ({ x: Number(point.x), z: Number(point.z) }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z));
+}
+
+function polygonAreaMm2(points: PlanPoint[]) {
+  let area = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!;
+    const next = points[(index + 1) % points.length]!;
+    area += current.x * next.z - next.x * current.z;
+  }
+  return Math.abs(area) / 2;
+}
+
+function triangulatedPlanMm(mesh: Mesh) {
+  const profile = meshPlanProfileMm(mesh);
+  if (profile.length < 3) return [];
+  const triangles = ShapeUtils.triangulateShape(profile.map((point) => new Vector2(point.x, point.z)), []);
+  return triangles.map((triangle) => triangle.map((pointIndex) => profile[pointIndex]!));
+}
+
+function lineIntersection(a: PlanPoint, b: PlanPoint, c: PlanPoint, d: PlanPoint): PlanPoint {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const cdx = d.x - c.x;
+  const cdz = d.z - c.z;
+  const denominator = abx * cdz - abz * cdx;
+  if (Math.abs(denominator) < 1e-9) return b;
+  const t = ((c.x - a.x) * cdz - (c.z - a.z) * cdx) / denominator;
+  return { x: a.x + abx * t, z: a.z + abz * t };
+}
+
+function clipConvexPolygon(subject: PlanPoint[], clip: PlanPoint[]) {
+  let output = subject;
+  const clipSignedArea = clip.reduce((sum, current, index) => {
+    const next = clip[(index + 1) % clip.length]!;
+    return sum + current.x * next.z - next.x * current.z;
+  }, 0);
+  for (let clipIndex = 0; clipIndex < clip.length; clipIndex += 1) {
+    const edgeStart = clip[clipIndex]!;
+    const edgeEnd = clip[(clipIndex + 1) % clip.length]!;
+    const input = output;
+    output = [];
+    for (let index = 0; index < input.length; index += 1) {
+      const current = input[index]!;
+      const previous = input[(index + input.length - 1) % input.length]!;
+      const currentCross = (edgeEnd.x - edgeStart.x) * (current.z - edgeStart.z) - (edgeEnd.z - edgeStart.z) * (current.x - edgeStart.x);
+      const previousCross = (edgeEnd.x - edgeStart.x) * (previous.z - edgeStart.z) - (edgeEnd.z - edgeStart.z) * (previous.x - edgeStart.x);
+      const currentInside = clipSignedArea >= 0 ? currentCross >= -1e-6 : currentCross <= 1e-6;
+      const previousInside = clipSignedArea >= 0 ? previousCross >= -1e-6 : previousCross <= 1e-6;
+      if (currentInside) {
+        if (!previousInside) output.push(lineIntersection(previous, current, edgeStart, edgeEnd));
+        output.push(current);
+      } else if (previousInside) {
+        output.push(lineIntersection(previous, current, edgeStart, edgeEnd));
+      }
+    }
+    if (output.length === 0) break;
+  }
+  return output;
+}
+
+function realPlanOverlapAreaMm2(a: Mesh, b: Mesh) {
+  let area = 0;
+  for (const aTriangle of triangulatedPlanMm(a)) {
+    for (const bTriangle of triangulatedPlanMm(b)) {
+      area += polygonAreaMm2(clipConvexPolygon(aTriangle, bTriangle));
+    }
+  }
+  return area;
+}
+
+function realBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
+  const boardMeshes = meshes(root).filter((mesh) => {
+    if (mesh.visible === false || mesh.userData.hiddenByDefault === true) return false;
+    return canonicalBoardMaterialGroups.includes(mesh.userData.materialGroup as typeof canonicalBoardMaterialGroups[number]);
+  });
+  const overlaps: string[] = [];
+  for (let index = 0; index < boardMeshes.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < boardMeshes.length; otherIndex += 1) {
+      const a = boardMeshes[index]!;
+      const b = boardMeshes[otherIndex]!;
+      const aStart = Number(a.userData.revitExtrusionStartMm);
+      const aEnd = Number(a.userData.revitExtrusionEndMm);
+      const bStart = Number(b.userData.revitExtrusionStartMm);
+      const bEnd = Number(b.userData.revitExtrusionEndMm);
+      if (![aStart, aEnd, bStart, bEnd].every(Number.isFinite)) continue;
+      const yOverlap = Math.min(aEnd, bEnd) - Math.max(aStart, bStart);
+      if (yOverlap <= 2) continue;
+      const planArea = realPlanOverlapAreaMm2(a, b);
+      if (planArea <= 4) continue;
+      overlaps.push(`${a.name}/${b.name}:${Math.round(planArea)}mm2 x ${Math.round(yOverlap)}mm`);
+    }
+  }
   return overlaps;
 }
 
@@ -1029,9 +1132,14 @@ describe("FWM furniture module packages", () => {
     }
 
     expect(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(chamfered, "wall_corner_front_right_corpus_panel")?.userData.materialGroup).toBe("corpus");
     expect(getMeshNamed(chamfered, "wall_corner_left_short_side_panel")).toBeNull();
     expect(getMeshNamed(openNiche, "wall_corner_diagonal_front_door")).toBeNull();
     expect(meshes(openNiche).filter((mesh) => /^wall_corner_shelf_/.test(mesh.name))).toHaveLength(2);
+    expect(realBoardOverlaps(chamfered)).toEqual([]);
+    expect(realBoardOverlaps(corner90Closed)).toEqual([]);
+    expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBeCloseTo(Math.PI / 2, 6);
+    expect(getObjectNamed(chamfered, "__kitchen_corner_anchor")).toBeTruthy();
 
     const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_x_door")!);
     const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "wall_corner_front_leaf_x_door")!);
@@ -1039,13 +1147,21 @@ describe("FWM furniture module packages", () => {
     const corner90BackZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_back_panel_z")!);
     const chamferedBackZ = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_z")!);
     const chamferedDoor = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
+    const chamferedFrontRightCorpus = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_front_right_corpus_panel")!);
+    const chamferedTopProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_top_panel")!);
+    const chamferedDoorProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
+    const topDiagonalA = chamferedTopProfile[3]!;
+    const topDiagonalB = chamferedTopProfile[4]!;
+    expect(chamferedDoorProfile.some((point) => Math.abs(point.x - topDiagonalA.x) < 0.001 && Math.abs(point.z - topDiagonalA.z) < 0.001)).toBe(true);
+    expect(chamferedDoorProfile.some((point) => Math.abs(point.x - topDiagonalB.x) < 0.001 && Math.abs(point.z - topDiagonalB.z) < 0.001)).toBe(true);
     const frontInset = cornerWidth / 2 - cornerDepth;
     expect(corner90BackZ.maxZ).toBeCloseTo(frontInset, 0);
     expect(chamferedBackZ.maxZ).toBeCloseTo(cornerWidth / 2 - cornerChamfer, 0);
     expect(closedDoor.minZ).toBeGreaterThanOrEqual(cornerWidth / 2 - 0.5);
     expect(closedDoorZ.maxX).toBeLessThanOrEqual(frontInset + 0.5);
     expect(chamferedDoor.minX).toBeLessThan(-cornerWidth / 2);
-    expect(chamferedDoor.maxZ).toBeGreaterThan(cornerWidth / 2);
+    expect(chamferedDoor.maxZ).toBeGreaterThan(topDiagonalA.z);
+    expect(chamferedFrontRightCorpus.maxZ).toBeCloseTo(cornerWidth / 2, 0);
     expect(closedDoor.width).toBeCloseTo(cornerDepth, 0);
     expect(closedDoorZ.depth).toBeCloseTo(cornerDepth, 0);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);

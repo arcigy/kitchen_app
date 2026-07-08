@@ -1655,7 +1655,8 @@ function wallCornerFootprint(variant: string, width: number, depth: number, cham
       frontSegments: [
         { start: { x: frontInset, z: half }, end: { x: half, z: half }, name: "front_leaf_x" },
         { start: { x: frontInset, z: frontInset }, end: { x: frontInset, z: half }, name: "front_leaf_z" }
-      ]
+      ],
+      frontCorpusSegments: [] as Array<{ start: { x: number; z: number }; end: { x: number; z: number }; name: string }>
     };
   }
 
@@ -1670,7 +1671,8 @@ function wallCornerFootprint(variant: string, width: number, depth: number, cham
       diagonalStart,
       diagonalEnd
     ],
-    frontSegments: [{ start: diagonalStart, end: diagonalEnd, name: "diagonal_front" }]
+    frontSegments: [{ start: diagonalStart, end: diagonalEnd, name: "diagonal_front" }],
+    frontCorpusSegments: [{ start: diagonalStart, end: { x: half, z: half }, name: "front_right_corpus_panel" }]
   };
 }
 
@@ -1690,15 +1692,40 @@ function wallCornerHorizontalBoardFootprint(points: Array<{ x: number; z: number
   const minX = Math.min(...points.map((point) => point.x));
   const maxX = Math.max(...points.map((point) => point.x));
   const minZ = Math.min(...points.map((point) => point.z));
+  const maxZ = Math.max(...points.map((point) => point.z));
   return points.map((point) => {
     const x = point.x <= minX + 0.001
       ? point.x + backThicknessMm
       : point.x >= maxX - 0.001
         ? point.x - sideThicknessMm
         : point.x;
-    const z = point.z <= minZ + 0.001 ? point.z + backThicknessMm : point.z;
+    const z = point.z <= minZ + 0.001
+      ? point.z + backThicknessMm
+      : point.z >= maxZ - 0.001
+        ? point.z - sideThicknessMm
+        : point.z;
     return { x, z };
   });
+}
+
+function attachWallCornerKitchenAnchors(group: THREE.Group, minX: number, maxX: number, minZ: number, maxZ: number) {
+  const cornerAnchor = new THREE.Object3D();
+  cornerAnchor.name = kitchenCornerAnchorName;
+  cornerAnchor.position.set(minX * MM, 0, minZ * MM);
+  cornerAnchor.visible = false;
+  group.add(cornerAnchor);
+
+  const xAnchor = new THREE.Object3D();
+  xAnchor.name = kitchenCornerXAnchorName;
+  xAnchor.position.set(maxX * MM, 0, minZ * MM);
+  xAnchor.visible = false;
+  group.add(xAnchor);
+
+  const zAnchor = new THREE.Object3D();
+  zAnchor.name = kitchenCornerZAnchorName;
+  zAnchor.position.set(minX * MM, 0, maxZ * MM);
+  zAnchor.visible = false;
+  group.add(zAnchor);
 }
 
 function addWallCornerHandle(
@@ -1755,6 +1782,10 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const minZ = -width / 2;
   const maxZ = width / 2;
   const leftWallFrontZ = Math.max(...footprint.points.filter((point) => Math.abs(point.x - minX) < 0.001).map((point) => point.z));
+  const chamferedCorner = !variant.includes("90");
+  const doorFrontSegments = chamferedCorner
+    ? [{ start: innerFootprint[3]!, end: innerFootprint[4]!, name: "diagonal_front" }]
+    : footprint.frontSegments;
   const verticalEdges = [
     { name: "back_panel_x", start: { x: minX + back, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
     { name: "back_panel_z", start: { x: minX, z: minZ + back }, end: { x: minX, z: leftWallFrontZ }, group: "back" as const, thickness: back },
@@ -1774,6 +1805,25 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
     );
     tagWallCornerBoard(mesh, edge.name, edge.group);
   }
+  if (chamferedCorner && !openNiche) {
+    const frontRightSegment = {
+      start: footprint.frontCorpusSegments[0]?.start ?? innerFootprint[3]!,
+      end: { x: maxX - t, z: maxZ },
+      name: footprint.frontCorpusSegments[0]?.name ?? "front_right_corpus_panel"
+    };
+    const frontRight = addInsetBoardBetweenPlanPoints(
+      group,
+      `wall_corner_${frontRightSegment.name}`,
+      frontRightSegment.start,
+      frontRightSegment.end,
+      height / 2,
+      height,
+      t,
+      body,
+      paramKeys
+    );
+    tagWallCornerBoard(frontRight, frontRightSegment.name, "corpus", [{ edgeId: "front_right_visible_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
+  }
 
   const shelves = Math.max(0, Math.min(12, Math.round(num(params, "shelfCount", openNiche ? 2 : 1))));
   for (let index = 0; index < shelves; index += 1) {
@@ -1785,7 +1835,7 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   if (!openNiche) {
     const opened = bool(params, "opened", false);
     const doorOffset = opened ? Math.min(180, depth * 0.42) : 0;
-    for (const segment of footprint.frontSegments) {
+    for (const segment of doorFrontSegments) {
       const dx = segment.end.x - segment.start.x;
       const dz = segment.end.z - segment.start.z;
       const length = Math.max(1, Math.hypot(dx, dz));
@@ -1814,6 +1864,8 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   group.userData.catalogWallCornerVariant = variant;
   group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
   group.userData.kitchenCornerFootprintMm = footprint.points;
+  group.userData.kitchenCornerRotationOffsetRad = Math.PI / 2;
+  attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
 }
 
 function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
