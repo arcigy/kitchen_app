@@ -50,6 +50,7 @@ const WALL_OPEN_END_USER_PARAMETER_KEYS = new Set([
   "depth",
   "side",
   "endingShape",
+  "shelfCount",
   "cornerRadiusMm",
   "chamferMm",
   "boardThickness",
@@ -335,7 +336,7 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
     }
     if (spec.moduleType === "fwm_catalog_wall_open_end") {
       if (next.key === "displayName") next.defaultValue = "Horny koncovy otvoreny modul";
-      if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky. Ma iba dve zvisle corpus dosky do L a hornu/dolnu zrezanu policu; nema pracovnu dosku, sokel, dvierka, zasuvky ani nastavitelne police.";
+      if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky. Ma dve zvisle corpus dosky do L a zrezane horizontalne police; nema pracovnu dosku, sokel, dvierka ani zasuvky.";
       if (next.key === "variant") next.defaultValue = "chamfered_end";
       if (next.key === "height") next.defaultValue = 300;
       if (next.key === "depth") next.defaultValue = 330;
@@ -359,6 +360,7 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
       if (next.key === "shape") next.defaultValue = "chamfered";
       if (next.key === "cornerRadiusMm") next.defaultValue = 120;
       if (next.key === "chamferMm") next.defaultValue = 120;
+      if (next.key === "shelfCount") next.defaultValue = 2;
     }
     if (spec.geometryKind === "open_end") {
       if (next.key === "displayName") next.defaultValue = spec.displayName;

@@ -692,9 +692,10 @@ describe("FWM furniture module packages", () => {
     expect(modulePackage).toBeTruthy();
 
     const parameterKeys = new Set(modulePackage!.parameters.parameters.map((parameter) => parameter.key));
-    for (const key of ["drawerCount", "doorCount", "shelfCount", "shelfGaps", "frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId", "handleComponentId", "hingeComponentId", "runnerComponentId", "plinthHeight", "plinthSetbackMm", "backThickness", "shelfThickness"]) {
+    for (const key of ["drawerCount", "doorCount", "shelfGaps", "frontMaterialId", "backMaterialId", "shelfMaterialId", "drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId", "handleComponentId", "hingeComponentId", "runnerComponentId", "plinthHeight", "plinthSetbackMm", "backThickness", "shelfThickness"]) {
       expect(parameterKeys.has(key), `wall open end must not expose ${key}`).toBe(false);
     }
+    expect(parameterKeys.has("shelfCount"), "wall open end must expose shelfCount").toBe(true);
     const userControls = new Set(modulePackage!.ui.controls.map((control) => control.parameterKey));
     expect([...userControls].sort()).toEqual([
       "boardThickness",
@@ -704,6 +705,7 @@ describe("FWM furniture module packages", () => {
       "depth",
       "endingShape",
       "height",
+      "shelfCount",
       "side",
       "width"
     ]);
@@ -714,6 +716,7 @@ describe("FWM furniture module packages", () => {
     expect(defaults.hasPlinth).toBe(false);
     expect(defaults.endingShape).toBe("chamfered");
     expect(defaults.side).toBe("right");
+    expect(defaults.shelfCount).toBe(2);
 
     const slotIds = modulePackage!.materials.slots.map((slot) => slot.slotId);
     expect(slotIds).toEqual(["corpus"]);
@@ -735,12 +738,14 @@ describe("FWM furniture module packages", () => {
     expect(meshes(chamfered).map((mesh) => mesh.name).sort()).toEqual([
       "wall_open_end_bottom_shelf",
       "wall_open_end_rear_board",
+      "wall_open_end_shelf_1",
+      "wall_open_end_shelf_2",
       "wall_open_end_side_rear_board",
       "wall_open_end_top_shelf"
     ]);
     expect(hasMeshNamed(chamfered, /wall_open_end_chamfered_side_panel/i)).toBe(false);
     expect(hasMeshNamed(rounded, /wall_open_end_rounded_side_panel/i)).toBe(false);
-    expect(meshes(chamfered).filter((mesh) => /^wall_open_end_shelf_\d+$/.test(mesh.name))).toHaveLength(0);
+    expect(meshes(chamfered).filter((mesh) => /^wall_open_end_shelf_\d+$/.test(mesh.name))).toHaveLength(2);
 
     const chamferedTop = getMeshNamed(chamfered, "wall_open_end_top_shelf");
     const roundedTop = getMeshNamed(rounded, "wall_open_end_top_shelf");
@@ -750,12 +755,18 @@ describe("FWM furniture module packages", () => {
     expect(chamferedTop?.userData.edgeBandingStrategy).toBe("explicit_visible_edges");
     expect(Array.isArray(chamferedTop?.userData.edgeBanding)).toBe(true);
     expect(chamferedTop?.userData.revitPlanProfileMm).toEqual([
-      { x: -150, y: 0, z: -165 },
-      { x: 150, y: 0, z: -165 },
+      { x: -132, y: 0, z: -147 },
+      { x: 150, y: 0, z: -147 },
       { x: 150, y: 0, z: 45 },
       { x: 30, y: 0, z: 165 },
-      { x: -150, y: 0, z: 165 }
+      { x: -132, y: 0, z: 165 }
     ]);
+    const rearBoardBounds = objectBoundsMm(getMeshNamed(chamfered, "wall_open_end_rear_board")!);
+    const sideRearBounds = objectBoundsMm(getMeshNamed(chamfered, "wall_open_end_side_rear_board")!);
+    const bottomBounds = objectBoundsMm(getMeshNamed(chamfered, "wall_open_end_bottom_shelf")!);
+    expect(sideRearBounds.minZ).toBeGreaterThanOrEqual(rearBoardBounds.maxZ - 0.5);
+    expect(bottomBounds.minZ).toBeGreaterThanOrEqual(rearBoardBounds.maxZ - 0.5);
+    expect(bottomBounds.minX).toBeGreaterThanOrEqual(sideRearBounds.maxX - 0.5);
     expect(((roundedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length).toBeGreaterThan(((chamferedTop?.userData.revitPlanProfileMm as unknown[]) ?? []).length);
     expect(meshes(chamfered).every((mesh) => mesh.userData.materialGroup === "corpus")).toBe(true);
     expect(objectBoundsMm(chamfered).height).toBeCloseTo(300, 0);
