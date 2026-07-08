@@ -177,6 +177,29 @@ function objectBoundsMm(object: Mesh | { updateMatrixWorld: (force?: boolean) =>
   };
 }
 
+function boundsForMeshesMm(root: { traverse: (visitor: (object: unknown) => void) => void }, predicate: (mesh: Mesh) => boolean) {
+  const box = new Box3();
+  let found = false;
+  for (const mesh of meshes(root)) {
+    if (!predicate(mesh)) continue;
+    mesh.updateMatrixWorld(true);
+    box.union(new Box3().setFromObject(mesh));
+    found = true;
+  }
+  expect(found).toBe(true);
+  return {
+    minX: box.min.x * 1000,
+    maxX: box.max.x * 1000,
+    width: (box.max.x - box.min.x) * 1000,
+    minY: box.min.y * 1000,
+    maxY: box.max.y * 1000,
+    height: (box.max.y - box.min.y) * 1000,
+    minZ: box.min.z * 1000,
+    maxZ: box.max.z * 1000,
+    depth: (box.max.z - box.min.z) * 1000
+  };
+}
+
 function unapprovedBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
   const toleranceMm = 2;
   const boardMeshes = meshes(root).filter((mesh) => {
@@ -991,8 +1014,9 @@ describe("FWM furniture module packages", () => {
 
     for (const group of [chamfered, openNiche, corner90Closed]) {
       const bounds = objectBoundsMm(group);
-      expect(bounds.width).toBeCloseTo(cornerWidth, 0);
-      expect(bounds.depth).toBeCloseTo(cornerWidth, 0);
+      const cabinetBounds = boundsForMeshesMm(group, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
+      expect(cabinetBounds.width).toBeCloseTo(cornerWidth, 0);
+      expect(cabinetBounds.depth).toBeCloseTo(cornerWidth, 0);
       expect(bounds.height).toBeCloseTo(450, 0);
       expect(hasMeshNamed(group, /worktop/i)).toBe(false);
       expect(hasMeshNamed(group, /plinth/i)).toBe(false);
@@ -1005,23 +1029,38 @@ describe("FWM furniture module packages", () => {
     }
 
     expect(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(chamfered, "wall_corner_left_short_side_panel")).toBeNull();
     expect(getMeshNamed(openNiche, "wall_corner_diagonal_front_door")).toBeNull();
     expect(meshes(openNiche).filter((mesh) => /^wall_corner_shelf_/.test(mesh.name))).toHaveLength(2);
 
     const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_x_door")!);
     const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "wall_corner_front_leaf_x_door")!);
     const closedDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_z_door")!);
+    const corner90BackZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_back_panel_z")!);
+    const chamferedBackZ = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_z")!);
+    const chamferedDoor = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
+    const frontInset = cornerWidth / 2 - cornerDepth;
+    expect(corner90BackZ.maxZ).toBeCloseTo(frontInset, 0);
+    expect(chamferedBackZ.maxZ).toBeCloseTo(cornerWidth / 2 - cornerChamfer, 0);
+    expect(closedDoor.minZ).toBeGreaterThanOrEqual(cornerWidth / 2 - 0.5);
+    expect(closedDoorZ.maxX).toBeLessThanOrEqual(frontInset + 0.5);
+    expect(chamferedDoor.minX).toBeLessThan(-cornerWidth / 2);
+    expect(chamferedDoor.maxZ).toBeGreaterThan(cornerWidth / 2);
     expect(closedDoor.width).toBeCloseTo(cornerDepth, 0);
     expect(closedDoorZ.depth).toBeCloseTo(cornerDepth, 0);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);
 
-    const depthChangedBounds = objectBoundsMm(corner90DepthChanged);
+    const depthChangedBounds = boundsForMeshesMm(corner90DepthChanged, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
     const depthChangedDoorX = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_x_door")!);
     const depthChangedDoorZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_z_door")!);
+    const depthChangedBackZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_back_panel_z")!);
+    const changedFrontInset = cornerWidth / 2 - 360;
     expect(depthChangedBounds.width).toBeCloseTo(cornerWidth, 0);
     expect(depthChangedBounds.depth).toBeCloseTo(cornerWidth, 0);
+    expect(depthChangedBackZ.maxZ).toBeCloseTo(changedFrontInset, 0);
     expect(depthChangedDoorX.width).toBeCloseTo(360, 0);
     expect(depthChangedDoorZ.depth).toBeCloseTo(360, 0);
+    expect(depthChangedDoorZ.maxX).toBeLessThanOrEqual(changedFrontInset + 0.5);
   });
 
   it("declares truthful internal-edit capabilities for composed and sink-capable modules", () => {

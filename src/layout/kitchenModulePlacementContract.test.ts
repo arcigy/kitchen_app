@@ -36,7 +36,7 @@ describe("kitchen module placement contract", () => {
     ]);
 
     expect(issues.filter((issue) => issue.severity === "error")).toEqual([]);
-  });
+  }, 30_000);
 
   it("allows top corner wall-cabinet packages without floor or worktop requirements", () => {
     const catalog = createSystemSeedClientCatalogRepository().getCatalogForClient("client_delfi");

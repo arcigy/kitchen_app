@@ -876,9 +876,12 @@ function addPlanPrism(
     const next = (index + 1) % count;
     indices.push(index, next, count + next, index, count + next, count + index);
   }
-  for (let index = 1; index < count - 1; index += 1) {
-    indices.push(0, index, index + 1);
-    indices.push(count, count + index + 1, count + index);
+  // ShapeUtils handles both convex and concave cabinet footprints.
+  const contour = pointsMm.map((point) => new THREE.Vector2(point.x, point.z));
+  const triangles = THREE.ShapeUtils.triangulateShape(contour, []);
+  for (const triangle of triangles) {
+    indices.push(triangle[0]!, triangle[1]!, triangle[2]!);
+    indices.push(count + triangle[2]!, count + triangle[1]!, count + triangle[0]!);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -940,10 +943,10 @@ function addBoardBetweenPlanPoints(
   return mesh;
 }
 
-function insetPlanSegmentTowardCenter(
+function offsetPlanSegmentTowardCenter(
   startMm: { x: number; z: number },
   endMm: { x: number; z: number },
-  thicknessMm: number,
+  offsetMm: number,
   centerMm: { x: number; z: number } = { x: 0, z: 0 }
 ) {
   const dx = endMm.x - startMm.x;
@@ -956,11 +959,19 @@ function insetPlanSegmentTowardCenter(
   const normal = leftNormal.x * toCenter.x + leftNormal.z * toCenter.z >= 0
     ? leftNormal
     : { x: -leftNormal.x, z: -leftNormal.z };
-  const offset = thicknessMm / 2;
   return {
-    start: { x: startMm.x + normal.x * offset, z: startMm.z + normal.z * offset },
-    end: { x: endMm.x + normal.x * offset, z: endMm.z + normal.z * offset }
+    start: { x: startMm.x + normal.x * offsetMm, z: startMm.z + normal.z * offsetMm },
+    end: { x: endMm.x + normal.x * offsetMm, z: endMm.z + normal.z * offsetMm }
   };
+}
+
+function insetPlanSegmentTowardCenter(
+  startMm: { x: number; z: number },
+  endMm: { x: number; z: number },
+  thicknessMm: number,
+  centerMm: { x: number; z: number } = { x: 0, z: 0 }
+) {
+  return offsetPlanSegmentTowardCenter(startMm, endMm, thicknessMm / 2, centerMm);
 }
 
 function addInsetBoardBetweenPlanPoints(
@@ -977,6 +988,22 @@ function addInsetBoardBetweenPlanPoints(
 ) {
   const inset = insetPlanSegmentTowardCenter(startMm, endMm, thicknessMm, centerMm);
   return addBoardBetweenPlanPoints(group, name, inset.start, inset.end, yCenterMm, heightMm, thicknessMm, material, paramKeys);
+}
+
+function addOutsetBoardBetweenPlanPoints(
+  group: THREE.Group,
+  name: string,
+  startMm: { x: number; z: number },
+  endMm: { x: number; z: number },
+  yCenterMm: number,
+  heightMm: number,
+  thicknessMm: number,
+  material: THREE.Material,
+  paramKeys: string[] = [],
+  centerMm: { x: number; z: number } = { x: 0, z: 0 }
+) {
+  const outset = offsetPlanSegmentTowardCenter(startMm, endMm, -thicknessMm / 2, centerMm);
+  return addBoardBetweenPlanPoints(group, name, outset.start, outset.end, yCenterMm, heightMm, thicknessMm, material, paramKeys);
 }
 
 function tagVisibleEdges(mesh: THREE.Mesh, edgeIds: string[]) {
@@ -1659,6 +1686,21 @@ function insetWallCornerFootprint(points: Array<{ x: number; z: number }>, inset
   });
 }
 
+function wallCornerHorizontalBoardFootprint(points: Array<{ x: number; z: number }>, backThicknessMm: number, sideThicknessMm: number) {
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minZ = Math.min(...points.map((point) => point.z));
+  return points.map((point) => {
+    const x = point.x <= minX + 0.001
+      ? point.x + backThicknessMm
+      : point.x >= maxX - 0.001
+        ? point.x - sideThicknessMm
+        : point.x;
+    const z = point.z <= minZ + 0.001 ? point.z + backThicknessMm : point.z;
+    return { x, z };
+  });
+}
+
 function addWallCornerHandle(
   group: THREE.Group,
   name: string,
@@ -1699,7 +1741,7 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const defaultChamfer = Math.max(80, width - depth);
   const chamfer = num(params, "frontChamferMm", num(params, "chamferMm", defaultChamfer));
   const footprint = wallCornerFootprint(variant, width, depth, chamfer);
-  const innerFootprint = insetWallCornerFootprint(footprint.points, t);
+  const innerFootprint = wallCornerHorizontalBoardFootprint(footprint.points, back, t);
   const innerH = Math.max(1, height - 2 * t);
   const paramKeys = ["width", "depth", "height", "variant", "cornerShape", "frontChamferMm", "chamferMm", "boardThickness"];
 
@@ -1712,14 +1754,12 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   const maxX = width / 2;
   const minZ = -width / 2;
   const maxZ = width / 2;
+  const leftWallFrontZ = Math.max(...footprint.points.filter((point) => Math.abs(point.x - minX) < 0.001).map((point) => point.z));
   const verticalEdges = [
-    { name: "back_panel_x", start: { x: minX + t, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
-    { name: "back_panel_z", start: { x: minX, z: minZ + t }, end: { x: minX, z: maxZ - t }, group: "back" as const, thickness: back },
+    { name: "back_panel_x", start: { x: minX + back, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
+    { name: "back_panel_z", start: { x: minX, z: minZ + back }, end: { x: minX, z: leftWallFrontZ }, group: "back" as const, thickness: back },
     { name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: maxZ }, group: "corpus" as const, thickness: t }
   ];
-  if (!openNiche && (variant === "corner_chamfered" || variant === "corner_chamfered_1p")) {
-    verticalEdges.push({ name: "left_short_side_panel", start: { x: minX, z: minZ }, end: { x: minX, z: maxZ - chamfer }, group: "corpus" as const, thickness: t });
-  }
   for (const edge of verticalEdges) {
     const mesh = addInsetBoardBetweenPlanPoints(
       group,
@@ -1755,7 +1795,7 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
         start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
         end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
       };
-      const door = addInsetBoardBetweenPlanPoints(
+      const door = addOutsetBoardBetweenPlanPoints(
         group,
         `wall_corner_${segment.name}_door`,
         shifted.start,
