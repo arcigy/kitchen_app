@@ -17,6 +17,12 @@ import { resolveFwmDrawerSystemPreset } from "./drawerSystemPresets";
 import { getFwmFurnitureSpec } from "./definitions";
 import { normalizeFwmFurnitureParams, type FwmFurnitureParams } from "./types";
 
+const BASE_BOTTLE_PULLOUT_MODULE_TYPE = "base_bottle_pullout";
+
+function usesCatalogMetalDrawerSystem(moduleType: string) {
+  return moduleType === "fwm_catalog_base_drawers" || moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE;
+}
+
 function num(params: Record<string, unknown>, key: string, fallback: number) {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -470,7 +476,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
     }
   } else {
     items.push(boardItem({ id: "side-panels", category: "body", description: "Side panels", quantity: spec.geometryKind === "corner" ? 4 : 2, length: cabinetH, width: depth, thickness: boardT, material: bodyRef, slot: "carcass" }));
-    if (spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers") {
+    if (spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers" || spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE) {
       const railDepth = Math.max(50, Math.min(90, depth * 0.14));
       items.push(
         boardItem({ id: "bottom-panel", category: "body", description: "Bottom panel", quantity: 1, length: innerW, width: depth, thickness: boardT, material: bodyRef, slot: "carcass" }),
@@ -489,14 +495,18 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
       const drawerDepth = resolveDrawerDepthLayout(depth, backT, num(p, "drawerBackGapMm", 10)).depthMm;
       const drawerBoxThickness = Math.max(10, Math.min(16, boardT - 2));
       const drawerPreset = resolveFwmDrawerSystemPreset(p.drawerSystemBrand ?? p.drawerSystem, p.drawerSystemSize);
-      const drawerBottomLength = spec.moduleType === "fwm_catalog_base_drawers"
+      const drawerBottomLength = usesCatalogMetalDrawerSystem(spec.moduleType)
         ? Math.max(100, drawerPreset.systemDepthMm - drawerPreset.bottomDepthDeductionMm)
         : Math.max(100, drawerDepth - drawerBoxThickness);
-      const drawerBottomWidth = spec.moduleType === "fwm_catalog_base_drawers"
+      const drawerBottomWidth = usesCatalogMetalDrawerSystem(spec.moduleType)
         ? Math.max(60, width - boardT * 2 - drawerPreset.bottomWidthDeductionMm)
         : Math.max(60, width - boardT * 2 - 70);
-      items.push(boardItem({ id: "drawer-fronts", category: "front", description: "Drawer fronts", quantity: drawerCount, length: width - 4, width: frontH - 2, thickness: frontT, material: frontRef, slot: "front" }));
-      if (spec.moduleType !== "fwm_catalog_base_drawers") {
+      if (spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE) {
+        items.push(boardItem({ id: "bottle-pullout-front", category: "front", description: "Bottle pull-out shared front", quantity: 1, length: width - 4, width: Math.max(80, height - plinth - 4), thickness: frontT, material: frontRef, slot: "front" }));
+      } else {
+        items.push(boardItem({ id: "drawer-fronts", category: "front", description: "Drawer fronts", quantity: drawerCount, length: width - 4, width: frontH - 2, thickness: frontT, material: frontRef, slot: "front" }));
+      }
+      if (!usesCatalogMetalDrawerSystem(spec.moduleType)) {
         items.push(boardItem({ id: "drawer-boxes", category: "drawer_box", description: "Drawer box boards", quantity: drawerCount * 4, length: drawerDepth, width: 120, thickness: boardT, material: bodyRef, slot: "carcass" }));
       }
       items.push(boardItem({ id: "drawer-bottoms", category: "drawer_bottom", description: "Drawer bottom boards", quantity: drawerCount, length: drawerBottomLength, width: drawerBottomWidth, thickness: num(p, "drawerBottomThickness", drawerBottomMaterial?.defaultThicknessMm ?? 8), material: drawerBottomRef ?? bodyRef, slot: "drawer_bottom" }));
@@ -556,7 +566,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   if (edgeLengthLm > 0 && edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", edgeLengthLm, edgeRef, "front"));
 
   const hardware = [
-    hardwareItem("handles", "Visible handles", Math.max(0, drawerCount + doorCount), componentRef(resolveComponent(catalog, p, "handleComponentId"))),
+    hardwareItem("handles", "Visible handles", Math.max(0, spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE ? (drawerCount > 0 ? 1 : 0) : drawerCount + doorCount), componentRef(resolveComponent(catalog, p, "handleComponentId"))),
     hardwareItem("hinges", "Door hinges", Math.max(0, doorCount * 2), componentRef(resolveComponent(catalog, p, "hingeComponentId"))),
     hardwareItem("runners", "Drawer runner pairs", Math.max(0, drawerCount), componentRef(resolveComponent(catalog, p, "runnerComponentId"))),
     ...(plinth > 0

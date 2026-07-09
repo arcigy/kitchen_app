@@ -322,6 +322,25 @@ export const FWM_FURNITURE_SPECS = [
     tags: [...vendorCatalog, "base", "drawer"]
   },
   {
+    moduleType: "base_bottle_pullout",
+    displayName: "Spodni flasovy vysuv",
+    description: "Narrow lower bottle and oil pull-out cabinet with two internal drawer trays connected to one full-height front.",
+    category: "base_cabinet",
+    geometryKind: "base",
+    width: 200,
+    height: 722,
+    depth: 530,
+    drawers: 2,
+    doors: 0,
+    shelves: 0,
+    hasWorktop: true,
+    hasPlinth: true,
+    variantOptions: ["two_tier_single_front"],
+    placementContexts: ["kitchen_wall", "floor"],
+    kitchenRole: "low",
+    tags: [...vendorCatalog, "base", "drawer", "bottle_pullout", "narrow"]
+  },
+  {
     moduleType: "fwm_catalog_base_sink",
     displayName: "Katalogova spodna drezova skrinka",
     description: "Catalog sink base cabinet covering door and drawer front variants.",

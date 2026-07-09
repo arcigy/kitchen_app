@@ -19,6 +19,10 @@ import { createModuleInternalEditingDefinition } from "../../layout/moduleIntern
 
 const now = "2026-06-09T00:00:00.000Z";
 const BASE_CORNER_NOTES = "Parametric lower catalog corner cabinet. The variant selects blind 1D, 90-degree or chamfered geometry. Depth controls both corner legs, plinthHeight stays independent from height, plinthSetbackMm moves the plinth zone, and chamfer controls are used only by chamfered variants.";
+const BASE_BOTTLE_PULLOUT_PACKAGE_ID = "base_bottle_pullout";
+const BASE_BOTTLE_PULLOUT_RUNTIME_TYPE = "base_bottle_pullout";
+const BASE_BOTTLE_PULLOUT_DISPLAY_NAME = "Spodni flasovy vysuv";
+const BASE_BOTTLE_PULLOUT_DESCRIPTION = "Narrow lower kitchen pull-out for bottles, oils and spices. It has one full-height front connected to two internal drawer trays, uses the shared drawer system hardware, binds to the kitchen worktop context, and never owns its own worktop.";
 
 type UiVisibility = NonNullable<ModuleParameterDefinition["uiVisibility"]>;
 
@@ -96,6 +100,257 @@ const WALL_OPEN_END_FREE_PARAMETER_KEYS = [
   "depth",
   "bodyMaterialId",
   "boardThickness"
+];
+
+const WALL_CORNER_90_PACKAGE_ID = "wall_corner_90";
+const WALL_CORNER_90_RUNTIME_TYPE = "fwm_catalog_wall_cabinet";
+const WALL_CORNER_90_USER_PARAMETER_KEYS = new Set([
+  "width",
+  "height",
+  "depth",
+  "shelfCount",
+  "opened",
+  "bodyMaterialId",
+  "frontMaterialId",
+  "backMaterialId",
+  "handleComponentId",
+  "hingeComponentId",
+  "boardThickness",
+  "frontThicknessMm",
+  "backThickness",
+  "shelfThickness"
+]);
+
+const WALL_CORNER_90_OWNED_PARAMETER_KEYS = new Set([
+  ...WALL_CORNER_90_USER_PARAMETER_KEYS,
+  "typeId",
+  "type",
+  "displayName",
+  "family",
+  "code",
+  "version",
+  "widthMm",
+  "heightMm",
+  "depthMm",
+  "rowHeight",
+  "heightCarcass",
+  "variant",
+  "catalogCode",
+  "side",
+  "cornerShape",
+  "frontType",
+  "openingMode",
+  "mountingMode",
+  "doorCount",
+  "shelfGaps",
+  "frontGap",
+  "sideGap",
+  "handleType",
+  "wallMounted",
+  "glassFronts",
+  "assemblyContext",
+  "roomCategory",
+  "kitchenModuleRole",
+  "isCorner",
+  "frontFaceCount",
+  "backFaceCount",
+  "requiresWorktop",
+  "hasWorktop",
+  "hasPlinth",
+  "frontSide",
+  "backSide",
+  "leftSide",
+  "rightSide",
+  "frontDirection",
+  "backDirection",
+  "leftDirection",
+  "rightDirection",
+  "worktopBackSide",
+  "positionXmm",
+  "positionYmm",
+  "positionZmm",
+  "rotationZDeg",
+  "customPriceOverride",
+  "pricingEnabled",
+  "priceSource",
+  "costOverride",
+  "quantity",
+  "isActive",
+  "isVisible",
+  "isLocked",
+  "isValid",
+  "validationErrors",
+  "notes",
+  "tags",
+  "createdAt",
+  "updatedAt",
+  "exportToIfc",
+  "ifcClass",
+  "ifcPredefinedType",
+  "ifcName",
+  "ifcDescription",
+  "ifcObjectType",
+  "ifcTag",
+  "classificationCode",
+  "classificationSystem",
+  "bodyMaterialGroup",
+  "frontMaterialGroup",
+  "backMaterialGroup",
+  "shelfMaterialGroup",
+  "shelfMaterialId",
+  "worktopMaterialGroup",
+  "drawerBoxMaterialGroup",
+  "materialAssignments",
+  "componentAssignments",
+  "commercialSelections"
+]);
+
+const BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS = new Set([
+  "width",
+  "height",
+  "depth",
+  "plinthHeight",
+  "plinthSetbackMm",
+  "opened",
+  "drawerSystemBrand",
+  "drawer1SystemSize",
+  "drawer2SystemSize",
+  "bodyMaterialId",
+  "frontMaterialId",
+  "backMaterialId",
+  "drawerBottomMaterialId",
+  "plinthMaterialId",
+  "boardThickness",
+  "frontThicknessMm",
+  "backThickness"
+]);
+
+const BASE_BOTTLE_PULLOUT_OWNED_PARAMETER_KEYS = new Set([
+  ...BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS,
+  "typeId",
+  "type",
+  "displayName",
+  "family",
+  "code",
+  "version",
+  "widthMm",
+  "heightMm",
+  "depthMm",
+  "rowHeight",
+  "heightCarcass",
+  "variant",
+  "catalogCode",
+  "assemblyContext",
+  "roomCategory",
+  "kitchenModuleRole",
+  "isCorner",
+  "frontFaceCount",
+  "backFaceCount",
+  "requiresWorktop",
+  "hasWorktop",
+  "hasPlinth",
+  "frontSide",
+  "backSide",
+  "leftSide",
+  "rightSide",
+  "frontDirection",
+  "backDirection",
+  "leftDirection",
+  "rightDirection",
+  "worktopBackSide",
+  "positionXmm",
+  "positionYmm",
+  "positionZmm",
+  "rotationZDeg",
+  "customPriceOverride",
+  "pricingEnabled",
+  "priceSource",
+  "costOverride",
+  "quantity",
+  "isActive",
+  "isVisible",
+  "isLocked",
+  "isValid",
+  "validationErrors",
+  "notes",
+  "tags",
+  "createdAt",
+  "updatedAt",
+  "exportToIfc",
+  "ifcClass",
+  "ifcPredefinedType",
+  "ifcName",
+  "ifcDescription",
+  "ifcObjectType",
+  "ifcTag",
+  "classificationCode",
+  "classificationSystem",
+  "bodyMaterialGroup",
+  "frontMaterialGroup",
+  "backMaterialGroup",
+  "shelfMaterialGroup",
+  "worktopMaterialGroup",
+  "drawerBoxMaterialGroup",
+  "openingMode",
+  "drawerCount",
+  "drawerSystem",
+  "drawerSystemSize",
+  "drawerSystemSizes",
+  "drawerSystemLabels",
+  "drawerSystemMinFrontHeightsMm",
+  "drawerSystemDepthMm",
+  "drawerBottomDepthDeductionMm",
+  "drawerBottomWidthDeductionMm",
+  "drawerBackWidthDeductionMm",
+  "drawerBackHeightDeductionMm",
+  "drawerSystemBackHeightsMm",
+  "drawerSystemPricePerSet",
+  "drawerSystemPriceWithMargin",
+  "drawerSystemCodeLabel",
+  "drawerFrontHeightsMm",
+  "drawer1FrontHeightMm",
+  "drawer2FrontHeightMm",
+  "drawer1SystemLabel",
+  "drawer2SystemLabel",
+  "drawer1SystemMinFrontHeightMm",
+  "drawer2SystemMinFrontHeightMm",
+  "drawer1SystemBackHeightMm",
+  "drawer2SystemBackHeightMm",
+  "handleType",
+  "handleLengthMm",
+  "handleProjectionMm",
+  "handleSizeMm",
+  "frontGap",
+  "sideGap",
+  "drawerBackGapMm",
+  "worktopThicknessMm",
+  "handleComponentId",
+  "runnerComponentId",
+  "legComponentId",
+  "clipComponentId",
+  "materialAssignments",
+  "componentAssignments",
+  "commercialSelections"
+]);
+
+const BASE_BOTTLE_PULLOUT_UI_CONTROL_KEYS = [
+  "width",
+  "height",
+  "depth",
+  "plinthHeight",
+  "plinthSetbackMm",
+  "opened",
+  "drawerSystemBrand",
+  "drawer1SystemSize",
+  "drawer2SystemSize",
+  "bodyMaterialId",
+  "frontMaterialId",
+  "backMaterialId",
+  "drawerBottomMaterialId",
+  "plinthMaterialId",
+  "boardThickness",
+  "frontThicknessMm",
+  "backThickness"
 ];
 
 const TALL_STACK_SLOT_DEFAULTS: Array<{ type: "empty" | "drawer" | "shelf" | "oven" | "sink" | "microwave" | "door"; height: number }> = [];
@@ -262,6 +517,10 @@ function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParamete
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerFrontHeightParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemSizeParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemParameter(parameter.key)) return "technical";
+  if (spec.moduleType === BASE_BOTTLE_PULLOUT_RUNTIME_TYPE) {
+    if (BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
+    return "internal";
+  }
   if (spec.kitchenRole === "top" && TOP_MODULE_INTERNAL_PARAMETER_KEYS.has(parameter.key)) return "internal";
   if (spec.moduleType === "fwm_catalog_wall_open_end") {
     if (WALL_OPEN_END_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
@@ -362,6 +621,63 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
       if (next.key === "depth") next.defaultValue = 530;
       if (next.key === "height") next.defaultValue = 722;
     }
+    if (spec.moduleType === BASE_BOTTLE_PULLOUT_RUNTIME_TYPE) {
+      if (next.key === "displayName" || next.key === "ifcName") next.defaultValue = BASE_BOTTLE_PULLOUT_DISPLAY_NAME;
+      if (next.key === "notes") next.defaultValue = BASE_BOTTLE_PULLOUT_DESCRIPTION;
+      if (next.key === "ifcDescription") next.defaultValue = BASE_BOTTLE_PULLOUT_DESCRIPTION;
+      if (next.key === "width" || next.key === "widthMm") {
+        next.defaultValue = 200;
+        next.min = 150;
+        next.max = 300;
+        next.step = 10;
+      }
+      if (next.key === "height" || next.key === "heightMm" || next.key === "rowHeight" || next.key === "heightCarcass") next.defaultValue = 722;
+      if (next.key === "depth" || next.key === "depthMm") next.defaultValue = 530;
+      if (next.key === "variant") {
+        next.defaultValue = "two_tier_single_front";
+        next.options = [{ label: "two tier single front", value: "two_tier_single_front" }];
+      }
+      if (next.key === "drawerCount") {
+        next.defaultValue = 2;
+        next.min = 2;
+        next.max = 2;
+      }
+      if (next.key === "doorCount" || next.key === "shelfCount") next.defaultValue = 0;
+      if (next.key === "openingMode") next.defaultValue = "drawer";
+      if (next.key === "drawerSystem" || next.key === "drawerSystemBrand") {
+        next.defaultValue = "merivobox";
+        if (next.key === "drawerSystemBrand") {
+          next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
+        }
+      }
+      if (next.key === "drawerSystemSize") next.defaultValue = "M";
+      if (next.key === "drawerSystemSizes") next.defaultValue = "M,M";
+      if (next.key === "drawerSystemLabels") next.defaultValue = "MERIVOBOX M,MERIVOBOX M";
+      if (next.key === "drawerSystemMinFrontHeightsMm") next.defaultValue = "136,136";
+      if (next.key === "drawerSystemBackHeightsMm") next.defaultValue = "83,83";
+      if (next.key === "drawerFrontHeightsMm") next.defaultValue = "";
+      if (next.key === "drawer1SystemSize" || next.key === "drawer2SystemSize") {
+        next.defaultValue = "M";
+        next.options = [
+          { label: "Auto", value: "" },
+          { label: "M", value: "M" },
+          { label: "D", value: "D" },
+          { label: "E", value: "E" },
+          { label: "F", value: "F" }
+        ];
+      }
+      if (next.key === "hasCutleryInnerDrawer") next.defaultValue = false;
+      if (next.key === "handleType") next.defaultValue = "bar";
+      if (next.key === "handleLengthMm") next.defaultValue = 120;
+      if (next.key === "requiresWorktop") next.defaultValue = true;
+      if (next.key === "hasWorktop") next.defaultValue = false;
+      if (next.key === "hasPlinth") next.defaultValue = true;
+      if (next.key === "bodyMaterialGroup" || next.key === "shelfMaterialGroup") next.defaultValue = "corpus";
+      if (next.key === "frontMaterialGroup") next.defaultValue = "front";
+      if (next.key === "backMaterialGroup") next.defaultValue = "back";
+      if (next.key === "worktopMaterialGroup") next.defaultValue = "";
+      if (next.key === "drawerBoxMaterialGroup") next.defaultValue = "drawer_bottom";
+    }
     if (spec.moduleType === "fwm_catalog_wall_open_end") {
       if (next.key === "displayName") next.defaultValue = "Horny koncovy otvoreny modul";
       if (next.key === "notes") next.defaultValue = "Horny otvoreny koncovy modul pre horne skrinky. Ma dve zvisle corpus dosky do L a zrezane horizontalne police; nema pracovnu dosku, sokel, dvierka ani zasuvky.";
@@ -433,6 +749,9 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
 }
 
 function filterModuleSpecificParameters(spec: FwmFurnitureSpec, parameters: ModuleParameterDefinition[]) {
+  if (spec.moduleType === BASE_BOTTLE_PULLOUT_RUNTIME_TYPE) {
+    return parameters.filter((parameter) => BASE_BOTTLE_PULLOUT_OWNED_PARAMETER_KEYS.has(parameter.key));
+  }
   if (spec.moduleType !== "fwm_catalog_wall_open_end") return parameters;
   return parameters.filter((parameter) =>
     !WALL_OPEN_END_FORBIDDEN_PARAMETER_KEYS.has(parameter.key) &&
@@ -1083,6 +1402,8 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
     "powerW",
     "drawerCount",
     "drawerSystemBrand",
+    "drawer1SystemSize",
+    "drawer2SystemSize",
     "hasCutleryInnerDrawer",
     "drawerFrontHeightsMm",
     "drawerSystem",
@@ -1412,4 +1733,282 @@ function makePackage(spec: FwmFurnitureSpec): FurnQuoteModulePackage {
   };
 }
 
-export const extendedFurnitureModulePackages: FurnQuoteModulePackage[] = FWM_FURNITURE_SPECS.map(makePackage);
+function createBaseBottlePulloutModulePackage(): FurnQuoteModulePackage {
+  const sourceSpec = FWM_FURNITURE_SPECS.find((spec) => spec.moduleType === BASE_BOTTLE_PULLOUT_RUNTIME_TYPE);
+  if (!sourceSpec) throw new Error(`Missing ${BASE_BOTTLE_PULLOUT_RUNTIME_TYPE} source spec.`);
+
+  const modulePackage = makePackage(sourceSpec);
+  modulePackage.module = {
+    ...modulePackage.module,
+    modulePackageId: BASE_BOTTLE_PULLOUT_PACKAGE_ID,
+    moduleType: BASE_BOTTLE_PULLOUT_RUNTIME_TYPE,
+    familyName: BASE_BOTTLE_PULLOUT_DISPLAY_NAME,
+    displayName: BASE_BOTTLE_PULLOUT_DISPLAY_NAME,
+    description: BASE_BOTTLE_PULLOUT_DESCRIPTION,
+    tags: [...sourceSpec.tags]
+  };
+  modulePackage.parameters = {
+    ...modulePackage.parameters,
+    parameters: modulePackage.parameters.parameters
+      .filter((parameter) => BASE_BOTTLE_PULLOUT_OWNED_PARAMETER_KEYS.has(parameter.key))
+      .map((parameter) => {
+        const next = { ...parameter };
+        if (BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS.has(next.key)) next.uiVisibility = "user";
+        else next.uiVisibility = "internal";
+        if (next.key === "type") next.defaultValue = BASE_BOTTLE_PULLOUT_RUNTIME_TYPE;
+        if (next.key === "displayName" || next.key === "ifcName") next.defaultValue = BASE_BOTTLE_PULLOUT_DISPLAY_NAME;
+        if (next.key === "notes" || next.key === "ifcDescription") next.defaultValue = BASE_BOTTLE_PULLOUT_DESCRIPTION;
+        if (next.key === "typeId" || next.key === "ifcTag") next.defaultValue = `${BASE_BOTTLE_PULLOUT_PACKAGE_ID}__type`;
+        if (next.key === "family") next.defaultValue = "base";
+        if (next.key === "width" || next.key === "widthMm") {
+          next.defaultValue = 200;
+          next.min = 150;
+          next.max = 300;
+          next.step = 10;
+        }
+        if (next.key === "height" || next.key === "heightMm" || next.key === "rowHeight" || next.key === "heightCarcass") next.defaultValue = 722;
+        if (next.key === "depth" || next.key === "depthMm") next.defaultValue = 530;
+        if (next.key === "variant") {
+          next.defaultValue = "two_tier_single_front";
+          next.options = [{ label: "two tier single front", value: "two_tier_single_front" }];
+        }
+        if (next.key === "drawerCount") {
+          next.defaultValue = 2;
+          next.min = 2;
+          next.max = 2;
+        }
+        if (next.key === "drawerSystemBrand") {
+          next.defaultValue = "merivobox";
+          next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
+        }
+        if (next.key === "drawerSystem" || next.key === "drawerSystemSize") next.defaultValue = next.key === "drawerSystem" ? "merivobox" : "M";
+        if (next.key === "drawerSystemSizes") next.defaultValue = "M,M";
+        if (next.key === "drawerSystemLabels") next.defaultValue = "MERIVOBOX M,MERIVOBOX M";
+        if (next.key === "drawerSystemMinFrontHeightsMm") next.defaultValue = "136,136";
+        if (next.key === "drawerSystemBackHeightsMm") next.defaultValue = "83,83";
+        if (next.key === "drawer1SystemSize" || next.key === "drawer2SystemSize") {
+          next.defaultValue = "M";
+          next.options = [
+            { label: "Auto", value: "" },
+            { label: "M", value: "M" },
+            { label: "D", value: "D" },
+            { label: "E", value: "E" },
+            { label: "F", value: "F" }
+          ];
+        }
+        if (next.key === "openingMode") next.defaultValue = "drawer";
+        if (next.key === "requiresWorktop") next.defaultValue = true;
+        if (next.key === "hasWorktop") next.defaultValue = false;
+        if (next.key === "hasPlinth") next.defaultValue = true;
+        return next;
+      })
+  };
+  const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
+  modulePackage.ui = {
+    ...modulePackage.ui,
+    controls: BASE_BOTTLE_PULLOUT_UI_CONTROL_KEYS
+      .filter((parameterKey) => parameterKeys.has(parameterKey))
+      .map((parameterKey, order) => {
+        const definition = modulePackage.parameters.parameters.find((parameter) => parameter.key === parameterKey);
+        const controlType =
+          parameterKey.endsWith("MaterialId") ? "materialPicker" :
+          /^drawer[1-5]SystemSize$/.test(parameterKey) || parameterKey === "drawerSystemBrand" ? "select" :
+          parameterKey === "opened" ? "checkbox" :
+          "number";
+        return {
+          parameterKey,
+          controlType,
+          groupId: definition?.group ?? "general",
+          order
+        };
+      })
+  };
+  modulePackage.materials = {
+    ...modulePackage.materials,
+    slots: modulePackage.materials.slots.filter((slot) => ["corpus", "front", "back", "drawer_bottom", "plinth"].includes(slot.slotId))
+  };
+  modulePackage.components = {
+    ...modulePackage.components,
+    slots: modulePackage.components.slots.filter((slot) => ["handle", "runner", "leg", "plinth_clip"].includes(slot.slotId))
+  };
+  modulePackage.behavior = modulePackage.behavior
+    ? {
+        ...modulePackage.behavior,
+        contextBindings: modulePackage.behavior.contextBindings?.map((binding) => ({
+          ...binding,
+          materialSync: binding.materialSync?.filter((rule) => rule.targetParameter !== "shelfMaterialId"),
+          componentSync: binding.componentSync?.filter((rule) => rule.targetParameter === "handleComponentId")
+        }))
+      }
+    : modulePackage.behavior;
+  if (modulePackage.geometry.mode === "trusted-runtime") {
+    modulePackage.geometry = {
+      ...modulePackage.geometry,
+      parameterMapping: Object.fromEntries(
+        Object.entries(modulePackage.geometry.parameterMapping ?? {}).filter(([key]) => parameterKeys.has(key))
+      ) as Record<string, string>
+    };
+  }
+  modulePackage.parameterPresets = {
+    freeParameterKeys: MODULE_PRESET_FREE_PARAMETER_KEYS.filter((key) => parameterKeys.has(key) || key === "materialAssignments" || key === "commercialSelections"),
+    presets: []
+  };
+  modulePackage.exports = {
+    ...modulePackage.exports,
+    exportTags: [...sourceSpec.tags],
+    manufacturingCode: "BASE_BOTTLE_PULLOUT",
+    notes: ["Narrow base bottle pull-out package using two internal drawer trays and one shared front."]
+  };
+  modulePackage.manufacturing = {
+    ...modulePackage.manufacturing,
+    notes: [
+      "One full-height front is edge-banded as visible front board.",
+      "Two internal trays reuse the shared drawer-system hardware and drawer-bottom material group."
+    ]
+  };
+  return modulePackage;
+}
+
+function createWallCorner90ModulePackage(): FurnQuoteModulePackage {
+  const sourceSpec = FWM_FURNITURE_SPECS.find((spec) => spec.moduleType === WALL_CORNER_90_RUNTIME_TYPE);
+  if (!sourceSpec) throw new Error(`Missing ${WALL_CORNER_90_RUNTIME_TYPE} source spec.`);
+
+  const wallCornerSpec: FwmFurnitureSpec = {
+    ...sourceSpec,
+    displayName: "Horna rohova skrinka 90",
+    description: "Upper L-shaped 90-degree corner cabinet for DELFI-style kitchen groups. It uses the proven upper corner runtime geometry, two hinged fronts, real shelves, top-context height/depth sync, canonical material groups, and no plinth, legs, clips or worktop.",
+    geometryKind: "corner",
+    width: 600,
+    height: 720,
+    depth: 320,
+    doors: 2,
+    shelves: 2,
+    hasWorktop: false,
+    hasPlinth: false,
+    wallMounted: true,
+    glassFronts: false,
+    variantOptions: ["corner_90"],
+    placementContexts: ["kitchen_corner", "kitchen_wall", "wall_mounted"],
+    kitchenRole: "top",
+    tags: ["kitchen", "wall", "upper", "corner", "l_shape"]
+  };
+
+  const modulePackage = makePackage(wallCornerSpec);
+  const displayName = "Horna rohova skrinka 90";
+  const description = wallCornerSpec.description;
+  modulePackage.module = {
+    ...modulePackage.module,
+    modulePackageId: WALL_CORNER_90_PACKAGE_ID,
+    moduleType: WALL_CORNER_90_PACKAGE_ID,
+    familyName: displayName,
+    displayName,
+    description,
+    tags: [...wallCornerSpec.tags]
+  };
+  modulePackage.parameters = {
+    ...modulePackage.parameters,
+    parameters: modulePackage.parameters.parameters
+      .filter((parameter) => WALL_CORNER_90_OWNED_PARAMETER_KEYS.has(parameter.key))
+      .map((parameter) => {
+        const next = { ...parameter };
+        if (WALL_CORNER_90_USER_PARAMETER_KEYS.has(next.key)) next.uiVisibility = "user";
+        else if (["variant", "doorCount", "cornerShape", "frontType", "openingMode", "mountingMode", "isCorner", "frontFaceCount", "backFaceCount", "requiresWorktop", "hasWorktop", "hasPlinth", "kitchenModuleRole"].includes(next.key)) next.uiVisibility = "technical";
+        else next.uiVisibility = next.uiVisibility === "user" ? "internal" : next.uiVisibility;
+
+        if (next.key === "type") next.defaultValue = WALL_CORNER_90_RUNTIME_TYPE;
+        if (next.key === "displayName" || next.key === "ifcName") next.defaultValue = displayName;
+        if (next.key === "notes") next.defaultValue = description;
+        if (next.key === "ifcDescription") next.defaultValue = description;
+        if (next.key === "ifcObjectType") next.defaultValue = "wall";
+        if (next.key === "typeId" || next.key === "ifcTag") next.defaultValue = `${WALL_CORNER_90_PACKAGE_ID}__type`;
+        if (next.key === "family") next.defaultValue = "wall";
+        if (next.key === "width" || next.key === "widthMm") next.defaultValue = 600;
+        if (next.key === "height" || next.key === "heightMm" || next.key === "rowHeight" || next.key === "heightCarcass") next.defaultValue = 720;
+        if (next.key === "depth" || next.key === "depthMm") next.defaultValue = 320;
+        if (next.key === "variant") {
+          next.defaultValue = "corner_90";
+          next.options = [{ label: "corner 90", value: "corner_90" }];
+        }
+        if (next.key === "doorCount") {
+          next.defaultValue = 2;
+          next.min = 2;
+          next.max = 2;
+        }
+        if (next.key === "shelfCount") next.defaultValue = 2;
+        if (next.key === "opened") next.defaultValue = true;
+        if (next.key === "cornerShape") next.defaultValue = "l_shape";
+        if (next.key === "frontType") next.defaultValue = "solid";
+        if (next.key === "openingMode") next.defaultValue = "hinged";
+        if (next.key === "side") next.defaultValue = "left";
+        if (next.key === "boardThickness" || next.key === "frontThicknessMm" || next.key === "backThickness" || next.key === "shelfThickness") next.defaultValue = 18;
+        if (next.key === "isCorner") next.defaultValue = true;
+        if (next.key === "frontFaceCount") next.defaultValue = 0;
+        if (next.key === "backFaceCount") next.defaultValue = 2;
+        if (next.key === "requiresWorktop" || next.key === "hasWorktop" || next.key === "hasPlinth") next.defaultValue = false;
+        if (next.key === "kitchenModuleRole") next.defaultValue = "top";
+        if (next.key === "bodyMaterialGroup" || next.key === "shelfMaterialGroup") next.defaultValue = "corpus";
+        if (next.key === "frontMaterialGroup") next.defaultValue = "front";
+        if (next.key === "backMaterialGroup") next.defaultValue = "back";
+        if (next.key === "worktopMaterialGroup") next.defaultValue = "";
+        if (next.key === "drawerBoxMaterialGroup") next.defaultValue = "";
+        return next;
+      })
+  };
+  const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
+  modulePackage.ui = {
+    ...modulePackage.ui,
+    controls: modulePackage.ui.controls.filter((control) => WALL_CORNER_90_USER_PARAMETER_KEYS.has(control.parameterKey))
+  };
+  modulePackage.materials = {
+    ...modulePackage.materials,
+    slots: modulePackage.materials.slots.filter((slot) => slot.slotId === "corpus" || slot.slotId === "front" || slot.slotId === "back")
+  };
+  modulePackage.placement = {
+    ...modulePackage.placement,
+    allowedContexts: ["kitchen_corner"],
+    requiredAnchors: ["two_perpendicular_walls", "corner", "wall"],
+    requiresCorner: true,
+    requiresWall: true,
+    requiresFloor: false,
+    allowFreePlacement: false,
+    corner: { required: true, allowedAngles: [90], toleranceDeg: 3, mustTouchBothWalls: true },
+    wall: { mustAttachToWall: true }
+  };
+  modulePackage.behavior = modulePackage.behavior
+    ? {
+        ...modulePackage.behavior,
+        contextBindings: modulePackage.behavior.contextBindings?.map((binding) => ({
+          ...binding,
+          materialSync: binding.materialSync?.map((rule) =>
+            rule.targetParameter === "backMaterialId" ? { ...rule, thicknessParameter: undefined } : rule
+          )
+        }))
+      }
+    : modulePackage.behavior;
+  if (modulePackage.geometry.mode === "trusted-runtime") {
+    modulePackage.geometry = {
+      ...modulePackage.geometry,
+      parameterMapping: Object.fromEntries(
+        Object.entries(modulePackage.geometry.parameterMapping ?? {}).filter(([key]) => parameterKeys.has(key))
+      ) as Record<string, string>
+    };
+  }
+  modulePackage.parameterPresets = {
+    freeParameterKeys: MODULE_PRESET_FREE_PARAMETER_KEYS.filter((key) => parameterKeys.has(key) || key === "materialAssignments" || key === "commercialSelections"),
+    presets: []
+  };
+  modulePackage.exports = {
+    ...modulePackage.exports,
+    manufacturingCode: "WALL_CORNER_90",
+    notes: ["Upper 90-degree wall corner module package. Runtime builder is shared with the historical wall-cabinet implementation; package identity stays generic."]
+  };
+  return modulePackage;
+}
+
+export const extendedFurnitureModulePackages: FurnQuoteModulePackage[] = [
+  ...FWM_FURNITURE_SPECS
+    .filter((spec) => spec.moduleType !== BASE_BOTTLE_PULLOUT_RUNTIME_TYPE)
+    .map(makePackage),
+  createBaseBottlePulloutModulePackage(),
+  createWallCorner90ModulePackage()
+];

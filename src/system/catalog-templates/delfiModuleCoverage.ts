@@ -58,6 +58,17 @@ export const DELFI_CATALOG_COVERAGE = [
     notes: "Drawer count and front split must drive geometry parametrically. Catalog variants are not separate modules."
   },
   {
+    id: "base_bottle_pullout",
+    kind: "module-family",
+    displayName: "Spodne uzke flasove vysuvy",
+    pdfPages: "2, 3, 9, 10",
+    catalogSections: ["Spodni se zasuvkami", "Uzke vysuvne ulozne moduly"],
+    catalogNamePatterns: ["Spod. flasovy vysuv", "Spod. uzky vysuv", "150/200/250 mm bottle pull-out"],
+    targetModuleType: "base_bottle_pullout",
+    requiredParameters: ["width", "height", "depth", "plinthHeight", "drawerSystemBrand", "drawerSystemSizes", "frontMaterialGroup", "carcassMaterialGroup", "drawerBottomMaterialGroup"],
+    notes: "Narrow base pull-out for bottles/oils/spices. It has two internal drawer trays but one shared full-height front, so drawerCount is technical and fixed to 2."
+  },
+  {
     id: "base_sink",
     kind: "module-family",
     displayName: "Spodne drezove skrinky",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Box3, ShapeUtils, Vector2, type Mesh, type Object3D } from "three";
+import { computeMeshVolumeOverlaps } from "../../geometry/meshOverlap";
 import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
 import { validateFurnQuoteModulePackage } from "../../core/module-package/module-package-validation";
 import { applyModuleParameterPreset, buildModulePackageGeometryFromPackage, createDefaultModulePackageParameters } from "../../core/module-package/runtime/module-runtime-adapter";
@@ -87,6 +88,7 @@ const delfiActiveRuntimeModuleTypes = [
   "fwm_catalog_base_corner",
   "fwm_catalog_base_doors",
   "fwm_catalog_base_drawers",
+  "base_bottle_pullout",
   "fwm_catalog_base_open_end",
   "fwm_catalog_tall_cabinet",
   "fwm_tall_open_end",
@@ -201,33 +203,20 @@ function boundsForMeshesMm(root: { traverse: (visitor: (object: unknown) => void
 }
 
 function unapprovedBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
-  const toleranceMm = 2;
   const boardMeshes = meshes(root).filter((mesh) => {
     if (mesh.visible === false || mesh.userData.hiddenByDefault === true) return false;
     return canonicalBoardMaterialGroups.includes(mesh.userData.materialGroup as typeof canonicalBoardMaterialGroups[number]);
   });
-  const boxes = boardMeshes.map((mesh) => ({ mesh, box: new Box3().setFromObject(mesh) }));
-  const overlaps: string[] = [];
-
-  for (let index = 0; index < boxes.length; index += 1) {
-    for (let otherIndex = index + 1; otherIndex < boxes.length; otherIndex += 1) {
-      const a = boxes[index]!;
-      const b = boxes[otherIndex]!;
-      const aAllow = (a.mesh.userData.allowOverlapWith as string[] | undefined) ?? [];
-      const bAllow = (b.mesh.userData.allowOverlapWith as string[] | undefined) ?? [];
-      if (aAllow.includes(b.mesh.name) || bAllow.includes(a.mesh.name)) continue;
-
-      const overlapMm = {
-        x: (Math.min(a.box.max.x, b.box.max.x) - Math.max(a.box.min.x, b.box.min.x)) * 1000,
-        y: (Math.min(a.box.max.y, b.box.max.y) - Math.max(a.box.min.y, b.box.min.y)) * 1000,
-        z: (Math.min(a.box.max.z, b.box.max.z) - Math.max(a.box.min.z, b.box.min.z)) * 1000
-      };
-      if (overlapMm.x <= toleranceMm || overlapMm.y <= toleranceMm || overlapMm.z <= toleranceMm) continue;
-      overlaps.push(`${a.mesh.name}/${b.mesh.name}:${Math.round(overlapMm.x)}x${Math.round(overlapMm.y)}x${Math.round(overlapMm.z)}mm`);
-    }
-  }
-
-  return overlaps;
+  const meshByName = new Map(boardMeshes.map((mesh) => [mesh.name, mesh]));
+  return computeMeshVolumeOverlaps(boardMeshes, { toleranceMm: 2 })
+    .filter((overlap) => {
+      const a = meshByName.get(overlap.a)!;
+      const b = meshByName.get(overlap.b)!;
+      const aAllow = (a.userData.allowOverlapWith as string[] | undefined) ?? [];
+      const bAllow = (b.userData.allowOverlapWith as string[] | undefined) ?? [];
+      return !aAllow.includes(b.name) && !bAllow.includes(a.name);
+    })
+    .map((overlap) => `${overlap.a}/${overlap.b}:${Math.round(overlap.overlapMm.x)}x${Math.round(overlap.overlapMm.y)}x${Math.round(overlap.overlapMm.z)}mm`);
 }
 
 type PlanPoint = { x: number; z: number };
@@ -238,6 +227,18 @@ function meshPlanProfileMm(mesh: Mesh): PlanPoint[] {
   return profile
     .map((point) => ({ x: Number(point.x), z: Number(point.z) }))
     .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z));
+}
+
+function meshPlanOverlapProfileMm(mesh: Mesh): PlanPoint[] {
+  const profile = meshPlanProfileMm(mesh);
+  if (profile.length >= 3) return profile;
+  const bounds = objectBoundsMm(mesh);
+  return [
+    { x: bounds.minX, z: bounds.minZ },
+    { x: bounds.maxX, z: bounds.minZ },
+    { x: bounds.maxX, z: bounds.maxZ },
+    { x: bounds.minX, z: bounds.maxZ }
+  ];
 }
 
 function polygonAreaMm2(points: PlanPoint[]) {
@@ -251,6 +252,13 @@ function polygonAreaMm2(points: PlanPoint[]) {
 }
 
 function triangulatedPlanMm(mesh: Mesh) {
+  const profile = meshPlanOverlapProfileMm(mesh);
+  if (profile.length < 3) return [];
+  const triangles = ShapeUtils.triangulateShape(profile.map((point) => new Vector2(point.x, point.z)), []);
+  return triangles.map((triangle) => triangle.map((pointIndex) => profile[pointIndex]!));
+}
+
+function triangulatedExplicitPlanMm(mesh: Mesh) {
   const profile = meshPlanProfileMm(mesh);
   if (profile.length < 3) return [];
   const triangles = ShapeUtils.triangulateShape(profile.map((point) => new Vector2(point.x, point.z)), []);
@@ -308,6 +316,25 @@ function realPlanOverlapAreaMm2(a: Mesh, b: Mesh) {
   return area;
 }
 
+function explicitPlanOverlapAreaMm2(a: Mesh, b: Mesh) {
+  let area = 0;
+  for (const aTriangle of triangulatedExplicitPlanMm(a)) {
+    for (const bTriangle of triangulatedExplicitPlanMm(b)) {
+      area += polygonAreaMm2(clipConvexPolygon(aTriangle, bTriangle));
+    }
+  }
+  return area;
+}
+
+function truthfulBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
+  const boardMeshes = meshes(root).filter((mesh) => {
+    if (mesh.visible === false || mesh.userData.hiddenByDefault === true) return false;
+    return canonicalBoardMaterialGroups.includes(mesh.userData.materialGroup as typeof canonicalBoardMaterialGroups[number]);
+  });
+  return computeMeshVolumeOverlaps(boardMeshes, { toleranceMm: 2 })
+    .map((overlap) => `${overlap.a}/${overlap.b}:${Math.round(overlap.planAreaMm2)}mm2 x ${Math.round(overlap.overlapMm.y)}mm`);
+}
+
 function realBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void) => void }) {
   const boardMeshes = meshes(root).filter((mesh) => {
     if (mesh.visible === false || mesh.userData.hiddenByDefault === true) return false;
@@ -318,15 +345,12 @@ function realBoardOverlaps(root: { traverse: (visitor: (object: unknown) => void
     for (let otherIndex = index + 1; otherIndex < boardMeshes.length; otherIndex += 1) {
       const a = boardMeshes[index]!;
       const b = boardMeshes[otherIndex]!;
-      const aStart = Number(a.userData.revitExtrusionStartMm);
-      const aEnd = Number(a.userData.revitExtrusionEndMm);
-      const bStart = Number(b.userData.revitExtrusionStartMm);
-      const bEnd = Number(b.userData.revitExtrusionEndMm);
-      if (![aStart, aEnd, bStart, bEnd].every(Number.isFinite)) continue;
-      const yOverlap = Math.min(aEnd, bEnd) - Math.max(aStart, bStart);
-      if (yOverlap <= 2) continue;
-      const planArea = realPlanOverlapAreaMm2(a, b);
-      if (planArea <= 4) continue;
+      const aBounds = objectBoundsMm(a);
+      const bBounds = objectBoundsMm(b);
+      const yOverlap = Math.min(aBounds.maxY, bBounds.maxY) - Math.max(aBounds.minY, bBounds.minY);
+      if (yOverlap <= 0.8) continue;
+      const planArea = explicitPlanOverlapAreaMm2(a, b);
+      if (planArea <= 0.64) continue;
       overlaps.push(`${a.name}/${b.name}:${Math.round(planArea)}mm2 x ${Math.round(yOverlap)}mm`);
     }
   }
@@ -393,6 +417,27 @@ function meshBoundsMm(mesh: Mesh) {
 
 function renderColorHex(mesh: Mesh | null) {
   return typeof mesh?.userData.renderColorHex === "string" ? mesh.userData.renderColorHex : "";
+}
+
+function materialColorHexes(mesh: Mesh | null) {
+  if (!mesh) return [];
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return materials.map((material) => {
+    const renderColor = material.userData.renderColorHex;
+    if (typeof renderColor === "string" && renderColor) return renderColor;
+    const color = (material as { color?: { getHexString?: () => string } }).color;
+    if (color && typeof color.getHexString === "function") {
+      return `#${color.getHexString()}`;
+    }
+    return "";
+  }).filter(Boolean);
+}
+
+function expectSingleBoardColor(mesh: Mesh | null) {
+  expect(mesh).toBeTruthy();
+  const colors = materialColorHexes(mesh);
+  expect(colors.length).toBeGreaterThan(0);
+  expect(new Set(colors).size).toBe(1);
 }
 
 function materialIdForFamily(catalog: ReturnType<typeof getSystemSeedCatalog>, family: string, except: string[] = []) {
@@ -479,8 +524,8 @@ describe("FWM furniture module packages", () => {
   });
 
   it("declares every requested module as a valid FurnQuote package", () => {
-    expect(FWM_FURNITURE_SPECS).toHaveLength(63);
-    expect(extendedFurnitureModulePackages).toHaveLength(63);
+    expect(FWM_FURNITURE_SPECS).toHaveLength(64);
+    expect(extendedFurnitureModulePackages).toHaveLength(65);
 
     for (const modulePackage of extendedFurnitureModulePackages) {
       expect(() => validateFurnQuoteModulePackage(modulePackage)).not.toThrow();
@@ -524,6 +569,7 @@ describe("FWM furniture module packages", () => {
       base_corner: "fwm_catalog_base_corner",
       base_doors: "fwm_catalog_base_doors",
       base_drawers: "fwm_catalog_base_drawers",
+      base_bottle_pullout: "base_bottle_pullout",
       base_sink: "fwm_catalog_base_sink",
       base_appliance: "fwm_catalog_base_appliance",
       base_open_end: "fwm_catalog_base_open_end",
@@ -540,13 +586,83 @@ describe("FWM furniture module packages", () => {
       front_component: "fwm_catalog_front_component",
       hardware_accessory: "fwm_catalog_hardware_accessory"
     };
-    expect(DELFI_CATALOG_COVERAGE).toHaveLength(18);
+    expect(DELFI_CATALOG_COVERAGE).toHaveLength(19);
     for (const entry of DELFI_CATALOG_COVERAGE) {
       const runtimeType = historicalRuntimeAliases[entry.targetModuleType] ?? entry.targetModuleType;
       expect(packageTypes.has(runtimeType), `${entry.id} missing runtime ${runtimeType}`).toBe(true);
       expect(entry.requiredParameters.length, entry.id).toBeGreaterThan(0);
       expect(entry.pdfPages, entry.id).toBeTruthy();
     }
+  });
+
+  it("declares the DELFI upper 90 corner as a neutral non-catalog package", () => {
+    const catalog = getSystemSeedCatalog();
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.modulePackageId === "wall_corner_90");
+    expect(modulePackage).toBeTruthy();
+    expect(() => validateFurnQuoteModulePackage(modulePackage!)).not.toThrow();
+    expect(modulePackage!.module.moduleType).toBe("wall_corner_90");
+    expect(modulePackage!.module.moduleType.startsWith("fwm_catalog_")).toBe(false);
+    expect(modulePackage!.module.displayName).toBe("Horna rohova skrinka 90");
+    expect(modulePackage!.geometry.mode).toBe("trusted-runtime");
+    if (modulePackage!.geometry.mode !== "trusted-runtime") throw new Error("Expected trusted runtime geometry.");
+    expect(modulePackage!.geometry.runtimeBuilderKey).toBe("fwm_catalog_wall_cabinet.v1");
+    expect(modulePackage!.placement).toMatchObject({
+      allowedContexts: ["kitchen_corner"],
+      requiresCorner: true,
+      requiresFloor: false,
+      allowFreePlacement: false
+    });
+
+    const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
+    expect(defaults.modulePackageId).toBe("wall_corner_90");
+    expect(defaults.moduleType).toBe("wall_corner_90");
+    expect(defaults.type).toBe("fwm_catalog_wall_cabinet");
+    expect(defaults.variant).toBe("corner_90");
+    expect(defaults.width).toBe(600);
+    expect(defaults.height).toBe(720);
+    expect(defaults.depth).toBe(320);
+    expect(defaults.shelfCount).toBe(2);
+    expect(defaults.doorCount).toBe(2);
+    expect(defaults.opened).toBe(true);
+    expect(defaults.isCorner).toBe(true);
+    expect(defaults.frontFaceCount).toBe(0);
+    expect(defaults.backFaceCount).toBe(2);
+    expect(defaults.requiresWorktop).toBe(false);
+    expect(defaults.hasWorktop).toBe(false);
+    expect(defaults.hasPlinth).toBe(false);
+    expect(defaults.bodyMaterialGroup).toBe("corpus");
+    expect(defaults.shelfMaterialGroup).toBe("corpus");
+
+    expect(modulePackage!.ui.controls.map((control) => control.parameterKey)).toEqual([
+      "width",
+      "height",
+      "depth",
+      "shelfCount",
+      "bodyMaterialId",
+      "frontMaterialId",
+      "backMaterialId",
+      "handleComponentId",
+      "hingeComponentId",
+      "boardThickness",
+      "frontThicknessMm",
+      "backThickness",
+      "shelfThickness",
+      "opened"
+    ]);
+    const parameterKeys = new Set(modulePackage!.parameters.parameters.map((parameter) => parameter.key));
+    for (const forbidden of ["drawerCount", "drawerSystemBrand", "cutoutWidthMm", "cutoutDepthMm", "powerW", "plinthHeight", "plinthSetbackMm", "worktopThicknessMm", "worktopMaterialId", "plinthMaterialId", "applianceKind", "frontChamferMm", "backChamferMm"]) {
+      expect(parameterKeys.has(forbidden), `wall_corner_90 must not own ${forbidden}`).toBe(false);
+    }
+    expect(modulePackage!.materials.slots.map((slot) => slot.slotId)).toEqual(["corpus", "front", "back"]);
+
+    const opened = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, catalog, parameters: defaults });
+    const closed = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, catalog, parameters: { ...defaults, opened: false } });
+    expect(getMeshNamed(opened, "door_front_x")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(opened, "doorHandle_front_x")?.userData.componentGeometryId).toBeTruthy();
+    expect(getMeshNamed(opened, "hinge_front_x_1_door_plate")?.userData.componentGeometryId).toBeTruthy();
+    expect(truthfulBoardOverlaps(opened)).toEqual([]);
+    expect(objectBoundsMm(opened).height).toBeCloseTo(720, 0);
+    expect(Math.abs(objectBoundsMm(getMeshNamed(opened, "door_front_x")!).minZ - objectBoundsMm(getMeshNamed(closed, "door_front_x")!).minZ)).toBeGreaterThan(80);
   });
 
   it("exposes neutral catalog parameters on every source-catalog FWM family", () => {
@@ -618,9 +734,13 @@ describe("FWM furniture module packages", () => {
 
     for (const modulePackage of extendedFurnitureModulePackages) {
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
-      const expectedMaterialParams = modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
-        ? ["bodyMaterialId"]
-        : requiredMaterialParams;
+      const expectedMaterialParams = modulePackage.module.modulePackageId === "wall_corner_90"
+        ? ["bodyMaterialId", "frontMaterialId", "backMaterialId"]
+        : modulePackage.module.modulePackageId === "base_bottle_pullout"
+          ? ["bodyMaterialId", "frontMaterialId", "backMaterialId", "drawerBottomMaterialId", "plinthMaterialId"]
+        : modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
+          ? ["bodyMaterialId"]
+          : requiredMaterialParams;
       for (const key of expectedMaterialParams) {
         expect(parameterKeys.has(key), `${modulePackage.module.moduleType} missing ${key}`).toBe(true);
       }
@@ -629,14 +749,33 @@ describe("FWM furniture module packages", () => {
           expect(parameterKeys.has(key), `${modulePackage.module.moduleType} must not own ${key}`).toBe(false);
         }
       }
+      if (modulePackage.module.modulePackageId === "wall_corner_90") {
+        for (const key of ["drawerBottomMaterialId", "plinthMaterialId", "worktopMaterialId"]) {
+          expect(parameterKeys.has(key), `${modulePackage.module.modulePackageId} must not own ${key}`).toBe(false);
+        }
+      }
+      if (modulePackage.module.modulePackageId === "base_bottle_pullout") {
+        for (const key of ["shelfMaterialId", "worktopMaterialId"]) {
+          expect(parameterKeys.has(key), `${modulePackage.module.modulePackageId} must not own ${key}`).toBe(false);
+        }
+      }
 
       const slotIds = new Set(modulePackage.materials.slots.map((slot) => slot.slotId));
-      const expectedSlots = modulePackage.module.moduleType === "fwm_catalog_wall_open_end" ? ["corpus"] : requiredSlots;
+      const expectedSlots = modulePackage.module.modulePackageId === "wall_corner_90"
+        ? ["corpus", "front", "back"]
+        : modulePackage.module.modulePackageId === "base_bottle_pullout"
+          ? ["corpus", "front", "back", "drawer_bottom", "plinth"]
+        : modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
+          ? ["corpus"]
+          : requiredSlots;
       for (const slotId of expectedSlots) {
         expect(slotIds.has(slotId), `${modulePackage.module.moduleType} missing material slot ${slotId}`).toBe(true);
       }
       if (modulePackage.module.moduleType === "fwm_catalog_wall_open_end") {
         expect(slotIds).toEqual(new Set(["corpus"]));
+      }
+      if (modulePackage.module.modulePackageId === "wall_corner_90") {
+        expect(slotIds).toEqual(new Set(["corpus", "front", "back"]));
       }
       expect(slotIds.has("carcass"), `${modulePackage.module.moduleType} must use canonical corpus slot`).toBe(false);
       expect(slotIds.has("shelf"), `${modulePackage.module.moduleType} shelves must use canonical corpus slot`).toBe(false);
@@ -1177,8 +1316,65 @@ describe("FWM furniture module packages", () => {
     expect(getMeshNamed(corner90Closed, "bottom_l")).toBeTruthy();
     expect(getMeshNamed(corner90Closed, "door_front_x")?.userData.materialGroup).toBe("front");
     expect(getMeshNamed(corner90Closed, "door_front_z")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(corner90Closed, "door_front_x")?.userData.materialSlotId).toBe("front");
+    expect(getMeshNamed(corner90Closed, "door_front_z")?.userData.materialSlotId).toBe("front");
+    expect(getMeshNamed(corner90Closed, "back_x")?.userData.materialGroup).toBe("back");
+    expect(getMeshNamed(corner90Closed, "back_z")?.userData.materialGroup).toBe("back");
+    expect(getMeshNamed(corner90Closed, "back_x")?.userData.materialSlotId).toBe("back");
+    expect(getMeshNamed(corner90Closed, "back_z")?.userData.materialSlotId).toBe("back");
+    for (const boardName of ["top_l", "bottom_l", "back_x", "back_z", "side_end_x", "side_end_z", "door_front_x", "door_front_z"]) {
+      expectSingleBoardColor(getMeshNamed(corner90Closed, boardName));
+    }
+    for (const boardName of ["door_front_x", "door_front_z"]) {
+      const material = getMeshNamed(corner90Closed, boardName)?.material;
+      const firstMaterial = Array.isArray(material) ? material[0] : material;
+      expect(firstMaterial?.type).toBe("MeshBasicMaterial");
+      expect(firstMaterial?.userData.uniformFaceColor).toBe(true);
+      expect(firstMaterial?.userData.materialSlotId).toBe("front");
+    }
     expect(getMeshNamed(corner90Closed, "doorHandle_front_x")?.userData.componentType).toBe("handle");
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_x")?.userData.catalogComponentId).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_x")?.userData.componentGeometryId).toBeTruthy();
     expect(getMeshNamed(corner90Closed, "doorHandle_front_z")?.userData.componentType).toBe("handle");
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_z")?.userData.catalogComponentId).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_z")?.userData.componentGeometryId).toBeTruthy();
+    const expectedCornerMin = -cornerWidth / 2;
+    const expectedCornerMax = cornerWidth / 2;
+    const expectedFrontThickness = 18;
+    const expectedFrontOuter = expectedCornerMin + cornerDepth;
+    const expectedFrontInner = expectedFrontOuter - expectedFrontThickness;
+    const wallCornerDoorX = objectBoundsMm(getMeshNamed(corner90Closed, "door_front_x")!);
+    const wallCornerDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "door_front_z")!);
+    const wallCornerBackX = objectBoundsMm(getMeshNamed(corner90Closed, "back_x")!);
+    const wallCornerBackZ = objectBoundsMm(getMeshNamed(corner90Closed, "back_z")!);
+    const wallCornerSideEndX = objectBoundsMm(getMeshNamed(corner90Closed, "side_end_x")!);
+    const wallCornerSideEndZ = objectBoundsMm(getMeshNamed(corner90Closed, "side_end_z")!);
+    const wallCornerHingeXPlate = objectBoundsMm(getMeshNamed(corner90Closed, "hinge_front_x_1_door_plate")!);
+    const wallCornerHingeXCup = objectBoundsMm(getMeshNamed(corner90Closed, "hinge_front_x_1_door_cup")!);
+    const wallCornerHingeZPlate = objectBoundsMm(getMeshNamed(corner90Closed, "hinge_front_z_1_door_plate")!);
+    const wallCornerHingeZCup = objectBoundsMm(getMeshNamed(corner90Closed, "hinge_front_z_1_door_cup")!);
+    expect(wallCornerDoorX.minX).toBeCloseTo(expectedFrontInner, 0);
+    expect(wallCornerDoorX.maxX).toBeCloseTo(expectedFrontOuter, 0);
+    expect(wallCornerDoorX.minZ).toBeCloseTo(expectedFrontInner, 0);
+    expect(wallCornerDoorX.maxZ).toBeCloseTo(expectedCornerMax, 0);
+    expect(wallCornerDoorZ.minX).toBeCloseTo(expectedFrontOuter, 0);
+    expect(wallCornerDoorZ.minZ).toBeCloseTo(expectedFrontInner, 0);
+    expect(wallCornerDoorZ.maxZ).toBeCloseTo(expectedFrontOuter, 0);
+    expect(wallCornerDoorZ.maxX).toBeCloseTo(expectedCornerMax, 0);
+    expect(wallCornerDoorX.maxX - wallCornerBackZ.minX).toBeCloseTo(cornerDepth, 1);
+    expect(wallCornerDoorZ.maxZ - wallCornerBackX.minZ).toBeCloseTo(cornerDepth, 1);
+    expect(wallCornerSideEndX.depth).toBeCloseTo(cornerDepth - 8 - expectedFrontThickness, 1);
+    expect(wallCornerSideEndZ.width).toBeCloseTo(cornerDepth - 8 - expectedFrontThickness, 1);
+    expect(wallCornerHingeXPlate.maxX).toBeLessThanOrEqual(wallCornerDoorX.minX + 0.01);
+    expect(wallCornerHingeXCup.maxX).toBeLessThanOrEqual(wallCornerDoorX.minX + 0.01);
+    expect(wallCornerHingeXCup.maxX).toBeLessThanOrEqual(wallCornerHingeXPlate.minX + 0.01);
+    expect(wallCornerHingeZPlate.maxZ).toBeLessThanOrEqual(wallCornerDoorZ.minZ + 0.01);
+    expect(wallCornerHingeZCup.maxZ).toBeLessThanOrEqual(wallCornerDoorZ.minZ + 0.01);
+    expect(wallCornerHingeZCup.maxZ).toBeLessThanOrEqual(wallCornerHingeZPlate.minZ + 0.01);
+    expect(getMeshNamed(corner90Closed, "hinge_front_x_1_door_plate")?.userData.componentType).toBe("hinge");
+    expect(getMeshNamed(corner90Closed, "hinge_front_x_1_door_plate")?.userData.catalogComponentId).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "hinge_front_x_1_door_plate")?.userData.componentGeometryId).toBeTruthy();
+    expect((getMeshNamed(corner90Closed, "hinge_front_x_1_door_plate")?.material as { userData?: Record<string, unknown> } | undefined)?.userData?.materialSource).toBe("component");
     expect(getMeshByBoardName(chamfered, "diagonal_front")?.userData.materialGroup).toBe("front");
     expect(getMeshByBoardName(chamfered, "front_right_panel")?.userData.materialGroup).toBe("corpus");
     expect(getMeshByBoardName(chamfered, "right_side_panel")?.userData.materialGroup).toBe("corpus");
@@ -1188,7 +1384,7 @@ describe("FWM furniture module packages", () => {
     expect(getMeshByBoardName(openNiche, "diagonal_handle")).toBeNull();
     expect(meshes(openNiche).filter((mesh) => /^corner_chamfered_shelf_/.test(mesh.name))).toHaveLength(2);
     expect(realBoardOverlaps(chamfered)).toEqual([]);
-    expect(realBoardOverlaps(corner90Closed)).toEqual([]);
+    expect(truthfulBoardOverlaps(corner90Closed)).toEqual([]);
     expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBe(Math.PI / 2);
     expect(corner90Closed.userData.sourceModuleType).toBe("fwm_catalog_wall_cabinet");
     expect(getObjectNamed(chamfered, "__kitchen_corner_anchor")).toBeTruthy();
@@ -2012,6 +2208,125 @@ describe("FWM furniture module packages", () => {
     expect(cutleryBomIds.has("cutlery-inner-drawer-front")).toBe(true);
     expect(cutleryBomIds.has("cutlery-inner-drawer-bottom")).toBe(true);
     expect(cutleryBomIds.has("cutlery-inner-drawer-cross-rail")).toBe(true);
+  });
+
+  it("builds the narrow bottle pull-out with two internal trays and one shared front", () => {
+    const catalog = getSystemSeedCatalog();
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.modulePackageId === "base_bottle_pullout");
+    expect(modulePackage).toBeTruthy();
+
+    const parameterByKey = new Map(modulePackage!.parameters.parameters.map((parameter) => [parameter.key, parameter]));
+    expect(modulePackage!.module.moduleType).toBe("base_bottle_pullout");
+    expect(parameterByKey.get("width")?.defaultValue).toBe(200);
+    expect(parameterByKey.get("width")?.min).toBe(150);
+    expect(parameterByKey.get("width")?.max).toBe(300);
+    expect(parameterByKey.get("drawerCount")?.defaultValue).toBe(2);
+    expect(parameterByKey.get("drawerCount")?.uiVisibility).toBe("internal");
+    expect(parameterByKey.get("opened")?.uiVisibility).toBe("user");
+    expect(parameterByKey.get("drawerSystemBrand")?.uiVisibility).toBe("user");
+    expect(parameterByKey.get("drawer1SystemSize")?.uiVisibility).toBe("user");
+    expect(parameterByKey.has("doorCount")).toBe(false);
+    expect(parameterByKey.has("shelfCount")).toBe(false);
+    expect(parameterByKey.has("hasCutleryInnerDrawer")).toBe(false);
+    expect(parameterByKey.has("cutoutWidthMm")).toBe(false);
+    expect(parameterByKey.has("powerW")).toBe(false);
+    const userControls = modulePackage!.ui.controls.map((control) => control.parameterKey);
+    expect(userControls).toEqual([
+      "width",
+      "height",
+      "depth",
+      "plinthHeight",
+      "plinthSetbackMm",
+      "opened",
+      "drawerSystemBrand",
+      "drawer1SystemSize",
+      "drawer2SystemSize",
+      "bodyMaterialId",
+      "frontMaterialId",
+      "backMaterialId",
+      "drawerBottomMaterialId",
+      "plinthMaterialId",
+      "boardThickness",
+      "frontThicknessMm",
+      "backThickness"
+    ]);
+    for (const staleControl of ["drawerCount", "openingMode", "variant", "hasWorktop", "hasPlinth", "requiresWorktop", "shelfCount", "doorCount"]) {
+      expect(userControls.includes(staleControl), `base bottle pullout must not show ${staleControl}`).toBe(false);
+    }
+    expect(modulePackage!.materials.slots.map((slot) => slot.slotId).sort()).toEqual(["back", "corpus", "drawer_bottom", "front", "plinth"]);
+
+    const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
+    const normalizedDefaults = normalizeFwmFurnitureParams(defaults);
+    expect(normalizedDefaults.drawerCount).toBe(2);
+    expect(normalizedDefaults.drawerSystemSizes).toBe("M,M");
+    const group = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: {
+        ...defaults,
+        width: 200,
+        depth: 530,
+        height: 722,
+        plinthHeight: 100,
+        plinthSetbackMm: 60,
+        hasWorktop: false,
+        worktopThicknessMm: 0
+      },
+      catalog
+    });
+
+    expect(getMeshNamed(group, "top")).toBeNull();
+    expect(getMeshNamed(group, "top_front_rail")).toBeTruthy();
+    expect(getMeshNamed(group, "top_back_rail")).toBeTruthy();
+    expect(getMeshNamed(group, "bottle_pullout_front")).toBeTruthy();
+    expect(getMeshNamed(group, "drawer_front_1")).toBeNull();
+    expect(getMeshNamed(group, "drawer_front_2")).toBeNull();
+    expect(getMeshNamed(group, "bottle_drawer_bottom_1")).toBeTruthy();
+    expect(getMeshNamed(group, "bottle_drawer_bottom_2")).toBeTruthy();
+    expect(getMeshNamed(group, "bottle_drawer_system_left_1")?.userData.componentType).toBe("runner");
+    expect(getMeshNamed(group, "bottle_drawer_system_right_2")?.userData.drawerSystemBrand).toBe("merivobox");
+    expect(getMeshNamed(group, "bottle_pullout_handle")?.userData.componentType).toBe("handle");
+    expect(getMeshNamed(group, "worktop")).toBeNull();
+    expect(unapprovedBoardOverlaps(group)).toHaveLength(0);
+
+    const front = objectBoundsMm(getMeshNamed(group, "bottle_pullout_front")!);
+    expect(front.width).toBeCloseTo(196, 3);
+    expect(front.height).toBeCloseTo(618, 3);
+    expect(front.minY).toBeCloseTo(102, 3);
+    expect(front.maxY).toBeCloseTo(720, 3);
+    expect(front.depth).toBeCloseTo(18, 3);
+    expect(getMeshNamed(group, "bottle_pullout_front")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(group, "bottle_pullout_front")?.userData.edgeBandingStrategy).toBe("explicit_visible_edges");
+    expect(getMeshNamed(group, "bottle_drawer_bottom_1")?.userData.materialGroup).toBe("drawer_bottom");
+
+    const opened = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: { ...defaults, width: 200, depth: 530, height: 722, opened: true, hasWorktop: false, worktopThicknessMm: 0 },
+      catalog
+    });
+    expect(objectBoundsMm(getMeshNamed(opened, "bottle_pullout_front")!).minZ).toBeGreaterThan(front.minZ + 100);
+    expect(objectBoundsMm(getMeshNamed(opened, "bottle_drawer_bottom_1")!).minZ).toBeGreaterThan(objectBoundsMm(getMeshNamed(group, "bottle_drawer_bottom_1")!).minZ + 100);
+    const fixedRunnerClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_system_left_outer_lower_1")!);
+    const fixedRunnerOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_system_left_outer_lower_1")!);
+    expect(fixedRunnerOpened.minZ).toBeCloseTo(fixedRunnerClosed.minZ, 3);
+    expect(fixedRunnerOpened.maxZ).toBeCloseTo(fixedRunnerClosed.maxZ, 3);
+    expect(getMeshNamed(opened, "bottle_drawer_system_left_outer_lower_1")?.userData.drawerMotionRole).toBe("fixed_corpus");
+    const movingProfileClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_system_left_1")!);
+    const movingProfileOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_system_left_1")!);
+    expect(movingProfileOpened.minZ).toBeGreaterThan(movingProfileClosed.minZ + 100);
+    expect(getMeshNamed(opened, "bottle_drawer_system_left_1")?.userData.drawerMotionRole).toBe("moving");
+
+    const bom = calculateFwmFurnitureBOM({ ...defaults, width: 200, depth: 530, height: 722, hasWorktop: false, worktopThicknessMm: 0 }, makeDefaultKitchenContext(catalog), catalog);
+    const frontBom = bom.quoteBom.items.find((item) => item.id === "bottle-pullout-front");
+    const drawerFrontBom = bom.quoteBom.items.find((item) => item.id === "drawer-fronts");
+    const drawerBottomBom = bom.quoteBom.items.find((item) => item.id === "drawer-bottoms");
+    const handleBom = bom.quoteBom.items.find((item) => item.id === "handles");
+    const runnerBom = bom.quoteBom.items.find((item) => item.id === "runners");
+    expect(frontBom?.quantity).toBe(1);
+    expect(drawerFrontBom).toBeUndefined();
+    expect(drawerBottomBom?.quantity).toBe(2);
+    expect(drawerBottomBom?.dimensionsMm?.width).toBeCloseTo(113, 3);
+    expect(handleBom?.quantity).toBe(1);
+    expect(runnerBom?.quantity).toBe(2);
   });
 
   it("builds the catalog base corner as a blind 1D corner cabinet, not as two generic L runs", () => {
@@ -2872,7 +3187,8 @@ describe("FWM furniture module packages", () => {
     for (const modulePackage of extendedFurnitureModulePackages) {
       for (const mode of ["low", "high"] as const) {
         const params = normalizeFwmFurnitureParams(createChangedParameterSet(modulePackage, mode, catalog));
-        expect(params.type, `${modulePackage.module.moduleType} ${mode}`).toBe(modulePackage.module.moduleType);
+        const expectedRuntimeType = createDefaultModulePackageParameters(modulePackage).type ?? modulePackage.module.moduleType;
+        expect(params.type, `${modulePackage.module.moduleType} ${mode}`).toBe(expectedRuntimeType);
         expect(Number.isFinite(params.width), `${modulePackage.module.moduleType} ${mode}`).toBe(true);
         expect(Number.isFinite(params.height), `${modulePackage.module.moduleType} ${mode}`).toBe(true);
         expect(Number.isFinite(params.depth), `${modulePackage.module.moduleType} ${mode}`).toBe(true);
@@ -2929,13 +3245,23 @@ describe("FWM furniture module packages", () => {
         expect(normalized.backMaterialId, modulePackage.module.moduleType).toBeUndefined();
         expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBeUndefined();
         expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBeUndefined();
+      } else if (modulePackage.module.modulePackageId === "base_bottle_pullout") {
+        expect(normalized.frontMaterialId, modulePackage.module.moduleType).toBe(ctx.frontsMaterialId);
+        expect(normalized.shelfMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
+        expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBe(ctx.drawerBottomMaterialId);
+        expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe(catalog.kitchenDefaults.plinthMaterialId);
+        expect(typeof normalized.backMaterialId, modulePackage.module.moduleType).toBe("string");
+        const backMaterial = catalog.materials.find((material) => material.id === normalized.backMaterialId);
+        expect(backMaterial?.boardFamily, modulePackage.module.moduleType).toBe("back");
       } else {
         expect(normalized.frontMaterialId, modulePackage.module.moduleType).toBe(ctx.frontsMaterialId);
         expect(normalized.shelfMaterialId, modulePackage.module.moduleType).toBe(ctx.corpusMaterialId);
         if (Number(createDefaultModulePackageParameters(modulePackage).drawerCount ?? 0) > 0) {
           expect(normalized.drawerBottomMaterialId, modulePackage.module.moduleType).toBe(ctx.drawerBottomMaterialId);
         }
-        if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
+        if (modulePackage.module.modulePackageId === "wall_corner_90") {
+          expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBeUndefined();
+        } else if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
           expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe(catalog.kitchenDefaults.plinthMaterialId);
         } else {
           expect(normalized.plinthMaterialId, modulePackage.module.moduleType).toBe("");
@@ -2943,7 +3269,11 @@ describe("FWM furniture module packages", () => {
         expect(typeof normalized.backMaterialId, modulePackage.module.moduleType).toBe("string");
         const backMaterial = catalog.materials.find((material) => material.id === normalized.backMaterialId);
         expect(backMaterial?.boardFamily, modulePackage.module.moduleType).toBe("back");
-        expect(normalized.backThickness, modulePackage.module.moduleType).toBe(backMaterial?.defaultThicknessMm);
+        if (modulePackage.module.modulePackageId === "wall_corner_90") {
+          expect(normalized.backThickness, modulePackage.module.moduleType).toBe(18);
+        } else {
+          expect(normalized.backThickness, modulePackage.module.moduleType).toBe(backMaterial?.defaultThicknessMm);
+        }
       }
     }
   }, 30_000);
@@ -3221,7 +3551,7 @@ describe("FWM furniture module packages", () => {
       plinthDepthMm: 80
     });
     const kitchenPackages = extendedFurnitureModulePackages.filter((entry) => entry.behavior?.contextBindings?.length);
-    expect(kitchenPackages).toHaveLength(27);
+    expect(kitchenPackages).toHaveLength(29);
 
     for (const modulePackage of kitchenPackages) {
       const paramsA = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;

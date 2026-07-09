@@ -77,6 +77,8 @@ Use this checklist before saying a new module is ready.
 - [ ] `geometry.mode` is either `trusted-runtime` or supported `declarative`.
 - [ ] `runtimeBuilderKey` exists when using trusted runtime.
 - [ ] Package parameters cover all builder inputs.
+- [ ] Overlap checks use the same real profile/volume detector as the inspector, not only a full `Box3`/AABB rectangle.
+- [ ] Non-rectangular modules expose real plan silhouettes for selection, CSV, BOM, placement, and overlap tests.
 - [ ] No executable code is stored in the package.
 - [ ] No `eval`, `Function`, dynamic import, or script field is required.
 
