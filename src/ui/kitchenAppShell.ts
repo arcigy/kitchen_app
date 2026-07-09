@@ -165,10 +165,12 @@ export function renderKitchenAppShell(root: HTMLElement): void {
         </div>
       </div>
 
+      <section id="materialsPhase" class="archux-materials-phase-panel" aria-label="Materiály a komponenty" hidden></section>
+
       <aside id="properties" aria-label="Properties"></aside>
 
       <footer class="archux-bottom" aria-label="Project overview">
-        <section class="archux-levels archux-view-list">
+        <section class="archux-levels archux-view-list" data-bottom-views>
           <strong>VIEWS</strong>
           <div class="archux-view-list-scroll">
             <button type="button" data-bottom-view-key="floorplan"><span>Floorplan</span></button>
@@ -178,6 +180,10 @@ export function renderKitchenAppShell(root: HTMLElement): void {
             <button type="button" data-bottom-view-key="elevation:south"><span>South</span></button>
             <button type="button" data-bottom-view-key="elevation:west"><span>West</span></button>
           </div>
+        </section>
+        <section class="archux-levels archux-material-warning-panel" data-material-warning-panel hidden>
+          <strong>VAROVANIA</strong>
+          <div class="archux-material-warning-list" data-material-warning-list></div>
         </section>
         <section class="archux-area archux-live-price">
           <strong>BOM / PRICING</strong>

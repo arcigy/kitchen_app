@@ -2578,6 +2578,13 @@ export function startApp(initialArgs: AppArgs) {
     root: document.getElementById("app") ?? document.body,
     S,
     catalog: clientCatalog,
+    materialsPhase: {
+      mainEl: document.getElementById("main")!,
+      hostEl: document.getElementById("materialsPhase")!,
+      viewsEl: document.querySelector<HTMLElement>("[data-bottom-views]")!,
+      warningsEl: document.querySelector<HTMLElement>("[data-material-warning-panel]")!,
+      warningListEl: document.querySelector<HTMLElement>("[data-material-warning-list]")!
+    },
     setVisualisationTopbar: () => {
       ensureLayoutMode();
       setClassicTopbarTab("visualisation");

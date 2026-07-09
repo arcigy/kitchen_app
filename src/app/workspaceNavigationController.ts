@@ -1,5 +1,7 @@
-import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { AppState, LayoutInstance } from "../layout/appState";
+import { buildProjectMaterialUsageSummary } from "../layout/bom/materialUsageSummary";
+import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materialsPhasePanel";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "quantities" | "materials" | "settings";
@@ -8,6 +10,13 @@ type WorkspaceNavigationControllerArgs = {
   root: HTMLElement;
   S: AppState;
   catalog: ClientCatalog;
+  materialsPhase: {
+    mainEl: HTMLElement;
+    hostEl: HTMLElement;
+    viewsEl: HTMLElement;
+    warningsEl: HTMLElement;
+    warningListEl: HTMLElement;
+  };
   setVisualisationTopbar: () => void;
   setDesignTopbar: () => void;
 };
@@ -32,6 +41,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const navButtons = Array.from(args.root.querySelectorAll<HTMLButtonElement>("[data-workspace-nav]"));
   const sheets = [...defaultSheets];
   let overlay: HTMLElement | null = null;
+  let materialsPhaseActive = false;
 
   const setActiveNav = (id: WorkspaceNavId) => {
     for (const button of navButtons) button.classList.toggle("active", button.dataset.workspaceNav === id);
@@ -40,6 +50,16 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const closeOverlay = () => {
     overlay?.remove();
     overlay = null;
+  };
+
+  const leaveMaterialsPhase = () => {
+    if (!materialsPhaseActive) return;
+    materialsPhaseActive = false;
+    args.root.classList.remove("archux-materials-phase");
+    args.materialsPhase.mainEl.classList.remove("archux-materials-phase");
+    args.materialsPhase.hostEl.hidden = true;
+    args.materialsPhase.viewsEl.hidden = false;
+    args.materialsPhase.warningsEl.hidden = true;
   };
 
   const openOverlay = (title: string, subtitle: string, body: HTMLElement, width: "wide" | "xl" = "wide") => {
@@ -126,21 +146,24 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   };
 
   const openMaterials = () => {
-    const materials = args.catalog.materials.filter((material) => material.isActive).slice(0, 24);
-    const body = document.createElement("div");
-    body.className = "workspace-materials";
-    const actions = document.createElement("div");
-    actions.className = "workspace-panel-actions";
-    const addButton = createButtonElement("Add material");
-    addButton.className = "workspace-primary";
-    const helpText = document.createElement("span");
-    helpText.textContent = "Zatial layout kniznice materialov. Neskor sem napojime katalog, ceny, dodavatelov a pravidla pouzitia.";
-    actions.append(addButton, helpText);
-    const grid = document.createElement("div");
-    grid.className = "workspace-material-grid";
-    grid.innerHTML = materials.map((material) => renderMaterialCardHtml(material)).join("");
-    body.append(actions, grid);
-    openOverlay("Materials", "Kniznica materialov pre projekt.", body);
+    closeOverlay();
+    args.setDesignTopbar();
+    const summary = buildProjectMaterialUsageSummary({
+      instances: args.S.instances,
+      worktops: args.S.kitchenWorktops,
+      customFurniture: args.S.customFurniture,
+      kitchenContext: args.S.kitchenCtx,
+      kitchenGroups: args.S.kitchenGroups,
+      catalog: args.catalog
+    });
+    mountProjectMaterialsPanel(args.materialsPhase.hostEl, summary);
+    args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(summary);
+    args.root.classList.add("archux-materials-phase");
+    args.materialsPhase.mainEl.classList.add("archux-materials-phase");
+    args.materialsPhase.hostEl.hidden = false;
+    args.materialsPhase.viewsEl.hidden = true;
+    args.materialsPhase.warningsEl.hidden = false;
+    materialsPhaseActive = true;
   };
 
   const openPlaceholder = (title: string, subtitle: string) => {
@@ -155,17 +178,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
 
   const handleNav = (id: WorkspaceNavId) => {
     if (id === "design") {
+      leaveMaterialsPhase();
       closeOverlay();
       setActiveNav("design");
       args.setDesignTopbar();
       return;
     }
     if (id === "visualisation") {
+      leaveMaterialsPhase();
       closeOverlay();
       setActiveNav("visualisation");
       args.setVisualisationTopbar();
       return;
     }
+    if (id !== "materials") leaveMaterialsPhase();
     setActiveNav(id);
     if (id === "sheets") openSheets();
     else if (id === "schedules") openSchedules();
@@ -183,13 +209,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && overlay) {
+    if (event.key !== "Escape") return;
+    if (materialsPhaseActive) {
+      leaveMaterialsPhase();
+      setActiveNav("design");
+      args.setDesignTopbar();
+      return;
+    }
+    if (overlay) {
       closeOverlay();
       setActiveNav("design");
     }
   });
 
-  return { closeOverlay, openSheets, openSchedules, openMaterials };
+  return { closeOverlay, openSheets, openSchedules, openMaterials, leaveMaterialsPhase };
 }
 
 function importPdfSheet(sheets: SheetRecord[], onDone: () => void): void {
@@ -383,16 +416,4 @@ function numberParam(instance: LayoutInstance, key: string): number {
 
 function formatModuleType(type: string): string {
   return type.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function renderMaterialCardHtml(material: MaterialDefinition): string {
-  const rawColor = material.preview?.colorHex?.replace(/^#/, "") ?? "e8edf6";
-  const color = `#${rawColor.padStart(6, "0")}`;
-  return `
-    <article class="workspace-material-card">
-      <span style="background:${color}"></span>
-      <strong>${material.displayName}</strong>
-      <small>${material.id}</small>
-    </article>
-  `;
 }

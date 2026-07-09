@@ -6,6 +6,7 @@ import { createWorkspaceNavigationController } from "./workspaceNavigationContro
 
 class WorkspaceFakeElement extends FakeElement {
   private selectors = new Map<string, WorkspaceFakeElement>();
+  hidden = false;
 
   querySelector<T = FakeElement>(selector: string): T | null {
     if (selector === ".workspace-dialog" || selector === "[data-workspace-close]") {
@@ -26,6 +27,27 @@ class WorkspaceFakeElement extends FakeElement {
     this.selectors.set(selector, element);
     return element;
   }
+}
+
+function materialsPhaseHarness() {
+  return {
+    mainEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    hostEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    viewsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    warningsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    warningListEl: new WorkspaceFakeElement() as unknown as HTMLElement
+  };
+}
+
+function emptyAppState() {
+  return {
+    instances: [],
+    sections: [],
+    kitchenWorktops: [],
+    customFurniture: [],
+    kitchenGroups: [],
+    kitchenCtx: {}
+  } as unknown as AppState;
 }
 
 describe("createWorkspaceNavigationController", () => {
@@ -51,8 +73,9 @@ describe("createWorkspaceNavigationController", () => {
     root.querySelectorAll = () => [];
     const controller = createWorkspaceNavigationController({
       root: root as unknown as HTMLElement,
-      S: { instances: [], sections: [] } as unknown as AppState,
+      S: emptyAppState(),
       catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase: materialsPhaseHarness(),
       setDesignTopbar: vi.fn(),
       setVisualisationTopbar: vi.fn()
     });
@@ -86,7 +109,7 @@ describe("createWorkspaceNavigationController", () => {
     expect(createdInputs[0].clickCount).toBe(1);
   });
 
-  it("opens schedules and materials with shared action buttons preserving labels", () => {
+  it("opens schedules as an overlay and Materials as the full project phase", () => {
     vi.stubGlobal("document", {
       addEventListener: vi.fn(),
       createElement: () => new WorkspaceFakeElement()
@@ -94,12 +117,14 @@ describe("createWorkspaceNavigationController", () => {
 
     const root = new WorkspaceFakeElement();
     root.querySelectorAll = () => [];
+    const materialsPhase = materialsPhaseHarness();
     const controller = createWorkspaceNavigationController({
       root: root as unknown as HTMLElement,
-      S: { instances: [], sections: [] } as unknown as AppState,
+      S: emptyAppState(),
       catalog: {
         materials: [{ id: "oak", displayName: "Oak", isActive: true }]
       } as unknown as ClientCatalog,
+      materialsPhase,
       setDesignTopbar: vi.fn(),
       setVisualisationTopbar: vi.fn()
     });
@@ -128,13 +153,16 @@ describe("createWorkspaceNavigationController", () => {
 
     controller.openMaterials();
 
-    const materialsOverlay = root.children[1] as WorkspaceFakeElement;
-    const materialsDialog = materialsOverlay.querySelector<WorkspaceFakeElement>(".workspace-dialog");
-    const materialsBody = materialsDialog?.children[0] as WorkspaceFakeElement;
-    const materialActions = materialsBody.children[0] as WorkspaceFakeElement;
-    const addMaterial = materialActions.children[0] as WorkspaceFakeElement;
-    expect(addMaterial.type).toBe("button");
-    expect(addMaterial.textContent).toBe("Add material");
-    expect(addMaterial.className).toBe("workspace-primary");
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+    expect((materialsPhase.mainEl as unknown as WorkspaceFakeElement).classList.contains("archux-materials-phase")).toBe(true);
+    expect(root.classList.contains("archux-materials-phase")).toBe(true);
+    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect((materialsPhase.warningsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("Materiály a komponenty");
+
+    controller.leaveMaterialsPhase();
+
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
   });
 });

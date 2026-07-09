@@ -3507,6 +3507,340 @@ textarea {
   transform: translateX(-50%);
 }
 
+/* Project materials phase: keep the project chrome, replace editor-only panels. */
+.archux-app.archux-materials-phase #ribbon .revit-tabs,
+.archux-app.archux-materials-phase #ribbon .topbar-rows {
+  display: none !important;
+}
+
+.archux-app.archux-materials-phase #ribbon .revit-chrome {
+  grid-template-rows: 76px !important;
+}
+
+.archux-main.archux-materials-phase {
+  grid-template-columns: 78px minmax(0, 1fr) !important;
+  grid-template-areas:
+    "nav materials"
+    "nav bottom" !important;
+}
+
+.archux-main.archux-materials-phase #viewer,
+.archux-main.archux-materials-phase #properties,
+.archux-main.archux-materials-phase #moduleCatalog {
+  display: none !important;
+}
+
+.archux-materials-phase-panel {
+  grid-area: materials;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid rgba(223, 228, 240, 0.92);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 42px rgba(32, 38, 62, 0.08);
+}
+
+.materials-phase__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.materials-phase__header h1,
+.materials-phase__overview h2,
+.materials-group h2 {
+  margin: 0;
+  color: #172033;
+}
+
+.materials-phase__header h1 {
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.materials-phase__header p,
+.materials-phase__overview > p,
+.materials-group header p,
+.materials-group__empty,
+.materials-phase__empty p {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.materials-phase__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(102px, 1fr));
+  gap: 8px;
+  flex: 0 1 510px;
+}
+
+.materials-phase__metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e8ebf2;
+  border-radius: 10px;
+  background: #fbfcff;
+}
+
+.materials-phase__metrics span,
+.materials-group__row small,
+.materials-phase__overview dd small {
+  color: #7a8496;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.materials-phase__metrics strong {
+  color: #242c3d;
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.materials-phase__notice {
+  margin: 20px 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f4f2ff;
+  color: #6355cf;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.materials-phase__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 300px);
+  align-items: start;
+  gap: 18px;
+}
+
+.materials-phase__groups,
+.materials-phase__overview {
+  overflow: hidden;
+  border: 1px solid #edf0f6;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.materials-group {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #edf0f6;
+}
+
+.materials-group:last-child {
+  border-bottom: 0;
+}
+
+.materials-group__icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e7eaf2;
+  border-radius: 50%;
+  background: #f7f8fc;
+  color: #5f6780;
+  font-size: 21px;
+}
+
+.materials-group__body {
+  min-width: 0;
+}
+
+.materials-group header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.materials-group h2 {
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.materials-group header > strong {
+  flex: 0 0 auto;
+  color: #313b50;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.materials-group__rows {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.materials-group__row {
+  display: grid;
+  grid-template-columns: 10px minmax(170px, 1fr) 70px 74px;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.materials-group__row > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.materials-group__row strong,
+.materials-group__row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.materials-group__row strong {
+  color: #30394d;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.materials-group__row > span:not(.materials-group__swatch),
+.materials-group__row b {
+  color: #5a6478;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.materials-group__row b {
+  color: #313a50;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.materials-group__swatch {
+  width: 9px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a89aff, #6a57e8);
+}
+
+.materials-group--front .materials-group__swatch { background: linear-gradient(180deg, #f3bb83, #b8793c); }
+.materials-group--worktop .materials-group__swatch { background: linear-gradient(180deg, #8799a6, #4d5b66); }
+.materials-group--plinth .materials-group__swatch { background: linear-gradient(180deg, #9aa3b4, #626d82); }
+.materials-group--back .materials-group__swatch,
+.materials-group--drawer_bottom .materials-group__swatch { background: linear-gradient(180deg, #91b3d5, #4b7aa8); }
+.materials-group--edge .materials-group__swatch { background: linear-gradient(180deg, #e5d36e, #ad9330); }
+.materials-group--hardware .materials-group__swatch { background: linear-gradient(180deg, #a5abb8, #555e71); }
+
+.materials-phase__overview {
+  padding: 18px;
+}
+
+.materials-phase__overview h2 {
+  font-size: 14px;
+  font-weight: 840;
+}
+
+.materials-phase__overview dl {
+  display: grid;
+  gap: 0;
+  margin: 14px 0 0;
+}
+
+.materials-phase__overview dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.materials-phase__overview dl > div:last-child {
+  border-bottom: 0;
+}
+
+.materials-phase__overview dt {
+  color: #596477;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.materials-phase__overview dd {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  margin: 0;
+  color: #303a4e;
+  font-size: 12px;
+  font-weight: 840;
+  text-align: right;
+}
+
+.materials-phase__empty {
+  display: grid;
+  gap: 4px;
+  padding: 34px;
+  color: #364158;
+  text-align: center;
+}
+
+.materials-warning,
+.materials-warning-empty {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.materials-warning {
+  display: flex;
+  gap: 7px;
+}
+
+.materials-warning span {
+  color: #e99b24;
+  font-size: 14px;
+  line-height: 0.9;
+}
+
+@media (max-width: 1180px) {
+  .materials-phase__header,
+  .materials-phase__content {
+    grid-template-columns: 1fr;
+  }
+
+  .materials-phase__header {
+    display: grid;
+  }
+
+  .materials-phase__metrics {
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .materials-phase__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .materials-group__row {
+    grid-template-columns: 10px minmax(130px, 1fr) 68px;
+  }
+
+  .materials-group__row > span:not(.materials-group__swatch) {
+    display: none;
+  }
+}
+
 .viewer-display {
   position: relative;
   height: 40px;
@@ -4122,6 +4456,10 @@ body.button-magnet-capturing * {
 
 .archux-bottom > section:last-child {
   border-right: 0;
+}
+
+.archux-bottom > section[hidden] {
+  display: none !important;
 }
 
 .archux-bottom p,
