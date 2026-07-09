@@ -1765,174 +1765,122 @@ function addWallCornerHandle(
   return handle;
 }
 
+function lowerCornerVariantForWallCorner(variant: string) {
+  if (variant === "corner_90" || variant === "corner_90_1p") return "corner_90";
+  return "corner_chamfered";
+}
+
+function wallCornerDerivedBaseParams(params: FwmFurnitureParams, variant: string): FwmFurnitureParams {
+  const upperDepth = num(params, "depth", 330);
+  const width = Math.max(upperDepth, num(params, "width", 600));
+  const height = num(params, "height", 720);
+  const boardThickness = num(params, "boardThickness", 18);
+  const mappedVariant = lowerCornerVariantForWallCorner(variant);
+  const next = {
+    ...params,
+    type: "fwm_catalog_base_corner",
+    variant: mappedVariant,
+    width,
+    depth: upperDepth,
+    height,
+    heightCarcass: height,
+    boardThickness,
+    backThickness: boardThickness,
+    shelfThickness: boardThickness,
+    frontThicknessMm: boardThickness,
+    plinthHeight: 0,
+    plinthSetbackMm: 0,
+    hasPlinth: false,
+    hasWorktop: false,
+    requiresWorktop: false,
+    kitchenModuleRole: "top"
+  } as FwmFurnitureParams;
+  if (mappedVariant === "corner_chamfered") {
+    const frontChamfer = num(params, "frontChamferMm", num(params, "chamferMm", Math.max(80, width - upperDepth)));
+    next.frontChamferMm = frontChamfer;
+    next.chamferMm = next.frontChamferMm;
+    next.frontChamferReferenceMm = frontChamfer;
+    next.backChamferMm = num(params, "backChamferMm", 0);
+  }
+  return next;
+}
+
+function wallCornerObjectText(object: THREE.Object3D) {
+  const data = object.userData as Record<string, unknown>;
+  return [
+    object.name,
+    data.boardName,
+    data.componentType,
+    data.componentId,
+    data.catalogComponentId,
+    data.materialGroup
+  ].filter((value): value is string => typeof value === "string").join(" ").toLowerCase();
+}
+
+function isLowerOnlyWallCornerPart(object: THREE.Object3D) {
+  const text = wallCornerObjectText(object);
+  const materialGroup = canonicalFwmMaterialGroup((object.userData as Record<string, unknown>).materialGroup);
+  const componentType = String((object.userData as Record<string, unknown>).componentType ?? "").toLowerCase();
+  if (materialGroup === "plinth") return true;
+  if (componentType === "leg" || componentType === "plinth_clip") return true;
+  return /(^|[_\s-])(leg|kick|plinth)([_\s-]|$)/.test(text) || text.includes("kickclip") || text.includes("plinth_clip");
+}
+
+function isOpenWallCornerFrontPart(object: THREE.Object3D) {
+  const text = wallCornerObjectText(object);
+  const materialGroup = canonicalFwmMaterialGroup((object.userData as Record<string, unknown>).materialGroup);
+  const componentType = String((object.userData as Record<string, unknown>).componentType ?? "").toLowerCase();
+  if (materialGroup === "front") return true;
+  if (componentType === "handle" || componentType === "hinge") return true;
+  return text.includes("door") || text.includes("handle") || text.includes("hinge");
+}
+
+function removeWallCornerParts(group: THREE.Group, predicate: (object: THREE.Object3D) => boolean) {
+  const removals: THREE.Object3D[] = [];
+  group.traverse((object) => {
+    if (object !== group && predicate(object)) removals.push(object);
+  });
+  for (const object of removals) {
+    object.parent?.remove(object);
+  }
+}
+
+function rebaseWallCornerVisibleGeometryToFloor(group: THREE.Group) {
+  group.updateMatrixWorld(true);
+  const bounds = new THREE.Box3();
+  let hasMesh = false;
+  group.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const meshBounds = new THREE.Box3().setFromObject(object);
+    if (meshBounds.isEmpty()) return;
+    bounds.union(meshBounds);
+    hasMesh = true;
+  });
+  if (!hasMesh) return;
+  const minY = bounds.min.y / MM;
+  if (Math.abs(minY) < 0.01) return;
+  for (const child of group.children) {
+    child.position.y -= minY * MM;
+  }
+  group.updateMatrixWorld(true);
+}
+
 function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const variant = String(params.variant ?? "corner_chamfered");
-  const depth = num(params, "depth", 330);
-  const width = Math.max(depth, num(params, "width", 600));
-  const height = num(params, "height", 450);
-  const t = num(params, "boardThickness", 18);
-  const back = num(params, "backThickness", 8);
-  const shelfT = num(params, "shelfThickness", t);
-  const frontT = num(params, "frontThicknessMm", 18);
-  const body = makeMaterial(params, catalog, "body");
-  const backMat = makeMaterial(params, catalog, "back");
-  const shelfMat = makeMaterial(params, catalog, "shelf");
-  const frontMat = makeMaterial(params, catalog, "front");
-  const hardware = makeMaterial(params, catalog, "hardware");
   const openNiche = variant === "corner_open_chamfered" || variant === "open_niche";
-  const defaultChamfer = Math.max(80, width - depth);
-  const chamfer = num(params, "frontChamferMm", num(params, "chamferMm", defaultChamfer));
-  const footprint = wallCornerFootprint(variant, width, depth, chamfer);
-  const innerFootprint = wallCornerHorizontalBoardFootprint(footprint.points, back, t);
-  const innerH = Math.max(1, height - 2 * t);
-  const paramKeys = ["width", "depth", "height", "variant", "cornerShape", "frontChamferMm", "chamferMm", "boardThickness"];
-
-  const bottom = addPlanPrism(group, "wall_corner_bottom_panel", innerFootprint, 0, t, body, paramKeys);
-  tagWallCornerBoard(bottom, "bottom_panel", "corpus", [{ edgeId: "visible_front_edges", role: "visible_corner_bottom", axis: "XZ", materialSlotId: "corpus" }]);
-  const top = addPlanPrism(group, "wall_corner_top_panel", innerFootprint, height - t, height, body, paramKeys);
-  tagWallCornerBoard(top, "top_panel", "corpus", [{ edgeId: "visible_front_edges", role: "visible_corner_top", axis: "XZ", materialSlotId: "corpus" }]);
-
-  const minX = -width / 2;
-  const maxX = width / 2;
-  const minZ = -width / 2;
-  const maxZ = width / 2;
-  const leftWallFrontZ = Math.max(...footprint.points.filter((point) => Math.abs(point.x - minX) < 0.001).map((point) => point.z));
-  const chamferedCorner = !variant.includes("90");
-  const lCorner = variant.includes("90");
-  const doorFrontSegments = chamferedCorner
-    ? footprint.frontSegments
-    : [
-      { start: { x: innerFootprint[3]!.x + frontT, z: innerFootprint[3]!.z }, end: innerFootprint[2]!, name: "front_leaf_x" },
-      { start: innerFootprint[4]!, end: innerFootprint[3]!, name: "front_leaf_z" }
-    ];
-  const lCornerFrontInset = lCorner ? footprint.points[3]!.x : maxZ;
-  const chamferedDoorOuter = chamferedCorner ? footprint.frontSegments[0] : null;
-  const chamferedDoorInner = chamferedDoorOuter
-    ? offsetPlanSegmentTowardCenter(chamferedDoorOuter.start, chamferedDoorOuter.end, frontT)
-    : null;
-  const verticalEdges = [
-    { name: "back_panel_x", start: { x: minX + back, z: minZ }, end: { x: maxX - t, z: minZ }, group: "back" as const, thickness: back },
-    ...(chamferedCorner ? [] : [{ name: "right_side_panel", start: { x: maxX, z: minZ }, end: { x: maxX, z: lCorner ? lCornerFrontInset : maxZ }, group: "corpus" as const, thickness: t }]),
-    { name: "back_panel_z", start: { x: minX, z: minZ + back }, end: { x: minX, z: leftWallFrontZ }, group: "back" as const, thickness: back },
-    ...(lCorner ? [{ name: "side_end_z_panel", start: { x: minX + back, z: maxZ }, end: { x: lCornerFrontInset, z: maxZ }, group: "corpus" as const, thickness: t }] : [])
-  ];
-  for (const edge of verticalEdges) {
-    const mesh = addInsetBoardBetweenPlanPoints(
-      group,
-      `wall_corner_${edge.name}`,
-      edge.start,
-      edge.end,
-      height / 2,
-      height,
-      edge.thickness,
-      edge.group === "back" ? backMat : body,
-      paramKeys
-    );
-    tagWallCornerBoard(mesh, edge.name, edge.group);
+  const baseParams = wallCornerDerivedBaseParams(params, variant);
+  if (baseParams.variant === "corner_90") {
+    buildCatalogBaseCorner90(group, baseParams, catalog);
+  } else {
+    buildCatalogBaseCornerChamfered(group, baseParams, catalog);
   }
-  if (chamferedCorner && chamferedDoorOuter && chamferedDoorInner) {
-    const rightSideInnerFront = planLineIntersection(
-      chamferedDoorInner.start,
-      chamferedDoorInner.end,
-      { x: maxX - t, z: minZ },
-      { x: maxX - t, z: maxZ }
-    );
-    const rightSide = addPlanPrism(
-      group,
-      "wall_corner_front_right_corpus_panel",
-      [
-        { x: maxX, z: minZ },
-        chamferedDoorOuter.start,
-        rightSideInnerFront,
-        { x: maxX - t, z: minZ + back }
-      ],
-      0,
-      height,
-      body,
-      paramKeys
-    );
-    tagWallCornerBoard(rightSide, "front_right_corpus_panel", "corpus", [{ edgeId: "right_front_miter_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
-    const leftFrontInnerStart = planLineIntersection(
-      chamferedDoorInner.start,
-      chamferedDoorInner.end,
-      { x: minX, z: maxZ - t },
-      { x: maxX, z: maxZ - t }
-    );
-    const leftFront = addPlanPrism(
-      group,
-      "wall_corner_front_left_corpus_panel",
-      [
-        chamferedDoorOuter.end,
-        { x: minX + back, z: maxZ },
-        { x: minX + back, z: maxZ - t },
-        leftFrontInnerStart
-      ],
-      0,
-      height,
-      body,
-      paramKeys
-    );
-    tagWallCornerBoard(leftFront, "front_left_corpus_panel", "corpus", [{ edgeId: "left_front_miter_edge", role: "visible_front_corpus", axis: "Y", materialSlotId: "corpus" }]);
-  }
-
-  const shelves = Math.max(0, Math.min(12, Math.round(num(params, "shelfCount", openNiche ? 2 : 1))));
-  for (let index = 0; index < shelves; index += 1) {
-    const yMin = t + ((innerH - shelfT) * (index + 1)) / (shelves + 1);
-    const shelf = addPlanPrism(group, `wall_corner_shelf_${index + 1}`, innerFootprint, yMin, yMin + shelfT, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "depth"]);
-    tagWallCornerBoard(shelf, `shelf_${index + 1}`, "corpus", [{ edgeId: "visible_shelf_front_edges", role: "visible_shelf_front", axis: "XZ", materialSlotId: "corpus" }]);
-  }
-
-  if (!openNiche) {
-    const opened = bool(params, "opened", false);
-    const doorOffset = opened ? Math.min(180, depth * 0.42) : 0;
-    for (const segment of doorFrontSegments) {
-      const dx = segment.end.x - segment.start.x;
-      const dz = segment.end.z - segment.start.z;
-      const length = Math.max(1, Math.hypot(dx, dz));
-      const nx = dz / length;
-      const nz = -dx / length;
-      const shifted = lCorner
-        ? offsetPlanSegmentTowardCenter(segment.start, segment.end, doorOffset)
-        : {
-          start: { x: segment.start.x + nx * doorOffset, z: segment.start.z + nz * doorOffset },
-          end: { x: segment.end.x + nx * doorOffset, z: segment.end.z + nz * doorOffset }
-        };
-      const door = chamferedCorner
-        ? addPlanPrism(
-          group,
-          `wall_corner_${segment.name}_door`,
-          [
-            shifted.start,
-            shifted.end,
-            offsetPlanSegmentTowardCenter(shifted.start, shifted.end, -frontT).end,
-            offsetPlanSegmentTowardCenter(shifted.start, shifted.end, -frontT).start
-          ],
-          0,
-          height,
-          frontMat,
-          ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
-        )
-        : addOutsetBoardBetweenPlanPoints(
-          group,
-          `wall_corner_${segment.name}_door`,
-          shifted.start,
-          shifted.end,
-          height / 2,
-          height,
-          frontT,
-          frontMat,
-          ["doorCount", "frontThicknessMm", "frontMaterialId", "opened", "variant"]
-        );
-      tagWallCornerBoard(door, `${segment.name}_door`, "front", [{ edgeId: "front_visible_edges", role: "visible_front", axis: "Y", materialSlotId: "front" }]);
-      addWallCornerHandle(group, `wall_corner_${segment.name}_handle`, shifted, height * 0.48, hardware);
-    }
-  }
-
+  removeWallCornerParts(group, isLowerOnlyWallCornerPart);
+  if (openNiche) removeWallCornerParts(group, isOpenWallCornerFrontPart);
+  rebaseWallCornerVisibleGeometryToFloor(group);
   group.userData.catalogWallCornerVariant = variant;
   group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
-  group.userData.kitchenCornerFootprintMm = footprint.points;
-  group.userData.kitchenCornerRotationOffsetRad = 0;
-  attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
+  group.userData.sourceModuleType = "fwm_catalog_base_corner";
+  group.userData.derivedFromLowerCorner = true;
 }
 
 function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
@@ -3103,6 +3051,15 @@ function annotateCopiedCornerFwmRuntime(source: THREE.Object3D, params: FwmFurni
       if (component && componentParamKey) markComponent(mesh, component, componentParamKey);
       if (group === "front") fitCopiedCornerFrontPanelHeight(mesh, params);
       data.grainAlong = inferGrainAlong(object.name, group, readMeshDimensionsMm(mesh));
+      if ((group === "front" || group === "shelf" || group === "body") && !data.edgeBandingStrategy) {
+        data.edgeBandingStrategy = "explicit_visible_edges";
+        data.edgeBanding = [{
+          edgeId: `${group}_visible_edges`,
+          role: group === "front" ? "visible_front" : "visible_corpus",
+          axis: group === "front" ? "Y" : "XZ",
+          materialSlotId: group === "front" ? "front" : "corpus"
+        }];
+      }
       data.catalogMaterialId = material.userData.catalogMaterialId;
       data.catalogMaterialName = material.userData.catalogMaterialName;
       data.materialRole = material.userData.materialRole;

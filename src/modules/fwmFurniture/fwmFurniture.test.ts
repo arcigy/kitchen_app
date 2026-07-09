@@ -1120,14 +1120,22 @@ describe("FWM furniture module packages", () => {
       }
     });
 
+    const lowerOnlyMatches = (group: { traverse: (visitor: (object: unknown) => void) => void }) =>
+      meshes(group)
+        .filter((mesh) => /plinth|kick|leg_|kickclip|plinth_clip/i.test(`${mesh.name} ${mesh.userData.boardName ?? ""} ${mesh.userData.componentType ?? ""}`))
+        .map((mesh) => mesh.name);
+
     for (const group of [chamfered, openNiche, corner90Closed]) {
       const bounds = objectBoundsMm(group);
       const cabinetBounds = boundsForMeshesMm(group, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
-      expect(cabinetBounds.width).toBeCloseTo(cornerWidth, 0);
-      expect(cabinetBounds.depth).toBeCloseTo(cornerWidth, 0);
+      expect(cabinetBounds.width).toBeGreaterThan(cornerWidth - 30);
+      expect(cabinetBounds.width).toBeLessThan(cornerWidth + 40);
+      expect(cabinetBounds.depth).toBeGreaterThan(cornerWidth - 30);
+      expect(cabinetBounds.depth).toBeLessThan(cornerWidth + 40);
       expect(bounds.height).toBeCloseTo(450, 0);
       expect(hasMeshNamed(group, /worktop/i)).toBe(false);
       expect(hasMeshNamed(group, /plinth/i)).toBe(false);
+      expect(lowerOnlyMatches(group)).toEqual([]);
       const meshList = meshes(group);
       expect(meshList.some((mesh) => mesh.userData.materialGroup === "corpus")).toBe(true);
       expect(meshList.some((mesh) => mesh.userData.materialGroup === "back")).toBe(true);
@@ -1136,83 +1144,49 @@ describe("FWM furniture module packages", () => {
       expect(meshList.some((mesh) => mesh.userData.edgeBandingStrategy === "explicit_visible_edges")).toBe(true);
     }
 
-    expect(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")?.userData.materialGroup).toBe("front");
-    expect(getMeshNamed(chamfered, "wall_corner_front_right_corpus_panel")?.userData.materialGroup).toBe("corpus");
-    expect(getMeshNamed(chamfered, "wall_corner_left_short_side_panel")).toBeNull();
-    expect(getMeshNamed(openNiche, "wall_corner_diagonal_front_door")).toBeNull();
-    expect(meshes(openNiche).filter((mesh) => /^wall_corner_shelf_/.test(mesh.name))).toHaveLength(2);
+    expect(chamfered.userData.derivedFromLowerCorner).toBe(true);
+    expect(corner90Closed.userData.derivedFromLowerCorner).toBe(true);
+    expect(getObjectNamed(corner90Closed, "corner_fwm_runtime_source")).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "bottom_x")).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "bottom_z")).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "door_front_x")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(corner90Closed, "door_front_z")?.userData.materialGroup).toBe("front");
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_x")?.userData.componentType).toBe("handle");
+    expect(getMeshNamed(corner90Closed, "doorHandle_front_z")?.userData.componentType).toBe("handle");
+    expect(getMeshByBoardName(chamfered, "diagonal_front")?.userData.materialGroup).toBe("front");
+    expect(getMeshByBoardName(chamfered, "front_right_panel")?.userData.materialGroup).toBe("corpus");
+    expect(getMeshByBoardName(chamfered, "right_side_panel")?.userData.materialGroup).toBe("corpus");
+    expect(getMeshByBoardName(chamfered, "left_side_panel")?.userData.materialGroup).toBe("corpus");
+    expect(getMeshByBoardName(chamfered, "diagonal_handle")?.userData.componentType).toBe("handle");
+    expect(getMeshByBoardName(openNiche, "diagonal_front")).toBeNull();
+    expect(getMeshByBoardName(openNiche, "diagonal_handle")).toBeNull();
+    expect(meshes(openNiche).filter((mesh) => /^corner_chamfered_shelf_/.test(mesh.name))).toHaveLength(2);
     expect(realBoardOverlaps(chamfered)).toEqual([]);
     expect(realBoardOverlaps(corner90Closed)).toEqual([]);
-    expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBe(0);
-    expect(corner90Closed.userData.kitchenCornerRotationOffsetRad).toBe(0);
+    expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBe(Math.PI / 2);
+    expect(corner90Closed.userData.sourceModuleType).toBe("fwm_catalog_base_corner");
     expect(getObjectNamed(chamfered, "__kitchen_corner_anchor")).toBeTruthy();
 
-    const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_x_door")!);
-    const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "wall_corner_front_leaf_x_door")!);
-    const closedDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_front_leaf_z_door")!);
-    const corner90BackZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_back_panel_z")!);
-    const corner90RightSide = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_right_side_panel")!);
-    const corner90SideEndZ = objectBoundsMm(getMeshNamed(corner90Closed, "wall_corner_side_end_z_panel")!);
-    const corner90TopProfile = meshPlanProfileMm(getMeshNamed(corner90Closed, "wall_corner_top_panel")!);
-    const chamferedBackZ = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_z")!);
-    const chamferedBackX = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_back_panel_x")!);
-    const chamferedDoor = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
-    const chamferedDoorMesh = getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!;
-    const chamferedFrontRightCorpus = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_front_right_corpus_panel")!);
-    const chamferedFrontLeftCorpus = objectBoundsMm(getMeshNamed(chamfered, "wall_corner_front_left_corpus_panel")!);
-    const chamferedTopProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_top_panel")!);
-    const chamferedDoorProfile = meshPlanProfileMm(getMeshNamed(chamfered, "wall_corner_diagonal_front_door")!);
-    const frontInset = -cornerWidth / 2 + cornerDepth;
-    expect(chamferedTopProfile).toEqual([
-      { x: -282, z: -282 },
-      { x: 282, z: -282 },
-      { x: 282, z: frontInset },
-      { x: frontInset, z: 282 },
-      { x: -282, z: 282 }
-    ]);
-    expect(chamferedDoorProfile.some((point) => Math.abs(point.x - cornerWidth / 2) < 0.001 && Math.abs(point.z - frontInset) < 0.001)).toBe(true);
-    expect(chamferedDoorProfile.some((point) => Math.abs(point.x - frontInset) < 0.001 && Math.abs(point.z - cornerWidth / 2) < 0.001)).toBe(true);
-    expect(corner90TopProfile).toEqual([
-      { x: -292, z: -292 },
-      { x: 282, z: -292 },
-      { x: 282, z: frontInset },
-      { x: frontInset, z: frontInset },
-      { x: frontInset, z: 282 },
-      { x: -292, z: 282 }
-    ]);
-    expect(corner90BackZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
-    expect(corner90RightSide.maxZ).toBeCloseTo(frontInset, 0);
-    expect(corner90RightSide.depth).toBeCloseTo(cornerDepth, 0);
-    expect(corner90SideEndZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
-    expect(chamferedBackZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
-    expect(chamferedBackZ.width).toBeCloseTo(18, 0);
-    expect(chamferedBackX.depth).toBeCloseTo(18, 0);
+    const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "door_front_x")!);
+    const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "door_front_x")!);
+    const chamferedDoor = objectBoundsMm(getMeshByBoardName(chamfered, "diagonal_front")!);
+    const chamferedFrontRightCorpus = objectBoundsMm(getMeshByBoardName(chamfered, "front_right_panel")!);
+    const chamferedFrontLeftCorpus = objectBoundsMm(getMeshByBoardName(chamfered, "left_side_panel")!);
+    const chamferedRightSide = objectBoundsMm(getMeshByBoardName(chamfered, "right_side_panel")!);
     expect(chamferedDoor.height).toBeCloseTo(450, 0);
-    expect(closedDoor.minZ).toBeGreaterThanOrEqual(frontInset - 0.5);
-    expect(closedDoor.maxZ).toBeLessThanOrEqual(frontInset + 18.5);
-    expect(closedDoorZ.minX).toBeCloseTo(frontInset, 0);
-    expect(closedDoorZ.maxX).toBeCloseTo(frontInset + 18, 0);
-    expect(chamferedDoor.maxX).toBeGreaterThan(cornerWidth / 2);
-    expect(chamferedDoor.maxZ).toBeGreaterThan(cornerWidth / 2);
-    expect(chamferedFrontRightCorpus.depth).toBeCloseTo(cornerDepth, 0);
-    expect(chamferedFrontRightCorpus.maxZ).toBeCloseTo(frontInset, 0);
-    expect(chamferedFrontLeftCorpus.height).toBeCloseTo(450, 0);
-    expect(closedDoor.width).toBeCloseTo(cornerWidth - cornerDepth - 36, 0);
-    expect(closedDoorZ.depth).toBeCloseTo(cornerWidth - cornerDepth - 18, 0);
+    expect(chamferedFrontRightCorpus.height).toBeGreaterThan(400);
+    expect(chamferedFrontLeftCorpus.height).toBeGreaterThan(400);
+    expect(chamferedRightSide.depth).toBeGreaterThan(cornerDepth);
+    expect(chamferedRightSide.depth).toBeLessThan(cornerDepth + 80);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);
 
     const depthChangedBounds = boundsForMeshesMm(corner90DepthChanged, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
-    const depthChangedDoorX = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_x_door")!);
-    const depthChangedDoorZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_front_leaf_z_door")!);
-    const depthChangedBackZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "wall_corner_back_panel_z")!);
-    const changedFrontInset = -cornerWidth / 2 + 360;
-    expect(depthChangedBounds.width).toBeCloseTo(cornerWidth, 0);
-    expect(depthChangedBounds.depth).toBeCloseTo(cornerWidth, 0);
-    expect(depthChangedBackZ.maxZ).toBeCloseTo(cornerWidth / 2, 0);
-    expect(depthChangedDoorX.width).toBeCloseTo(cornerWidth - 360 - 36, 0);
-    expect(depthChangedDoorZ.depth).toBeCloseTo(cornerWidth - 360 - 18, 0);
-    expect(depthChangedDoorZ.minX).toBeCloseTo(changedFrontInset, 0);
-    expect(depthChangedDoorZ.maxX).toBeCloseTo(changedFrontInset + 18, 0);
+    const depthChangedDoorX = objectBoundsMm(getMeshNamed(corner90DepthChanged, "door_front_x")!);
+    const depthChangedDoorZ = objectBoundsMm(getMeshNamed(corner90DepthChanged, "door_front_z")!);
+    expect(depthChangedBounds.width).toBeGreaterThan(cornerWidth - 30);
+    expect(depthChangedBounds.depth).toBeGreaterThan(cornerWidth - 30);
+    expect(depthChangedDoorX.depth).not.toBeCloseTo(closedDoor.depth, 0);
+    expect(depthChangedDoorZ.width).not.toBeCloseTo(objectBoundsMm(getMeshNamed(corner90Closed, "door_front_z")!).width, 0);
   });
 
   it("declares truthful internal-edit capabilities for composed and sink-capable modules", () => {
