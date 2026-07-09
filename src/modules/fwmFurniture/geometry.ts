@@ -1765,21 +1765,15 @@ function addWallCornerHandle(
   return handle;
 }
 
-function lowerCornerVariantForWallCorner(variant: string) {
-  if (variant === "corner_90" || variant === "corner_90_1p") return "corner_90";
-  return "corner_chamfered";
-}
-
 function wallCornerDerivedBaseParams(params: FwmFurnitureParams, variant: string): FwmFurnitureParams {
   const upperDepth = num(params, "depth", 330);
   const width = Math.max(upperDepth, num(params, "width", 600));
   const height = num(params, "height", 720);
   const boardThickness = num(params, "boardThickness", 18);
-  const mappedVariant = lowerCornerVariantForWallCorner(variant);
   const next = {
     ...params,
     type: "fwm_catalog_base_corner",
-    variant: mappedVariant,
+    variant: "corner_chamfered",
     width,
     depth: upperDepth,
     height,
@@ -1795,13 +1789,11 @@ function wallCornerDerivedBaseParams(params: FwmFurnitureParams, variant: string
     requiresWorktop: false,
     kitchenModuleRole: "top"
   } as FwmFurnitureParams;
-  if (mappedVariant === "corner_chamfered") {
-    const frontChamfer = num(params, "frontChamferMm", num(params, "chamferMm", Math.max(80, width - upperDepth)));
-    next.frontChamferMm = frontChamfer;
-    next.chamferMm = next.frontChamferMm;
-    next.frontChamferReferenceMm = frontChamfer;
-    next.backChamferMm = num(params, "backChamferMm", 0);
-  }
+  const frontChamfer = num(params, "frontChamferMm", num(params, "chamferMm", Math.max(80, width - upperDepth)));
+  next.frontChamferMm = frontChamfer;
+  next.chamferMm = next.frontChamferMm;
+  next.frontChamferReferenceMm = frontChamfer;
+  next.backChamferMm = num(params, "backChamferMm", 0);
   return next;
 }
 
@@ -1865,22 +1857,315 @@ function rebaseWallCornerVisibleGeometryToFloor(group: THREE.Group) {
   group.updateMatrixWorld(true);
 }
 
+function attachObjectsToWallCornerPivot(group: THREE.Group, pivotName: string, pivotPositionMm: { x: number; z: number }, objects: THREE.Object3D[]) {
+  const pivot = new THREE.Group();
+  pivot.name = pivotName;
+  pivot.position.set(pivotPositionMm.x * MM, 0, pivotPositionMm.z * MM);
+  group.add(pivot);
+  group.updateMatrixWorld(true);
+  for (const object of objects) {
+    if (object.parent === pivot) continue;
+    pivot.attach(object);
+  }
+  return pivot;
+}
+
+function addWallCornerHardwareBox(
+  group: THREE.Group,
+  name: string,
+  sizeMm: { width: number; height: number; depth: number },
+  centerMm: { x: number; y: number; z: number },
+  material: THREE.Material,
+  component: ComponentDefinition | undefined,
+  componentParamKey: "handleComponentId" | "hingeComponentId",
+  paramKeys: string[]
+) {
+  const mesh = addBox(group, name, sizeMm, centerMm, material, paramKeys);
+  tagWallCornerBoard(mesh, name, "hardware");
+  markComponent(mesh, component, componentParamKey);
+  return mesh;
+}
+
+function addWallCornerHardwareCylinder(
+  group: THREE.Group,
+  name: string,
+  radiusMm: number,
+  lengthMm: number,
+  centerMm: { x: number; y: number; z: number },
+  material: THREE.Material,
+  axis: "x" | "y" | "z",
+  component: ComponentDefinition | undefined
+) {
+  const mesh = addCylinder(group, name, radiusMm, lengthMm, centerMm, material, axis, ["handleComponentId", "opened"]);
+  tagWallCornerBoard(mesh, name, "hardware");
+  markComponent(mesh, component, "handleComponentId");
+  return mesh;
+}
+
+function buildCatalogWallCorner90Cabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
+  const legLength = Math.max(260, num(params, "width", 600));
+  const cabinetDepth = Math.max(120, Math.min(num(params, "depth", 330), legLength - 80));
+  const height = Math.max(120, num(params, "height", 720));
+  const t = Math.max(8, num(params, "boardThickness", 18));
+  const backT = Math.max(8, num(params, "backThickness", t));
+  const frontT = Math.max(8, num(params, "frontThicknessMm", t));
+  const shelfT = Math.max(8, num(params, "shelfThickness", t));
+  const frontGap = Math.max(0, num(params, "frontGap", 2));
+  const handleProjection = Math.max(4, num(params, "handleProjectionMm", 28));
+  const handleLength = Math.max(40, Math.min(num(params, "handleLengthMm", 160), height * 0.45));
+  const minX = -legLength / 2;
+  const maxX = legLength / 2;
+  const minZ = -legLength / 2;
+  const maxZ = legLength / 2;
+  const insideFront = minX + cabinetDepth;
+  const body = makeMaterial(params, catalog, "body");
+  const backMat = makeMaterial(params, catalog, "back");
+  const frontMat = makeMaterial(params, catalog, "front");
+  const hardware = makeMaterial(params, catalog, "hardware");
+  const handleComponent = resolveComponentForParam(params, catalog, "handleComponentId", "handle");
+  const hingeComponent = resolveComponentForParam(params, catalog, "hingeComponentId", "hinge");
+  const handleMaterial = makeComponentMaterial(params, catalog, handleComponent, hardware);
+  const hingeMaterial = makeComponentMaterial(params, catalog, hingeComponent, hardware);
+  const footprint = [
+    { x: minX, z: minZ },
+    { x: maxX, z: minZ },
+    { x: maxX, z: insideFront },
+    { x: insideFront, z: insideFront },
+    { x: insideFront, z: maxZ },
+    { x: minX, z: maxZ }
+  ];
+  const innerShelfFootprint = [
+    { x: minX + t, z: minZ + backT },
+    { x: maxX - t, z: minZ + backT },
+    { x: maxX - t, z: insideFront - t },
+    { x: insideFront + t, z: insideFront + t },
+    { x: insideFront + t, z: maxZ - t },
+    { x: minX + backT, z: maxZ - t }
+  ];
+  const paramKeys = ["width", "height", "depth", "boardThickness", "backThickness", "frontThicknessMm", "opened"];
+  const bottom = addPlanPrism(group, "bottom_l", footprint, 0, t, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(bottom, "bottom_panel", "corpus"), ["front_l_visible_edges"]);
+  const top = addPlanPrism(group, "top_l", footprint, height - t, height, body, paramKeys);
+  tagVisibleEdges(tagBoardIdentity(top, "top_panel", "corpus"), ["front_l_visible_edges"]);
+
+  const backX = addBox(
+    group,
+    "back_x",
+    { width: legLength - backT, height: Math.max(1, height - 2 * t), depth: backT },
+    { x: (minX + backT + maxX) / 2, y: height / 2, z: minZ + backT / 2 },
+    backMat,
+    paramKeys
+  );
+  tagWallCornerBoard(backX, "back_x", "back");
+  const backZ = addBox(
+    group,
+    "back_z",
+    { width: backT, height: Math.max(1, height - 2 * t), depth: legLength - backT },
+    { x: minX + backT / 2, y: height / 2, z: (minZ + backT + maxZ) / 2 },
+    backMat,
+    paramKeys
+  );
+  tagWallCornerBoard(backZ, "back_z", "back");
+
+  const sideEndX = addBox(
+    group,
+    "side_end_x",
+    { width: t, height, depth: Math.max(1, cabinetDepth - backT) },
+    { x: maxX - t / 2, y: height / 2, z: (minZ + backT + insideFront) / 2 },
+    body,
+    paramKeys
+  );
+  tagVisibleEdges(tagBoardIdentity(sideEndX, "side_end_x", "corpus"), ["front_vertical_edge"]);
+  const sideEndZ = addBox(
+    group,
+    "side_end_z",
+    { width: Math.max(1, cabinetDepth - backT), height, depth: t },
+    { x: (minX + backT + insideFront) / 2, y: height / 2, z: maxZ - t / 2 },
+    body,
+    paramKeys
+  );
+  tagVisibleEdges(tagBoardIdentity(sideEndZ, "side_end_z", "corpus"), ["front_vertical_edge"]);
+
+  const shelfCount = Math.max(0, Math.min(16, Math.round(num(params, "shelfCount", 2))));
+  const clearHeight = Math.max(1, height - 2 * t - shelfCount * shelfT);
+  const gap = clearHeight / (shelfCount + 1);
+  let shelfY = t;
+  for (let index = 0; index < shelfCount; index += 1) {
+    shelfY += gap;
+    const shelf = addPlanPrism(group, `shelf_${index + 1}_l`, innerShelfFootprint, shelfY, shelfY + shelfT, body, ["width", "depth", "height", "shelfCount", "shelfThickness", "shelfGaps"]);
+    tagVisibleEdges(tagBoardIdentity(shelf, `shelf_${index + 1}`, "corpus"), ["front_l_visible_edges"]);
+    shelfY += shelfT;
+  }
+
+  const doorY = height / 2;
+  const doorH = height;
+  const doorXMinZ = insideFront + frontGap;
+  const doorXMaxZ = maxZ - t - frontGap;
+  const doorXDepth = Math.max(40, doorXMaxZ - doorXMinZ);
+  const doorX = addBox(
+    group,
+    "door_front_x",
+    { width: frontT, height: doorH, depth: doorXDepth },
+    { x: insideFront + frontT / 2 + 0.2, y: doorY, z: doorXMinZ + doorXDepth / 2 },
+    frontMat,
+    ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
+  );
+  tagVisibleEdges(tagBoardIdentity(doorX, "door_front_x", "front"), ["visible_door_edges"]);
+  const doorZMinX = insideFront + frontT + frontGap;
+  const doorZMaxX = maxX - t - frontGap;
+  const doorZWidth = Math.max(40, doorZMaxX - doorZMinX);
+  const doorZ = addBox(
+    group,
+    "door_front_z",
+    { width: doorZWidth, height: doorH, depth: frontT },
+    { x: doorZMinX + doorZWidth / 2, y: doorY, z: insideFront + frontT / 2 + 0.2 },
+    frontMat,
+    ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
+  );
+  tagVisibleEdges(tagBoardIdentity(doorZ, "door_front_z", "front"), ["visible_door_edges"]);
+
+  addWallCornerHardwareCylinder(
+    group,
+    "doorHandle_front_x",
+    5,
+    handleLength,
+    { x: insideFront + frontT + handleProjection * 0.5, y: height - 60, z: doorXMinZ + doorXDepth * 0.5 },
+    handleMaterial,
+    "z",
+    handleComponent
+  );
+  addWallCornerHardwareCylinder(
+    group,
+    "doorHandle_front_z",
+    5,
+    handleLength,
+    { x: doorZMinX + doorZWidth * 0.5, y: height - 60, z: insideFront + frontT + handleProjection * 0.5 },
+    handleMaterial,
+    "x",
+    handleComponent
+  );
+
+  const hingeYs = [height * 0.28, height * 0.72];
+  for (const [index, hingeY] of hingeYs.entries()) {
+    addWallCornerHardwareBox(
+      group,
+      `hinge_front_x_${index + 1}_door_plate`,
+      { width: 6, height: 64, depth: 24 },
+      { x: insideFront - 3, y: hingeY, z: doorXMaxZ - 34 },
+      hingeMaterial,
+      hingeComponent,
+      "hingeComponentId",
+      ["hingeComponentId", "opened"]
+    );
+    addWallCornerHardwareBox(
+      group,
+      `hinge_front_x_${index + 1}_door_cup`,
+      { width: 6, height: 24, depth: 24 },
+      { x: insideFront + frontT + 3, y: hingeY, z: doorXMaxZ - 34 },
+      hingeMaterial,
+      hingeComponent,
+      "hingeComponentId",
+      ["hingeComponentId", "opened"]
+    );
+    addWallCornerHardwareBox(
+      group,
+      `hinge_front_z_${index + 1}_door_plate`,
+      { width: 24, height: 64, depth: 6 },
+      { x: doorZMaxX - 34, y: hingeY, z: insideFront - 3 },
+      hingeMaterial,
+      hingeComponent,
+      "hingeComponentId",
+      ["hingeComponentId", "opened"]
+    );
+    addWallCornerHardwareBox(
+      group,
+      `hinge_front_z_${index + 1}_door_cup`,
+      { width: 24, height: 24, depth: 6 },
+      { x: doorZMaxX - 34, y: hingeY, z: insideFront + frontT + 3 },
+      hingeMaterial,
+      hingeComponent,
+      "hingeComponentId",
+      ["hingeComponentId", "opened"]
+    );
+  }
+
+  if (bool(params, "opened", false)) {
+    const hingeCount = hingeYs.length;
+    const xPivot = attachObjectsToWallCornerPivot(
+      group,
+      "__wall_corner_90_door_pivot_x",
+      { x: insideFront + frontT / 2, z: doorXMaxZ },
+      [
+        doorX,
+        group.getObjectByName("doorHandle_front_x"),
+        ...Array.from({ length: hingeCount }, (_, index) => [
+          group.getObjectByName(`hinge_front_x_${index + 1}_door_plate`),
+          group.getObjectByName(`hinge_front_x_${index + 1}_door_cup`)
+        ]).flat()
+      ].filter((object): object is THREE.Object3D => Boolean(object))
+    );
+    xPivot.rotation.y = Math.PI / 2;
+    const zPivot = attachObjectsToWallCornerPivot(
+      group,
+      "__wall_corner_90_door_pivot_z",
+      { x: doorZMaxX, z: insideFront + frontT / 2 },
+      [
+        doorZ,
+        group.getObjectByName("doorHandle_front_z"),
+        ...Array.from({ length: hingeCount }, (_, index) => [
+          group.getObjectByName(`hinge_front_z_${index + 1}_door_plate`),
+          group.getObjectByName(`hinge_front_z_${index + 1}_door_cup`)
+        ]).flat()
+      ].filter((object): object is THREE.Object3D => Boolean(object))
+    );
+    zPivot.rotation.y = -Math.PI / 2;
+  }
+
+  attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
+  group.userData.catalogWallCornerVariant = String(params.variant ?? "corner_90");
+  group.userData.cornerShape = "l_shape";
+  group.userData.sourceModuleType = "fwm_catalog_wall_cabinet";
+  group.userData.wallCornerIndependentGeometry = true;
+}
+
+function openWallCornerChamferedDoor(group: THREE.Group) {
+  const door = findGroundTruthMeshByBoardName(group, "diagonal_front");
+  if (!door) return;
+  const related = [
+    door,
+    findGroundTruthMeshByBoardName(group, "diagonal_handle"),
+    findGroundTruthMeshByBoardName(group, "hinge_lower"),
+    findGroundTruthMeshByBoardName(group, "hinge_upper")
+  ].filter((object): object is THREE.Mesh => object !== null);
+  door.updateMatrixWorld(true);
+  const doorBounds = new THREE.Box3().setFromObject(door);
+  const pivot = attachObjectsToWallCornerPivot(
+    group,
+    "__wall_corner_chamfered_door_pivot",
+    { x: doorBounds.max.x / MM, z: doorBounds.max.z / MM },
+    related
+  );
+  pivot.rotation.y = -Math.PI * 0.55;
+}
+
 function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
   const variant = String(params.variant ?? "corner_chamfered");
   const openNiche = variant === "corner_open_chamfered" || variant === "open_niche";
-  const baseParams = wallCornerDerivedBaseParams(params, variant);
-  if (baseParams.variant === "corner_90") {
-    buildCatalogBaseCorner90(group, baseParams, catalog);
-  } else {
-    buildCatalogBaseCornerChamfered(group, baseParams, catalog);
+  if (variant === "corner_90" || variant === "corner_90_1p") {
+    buildCatalogWallCorner90Cabinet(group, params, catalog);
+    return;
   }
+  const baseParams = wallCornerDerivedBaseParams(params, variant);
+  group.userData.groundTruthBuildParams = baseParams;
+  buildCatalogBaseCornerChamferedGroundTruth(group, catalog);
   removeWallCornerParts(group, isLowerOnlyWallCornerPart);
   if (openNiche) removeWallCornerParts(group, isOpenWallCornerFrontPart);
   rebaseWallCornerVisibleGeometryToFloor(group);
+  if (!openNiche && bool(params, "opened", false)) openWallCornerChamferedDoor(group);
   group.userData.catalogWallCornerVariant = variant;
   group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
-  group.userData.sourceModuleType = "fwm_catalog_base_corner";
-  group.userData.derivedFromLowerCorner = true;
+  group.userData.sourceModuleType = "fwm_catalog_wall_cabinet";
+  group.userData.wallCornerIndependentGeometry = true;
 }
 
 function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {

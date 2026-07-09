@@ -1033,6 +1033,29 @@ describe("FWM furniture module packages", () => {
         plinthHeight: 0
       }
     });
+    const chamferedOpened = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      catalog,
+      parameters: {
+        ...defaults,
+        variant: "corner_chamfered",
+        width: cornerWidth,
+        depth: cornerDepth,
+        height: 450,
+        shelfCount: 1,
+        doorCount: 1,
+        opened: true,
+        frontChamferMm: cornerChamfer,
+        isCorner: true,
+        cornerShape: "chamfered",
+        frontFaceCount: 0,
+        backFaceCount: 2,
+        requiresWorktop: false,
+        hasWorktop: false,
+        hasPlinth: false,
+        plinthHeight: 0
+      }
+    });
     const openNiche = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
       catalog,
@@ -1144,11 +1167,14 @@ describe("FWM furniture module packages", () => {
       expect(meshList.some((mesh) => mesh.userData.edgeBandingStrategy === "explicit_visible_edges")).toBe(true);
     }
 
-    expect(chamfered.userData.derivedFromLowerCorner).toBe(true);
-    expect(corner90Closed.userData.derivedFromLowerCorner).toBe(true);
-    expect(getObjectNamed(corner90Closed, "corner_fwm_runtime_source")).toBeTruthy();
-    expect(getMeshNamed(corner90Closed, "bottom_x")).toBeTruthy();
-    expect(getMeshNamed(corner90Closed, "bottom_z")).toBeTruthy();
+    expect(chamfered.userData.wallCornerIndependentGeometry).toBe(true);
+    expect(corner90Closed.userData.wallCornerIndependentGeometry).toBe(true);
+    expect(getObjectNamed(corner90Closed, "corner_fwm_runtime_source")).toBeNull();
+    expect(getMeshNamed(corner90Closed, "top_l")).toBeTruthy();
+    expect(getMeshNamed(corner90Closed, "top_x_front")).toBeNull();
+    expect(getMeshNamed(corner90Closed, "top_x_back")).toBeNull();
+    expect(getMeshNamed(corner90Closed, "top_z")).toBeNull();
+    expect(getMeshNamed(corner90Closed, "bottom_l")).toBeTruthy();
     expect(getMeshNamed(corner90Closed, "door_front_x")?.userData.materialGroup).toBe("front");
     expect(getMeshNamed(corner90Closed, "door_front_z")?.userData.materialGroup).toBe("front");
     expect(getMeshNamed(corner90Closed, "doorHandle_front_x")?.userData.componentType).toBe("handle");
@@ -1164,12 +1190,21 @@ describe("FWM furniture module packages", () => {
     expect(realBoardOverlaps(chamfered)).toEqual([]);
     expect(realBoardOverlaps(corner90Closed)).toEqual([]);
     expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBe(Math.PI / 2);
-    expect(corner90Closed.userData.sourceModuleType).toBe("fwm_catalog_base_corner");
+    expect(corner90Closed.userData.sourceModuleType).toBe("fwm_catalog_wall_cabinet");
     expect(getObjectNamed(chamfered, "__kitchen_corner_anchor")).toBeTruthy();
 
     const closedDoor = objectBoundsMm(getMeshNamed(corner90Closed, "door_front_x")!);
     const openedDoor = objectBoundsMm(getMeshNamed(corner90Opened, "door_front_x")!);
+    const closedDoorZ = objectBoundsMm(getMeshNamed(corner90Closed, "door_front_z")!);
+    const openedDoorZ = objectBoundsMm(getMeshNamed(corner90Opened, "door_front_z")!);
+    const closedHandleX = objectBoundsMm(getMeshNamed(corner90Closed, "doorHandle_front_x")!);
+    const openedHandleX = objectBoundsMm(getMeshNamed(corner90Opened, "doorHandle_front_x")!);
+    const closedHandleZ = objectBoundsMm(getMeshNamed(corner90Closed, "doorHandle_front_z")!);
+    const openedHandleZ = objectBoundsMm(getMeshNamed(corner90Opened, "doorHandle_front_z")!);
     const chamferedDoor = objectBoundsMm(getMeshByBoardName(chamfered, "diagonal_front")!);
+    const chamferedOpenedDoor = objectBoundsMm(getMeshByBoardName(chamferedOpened, "diagonal_front")!);
+    const chamferedHandle = objectBoundsMm(getMeshByBoardName(chamfered, "diagonal_handle")!);
+    const chamferedOpenedHandle = objectBoundsMm(getMeshByBoardName(chamferedOpened, "diagonal_handle")!);
     const chamferedFrontRightCorpus = objectBoundsMm(getMeshByBoardName(chamfered, "front_right_panel")!);
     const chamferedFrontLeftCorpus = objectBoundsMm(getMeshByBoardName(chamfered, "left_side_panel")!);
     const chamferedRightSide = objectBoundsMm(getMeshByBoardName(chamfered, "right_side_panel")!);
@@ -1179,6 +1214,11 @@ describe("FWM furniture module packages", () => {
     expect(chamferedRightSide.depth).toBeGreaterThan(cornerDepth);
     expect(chamferedRightSide.depth).toBeLessThan(cornerDepth + 80);
     expect(Math.abs(openedDoor.minZ - closedDoor.minZ)).toBeGreaterThan(80);
+    expect(Math.abs(openedDoorZ.minX - closedDoorZ.minX)).toBeGreaterThan(80);
+    expect(Math.abs(openedHandleX.minZ - closedHandleX.minZ)).toBeGreaterThan(80);
+    expect(Math.abs(openedHandleZ.minX - closedHandleZ.minX)).toBeGreaterThan(80);
+    expect(Math.abs(chamferedOpenedDoor.minX - chamferedDoor.minX)).toBeGreaterThan(40);
+    expect(Math.abs(chamferedOpenedHandle.minX - chamferedHandle.minX)).toBeGreaterThan(40);
 
     const depthChangedBounds = boundsForMeshesMm(corner90DepthChanged, (mesh) => ["corpus", "back"].includes(String(mesh.userData.materialGroup)));
     const depthChangedDoorX = objectBoundsMm(getMeshNamed(corner90DepthChanged, "door_front_x")!);
