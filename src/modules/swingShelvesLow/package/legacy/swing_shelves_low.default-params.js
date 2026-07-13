@@ -19,7 +19,7 @@ function swingShelvesLowDefaultsV2() {
     sideGap: 2,
     topGap: 2,
     bottomGap: 2,
-    frontThicknessMm: 19,
+    frontThicknessMm: 18,
     shelfCount: 4,
     shelfAutoFit: true,
     shelfGaps: [],

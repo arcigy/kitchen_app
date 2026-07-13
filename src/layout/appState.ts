@@ -186,6 +186,7 @@ export type KitchenWorktopJustification = "center" | "back" | "front";
 
 export type KitchenWorktopParams = {
   path: FloorBoundaryPoint[];
+  segmentDepthsMm?: number[];
   justification: KitchenWorktopJustification;
   mirrored: boolean;
   depthMm: number;

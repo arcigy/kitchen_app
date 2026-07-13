@@ -3,6 +3,12 @@ import type { ClientContext } from "../core/client/client-context";
 import { exportSceneToJson, type ExportSceneArgs } from "../core/exportScene";
 import { downloadCanvasPng, saveTextFile, saveTextFileAs, type WritableHandle } from "../core/filePersistence";
 import { createClientProjectPhaseScope } from "../core/storage/storage-types";
+import {
+  exportWebsiteShowcaseSnapshot,
+  type WebsiteShowcaseSnapshotStage
+} from "../core/websiteShowcaseExport";
+import type { KitchenGroup, KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import type { ModuleParams } from "../model/cabinetTypes";
 import { attachFileMenu } from "../ui/createFileMenu";
 import type { AppArgs } from "./bootstrap";
 import { openBlenderMaterialReview } from "./blenderMaterialReview";
@@ -38,6 +44,10 @@ type ExportActionsArgs = {
   getWindowOpening: () => NonNullable<ExportSceneArgs["window"]>["opening"];
   getDaylightIntensity: () => number;
   buildLayoutExportPayload: () => unknown;
+  getWebsiteShowcaseModules: () => readonly LayoutInstance[];
+  getWebsiteShowcaseWorktops: () => readonly KitchenWorktopInstance[];
+  getWebsiteShowcaseKitchenGroups: () => readonly KitchenGroup[];
+  buildWebsiteShowcaseModule: (params: ModuleParams) => THREE.Group;
   onLanguageChange: () => void;
 };
 
@@ -184,6 +194,19 @@ export function createExportActions(args: ExportActionsArgs) {
     return { payload, json };
   };
 
+  const buildWebsiteShowcaseExportJson = (stage: WebsiteShowcaseSnapshotStage) => {
+    const payload = exportWebsiteShowcaseSnapshot({
+      stage,
+      modules: args.getWebsiteShowcaseModules(),
+      worktops: args.getWebsiteShowcaseWorktops(),
+      kitchenGroups: args.getWebsiteShowcaseKitchenGroups(),
+      buildModule: args.buildWebsiteShowcaseModule
+    });
+    const json = JSON.stringify(payload, null, 2);
+    args.appArgs.exportOutEl.value = json;
+    return { payload, json };
+  };
+
   const downloadViewportPng = () => {
     downloadCanvasPng({ canvas: args.renderer.domElement, scope: storageScope, prefix: "kitchen" });
   };
@@ -213,6 +236,23 @@ export function createExportActions(args: ExportActionsArgs) {
 
   const exportSceneJsonFile = async () => {
     await saveTextFileAs({ text: buildSceneExportJson().json, scope: storageScope, prefix: "kitchen-scene", extension: "json" });
+  };
+
+  const exportWebsiteShowcaseFile = async (stage: WebsiteShowcaseSnapshotStage) => {
+    args.appArgs.copyStatusEl.textContent = "Preparing website animation export...";
+    try {
+      const { json } = buildWebsiteShowcaseExportJson(stage);
+      await saveTextFileAs({
+        text: json,
+        scope: storageScope,
+        prefix: `kitchen-website-${stage}`,
+        extension: "json"
+      });
+      args.appArgs.copyStatusEl.textContent = `Website ${stage} snapshot exported.`;
+    } catch (error: unknown) {
+      args.appArgs.copyStatusEl.textContent = error instanceof Error ? error.message : String(error);
+      throw error;
+    }
   };
 
   const copyCurrentExport = async () => {
@@ -329,6 +369,8 @@ export function createExportActions(args: ExportActionsArgs) {
       saveAs: saveLayoutFileAs,
       exportLayoutJson: exportLayoutJsonFile,
       exportSceneJson: exportSceneJsonFile,
+      exportWebsiteInitial: () => exportWebsiteShowcaseFile("initial"),
+      exportWebsiteFinal: () => exportWebsiteShowcaseFile("final"),
       exportBlenderPreview,
       exportPng: downloadViewportPng,
       copyJson: copyCurrentExport,
@@ -339,11 +381,13 @@ export function createExportActions(args: ExportActionsArgs) {
   return {
     buildLayoutExportJson,
     buildSceneExportJson,
+    buildWebsiteShowcaseExportJson,
     copyCurrentExport,
     downloadViewportPng,
     exportLayoutJsonFile,
     exportBlenderPreview,
     exportSceneJsonFile,
+    exportWebsiteShowcaseFile,
     saveLayoutFile,
     saveLayoutFileAs
   };

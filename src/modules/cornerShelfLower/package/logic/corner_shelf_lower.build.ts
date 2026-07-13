@@ -26,7 +26,7 @@ export const defaultParams = {
   "hingeCountPerDoor": 2,
   "hingeTopOffsetMm": 110,
   "hingeBottomOffsetMm": 110,
-  "frontThicknessMm": 19,
+  "frontThicknessMm": 18,
   "sideGap": 2,
   "topGap": 2,
   "bottomGap": 2,

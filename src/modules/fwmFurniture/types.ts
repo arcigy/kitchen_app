@@ -254,11 +254,14 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     tallDoorOpeningMode: "lift_up",
     boardThickness: 18,
     backThickness: spec.geometryKind === "cladding" ? 0 : 8,
-    frontThicknessMm: spec.glassFronts ? 6 : 18,
+    frontThicknessMm: 18,
     shelfThickness: 18,
     worktopThicknessMm: requiresWorktop || spec.geometryKind === "worktop" ? 38 : 0,
     plinthHeight: spec.hasPlinth ? 100 : 0,
     plinthSetbackMm: spec.hasPlinth ? 60 : 0,
+    kitchenEndClosureLeft: false,
+    kitchenEndClosureRight: false,
+    kitchenEndClosureBackGapMm: 0,
     frontGap: 2,
     sideGap: 2,
     side: spec.geometryKind === "corner" ? "left" : "none",
@@ -377,11 +380,14 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
   next.boardThickness = clamp(Math.round(num(next.boardThickness, isSurfaceLike(spec) ? num(next.height, spec.height) : 18)), 4, 100);
   next.backThickness = hasNoBackPanel(spec) ? 0 : clamp(num(next.backThickness, 8), 0, Math.min(30, Math.max(0, num(next.depth, spec.depth) - 1)));
   next.drawerBackGapMm = clamp(num(next.drawerBackGapMm, 10), 0, 80);
-  next.frontThicknessMm = clamp(Math.round(num(next.frontThicknessMm, spec.glassFronts ? 6 : 18)), 4, 50);
+  next.frontThicknessMm = clamp(Math.round(num(next.frontThicknessMm, 18)), 4, 50);
   next.shelfThickness = clamp(Math.round(num(next.shelfThickness, num(next.boardThickness, 18))), 8, 50);
   next.worktopThicknessMm = (next.requiresWorktop || ownsWorktopGeometry) && !suppressWorktop ? clamp(Math.round(num(next.worktopThicknessMm, 38)), 10, 100) : 0;
   next.plinthHeight = spec.hasPlinth && !suppressPlinth ? clamp(Math.round(num(next.plinthHeight, 100)), 0, Math.max(0, num(next.height, spec.height) - 120)) : 0;
   next.plinthSetbackMm = spec.hasPlinth && !suppressPlinth ? clamp(Math.round(num(next.plinthSetbackMm, 60)), 0, Math.max(0, num(next.depth, spec.depth) / 2)) : 0;
+  next.kitchenEndClosureLeft = bool(next.kitchenEndClosureLeft, false);
+  next.kitchenEndClosureRight = bool(next.kitchenEndClosureRight, false);
+  next.kitchenEndClosureBackGapMm = clamp(Math.round(num(next.kitchenEndClosureBackGapMm, 0)), 0, 1200);
   next.hasPlinth = spec.hasPlinth === true && next.plinthHeight > 0;
   next.frontGap = clamp(num(next.frontGap, 2), 0, 12);
   next.sideGap = clamp(num(next.sideGap, 2), 0, 20);

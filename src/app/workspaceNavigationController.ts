@@ -1,4 +1,5 @@
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { ProjectMaterialsView } from "../core/project-materials/project-material-types";
 import type { AppState, LayoutInstance } from "../layout/appState";
 import { buildProjectMaterialUsageSummary } from "../layout/bom/materialUsageSummary";
 import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materialsPhasePanel";
@@ -16,6 +17,10 @@ type WorkspaceNavigationControllerArgs = {
     viewsEl: HTMLElement;
     warningsEl: HTMLElement;
     warningListEl: HTMLElement;
+  };
+  materialsController?: {
+    open: () => Promise<ProjectMaterialsView>;
+    close: () => Promise<void>;
   };
   setVisualisationTopbar: () => void;
   setDesignTopbar: () => void;
@@ -52,9 +57,10 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     overlay = null;
   };
 
-  const leaveMaterialsPhase = () => {
+  const leaveMaterialsPhase = async () => {
     if (!materialsPhaseActive) return;
     materialsPhaseActive = false;
+    await args.materialsController?.close();
     args.root.classList.remove("archux-materials-phase");
     args.materialsPhase.mainEl.classList.remove("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = true;
@@ -148,6 +154,27 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const openMaterials = () => {
     closeOverlay();
     args.setDesignTopbar();
+    args.root.classList.add("archux-materials-phase");
+    args.materialsPhase.mainEl.classList.add("archux-materials-phase");
+    args.materialsPhase.hostEl.hidden = false;
+    args.materialsPhase.viewsEl.hidden = true;
+    args.materialsPhase.warningsEl.hidden = false;
+    materialsPhaseActive = true;
+    if (args.materialsController) {
+      args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning-empty">Načítavam varovania…</p>`;
+      void args.materialsController.open()
+        .then((view) => {
+          if (!materialsPhaseActive) return;
+          args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(view.warnings);
+        })
+        .catch((error: unknown) => {
+          if (!materialsPhaseActive) return;
+          const message = error instanceof Error ? error.message : "Materiály sa nepodarilo načítať.";
+          args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">Materiály sa nedajú bezpečne otvoriť, pretože projekt sa nepodarilo uložiť. ${escapeHtml(message)}</p>`;
+          args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning">${escapeHtml(message)}</p>`;
+        });
+      return;
+    }
     const summary = buildProjectMaterialUsageSummary({
       instances: args.S.instances,
       worktops: args.S.kitchenWorktops,
@@ -158,12 +185,6 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     });
     mountProjectMaterialsPanel(args.materialsPhase.hostEl, summary);
     args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(summary);
-    args.root.classList.add("archux-materials-phase");
-    args.materialsPhase.mainEl.classList.add("archux-materials-phase");
-    args.materialsPhase.hostEl.hidden = false;
-    args.materialsPhase.viewsEl.hidden = true;
-    args.materialsPhase.warningsEl.hidden = false;
-    materialsPhaseActive = true;
   };
 
   const openPlaceholder = (title: string, subtitle: string) => {
@@ -176,22 +197,22 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     openOverlay(title, subtitle, body);
   };
 
-  const handleNav = (id: WorkspaceNavId) => {
+  const handleNav = async (id: WorkspaceNavId) => {
     if (id === "design") {
-      leaveMaterialsPhase();
+      await leaveMaterialsPhase();
       closeOverlay();
       setActiveNav("design");
       args.setDesignTopbar();
       return;
     }
     if (id === "visualisation") {
-      leaveMaterialsPhase();
+      await leaveMaterialsPhase();
       closeOverlay();
       setActiveNav("visualisation");
       args.setVisualisationTopbar();
       return;
     }
-    if (id !== "materials") leaveMaterialsPhase();
+    if (id !== "materials") await leaveMaterialsPhase();
     setActiveNav(id);
     if (id === "sheets") openSheets();
     else if (id === "schedules") openSchedules();
@@ -204,16 +225,19 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   for (const button of navButtons) {
     button.addEventListener("click", () => {
       const id = button.dataset.workspaceNav as WorkspaceNavId | undefined;
-      if (id) handleNav(id);
+      if (id) void handleNav(id);
     });
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
     if (materialsPhaseActive) {
-      leaveMaterialsPhase();
-      setActiveNav("design");
-      args.setDesignTopbar();
+      void leaveMaterialsPhase().then(() => {
+        setActiveNav("design");
+        args.setDesignTopbar();
+      });
       return;
     }
     if (overlay) {
@@ -223,6 +247,10 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   });
 
   return { closeOverlay, openSheets, openSchedules, openMaterials, leaveMaterialsPhase };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 }
 
 function importPdfSheet(sheets: SheetRecord[], onDone: () => void): void {

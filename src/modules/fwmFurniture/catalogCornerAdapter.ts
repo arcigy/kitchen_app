@@ -44,7 +44,7 @@ export function mapFwmCatalogCornerToCornerShelfLowerParams(params: FwmFurniture
     requiresWorktop: hasWorktop,
     boardThickness: num(source, "boardThickness", 18),
     backThickness: num(source, "backThickness", 6),
-    frontThicknessMm: num(source, "frontThicknessMm", 19),
+    frontThicknessMm: num(source, "frontThicknessMm", 18),
     plinthHeight: num(source, "plinthHeight", 100),
     plinthSetbackMm: num(source, "plinthSetbackMm", 60),
     shelfCount,

@@ -32,7 +32,7 @@ export function calculateBOM(params: CornerShelfLowerParams, ctx: KitchenContext
   const heightCarcass = num(source, "heightCarcass", Math.max(50, height - worktopT));
   const boardT = num(source, "boardThickness", 18);
   const backT = num(source, "backThickness", 6);
-  const frontT = num(source, "frontThicknessMm", 19);
+  const frontT = num(source, "frontThicknessMm", 18);
   const plinthHeight = num(source, "plinthHeight", 100);
   const plinthSetback = num(source, "plinthSetbackMm", 60);
   const sideGap = num(source, "sideGap", 2);

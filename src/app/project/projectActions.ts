@@ -21,6 +21,7 @@ export type ProjectActions = {
 
 export function createProjectActions(args: {
   buildAppState: () => ProjectSaveFile["appState"];
+  buildBomSnapshot?: () => unknown;
   restoreSave: (save: ProjectSaveFile) => void;
   onProjectChanged: (project: ProjectMetadata | null, status?: string) => void;
   initialProject?: ProjectMetadata | null;
@@ -47,7 +48,12 @@ export function createProjectActions(args: {
     },
     async save() {
       if (!state.currentProject) throw new Error("Create or load a project before saving.");
-      const save = await saveProject(state.currentProject.projectId, args.buildAppState(), state.editingSessionId);
+      const save = await saveProject(
+        state.currentProject.projectId,
+        args.buildAppState(),
+        state.editingSessionId,
+        args.buildBomSnapshot?.()
+      );
       state.lastSavedAt = save.integrity.savedAt;
       setProject(save.project, "Saved.");
       return save;

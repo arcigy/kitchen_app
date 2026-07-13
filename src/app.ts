@@ -190,6 +190,8 @@ import {
 import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
+import { createMaterialsPhaseController } from "./app/materialsPhaseController";
+import { createSupplierBridgeWebController } from "./app/supplierBridgeWebController";
 import { createProjectAutosaveController } from "./app/project/projectAutosave";
 import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
@@ -225,6 +227,14 @@ import { topbarIcons } from "./app/topbarIcons";
 import { createProjectHeader } from "./ui/project/projectHeader";
 import { createProjectMenuActions } from "./ui/project/projectSaveActions";
 import type { ProjectSaveFile } from "./core/project-save/project-save-types";
+import {
+  createEmptyProjectMaterialAssignmentsState,
+  type ProjectMaterialAssignmentsState
+} from "./core/project-materials/project-material-types";
+import { createDefaultProjectMaterialAssignments } from "./core/project-materials/project-material-business";
+import { buildProjectMaterialScopes, buildProjectMaterialUsageSummary } from "./layout/bom/materialUsageSummary";
+import { projectMaterialQuantitiesFromUsageSummary } from "./layout/bom/projectMaterialQuantities";
+import { renderMaterialWarnings } from "./ui/materialsPhasePanel";
 import { createToolModeController } from "./app/toolModeController";
 import { createSelectionController } from "./app/selectionController";
 import { createBuildModeController } from "./app/buildModeController";
@@ -240,6 +250,7 @@ import { createDetailViewController } from "./app/detailViewController";
 import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
+import { createKitchenWorktopDrawSnapResolver } from "./app/pointerKitchenWorktopDrawClickHelpers";
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
@@ -274,6 +285,9 @@ export function startApp(initialArgs: AppArgs) {
   setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
+  let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
+  let materialsPhaseController: ReturnType<typeof createMaterialsPhaseController> | null = null;
+  let supplierBridgeController: ReturnType<typeof createSupplierBridgeWebController> | null = null;
 
   const enabledModulePackages = getEnabledModulePackageDefinitions(clientCatalog, modulePackages);
   const runtimeDescriptorsByType = new Map<string, ReturnType<typeof getModuleDescriptors>[number]>(
@@ -472,9 +486,10 @@ export function startApp(initialArgs: AppArgs) {
 
   let kitchenMode: ReturnType<typeof createKitchenEditMode> | null = null;
 
-  const { updateSelectionHighlights, updateSelectionHover } = createSelectionHighlights({
+  const { updateSelectionHighlights, syncSelectionHighlights, updateSelectionHover } = createSelectionHighlights({
     layoutRoot,
     getMode: () => mode,
+    getViewMode: () => viewMode,
     getWalls: () => walls,
     getSelectedWallIds: () => selectedWallIds,
     getSelectedInstanceIds: () => selectedInstanceIds,
@@ -673,6 +688,27 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const S: AppState = makeAppState(params);
+  const buildMaterialsUsageSummary = () => buildProjectMaterialUsageSummary({
+    instances: S.instances,
+    worktops: S.kitchenWorktops,
+    customFurniture: S.customFurniture,
+    kitchenContext: S.kitchenCtx,
+    kitchenGroups: S.kitchenGroups,
+    catalog: clientCatalog
+  });
+  const buildProjectMaterialQuantities = () => projectMaterialQuantitiesFromUsageSummary(buildMaterialsUsageSummary());
+  const createProjectMaterialDefaults = () => createDefaultProjectMaterialAssignments(
+    clientCatalog,
+    new Date().toISOString(),
+    {
+      corpus: S.kitchenCtx.corpusMaterialId,
+      front: S.kitchenCtx.frontsMaterialId,
+      worktop: S.kitchenCtx.worktopMaterialId,
+      back: S.kitchenCtx.backMaterialId,
+      drawer_bottom: S.kitchenCtx.drawerBottomMaterialId,
+      handle: S.kitchenCtx.handleComponentId
+    }
+  );
   S.mode = mode;
   S.viewMode = viewMode;
   S.renderMode = renderMode;
@@ -1048,6 +1084,13 @@ export function startApp(initialArgs: AppArgs) {
   const getKitchenSegmentReservedMargins = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getKitchenSegmentReservedMargins"]>) => kitchenPlacementController.getKitchenSegmentReservedMargins(...args);
   const inferKitchenPlacementBinding = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["inferKitchenPlacementBinding"]>) => kitchenPlacementController.inferKitchenPlacementBinding(...args);
   const applyKitchenPlacementBinding = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["applyKitchenPlacementBinding"]>) => kitchenPlacementController.applyKitchenPlacementBinding(...args);
+  const syncKitchenRunEndClosure = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["syncKitchenRunEndClosure"]>) => kitchenPlacementController.syncKitchenRunEndClosure(...args);
+  const syncKitchenRunEndClosures = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["syncKitchenRunEndClosures"]>) => kitchenPlacementController.syncKitchenRunEndClosures(...args);
+  const getKitchenRunDimensionSources = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getKitchenRunDimensionSources"]>) => kitchenPlacementController.getKitchenRunDimensionSources(...args);
+  const resizeKitchenRunModule = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["resizeKitchenRunModule"]>) => kitchenPlacementController.resizeKitchenRunModule(...args);
+  const resizeKitchenCornerArm = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["resizeKitchenCornerArm"]>) => kitchenPlacementController.resizeKitchenCornerArm(...args);
+  const moveKitchenRunModuleByGap = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["moveKitchenRunModuleByGap"]>) => kitchenPlacementController.moveKitchenRunModuleByGap(...args);
+  const editKitchenWorktopSegment = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["editKitchenWorktopSegment"]>) => kitchenPlacementController.editKitchenWorktopSegment(...args);
   const rebuildKitchenGroupLayout = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["rebuildKitchenGroupLayout"]>) => kitchenPlacementController.rebuildKitchenGroupLayout(...args);
   const getTallKitchenPlacementConstraint = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getTallKitchenPlacementConstraint"]>) => kitchenPlacementController.getTallKitchenPlacementConstraint(...args);
   const getKitchenPlacementConstraint = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getKitchenPlacementConstraint"]>) => kitchenPlacementController.getKitchenPlacementConstraint(...args);
@@ -1067,11 +1110,13 @@ export function startApp(initialArgs: AppArgs) {
     getKitchenWorktopBackGuidePath,
     rebuildInstance,
     rebuildKitchenGroupWorktops,
+    rebuildKitchenWorktop,
     updateLayoutPanel,
     getWallSolvedJoinPolys: () => wallSolvedJoinPolys,
     getWallUnionPolys: () => wallUnionPolys,
     getLayoutTool: () => layoutTool,
     getWallChainStart: () => wallDraw.chainStart,
+    commitHistory: () => commitHistory(S),
     catalog: clientCatalog,
     modulePackages
   });
@@ -1140,6 +1185,7 @@ export function startApp(initialArgs: AppArgs) {
     placeWithoutOverlap,
     inferKitchenPlacementBinding,
     rebuildKitchenGroupWorktops,
+    syncPlacedInstancePresentation,
     setSelectedModule,
     updateLayoutPanel
   });
@@ -2134,6 +2180,7 @@ export function startApp(initialArgs: AppArgs) {
     catalog: clientCatalog,
     instances,
     getModuleLocalBackCenter,
+    syncKitchenRunEndClosures,
     setWorktopDrawSnap: (next: PlanSnapResult | null) => { worktopDrawSnap = next; },
     nextWorktopId: () => `wt${worktopCounter++}`,
     ensureWorktopCounter: (next: number) => { worktopCounter = Math.max(worktopCounter, next); S.worktopCounter = worktopCounter; },
@@ -2343,7 +2390,14 @@ export function startApp(initialArgs: AppArgs) {
       setUnderlayStatus("Unpin from Worktop: vyber modul pripnuty k pracovnej doske.");
       return;
     }
-    for (const inst of targets) inst.kitchenPlacement = null;
+    const affectedGroups = new Set<string>();
+    for (const inst of targets) {
+      inst.kitchenPlacement = null;
+      if (inst.kitchenGroupId) affectedGroups.add(inst.kitchenGroupId);
+      const group = inst.kitchenGroupId ? S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null : null;
+      syncKitchenRunEndClosure(inst, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm);
+    }
+    for (const groupId of affectedGroups) syncKitchenRunEndClosures(groupId);
     updateLayoutPanel();
     updateSelectionHighlights();
     mountProps();
@@ -2574,38 +2628,18 @@ export function startApp(initialArgs: AppArgs) {
   });
   syncClassicTopbarVisibility = createClassicTopbarControllerResult.syncClassicTopbarVisibility;
 
-  createWorkspaceNavigationController({
-    root: document.getElementById("app") ?? document.body,
-    S,
-    catalog: clientCatalog,
-    materialsPhase: {
-      mainEl: document.getElementById("main")!,
-      hostEl: document.getElementById("materialsPhase")!,
-      viewsEl: document.querySelector<HTMLElement>("[data-bottom-views]")!,
-      warningsEl: document.querySelector<HTMLElement>("[data-material-warning-panel]")!,
-      warningListEl: document.querySelector<HTMLElement>("[data-material-warning-list]")!
-    },
-    setVisualisationTopbar: () => {
-      ensureLayoutMode();
-      setClassicTopbarTab("visualisation");
-    },
-    setDesignTopbar: () => {
-      ensureLayoutMode();
-      setClassicTopbarTab("architecture");
-    }
-  });
-
-
   kitchenMode = createKitchenEditMode({
     S,
     layoutRoot,
     viewerEl: args.viewerEl,
     tb,
     props,
-    icons: { cabinet: I_CABINET, worktop: I_FLOOR, done: I_DONE, cancel: I_CANCEL },
+    icons: { cabinet: I_CABINET, worktop: I_FLOOR, done: I_DONE, cancel: I_CANCEL, move: I_MOVE, align: I_ALIGN },
     ensureLayoutMode,
     ensureFloorplanViewerTab: () => ensureFloorplanViewerTab(),
     setToolSelect,
+    setToolAlign,
+    startTransformFromSelection,
     cancelPlacementIfActive: () => {
       if (placement.active) cancelPlacement(S, placementHelpers);
     },
@@ -2616,6 +2650,11 @@ export function startApp(initialArgs: AppArgs) {
     createInstance,
     findInstance,
     setSelectedModule,
+    getSelectedModuleIds: () => {
+      const ids = [...selectedInstanceIds];
+      if (selectedInstanceId && !ids.includes(selectedInstanceId)) ids.push(selectedInstanceId);
+      return ids;
+    },
     getSelectedKitchenGroupId: () => selectedKitchenGroupId,
     setSelectedKitchenGroup,
     updateLayoutPanel,
@@ -2637,6 +2676,11 @@ export function startApp(initialArgs: AppArgs) {
     worldToScreen,
     getViewMode: () => viewMode,
     getActiveViewerTab: () => activeViewerTab,
+    getKitchenRunDimensionSources,
+    resizeKitchenRunModule,
+    resizeKitchenCornerArm,
+    moveKitchenRunModuleByGap,
+    editKitchenWorktopSegment,
     catalog: clientCatalog,
     modulePackages
   });
@@ -2691,17 +2735,14 @@ export function startApp(initialArgs: AppArgs) {
   const updateAllSectionVisuals = sectionController.updateAllSectionVisuals;
   refreshViewerTabs();
 
-  function resolveKitchenWorktopDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
-    const snapped = snapPoint2D(rawPoint, rect, cam(), 32, {
-        kindPriority: ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"],
-      sticky: worktopDrawSnap,
-      preferNearest: true
-    });
-    const activeSnap =
-      snapped.kind !== "none" ? snapped : keepStickyPlanSnap(rawPoint, worktopDrawSnap, cam(), rect, 32);
-    worktopDrawSnap = activeSnap;
-    return activeSnap;
-  }
+  const resolveKitchenWorktopDrawSnap = createKitchenWorktopDrawSnapResolver({
+    getPoints: () => kitchenWorktopDraw.points,
+    getCamera: cam,
+    getSticky: () => worktopDrawSnap,
+    setSticky: (next) => { worktopDrawSnap = next; },
+    snapPoint2D,
+    keepStickyPlanSnap
+  });
 
   function resolveSectionDrawSnap(rawPoint: THREE.Vector3, rect: DOMRect) {
     const snapped = snapPoint2D(rawPoint, rect, cam(), 24, {
@@ -3143,6 +3184,7 @@ export function startApp(initialArgs: AppArgs) {
         },
         rotationYDeg: (inst.root.rotation.y * 180) / Math.PI
       })),
+      materialAssignments: cloneJson(materialsPhaseController?.getSaveState() ?? projectMaterialAssignments),
       scene: {
         mode,
         viewMode,
@@ -3183,6 +3225,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const restoreProjectSave = (save: ProjectSaveFile) => {
     resetProjectInteractionStateForLoad();
+    projectMaterialAssignments = cloneJson(save.appState.materialAssignments);
     const layout = save.appState.layout as {
       snapshot?: unknown;
       windows?: Array<{ id: string; params: WindowParams }>;
@@ -3203,6 +3246,8 @@ export function startApp(initialArgs: AppArgs) {
       });
     }
     S.activeKitchenGroupId = kitchen?.activeKitchenGroupId ?? null;
+    if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
+    materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
     if (!layout?.snapshot) throw new Error("Project save is missing layout snapshot.");
     restoreLayoutSnapshot(S, helpers, layout.snapshot as Parameters<typeof restoreLayoutSnapshot>[2]);
     for (const inst of windows.splice(0, windows.length)) {
@@ -3252,12 +3297,79 @@ export function startApp(initialArgs: AppArgs) {
 
   const projectActions = createProjectActions({
     buildAppState: buildProjectAppState,
+    buildBomSnapshot: () => ({
+      materialQuantities: buildProjectMaterialQuantities(),
+      generatedAt: new Date().toISOString()
+    }),
     restoreSave: restoreProjectSave,
     onProjectChanged: (project, status) => {
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
     },
     initialProject: args.initialProjectSave?.project ?? args.initialProject ?? null
+  });
+  if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
+  const materialWarningListEl = document.querySelector<HTMLElement>("[data-material-warning-list]")!;
+  materialsPhaseController = createMaterialsPhaseController({
+    container: document.getElementById("materialsPhase")!,
+    catalog: clientCatalog,
+    getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    getQuantities: buildProjectMaterialQuantities,
+    getScopes: () => buildProjectMaterialScopes({
+      instances: S.instances,
+      worktops: S.kitchenWorktops,
+      customFurniture: S.customFurniture,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups,
+      catalog: clientCatalog
+    }),
+    initialAssignments: projectMaterialAssignments,
+    onOpenSupplier: async (supplierId) => { await supplierBridgeController?.start(supplierId); },
+    onCancelSupplierBridge: async () => supplierBridgeController?.cancel(),
+    onViewChanged: (view) => {
+      projectMaterialAssignments = cloneJson(view.assignments);
+      materialWarningListEl.innerHTML = renderMaterialWarnings(view.warnings);
+    }
+  });
+  supplierBridgeController = createSupplierBridgeWebController({
+    getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    getProjectLabel: () => projectActions.getState().currentProject?.name ?? null,
+    onStateChanged: (state) => materialsPhaseController?.setSupplierBridgeState(state),
+    onProjectMaterialsChanged: async () => { await materialsPhaseController?.open(); }
+  });
+  createWorkspaceNavigationController({
+    root: document.getElementById("app") ?? document.body,
+    S,
+    catalog: clientCatalog,
+    materialsPhase: {
+      mainEl: document.getElementById("main")!,
+      hostEl: document.getElementById("materialsPhase")!,
+      viewsEl: document.querySelector<HTMLElement>("[data-bottom-views]")!,
+      warningsEl: document.querySelector<HTMLElement>("[data-material-warning-panel]")!,
+      warningListEl: materialWarningListEl
+    },
+    materialsController: {
+      open: async () => {
+        if (projectActions.getState().currentProject) {
+          await projectActions.save();
+        }
+        const view = await materialsPhaseController!.open();
+        void supplierBridgeController?.open();
+        return view;
+      },
+      close: async () => {
+        await materialsPhaseController?.close();
+        supplierBridgeController?.close();
+      }
+    },
+    setVisualisationTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("visualisation");
+    },
+    setDesignTopbar: () => {
+      ensureLayoutMode();
+      setClassicTopbarTab("architecture");
+    }
   });
   const projectMenuActions = createProjectMenuActions(projectActions, {
     openProjectManager: args.openProjectManager,
@@ -3273,7 +3385,8 @@ export function startApp(initialArgs: AppArgs) {
         cameras: cameraPlacementController.getSaveState(),
         visibility: visibilityController.getSaveState(),
         dimensions: technicalDimensions.getSaveState(),
-        wardrobe: wardrobeMode?.getSaveState() ?? null
+        wardrobe: wardrobeMode?.getSaveState() ?? null,
+        materialAssignments: materialsPhaseController?.getSaveState() ?? projectMaterialAssignments
       }),
     formatSavedMessage: (save) =>
       `Autosave ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
@@ -3370,6 +3483,10 @@ export function startApp(initialArgs: AppArgs) {
     getWindowOpening,
     getDaylightIntensity,
     buildLayoutExportPayload,
+    getWebsiteShowcaseModules: () => instances,
+    getWebsiteShowcaseWorktops: () => kitchenWorktops,
+    getWebsiteShowcaseKitchenGroups: () => S.kitchenGroups,
+    buildWebsiteShowcaseModule: buildModuleFromParams,
     projectMenuActions,
     onLanguageChange: () => window.location.reload()
   });
@@ -3515,8 +3632,10 @@ export function startApp(initialArgs: AppArgs) {
     preserveWorldKitchenAnchor,
     propagateCornerResizeToPinnedNeighbors,
     propagateModuleResizeToPinnedNeighbors,
+    rebuildKitchenGroupWorktops,
     renderErrors,
     tagModuleGeometry,
+    syncKitchenRunEndClosures,
     updateLayoutPanel,
     validateModule
   });
@@ -3555,6 +3674,7 @@ export function startApp(initialArgs: AppArgs) {
     hideHoverCursor,
     helpers,
     inferKitchenPlacementBinding,
+    syncKitchenRunEndClosures,
     instanceFitsRoom,
     instances,
     isDoorPlacementActive,
@@ -3695,6 +3815,7 @@ export function startApp(initialArgs: AppArgs) {
     hudPickLine1,
     hudPickLine2,
     inferKitchenPlacementBinding,
+    syncKitchenRunEndClosures,
     insertColumnAtPoint,
     insertDoorAtWallPoint,
     insertWindowAtWallPoint,
@@ -3983,6 +4104,7 @@ export function startApp(initialArgs: AppArgs) {
     rebuildFloor,
     rebuildKitchenWorktop,
     applyKitchenPlacementBinding,
+    syncKitchenRunEndClosures,
     findKitchenWorktop,
     updateSelectionHighlights,
     updateLayoutPanel
@@ -4273,6 +4395,8 @@ export function startApp(initialArgs: AppArgs) {
   const tick = () => {
     const dt = Math.min(0.05, navClock.getDelta());
     visibilityController.sync();
+    kitchenMode?.syncPlanPresentation?.();
+    syncSelectionHighlights();
     syncClassicTopbarVisibility();
     syncViewerDownbar();
     demosLivePreviewColor.sync();

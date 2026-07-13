@@ -191,6 +191,7 @@ async function start(): Promise<void> {
       clientName: clientProfile.company.name,
       organizationUsers: clientProfile.organization.users,
       currentUserId: clientContext.userId,
+      currentUserRole: clientContext.role,
       onSelect: (selection) => {
         void launchWorkspace({
           clientContext,

@@ -42,6 +42,7 @@ type MeasureSelectionActionsContext = {
   rebuildFloor: (floor: FloorInstance) => void;
   rebuildKitchenWorktop: (worktop: KitchenWorktopInstance) => void;
   applyKitchenPlacementBinding: (inst: LayoutInstance, binding: NonNullable<LayoutInstance["kitchenPlacement"]>, backOffsetMm: number) => boolean;
+  syncKitchenRunEndClosures: (groupId: string, backOffsetMm?: number) => boolean;
   findKitchenWorktop: (id: string) => KitchenWorktopInstance | null;
   updateSelectionHighlights: () => void;
   updateLayoutPanel: () => void;
@@ -120,6 +121,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     if (!inst) return false;
     if (isObjectInLockedAlignLock(ctx.S.alignLocks, "module", instanceId)) return false;
     const prevPos = inst.root.position.clone();
+    const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     inst.root.position.x += dxMm / 1000;
     inst.root.position.z += dzMm / 1000;
     const valid =
@@ -131,12 +133,36 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
       inst.root.position.copy(prevPos);
       return false;
     }
+    const kitchenGroupId = inst.kitchenGroupId;
+    const backOffsetMm = kitchenGroupId
+      ? resolveKitchenPlacementBackOffset({
+          kitchenGroupId,
+          kitchenGroups: ctx.S.kitchenGroups,
+          defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+        })
+      : ctx.S.kitchenCtx.worktopBackOffsetMm;
     refreshModuleKitchenPlacement({
       instance: inst,
       kitchenGroups: ctx.S.kitchenGroups,
       defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
       inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
     });
+    if (prevKitchenPlacement && !inst.kitchenPlacement) {
+      inst.root.position.copy(prevPos);
+      inst.kitchenPlacement = prevKitchenPlacement;
+      inst.root.updateMatrixWorld(true);
+      return false;
+    }
+    if (
+      inst.kitchenPlacement &&
+      !ctx.applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm)
+    ) {
+      inst.root.position.copy(prevPos);
+      inst.kitchenPlacement = prevKitchenPlacement;
+      inst.root.updateMatrixWorld(true);
+      return false;
+    }
+    if (kitchenGroupId) ctx.syncKitchenRunEndClosures(kitchenGroupId, backOffsetMm);
     return true;
   };
 

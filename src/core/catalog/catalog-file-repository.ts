@@ -11,9 +11,12 @@ import { isDemosCatalogGenerated } from "../../system/catalog-templates/demosCat
 import type { ClientCatalog } from "./catalog-types";
 import {
   createSystemSeedClientCatalogRepository,
+  findCatalogComponentByCode,
+  findCatalogMaterialByCode,
   type ClientCatalogRepository
 } from "./catalog-repository";
 import { validateClientCatalog } from "./catalog-validation";
+import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
 
 export function getCatalogFileNames() {
   return {
@@ -99,6 +102,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       writeJson(ctx, names.vendorCatalog, validated.vendorCatalog ?? null),
       writeJson(ctx, names.meta, validated.meta)
     ]);
+    invalidateCatalogExactLookupCaches(ctx.clientId);
   }
 
   async function ensureSystemModulePackages(ctx: ClientContext, catalog: ClientCatalog): Promise<ClientCatalog> {
@@ -215,8 +219,14 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     async getMaterialById(ctx, materialId) {
       return (await ensureCatalogExists(ctx)).materials.find((material) => material.id === materialId) ?? null;
     },
+    async getMaterialByCode(ctx, code) {
+      return findCatalogMaterialByCode((await ensureCatalogExists(ctx)).materials, code);
+    },
     async getComponentById(ctx, componentId) {
       return (await ensureCatalogExists(ctx)).components.find((component) => component.id === componentId) ?? null;
+    },
+    async getComponentByCode(ctx, code) {
+      return findCatalogComponentByCode((await ensureCatalogExists(ctx)).components, code);
     },
     async getModuleByType(ctx, moduleType) {
       return (await ensureCatalogExists(ctx)).modules.find((module) => module.moduleType === moduleType) ?? null;

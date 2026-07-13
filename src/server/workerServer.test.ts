@@ -87,13 +87,15 @@ const requestWorker = async (
     cookie?: string;
     method?: string;
     body?: unknown;
+    headers?: Record<string, string>;
   } = {}
 ) => {
   const res = await fetch(`http://127.0.0.1:${port}${urlPath}`, {
     method: options.method ?? "GET",
     headers: {
       ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.cookie ? { Cookie: options.cookie } : {})
+      ...(options.cookie ? { Cookie: options.cookie } : {}),
+      ...options.headers
     },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
@@ -184,6 +186,13 @@ describe("multi-client worker isolation", () => {
     controller = await createServer(projectRoot, activeUserService);
   };
 
+  const replaceServer = async (userService: UserService) => {
+    if (controller) {
+      await new Promise<void>((resolve) => controller!.server.close(() => resolve()));
+    }
+    controller = await createServer(projectRoot, userService);
+  };
+
   beforeEach(async () => {
     process.env.AUTH_SESSION_SECRET = "test-auth-secret";
     process.env.PROJECT_FILE_SECRET = "test-project-file-secret";
@@ -216,6 +225,32 @@ describe("multi-client worker isolation", () => {
     expect(response.status).toBe(401);
   });
 
+  it("returns retryable 503 for a database session failure and keeps serving requests", async () => {
+    const unavailableUserService: UserService = {
+      authenticate: async () => null,
+      getUserById: async () => {
+        throw new Error("Connection terminated due to connection timeout");
+      }
+    };
+    await replaceServer(unavailableUserService);
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+
+    const failedSession = await requestWorker(controller!.port, "/api/auth/session", { cookie });
+    expect(failedSession.status).toBe(503);
+    expect(failedSession.body).toEqual({ ok: false, error: "Database temporarily unavailable. Please retry." });
+    expect(failedSession.headers.get("retry-after")).toBe("2");
+
+    const liveness = await requestWorker(controller!.port, "/health");
+    expect(liveness.status).toBe(200);
+    expect(liveness.body).toEqual({ ok: true });
+  });
+
+  it("reports file-backed readiness without requiring a database", async () => {
+    const readiness = await requestWorker(controller!.port, "/ready");
+    expect(readiness.status).toBe(200);
+    expect(readiness.body).toMatchObject({ ok: true, storage: "file" });
+  });
+
   it("loads client catalog from server session and stores it in the client namespace", async () => {
     const response = await requestWorker(controller!.port, "/api/catalog", {
       cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
@@ -230,12 +265,32 @@ describe("multi-client worker isolation", () => {
     expect(stored.prices?.[priceId]).toBe(body.catalog?.priceList?.prices?.[priceId]);
   }, 60_000);
 
-  it("looks up catalog materials by exact ID and board family", async () => {
+  it("looks up tenant catalog entities by exact ID, aliases, unit price, and inactive state", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
-    const catalog = (catalogResponse.body as { catalog?: { materials?: Array<{ id: string; boardFamily?: string }> } }).catalog;
+    const catalog = (catalogResponse.body as {
+      catalog?: {
+        materials?: Array<{
+          id: string;
+          materialCode?: string;
+          boardFamily?: string;
+          isActive: boolean;
+          supplierSource?: { supplierProductId?: string };
+        }>;
+        components?: Array<{
+          id: string;
+          componentCode?: string;
+          componentType: string;
+          isActive: boolean;
+          supplierSource?: { supplierProductId?: string };
+        }>;
+        priceList?: { prices: Record<string, number> };
+      };
+    }).catalog;
     const frontMaterial = catalog?.materials?.find((material) => material.boardFamily === "front");
+    const component = catalog?.components?.[0];
     expect(frontMaterial?.id).toBeTruthy();
+    expect(component?.id).toBeTruthy();
 
     const ok = await requestWorker(
       controller!.port,
@@ -244,6 +299,45 @@ describe("multi-client worker isolation", () => {
     );
     expect(ok.status).toBe(200);
     expect((ok.body as { material?: { id?: string } }).material?.id).toBe(frontMaterial!.id);
+    expect((ok.body as { unitPrice?: number }).unitPrice).toBe(catalog?.priceList?.prices[frontMaterial!.id]);
+
+    const materialAlias = await requestWorker(
+      controller!.port,
+      `/api/materials/by-code/${encodeURIComponent(frontMaterial!.id)}`,
+      { cookie }
+    );
+    expect(materialAlias.status).toBe(200);
+    expect((materialAlias.body as { material?: { id?: string }; unitPrice?: number }).material?.id).toBe(frontMaterial!.id);
+    expect((materialAlias.body as { unitPrice?: number }).unitPrice).toBe(catalog?.priceList?.prices[frontMaterial!.id]);
+
+    const componentAlias = await requestWorker(
+      controller!.port,
+      `/api/components/by-code/${encodeURIComponent(component!.id)}`,
+      { cookie }
+    );
+    expect(componentAlias.status).toBe(200);
+    expect((componentAlias.body as { component?: { id?: string; isActive?: boolean }; unitPrice?: number }).component).toMatchObject({
+      id: component!.id,
+      isActive: component!.isActive
+    });
+    expect((componentAlias.body as { unitPrice?: number }).unitPrice).toBe(catalog?.priceList?.prices[component!.id]);
+
+    const supplierMaterial = catalog?.materials?.find((material) => material.supplierSource?.supplierProductId);
+    const supplierComponent = catalog?.components?.find((item) => item.supplierSource?.supplierProductId);
+    expect(supplierMaterial?.supplierSource?.supplierProductId).toBeTruthy();
+    expect(supplierComponent?.supplierSource?.supplierProductId).toBeTruthy();
+    const supplierMaterialAlias = await requestWorker(
+      controller!.port,
+      `/api/materials/by-code/${encodeURIComponent(supplierMaterial!.supplierSource!.supplierProductId!)}`,
+      { cookie }
+    );
+    const supplierComponentAlias = await requestWorker(
+      controller!.port,
+      `/api/components/by-code/${encodeURIComponent(supplierComponent!.supplierSource!.supplierProductId!)}`,
+      { cookie }
+    );
+    expect((supplierMaterialAlias.body as { material?: { id?: string } }).material?.id).toBe(supplierMaterial!.id);
+    expect((supplierComponentAlias.body as { component?: { id?: string } }).component?.id).toBe(supplierComponent!.id);
 
     const wrongFamily = await requestWorker(
       controller!.port,
@@ -251,6 +345,26 @@ describe("multi-client worker isolation", () => {
       { cookie }
     );
     expect(wrongFamily.status).toBe(404);
+
+    const inactiveMaterial = catalog?.materials?.find((material) => material.id !== frontMaterial!.id);
+    expect(inactiveMaterial?.id).toBeTruthy();
+    const materialsPath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog", "materials.json");
+    const storedMaterials = JSON.parse(await readFile(materialsPath, "utf-8")) as Array<Record<string, unknown>>;
+    await writeFile(
+      materialsPath,
+      `${JSON.stringify(storedMaterials.map((material) => material.id === inactiveMaterial!.id ? { ...material, isActive: false } : material), null, 2)}\n`,
+      "utf-8"
+    );
+    const inactiveAlias = await requestWorker(
+      controller!.port,
+      `/api/materials/by-code/${encodeURIComponent(inactiveMaterial!.id)}`,
+      { cookie }
+    );
+    expect(inactiveAlias.status).toBe(200);
+    expect((inactiveAlias.body as { material?: { id?: string; isActive?: boolean } }).material).toMatchObject({
+      id: inactiveMaterial!.id,
+      isActive: false
+    });
   }, 30_000);
 
   it("resolves tenant vendor module lookup inside the current client catalog namespace", async () => {
@@ -695,6 +809,383 @@ describe("multi-client worker isolation", () => {
     expect(downloaded.text).not.toContain("Private Kitchen");
     expect(downloaded.text).not.toContain("Jane Client");
   });
+
+  it("deletes a tenant project with its versions and files only for owners or admins", async () => {
+    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const adminCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "admin" });
+    const designerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "designer" });
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "viewer" });
+    const otherTenantCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie: ownerCookie,
+      body: { name: "Delete Kitchen", address: "Main 3", contactName: "Jane" }
+    });
+    const project = (created.body as { project: { projectId: string; activePhaseId: string } }).project;
+    await requestWorker(controller!.port, `/api/projects/${project.projectId}/save`, {
+      method: "POST",
+      cookie: ownerCookie,
+      body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+    });
+    const projectPath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "projects", project.projectId);
+    await access(path.join(projectPath, "versions", "version-manifest.json"));
+
+    expect((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, {
+      method: "DELETE",
+      cookie: viewerCookie
+    })).status).toBe(403);
+    expect((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, {
+      method: "DELETE",
+      cookie: designerCookie
+    })).status).toBe(403);
+    expect([403, 404]).toContain((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, {
+      method: "DELETE",
+      cookie: otherTenantCookie
+    })).status);
+    expect((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, { cookie: ownerCookie })).status).toBe(200);
+
+    expect((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, {
+      method: "DELETE",
+      cookie: adminCookie
+    })).status).toBe(200);
+    expect([403, 404]).toContain((await requestWorker(controller!.port, `/api/projects/${project.projectId}`, { cookie: ownerCookie })).status);
+    await expect(access(projectPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("keeps generic project saves read-only for material assignments and denies viewers", async () => {
+    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "viewer" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie: ownerCookie,
+      body: { name: "Authoritative Materials", address: "Main 2", contactName: "Jane" }
+    });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie: ownerCookie });
+    const projectCatalog = (catalogResponse.body as {
+      catalog: {
+        materials: Array<{ id: string; boardFamily?: string }>;
+        kitchenDefaults: { frontMaterialId?: string };
+      };
+    }).catalog;
+    const projectFront = projectCatalog.materials.find((material) =>
+      material.boardFamily === "front" && material.id !== projectCatalog.kitchenDefaults.frontMaterialId
+    )!;
+    expect(projectFront?.id).toBeTruthy();
+    const forgedAssignments = {
+      schemaVersion: 1,
+      initialized: true,
+      revision: 999,
+      assignments: [{
+        assignmentId: "forged-corpus",
+        category: "corpus",
+        kind: "material",
+        materialId: "mat.forged",
+        customValues: { forged: true },
+        source: "user",
+        snapshots: { material: { definition: { id: "mat.forged", entityType: "material" } } },
+        updatedAt: "2026-07-10T08:00:00.000Z"
+      }]
+    };
+
+    const viewerSave = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie: viewerCookie,
+      body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], materialAssignments: forgedAssignments, scene: {} } }
+    });
+    expect(viewerSave.status).toBe(403);
+
+    const firstSave = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie: ownerCookie,
+      body: {
+        appState: {
+          layout: { marker: "first-layout", windows: [], doors: [] },
+          kitchen: { context: { frontsMaterialId: projectFront.id } },
+          modules: [],
+          materialAssignments: forgedAssignments,
+          scene: {}
+        }
+      }
+    });
+    expect(firstSave.status).toBe(200);
+    const first = (firstSave.body as { save: { appState: { layout: { marker: string }; materialAssignments: unknown } } }).save;
+    expect(first.appState.layout.marker).toBe("first-layout");
+    expect(first.appState.materialAssignments).toMatchObject({ initialized: true, revision: 0 });
+    expect(JSON.stringify(first.appState.materialAssignments)).not.toContain("mat.forged");
+    expect((first.appState.materialAssignments as { assignments: Array<{ category: string; materialId?: string }> }).assignments)
+      .toContainEqual(expect.objectContaining({ category: "front", materialId: projectFront.id }));
+
+    const secondSave = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie: ownerCookie,
+      body: {
+        appState: {
+          layout: { marker: "second-layout", windows: [], doors: [] },
+          kitchen: {},
+          modules: [],
+          materialAssignments: { ...forgedAssignments, revision: 1000 },
+          scene: {}
+        }
+      }
+    });
+    expect(secondSave.status).toBe(200);
+    const second = (secondSave.body as { save: { appState: { layout: { marker: string }; materialAssignments: unknown } } }).save;
+    expect(second.appState.layout.marker).toBe("second-layout");
+    expect(second.appState.materialAssignments).toEqual(first.appState.materialAssignments);
+
+    const viewerRestore = await requestWorker(controller!.port, `/api/projects/${projectId}/versions/1/restore`, {
+      method: "POST",
+      cookie: viewerCookie
+    });
+    expect(viewerRestore.status).toBe(403);
+    const afterViewerRestore = await requestWorker(controller!.port, `/api/projects/${projectId}/load`, { cookie: ownerCookie });
+    expect(afterViewerRestore.status).toBe(200);
+    expect((afterViewerRestore.body as { save: { appState: { layout: { marker: string }; materialAssignments: unknown } } }).save.appState)
+      .toMatchObject({ layout: { marker: "second-layout" }, materialAssignments: second.appState.materialAssignments });
+  }, 30_000);
+
+  it("keeps project material assignments atomic and preserves the committed value after an invalid ID", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Materials Kitchen", address: "Material 1", contactName: "Jane" }
+    });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie,
+      body: {
+        appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} },
+        bomSnapshot: { materialQuantities: [{ category: "corpus", quantity: 1, unit: "<img src=x onerror=alert(1)>" }] }
+      }
+    });
+
+    const initial = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    expect(initial.status).toBe(200);
+    const initialView = (initial.body as {
+      view: {
+        assignments: { revision: number; initialized: boolean; assignments: Array<Record<string, unknown>> };
+        quantities: Array<{ category: string; quantity: number; unit: string }>;
+        priceSource: { priceListId: string; lastSynchronizedAt: string | null };
+      };
+    }).view;
+    expect(initialView.assignments.initialized).toBe(true);
+    expect(initialView.priceSource.priceListId).toBeTruthy();
+    expect(initialView.priceSource.lastSynchronizedAt).toBeNull();
+    expect(initialView.quantities.find((item) => item.category === "corpus")).toMatchObject({ quantity: 0, unit: "m2" });
+    expect(JSON.stringify(initial.body)).not.toContain("fullCatalog");
+    expect(JSON.stringify(initial.body)).not.toContain("onerror");
+    const corpus = initialView.assignments.assignments.find((item) => item.category === "corpus")!;
+
+    const malformed = await requestWorker(controller!.port, `/api/projects/${projectId}/materials/validate`, {
+      method: "POST",
+      cookie,
+      body: { state: {} }
+    });
+    expect(malformed.status).toBe(400);
+    const nullRevision = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: { revision: null, assignment: corpus }
+    });
+    expect(nullRevision.status).toBe(409);
+
+    const concurrentCommits = await Promise.all([1, 2].map(() => requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: { revision: initialView.assignments.revision, assignment: corpus }
+    })));
+    expect(concurrentCommits.map((response) => response.status).sort()).toEqual([200, 409]);
+    const committed = concurrentCommits.find((response) => response.status === 200)!;
+    const committedView = (committed.body as { view: { assignments: { revision: number; assignments: Array<Record<string, unknown>> } } }).view;
+    expect(committedView.assignments.revision).toBe(1);
+    const committedCorpus = committedView.assignments.assignments.find((item) => item.category === "corpus")!;
+    const committedId = String(committedCorpus.materialId);
+    const forgedEdgeId = "mat.forged.edge";
+    const forgedEdgeAssignment = {
+      ...committedCorpus,
+      edgeFrontId: forgedEdgeId,
+      snapshots: {
+        ...(committedCorpus.snapshots as Record<string, unknown>),
+        edgeFront: {
+          ...((committedCorpus.snapshots as { material: Record<string, unknown> }).material),
+          definition: { id: forgedEdgeId, entityType: "material" }
+        }
+      }
+    };
+    const forgedEdge = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: { revision: 1, assignment: forgedEdgeAssignment }
+    });
+    expect(forgedEdge.status).toBe(422);
+
+    const invalidDefinition = {
+      ...((committedCorpus.snapshots as { material: { definition: Record<string, unknown> } }).material.definition),
+      id: "mat.does.not.exist"
+    };
+    const invalidAssignment = {
+      ...committedCorpus,
+      materialId: "mat.does.not.exist",
+      snapshots: {
+        material: {
+          ...((committedCorpus.snapshots as { material: Record<string, unknown> }).material),
+          definition: invalidDefinition
+        }
+      }
+    };
+    const invalid = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: { revision: 1, assignment: invalidAssignment }
+    });
+    expect(invalid.status).toBe(422);
+
+    const reloaded = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    const reloadedAssignments = (reloaded.body as { view: { assignments: { revision: number; assignments: Array<Record<string, unknown>> } } }).view.assignments;
+    expect(reloadedAssignments.revision).toBe(1);
+    expect(reloadedAssignments.assignments.find((item) => item.category === "corpus")?.materialId).toBe(committedId);
+
+    const warnings = await requestWorker(controller!.port, `/api/projects/${projectId}/warnings`, { cookie });
+    expect(warnings.status).toBe(200);
+    const crossTenant = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      cookie: makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" })
+    });
+    expect([403, 404]).toContain(crossTenant.status);
+  }, 30_000);
+
+  it("runs the supplier bridge assisted session through attachment, idempotent capture and explicit confirmation", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Supplier Bridge Kitchen", address: "Bridge 1", contactName: "Jane" }
+    });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie,
+      body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+    });
+
+    const started = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, {
+      method: "POST",
+      cookie,
+      body: { supplierId: "mock-supplier" }
+    });
+    expect(started.status).toBe(201);
+    const startedBody = started.body as {
+      bridgeToken: string;
+      view: { session: { id: string }; currentItem: Record<string, unknown>; counts: { total: number } };
+    };
+    expect(startedBody.view.counts.total).toBeGreaterThan(0);
+    expect(startedBody.bridgeToken).toBeTruthy();
+
+    const attached = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${startedBody.view.session.id}/attach`, {
+      method: "POST",
+      body: { bridgeToken: startedBody.bridgeToken }
+    });
+    expect(attached.status).toBe(200);
+    const accessToken = (attached.body as { accessToken: string }).accessToken;
+    const replayAttach = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${startedBody.view.session.id}/attach`, {
+      method: "POST",
+      body: { bridgeToken: startedBody.bridgeToken }
+    });
+    expect(replayAttach.status).toBe(401);
+
+    const currentItem = startedBody.view.currentItem;
+    const itemId = String(currentItem.id);
+    const captured = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${startedBody.view.session.id}/candidates`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: {
+        submissionId: "worker-capture-1",
+        syncItemId: itemId,
+        supplierProductCode: "MOCK-BRIDGE-001",
+        normalizedProduct: {
+          displayName: "Mock supplier board",
+          manufacturer: currentItem.expectedManufacturer,
+          decorCode: currentItem.expectedDecorCode,
+          surfaceCode: currentItem.expectedSurfaceCode,
+          productType: currentItem.expectedProductType,
+          thicknessMm: currentItem.expectedThicknessMm,
+          widthMm: 2_070,
+          lengthMm: 2_800,
+          availability: "available"
+        },
+        sourcePageType: "product",
+        sourcePath: "/product/mock-bridge-001",
+        observedAt: "2026-07-10T08:00:00.000Z",
+        price: {
+          supplierAccountId: "mock-account",
+          amount: 12.5,
+          currency: "EUR",
+          priceBasis: "m2",
+          vatMode: "excluded",
+          minimumQuantity: 1,
+          packageQuantity: null,
+          rawPriceText: "12,50 € bez DPH",
+          rawUnitText: "EUR / m²",
+          normalizedAmount: 12.5,
+          normalizedPriceBasis: "m2",
+          normalizationCalculation: "No unit conversion applied.",
+          normalizationConfidence: 0.98,
+          observedAt: "2026-07-10T08:00:00.000Z"
+        }
+      }
+    });
+    expect(captured.status).toBe(201);
+    const capturedBody = captured.body as { candidate: { id: string }; view: { counts: { needsConfirmation: number } }; idempotent: boolean };
+    expect(capturedBody.idempotent).toBe(false);
+    expect(capturedBody.view.counts.needsConfirmation).toBe(1);
+    const replayCapture = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${startedBody.view.session.id}/candidates`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: {
+        submissionId: "worker-capture-1",
+        syncItemId: itemId,
+        supplierProductCode: "MOCK-BRIDGE-001",
+        normalizedProduct: {
+          displayName: "Mock supplier board",
+          manufacturer: currentItem.expectedManufacturer,
+          decorCode: currentItem.expectedDecorCode,
+          surfaceCode: currentItem.expectedSurfaceCode,
+          productType: currentItem.expectedProductType,
+          thicknessMm: currentItem.expectedThicknessMm,
+          widthMm: 2_070,
+          lengthMm: 2_800,
+          availability: "available"
+        },
+        sourcePageType: "product",
+        sourcePath: "/product/mock-bridge-001",
+        observedAt: "2026-07-10T08:00:00.000Z",
+        price: null
+      }
+    });
+    expect(replayCapture.status).toBe(200);
+    expect((replayCapture.body as { candidate: { id: string }; idempotent: boolean }).candidate.id).toBe(capturedBody.candidate.id);
+
+    const confirmed = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${startedBody.view.session.id}/confirm`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: { syncItemId: itemId, candidateId: capturedBody.candidate.id }
+    });
+    expect(confirmed.status).toBe(200);
+    expect((confirmed.body as { view: { counts: { completed: number } } }).view.counts.completed).toBe(1);
+
+    const materials = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    const assignments = (materials.body as { view: { assignments: { assignments: Array<Record<string, unknown>> } } }).view.assignments.assignments;
+    const updated = assignments.find((assignment) => assignment.assignmentId === currentItem.materialAssignmentId);
+    expect(updated?.customValues).toMatchObject({
+      supplierBridge: {
+        sessionId: startedBody.view.session.id,
+        candidateId: capturedBody.candidate.id,
+        supplierProductCode: "MOCK-BRIDGE-001"
+      }
+    });
+  }, 30_000);
 
   it("rejects clientId in project create payload", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {

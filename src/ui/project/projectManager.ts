@@ -1,11 +1,12 @@
 import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
-import type { OrganizationUser } from "../../core/client/client-types";
+import type { ClientRole, OrganizationUser } from "../../core/client/client-types";
 import { findOrganizationUser, organizationUserInitial, organizationUserName } from "../../core/client/organization-users";
 import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
 import {
   createProject,
+  deleteProject,
   downloadProject,
   importProjectFile,
   listProjectVersions,
@@ -26,11 +27,93 @@ type ProjectManagerArgs = {
   clientName: string;
   organizationUsers: OrganizationUser[];
   currentUserId: string;
+  currentUserRole: ClientRole;
   onSelect: (selection: ProjectManagerSelection) => void;
 };
 
 export function createProjectVersionActionButton(label: string): HTMLButtonElement {
   return createButtonElement(label);
+}
+
+export function createProjectDeleteActionButton(onDelete: () => void): HTMLButtonElement {
+  const button = createButtonElement("Odstrániť projekt");
+  button.classList.add("project-manager-project-menu-danger");
+  button.addEventListener("click", () => {
+    onDelete();
+  });
+  return button;
+}
+
+export function createProjectDeleteDialog(
+  projectName: string,
+  onConfirm: () => Promise<void>
+): HTMLElement {
+  const overlay = document.createElement("div");
+  overlay.className = "project-delete-overlay";
+
+  const dialog = document.createElement("section");
+  dialog.className = "project-delete-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "project-delete-title");
+
+  const icon = document.createElement("span");
+  icon.className = "project-delete-dialog__icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "!";
+
+  const title = document.createElement("h2");
+  title.id = "project-delete-title";
+  title.textContent = "Odstrániť projekt?";
+
+  const description = document.createElement("p");
+  description.textContent = "Odstránia sa všetky uloženia, verzie a súbory tohto projektu.";
+
+  const projectLabel = document.createElement("strong");
+  projectLabel.className = "project-delete-dialog__project";
+  projectLabel.textContent = projectName;
+
+  const warning = document.createElement("p");
+  warning.className = "project-delete-dialog__warning";
+  warning.textContent = "Táto akcia sa nedá vrátiť späť.";
+
+  const error = document.createElement("p");
+  error.className = "project-delete-dialog__error";
+  error.hidden = true;
+
+  const actions = document.createElement("div");
+  actions.className = "project-delete-dialog__actions";
+  const cancel = createButtonElement("Zrušiť");
+  cancel.classList.add("project-delete-dialog__cancel");
+  const confirm = createButtonElement("Áno, odstrániť projekt");
+  confirm.classList.add("project-delete-dialog__confirm");
+  actions.append(cancel, confirm);
+
+  const close = () => overlay.remove();
+  cancel.addEventListener("click", close);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+  confirm.addEventListener("click", async () => {
+    cancel.disabled = true;
+    confirm.disabled = true;
+    confirm.textContent = "Odstraňujem...";
+    error.hidden = true;
+    try {
+      await onConfirm();
+      close();
+    } catch (deleteError) {
+      error.textContent = deleteError instanceof Error ? deleteError.message : String(deleteError);
+      error.hidden = false;
+      cancel.disabled = false;
+      confirm.disabled = false;
+      confirm.textContent = "Skúsiť znova";
+    }
+  });
+
+  dialog.append(icon, title, description, projectLabel, warning, error, actions);
+  overlay.appendChild(dialog);
+  return overlay;
 }
 
 function field(label: string, required = false) {
@@ -260,7 +343,14 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
   }
 }
 
-function projectCard(project: ProjectMetadata, users: readonly OrganizationUser[], onLoad: () => void, onDownload: () => void, onVersions: () => void): HTMLElement {
+function projectCard(
+  project: ProjectMetadata,
+  users: readonly OrganizationUser[],
+  onLoad: () => void,
+  onDownload: () => void,
+  onVersions: () => void,
+  onDelete?: () => void
+): HTMLElement {
   const card = document.createElement("article");
   card.className = "project-manager-project-card";
   const button = document.createElement("button");
@@ -324,6 +414,13 @@ function projectCard(project: ProjectMetadata, users: readonly OrganizationUser[
     onVersions();
   });
   menu.append(openItem, exportItem, versionsItem);
+  if (onDelete) {
+    const deleteItem = createProjectDeleteActionButton(() => {
+      menu.hidden = true;
+      onDelete();
+    });
+    menu.appendChild(deleteItem);
+  }
   menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
     document.querySelectorAll<HTMLElement>(".project-manager-project-menu").forEach((item) => {
@@ -335,7 +432,14 @@ function projectCard(project: ProjectMetadata, users: readonly OrganizationUser[
   return card;
 }
 
-function renderProjects(root: HTMLElement, projects: ProjectMetadata[], users: readonly OrganizationUser[], onLoad: (projectId: string) => Promise<void>, onRefresh?: () => Promise<void>): void {
+function renderProjects(
+  root: HTMLElement,
+  projects: ProjectMetadata[],
+  users: readonly OrganizationUser[],
+  onLoad: (projectId: string) => Promise<void>,
+  canDeleteProjects: boolean,
+  onRefresh?: () => Promise<void>
+): void {
   const list = root.querySelector<HTMLElement>("[data-project-manager-list]");
   if (!list) return;
   list.innerHTML = "";
@@ -372,11 +476,27 @@ function renderProjects(root: HTMLElement, projects: ProjectMetadata[], users: r
         buttons.forEach((item) => { item.disabled = false; });
       }
     };
+    const deleteCard = async () => {
+      const buttons = card.querySelectorAll<HTMLButtonElement>("button");
+      buttons.forEach((item) => { item.disabled = true; });
+      setStatus(root, `Odstraňujem projekt "${project.name}"...`);
+      try {
+        await deleteProject(project.projectId);
+        if (onRefresh) await onRefresh();
+        setStatus(root, "Projekt bol odstránený.");
+      } catch (error) {
+        setStatus(root, error instanceof Error ? error.message : String(error), "error");
+        buttons.forEach((item) => { item.disabled = false; });
+        throw error;
+      }
+    };
     const card = projectCard(project, users, loadCard, downloadCard, () => {
       void openVersionsDialog(root, project, users, async () => {
         if (onRefresh) await onRefresh();
       });
-    });
+    }, canDeleteProjects ? () => {
+      root.appendChild(createProjectDeleteDialog(project.name, deleteCard));
+    } : undefined);
     list.appendChild(card);
   }
 }
@@ -471,10 +591,10 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       renderProjects(args.root, await listProjects(), args.organizationUsers, async (projectId) => {
         const save = await loadProject(projectId);
         args.onSelect({ kind: "loaded", save });
-      }, loadProjects);
+      }, args.currentUserRole === "owner" || args.currentUserRole === "admin", loadProjects);
       setStatus(args.root, "Project manager pripraveny.");
     } catch (error) {
-      renderProjects(args.root, [], args.organizationUsers, async () => undefined);
+      renderProjects(args.root, [], args.organizationUsers, async () => undefined, false);
       setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
     }
   };

@@ -66,7 +66,10 @@ export function normalizeCatalogMeta(catalog: ClientCatalog): ClientCatalog {
       catalogVersion: catalog.meta?.catalogVersion ?? 1,
       source: catalog.meta?.source ?? "client-custom",
       createdAt: catalog.meta?.createdAt ?? now,
-      updatedAt: catalog.meta?.updatedAt ?? now
+      updatedAt: catalog.meta?.updatedAt ?? now,
+      ...(catalog.meta?.lastSynchronizedAt !== undefined
+        ? { lastSynchronizedAt: catalog.meta.lastSynchronizedAt }
+        : {})
     }
   };
 }
@@ -81,9 +84,22 @@ export function validateClientCatalog(input: ClientCatalog): ClientCatalog {
   const moduleIds = catalog.modules.map((module) => module.id);
   const priceIds = new Set(Object.keys(catalog.priceList.prices));
 
+  if (
+    catalog.meta.lastSynchronizedAt !== undefined &&
+    (typeof catalog.meta.lastSynchronizedAt !== "string" || Number.isNaN(Date.parse(catalog.meta.lastSynchronizedAt)))
+  ) {
+    errors.push("meta.lastSynchronizedAt must be an ISO date string");
+  }
+
   for (const id of findDuplicates(catalog.materials.map((material) => material.id))) errors.push(`duplicate material id: ${id}`);
   for (const id of findDuplicates(catalog.components.map((component) => component.id))) errors.push(`duplicate component id: ${id}`);
   for (const id of findDuplicates(moduleIds)) errors.push(`duplicate module id: ${id}`);
+  for (const code of findDuplicates(catalog.materials.map((material) => material.materialCode?.trim() ?? "").filter(Boolean))) {
+    errors.push(`duplicate materialCode: ${code}`);
+  }
+  for (const code of findDuplicates(catalog.components.map((component) => component.componentCode?.trim() ?? "").filter(Boolean))) {
+    errors.push(`duplicate componentCode: ${code}`);
+  }
 
   requireRefs(errors, "kitchenDefaults", kitchenDefaultRefs(catalog.kitchenDefaults), materialIds);
   requireRefs(errors, "kitchenDefaults", [

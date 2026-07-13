@@ -10,12 +10,19 @@ import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndp
 import { handleClientProfileApi } from "./clientEndpoint";
 import { handleModulePackageApi } from "./modulePackageEndpoint";
 import { handleProjectApi } from "./projectEndpoint";
+import { handleProjectMaterialsApi } from "./projectMaterialsEndpoint";
+import { ProjectMaterialRevisionConflictError } from "../core/project-materials/project-material-errors";
 import { handleAssistantApi } from "./assistantEndpoint";
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository, createServerUserService } from "./serverRepositories";
 import { handleDemosMaterialImage, handleDemosMaterialLookup } from "./demosMaterialLookup";
 import { runBlenderExport } from "./blender/runBlenderExport";
 import { createClientCatalogService } from "../core/catalog/catalog-service";
+import { CatalogExactLookupCache } from "../core/catalog/catalog-exact-lookup";
+import { handleCatalogExactLookupApi } from "./catalogLookupEndpoint";
+import { handleSupplierBridgeApi } from "./supplierBridgeEndpoint";
+import { checkDatabaseReadiness } from "./databaseReadiness";
+import { databaseUnavailableStatus, publicServerErrorMessage } from "./server-error-response";
 
 const PROJECT_ROOT = process.cwd();
 const DEFAULT_PROJECT_ROOT = process.cwd();
@@ -112,8 +119,11 @@ const forbiddenErrorMessagePatterns = [
 ];
 
 const getErrorCode = (error: unknown): number => {
+  const unavailable = databaseUnavailableStatus(error);
+  if (unavailable) return unavailable;
   if (error instanceof SyntaxError) return 400;
   if (error instanceof Error) {
+    if (error instanceof ProjectMaterialRevisionConflictError) return 409;
     if (error.message === "Missing authenticated client session.") return 401;
     if (error.message === "Imported projectId already exists.") return 409;
     if (error.message.startsWith("Invalid FurnQuote module package:")) return 400;
@@ -175,31 +185,6 @@ const handleCatalogLookup = async (
   const kind = reqUrl.searchParams.get("kind");
   const repository = createServerCatalogRepository(projectRoot);
   const service = createClientCatalogService({ context, repository });
-  const catalog = await service.loadCatalog();
-
-  if (kind === "material") {
-    const id = (reqUrl.searchParams.get("id") ?? "").trim();
-    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
-    const family = reqUrl.searchParams.get("family") ?? "";
-    const material = catalog.materials.find(
-      (item) =>
-        item.id === id &&
-        item.materialType === "board" &&
-        item.isActive &&
-        (!family || item.boardFamily === family)
-    ) ?? null;
-    return sendJson(res, material ? 200 : 404, { ok: !!material, material });
-  }
-
-  if (kind === "component") {
-    const id = (reqUrl.searchParams.get("id") ?? "").trim();
-    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
-    const componentType = reqUrl.searchParams.get("componentType") ?? "";
-    const component = catalog.components.find(
-      (item) => item.id === id && item.isActive && (!componentType || item.componentType === componentType)
-    ) ?? null;
-    return sendJson(res, component ? 200 : 404, { ok: !!component, component });
-  }
 
   if (kind === "vendor_product") {
     const resolution = await service.resolveVendorProductVariant({
@@ -586,15 +571,25 @@ export function startWorkerServer(
 ) {
   const userService = dependencies.userService ?? defaultUserService;
   const projectRoot = dependencies.projectRoot ?? process.env.KITCHEN_APP_PROJECT_ROOT ?? DEFAULT_PROJECT_ROOT;
+  const catalogLookupCache = new CatalogExactLookupCache();
   const server = http.createServer(async (req, res) => {
     try {
       const url = createRequestUrl(req, host, port);
 
       if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
 
+      if (req.method === "GET" && url.pathname === "/ready") {
+        try {
+          return sendJson(res, 200, await checkDatabaseReadiness());
+        } catch (error) {
+          res.setHeader("Retry-After", "2");
+          return sendJson(res, 503, { ok: false, error: publicServerErrorMessage(error, 503) });
+        }
+      }
+
       if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService });
 
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson, { userService });
+      if (req.method === "GET" && url.pathname === "/api/auth/session") return await handleAuthSession(req, res, sendJson, { userService });
 
       if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
 
@@ -606,6 +601,15 @@ export function startWorkerServer(
       ) return;
 
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res, userService, projectRoot);
+
+      if (
+        await handleCatalogExactLookupApi(req, res, url, {
+          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          createRepository: () => createServerCatalogRepository(projectRoot),
+          cache: catalogLookupCache,
+          sendJson
+        })
+      ) return;
 
       if (req.method === "GET" && url.pathname === "/api/catalog/lookup")
         return await handleCatalogLookup(req, url, res, userService, projectRoot);
@@ -621,6 +625,24 @@ export function startWorkerServer(
 
       if (
         await handleModulePackageApi(req, res, url, {
+          projectRoot,
+          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
+      if (
+        await handleProjectMaterialsApi(req, res, url, {
+          projectRoot,
+          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
+      if (
+        await handleSupplierBridgeApi(req, res, url, {
           projectRoot,
           getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
           readJsonBody,
@@ -658,7 +680,9 @@ export function startWorkerServer(
       return sendText(res, 404, "Not found");
     } catch (err: unknown) {
       const status = getErrorCode(err);
-      const message = err instanceof Error ? err.message : String(err);
+      if (status === 503) res.setHeader("Retry-After", "2");
+      const message = publicServerErrorMessage(err, status);
+      console.error(`[worker] ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${err instanceof Error ? err.message : String(err)}`);
       return sendJson(res, status, { ok: false, error: message });
     }
   });

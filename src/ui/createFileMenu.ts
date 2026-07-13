@@ -30,6 +30,8 @@ type FileMenuActions = {
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
   exportSceneJson: () => void | Promise<void>;
+  exportWebsiteInitial: () => void | Promise<void>;
+  exportWebsiteFinal: () => void | Promise<void>;
   exportBlenderPreview: () => void | Promise<void>;
   exportPng: () => void | Promise<void>;
   copyJson: () => void | Promise<void>;
@@ -97,6 +99,14 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
     { type: "separator" },
     { label: t("Export Layout JSON…"), onSelect: actions.exportLayoutJson },
     { label: t("Export Scene JSON…"), onSelect: actions.exportSceneJson },
+    {
+      type: "submenu",
+      label: t("Website animation export"),
+      items: [
+        { label: t("Export initial / wrong parameters…"), onSelect: actions.exportWebsiteInitial },
+        { label: t("Export final / corrected parameters…"), onSelect: actions.exportWebsiteFinal }
+      ]
+    },
     { label: t("Export PNG Snapshot…"), onSelect: actions.exportPng },
     { label: t("Export Blender Material Preview..."), onSelect: actions.exportBlenderPreview },
     { label: t("Copy JSON to Clipboard"), onSelect: actions.copyJson },

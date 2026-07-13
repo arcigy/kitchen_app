@@ -2,6 +2,7 @@ import type { KitchenWorktopInstance } from "./localTypes";
 import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import { pointInPolygonXZ } from "./sharedUtils";
 import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
+import { findKitchenWorktopSegmentAtPoint } from "../layout/worktopSegmentEditing";
 
 type KitchenWorktopSelectionControllerContext = {
   kitchenWorktops: KitchenWorktopInstance[];
@@ -23,12 +24,24 @@ export function createKitchenWorktopSelectionController(ctx: KitchenWorktopSelec
     ctx.marqueeEl.style.display = "none";
   };
 
-  const beginKitchenWorktopSelection = (worktopId: string, ev: PointerEvent) => {
+  const beginKitchenWorktopSelection = (
+    worktopId: string,
+    ev: PointerEvent,
+    pointMm?: { x: number; z: number }
+  ) => {
     const worktop = ctx.findKitchenWorktop(worktopId);
     if (!worktop) return false;
     cancelPendingMarqueeHit(ev.pointerId);
 
     if (ctx.getKitchenEditMode() && worktop.kitchenGroupId !== ctx.getActiveKitchenGroupId()) return false;
+
+    if (ctx.getKitchenEditMode() && pointMm) {
+      const segmentIndex = findKitchenWorktopSegmentAtPoint(worktop.params, pointMm);
+      if (segmentIndex != null && worktop.kitchenGroupId) {
+        ctx.setSelectedKitchenGroup(worktop.kitchenGroupId);
+        return ctx.getKitchenMode()?.selectWorktopSegment?.(worktop.id, segmentIndex) ?? false;
+      }
+    }
 
     if (!ctx.getKitchenEditMode() && worktop.kitchenGroupId) {
       const group = ctx.getKitchenMode()?.findKitchenGroup(worktop.kitchenGroupId) ?? null;

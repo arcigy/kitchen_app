@@ -56,13 +56,17 @@ type InstanceRebuilderContext = {
     prevBoxesById?: Map<string, THREE.Box3>
   ) => { movedIds: string[] };
   rebuildWallPlanMesh?: () => void;
+  rebuildKitchenGroupWorktops?: (groupId: string, kitchenCtx?: AppState["kitchenCtx"]) => void;
   renderErrors: (errorsEl: HTMLElement, errors: string[]) => void;
   tagModuleGeometry: (module: THREE.Object3D, instanceId: string) => void;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
   updateLayoutPanel: () => void;
   validateModule: (params: ModuleParams) => string[];
 };
 
 export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
+  const rebuildingKitchenWorktops = new Set<string>();
+
   function rebuildInstance(
     inst: LayoutInstance,
     opts?: {
@@ -224,6 +228,23 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
         defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
         inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
       });
+    }
+    const affectedKitchenGroups = new Set<string>();
+    if (inst.kitchenGroupId) affectedKitchenGroups.add(inst.kitchenGroupId);
+    for (const neighborId of propagated.movedIds) {
+      const neighbor = ctx.findInstance(neighborId);
+      if (neighbor?.kitchenGroupId) affectedKitchenGroups.add(neighbor.kitchenGroupId);
+    }
+    for (const groupId of affectedKitchenGroups) ctx.syncKitchenRunEndClosures?.(groupId);
+    for (const groupId of affectedKitchenGroups) {
+      if (!ctx.rebuildKitchenGroupWorktops || rebuildingKitchenWorktops.has(groupId)) continue;
+      rebuildingKitchenWorktops.add(groupId);
+      try {
+        const kitchenCtx = ctx.S.kitchenGroups.find((group) => group.id === groupId)?.ctx ?? ctx.S.kitchenCtx;
+        ctx.rebuildKitchenGroupWorktops(groupId, kitchenCtx);
+      } finally {
+        rebuildingKitchenWorktops.delete(groupId);
+      }
     }
     if (!opts?.skipLayoutPanelUpdate) ctx.updateLayoutPanel();
     return true;

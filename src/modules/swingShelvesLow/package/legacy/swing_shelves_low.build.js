@@ -9,7 +9,7 @@ function swingShelvesLowBuildV2(n) {
   const boardThicknessMm = Math.max(5, Number(n.boardThickness) || 18);
   const shelfThicknessMm = Math.max(5, Number(n.shelfThickness ?? boardThicknessMm) || boardThicknessMm);
   const backThicknessMm = Math.max(3, Number(n.backThickness) || 6);
-  const frontThicknessMm = Math.max(5, Number(n.frontThicknessMm ?? 19) || 19);
+  const frontThicknessMm = Math.max(5, Number(n.frontThicknessMm ?? 18) || 18);
   const plinthHeightMm = Math.max(0, Number(n.plinthHeight ?? 100) || 0);
   const plinthSetbackMm = Math.max(0, Number(n.plinthSetbackMm ?? 60) || 0);
   const sideGapMm = Math.max(0, Number(n.sideGap ?? 2) || 0);

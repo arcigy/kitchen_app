@@ -21,12 +21,40 @@ import type { KitchenContext } from "../layout/kitchenContext";
 import type { LayoutTool } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
 import { validateKitchenModulePackagePlacement } from "../layout/modulePackagePlacementIntegration";
-import { getKitchenModuleRole, isKitchenCornerModule, staysOutsideKitchenWorktopFootprint } from "../layout/kitchenModuleRules";
+import {
+  getKitchenModuleRole,
+  isKitchenCornerModule,
+  staysOutsideKitchenWorktopFootprint,
+  type KitchenModuleEditLayer
+} from "../layout/kitchenModuleRules";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { getVendorPreferredPlacementContext, validateVendorPlacementCandidate } from "../layout/vendorPlacementRules";
-import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
+import {
+  getKitchenWorktopPolygon,
+  getKitchenWorktopSegmentDepthMm,
+  kitchenWorktopPointToWorld,
+  sanitizeKitchenWorktopPath
+} from "../layout/worktopGeometry";
+import { deriveKitchenRunEndClosure } from "./kitchenRunEndClosure";
 import { toFreePlanBinding } from "./measureAssociative";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import {
+  reflowKitchenRunModules,
+  requestedKitchenRunCenterForGap,
+  type KitchenRunCornerArm,
+  type KitchenRunDimensionModule,
+  type KitchenRunDimensionSource
+} from "../layout/kitchenRunDimensions";
+import {
+  requestedKitchenCornerParamValue,
+  resolveKitchenCornerDimensionParam,
+  type KitchenCornerDimensionAxis
+} from "../layout/kitchenCornerDimensionParams";
+import {
+  moveKitchenWorktopSegmentByAdjacentLength,
+  resizeKitchenWorktopSegment as resizeWorktopSegmentParams,
+  setKitchenWorktopSegmentDepth
+} from "../layout/worktopSegmentEditing";
 import {
   createPinoSideCabinetPlacementCandidate,
   getPinoSideCabinetPreferredPlacementContext,
@@ -121,11 +149,13 @@ export type KitchenPlacementControllerContext = {
     }
   ) => boolean;
   rebuildKitchenGroupWorktops: (groupId: string, nextCtx?: KitchenContext) => void;
+  rebuildKitchenWorktop: (worktop: KitchenWorktopInstance) => void;
   updateLayoutPanel: () => void;
   getWallSolvedJoinPolys: () => Array<Array<{ x: number; z: number }>>;
   getWallUnionPolys: () => PolygonClipMultiPolygon | null;
   getLayoutTool: () => LayoutTool;
   getWallChainStart: () => THREE.Vector3 | null;
+  commitHistory: () => void;
   catalog: ClientCatalog;
   modulePackages?: readonly FurnQuoteModulePackage[];
 };
@@ -149,6 +179,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
   const kitchenAnchorMaxDistanceM = 0.18;
   const kitchenAnchorMaxAngleDeltaRad = Math.PI / 3;
+  const kitchenRunEndClosureSyncing = new WeakSet<LayoutInstance>();
 
   const getModulePackageForInstance = (inst: LayoutInstance) => {
     const params = inst.params as Record<string, unknown>;
@@ -157,6 +188,26 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       return ctx.modulePackages?.find((modulePackage) => modulePackage.module.modulePackageId === explicitPackageId) ?? null;
     }
     return ctx.modulePackages?.find((modulePackage) => modulePackage.module.moduleType === inst.params.type) ?? null;
+  };
+
+  const getModuleWidthLimitsMm = (inst: LayoutInstance) => {
+    const modulePackage = getModulePackageForInstance(inst);
+    const widthParameter = modulePackage?.parameters.parameters.find((parameter) => parameter.key === "width" || parameter.key === "widthMm");
+    const dimensionRule = modulePackage?.constraints.dimensionRules?.width;
+    return {
+      minWidthMm: Math.max(1, dimensionRule?.min ?? widthParameter?.min ?? 1),
+      maxWidthMm: Math.max(1, dimensionRule?.max ?? widthParameter?.max ?? 100_000)
+    };
+  };
+
+  const getInstanceWidthMm = (inst: LayoutInstance) =>
+    Math.max(1, (inst.localBox.max.x - inst.localBox.min.x) * 1000);
+
+  const getInstanceWidthParamKey = (inst: LayoutInstance) => {
+    const params = inst.params as Record<string, unknown>;
+    if (typeof params.width === "number") return "width";
+    if (typeof params.widthMm === "number") return "widthMm";
+    return "width";
   };
 
   const firstPlacementError = (result: { errors: Array<{ message: string }> }) =>
@@ -545,32 +596,57 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     };
   };
 
-  const getKitchenSegmentReservedMargins = (
+  const getKitchenSegmentReservedDetails = (
     groupId: string | null,
     worktopId: string,
     segmentIndex: number,
     backOffsetMm: number,
-    ignoreInstanceId?: string | null
+    ignoreInstanceId?: string | null,
+    moduleRole?: KitchenModuleEditLayer
   ) => {
     if (!groupId) return { startM: 0, endM: 0 };
     let startM = 0;
     let endM = 0;
+    let startArm: KitchenRunCornerArm | undefined;
+    let endArm: KitchenRunCornerArm | undefined;
+
+    const reserve = (side: "start" | "end", moduleId: string, axis: KitchenCornerDimensionAxis, lengthM: number) => {
+      if (side === "start") {
+        if (lengthM <= startM) return;
+        startM = lengthM;
+        startArm = { moduleId, axis, lengthMm: lengthM * 1000 };
+        return;
+      }
+      if (lengthM <= endM) return;
+      endM = lengthM;
+      endArm = { moduleId, axis, lengthMm: lengthM * 1000 };
+    };
 
     for (const other of instances) {
-      if (other.id === ignoreInstanceId || other.kitchenGroupId !== groupId || !isCornerKitchenModule(other)) continue;
+      if (
+        other.id === ignoreInstanceId ||
+        other.kitchenGroupId !== groupId ||
+        !isCornerKitchenModule(other) ||
+        (moduleRole != null && getKitchenModuleRole(other.params as Record<string, unknown>) !== moduleRole)
+      ) continue;
       const armInfo = getKitchenCornerArmBindingInfo(other, backOffsetMm);
       if (!armInfo || armInfo.worktopId !== worktopId) continue;
 
       if (armInfo.xSegmentIndex === segmentIndex) {
-        if (segmentIndex < armInfo.cornerIndex) endM = Math.max(endM, armInfo.xLengthM);
-        else startM = Math.max(startM, armInfo.xLengthM);
+        reserve(segmentIndex < armInfo.cornerIndex ? "end" : "start", other.id, "x", armInfo.xLengthM);
       }
       if (armInfo.zSegmentIndex === segmentIndex) {
-        if (segmentIndex < armInfo.cornerIndex) endM = Math.max(endM, armInfo.zLengthM);
-        else startM = Math.max(startM, armInfo.zLengthM);
+        reserve(segmentIndex < armInfo.cornerIndex ? "end" : "start", other.id, "z", armInfo.zLengthM);
       }
     }
 
+    return { startM, endM, startArm, endArm };
+  };
+
+  const getKitchenSegmentReservedMargins = (
+    ...args: Parameters<typeof getKitchenSegmentReservedDetails>
+  ) => {
+    const { startM, endM } = getKitchenSegmentReservedDetails(...args);
     return { startM, endM };
   };
 
@@ -673,7 +749,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const applyKitchenPlacementBinding = (
     inst: LayoutInstance,
     binding: KitchenPlacementBinding,
-    backOffsetMm: number
+    backOffsetMm: number,
+    opts?: { skipRunEndClosureSync?: boolean }
   ) => {
     const worktop = kitchenWorktops.find((item) => item.id === binding.worktopId);
     if (!worktop) return false;
@@ -691,6 +768,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       inst.root.position.y = getKitchenModulePlacementY(inst, worktop.kitchenGroupId);
       inst.root.updateMatrixWorld(true);
       inst.kitchenPlacement = { ...info.binding };
+      if (!opts?.skipRunEndClosureSync) syncKitchenRunEndClosure(inst, backOffsetMm);
       return true;
     }
 
@@ -717,7 +795,499 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       segmentIndex: binding.segmentIndex,
       offsetAlongM: clampedAlong
     };
+    if (!opts?.skipRunEndClosureSync) syncKitchenRunEndClosure(inst, backOffsetMm);
     return true;
+  };
+
+  const syncKitchenRunEndClosure = (inst: LayoutInstance, backOffsetMm: number) => {
+    if (kitchenRunEndClosureSyncing.has(inst)) return false;
+    const params = inst.params as Record<string, unknown>;
+    const hasExistingClosureState =
+      "kitchenEndClosureLeft" in params ||
+      "kitchenEndClosureRight" in params ||
+      "kitchenEndClosureBackGapMm" in params;
+    const supportsClosure = inst.module.userData.supportsKitchenRunEndClosure === true;
+    if (!supportsClosure && !hasExistingClosureState) return false;
+
+    const binding = inst.kitchenPlacement;
+    const worktop = binding ? kitchenWorktops.find((item) => item.id === binding.worktopId) ?? null : null;
+    const guidePath = worktop ? getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm) : [];
+    const state = deriveKitchenRunEndClosure({
+      enabled: supportsClosure && getKitchenModuleRole(params) === "base" && !isCornerKitchenModule(inst),
+      binding,
+      guidePath,
+      moduleWidthM: Math.max(0.002, inst.localBox.max.x - inst.localBox.min.x),
+      moduleRotationY: inst.root.rotation.y,
+      backGapMm: backOffsetMm
+    });
+
+    const changed =
+      params.kitchenEndClosureLeft !== state.left ||
+      params.kitchenEndClosureRight !== state.right ||
+      params.kitchenEndClosureBackGapMm !== state.backGapMm;
+    if (!changed) return false;
+
+    const previous = {
+      left: params.kitchenEndClosureLeft,
+      right: params.kitchenEndClosureRight,
+      backGapMm: params.kitchenEndClosureBackGapMm
+    };
+    const previousBinding = binding ? structuredClone(binding) : null;
+    params.kitchenEndClosureLeft = state.left;
+    params.kitchenEndClosureRight = state.right;
+    params.kitchenEndClosureBackGapMm = state.backGapMm;
+
+    kitchenRunEndClosureSyncing.add(inst);
+    const rebuilt = rebuildInstance(inst, {
+      skipLayoutValidation: true,
+      skipLayoutPanelUpdate: true,
+      preserveBackAnchor: true,
+      sourceKey: inst.params.type
+    });
+    if (!rebuilt) {
+      if (previous.left === undefined) delete params.kitchenEndClosureLeft;
+      else params.kitchenEndClosureLeft = previous.left;
+      if (previous.right === undefined) delete params.kitchenEndClosureRight;
+      else params.kitchenEndClosureRight = previous.right;
+      if (previous.backGapMm === undefined) delete params.kitchenEndClosureBackGapMm;
+      else params.kitchenEndClosureBackGapMm = previous.backGapMm;
+      kitchenRunEndClosureSyncing.delete(inst);
+      return false;
+    }
+    if (previousBinding) applyKitchenPlacementBinding(inst, previousBinding, backOffsetMm, { skipRunEndClosureSync: true });
+    kitchenRunEndClosureSyncing.delete(inst);
+    return true;
+  };
+
+  const syncKitchenRunEndClosures = (groupId: string, backOffsetMm?: number) => {
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
+    const resolvedBackOffsetMm = backOffsetMm ?? group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+    let changed = false;
+    for (const inst of instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      changed = syncKitchenRunEndClosure(inst, resolvedBackOffsetMm) || changed;
+    }
+    return changed;
+  };
+
+  const getKitchenRunDimensionSources = (
+    groupId: string,
+    moduleRole: KitchenModuleEditLayer = "base"
+  ): KitchenRunDimensionSource[] => {
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: groupId,
+      kitchenGroups: S.kitchenGroups,
+      defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+    });
+    const sources: KitchenRunDimensionSource[] = [];
+    for (const worktop of kitchenWorktops) {
+      if (worktop.kitchenGroupId !== groupId) continue;
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
+      const worktopEdgePath = sanitizeKitchenWorktopPath(worktop.params.path).map(kitchenWorktopPointToWorld);
+      for (let segmentIndex = 0; segmentIndex < guidePath.length - 1; segmentIndex += 1) {
+        const info = getKitchenGuideSegmentInfo(worktop, segmentIndex, backOffsetMm);
+        if (!info) continue;
+        const worktopEdgeStart = worktopEdgePath[segmentIndex];
+        const worktopEdgeEnd = worktopEdgePath[segmentIndex + 1];
+        const reserved = getKitchenSegmentReservedDetails(groupId, worktop.id, segmentIndex, backOffsetMm, null, moduleRole);
+        const modules: KitchenRunDimensionModule[] = [];
+        for (const inst of instances) {
+          const binding = inst.kitchenPlacement;
+          if (
+            inst.kitchenGroupId !== groupId ||
+            !binding ||
+            (binding.kind ?? "segment") !== "segment" ||
+            binding.worktopId !== worktop.id ||
+            binding.segmentIndex !== segmentIndex ||
+            getKitchenModuleRole(inst.params as Record<string, unknown>) !== moduleRole ||
+            isCornerKitchenModule(inst)
+          ) continue;
+          const limits = getModuleWidthLimitsMm(inst);
+          modules.push({
+            id: inst.id,
+            centerMm: binding.offsetAlongM * 1000,
+            widthMm: getInstanceWidthMm(inst),
+            ...limits
+          });
+        }
+        sources.push({
+          id: `${worktop.id}:${segmentIndex}`,
+          groupId,
+          worktopId: worktop.id,
+          segmentIndex,
+          lengthMm: info.length * 1000,
+          worktopDepthMm: getKitchenWorktopSegmentDepthMm(worktop.params, segmentIndex),
+          start: { x: info.start.x, z: info.start.z },
+          end: { x: info.end.x, z: info.end.z },
+          frontNormal: { x: info.frontNormal.x, z: info.frontNormal.z },
+          worktopEdgeStart: worktopEdgeStart ? { x: worktopEdgeStart.x, z: worktopEdgeStart.z } : undefined,
+          worktopEdgeEnd: worktopEdgeEnd ? { x: worktopEdgeEnd.x, z: worktopEdgeEnd.z } : undefined,
+          worktopEdgeLengthMm: worktopEdgeStart && worktopEdgeEnd
+            ? worktopEdgeStart.distanceTo(worktopEdgeEnd) * 1000
+            : undefined,
+          reservedStartMm: reserved.startM * 1000,
+          reservedEndMm: reserved.endM * 1000,
+          reservedStartArm: reserved.startArm,
+          reservedEndArm: reserved.endArm,
+          modules
+        });
+      }
+    }
+    return sources;
+  };
+
+  type KitchenRunModuleEditResult =
+    | { ok: true; appliedValueMm: number; clamped: boolean }
+    | { ok: false; reason: "missing-module" | "missing-run" | "invalid-value" | "run-too-small" | "rebuild-failed" };
+
+  const applyKitchenRunModuleEdit = (args: {
+    instanceId: string;
+    widthMm?: number;
+    gap?: { side: "before" | "after"; valueMm: number };
+  }): KitchenRunModuleEditResult => {
+    const inst = instances.find((item) => item.id === args.instanceId) ?? null;
+    if (!inst?.kitchenGroupId) return { ok: false, reason: "missing-module" };
+    const groupId = inst.kitchenGroupId;
+    const moduleRole = getKitchenModuleRole(inst.params as Record<string, unknown>);
+    if (moduleRole === "tall") return { ok: false, reason: "missing-run" };
+    const source = getKitchenRunDimensionSources(groupId, moduleRole).find((run) => run.modules.some((module) => module.id === inst.id)) ?? null;
+    if (!source) return { ok: false, reason: "missing-run" };
+    let requestedCenterMm = source.modules.find((module) => module.id === inst.id)?.centerMm ?? 0;
+    if (args.gap) {
+      const center = requestedKitchenRunCenterForGap({
+        side: args.gap.side,
+        gapMm: args.gap.valueMm,
+        selectedModuleId: inst.id,
+        lengthMm: source.lengthMm,
+        reservedStartMm: source.reservedStartMm,
+        reservedEndMm: source.reservedEndMm,
+        modules: source.modules
+      });
+      if (center == null) return { ok: false, reason: "invalid-value" };
+      requestedCenterMm = center;
+    }
+    const reflow = reflowKitchenRunModules({
+      lengthMm: source.lengthMm,
+      reservedStartMm: source.reservedStartMm,
+      reservedEndMm: source.reservedEndMm,
+      modules: source.modules,
+      selectedModuleId: inst.id,
+      requestedWidthMm: args.widthMm,
+      requestedCenterMm
+    });
+    if (!reflow.ok) return { ok: false, reason: reflow.reason };
+
+    const affected = source.modules
+      .map((module) => instances.find((item) => item.id === module.id) ?? null)
+      .filter((item): item is LayoutInstance => !!item);
+    const snapshots = affected.map((item) => ({
+      item,
+      params: item === inst ? structuredClone(item.params) : null,
+      position: item.root.position.clone(),
+      rotationY: item.root.rotation.y,
+      binding: item.kitchenPlacement ? structuredClone(item.kitchenPlacement) : null
+    }));
+    const widthKey = getInstanceWidthParamKey(inst);
+    if (args.widthMm != null) {
+      const previousParams = structuredClone(inst.params);
+      (inst.params as Record<string, unknown>)[widthKey] = reflow.selectedWidthMm;
+      if (!rebuildInstance(inst, {
+        skipLayoutValidation: true,
+        skipLayoutPanelUpdate: true,
+        preserveBackAnchor: true,
+        previousParams,
+        sourceKey: widthKey
+      })) {
+        inst.params = previousParams;
+        rebuildInstance(inst, { skipLayoutValidation: true, skipLayoutPanelUpdate: true });
+        return { ok: false, reason: "rebuild-failed" };
+      }
+    }
+
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: groupId,
+      kitchenGroups: S.kitchenGroups,
+      defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+    });
+    let applied = true;
+    for (const item of affected) {
+      const centerMm = reflow.centersMm.get(item.id);
+      if (centerMm == null) continue;
+      applied = applyKitchenPlacementBinding(item, {
+        worktopId: source.worktopId,
+        segmentIndex: source.segmentIndex,
+        offsetAlongM: centerMm / 1000
+      }, backOffsetMm) && applied;
+    }
+    if (!applied) {
+      for (const snapshot of snapshots) {
+        if (snapshot.params) {
+          snapshot.item.params = structuredClone(snapshot.params);
+          rebuildInstance(snapshot.item, { skipLayoutValidation: true, skipLayoutPanelUpdate: true });
+        }
+        snapshot.item.root.position.copy(snapshot.position);
+        snapshot.item.root.rotation.y = snapshot.rotationY;
+        snapshot.item.kitchenPlacement = snapshot.binding ? structuredClone(snapshot.binding) : null;
+        snapshot.item.root.updateMatrixWorld(true);
+      }
+      syncKitchenRunEndClosures(groupId, backOffsetMm);
+      return { ok: false, reason: "rebuild-failed" };
+    }
+
+    syncKitchenRunEndClosures(groupId, backOffsetMm);
+    updateLayoutPanel();
+    ctx.commitHistory();
+    return {
+      ok: true,
+      appliedValueMm: args.widthMm != null ? reflow.selectedWidthMm : args.gap?.valueMm ?? 0,
+      clamped: args.widthMm != null
+        ? Math.abs(reflow.selectedWidthMm - args.widthMm) > 0.01
+        : reflow.clamped
+    };
+  };
+
+  const resizeKitchenRunModule = (instanceId: string, widthMm: number) =>
+    applyKitchenRunModuleEdit({ instanceId, widthMm });
+
+  const resizeKitchenCornerArm = (
+    instanceId: string,
+    axis: KitchenCornerDimensionAxis,
+    requestedLengthMm: number
+  ): KitchenRunModuleEditResult => {
+    const inst = instances.find((item) => item.id === instanceId) ?? null;
+    if (!inst?.kitchenGroupId || !isCornerKitchenModule(inst) || !Number.isFinite(requestedLengthMm)) {
+      return { ok: false, reason: "missing-module" };
+    }
+    const params = inst.params as Record<string, unknown>;
+    const param = resolveKitchenCornerDimensionParam(params, axis);
+    if (!param) return { ok: false, reason: "invalid-value" };
+    const groupId = inst.kitchenGroupId;
+    const moduleRole = getKitchenModuleRole(params);
+    if (moduleRole === "tall") return { ok: false, reason: "missing-run" };
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: groupId,
+      kitchenGroups: S.kitchenGroups,
+      defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+    });
+    const armInfo = getKitchenCornerArmBindingInfo(inst, backOffsetMm);
+    if (!armInfo) return { ok: false, reason: "missing-run" };
+    const currentLengthMm = (axis === "x" ? armInfo.xLengthM : armInfo.zLengthM) * 1000;
+    if (!currentLengthMm) return { ok: false, reason: "missing-run" };
+    const source = getKitchenRunDimensionSources(groupId, moduleRole).find((run) =>
+      run.reservedStartArm?.moduleId === inst.id && run.reservedStartArm.axis === axis ||
+      run.reservedEndArm?.moduleId === inst.id && run.reservedEndArm.axis === axis
+    ) ?? null;
+    if (!source) return { ok: false, reason: "missing-run" };
+    const atStart = source.reservedStartArm?.moduleId === inst.id && source.reservedStartArm.axis === axis;
+    const oppositeReservedMm = atStart ? source.reservedEndMm : source.reservedStartMm;
+    const straightWidthsMm = source.modules.reduce((sum, module) => sum + module.widthMm, 0);
+    const maximumArmMm = source.lengthMm - oppositeReservedMm - straightWidthsMm;
+    const minimumArmMm = currentLengthMm + param.minimumMm - param.currentValueMm;
+    if (maximumArmMm < minimumArmMm - 0.01) return { ok: false, reason: "run-too-small" };
+    const appliedRequestMm = Math.max(minimumArmMm, Math.min(maximumArmMm, requestedLengthMm));
+    const nextParamValue = requestedKitchenCornerParamValue({
+      param,
+      currentArmLengthMm: currentLengthMm,
+      requestedArmLengthMm: appliedRequestMm
+    });
+    if (nextParamValue == null) return { ok: false, reason: "invalid-value" };
+
+    const affected = instances.filter((item) => item.kitchenGroupId === groupId);
+    const snapshots = affected.map((item) => ({
+      item,
+      params: item === inst ? structuredClone(item.params) : null,
+      position: item.root.position.clone(),
+      rotationY: item.root.rotation.y,
+      binding: item.kitchenPlacement ? structuredClone(item.kitchenPlacement) : null
+    }));
+    const rollback = () => {
+      for (const snapshot of snapshots) {
+        if (snapshot.params) {
+          snapshot.item.params = structuredClone(snapshot.params);
+          rebuildInstance(snapshot.item, { skipLayoutValidation: true, skipLayoutPanelUpdate: true });
+        }
+        snapshot.item.root.position.copy(snapshot.position);
+        snapshot.item.root.rotation.y = snapshot.rotationY;
+        snapshot.item.kitchenPlacement = snapshot.binding ? structuredClone(snapshot.binding) : null;
+        snapshot.item.root.updateMatrixWorld(true);
+      }
+      syncKitchenRunEndClosures(groupId, backOffsetMm);
+    };
+
+    const previousParams = structuredClone(inst.params);
+    params[param.key] = nextParamValue;
+    if (!rebuildInstance(inst, {
+      skipLayoutValidation: true,
+      skipLayoutPanelUpdate: true,
+      preserveBackAnchor: true,
+      previousParams,
+      sourceKey: param.key
+    }) || !inst.kitchenPlacement || !applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm, { skipRunEndClosureSync: true })) {
+      rollback();
+      return { ok: false, reason: "rebuild-failed" };
+    }
+
+    const updatedArmInfo = getKitchenCornerArmBindingInfo(inst, backOffsetMm);
+    const appliedLengthMm = updatedArmInfo
+      ? (axis === "x" ? updatedArmInfo.xLengthM : updatedArmInfo.zLengthM) * 1000
+      : 0;
+    if (!appliedLengthMm) {
+      rollback();
+      return { ok: false, reason: "rebuild-failed" };
+    }
+
+    const affectedRuns = getKitchenRunDimensionSources(groupId, moduleRole).filter((run) =>
+      run.reservedStartArm?.moduleId === inst.id || run.reservedEndArm?.moduleId === inst.id
+    );
+    let placementsValid = true;
+    for (const run of affectedRuns) {
+      const sorted = [...run.modules].sort((a, b) => a.centerMm - b.centerMm || a.id.localeCompare(b.id));
+      const usableStartMm = run.reservedStartMm;
+      const usableEndMm = run.lengthMm - run.reservedEndMm;
+      const totalWidthMm = sorted.reduce((sum, module) => sum + module.widthMm, 0);
+      if (totalWidthMm > usableEndMm - usableStartMm + 0.01) {
+        placementsValid = false;
+        break;
+      }
+      const centers = new Map<string, number>();
+      let cursorMm = usableStartMm;
+      for (const module of sorted) {
+        const centerMm = Math.max(module.centerMm, cursorMm + module.widthMm / 2);
+        centers.set(module.id, centerMm);
+        cursorMm = centerMm + module.widthMm / 2;
+      }
+      const overflowMm = Math.max(0, cursorMm - usableEndMm);
+      for (const module of sorted) {
+        const item = instances.find((candidate) => candidate.id === module.id) ?? null;
+        const centerMm = centers.get(module.id);
+        if (!item || centerMm == null) continue;
+        placementsValid = applyKitchenPlacementBinding(item, {
+          worktopId: run.worktopId,
+          segmentIndex: run.segmentIndex,
+          offsetAlongM: (centerMm - overflowMm) / 1000
+        }, backOffsetMm, { skipRunEndClosureSync: true }) && placementsValid;
+      }
+    }
+    if (!placementsValid) {
+      rollback();
+      return { ok: false, reason: "run-too-small" };
+    }
+
+    syncKitchenRunEndClosures(groupId, backOffsetMm);
+    updateLayoutPanel();
+    ctx.commitHistory();
+    return {
+      ok: true,
+      appliedValueMm: appliedLengthMm,
+      clamped: Math.abs(appliedLengthMm - requestedLengthMm) > 0.01
+    };
+  };
+
+  const moveKitchenRunModuleByGap = (instanceId: string, side: "before" | "after", gapMm: number) =>
+    applyKitchenRunModuleEdit({ instanceId, gap: { side, valueMm: gapMm } });
+
+  const editKitchenWorktopSegment = (args: {
+    worktopId: string;
+    segmentIndex: number;
+    depthMm?: number;
+    lengthMm?: number;
+    adjacentSegmentIndex?: number;
+  }): KitchenRunModuleEditResult => {
+    const worktop = kitchenWorktops.find((item) => item.id === args.worktopId) ?? null;
+    if (!worktop) return { ok: false, reason: "missing-run" };
+    const currentStart = worktop.params.path[args.segmentIndex];
+    const currentEnd = worktop.params.path[args.segmentIndex + 1];
+    if (!currentStart || !currentEnd) return { ok: false, reason: "missing-run" };
+    const nextParams = args.depthMm != null
+      ? setKitchenWorktopSegmentDepth(worktop.params, args.segmentIndex, args.depthMm)
+      : args.adjacentSegmentIndex != null && args.lengthMm != null
+        ? moveKitchenWorktopSegmentByAdjacentLength(
+            worktop.params,
+            args.segmentIndex,
+            args.adjacentSegmentIndex,
+            args.lengthMm
+          )
+      : args.lengthMm != null
+        ? resizeWorktopSegmentParams(worktop.params, args.segmentIndex, args.lengthMm)
+        : null;
+    if (!nextParams) return { ok: false, reason: "invalid-value" };
+
+    const previousParams = structuredClone(worktop.params);
+    const affected = instances.filter((item) => item.kitchenPlacement?.worktopId === worktop.id);
+    const snapshots = affected.map((item) => ({
+      item,
+      position: item.root.position.clone(),
+      rotationY: item.root.rotation.y,
+      binding: item.kitchenPlacement ? structuredClone(item.kitchenPlacement) : null
+    }));
+    const rollback = () => {
+      worktop.params = structuredClone(previousParams);
+      ctx.rebuildKitchenWorktop(worktop);
+      for (const snapshot of snapshots) {
+        snapshot.item.root.position.copy(snapshot.position);
+        snapshot.item.root.rotation.y = snapshot.rotationY;
+        snapshot.item.kitchenPlacement = snapshot.binding ? structuredClone(snapshot.binding) : null;
+        snapshot.item.root.updateMatrixWorld(true);
+      }
+    };
+
+    worktop.params = nextParams;
+    ctx.rebuildKitchenWorktop(worktop);
+    const group = S.kitchenGroups.find((item) => item.id === worktop.kitchenGroupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+    let applied = true;
+    if (args.lengthMm != null) {
+      for (const item of affected.filter((candidate) => isCornerKitchenModule(candidate))) {
+        if (!item.kitchenPlacement) continue;
+        applied = applyKitchenPlacementBinding(item, item.kitchenPlacement, backOffsetMm, { skipRunEndClosureSync: true }) && applied;
+      }
+      for (const role of ["base", "upper"] as const) {
+        const runs = getKitchenRunDimensionSources(worktop.kitchenGroupId, role).filter((run) => run.worktopId === worktop.id);
+        for (const run of runs) {
+          const sorted = [...run.modules].sort((a, b) => a.centerMm - b.centerMm || a.id.localeCompare(b.id));
+          const usableStartMm = run.reservedStartMm;
+          const usableEndMm = run.lengthMm - run.reservedEndMm;
+          if (sorted.reduce((sum, module) => sum + module.widthMm, 0) > usableEndMm - usableStartMm + 0.01) {
+            applied = false;
+            break;
+          }
+          let cursorMm = usableStartMm;
+          const centers = new Map<string, number>();
+          for (const module of sorted) {
+            const centerMm = Math.max(module.centerMm, cursorMm + module.widthMm / 2);
+            centers.set(module.id, centerMm);
+            cursorMm = centerMm + module.widthMm / 2;
+          }
+          const overflowMm = Math.max(0, cursorMm - usableEndMm);
+          for (const module of sorted) {
+            const item = instances.find((candidate) => candidate.id === module.id) ?? null;
+            const centerMm = centers.get(module.id);
+            if (!item || centerMm == null) continue;
+            applied = applyKitchenPlacementBinding(item, {
+              worktopId: run.worktopId,
+              segmentIndex: run.segmentIndex,
+              offsetAlongM: (centerMm - overflowMm) / 1000
+            }, backOffsetMm, { skipRunEndClosureSync: true }) && applied;
+          }
+        }
+      }
+    }
+    if (!applied) {
+      rollback();
+      return { ok: false, reason: "run-too-small" };
+    }
+
+    syncKitchenRunEndClosures(worktop.kitchenGroupId, backOffsetMm);
+    updateLayoutPanel();
+    ctx.commitHistory();
+    const measuredSegmentIndex = args.adjacentSegmentIndex ?? args.segmentIndex;
+    const updatedStart = worktop.params.path[measuredSegmentIndex]!;
+    const updatedEnd = worktop.params.path[measuredSegmentIndex + 1]!;
+    const appliedValueMm = args.depthMm != null
+      ? worktop.params.segmentDepthsMm?.[args.segmentIndex] ?? worktop.params.depthMm
+      : Math.hypot(updatedEnd.x - updatedStart.x, updatedEnd.z - updatedStart.z);
+    const requestedValueMm = args.depthMm ?? args.lengthMm ?? appliedValueMm;
+    return { ok: true, appliedValueMm, clamped: Math.abs(appliedValueMm - requestedValueMm) > 0.01 };
   };
 
   const rebuildKitchenGroupLayout = (
@@ -752,6 +1322,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       const binding = bindings.get(inst.id) ?? inst.kitchenPlacement;
       if (binding && applyKitchenPlacementBinding(inst, binding, nextCtx.worktopBackOffsetMm)) continue;
       inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, nextCtx.worktopBackOffsetMm);
+      syncKitchenRunEndClosure(inst, nextCtx.worktopBackOffsetMm);
     }
 
     updateLayoutPanel();
@@ -991,6 +1562,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
           rotationY: number;
           valid: boolean;
           distance: number;
+          cursorFrontDistance: number;
         }
       | null = null;
 
@@ -1010,13 +1582,18 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
         const projected = cursorOffset.dot(info.dir);
         const closestOnGuide = guideStart.clone().addScaledVector(info.dir, clampNumber(projected, 0, info.length));
         const backCenterDistance = closestOnGuide.distanceToSquared(cursorWorld);
+        const cursorFrontDistance = cursorOffset.dot(info.frontNormal);
         const clampedAlongGuide = clampNumber(projected, minAlong, maxAlong);
         const backCenter = guideStart.clone().addScaledVector(info.dir, clampedAlongGuide);
         const rotatedBackCenter = localBackCenter.clone().applyEuler(new THREE.Euler(0, info.rotationY, 0));
         const position = backCenter.clone().sub(rotatedBackCenter);
         position.y = 0;
 
-        if (!best || backCenterDistance < best.distance) {
+        if (
+          !best ||
+          backCenterDistance < best.distance - 1e-9 ||
+          (Math.abs(backCenterDistance - best.distance) <= 1e-9 && cursorFrontDistance > best.cursorFrontDistance + 1e-9)
+        ) {
           best = {
             binding: {
               worktopId: worktop.id,
@@ -1026,7 +1603,8 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
             position,
             rotationY: info.rotationY,
             valid: true,
-            distance: backCenterDistance
+            distance: backCenterDistance,
+            cursorFrontDistance
           };
         }
       }
@@ -1100,6 +1678,13 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     getKitchenSegmentReservedMargins,
     inferKitchenPlacementBinding,
     applyKitchenPlacementBinding,
+    syncKitchenRunEndClosure,
+    syncKitchenRunEndClosures,
+    getKitchenRunDimensionSources,
+    resizeKitchenRunModule,
+    resizeKitchenCornerArm,
+    moveKitchenRunModuleByGap,
+    editKitchenWorktopSegment,
     rebuildKitchenGroupLayout,
     getTallKitchenPlacementConstraint,
     getKitchenPlacementConstraint,

@@ -21,6 +21,7 @@ const BASE_CORNER_CHAMFERED_GROUND_TRUTH_PACKAGE = baseCornerChamferedGroundTrut
 const kitchenCornerAnchorName = "__kitchen_corner_anchor";
 const kitchenCornerXAnchorName = "__kitchen_corner_x_anchor";
 const kitchenCornerZAnchorName = "__kitchen_corner_z_anchor";
+const kitchenBackAnchorName = "__kitchen_back_anchor";
 const BASE_CORNER_CHAMFERED_SOURCE = {
   xMin: 33.3,
   xMax: 933.3,
@@ -1254,15 +1255,38 @@ function addCornerStyleClipCollar(
 function addCornerStylePlinthClipSet(
   group: THREE.Group,
   prefix: string,
-  index: number,
+  index: number | string,
   centerMm: { x: number; z: number },
   material: THREE.Material,
-  component: ComponentDefinition | undefined
+  component: ComponentDefinition | undefined,
+  facing: "front" | "left" | "right" = "front"
 ) {
-  const paramKeys = ["clipComponentId", "legComponentId", "plinthHeight", "plinthSetbackMm", "depth", "boardThickness"];
-  const collar = addCornerStyleClipCollar(group, `${prefix}kickClip_front_${index}_collar`, { x: centerMm.x, y: 40, z: centerMm.z + 1.768 }, material, paramKeys);
-  const pad = addBox(group, `${prefix}kickClip_front_${index}_pad`, { width: 30, height: 35, depth: 25 }, { x: centerMm.x, y: 40, z: centerMm.z + 7 }, material, paramKeys);
-  const arm = addBox(group, `${prefix}kickClip_front_${index}_arm`, { width: 30, height: 35, depth: 25 }, { x: centerMm.x, y: 39, z: centerMm.z + 26.5 }, material, paramKeys);
+  const paramKeys = [
+    "clipComponentId",
+    "legComponentId",
+    "plinthHeight",
+    "plinthSetbackMm",
+    "depth",
+    "boardThickness",
+    "kitchenEndClosureLeft",
+    "kitchenEndClosureRight",
+    "kitchenEndClosureBackGapMm"
+  ];
+  const rotationY = facing === "left" ? -Math.PI / 2 : facing === "right" ? Math.PI / 2 : 0;
+  const direction = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, rotationY, 0));
+  const offsetCenter = (distance: number) => ({
+    x: centerMm.x + direction.x * distance,
+    y: 40,
+    z: centerMm.z + direction.z * distance
+  });
+  const collar = addCornerStyleClipCollar(group, `${prefix}kickClip_${facing}_${index}_collar`, offsetCenter(1.768), material, paramKeys);
+  collar.rotation.y += rotationY;
+  const pad = addBox(group, `${prefix}kickClip_${facing}_${index}_pad`, { width: 30, height: 35, depth: 25 }, offsetCenter(7), material, paramKeys);
+  pad.rotation.y = rotationY;
+  const armCenter = offsetCenter(26.5);
+  armCenter.y = 39;
+  const arm = addBox(group, `${prefix}kickClip_${facing}_${index}_arm`, { width: 30, height: 35, depth: 25 }, armCenter, material, paramKeys);
+  arm.rotation.y = rotationY;
   markComponent(collar, component, "clipComponentId");
   markComponent(pad, component, "clipComponentId");
   markComponent(arm, component, "clipComponentId");
@@ -1275,7 +1299,7 @@ function tagChamferedRuntimeHardware(mesh: THREE.Mesh, boardName: string, materi
   mesh.userData.materialSlotId = materialSlotId;
 }
 
-function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width: number; depth: number; plinth: number; setback: number; boardDepth: number; prefix: string }) {
+function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width: number; depth: number; plinth: number; setback: number; boardDepth: number; prefix: string; zOffset?: number }) {
   const legHeight = Math.max(1, opts.plinth);
   const hardware = makeMaterial(params, catalog, "hardware");
   const legComponent = resolveComponentForParam(params, catalog, "legComponentId", "leg");
@@ -1283,18 +1307,24 @@ function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catal
   const legMaterial = makeComponentMaterial(params, catalog, legComponent, hardware);
   const clipMaterial = makeComponentMaterial(params, catalog, clipComponent, hardware);
   const xInset = Math.min(90, Math.max(55, opts.width * 0.12));
-  const zFront = opts.depth / 2 - opts.setback - opts.boardDepth - 30;
-  const zBack = -opts.depth / 2 + Math.min(100, Math.max(70, opts.depth * 0.16));
+  const zOffset = opts.zOffset ?? 0;
+  const zFront = zOffset + opts.depth / 2 - opts.setback - opts.boardDepth - 30;
+  const zBack = zOffset - opts.depth / 2 + Math.min(100, Math.max(70, opts.depth * 0.16));
   const xPositions = [-opts.width / 2 + xInset, opts.width / 2 - xInset];
   if (opts.width > 900) xPositions.splice(1, 0, 0);
   if (opts.width > 1500) {
     xPositions.splice(1, 0, -opts.width * 0.25);
     xPositions.splice(xPositions.length - 1, 0, opts.width * 0.25);
   }
+  const leftClosure = bool(params, "kitchenEndClosureLeft", false);
+  const rightClosure = bool(params, "kitchenEndClosureRight", false);
+  const sideLegInset = Math.min(Math.max(1, opts.width / 2 - 1), opts.boardDepth + 30);
+  if (leftClosure && xPositions.length > 0) xPositions[0] = -opts.width / 2 + sideLegInset;
+  if (rightClosure && xPositions.length > 0) xPositions[xPositions.length - 1] = opts.width / 2 - sideLegInset;
   const zPositions = Math.abs(zFront - zBack) > 120 ? [zFront, zBack] : [zFront];
   let frontIndex = 1;
   let rearIndex = 1;
-  for (const x of xPositions) {
+  for (const [xIndex, x] of xPositions.entries()) {
     for (const [zIndex, z] of zPositions.entries()) {
       const isFront = zIndex === 0;
       const index = isFront ? frontIndex : rearIndex;
@@ -1307,14 +1337,32 @@ function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catal
       } else {
         rearIndex += 1;
       }
+      const sideFacing = xIndex === 0 && leftClosure
+        ? "left"
+        : xIndex === xPositions.length - 1 && rightClosure
+          ? "right"
+          : null;
+      if (sideFacing) {
+        addCornerStylePlinthClipSet(
+          group,
+          opts.prefix,
+          `${isFront ? "front" : "rear"}_${index}`,
+          { x, z },
+          clipMaterial,
+          clipComponent,
+          sideFacing
+        );
+      }
     }
   }
 }
 
-function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { openFront?: boolean; topOpen?: boolean; topRails?: boolean; width?: number; height?: number; depth?: number; namePrefix?: string } = {}) {
+function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { openFront?: boolean; topOpen?: boolean; topRails?: boolean; width?: number; height?: number; depth?: number; envelopeDepth?: number; zOffset?: number; namePrefix?: string } = {}) {
   const width = opts.width ?? num(params, "width", 800);
   const height = opts.height ?? num(params, "height", 720);
   const depth = opts.depth ?? num(params, "depth", 560);
+  const envelopeDepth = opts.envelopeDepth ?? depth;
+  const zOffset = opts.zOffset ?? 0;
   const t = num(params, "boardThickness", 18);
   const back = num(params, "backThickness", 8);
   const plinth = num(params, "plinthHeight", 0);
@@ -1329,18 +1377,41 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
   const innerH = Math.max(1, cabinetHeight - 2 * t);
   const backLayout = resolveBackPanelDepthLayout(depth, back);
   const innerD = Math.max(1, depth / 2 - backLayout.innerFaceZ);
+  const leftClosure = bool(params, "kitchenEndClosureLeft", false);
+  const rightClosure = bool(params, "kitchenEndClosureRight", false);
+  const closureBackGapMm = Math.max(0, num(params, "kitchenEndClosureBackGapMm", 0));
+  const closureParamKeys = [
+    "width",
+    "height",
+    "depth",
+    "boardThickness",
+    "kitchenEndClosureLeft",
+    "kitchenEndClosureRight",
+    "kitchenEndClosureBackGapMm"
+  ];
+  const leftDepth = leftClosure ? envelopeDepth + closureBackGapMm : depth;
+  const rightDepth = rightClosure ? envelopeDepth + closureBackGapMm : depth;
 
-  addBox(group, `${prefix}left_side`, { width: t, height: cabinetHeight, depth }, { x: -width / 2 + t / 2, y: baseY + cabinetHeight / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
-  addBox(group, `${prefix}right_side`, { width: t, height: cabinetHeight, depth }, { x: width / 2 - t / 2, y: baseY + cabinetHeight / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
-  addBox(group, `${prefix}bottom`, { width: innerW, height: t, depth }, { x: 0, y: baseY + t / 2, z: 0 }, body, ["width", "depth", "boardThickness"]);
+  group.userData.supportsKitchenRunEndClosure = true;
+  if (!group.getObjectByName(kitchenBackAnchorName)) {
+    const kitchenBackAnchor = new THREE.Object3D();
+    kitchenBackAnchor.name = kitchenBackAnchorName;
+    kitchenBackAnchor.position.set(0, 0, -envelopeDepth * 0.5 * MM);
+    kitchenBackAnchor.visible = false;
+    group.add(kitchenBackAnchor);
+  }
+
+  addBox(group, `${prefix}left_side`, { width: t, height: cabinetHeight, depth: leftDepth }, { x: -width / 2 + t / 2, y: baseY + cabinetHeight / 2, z: leftClosure ? -closureBackGapMm / 2 : zOffset }, body, closureParamKeys);
+  addBox(group, `${prefix}right_side`, { width: t, height: cabinetHeight, depth: rightDepth }, { x: width / 2 - t / 2, y: baseY + cabinetHeight / 2, z: rightClosure ? -closureBackGapMm / 2 : zOffset }, body, closureParamKeys);
+  addBox(group, `${prefix}bottom`, { width: innerW, height: t, depth }, { x: 0, y: baseY + t / 2, z: zOffset }, body, ["width", "depth", "boardThickness"]);
   if (!opts.topOpen && opts.topRails) {
     const railDepth = Math.max(50, Math.min(90, depth * 0.14));
-    addBox(group, `${prefix}top_back_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: -depth / 2 + railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
-    addBox(group, `${prefix}top_front_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: depth / 2 - railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
+    addBox(group, `${prefix}top_back_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: zOffset - depth / 2 + railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
+    addBox(group, `${prefix}top_front_rail`, { width: innerW, height: t, depth: railDepth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: zOffset + depth / 2 - railDepth / 2 }, body, ["width", "height", "depth", "boardThickness"]);
   } else if (!opts.topOpen) {
-    addBox(group, `${prefix}top`, { width: innerW, height: t, depth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: 0 }, body, ["width", "height", "depth", "boardThickness"]);
+    addBox(group, `${prefix}top`, { width: innerW, height: t, depth }, { x: 0, y: baseY + cabinetHeight - t / 2, z: zOffset }, body, ["width", "height", "depth", "boardThickness"]);
   }
-  if (backLayout.thicknessMm > 0) addBox(group, `${prefix}back`, { width: innerW, height: innerH, depth: backLayout.thicknessMm }, { x: 0, y: baseY + t + innerH / 2, z: backLayout.centerZ }, backMat, ["width", "height", "depth", "backThickness"]);
+  if (backLayout.thicknessMm > 0) addBox(group, `${prefix}back`, { width: innerW, height: innerH, depth: backLayout.thicknessMm }, { x: 0, y: baseY + t + innerH / 2, z: zOffset + backLayout.centerZ }, backMat, ["width", "height", "depth", "backThickness"]);
 
   const shelves = Math.round(num(params, "shelfCount", 0));
   const shelfT = num(params, "shelfThickness", t);
@@ -1358,16 +1429,38 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
   for (let index = 0; index < shelves; index += 1) {
     shelfCursorY += shelfGaps[index] * shelfGapScale;
     const y = shelfCursorY + shelfT / 2;
-    addBox(group, `${prefix}shelf_${index + 1}`, { width: innerW, height: shelfT, depth: innerD }, { x: 0, y, z: back / 2 }, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "shelfMaterialId"]);
+    addBox(group, `${prefix}shelf_${index + 1}`, { width: innerW, height: shelfT, depth: innerD }, { x: 0, y, z: zOffset + back / 2 }, shelfMat, ["shelfCount", "shelfGaps", "shelfThickness", "height", "shelfMaterialId"]);
     shelfCursorY += shelfT;
   }
 
   if (plinth > 0) {
     const setback = num(params, "plinthSetbackMm", 60);
     const boardDepth = Math.max(8, Math.min(t, 24));
-    const z = depth / 2 - setback - boardDepth / 2;
+    const z = zOffset + depth / 2 - setback - boardDepth / 2;
     addBox(group, `${prefix}plinth_front_board`, { width: Math.max(1, width), height: plinth, depth: boardDepth }, { x: 0, y: plinth / 2, z }, plinthMat, ["plinthHeight", "plinthSetbackMm", "plinthMaterialId"]);
-    addAdjustableLegs(group, params, catalog, { width, depth, plinth, setback, boardDepth, prefix });
+    const sideReturnRearZ = -envelopeDepth / 2 - closureBackGapMm;
+    const sideReturnFrontZ = zOffset + depth / 2 - setback;
+    const sideReturnDepth = Math.max(1, sideReturnFrontZ - sideReturnRearZ);
+    const sideReturnCenterZ = (sideReturnRearZ + sideReturnFrontZ) / 2;
+    const sideReturnParamKeys = [
+      "width",
+      "depth",
+      "plinthHeight",
+      "plinthSetbackMm",
+      "plinthMaterialId",
+      "kitchenEndClosureLeft",
+      "kitchenEndClosureRight",
+      "kitchenEndClosureBackGapMm"
+    ];
+    if (leftClosure) {
+      const leftReturn = addBox(group, `${prefix}plinth_left_return`, { width: boardDepth, height: plinth, depth: sideReturnDepth }, { x: -width / 2 + boardDepth / 2, y: plinth / 2, z: sideReturnCenterZ }, plinthMat, sideReturnParamKeys);
+      leftReturn.userData.sideRole = "LEFT";
+    }
+    if (rightClosure) {
+      const rightReturn = addBox(group, `${prefix}plinth_right_return`, { width: boardDepth, height: plinth, depth: sideReturnDepth }, { x: width / 2 - boardDepth / 2, y: plinth / 2, z: sideReturnCenterZ }, plinthMat, sideReturnParamKeys);
+      rightReturn.userData.sideRole = "RIGHT";
+    }
+    addAdjustableLegs(group, params, catalog, { width, depth, plinth, setback, boardDepth, prefix, zOffset });
   }
 }
 
@@ -2447,6 +2540,7 @@ type ChamferedGroundTruthParametricContext = {
   width: number;
   depth: number;
   height: number;
+  boardThickness: number;
   frontChamferMm: number;
   frontChamferReferenceMm: number;
   backChamferMm: number;
@@ -2467,6 +2561,7 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
   const depth = Math.max(100, num(params, "depth", BASE_CORNER_CHAMFERED_SOURCE.depth));
   const width = depth;
   const height = Math.max(50, num(params, "height", BASE_CORNER_CHAMFERED_SOURCE.yMax));
+  const boardThickness = Math.max(1, num(params, "boardThickness", 18));
   const frontFallback = num(params, "chamferMm", BASE_CORNER_CHAMFERED_SOURCE.chamferMm);
   const requestedFrontChamfer = num(params, "frontChamferMm", frontFallback);
   const requestedFrontChamferReference = num(params, "frontChamferReferenceMm", 200);
@@ -2485,7 +2580,7 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
   );
   const plinthHeight = Math.max(0, Math.min(height - 1, num(params, "plinthHeight", BASE_CORNER_CHAMFERED_SOURCE.plinthTop)));
   const plinthSetbackMm = Math.max(0, num(params, "plinthSetbackMm", BASE_CORNER_CHAMFERED_SOURCE.plinthSetbackMm));
-  return { width, depth, height, frontChamferMm, frontChamferReferenceMm, backChamferMm, plinthHeight, plinthSetbackMm };
+  return { width, depth, height, boardThickness, frontChamferMm, frontChamferReferenceMm, backChamferMm, plinthHeight, plinthSetbackMm };
 }
 
 function chamferedDepthIsStraightSegment(context: ChamferedGroundTruthParametricContext) {
@@ -2546,6 +2641,73 @@ function mapChamferedGroundTruthY(value: number, context: ChamferedGroundTruthPa
   return context.plinthHeight + ((value - BASE_CORNER_CHAMFERED_SOURCE.plinthTop) / sourceBody) * targetBody;
 }
 
+function resolveChamferedCornerJoinProfile(context: ChamferedGroundTruthParametricContext) {
+  const frontDelta = context.frontChamferMm - context.frontChamferReferenceMm;
+  const seamX = mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_SOURCE.xMin, context);
+  const seamZ = mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_FRONT_DIAGONAL_SOURCE.maxZ, context) + frontDelta;
+  const cornerX = mapChamferedGroundTruthX(951.3, context) + frontDelta;
+  const cornerZ = mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_SOURCE.zMin, context);
+  const leftStraightFrontZ = mapChamferedGroundTruthZ(
+    BASE_CORNER_CHAMFERED_SOURCE.zMax - BASE_CORNER_CHAMFERED_SOURCE.chamferMm,
+    context
+  );
+  const rightStraightFrontX = mapChamferedGroundTruthX(
+    BASE_CORNER_CHAMFERED_SOURCE.xMin + BASE_CORNER_CHAMFERED_SOURCE.chamferMm,
+    context
+  ) + 18 + frontDelta;
+  const diagonalBoardCoordinateThickness = context.boardThickness * Math.SQRT2;
+  const plinthOuterLeft = new THREE.Vector3(
+    seamX,
+    0,
+    leftStraightFrontZ - context.plinthSetbackMm
+  );
+  const plinthOuterRight = new THREE.Vector3(
+    rightStraightFrontX + context.plinthSetbackMm,
+    0,
+    seamZ
+  );
+  return {
+    corner: new THREE.Vector3(cornerX, 0, cornerZ),
+    xJoin: new THREE.Vector3(seamX, 0, cornerZ),
+    zJoin: new THREE.Vector3(cornerX, 0, seamZ),
+    plinthOuterLeft,
+    plinthOuterRight,
+    plinthInnerLeft: new THREE.Vector3(
+      plinthOuterLeft.x,
+      0,
+      plinthOuterLeft.z - diagonalBoardCoordinateThickness
+    ),
+    plinthInnerRight: new THREE.Vector3(
+      plinthOuterRight.x + diagonalBoardCoordinateThickness,
+      0,
+      plinthOuterRight.z
+    )
+  };
+}
+
+function mapChamferedDiagonalPlinthVertexMm(
+  sourceVector: THREE.Vector3,
+  context: ChamferedGroundTruthParametricContext
+) {
+  const profile = resolveChamferedCornerJoinProfile(context);
+  const atRightEnd = Math.abs(sourceVector.z - BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxZ) < 0.5;
+  if (atRightEnd) {
+    const sourceOuterX = 571.3;
+    const sourceInnerX = BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxX;
+    const ratio = Math.max(0, Math.min(1, (sourceVector.x - sourceOuterX) / Math.max(1, sourceInnerX - sourceOuterX)));
+    return profile.plinthOuterRight.clone().lerp(profile.plinthInnerRight, ratio).setY(
+      mapChamferedGroundTruthY(sourceVector.y, context)
+    );
+  }
+
+  const sourceInnerZ = BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.minZ;
+  const sourceOuterZ = 362;
+  const ratio = Math.max(0, Math.min(1, (sourceVector.z - sourceInnerZ) / Math.max(1, sourceOuterZ - sourceInnerZ)));
+  return profile.plinthInnerLeft.clone().lerp(profile.plinthOuterLeft, ratio).setY(
+    mapChamferedGroundTruthY(sourceVector.y, context)
+  );
+}
+
 function groundTruthPrimitiveSourceBoundsMm(primitive: ModuleGeometryPrimitive) {
   const vertices = Array.isArray(primitive.params.verticesMm) ? primitive.params.verticesMm : [];
   const xs: number[] = [];
@@ -2601,9 +2763,8 @@ function applyFrontChamferedHardwareCoordinateOffset(
   let targetCenterZ = anchorZ + (mappedCenterZ - anchorZ) * (targetSpanZ / Math.max(1, mappedSpanZ));
   if (/leg_diagonal/i.test(boardName)) {
     const alongDiagonal = targetCenterX + targetCenterZ;
-    const plinthFrontLine =
-      mapChamferedGroundTruthZ(BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxZ, context) -
-      mapChamferedGroundTruthX(BASE_CORNER_CHAMFERED_DIAGONAL_PLINTH_SOURCE.maxX, context);
+    const plinthProfile = resolveChamferedCornerJoinProfile(context);
+    const plinthFrontLine = plinthProfile.plinthOuterLeft.z - plinthProfile.plinthOuterLeft.x;
     const legBehindPlinthMm = 55;
     const targetOffsetBehindPlinth = plinthFrontLine - legBehindPlinthMm;
     targetCenterX = (alongDiagonal - targetOffsetBehindPlinth) / 2;
@@ -2685,50 +2846,6 @@ function applyBackChamferedCutCoordinateOffset(
   return adjusted;
 }
 
-function applyChamferedPlinthSetbackCoordinateOffset(
-  vector: THREE.Vector3,
-  sourceVector: THREE.Vector3,
-  primitive: ModuleGeometryPrimitive,
-  context: ChamferedGroundTruthParametricContext
-) {
-  const boardName = readGroundTruthString(primitive.params.boardName) ?? "";
-  const materialGroup = readGroundTruthString(primitive.params.materialGroup);
-  const movesWithDiagonalPlinth =
-    materialGroup === "plinth" ||
-    /leg_diagonal/i.test(boardName);
-  if (!movesWithDiagonalPlinth) return vector;
-  const delta = context.plinthSetbackMm - BASE_CORNER_CHAMFERED_SOURCE.plinthSetbackMm;
-  if (Math.abs(delta) < 0.001) return vector;
-
-  if (/leg_diagonal/i.test(boardName)) {
-    const bounds = groundTruthPrimitiveSourceBoundsMm(primitive);
-    if (!bounds) return vector;
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const xRange = 596.702 - 15.28;
-    const zRange = 918 - 336.578;
-    const alongX = Math.max(0, Math.min(1, (centerX - 15.28) / Math.max(1, xRange)));
-    const alongZ = Math.max(0, Math.min(1, (centerZ - 336.578) / Math.max(1, zRange)));
-    return new THREE.Vector3(
-      vector.x + delta * (1 - alongX),
-      vector.y,
-      vector.z - delta * alongZ
-    );
-  }
-
-  const xRange = 596.702 - 15.28;
-  const zRange = 918 - 336.578;
-  const alongX = Math.max(0, Math.min(1, (sourceVector.x - 15.28) / Math.max(1, xRange)));
-  const alongZ = Math.max(0, Math.min(1, (sourceVector.z - 336.578) / Math.max(1, zRange)));
-
-  // Coordinate setback for a 45-degree plinth: do not use perpendicular/diagonal length.
-  return new THREE.Vector3(
-    vector.x + delta * (1 - alongX),
-    vector.y,
-    vector.z - delta * alongZ
-  );
-}
-
 function trimChamferedStraightPanelMeasurementOverlap(
   vector: THREE.Vector3,
   sourceVector: THREE.Vector3,
@@ -2776,6 +2893,9 @@ function transformChamferedGroundTruthVertexMm(
   primitive: ModuleGeometryPrimitive,
   context: ChamferedGroundTruthParametricContext
 ) {
+  if (readGroundTruthString(primitive.params.boardName) === "diagonal_plinth") {
+    return mapChamferedDiagonalPlinthVertexMm(vector, context);
+  }
   const sourceVector = alignTopPanelFootprintToVerticalPanels(alignVerticalBackPanelBottom(vector, primitive), primitive);
   const mapped = new THREE.Vector3(
     mapChamferedGroundTruthX(sourceVector.x, context),
@@ -2784,8 +2904,7 @@ function transformChamferedGroundTruthVertexMm(
   );
   const chamfered = applyChamferedCutCoordinateOffset(mapped, sourceVector, primitive, context);
   const backChamfered = applyBackChamferedCutCoordinateOffset(chamfered, sourceVector, primitive, context);
-  const plinthSetback = applyChamferedPlinthSetbackCoordinateOffset(backChamfered, sourceVector, primitive, context);
-  return trimChamferedStraightPanelMeasurementOverlap(plinthSetback, sourceVector, primitive);
+  return trimChamferedStraightPanelMeasurementOverlap(backChamfered, sourceVector, primitive);
 }
 
 function fallbackGroundTruthColorForMaterialGroup(group: unknown): string {
@@ -3150,24 +3269,26 @@ function buildCatalogBaseCornerChamferedGroundTruth(group: THREE.Group, catalog:
 }
 
 function attachChamferedCornerKitchenAnchors(group: THREE.Group) {
-  group.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(group);
+  const params = group.userData.groundTruthBuildParams as FwmFurnitureParams | undefined;
+  const profile = resolveChamferedCornerJoinProfile(
+    createChamferedGroundTruthParametricContext(params ?? ({} as FwmFurnitureParams))
+  );
 
   const cornerAnchor = new THREE.Object3D();
   cornerAnchor.name = kitchenCornerAnchorName;
-  cornerAnchor.position.set(box.min.x, 0, box.min.z);
+  cornerAnchor.position.copy(profile.corner).multiplyScalar(MM);
   cornerAnchor.visible = false;
   group.add(cornerAnchor);
 
   const xAnchor = new THREE.Object3D();
   xAnchor.name = kitchenCornerXAnchorName;
-  xAnchor.position.set(box.max.x, 0, box.min.z);
+  xAnchor.position.copy(profile.xJoin).multiplyScalar(MM);
   xAnchor.visible = false;
   group.add(xAnchor);
 
   const zAnchor = new THREE.Object3D();
   zAnchor.name = kitchenCornerZAnchorName;
-  zAnchor.position.set(box.min.x, 0, box.max.z);
+  zAnchor.position.copy(profile.zJoin).multiplyScalar(MM);
   zAnchor.visible = false;
   group.add(zAnchor);
 }
@@ -3392,10 +3513,17 @@ function buildCatalogBaseCornerChamferedProcedural(group: THREE.Group, params: F
 }
 
 function buildCatalogBaseCorner90(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
-  const source = buildCornerShelfLower(mapFwmCatalogCornerToCornerShelfLowerParams(params), catalog);
+  const sourceParams = mapFwmCatalogCornerToCornerShelfLowerParams(params);
+  const shouldOpen = sourceParams.doorOpen === true;
+  const source = buildCornerShelfLower({ ...sourceParams, doorOpen: false }, catalog);
   source.name = "corner_fwm_runtime_source";
   annotateCopiedCornerFwmRuntime(source, params, catalog);
-  trimCopiedCorner90ButtJoints(source);
+  trimCopiedCorner90ButtJoints(
+    source,
+    Math.max(0, num(params, "sideGap", 2)),
+    Math.max(1, Math.round(num(params, "hingeCountPerDoor", 2)))
+  );
+  if (shouldOpen) openCopiedCorner90Doors(source, params);
   group.add(source);
   group.userData.catalogCornerVariant = String(params.variant ?? "corner_90");
   group.userData.sourceModuleType = "corner_shelf_lower";
@@ -3406,7 +3534,23 @@ function findMeshObject(root: THREE.Object3D, name: string) {
   return object instanceof THREE.Mesh ? object : null;
 }
 
-function trimCopiedCorner90ButtJoints(root: THREE.Object3D) {
+function shiftCopiedCornerObjects(root: THREE.Object3D, names: string[], axis: "x" | "z", deltaMm: number) {
+  if (Math.abs(deltaMm) <= 1e-6) return;
+  for (const name of names) {
+    const object = root.getObjectByName(name);
+    if (object) object.position[axis] += deltaMm * MM;
+  }
+}
+
+function copiedCornerHingeNames(axis: "x" | "z", hingeCount: number) {
+  return Array.from({ length: hingeCount }, (_, index) => [
+    `hinge_front_${axis}_${index + 1}_door_plate`,
+    `hinge_front_${axis}_${index + 1}_door_cup`,
+    `hinge_front_${axis}_${index + 1}_arm`
+  ]).flat();
+}
+
+function trimCopiedCorner90ButtJoints(root: THREE.Object3D, sideGapMm: number, hingeCount: number) {
   const sideEndZ = findMeshObject(root, "side_end_z");
   const bottomZ = findMeshObject(root, "bottom_z");
   if (sideEndZ && bottomZ) {
@@ -3414,14 +3558,41 @@ function trimCopiedCorner90ButtJoints(root: THREE.Object3D) {
     resizeAxisAlignedBoxMeshToBoundsMm(bottomZ, { maxZ: sideBounds.minZ });
   }
 
+  const sideEndX = findMeshObject(root, "side_end_x");
   const doorFrontX = findMeshObject(root, "door_front_x");
   const doorFrontZ = findMeshObject(root, "door_front_z");
-  if (doorFrontX && doorFrontZ) {
-    const doorBounds = readObjectBoundsMm(doorFrontX);
-    resizeAxisAlignedBoxMeshToBoundsMm(doorFrontZ, { minX: doorBounds.maxX });
+  if (sideEndX && sideEndZ && doorFrontX && doorFrontZ) {
+    const doorXBefore = readObjectBoundsMm(doorFrontX);
+    const sideZBounds = readObjectBoundsMm(sideEndZ);
+    const doorXMaxZ = sideZBounds.maxZ - sideGapMm;
+    resizeAxisAlignedBoxMeshToBoundsMm(doorFrontX, { maxZ: doorXMaxZ });
+    const doorXAfter = readObjectBoundsMm(doorFrontX);
+    const doorXCenterDeltaZ = (doorXAfter.minZ + doorXAfter.maxZ - doorXBefore.minZ - doorXBefore.maxZ) / 2;
+    shiftCopiedCornerObjects(root, ["doorHandle_front_x"], "z", doorXCenterDeltaZ);
+    shiftCopiedCornerObjects(
+      root,
+      copiedCornerHingeNames("x", hingeCount),
+      "z",
+      doorXAfter.maxZ - doorXBefore.maxZ
+    );
+
+    const doorZBefore = readObjectBoundsMm(doorFrontZ);
+    const sideXBounds = readObjectBoundsMm(sideEndX);
+    resizeAxisAlignedBoxMeshToBoundsMm(doorFrontZ, {
+      minX: doorXAfter.maxX,
+      maxX: sideXBounds.maxX - sideGapMm
+    });
+    const doorZAfter = readObjectBoundsMm(doorFrontZ);
+    const doorZCenterDeltaX = (doorZAfter.minX + doorZAfter.maxX - doorZBefore.minX - doorZBefore.maxX) / 2;
+    shiftCopiedCornerObjects(root, ["doorHandle_front_z"], "x", doorZCenterDeltaX);
+    shiftCopiedCornerObjects(
+      root,
+      copiedCornerHingeNames("z", hingeCount),
+      "x",
+      doorZAfter.maxX - doorZBefore.maxX
+    );
   }
 
-  const sideEndX = findMeshObject(root, "side_end_x");
   const backX = findMeshObject(root, "back_x");
   if (sideEndX && backX) {
     const sideBounds = readObjectBoundsMm(sideEndX);
@@ -3438,6 +3609,40 @@ function trimCopiedCorner90ButtJoints(root: THREE.Object3D) {
   if (sideEndZ && backZ) {
     const sideBounds = readObjectBoundsMm(sideEndZ);
     resizeAxisAlignedBoxMeshToBoundsMm(backZ, { maxZ: sideBounds.minZ });
+  }
+}
+
+function openCopiedCorner90Doors(root: THREE.Group, params: FwmFurnitureParams) {
+  const hingeCount = Math.max(1, Math.round(num(params, "hingeCountPerDoor", 2)));
+  const doorFrontX = findMeshObject(root, "door_front_x");
+  const doorFrontZ = findMeshObject(root, "door_front_z");
+  if (doorFrontX) {
+    const bounds = readObjectBoundsMm(doorFrontX);
+    const pivot = attachObjectsToWallCornerPivot(
+      root,
+      "__corner_door_pivot_x",
+      { x: (bounds.minX + bounds.maxX) / 2, z: bounds.maxZ },
+      [
+        doorFrontX,
+        root.getObjectByName("doorHandle_front_x"),
+        ...copiedCornerHingeNames("x", hingeCount).map((name) => root.getObjectByName(name))
+      ].filter((object): object is THREE.Object3D => Boolean(object))
+    );
+    pivot.rotation.y = Math.PI / 2;
+  }
+  if (doorFrontZ) {
+    const bounds = readObjectBoundsMm(doorFrontZ);
+    const pivot = attachObjectsToWallCornerPivot(
+      root,
+      "__corner_door_pivot_z",
+      { x: bounds.maxX, z: (bounds.minZ + bounds.maxZ) / 2 },
+      [
+        doorFrontZ,
+        root.getObjectByName("doorHandle_front_z"),
+        ...copiedCornerHingeNames("z", hingeCount).map((name) => root.getObjectByName(name))
+      ].filter((object): object is THREE.Object3D => Boolean(object))
+    );
+    pivot.rotation.y = -Math.PI / 2;
   }
 }
 
@@ -3604,10 +3809,12 @@ function scaleGroundTruthYSize(
   return (height / Math.max(1, source.height - source.plinth)) * Math.max(1, target.height - target.plinth);
 }
 
-function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width?: number; height?: number; depth?: number; yOffset?: number; prefix?: string } = {}) {
+function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog, opts: { width?: number; height?: number; depth?: number; zOffset?: number; drawerDepthShiftMm?: number; yOffset?: number; prefix?: string } = {}) {
   const width = opts.width ?? num(params, "width", 800);
   const height = opts.height ?? num(params, "height", 720);
   const depth = opts.depth ?? num(params, "depth", 560);
+  const zOffset = opts.zOffset ?? 0;
+  const drawerDepthShiftMm = opts.drawerDepthShiftMm ?? 0;
   const plinth = num(params, "plinthHeight", 0);
   const gap = num(params, "frontGap", 2);
   const sideGap = num(params, "sideGap", 2);
@@ -3619,7 +3826,7 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
   const doorCount = Math.round(num(params, "doorCount", 0));
   const opened = bool(params, "opened", false);
   const prefix = opts.prefix ? `${opts.prefix}_` : "";
-  const z = depth / 2 + frontT / 2 + 1;
+  const z = zOffset + depth / 2 + frontT / 2 + 1;
   const frontAreaHeight = Math.max(80, height - plinth - gap * 2);
 
   if (drawerCount > 0) {
@@ -3650,9 +3857,9 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
       addBox(drawerGroup, `${prefix}drawer_front_${index + 1}`, { width: width - sideGap * 2, height: drawerH, depth: frontT }, { x: 0, y: 0, z: 0 }, frontMat, ["drawerCount", "drawerFrontHeightsMm", "frontThicknessMm", "frontGap", "handleComponentId", "opened"]);
       const drawerPreset = resolveDrawerPresetForIndex(params, drawerH, index + 1);
       const metalDrawerDepth = Math.max(160, drawerPreset.systemDepthMm - 4);
-      const drawerCenterWorldZ = usesCatalogMetalDrawerSystem(params)
+      const drawerCenterWorldZ = zOffset + (usesCatalogMetalDrawerSystem(params)
         ? -depth / 2 + metalDrawerDepth / 2 + 35
-        : drawerDepth.centerZ;
+        : drawerDepth.centerZ) - drawerDepthShiftMm;
       addDrawerSubmodule(drawerGroup, params, catalog, {
         prefix,
         index: index + 1,
@@ -4531,7 +4738,18 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     return finish();
   }
 
-  addCarcass(group, p, catalog, { topOpen: spec.geometryKind === "sink", topRails: spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers" });
+  const usesTotalOutsideDepth = spec.moduleType === "fwm_catalog_base_drawers";
+  const totalOutsideDepth = num(p, "depth", spec.depth);
+  const frontDepthAllowance = usesTotalOutsideDepth ? num(p, "frontThicknessMm", 18) + 1 : 0;
+  const carcassDepth = Math.max(1, totalOutsideDepth - frontDepthAllowance);
+  const carcassZOffset = usesTotalOutsideDepth ? -frontDepthAllowance / 2 : 0;
+  addCarcass(group, p, catalog, {
+    topOpen: spec.geometryKind === "sink",
+    topRails: spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers",
+    depth: carcassDepth,
+    envelopeDepth: totalOutsideDepth,
+    zOffset: carcassZOffset
+  });
   const applianceKind = (spec.appliance ?? (typeof p.applianceKind === "string" && p.applianceKind !== "none" ? p.applianceKind : null)) as string | null;
   if (applianceKind) {
     addAppliance(group, p, catalog, applianceKind, num(p, "height", spec.height) * 0.48, applianceKind === "microwave" ? 380 : applianceKind === "oven" ? 600 : num(p, "height", spec.height) * 0.58);
@@ -4541,7 +4759,11 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     addCylinder(group, "faucet_arc", 12, 220, { x: 0, y: num(p, "height", spec.height) + 170, z: -120 }, makeMaterial(p, catalog, "hardware"), "y");
   }
   if (applianceKind === "dishwasher") addDishwasherFront(group, p, catalog);
-  else addFronts(group, p, catalog);
+  else addFronts(group, p, catalog, {
+    depth: carcassDepth,
+    zOffset: carcassZOffset,
+    drawerDepthShiftMm: frontDepthAllowance
+  });
   addWorktop(group, p, catalog);
   return finish();
 }

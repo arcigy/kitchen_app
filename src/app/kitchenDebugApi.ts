@@ -320,6 +320,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null,
       moduleVisible: inst.module.visible,
       outlineVisible: inst.outline.visible,
+      outlineVertexCount: inst.outline.geometry.getAttribute("position")?.count ?? 0,
       pickVisible: inst.pick.visible,
       params: structuredClone(inst.params),
       positionM: {
@@ -501,6 +502,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugCreateKitchenScenario = (opts?: {
     ctxPatch?: Partial<ReturnType<typeof resolveContext>>;
     path?: FloorBoundaryPoint[];
+    segmentDepthsMm?: number[];
     justification?: KitchenWorktopJustification;
     mirrored?: boolean;
     addModule?: boolean;
@@ -528,6 +530,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     createKitchenWorktop(
       {
         path: structuredClone(opts?.path ?? [{ x: 0, z: 0 }, { x: 2400, z: 0 }]),
+        segmentDepthsMm: opts?.segmentDepthsMm ? [...opts.segmentDepthsMm] : undefined,
         justification: opts?.justification ?? "back",
         mirrored: !!opts?.mirrored,
         depthMm: nextCtx.worktopDepthMm,

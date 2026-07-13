@@ -9,14 +9,22 @@ import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "../src/ser
 import { handleClientProfileApi } from "../src/server/clientEndpoint";
 import { handleModulePackageApi } from "../src/server/modulePackageEndpoint";
 import { handleProjectApi } from "../src/server/projectEndpoint";
+import { handleProjectMaterialsApi } from "../src/server/projectMaterialsEndpoint";
+import { ProjectMaterialRevisionConflictError } from "../src/core/project-materials/project-material-errors";
 import { handleAssistantApi } from "../src/server/assistantEndpoint";
 import { createServerCatalogRepository, createServerUserService } from "../src/server/serverRepositories";
 import { handleDemosMaterialImage, handleDemosMaterialLookup } from "../src/server/demosMaterialLookup";
 import { createClientCatalogService } from "../src/core/catalog/catalog-service";
+import { CatalogExactLookupCache } from "../src/core/catalog/catalog-exact-lookup";
+import { handleCatalogExactLookupApi } from "../src/server/catalogLookupEndpoint";
+import { handleSupplierBridgeApi } from "../src/server/supplierBridgeEndpoint";
 import { runBlenderExport } from "./blender/runBlenderExport";
+import { checkDatabaseReadiness } from "../src/server/databaseReadiness";
+import { databaseUnavailableStatus, publicServerErrorMessage } from "../src/server/server-error-response";
 
 const PROJECT_ROOT = process.cwd();
 const serverUserService = createServerUserService();
+const catalogLookupCache = new CatalogExactLookupCache();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -360,33 +368,6 @@ const handleCatalogLookup = async (req: http.IncomingMessage, reqUrl: URL, res: 
   const kind = reqUrl.searchParams.get("kind");
   const repository = createServerCatalogRepository(PROJECT_ROOT);
   const service = createClientCatalogService({ context, repository });
-  const catalog = await repository.ensureCatalogExists(context);
-
-  if (kind === "material") {
-    const id = (reqUrl.searchParams.get("id") ?? "").trim();
-    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
-    const family = reqUrl.searchParams.get("family") ?? "";
-    const material =
-      catalog.materials.find(
-        (item) =>
-          item.id === id &&
-          item.materialType === "board" &&
-          item.isActive &&
-          (!family || item.boardFamily === family)
-      ) ?? null;
-    return sendJson(res, material ? 200 : 404, { ok: !!material, material });
-  }
-
-  if (kind === "component") {
-    const id = (reqUrl.searchParams.get("id") ?? "").trim();
-    if (!id) return sendJson(res, 400, { ok: false, error: "id is required." });
-    const componentType = reqUrl.searchParams.get("componentType") ?? "";
-    const component =
-      catalog.components.find(
-        (item) => item.id === id && item.isActive && (!componentType || item.componentType === componentType)
-      ) ?? null;
-    return sendJson(res, component ? 200 : 404, { ok: !!component, component });
-  }
 
   if (kind === "vendor_product") {
     const resolution = await service.resolveVendorProductVariant({
@@ -744,8 +725,11 @@ const handleMaterialProofCatalogs = async (req: http.IncomingMessage, res: http.
 };
 
 const getErrorCode = (error: unknown): number => {
+  const unavailable = databaseUnavailableStatus(error);
+  if (unavailable) return unavailable;
   if (error instanceof SyntaxError) return 400;
   if (error instanceof Error) {
+    if (error instanceof ProjectMaterialRevisionConflictError) return 409;
     if (isUnauthorizedError(error)) return 401;
     if (error.message === "Imported projectId already exists.") return 409;
     if (error.message.startsWith("Invalid FurnQuote module package:")) return 400;
@@ -770,9 +754,18 @@ export function startWorkerServer() {
 
       if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
 
+      if (req.method === "GET" && url.pathname === "/ready") {
+        try {
+          return sendJson(res, 200, await checkDatabaseReadiness());
+        } catch (error) {
+          res.setHeader("Retry-After", "2");
+          return sendJson(res, 503, { ok: false, error: publicServerErrorMessage(error, 503) });
+        }
+      }
+
       if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService: serverUserService });
 
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return handleAuthSession(req, res, sendJson, { userService: serverUserService });
+      if (req.method === "GET" && url.pathname === "/api/auth/session") return await handleAuthSession(req, res, sendJson, { userService: serverUserService });
 
       if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
 
@@ -784,6 +777,15 @@ export function startWorkerServer() {
       ) return;
 
       if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res);
+
+      if (
+        await handleCatalogExactLookupApi(req, res, url, {
+          getContext: getValidatedClientContext,
+          createRepository: () => createServerCatalogRepository(PROJECT_ROOT),
+          cache: catalogLookupCache,
+          sendJson
+        })
+      ) return;
 
       if (req.method === "GET" && url.pathname === "/api/catalog/lookup") return await handleCatalogLookup(req, url, res);
 
@@ -804,6 +806,24 @@ export function startWorkerServer() {
 
       if (
         await handleModulePackageApi(req, res, url, {
+          projectRoot: PROJECT_ROOT,
+          getContext: getValidatedClientContext,
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
+      if (
+        await handleProjectMaterialsApi(req, res, url, {
+          projectRoot: PROJECT_ROOT,
+          getContext: getValidatedClientContext,
+          readJsonBody,
+          sendJson
+        })
+      ) return;
+
+      if (
+        await handleSupplierBridgeApi(req, res, url, {
           projectRoot: PROJECT_ROOT,
           getContext: getValidatedClientContext,
           readJsonBody,
@@ -841,7 +861,9 @@ export function startWorkerServer() {
       return sendText(res, 404, "Not found");
     } catch (err: unknown) {
       const status = getErrorCode(err);
-      const message = err instanceof Error ? err.message : String(err);
+      if (status === 503) res.setHeader("Retry-After", "2");
+      const message = publicServerErrorMessage(err, status);
+      console.error(`[worker] ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${err instanceof Error ? err.message : String(err)}`);
       return sendJson(res, status, { ok: false, error: message });
     }
   });

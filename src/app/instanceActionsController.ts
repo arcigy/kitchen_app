@@ -27,6 +27,7 @@ type InstanceActionsContext = {
     worktopBackOffsetMm: number
   ) => KitchenPlacementBinding | null;
   rebuildKitchenGroupWorktops?: (groupId: string) => void;
+  syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
   setSelectedModule: (id: string | null) => void;
   updateLayoutPanel: () => void;
 };
@@ -131,7 +132,14 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     ctx.layoutRoot.remove(inst.root);
     disposeObject3D(inst.root);
     ctx.instances.splice(idx, 1);
-    if (inst.kitchenGroupId) ctx.rebuildKitchenGroupWorktops?.(inst.kitchenGroupId);
+    if (inst.kitchenGroupId) {
+      const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId);
+      if (group) group.instanceIds = group.instanceIds.filter((instanceId) => instanceId !== id);
+      ctx.rebuildKitchenGroupWorktops?.(inst.kitchenGroupId);
+      for (const remaining of ctx.instances) {
+        if (remaining.kitchenGroupId === inst.kitchenGroupId) ctx.syncPlacedInstancePresentation?.(remaining);
+      }
+    }
     ctx.updateLayoutPanel();
   };
 

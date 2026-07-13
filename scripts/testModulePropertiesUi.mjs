@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { installAuthSession } from "./uiAuthSession.mjs";
 
-const baseUrl = process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
+const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
 async function main() {
   const browser = await chromium.launch({ headless: true });

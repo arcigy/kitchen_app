@@ -112,7 +112,7 @@ export function normalizeSwingShelvesLowParams(
     20
   );
   normalized.frontThicknessMm = clamp(
-    Math.round(getNumber(normalized.frontThicknessMm, getNumber(MODULE_DEFAULTS.frontThicknessMm, 19))),
+    Math.round(getNumber(normalized.frontThicknessMm, getNumber(MODULE_DEFAULTS.frontThicknessMm, 18))),
     12,
     50
   );

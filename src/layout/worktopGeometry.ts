@@ -58,7 +58,8 @@ export function sanitizeKitchenWorktopPath(points: FloorBoundaryPoint[]) {
     const bcx = c.x - b.x;
     const bcz = c.z - b.z;
     const cross = abx * bcz - abz * bcx;
-    if (Math.abs(cross) < 1) continue;
+    const dot = abx * bcx + abz * bcz;
+    if (Math.abs(cross) < 1 && dot >= 0) continue;
     simplified.push(b);
   }
   simplified.push(roundedPoints[roundedPoints.length - 1]!);
@@ -71,6 +72,8 @@ export function kitchenWorktopPointToWorld(point: FloorBoundaryPoint) {
 
 export function offsetKitchenWorktopPath(path: THREE.Vector3[], signedOffsetM: number) {
   if (path.length <= 1 || Math.abs(signedOffsetM) < 1e-8) return path.map((point) => point.clone());
+  // Temporary island workflow: opposite collinear segments share one center seam.
+  if (isCollinearReversingPath(path)) return path.map((point) => point.clone());
 
   const segments = path
     .slice(0, -1)
@@ -150,14 +153,51 @@ export function offsetClosedKitchenWorktopPolygon(points: THREE.Vector3[], outwa
   return offset;
 }
 
-export function getKitchenWorktopPolygon(params: KitchenWorktopParams) {
-  const path = sanitizeKitchenWorktopPath(params.path);
-  if (path.length < 2) return [] as THREE.Vector3[];
+function isCollinearReversingPath(path: THREE.Vector3[]) {
+  let axis: THREE.Vector3 | null = null;
+  let previousDirection: THREE.Vector3 | null = null;
+  let reverses = false;
 
-  const depthM = Math.max(1, params.depthMm) / 1000;
-  const pathWorld = path.map(kitchenWorktopPointToWorld);
-  if (pathWorld.length < 2) return [] as THREE.Vector3[];
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const direction = path[index + 1]!.clone().sub(path[index]!).setY(0);
+    if (direction.lengthSq() < 1e-10) continue;
+    direction.normalize();
+    axis ??= direction.clone();
+    if (Math.abs(axis.x * direction.z - axis.z * direction.x) > 1e-6) return false;
+    if (previousDirection && previousDirection.dot(direction) < -0.999) reverses = true;
+    previousDirection = direction;
+  }
 
+  return reverses;
+}
+
+function getCollinearReversingWorktopPolygon(path: THREE.Vector3[], leftDepthM: number, rightDepthM: number) {
+  const segmentPolygons = path
+    .slice(0, -1)
+    .map((point, index) => {
+      const next = path[index + 1]!;
+      const direction = next.clone().sub(point).setY(0);
+      if (direction.lengthSq() < 1e-10) return null;
+      direction.normalize();
+      const normal = new THREE.Vector3(-direction.z, 0, direction.x);
+      return toClipperPolygon([
+        point.clone().addScaledVector(normal, leftDepthM),
+        next.clone().addScaledVector(normal, leftDepthM),
+        next.clone().addScaledVector(normal, -rightDepthM),
+        point.clone().addScaledVector(normal, -rightDepthM)
+      ]);
+    })
+    .filter((polygon): polygon is MultiPolygon => !!polygon);
+
+  if (segmentPolygons.length === 0) return [] as THREE.Vector3[];
+  try {
+    return getLargestOuterRingPolygon(polygonClipper.union(...segmentPolygons));
+  } catch {
+    return [] as THREE.Vector3[];
+  }
+}
+
+function getKitchenWorktopDepthSides(params: KitchenWorktopParams, depthM: number) {
   let leftDepthM = depthM / 2;
   let rightDepthM = depthM / 2;
   if (params.justification === "back") {
@@ -167,10 +207,64 @@ export function getKitchenWorktopPolygon(params: KitchenWorktopParams) {
     leftDepthM = 0;
     rightDepthM = depthM;
   }
-  if (params.mirrored) {
-    const nextLeftDepthM = rightDepthM;
-    rightDepthM = leftDepthM;
-    leftDepthM = nextLeftDepthM;
+  if (params.mirrored) [leftDepthM, rightDepthM] = [rightDepthM, leftDepthM];
+  return { leftDepthM, rightDepthM };
+}
+
+export function getKitchenWorktopSegmentDepthMm(params: KitchenWorktopParams, segmentIndex: number) {
+  return Math.max(1, params.segmentDepthsMm?.[segmentIndex] ?? params.depthMm);
+}
+
+export function getKitchenWorktopSegmentPolygon(params: KitchenWorktopParams, segmentIndex: number) {
+  const path = sanitizeKitchenWorktopPath(params.path).map(kitchenWorktopPointToWorld);
+  const start = path[segmentIndex];
+  const end = path[segmentIndex + 1];
+  if (!start || !end) return [] as THREE.Vector3[];
+  const direction = end.clone().sub(start).setY(0);
+  if (direction.lengthSq() < 1e-10) return [] as THREE.Vector3[];
+  direction.normalize();
+  const normal = new THREE.Vector3(-direction.z, 0, direction.x);
+  const { leftDepthM, rightDepthM } = getKitchenWorktopDepthSides(
+    params,
+    getKitchenWorktopSegmentDepthMm(params, segmentIndex) / 1000
+  );
+  const polygon = [
+    start.clone().addScaledVector(normal, leftDepthM),
+    end.clone().addScaledVector(normal, leftDepthM),
+    end.clone().addScaledVector(normal, -rightDepthM),
+    start.clone().addScaledVector(normal, -rightDepthM)
+  ];
+  if (getSignedPolygonAreaM2(polygon) < 0) polygon.reverse();
+  return polygon;
+}
+
+export function getKitchenWorktopPolygon(params: KitchenWorktopParams) {
+  const path = sanitizeKitchenWorktopPath(params.path);
+  if (path.length < 2) return [] as THREE.Vector3[];
+
+  const depthM = Math.max(1, params.depthMm) / 1000;
+  const pathWorld = path.map(kitchenWorktopPointToWorld);
+  if (pathWorld.length < 2) return [] as THREE.Vector3[];
+
+  if (params.segmentDepthsMm?.length) {
+    const segmentPolygons = pathWorld
+      .slice(0, -1)
+      .map((_, segmentIndex) => toClipperPolygon(getKitchenWorktopSegmentPolygon(params, segmentIndex)))
+      .filter((polygon): polygon is MultiPolygon => !!polygon);
+    if (segmentPolygons.length > 0) {
+      try {
+        const union = getLargestOuterRingPolygon(polygonClipper.union(...segmentPolygons));
+        if (union.length >= 3) return union;
+      } catch {
+        // Fall through to the uniform-depth geometry.
+      }
+    }
+  }
+  const { leftDepthM, rightDepthM } = getKitchenWorktopDepthSides(params, depthM);
+
+  if (isCollinearReversingPath(pathWorld)) {
+    const islandPolygon = getCollinearReversingWorktopPolygon(pathWorld, leftDepthM, rightDepthM);
+    if (islandPolygon.length >= 3) return islandPolygon;
   }
 
   const left = offsetKitchenWorktopPath(pathWorld, leftDepthM);

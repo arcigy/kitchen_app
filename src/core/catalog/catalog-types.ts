@@ -192,6 +192,7 @@ export type ClientCatalog = {
     source: "system-seed" | "client-custom";
     createdAt: string;
     updatedAt: string;
+    lastSynchronizedAt?: string;
   };
 };
 

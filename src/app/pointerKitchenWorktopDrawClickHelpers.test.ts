@@ -1,14 +1,84 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createKitchenWorktopDrawSnapResolver,
   handleKitchenWorktopDrawHover,
   handleKitchenWorktopDrawPointClick,
   resolveKitchenWorktopDrawClickPoint,
+  resolveKitchenWorktopStartPointSnap,
   resolveKitchenWorktopTypedPoint,
   updateKitchenWorktopDrawPointerMoveHover
 } from "./pointerKitchenWorktopDrawClickHelpers";
 
 describe("pointer kitchen worktop draw click helpers", () => {
+  it("snaps a returning worktop path to its original first point", () => {
+    const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+    camera.position.set(0, 10, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const rect = { width: 1000, height: 1000 } as DOMRect;
+
+    const snap = resolveKitchenWorktopStartPointSnap({
+      rawPoint: new THREE.Vector3(0.1, 0, 0),
+      points: [{ x: 0, z: 0 }, { x: 2000, z: 0 }],
+      camera,
+      rect,
+      maxPx: 32
+    });
+
+    expect(snap).toMatchObject({
+      kind: "endpoint",
+      owner: "worktop",
+      binding: { type: "free", pointMm: { x: 0, y: 0, z: 0 } }
+    });
+    expect(snap?.point).toEqual(new THREE.Vector3(0, 0, 0));
+    expect(resolveKitchenWorktopStartPointSnap({
+      rawPoint: new THREE.Vector3(1, 0, 0),
+      points: [{ x: 0, z: 0 }, { x: 2000, z: 0 }],
+      camera,
+      rect,
+      maxPx: 32
+    })).toBeNull();
+    expect(resolveKitchenWorktopStartPointSnap({
+      rawPoint: new THREE.Vector3(0, 0, 0),
+      points: [{ x: 0, z: 0 }],
+      camera,
+      rect,
+      maxPx: 32
+    })).toBeNull();
+  });
+
+  it("prioritizes the start point before generic worktop snap candidates", () => {
+    const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+    camera.position.set(0, 10, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const rect = { width: 1000, height: 1000 } as DOMRect;
+    const genericSnap = { point: new THREE.Vector3(1, 0, 0), kind: "edge" as const };
+    const snapPoint2D = vi.fn(() => genericSnap);
+    const keepStickyPlanSnap = vi.fn(() => null);
+    let sticky = null as ReturnType<typeof resolveKitchenWorktopStartPointSnap>;
+    const resolve = createKitchenWorktopDrawSnapResolver({
+      getPoints: () => [{ x: 0, z: 0 }, { x: 2000, z: 0 }],
+      getCamera: () => camera,
+      getSticky: () => sticky,
+      setSticky: (next) => { sticky = next; },
+      snapPoint2D,
+      keepStickyPlanSnap,
+      maxPx: 32
+    });
+
+    expect(resolve(new THREE.Vector3(0.1, 0, 0), rect)).toMatchObject({ kind: "endpoint", owner: "worktop" });
+    expect(snapPoint2D).not.toHaveBeenCalled();
+    expect(resolve(new THREE.Vector3(1, 0, 0), rect)).toBe(genericSnap);
+    expect(snapPoint2D).toHaveBeenCalledOnce();
+    expect(keepStickyPlanSnap).not.toHaveBeenCalled();
+  });
+
   it("rounds the raw hit point to millimeters when no snap is active", () => {
     const point = resolveKitchenWorktopDrawClickPoint({
       hitPoint: new THREE.Vector3(1.2344, 0, -0.5556),

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FloorBoundaryPoint } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
+import { worldToScreen } from "./sharedUtils";
 
 export type PointerKitchenWorktopSnap = {
   point: THREE.Vector3;
@@ -16,6 +17,85 @@ export type PointerKitchenWorktopDrawHoverState = PointerKitchenWorktopDrawState
   lastPointerPx: { x: number; y: number };
   typedMm: string;
 };
+
+type KitchenWorktopSnapPoint2D = (
+  rawPoint: THREE.Vector3,
+  rect: DOMRect,
+  camera: THREE.Camera,
+  maxPx: number,
+  options: {
+    kindPriority: Array<Exclude<PlanSnapResult["kind"], "none">>;
+    sticky: PlanSnapResult | null;
+    preferNearest: boolean;
+  }
+) => PlanSnapResult;
+
+type KeepStickyKitchenWorktopSnap = (
+  rawPoint: THREE.Vector3,
+  sticky: PlanSnapResult | null,
+  camera: THREE.Camera,
+  rect: DOMRect,
+  thresholdPx: number
+) => PlanSnapResult | null;
+
+export function resolveKitchenWorktopStartPointSnap(params: {
+  rawPoint: THREE.Vector3;
+  points: FloorBoundaryPoint[];
+  camera: THREE.Camera;
+  rect: DOMRect;
+  maxPx?: number;
+}): PlanSnapResult | null {
+  const firstPoint = params.points.length >= 2 ? params.points[0] : null;
+  if (!firstPoint) return null;
+
+  const startWorld = new THREE.Vector3(firstPoint.x / 1000, 0, firstPoint.z / 1000);
+  const rawScreen = worldToScreen(params.rawPoint, params.camera, params.rect);
+  const startScreen = worldToScreen(startWorld, params.camera, params.rect);
+  if (rawScreen.distanceTo(startScreen) > (params.maxPx ?? 32)) return null;
+
+  return {
+    point: startWorld,
+    kind: "endpoint",
+    owner: "worktop",
+    binding: {
+      type: "free",
+      pointMm: { x: firstPoint.x, y: 0, z: firstPoint.z }
+    }
+  };
+}
+
+export function createKitchenWorktopDrawSnapResolver(ctx: {
+  getPoints: () => FloorBoundaryPoint[];
+  getCamera: () => THREE.Camera;
+  getSticky: () => PlanSnapResult | null;
+  setSticky: (next: PlanSnapResult | null) => void;
+  snapPoint2D: KitchenWorktopSnapPoint2D;
+  keepStickyPlanSnap: KeepStickyKitchenWorktopSnap;
+  maxPx?: number;
+}) {
+  return (rawPoint: THREE.Vector3, rect: DOMRect) => {
+    const maxPx = ctx.maxPx ?? 32;
+    const camera = ctx.getCamera();
+    const sticky = ctx.getSticky();
+    const startPointSnap = resolveKitchenWorktopStartPointSnap({
+      rawPoint,
+      points: ctx.getPoints(),
+      camera,
+      rect,
+      maxPx
+    });
+    const snapped = startPointSnap ?? ctx.snapPoint2D(rawPoint, rect, camera, maxPx, {
+      kindPriority: ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"],
+      sticky,
+      preferNearest: true
+    });
+    const activeSnap = snapped.kind !== "none"
+      ? snapped
+      : ctx.keepStickyPlanSnap(rawPoint, sticky, camera, rect, maxPx);
+    ctx.setSticky(activeSnap);
+    return activeSnap;
+  };
+}
 
 export function resolveKitchenWorktopDrawClickPoint(params: {
   hitPoint: THREE.Vector3;

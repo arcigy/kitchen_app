@@ -43,7 +43,7 @@ export type ComponentType =
   | "lighting";
 
 export type CatalogSupplierSource = {
-  supplier: "demos-sk" | "demos-cz" | "system";
+  supplier: string;
   supplierProductId: string;
   url?: string;
   imageUrl?: string;
@@ -95,10 +95,14 @@ export type ComponentGeometryDefinition = {
 export type MaterialDefinition = {
   id: string;
   entityType: "material";
+  supplierId?: string;
+  materialCode?: string;
+  manufacturer?: string;
   materialType: MaterialType;
   name: string;
   displayName: string;
   category: string;
+  subcategory?: string;
   baseMaterial: MaterialBase;
   decor: string;
   color: string;
@@ -116,15 +120,22 @@ export type MaterialDefinition = {
   edgeFamily?: EdgeFamily;
   recommendedBoardMatch?: string;
   supplierSource?: CatalogSupplierSource;
+  lastUpdated?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ComponentDefinition = {
   id: string;
   entityType: "component";
+  supplierId?: string;
+  componentCode?: string;
+  manufacturer?: string;
   componentType: ComponentType;
   geometryId: string;
   name: string;
   displayName: string;
+  category?: string;
+  subcategory?: string;
   brand: string;
   series: string;
   variant: string;
@@ -140,6 +151,8 @@ export type ComponentDefinition = {
   recommendedUse?: string;
   notes?: string[];
   supplierSource?: CatalogSupplierSource;
+  lastUpdated?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type PricingCatalogRecord = MaterialDefinition | ComponentDefinition;

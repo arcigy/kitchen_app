@@ -1,1 +1,1 @@
-export const REQUIRED_DATABASE_MIGRATION_VERSION = "0001_core";
+export const REQUIRED_DATABASE_MIGRATION_VERSION = "0004_client_suppliers";

@@ -28,6 +28,11 @@ function num(params: Record<string, unknown>, key: string, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function bool(params: Record<string, unknown>, key: string, fallback: boolean) {
+  const value = params[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function rec(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -56,6 +61,33 @@ function canonicalBomMaterialGroup(value: string): string {
 
 function componentRef(component: ComponentDefinition | undefined | null): PortableComponentRef | null {
   return component ? { ...component, catalogId: component.id } : null;
+}
+
+function configuredComponentId(
+  params: FwmFurnitureParams,
+  key: "handleComponentId" | "hingeComponentId" | "runnerComponentId" | "legComponentId" | "clipComponentId"
+): string | undefined {
+  const assignments = rec(params.componentAssignments);
+  const explicit = typeof params[key] === "string" && params[key] ? params[key] as string : undefined;
+  if (explicit) return explicit;
+  const assignmentKey = key === "handleComponentId" ? "handle" :
+    key === "hingeComponentId" ? "hinge" :
+    key === "runnerComponentId" ? "runner" : key;
+  const assigned = assignments[assignmentKey];
+  return typeof assigned === "string" && assigned ? assigned : undefined;
+}
+
+function componentUsage(
+  catalog: ClientCatalog,
+  params: FwmFurnitureParams,
+  key: "handleComponentId" | "hingeComponentId" | "runnerComponentId" | "legComponentId" | "clipComponentId",
+  componentType: ComponentType
+): { component: PortableComponentRef | null; configuredId: string | undefined; componentType: ComponentType } {
+  return {
+    component: componentRef(resolveComponent(catalog, params, key)),
+    configuredId: configuredComponentId(params, key),
+    componentType
+  };
 }
 
 function resolveMaterial(catalog: ClientCatalog, params: FwmFurnitureParams, slot: "body" | "front" | "back" | "shelf" | "drawer_bottom" | "plinth" | "worktop") {
@@ -118,7 +150,7 @@ function legAndClipCounts(width: number, depth: number, setback: number, boardTh
   const zFront = depth / 2 - setback - boardDepth - 55;
   const zBack = -depth / 2 + Math.min(100, Math.max(70, depth * 0.16));
   const zCount = Math.abs(zFront - zBack) > 120 ? 2 : 1;
-  return { legs: xCount * zCount, clips: xCount };
+  return { legs: xCount * zCount, clips: xCount, zCount };
 }
 
 function boardItem(args: {
@@ -220,8 +252,43 @@ function edgeItem(id: string, description: string, lengthLm: number, material: P
   };
 }
 
-function hardwareItem(id: string, description: string, quantity: number, component: PortableComponentRef | null): PortableQuoteBomItem | null {
-  if (!component || quantity <= 0) return null;
+function hardwareItem(
+  id: string,
+  description: string,
+  quantity: number,
+  usage: { component: PortableComponentRef | null; configuredId: string | undefined; componentType: ComponentType }
+): PortableQuoteBomItem | null {
+  if (quantity <= 0) return null;
+  const component = usage.component;
+  if (!component) {
+    const configuredId = usage.configuredId;
+    return {
+      id,
+      itemType: "hardware",
+      category: usage.componentType,
+      name: description,
+      description,
+      pricingBasis: "piece",
+      pricingUnit: "pcs",
+      quantity,
+      pricingQuantity: quantity,
+      materialGroup: usage.componentType,
+      component: null,
+      catalogRef: null,
+      pricingLookup: configuredId
+        ? {
+            key: configuredId,
+            sourceCatalogId: configuredId,
+            sourceEntityType: "component",
+            resolution: "unresolved_catalog_id"
+          }
+        : null,
+      pricingGroup: "hardware",
+      pricingQuantityBase: quantity,
+      notes: ["Required hardware is unresolved in the tenant catalog."],
+      validationErrors: [`Missing catalog component${configuredId ? ` ${configuredId}` : ""}`]
+    };
+  }
   return {
     id,
     itemType: "hardware",
@@ -300,10 +367,17 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   const depth = num(p, "depth", spec.depth);
   const boardT = num(p, "boardThickness", 18);
   const frontT = num(p, "frontThicknessMm", 18);
+  const carcassDepth = spec.moduleType === "fwm_catalog_base_drawers"
+    ? Math.max(1, depth - frontT - 1)
+    : depth;
   const backT = num(p, "backThickness", 8);
   const shelfT = num(p, "shelfThickness", boardT);
   const plinth = num(p, "plinthHeight", 0);
   const plinthSetback = num(p, "plinthSetbackMm", 0);
+  const kitchenEndClosureLeft = bool(p, "kitchenEndClosureLeft", false);
+  const kitchenEndClosureRight = bool(p, "kitchenEndClosureRight", false);
+  const kitchenEndClosureCount = Number(kitchenEndClosureLeft) + Number(kitchenEndClosureRight);
+  const kitchenEndClosureBackGapMm = Math.max(0, num(p, "kitchenEndClosureBackGapMm", 0));
   const bodyMaterial = resolveMaterial(catalog, p, "body");
   const frontMaterial = resolveMaterial(catalog, p, "front");
   const backMaterial = resolveMaterial(catalog, p, "back");
@@ -475,24 +549,53 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
       addCatalogCornerPart("corner-front-top-rail", "body", "Corner front top rail", { width: 864, height: 18, depth: 70 });
     }
   } else {
-    items.push(boardItem({ id: "side-panels", category: "body", description: "Side panels", quantity: spec.geometryKind === "corner" ? 4 : 2, length: cabinetH, width: depth, thickness: boardT, material: bodyRef, slot: "carcass" }));
+    const normalSidePanelCount = spec.geometryKind === "corner" ? 4 : Math.max(0, 2 - kitchenEndClosureCount);
+    if (normalSidePanelCount > 0) {
+      items.push(boardItem({ id: "side-panels", category: "body", description: "Side panels", quantity: normalSidePanelCount, length: cabinetH, width: carcassDepth, thickness: boardT, material: bodyRef, slot: "carcass" }));
+    }
+    if (spec.geometryKind !== "corner" && kitchenEndClosureCount > 0) {
+      items.push(boardItem({
+        id: "kitchen-end-closure-side-panels",
+        category: "body",
+        description: "Full-depth kitchen end closure side panels",
+        quantity: kitchenEndClosureCount,
+        length: cabinetH,
+        width: depth + kitchenEndClosureBackGapMm,
+        thickness: boardT,
+        material: bodyRef,
+        slot: "carcass"
+      }));
+    }
     if (spec.moduleType === "fwm_catalog_base_doors" || spec.moduleType === "fwm_catalog_base_drawers" || spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE) {
-      const railDepth = Math.max(50, Math.min(90, depth * 0.14));
+      const railDepth = Math.max(50, Math.min(90, carcassDepth * 0.14));
       items.push(
-        boardItem({ id: "bottom-panel", category: "body", description: "Bottom panel", quantity: 1, length: innerW, width: depth, thickness: boardT, material: bodyRef, slot: "carcass" }),
+        boardItem({ id: "bottom-panel", category: "body", description: "Bottom panel", quantity: 1, length: innerW, width: carcassDepth, thickness: boardT, material: bodyRef, slot: "carcass" }),
         boardItem({ id: "top-front-back-rails", category: "body", description: "Top front/back rails", quantity: 2, length: innerW, width: railDepth, thickness: boardT, material: bodyRef, slot: "carcass" })
       );
     } else {
-      items.push(boardItem({ id: "bottom-top-panels", category: "body", description: "Bottom and top panels", quantity: spec.geometryKind === "sink" ? 1 : 2, length: innerW, width: depth, thickness: boardT, material: bodyRef, slot: "carcass" }));
+      items.push(boardItem({ id: "bottom-top-panels", category: "body", description: "Bottom and top panels", quantity: spec.geometryKind === "sink" ? 1 : 2, length: innerW, width: carcassDepth, thickness: boardT, material: bodyRef, slot: "carcass" }));
     }
     if (backT > 0) items.push(boardItem({ id: "back-panel", category: "back", description: "Back panel", quantity: 1, length: innerW, width: innerH, thickness: backT, material: backRef, slot: "back" }));
-    if (shelfCount > 0) items.push(boardItem({ id: "shelves", category: "shelf", description: "Adjustable shelves", quantity: shelfCount, length: innerW, width: Math.max(1, depth - backT), thickness: shelfT, material: shelfRef ?? bodyRef, slot: "shelf" }));
+    if (shelfCount > 0) items.push(boardItem({ id: "shelves", category: "shelf", description: "Adjustable shelves", quantity: shelfCount, length: innerW, width: Math.max(1, carcassDepth - backT), thickness: shelfT, material: shelfRef ?? bodyRef, slot: "shelf" }));
     if (plinth > 0) {
       items.push(boardItem({ id: "plinth-front-board", category: "plinth", description: "Plinth front board", quantity: 1, length: width, width: plinth, thickness: Math.max(8, Math.min(boardT, 24)), material: plinthRef ?? bodyRef, slot: "plinth" }));
+      if (kitchenEndClosureCount > 0) {
+        items.push(boardItem({
+          id: "plinth-side-return-boards",
+          category: "plinth",
+          description: "Kitchen end side plinth return boards",
+          quantity: kitchenEndClosureCount,
+          length: Math.max(1, carcassDepth + kitchenEndClosureBackGapMm - plinthSetback),
+          width: plinth,
+          thickness: Math.max(8, Math.min(boardT, 24)),
+          material: plinthRef ?? bodyRef,
+          slot: "plinth"
+        }));
+      }
     }
     if (drawerCount > 0) {
       const frontH = Math.max(80, (height - plinth) / drawerCount);
-      const drawerDepth = resolveDrawerDepthLayout(depth, backT, num(p, "drawerBackGapMm", 10)).depthMm;
+      const drawerDepth = resolveDrawerDepthLayout(carcassDepth, backT, num(p, "drawerBackGapMm", 10)).depthMm;
       const drawerBoxThickness = Math.max(10, Math.min(16, boardT - 2));
       const drawerPreset = resolveFwmDrawerSystemPreset(p.drawerSystemBrand ?? p.drawerSystem, p.drawerSystemSize);
       const drawerBottomLength = usesCatalogMetalDrawerSystem(spec.moduleType)
@@ -566,13 +669,18 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   if (edgeLengthLm > 0 && edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", edgeLengthLm, edgeRef, "front"));
 
   const hardware = [
-    hardwareItem("handles", "Visible handles", Math.max(0, spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE ? (drawerCount > 0 ? 1 : 0) : drawerCount + doorCount), componentRef(resolveComponent(catalog, p, "handleComponentId"))),
-    hardwareItem("hinges", "Door hinges", Math.max(0, doorCount * 2), componentRef(resolveComponent(catalog, p, "hingeComponentId"))),
-    hardwareItem("runners", "Drawer runner pairs", Math.max(0, drawerCount), componentRef(resolveComponent(catalog, p, "runnerComponentId"))),
+    hardwareItem("handles", "Visible handles", Math.max(0, spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE ? (drawerCount > 0 ? 1 : 0) : drawerCount + doorCount), componentUsage(catalog, p, "handleComponentId", "handle")),
+    hardwareItem("hinges", "Door hinges", Math.max(0, doorCount * 2), componentUsage(catalog, p, "hingeComponentId", "hinge")),
+    hardwareItem("runners", "Drawer runner pairs", Math.max(0, drawerCount), componentUsage(catalog, p, "runnerComponentId", "runner")),
     ...(plinth > 0
       ? [
-          hardwareItem("adjustable-legs", "Adjustable cabinet legs", legAndClipCounts(width, depth, plinthSetback, boardT).legs, componentRef(resolveComponent(catalog, p, "legComponentId"))),
-          hardwareItem("plinth-clips", "Plinth board clips", legAndClipCounts(width, depth, plinthSetback, boardT).clips, componentRef(resolveComponent(catalog, p, "clipComponentId")))
+          hardwareItem("adjustable-legs", "Adjustable cabinet legs", legAndClipCounts(width, carcassDepth, plinthSetback, boardT).legs, componentUsage(catalog, p, "legComponentId", "leg")),
+          hardwareItem(
+            "plinth-clips",
+            "Plinth board clips",
+            legAndClipCounts(width, carcassDepth, plinthSetback, boardT).clips + kitchenEndClosureCount * legAndClipCounts(width, carcassDepth, plinthSetback, boardT).zCount,
+            componentUsage(catalog, p, "clipComponentId", "plinth_clip")
+          )
         ]
       : [])
   ].filter((item): item is PortableQuoteBomItem => !!item);
@@ -582,7 +690,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   for (const item of items) {
     const lookup = item.pricingLookup?.sourceCatalogId;
     if (lookup && pricingCatalog.getUnitPriceForCatalogId(lookup) === null) {
-      item.validationErrors = [`Missing price for ${lookup}`];
+      item.validationErrors = [...(item.validationErrors ?? []), `Missing price for ${lookup}`];
     }
   }
 

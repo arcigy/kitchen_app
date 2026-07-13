@@ -49,3 +49,17 @@ See also:
 - `docs/AI_DEVELOPMENT_RULES.md`
 - `docs/ARCHITECTURE.md`
 - `docs/release-checklist.md`
+
+## graphify
+
+This project has a local knowledge graph at `graphify-out/`.
+
+When the user types `$graphify`, use the installed Graphify skill before any other codebase exploration.
+
+Rules:
+- For every codebase or architecture question, first run `graphify query "<question>" --budget 1200`. When the question names a relationship, add `--context <relation>` to keep the returned subgraph minimal. Use `graphify explain "<symbol>"` for a named concept and `graphify path "<A>" "<B>"` for a dependency path.
+- Only after the narrow Graphify result identifies source paths or symbols may you search or read those exact relevant files. Do not broad-grep or enumerate the repository first.
+- Never manually read, print, parse, or attach the full `graphify-out/graph.json` or the full `graphify-out/GRAPH_REPORT.md`. The Graphify CLI may access its graph internally; agents must use `query`, `explain`, or `path` output instead.
+- If the graph result is stale or insufficient, run `graphify update .` and repeat the narrow query. Do not fall back to a full graph/report read.
+- `graphify-out/` is generated local state. Its uncommitted changes are expected and must not be treated as product-code changes.
+- After modifying code, run `graphify update .` to keep the code graph current (AST-only, no API cost).

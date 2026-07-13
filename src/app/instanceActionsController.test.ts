@@ -73,4 +73,57 @@ describe("instance actions controller", () => {
     expect(inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(duplicated, "kg1", 45);
     expect(duplicated.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
   });
+
+  it("keeps every remaining kitchen module presented after deleting one floorplan module", () => {
+    const removed = moduleInstance("removed");
+    const remainingA = moduleInstance("remaining-a");
+    const remainingB = moduleInstance("remaining-b");
+    for (const instance of [removed, remainingA, remainingB]) instance.kitchenGroupId = "kg1";
+    const instances = [removed, remainingA, remainingB];
+    const layoutRoot = new THREE.Group();
+    for (const instance of instances) layoutRoot.add(instance.root);
+    const syncPlacedInstancePresentation = vi.fn((instance: LayoutInstance) => {
+      instance.module.visible = false;
+      instance.outline.visible = true;
+    });
+    const rebuildKitchenGroupWorktops = vi.fn();
+    const group = {
+      id: "kg1",
+      name: "Kitchen",
+      ctx: makeDefaultKitchenContext(),
+      instanceIds: instances.map((instance) => instance.id)
+    };
+    const controller = createInstanceActionsController({
+      S: {
+        kitchenEditMode: true,
+        activeKitchenGroupId: "kg1",
+        kitchenGroups: [group],
+        kitchenCtx: makeDefaultKitchenContext()
+      } as AppState,
+      instances,
+      layoutRoot,
+      clientCatalog: {} as Parameters<typeof createInstanceActionsController>[0]["clientCatalog"],
+      getMode: () => "layout",
+      getInstanceCounter: () => 4,
+      setInstanceCounter: vi.fn(),
+      findInstance: (id) => instances.find((item) => item.id === id) ?? null,
+      getSelectedInstanceId: () => removed.id,
+      ensurePickAndOutline: vi.fn(),
+      placeWithoutOverlap: vi.fn(),
+      inferKitchenPlacementBinding: vi.fn(() => null),
+      rebuildKitchenGroupWorktops,
+      syncPlacedInstancePresentation,
+      setSelectedModule: vi.fn(),
+      updateLayoutPanel: vi.fn()
+    });
+
+    controller.deleteInstance(removed.id);
+
+    expect(instances.map((instance) => instance.id)).toEqual([remainingA.id, remainingB.id]);
+    expect(group.instanceIds).toEqual([remainingA.id, remainingB.id]);
+    expect(rebuildKitchenGroupWorktops).toHaveBeenCalledExactlyOnceWith("kg1");
+    expect(syncPlacedInstancePresentation).toHaveBeenCalledTimes(2);
+    expect(remainingA.outline.visible).toBe(true);
+    expect(remainingB.outline.visible).toBe(true);
+  });
 });

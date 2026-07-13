@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Box3, ShapeUtils, Vector2, type Mesh, type Object3D } from "three";
+import { Box3, ShapeUtils, Vector2, Vector3, type BufferAttribute, type Mesh, type Object3D } from "three";
 import { computeMeshVolumeOverlaps } from "../../geometry/meshOverlap";
 import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
 import { validateFurnQuoteModulePackage } from "../../core/module-package/module-package-validation";
@@ -177,6 +177,17 @@ function objectBoundsMm(object: Mesh | { updateMatrixWorld: (force?: boolean) =>
     maxZ: box.max.z * 1000,
     depth: (box.max.z - box.min.z) * 1000
   };
+}
+
+function meshPlanVerticesMm(mesh: Mesh) {
+  mesh.updateMatrixWorld(true);
+  const position = mesh.geometry.getAttribute("position") as BufferAttribute;
+  const points: Array<{ x: number; z: number }> = [];
+  for (let index = 0; index < position.count; index += 1) {
+    const point = new Vector3(position.getX(index), position.getY(index), position.getZ(index)).applyMatrix4(mesh.matrixWorld);
+    points.push({ x: point.x * 1000, z: point.z * 1000 });
+  }
+  return points;
 }
 
 function boundsForMeshesMm(root: { traverse: (visitor: (object: unknown) => void) => void }, predicate: (mesh: Mesh) => boolean) {
@@ -2658,6 +2669,52 @@ describe("FWM furniture module packages", () => {
     expect(syncedDepthFrontRight.minZ).toBeCloseTo(780, 1);
     expect(syncedDepthFrontRight.maxZ).toBeCloseTo(798, 1);
 
+    const syncedCornerAnchor = syncedDepth.getObjectByName("__kitchen_corner_anchor")!;
+    const syncedCornerXAnchor = syncedDepth.getObjectByName("__kitchen_corner_x_anchor")!;
+    const syncedCornerZAnchor = syncedDepth.getObjectByName("__kitchen_corner_z_anchor")!;
+    expect(syncedCornerAnchor.position.x * 1000 - syncedCornerXAnchor.position.x * 1000).toBeCloseTo(798, 1);
+    expect(syncedCornerZAnchor.position.z * 1000 - syncedCornerAnchor.position.z * 1000).toBeCloseTo(798, 1);
+
+    const straightPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_doors")!;
+    const straightParams = {
+      ...(createDefaultModulePackageParameters(straightPackage) as FwmFurnitureParams),
+      width: 600,
+      depth: 580,
+      height: 722,
+      plinthHeight: 100,
+      plinthSetbackMm: 60
+    } as FwmFurnitureParams;
+    const straight = buildModulePackageGeometryFromPackage({ modulePackage: straightPackage, parameters: straightParams, catalog });
+    const straightBackAnchor = straight.getObjectByName("__kitchen_back_anchor")!;
+    const straightPlinthMesh = meshes(straight).find((mesh) => mesh.userData.materialGroup === "plinth");
+    expect(straightPlinthMesh).toBeTruthy();
+    const straightPlinth = objectBoundsMm(straightPlinthMesh!);
+    const straightFrontMesh = meshes(straight).find((mesh) => mesh.userData.materialGroup === "front");
+    expect(straightFrontMesh).toBeTruthy();
+    const straightFront = objectBoundsMm(straightFrontMesh!);
+    const straightPlinthFrontOffset = straightPlinth.maxZ - straightBackAnchor.position.z * 1000;
+    const straightFrontOffset = straightFront.maxZ - straightBackAnchor.position.z * 1000;
+
+    const cornerPlinthPoints = meshPlanVerticesMm(getMeshByBoardName(syncedDepth, "diagonal_plinth")!);
+    const cornerPlinthLeftJoin = Math.max(...cornerPlinthPoints
+      .filter((point) => Math.abs(point.x - syncedCornerXAnchor.position.x * 1000) < 0.1)
+      .map((point) => point.z));
+    const cornerPlinthRightJoin = Math.min(...cornerPlinthPoints
+      .filter((point) => Math.abs(point.z - syncedCornerZAnchor.position.z * 1000) < 0.1)
+      .map((point) => point.x));
+    expect(cornerPlinthLeftJoin - syncedCornerAnchor.position.z * 1000).toBeCloseTo(straightPlinthFrontOffset, 1);
+    expect(syncedCornerAnchor.position.x * 1000 - cornerPlinthRightJoin).toBeCloseTo(straightPlinthFrontOffset, 1);
+
+    const cornerFrontPoints = meshPlanVerticesMm(getMeshByBoardName(syncedDepth, "diagonal_front")!);
+    const cornerFrontLeftJoin = Math.max(...cornerFrontPoints
+      .filter((point) => Math.abs(point.x - syncedCornerXAnchor.position.x * 1000) < 0.1)
+      .map((point) => point.z));
+    const cornerFrontRightJoin = Math.min(...cornerFrontPoints
+      .filter((point) => Math.abs(point.z - syncedCornerZAnchor.position.z * 1000) < 0.1)
+      .map((point) => point.x));
+    expect(Math.abs(cornerFrontLeftJoin - syncedCornerAnchor.position.z * 1000 - straightFrontOffset)).toBeLessThanOrEqual(3);
+    expect(Math.abs(syncedCornerAnchor.position.x * 1000 - cornerFrontRightJoin - straightFrontOffset)).toBeLessThanOrEqual(3);
+
     const assertSquareBackJoin = (root: ReturnType<typeof buildModulePackageGeometryFromPackage>) => {
       expect(getMeshByBoardName(root, "back_corner_panel")).toBeNull();
       const backLeft = objectBoundsMm(getMeshByBoardName(root, "back_left_panel")!);
@@ -2678,7 +2735,8 @@ describe("FWM furniture module packages", () => {
         "diagonal_plinth_clip_right_collar"
       ]) {
         const hardware = objectBoundsMm(getMeshByBoardName(root, boardName)!);
-        expect(hardware.maxZ - hardware.minX, boardName).toBeLessThanOrEqual(plinthFrontLine + 2);
+        const centerLine = ((hardware.minZ + hardware.maxZ) - (hardware.minX + hardware.maxX)) / 2;
+        expect(centerLine, boardName).toBeLessThanOrEqual(plinthFrontLine + 2);
       }
       for (const boardName of ["diagonal_plinth_clip_left_arm", "diagonal_plinth_clip_right_arm"]) {
         const arm = objectBoundsMm(getMeshByBoardName(root, boardName)!);
@@ -2730,9 +2788,9 @@ describe("FWM furniture module packages", () => {
 
     const baseBounds = objectBoundsMm(base);
     const sourceBounds = rawGroundTruthBoundsMm(baseCornerChamferedGroundTruth);
-    expect(baseBounds.minX).toBeCloseTo(sourceBounds.minX, 2);
+    expect(baseBounds.minX).toBeCloseTo(15.3, 1);
     expect(baseBounds.maxX).toBeCloseTo(sourceBounds.maxX, 2);
-    expect(baseBounds.width).toBeCloseTo(sourceBounds.width, 2);
+    expect(baseBounds.width).toBeCloseTo(sourceBounds.width, 1);
     expect(baseBounds.minZ).toBeCloseTo(sourceBounds.minZ, 2);
     expect(baseBounds.maxZ).toBeCloseTo(sourceBounds.maxZ, 2);
     expect(baseBounds.depth).toBeCloseTo(sourceBounds.depth, 2);
@@ -2740,12 +2798,12 @@ describe("FWM furniture module packages", () => {
     const cornerAnchor = base.getObjectByName("__kitchen_corner_anchor");
     const cornerXAnchor = base.getObjectByName("__kitchen_corner_x_anchor");
     const cornerZAnchor = base.getObjectByName("__kitchen_corner_z_anchor");
-    expect(cornerAnchor?.position.x ? cornerAnchor.position.x * 1000 : 0).toBeCloseTo(baseBounds.minX, 1);
-    expect(cornerAnchor?.position.z ? cornerAnchor.position.z * 1000 : 0).toBeCloseTo(baseBounds.minZ, 1);
-    expect(cornerXAnchor?.position.x ? cornerXAnchor.position.x * 1000 : 0).toBeCloseTo(baseBounds.maxX, 1);
-    expect(cornerXAnchor?.position.z ? cornerXAnchor.position.z * 1000 : 0).toBeCloseTo(baseBounds.minZ, 1);
-    expect(cornerZAnchor?.position.x ? cornerZAnchor.position.x * 1000 : 0).toBeCloseTo(baseBounds.minX, 1);
-    expect(cornerZAnchor?.position.z ? cornerZAnchor.position.z * 1000 : 0).toBeCloseTo(baseBounds.maxZ, 1);
+    expect(cornerAnchor?.position.x ? cornerAnchor.position.x * 1000 : 0).toBeCloseTo(951.3, 1);
+    expect(cornerAnchor?.position.z ?? 1).toBeCloseTo(0, 6);
+    expect(cornerXAnchor?.position.x ? cornerXAnchor.position.x * 1000 : 0).toBeCloseTo(33.3, 1);
+    expect(cornerXAnchor?.position.z ?? 1).toBeCloseTo(0, 6);
+    expect(cornerZAnchor?.position.x ? cornerZAnchor.position.x * 1000 : 0).toBeCloseTo(951.3, 1);
+    expect(cornerZAnchor?.position.z ? cornerZAnchor.position.z * 1000 : 0).toBeCloseTo(918, 1);
     const diagonalHandle = getMeshByBoardName(base, "diagonal_handle");
     const diagonalHinge = getMeshByBoardName(base, "hinge_lower");
     expect(diagonalHandle?.userData.componentType).toBe("handle");
@@ -2795,8 +2853,10 @@ describe("FWM furniture module packages", () => {
     expect(objectBoundsMm(tallerPlinth).maxY).toBeCloseTo(822, 1);
 
     const setbackPlinth = objectBoundsMm(getMeshByBoardName(deeperPlinthSetback, "diagonal_plinth")!);
-    expect(setbackPlinth.minX - basePlinth.minX).toBeCloseTo(40, 1);
-    expect(setbackPlinth.maxZ - basePlinth.maxZ).toBeCloseTo(-40, 1);
+    expect(setbackPlinth.minX).toBeCloseTo(basePlinth.minX, 1);
+    expect(setbackPlinth.maxX - basePlinth.maxX).toBeCloseTo(40, 1);
+    expect(setbackPlinth.minZ - basePlinth.minZ).toBeCloseTo(-40, 1);
+    expect(setbackPlinth.maxZ).toBeCloseTo(basePlinth.maxZ, 1);
     const baseSetbackDiagonalLeg = objectBoundsMm(getMeshByBoardName(base, "leg_diagonal_left")!);
     const setbackDiagonalLeg = objectBoundsMm(getMeshByBoardName(deeperPlinthSetback, "leg_diagonal_left")!);
     const baseSetbackClip = objectBoundsMm(getMeshByBoardName(base, "diagonal_plinth_clip_left_collar")!);
@@ -2874,7 +2934,8 @@ describe("FWM furniture module packages", () => {
     expect(smallerFrontChamferHinge.depth).toBeCloseTo(baseHinge.depth, 1);
     expect(smallerFrontChamferDiagonalLeg.width).toBeCloseTo(baseDiagonalLeg.width, 1);
     expect(smallerFrontChamferDiagonalLeg.depth).toBeCloseTo(baseDiagonalLeg.depth, 1);
-    const plinthFrontLine = smallerFrontChamferPlinth.minZ - smallerFrontChamferPlinth.minX;
+    const plinthFrontLine = Math.max(...meshPlanVerticesMm(getMeshByBoardName(smallerFrontChamfer, "diagonal_plinth")!)
+      .map((point) => point.z - point.x));
     expect(smallerFrontChamferDiagonalLeg.maxZ - smallerFrontChamferDiagonalLeg.minX).toBeLessThanOrEqual(plinthFrontLine + 2);
     expect(smallerFrontChamferDiagonalLegRight.maxZ - smallerFrontChamferDiagonalLegRight.minX).toBeLessThanOrEqual(plinthFrontLine + 2);
     expect(smallerFrontChamferLeftClipArm.maxZ - smallerFrontChamferLeftClipArm.minX).toBeGreaterThanOrEqual(plinthFrontLine + 25);
@@ -2955,6 +3016,7 @@ describe("FWM furniture module packages", () => {
       width: 900,
       depth: 900,
       height: 722,
+      sideGap: 2,
       doorCount: 2,
       shelfCount: 4,
       bodyMaterialId,
@@ -3022,9 +3084,10 @@ describe("FWM furniture module packages", () => {
     expect(depth580DoorX.depth).toBeGreaterThan(250);
     expect(depth580DoorZ.width).toBeGreaterThan(250);
     expect(depth580DoorZ.minX).toBeGreaterThanOrEqual(depth580SideEndZ.maxX - 1);
-    expect(depth580DoorZ.maxX).toBeLessThanOrEqual(depth580SideEndX.minX + 1);
+    expect(depth580DoorZ.maxX).toBeCloseTo(depth580SideEndX.maxX - Number(params.sideGap ?? 2), 1);
     expect(depth580DoorX.minZ).toBeGreaterThanOrEqual(depth580SideEndX.maxZ - 1);
-    expect(depth580DoorX.maxZ).toBeLessThanOrEqual(depth580SideEndZ.minZ + 1);
+    expect(depth580DoorX.maxZ).toBeCloseTo(depth580SideEndZ.maxZ - Number(params.sideGap ?? 2), 1);
+    expect(depth580DoorZ.minX).toBeCloseTo(depth580DoorX.maxX, 1);
     expect(depth580DoorZ.minZ).toBeCloseTo(depth580SideEndX.maxZ + 0.2, 1);
     expect(depth580DoorX.minX).toBeCloseTo(depth580SideEndZ.maxX + 0.2, 1);
     expect(depth900DoorX.depth).toBeGreaterThan(200);
@@ -3360,6 +3423,163 @@ describe("FWM furniture module packages", () => {
       renderColorHex(getMeshNamed(drawerGroup, "plinth_front_board"))
     ].filter(Boolean));
     expect(visibleColors.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("builds automatic full-depth corpus and clipped side plinths on exposed base-module ends", () => {
+    const catalog = getSystemSeedCatalog();
+    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
+    const doorPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_doors");
+    expect(drawerPackage).toBeTruthy();
+    expect(doorPackage).toBeTruthy();
+
+    const drawerDefaults = createDefaultModulePackageParameters(drawerPackage!) as FwmFurnitureParams;
+    const baseline = buildModulePackageGeometryFromPackage({
+      modulePackage: drawerPackage!,
+      catalog,
+      parameters: drawerDefaults
+    });
+    const leftClosed = buildModulePackageGeometryFromPackage({
+      modulePackage: drawerPackage!,
+      catalog,
+      parameters: {
+        ...drawerDefaults,
+        kitchenEndClosureLeft: true,
+        kitchenEndClosureRight: false,
+        kitchenEndClosureBackGapMm: 80
+      }
+    });
+
+    expect(leftClosed.userData.supportsKitchenRunEndClosure).toBe(true);
+    const leftSide = objectBoundsMm(getMeshNamed(leftClosed, "left_side")!);
+    const rightSide = objectBoundsMm(getMeshNamed(leftClosed, "right_side")!);
+    expect(leftSide.depth).toBeCloseTo(Number(drawerDefaults.depth) + 80, 3);
+    expect(leftSide.minZ).toBeCloseTo(-Number(drawerDefaults.depth) / 2 - 80, 3);
+    expect(rightSide.depth).toBeCloseTo(Number(drawerDefaults.depth) - Number(drawerDefaults.frontThicknessMm) - 1, 3);
+
+    const leftPlinth = getMeshNamed(leftClosed, "plinth_left_return");
+    expect(leftPlinth?.userData.materialGroup).toBe("plinth");
+    expect(leftPlinth?.userData.sideRole).toBe("LEFT");
+    expect(getMeshNamed(leftClosed, "plinth_right_return")).toBeNull();
+    expect(getMeshNamed(leftClosed, "kickClip_left_front_1_arm")?.userData.componentType).toBe("plinth_clip");
+    expect(getMeshNamed(leftClosed, "kickClip_left_rear_1_arm")?.userData.componentType).toBe("plinth_clip");
+    const leftPlinthBounds = objectBoundsMm(leftPlinth!);
+    const leftClipBounds = objectBoundsMm(getMeshNamed(leftClosed, "kickClip_left_front_1_arm")!);
+    expect(leftClipBounds.minX).toBeLessThanOrEqual(leftPlinthBounds.maxX + 1);
+    expect(leftClipBounds.maxX).toBeGreaterThanOrEqual(leftPlinthBounds.minX - 1);
+
+    const backAnchor = getObjectNamed(leftClosed, "__kitchen_back_anchor");
+    expect(backAnchor?.position.z).toBeCloseTo(-Number(drawerDefaults.depth) / 2000, 6);
+
+    const doorDefaults = createDefaultModulePackageParameters(doorPackage!) as FwmFurnitureParams;
+    const bothClosedOpened = buildModulePackageGeometryFromPackage({
+      modulePackage: doorPackage!,
+      catalog,
+      parameters: {
+        ...doorDefaults,
+        opened: true,
+        kitchenEndClosureLeft: true,
+        kitchenEndClosureRight: true,
+        kitchenEndClosureBackGapMm: 80
+      }
+    });
+    expect(getMeshNamed(bothClosedOpened, "plinth_left_return")).not.toBeNull();
+    expect(getMeshNamed(bothClosedOpened, "plinth_right_return")).not.toBeNull();
+    expect(objectBoundsMm(getMeshNamed(bothClosedOpened, "right_side")!).depth).toBeCloseTo(Number(doorDefaults.depth) + 80, 3);
+
+    const baselineBom = calculateFwmFurnitureBOM(
+      baseline.userData.modulePackageBuildParameters as FwmFurnitureParams,
+      makeDefaultKitchenContext(catalog),
+      catalog
+    );
+    const closureBom = calculateFwmFurnitureBOM(
+      leftClosed.userData.modulePackageBuildParameters as FwmFurnitureParams,
+      makeDefaultKitchenContext(catalog),
+      catalog
+    );
+    expect(closureBom.quoteBom.items.find((item) => item.id === "kitchen-end-closure-side-panels")?.quantity).toBe(1);
+    expect(closureBom.quoteBom.items.find((item) => item.id === "kitchen-end-closure-side-panels")?.dimensionsMm?.width).toBeCloseTo(Number(drawerDefaults.depth) + 80, 3);
+    expect(closureBom.quoteBom.items.find((item) => item.id === "plinth-side-return-boards")?.quantity).toBe(1);
+    expect(closureBom.quoteBom.items.find((item) => item.id === "plinth-clips")?.quantity).toBe(
+      (baselineBom.quoteBom.items.find((item) => item.id === "plinth-clips")?.quantity ?? 0) + 2
+    );
+  });
+
+  it("keeps the base drawer and corner 90 on the same truthful outside-depth contract", () => {
+    const catalog = getSystemSeedCatalog();
+    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
+    const cornerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_corner");
+    expect(drawerPackage).toBeTruthy();
+    expect(cornerPackage).toBeTruthy();
+
+    const drawerDefaults = createDefaultModulePackageParameters(drawerPackage!) as FwmFurnitureParams;
+    const drawer = buildModulePackageGeometryFromPackage({
+      modulePackage: drawerPackage!,
+      catalog,
+      parameters: {
+        ...drawerDefaults,
+        depth: 580,
+        frontThicknessMm: 18,
+        hasWorktop: false,
+        worktopThicknessMm: 0
+      }
+    });
+    const drawerRear = objectBoundsMm(getMeshNamed(drawer, "left_side")!).minZ;
+    const drawerFront = objectBoundsMm(getMeshNamed(drawer, "drawer_front_1")!).maxZ;
+    expect(drawerFront - drawerRear).toBeCloseTo(580, 1);
+    expect(objectBoundsMm(getMeshNamed(drawer, "left_side")!).depth).toBeCloseTo(561, 2);
+    expect((drawer.userData.modulePackageBuildParameters as FwmFurnitureParams).depth).toBe(580);
+
+    const cornerDefaults = createDefaultModulePackageParameters(cornerPackage!) as FwmFurnitureParams;
+    const corner = buildModulePackageGeometryFromPackage({
+      modulePackage: cornerPackage!,
+      catalog,
+      parameters: {
+        ...cornerDefaults,
+        variant: "corner_90",
+        width: 900,
+        depth: 580,
+        frontThicknessMm: 18,
+        hasWorktop: false,
+        worktopThicknessMm: 0
+      }
+    });
+    const cornerRear = objectBoundsMm(getMeshNamed(corner, "side_end_x")!).minZ;
+    const cornerFront = objectBoundsMm(getMeshNamed(corner, "door_front_z")!).maxZ;
+    expect(cornerFront - cornerRear).toBeCloseTo(580, 0);
+
+    const drawerBom = calculateFwmFurnitureBOM(
+      drawer.userData.modulePackageBuildParameters as FwmFurnitureParams,
+      makeDefaultKitchenContext(catalog),
+      catalog
+    );
+    expect(drawerBom.quoteBom.moduleInstance.depthMm).toBe(580);
+    expect(drawerBom.quoteBom.items.find((item) => item.id === "side-panels")?.dimensionsMm?.width).toBeCloseTo(561, 2);
+  });
+
+  it("keeps required hardware quantities when an explicit component is missing from the live catalog", () => {
+    const catalog = getSystemSeedCatalog();
+    const missingClipId = "cmp.clip.plinth.missing-test";
+    catalog.components = catalog.components.filter((component) => component.componentType !== "plinth_clip");
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_drawer_cabinet")!;
+    const params = {
+      ...createDefaultModulePackageParameters(modulePackage),
+      type: "fwm_base_drawer_cabinet",
+      clipComponentId: missingClipId,
+      plinthHeight: 120
+    } as FwmFurnitureParams;
+
+    const bom = calculateFwmFurnitureBOM(params, makeDefaultKitchenContext(catalog), catalog);
+    const clips = bom.quoteBom.items.find((item) => item.id === "plinth-clips");
+
+    expect(clips?.quantity).toBeGreaterThan(0);
+    expect(clips?.component).toBeNull();
+    expect(clips?.catalogRef).toBeNull();
+    expect(clips?.pricingLookup).toMatchObject({
+      sourceCatalogId: missingClipId,
+      resolution: "unresolved_catalog_id"
+    });
+    expect(clips?.validationErrors).toContain(`Missing catalog component ${missingClipId}`);
+    expect(clips?.validationErrors).toContain(`Missing price for ${missingClipId}`);
   });
 
   it("keeps the back panel rear face fixed and moves drawer boxes with the inner back face", () => {

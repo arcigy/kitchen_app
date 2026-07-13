@@ -2,6 +2,10 @@ import type http from "node:http";
 import type { ClientContext } from "../core/client/client-context";
 import { createProjectService } from "../core/project/project-service";
 import type { CreateProjectInput } from "../core/project/project-types";
+import {
+  createDefaultProjectMaterialAssignments,
+  type ProjectMaterialDefaultOverrides
+} from "../core/project-materials/project-material-business";
 import { PROJECT_FILE_MIME_TYPE, toSafeProjectFileName } from "../core/project-save/project-save-file";
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository, createServerModulePackageRepository } from "./serverRepositories";
@@ -51,6 +55,28 @@ function assertNoClientIdPayload(body: unknown): void {
 function getBodyRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Expected JSON body.");
   return body as Record<string, unknown>;
+}
+
+function projectMaterialOverrides(appState: Record<string, unknown>): ProjectMaterialDefaultOverrides {
+  const kitchen = appState.kitchen && typeof appState.kitchen === "object" && !Array.isArray(appState.kitchen)
+    ? appState.kitchen as Record<string, unknown>
+    : {};
+  const context = kitchen.context && typeof kitchen.context === "object" && !Array.isArray(kitchen.context)
+    ? kitchen.context as Record<string, unknown>
+    : {};
+  const stringValue = (key: string) => typeof context[key] === "string" ? String(context[key]).trim() || undefined : undefined;
+  return {
+    corpus: stringValue("corpusMaterialId"),
+    front: stringValue("frontsMaterialId"),
+    worktop: stringValue("worktopMaterialId"),
+    back: stringValue("backMaterialId"),
+    drawer_bottom: stringValue("drawerBottomMaterialId"),
+    handle: stringValue("handleComponentId")
+  };
+}
+
+function isMissingProjectSave(error: unknown): boolean {
+  return !!error && typeof error === "object" && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
 function asCreateProjectInput(body: unknown): CreateProjectInput {
@@ -111,18 +137,48 @@ export async function handleProjectApi(
   const route = parseProjectRoute(url.pathname);
   if (!route) return false;
 
+  if (req.method === "DELETE" && route.action === "metadata") {
+    if (ctx.role !== "owner" && ctx.role !== "admin") {
+      deps.sendJson(res, 403, { ok: false, error: "Only owners and admins can delete projects." });
+      return true;
+    }
+    await service.deleteProject(ctx, route.projectId);
+    deps.sendJson(res, 200, { ok: true });
+    return true;
+  }
+
   if (req.method === "GET" && route.action === "metadata") {
     deps.sendJson(res, 200, { ok: true, project: await service.getProject(ctx, route.projectId) });
     return true;
   }
 
   if (req.method === "POST" && route.action === "save") {
+    if (ctx.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot save projects." });
+      return true;
+    }
     const body = await deps.readJsonBody(req);
     assertNoClientIdPayload(body);
     const record = getBodyRecord(body);
     const project = await service.getProject(ctx, route.projectId);
     const appState = getBodyRecord(record.appState ?? {});
     const catalog = await createServerCatalogRepository(deps.projectRoot).ensureCatalogExists(ctx);
+    let materialAssignments = createDefaultProjectMaterialAssignments(
+      catalog,
+      new Date().toISOString(),
+      projectMaterialOverrides(appState)
+    );
+    let initializeStoredAssignments = false;
+    try {
+      const stored = await repository.loadProjectSave(ctx, project.projectId, project.activePhaseId);
+      if (stored.appState.materialAssignments.initialized) {
+        materialAssignments = stored.appState.materialAssignments;
+      } else {
+        initializeStoredAssignments = true;
+      }
+    } catch (error) {
+      if (!isMissingProjectSave(error)) throw error;
+    }
     const modulePackages = await createServerModulePackageRepository(deps.projectRoot).listPackages(ctx);
     const save = await service.saveCurrentProject(ctx, {
       projectId: project.projectId,
@@ -133,6 +189,7 @@ export async function handleProjectApi(
       layoutState: appState.layout ?? null,
       kitchenState: appState.kitchen ?? null,
       moduleInstances: Array.isArray(appState.modules) ? appState.modules : [],
+      materialAssignments,
       sceneState: appState.scene ?? null,
       editorState: appState.editor,
       recentActivity: appState.recentActivity,
@@ -144,6 +201,8 @@ export async function handleProjectApi(
       editingSessionId: record.editingSessionId,
       bomSnapshot: record.bomSnapshot,
       appVersion: typeof record.appVersion === "string" ? record.appVersion : undefined
+    }, {
+      materialAssignmentsMode: initializeStoredAssignments ? "initialize" : "preserve"
     });
     deps.sendJson(res, 200, { ok: true, save });
     return true;
@@ -165,6 +224,10 @@ export async function handleProjectApi(
   }
 
   if (req.method === "POST" && route.action === "restoreVersion") {
+    if (ctx.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot restore project versions." });
+      return true;
+    }
     deps.sendJson(res, 200, { ok: true, save: await service.restoreProjectVersion(ctx, route.projectId, route.versionNumber) });
     return true;
   }

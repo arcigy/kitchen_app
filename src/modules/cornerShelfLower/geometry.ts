@@ -15,7 +15,7 @@ const baseLengthXMm = typeof baseLiveRuntime?.params?.lengthX === "number" ? bas
 const baseLengthZMm = typeof baseLiveRuntime?.params?.lengthZ === "number" ? baseLiveRuntime.params.lengthZ : 1000;
 const baseDepthMm = typeof baseLiveRuntime?.params?.depth === "number" ? baseLiveRuntime.params.depth : 560;
 const baseFrontThicknessMm =
-  typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 19;
+  typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 18;
 const baseBackThicknessMm =
   typeof baseLiveRuntime?.params?.backThickness === "number" ? baseLiveRuntime.params.backThickness : 6;
 const baseBoardThicknessMm =

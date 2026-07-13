@@ -24,7 +24,7 @@ function cornerShelfLowerDefaultsV2() {
     hingeTopOffsetMm: 110,
     hingeBottomOffsetMm: 110,
     clipComponentId: "cmp.clip.plinth.standard",
-    frontThicknessMm: 19,
+    frontThicknessMm: 18,
     sideGap: 2,
     topGap: 2,
     bottomGap: 2,

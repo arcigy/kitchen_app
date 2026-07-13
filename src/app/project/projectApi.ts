@@ -4,7 +4,13 @@ import { toSafeProjectFileName } from "../../core/project-save/project-save-file
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const data = text ? JSON.parse(text) as T : ({} as T);
+  let data: T;
+  try {
+    data = text ? JSON.parse(text) as T : ({} as T);
+  } catch {
+    if (!response.ok) throw new Error(text.trim() || `HTTP ${response.status}`);
+    throw new Error("Server returned an invalid response.");
+  }
   if (!response.ok) {
     const error = data && typeof data === "object" && "error" in data ? String((data as { error?: unknown }).error) : `HTTP ${response.status}`;
     throw new Error(error);
@@ -39,12 +45,24 @@ export async function listProjects(): Promise<ProjectMetadata[]> {
   return data.projects;
 }
 
-export async function saveProject(projectId: string, appState: ProjectSaveFile["appState"], editingSessionId?: string): Promise<ProjectSaveFile> {
+export async function deleteProject(projectId: string): Promise<void> {
+  await readJson<{ ok: true }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+    credentials: "include"
+  }));
+}
+
+export async function saveProject(
+  projectId: string,
+  appState: ProjectSaveFile["appState"],
+  editingSessionId?: string,
+  bomSnapshot?: unknown
+): Promise<ProjectSaveFile> {
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/save`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ appState, editingSessionId, appVersion: import.meta.env?.VITE_APP_VERSION })
+    body: JSON.stringify({ appState, editingSessionId, bomSnapshot, appVersion: import.meta.env?.VITE_APP_VERSION })
   }));
   return data.save;
 }

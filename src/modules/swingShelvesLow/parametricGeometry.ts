@@ -367,7 +367,7 @@ export function buildSwingShelvesLowParametric(
   const heightCarcassMm = Math.max(80, Math.round(getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm)));
   const totalDepthMm = Math.max(200, Math.round(getNumber(params.depth, 560)));
 
-  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 19)), catalogContext);
+  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 18)), catalogContext);
   const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.boardThickness, 18)), catalogContext);
   const shelfThicknessMm = resolveBoardThickness("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.shelfThickness, boardThicknessMm)), catalogContext);
   const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.backThickness, 6)), catalogContext);

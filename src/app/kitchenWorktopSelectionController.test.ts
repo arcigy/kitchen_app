@@ -97,4 +97,29 @@ describe("createKitchenWorktopSelectionController", () => {
     expect(controller.beginKitchenWorktopSelection("wt1", { pointerId: 7 } as PointerEvent)).toBe(false);
     expect(selectedGroups).toEqual([]);
   });
+
+  it("selects the individual worktop wing under the pointer while editing", () => {
+    const item = worktop();
+    item.params.path = [
+      { x: 0, z: 0 },
+      { x: 2000, z: 0 },
+      { x: 2000, z: 1500 }
+    ];
+    const selectWorktopSegment = vi.fn(() => true);
+    const setSelectedKitchenGroup = vi.fn();
+    const controller = createKitchenWorktopSelectionController({
+      kitchenWorktops: [item],
+      marquee: marquee(),
+      marqueeEl: marqueeElement(),
+      findKitchenWorktop: () => item,
+      getActiveKitchenGroupId: () => "kg1",
+      getKitchenEditMode: () => true,
+      getKitchenMode: () => ({ findKitchenGroup: () => ({ id: "kg1" }), selectWorktopSegment }),
+      setSelectedKitchenGroup
+    });
+
+    expect(controller.beginKitchenWorktopSelection("wt1", { pointerId: 7 } as PointerEvent, { x: 1900, z: 1100 })).toBe(true);
+    expect(setSelectedKitchenGroup).toHaveBeenCalledWith("kg1");
+    expect(selectWorktopSegment).toHaveBeenCalledWith("wt1", 1);
+  });
 });
