@@ -10,6 +10,11 @@ import type { ClientProfile } from "../core/client/client-types";
 import { getDatabaseUrl, resolveDatabaseConfig } from "../core/database/database-config";
 import { createFileModulePackageRepository, type ModulePackageRepository } from "../core/module-package/module-package-repository";
 import { createPostgresModulePackageRepository } from "../core/module-package/module-package-postgres-repository";
+import { createFileSupplierBridgeRepository } from "../core/supplier-bridge/supplier-bridge-file-repository";
+import { createPostgresSupplierBridgeRepository } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
+import type { SupplierBridgeRepository } from "../core/supplier-bridge/supplier-bridge-repository";
+import { createSeedSupplierConfigurationRepository, type SupplierConfigurationRepository } from "../core/supplier-configuration/supplier-configuration-repository";
+import { createPostgresSupplierConfigurationRepository } from "../core/supplier-configuration/supplier-configuration-postgres-repository";
 
 export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
   const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -39,6 +44,20 @@ export function createServerModulePackageRepository(projectRoot: string): Module
   return databaseConfig
     ? createPostgresModulePackageRepository(databaseConfig)
     : createFileModulePackageRepository(projectRoot);
+}
+
+export function createServerSupplierBridgeRepository(projectRoot: string): SupplierBridgeRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresSupplierBridgeRepository(databaseConfig)
+    : createFileSupplierBridgeRepository(projectRoot);
+}
+
+export function createServerSupplierConfigurationRepository(): SupplierConfigurationRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresSupplierConfigurationRepository(databaseConfig)
+    : createSeedSupplierConfigurationRepository();
 }
 
 export async function loadServerClientProfile(clientId: string): Promise<ClientProfile | null> {

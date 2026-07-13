@@ -1,0 +1,29 @@
+# Generated, cached, and runtime outputs are not project knowledge.
+graphify-out/
+.codex/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+**/dist-*/
+build/
+**/build/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
+.cache/
+**/.cache/
+tmp/
+**/tmp/
+output/
+outputs/
+exports/
+storage/
+public/debug-pdf/
+*.map
+*.log
+
+# Confirmed generated module artifacts.
+src/modules/*/package/legacy/legacy-builder.runtime.js
+src/system/catalog-templates/demosCatalog.generated.ts

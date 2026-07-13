@@ -1,4 +1,5 @@
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
+import type { MaterialAssignmentCategory, ProjectMaterialScope, ProjectMaterialScopeItem } from "../../core/project-materials/project-material-types";
 import type { KitchenContext } from "../kitchenContext";
 import type { CustomFurnitureInstance } from "../customFurnitureTypes";
 import type { KitchenGroup, KitchenWorktopInstance, LayoutInstance } from "../appState";
@@ -22,6 +23,7 @@ export type MaterialUsageItem = {
   catalogId: string | null;
   displayName: string;
   detail: string;
+  usageRole?: string;
   quantity: number;
   pieces: number;
   unit: MaterialUsageUnit;
@@ -57,13 +59,87 @@ export type ProjectMaterialUsageInput = {
   catalog: ClientCatalog;
 };
 
+function scopeCategory(item: PortableQuoteBomItem): MaterialAssignmentCategory | null {
+  if (item.itemType === "edge_band") return String(item.materialGroup).toLowerCase().includes("front") ? "edge_front" : "edge_other";
+  if (item.itemType === "hardware") {
+    const type = item.component?.componentType;
+    if (type === "handle" || type === "hinge" || type === "runner" || type === "lift_up" || type === "leg") return type;
+    return type === "fastener" || type === "plinth_clip" || type === "shelf_support" || type === "hanging_bracket" ? "fastener" : "other_component";
+  }
+  const group = String(item.materialGroup ?? item.material?.boardFamily ?? "").toLowerCase();
+  if (["corpus", "carcass", "body", "shelf"].includes(group)) return "corpus";
+  if (group === "front" || group === "worktop" || group === "plinth" || group === "back" || group === "drawer_bottom") return group;
+  return null;
+}
+
+function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem[] {
+  return quoteBom.items.flatMap((item) => {
+    const category = scopeCategory(item);
+    if (!category) return [];
+    const pieces = finiteNumber(item.quantity) ?? 1;
+    let quantity: number | null;
+    let unit: ProjectMaterialScopeItem["unit"];
+    if (category === "plinth") {
+      const length = finiteNumber(item.dimensionsMm?.length);
+      quantity = length == null ? null : length * pieces / 1000;
+      unit = "lm";
+    } else if (category === "edge_front" || category === "edge_other") {
+      quantity = finiteNumber(item.metrics?.edgeLengthLm) ?? finiteNumber(item.pricingQuantityBase) ?? finiteNumber(item.pricingQuantity);
+      unit = "lm";
+    } else if (["handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component"].includes(category)) {
+      quantity = finiteNumber(item.pricingQuantityBase) ?? finiteNumber(item.pricingQuantity) ?? pieces;
+      unit = "pcs";
+    } else {
+      const length = finiteNumber(item.dimensionsMm?.length);
+      const width = finiteNumber(item.dimensionsMm?.width);
+      quantity = finiteNumber(item.metrics?.areaM2) ?? finiteNumber(item.pricingQuantityBase)
+        ?? (length == null || width == null ? null : length * width * pieces / 1_000_000);
+      unit = "m2";
+    }
+    if (quantity == null) return [];
+    return [{
+      id: item.id,
+      category,
+      label: item.description || item.name || item.id,
+      description: item.dimensionsMm
+        ? `${Math.round(item.dimensionsMm.length)} × ${Math.round(item.dimensionsMm.width)} × ${Math.round(item.dimensionsMm.thickness)} mm`
+        : item.component?.componentType ?? item.materialGroup ?? "Komponent",
+      quantity: Math.round(quantity * 10_000) / 10_000,
+      unit,
+      pieces
+    } satisfies ProjectMaterialScopeItem];
+  });
+}
+
+function finiteNumber(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): ProjectMaterialScope[] {
+  const scopes: ProjectMaterialScope[] = [];
+  for (const instance of input.instances) {
+    const context = input.kitchenGroups.find((group) => group.id === instance.kitchenGroupId)?.ctx ?? input.kitchenContext;
+    try {
+      const quoteBom = calculateModuleBOM(instance, context, input.catalog).quoteBom;
+      scopes.push({ id: `module:${instance.id}`, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom) });
+    } catch {
+      // The summary warning path reports malformed modules without hiding valid module scopes.
+    }
+  }
+  for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog)) {
+    scopes.push({ id: `addition:${addition.instanceId}`, kind: "addition", label: addition.label, items: scopeItems(addition.result.quoteBom) });
+  }
+  return scopes;
+}
+
 type GroupConfig = Pick<MaterialUsageGroup, "id" | "label" | "unit" | "itemLabel" | "alwaysVisible">;
 
 const GROUPS: readonly GroupConfig[] = [
   { id: "corpus", label: "Korpus", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "front", label: "Fronty", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "worktop", label: "Pracovná doska", unit: "m2", itemLabel: "doska", alwaysVisible: true },
-  { id: "plinth", label: "Sokel", unit: "m2", itemLabel: "doska", alwaysVisible: true },
+  { id: "plinth", label: "Sokel", unit: "lm", itemLabel: "doska", alwaysVisible: true },
   { id: "back", label: "Chrbát", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "drawer_bottom", label: "Dná zásuviek", unit: "m2", itemLabel: "doska", alwaysVisible: false },
   { id: "edge", label: "Hrany", unit: "lm", itemLabel: "hrana", alwaysVisible: true },
@@ -152,7 +228,7 @@ function addBomItem(
   const config = GROUP_BY_ID.get(groupId);
   if (!config) return;
 
-  const quantity = usageQuantity(item, config.unit);
+  const quantity = usageQuantity(item, config);
   if (quantity == null) {
     warnings.push(`${source}: položka ${item.description || item.id} nemá platné množstvo.`);
     return;
@@ -162,7 +238,8 @@ function addBomItem(
   const catalogId = item.material?.catalogId ?? item.component?.catalogId ?? null;
   const displayName = item.material?.displayName ?? item.component?.displayName ?? item.description ?? item.name ?? item.id;
   const detail = itemDetail(item, config.unit);
-  const key = `${catalogId ?? `missing:${item.id}`}:${detail}`;
+  const usageRole = usageRoleFor(item);
+  const key = `${catalogId ?? `missing:${item.id}`}:${detail}:${usageRole}`;
   const groupBuckets = buckets.get(groupId) ?? new Map<string, MaterialUsageItem>();
   const existing = groupBuckets.get(key);
 
@@ -172,7 +249,7 @@ function addBomItem(
     existing.quantity += quantity;
     existing.pieces += pieces;
   } else {
-    groupBuckets.set(key, { catalogId, displayName, detail, quantity, pieces, unit: config.unit });
+    groupBuckets.set(key, { catalogId, displayName, detail, usageRole, quantity, pieces, unit: config.unit });
   }
   buckets.set(groupId, groupBuckets);
 }
@@ -191,7 +268,13 @@ function materialUsageGroupFor(item: PortableQuoteBomItem): MaterialUsageGroupId
   return null;
 }
 
-function usageQuantity(item: PortableQuoteBomItem, unit: MaterialUsageUnit): number | null {
+function usageQuantity(item: PortableQuoteBomItem, group: GroupConfig): number | null {
+  const unit = group.unit;
+  if (group.id === "plinth") {
+    const lengthMm = positiveNumber(item.dimensionsMm?.length);
+    const pieces = positiveNumber(item.quantity) ?? 1;
+    return lengthMm == null ? null : (lengthMm * pieces) / 1000;
+  }
   if (unit === "m2") {
     const area = positiveNumber(item.metrics?.areaM2) ?? positiveNumber(item.pricingQuantityBase);
     if (area != null) return area;
@@ -202,6 +285,12 @@ function usageQuantity(item: PortableQuoteBomItem, unit: MaterialUsageUnit): num
   }
   if (unit === "lm") return positiveNumber(item.metrics?.edgeLengthLm) ?? positiveNumber(item.pricingQuantityBase) ?? positiveNumber(item.pricingQuantity);
   return positiveNumber(item.pricingQuantityBase) ?? positiveNumber(item.pricingQuantity) ?? positiveNumber(item.quantity);
+}
+
+function usageRoleFor(item: PortableQuoteBomItem): string {
+  if (item.itemType === "hardware") return item.component?.componentType ?? item.materialGroup ?? item.category ?? "other_component";
+  if (item.itemType === "edge_band") return item.material?.edgeFamily ?? item.materialGroup ?? "other";
+  return item.materialGroup ?? item.material?.boardFamily ?? item.category;
 }
 
 function itemDetail(item: PortableQuoteBomItem, unit: MaterialUsageUnit): string {

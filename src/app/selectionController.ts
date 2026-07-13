@@ -101,6 +101,7 @@ export type SelectionControllerContext = {
     filterSelectableInstanceId: (id: string | null) => string | null;
     findKitchenGroup?: (id: string) => { id: string } | null;
     refreshModuleCatalog?: () => void;
+    clearWorktopSegmentSelection?: () => void;
   } | null;
   layoutPanel: { setSelected: (id: string | null) => void };
   layoutTool: LayoutTool;
@@ -507,6 +508,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function setSelectedModule(id: string | null, options?: SelectModuleOptions) {
+    if (id) ctx.kitchenMode?.clearWorktopSegmentSelection?.();
     const inst = id ? ctx.instances.find((item) => item.id === id) ?? null : null;
     if (!ctx.getKitchenEditMode() && inst?.kitchenGroupId && ctx.kitchenMode?.findKitchenGroup?.(inst.kitchenGroupId)) {
       setSelectedKitchenGroup(inst.kitchenGroupId);

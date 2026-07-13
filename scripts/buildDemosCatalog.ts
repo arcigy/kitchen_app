@@ -505,7 +505,7 @@ async function main() {
   );
   const kitchenDefaults: KitchenDefaults = {
     carcassMaterialId: chooseDefault(materials, (item) => item.boardFamily === "body" && item.defaultThicknessMm === 18),
-    frontMaterialId: chooseDefault(materials, (item) => item.boardFamily === "front"),
+    frontMaterialId: chooseDefault(materials, (item) => item.boardFamily === "front" && item.defaultThicknessMm === 18),
     worktopMaterialId: chooseDefault(materials, (item) => item.boardFamily === "worktop"),
     plinthMaterialId: chooseDefault(materials, (item) => item.boardFamily === "body" && item.defaultThicknessMm === 18),
     backPanelMaterialId,

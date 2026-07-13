@@ -1,72 +1,45 @@
-import { Pool, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import type { ClientContext } from "../client/client-context";
-import { quotePgIdentifier } from "../database/database-config";
-import { REQUIRED_DATABASE_MIGRATION_VERSION } from "../database/migration-version";
-import { attachPostgresPoolErrorHandler } from "../database/postgres-pool-error-handler";
-import { sanitizeStorageId } from "../storage/storage-types";
+import { closeSchemaPools, withSchemaClient } from "../database/postgres-client";
+import { resolveClientStoragePath, resolveProjectStoragePath } from "../storage/storage-path-resolver";
+import { createClientProjectPhaseScope, sanitizeStorageId } from "../storage/storage-types";
 import type { CreateProjectInput, ProjectMetadata, ProjectVersionMetadata } from "./project-types";
 import { createProjectMetadata } from "./project-metadata";
 import { assertValidCreateProjectInput, assertValidProjectMetadata } from "./project-validation";
 import type { ProjectBundledAssetPayload, ProjectSaveFile } from "../project-save/project-save-types";
+import { loadProjectSaveFile } from "../project-save/project-save-loader";
 import { validateProjectSaveFile } from "../project-save/project-save-validation";
 import { bundleProjectAssets, restoreBundledProjectAssets } from "../project-save/project-asset-bundling";
 import type { ProjectRepository } from "./project-repository";
-
-const pools = new Map<string, Pool>();
-const verifiedSchemas = new Set<string>();
-
-function poolKey(connectionString: string, schema: string): string {
-  return `${connectionString}#schema=${schema}`;
-}
-
-function getPool(connectionString: string, schema: string): Pool {
-  const key = poolKey(connectionString, schema);
-  const existing = pools.get(key);
-  if (existing) return existing;
-  const pool = new Pool({
-    connectionString,
-    max: 8,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000
-  });
-  attachPostgresPoolErrorHandler(pool, "project-db", schema);
-  pools.set(key, pool);
-  return pool;
-}
+import type { ProjectMaterialAssignmentsState } from "../project-materials/project-material-types";
+import { validateProjectMaterialAssignmentsState } from "../project-materials/project-material-validation";
+import { ProjectMaterialRevisionConflictError } from "../project-materials/project-material-errors";
+import { patchProjectSaveMaterialAssignments } from "../project-materials/project-material-save-patch";
+import { assertFullSaveMaterialAssignmentsAllowed } from "../project-materials/project-material-save-authority";
 
 export async function closePostgresProjectPools(): Promise<void> {
-  const openPools = [...pools.values()];
-  pools.clear();
-  verifiedSchemas.clear();
-  await Promise.all(openPools.map((pool) => pool.end()));
+  await closeSchemaPools();
 }
 
-async function setSearchPath(client: PoolClient, schema: string): Promise<void> {
-  await client.query(`SET search_path TO ${quotePgIdentifier(schema)}, public`);
-}
-
-async function assertSchemaMigrated(client: PoolClient, key: string, schema: string): Promise<void> {
-  if (verifiedSchemas.has(key)) return;
-  const result = await client.query<{ version: string }>(
-    "SELECT version FROM schema_migrations WHERE version = $1",
-    [REQUIRED_DATABASE_MIGRATION_VERSION]
-  ).catch((error: unknown) => {
-    throw new Error(`Database schema "${schema}" is not migrated. Run npm run db:migrate -- --schema ${schema}. ${error instanceof Error ? error.message : String(error)}`);
-  });
-  if (!result.rows[0]) {
-    throw new Error(`Database schema "${schema}" is missing migration ${REQUIRED_DATABASE_MIGRATION_VERSION}. Run npm run db:migrate -- --schema ${schema}.`);
-  }
-  verifiedSchemas.add(key);
-}
-
-async function withClient<T>(pool: Pool, schema: string, key: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
+async function withTransaction<T>(client: PoolClient, operation: () => Promise<T>): Promise<T> {
+  await client.query("BEGIN");
   try {
-    await setSearchPath(client, schema);
-    await assertSchemaMigrated(client, key, schema);
-    return await fn(client);
-  } finally {
-    client.release();
+    const result = await operation();
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}
+
+function assertNextMaterialRevision(expectedRevision: number, nextState: ProjectMaterialAssignmentsState): void {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error("Expected material revision is invalid.");
+  validateProjectMaterialAssignmentsState(nextState, "next project material assignments");
+  if (nextState.revision !== expectedRevision + 1) {
+    throw new Error("Next material assignment revision must increment expectedRevision by one.");
   }
 }
 
@@ -149,21 +122,21 @@ export function createPostgresProjectRepository(args: {
   schema?: string;
 }): ProjectRepository {
   const schema = args.schema ?? "public";
-  const key = poolKey(args.connectionString, schema);
-  const pool = getPool(args.connectionString, schema);
+  const withClient = <T>(fn: (client: PoolClient) => Promise<T>) =>
+    withSchemaClient(args.connectionString, schema, fn);
 
   return {
     async createProject(ctx, input) {
       assertValidCreateProjectInput(input);
       const metadata = createProjectMetadata(ctx, input);
-      await withClient(pool, schema, key, async (client) => {
+      await withClient(async (client) => {
         await saveMetadata(client, ctx, metadata);
       });
       return metadata;
     },
 
     async listProjects(ctx) {
-      return withClient(pool, schema, key, async (client) => {
+      return withClient(async (client) => {
         const result = await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 ORDER BY updated_at DESC, db_updated_at DESC",
           [ctx.clientId]
@@ -174,7 +147,7 @@ export function createPostgresProjectRepository(args: {
 
     async getProject(ctx, projectId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
-      return withClient(pool, schema, key, async (client) => {
+      return withClient(async (client) => {
         const result = await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
           [ctx.clientId, safeProjectId]
@@ -185,8 +158,31 @@ export function createPostgresProjectRepository(args: {
       });
     },
 
+    async deleteProject(ctx, projectId) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      await withClient(async (client) => {
+        const result = await client.query(
+          "DELETE FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
+          [ctx.clientId, safeProjectId]
+        );
+        if (result.rowCount !== 1) throw notFound("Project not found.");
+      });
+
+      const root = path.resolve(args.projectRoot);
+      const clientRoot = path.resolve(resolveClientStoragePath(root, ctx));
+      const projectPath = path.resolve(resolveProjectStoragePath(root, createClientProjectPhaseScope(ctx, {
+        projectId: safeProjectId,
+        phaseId: "phase_1"
+      })));
+      const relative = path.relative(clientRoot, projectPath);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+        throw new Error("Refusing to delete a project outside the current client storage.");
+      }
+      await rm(projectPath, { recursive: true, force: true });
+    },
+
     async saveProjectMetadata(ctx, metadata) {
-      await withClient(pool, schema, key, async (client) => {
+      await withClient(async (client) => {
         await saveMetadata(client, ctx, metadata);
       });
     },
@@ -194,50 +190,103 @@ export function createPostgresProjectRepository(args: {
     async loadProjectSave(ctx, projectId, phaseId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
-      return withClient(pool, schema, key, async (client) => {
+      return withClient(async (client) => {
         const project = rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
           [ctx.clientId, safeProjectId]
         )).rows[0]);
         assertPhaseBelongsToProject(project, safePhaseId);
-        const result = await client.query<{ save: ProjectSaveFile }>(
+        const result = await client.query<{ save: unknown }>(
           "SELECT save FROM arcigy_project_saves WHERE client_id = $1 AND project_id = $2 AND phase_id = $3",
           [ctx.clientId, safeProjectId, safePhaseId]
         );
         if (!result.rows[0]) throw notFound("Project save not found.");
-        const save = result.rows[0].save;
-        validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
-        return save;
+        return loadProjectSaveFile(result.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
       });
     },
 
-    async saveProjectSnapshot(ctx, projectId, phaseId, save) {
+    async saveProjectSnapshot(ctx, projectId, phaseId, save, options) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
       validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
-      await withClient(pool, schema, key, async (client) => {
+      await withClient(async (client) => {
+        await withTransaction(client, async () => {
+          const project = rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
+            "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2 FOR UPDATE",
+            [ctx.clientId, safeProjectId]
+          )).rows[0]);
+          assertPhaseBelongsToProject(project, safePhaseId);
+          const storedResult = await client.query<{ save: unknown }>(
+            "SELECT save FROM arcigy_project_saves WHERE client_id = $1 AND project_id = $2 AND phase_id = $3 FOR UPDATE",
+            [ctx.clientId, safeProjectId, safePhaseId]
+          );
+          if (storedResult.rows[0]) {
+            const stored = loadProjectSaveFile(storedResult.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
+            assertFullSaveMaterialAssignmentsAllowed(
+              stored.appState.materialAssignments,
+              save.appState.materialAssignments,
+              options?.materialAssignmentsMode
+            );
+          }
+          await client.query(
+            `
+              INSERT INTO arcigy_project_saves (client_id, project_id, phase_id, save, saved_at, saved_by_user_id, db_updated_at)
+              VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, $6, now())
+              ON CONFLICT (client_id, project_id, phase_id) DO UPDATE SET
+                save = EXCLUDED.save,
+                saved_at = EXCLUDED.saved_at,
+                saved_by_user_id = EXCLUDED.saved_by_user_id,
+                db_updated_at = now()
+            `,
+            [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(save), save.integrity.savedAt, ctx.userId]
+          );
+        });
+      });
+    },
+
+    async updateProjectMaterialAssignments(ctx, projectId, phaseId, expectedRevision, nextState) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
+      assertNextMaterialRevision(expectedRevision, nextState);
+      return withClient(async (client) => withTransaction(client, async () => {
         const project = rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
-          "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
+          "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2 FOR UPDATE",
           [ctx.clientId, safeProjectId]
         )).rows[0]);
         assertPhaseBelongsToProject(project, safePhaseId);
+        const storedResult = await client.query<{ save: unknown }>(
+          "SELECT save FROM arcigy_project_saves WHERE client_id = $1 AND project_id = $2 AND phase_id = $3 FOR UPDATE",
+          [ctx.clientId, safeProjectId, safePhaseId]
+        );
+        if (!storedResult.rows[0]) throw notFound("Project save not found.");
+        const stored = loadProjectSaveFile(storedResult.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
+        const actualRevision = stored.appState.materialAssignments.revision;
+        if (actualRevision !== expectedRevision) {
+          throw new ProjectMaterialRevisionConflictError(expectedRevision, actualRevision);
+        }
+        const patched = patchProjectSaveMaterialAssignments({
+          save: stored,
+          phaseId: safePhaseId,
+          nextState,
+          updatedByUserId: ctx.userId
+        });
+        validateProjectSaveFile(patched, { clientId: ctx.clientId, projectId: safeProjectId });
         await client.query(
           `
-            INSERT INTO arcigy_project_saves (client_id, project_id, phase_id, save, saved_at, db_updated_at)
-            VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, now())
-            ON CONFLICT (client_id, project_id, phase_id) DO UPDATE SET
-              save = EXCLUDED.save,
-              saved_at = EXCLUDED.saved_at,
-              db_updated_at = now()
+            UPDATE arcigy_project_saves
+            SET save = $4::jsonb, saved_at = $5::timestamptz, saved_by_user_id = $6, db_updated_at = now()
+            WHERE client_id = $1 AND project_id = $2 AND phase_id = $3
           `,
-          [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(save), save.integrity.savedAt]
+          [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(patched), patched.integrity.savedAt, ctx.userId]
         );
-      });
+        await saveMetadata(client, ctx, patched.project);
+        return patched;
+      }));
     },
 
     async listProjectVersions(ctx, projectId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
-      return withClient(pool, schema, key, async (client) => {
+      return withClient(async (client) => {
         rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
           [ctx.clientId, safeProjectId]
@@ -252,26 +301,24 @@ export function createPostgresProjectRepository(args: {
 
     async loadProjectVersion(ctx, projectId, versionNumber) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
-      return withClient(pool, schema, key, async (client) => {
+      return withClient(async (client) => {
         rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
           [ctx.clientId, safeProjectId]
         )).rows[0]);
-        const result = await client.query<{ save: ProjectSaveFile }>(
+        const result = await client.query<{ save: unknown }>(
           "SELECT save FROM arcigy_project_versions WHERE client_id = $1 AND project_id = $2 AND version_number = $3",
           [ctx.clientId, safeProjectId, versionNumber]
         );
         if (!result.rows[0]) throw notFound("Project version not found.");
-        const save = result.rows[0].save;
-        validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
-        return save;
+        return loadProjectSaveFile(result.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
       });
     },
 
     async saveProjectVersion(ctx, metadata, save) {
       const safeProjectId = sanitizeStorageId(metadata.projectId, "projectId");
       validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
-      await withClient(pool, schema, key, async (client) => {
+      await withClient(async (client) => {
         rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
           "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2",
           [ctx.clientId, safeProjectId]

@@ -24,6 +24,85 @@ function tallModule(): LayoutInstance {
   } as LayoutInstance;
 }
 
+function baseModule(): LayoutInstance {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  root.add(module);
+  root.updateMatrixWorld(true);
+  return {
+    id: "base_module",
+    params: {
+      type: "fwm_catalog_base_doors",
+      kitchenModuleRole: "low",
+      width: 600,
+      depth: 530,
+      requiresWorktop: true,
+      worktopThicknessMm: 38
+    },
+    kitchenGroupId: "kg1",
+    kitchenPlacement: null,
+    root,
+    module,
+    localBox: new THREE.Box3(new THREE.Vector3(-0.3, 0, -0.265), new THREE.Vector3(0.3, 0.722, 0.265)),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+}
+
+function boundBaseModule(id: string, centerM: number): LayoutInstance {
+  const inst = baseModule();
+  inst.id = id;
+  inst.kitchenPlacement = { worktopId: "w1", segmentIndex: 0, offsetAlongM: centerM };
+  return inst;
+}
+
+function boundUpperModule(id: string, centerM: number): LayoutInstance {
+  const inst = boundBaseModule(id, centerM);
+  inst.params = {
+    ...inst.params,
+    type: "fwm_catalog_wall_cabinet",
+    kitchenModuleRole: "upper"
+  } as LayoutInstance["params"];
+  inst.root.position.y = 1.4;
+  return inst;
+}
+
+function boundCorner90Module(): LayoutInstance {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  const corner = new THREE.Object3D();
+  corner.name = "__kitchen_corner_anchor";
+  const xAnchor = new THREE.Object3D();
+  xAnchor.name = "__kitchen_corner_x_anchor";
+  xAnchor.position.x = 0.9;
+  const zAnchor = new THREE.Object3D();
+  zAnchor.name = "__kitchen_corner_z_anchor";
+  zAnchor.position.z = 0.9;
+  module.add(corner, xAnchor, zAnchor);
+  root.add(module);
+  root.position.set(2.4, 0, 0);
+  root.rotation.y = -Math.PI / 2;
+  root.updateMatrixWorld(true);
+  return {
+    id: "corner-90",
+    params: {
+      type: "fwm_catalog_base_corner",
+      variant: "corner_90",
+      kitchenModuleRole: "low",
+      cornerShape: "l_shape",
+      width: 900,
+      depth: 560
+    },
+    kitchenGroupId: "kg1",
+    kitchenPlacement: { worktopId: "w1", kind: "corner", segmentIndex: 0, cornerIndex: 1, offsetAlongM: 0 },
+    root,
+    module,
+    localBox: new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.9, 0.722, 0.9)),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+}
+
 function vendorTallApplianceModule(): LayoutInstance {
   const inst = tallModule();
   inst.id = "vendor_tall_appliance";
@@ -43,13 +122,13 @@ function chamferedCornerModule(rotationOffsetRad: number): LayoutInstance {
   module.userData.kitchenCornerRotationOffsetRad = rotationOffsetRad;
   const cornerAnchor = new THREE.Object3D();
   cornerAnchor.name = "__kitchen_corner_anchor";
-  cornerAnchor.position.set(0, 0, 0);
+  cornerAnchor.position.set(0.9, 0, 0);
   const xAnchor = new THREE.Object3D();
   xAnchor.name = "__kitchen_corner_x_anchor";
-  xAnchor.position.set(0.9, 0, 0);
+  xAnchor.position.set(0, 0, 0);
   const zAnchor = new THREE.Object3D();
   zAnchor.name = "__kitchen_corner_z_anchor";
-  zAnchor.position.set(0, 0, 0.9);
+  zAnchor.position.set(0.9, 0, 0.9);
   module.add(cornerAnchor, xAnchor, zAnchor);
   root.add(module);
   root.updateMatrixWorld(true);
@@ -148,11 +227,13 @@ function makeContext(getKitchenWorktopBackGuidePath = vi.fn()): KitchenPlacement
     ]),
     rebuildInstance: vi.fn(() => true),
     rebuildKitchenGroupWorktops: vi.fn(),
+    rebuildKitchenWorktop: vi.fn(),
     updateLayoutPanel: vi.fn(),
     getWallSolvedJoinPolys: vi.fn(() => []),
     getWallUnionPolys: vi.fn(() => null),
     getLayoutTool: vi.fn(() => "select"),
     getWallChainStart: vi.fn(() => null),
+    commitHistory: vi.fn(),
     catalog: {}
   } as unknown as KitchenPlacementControllerContext;
 }
@@ -166,6 +247,280 @@ describe("kitchen placement controller", () => {
 
     expect(result?.valid).toBe(true);
     expect(getKitchenWorktopBackGuidePath).toHaveBeenCalledWith(expect.objectContaining({ materialId: "mat" }), 45);
+  });
+
+  it("selects either coincident island side from the cursor side", () => {
+    const getKitchenWorktopBackGuidePath = vi.fn();
+    const ctx = makeContext(getKitchenWorktopBackGuidePath);
+    getKitchenWorktopBackGuidePath.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(2, 0, 0),
+      new THREE.Vector3(0, 0, 0)
+    ]);
+    const controller = createKitchenPlacementController(ctx);
+
+    const front = controller.getKitchenPlacementConstraint(baseModule(), new THREE.Vector3(1, 0, 0.3));
+    const back = controller.getKitchenPlacementConstraint(baseModule(), new THREE.Vector3(1, 0, -0.3));
+    const seam = controller.getKitchenPlacementConstraint(baseModule(), new THREE.Vector3(1, 0, 0));
+
+    expect(front?.kitchenPlacement?.segmentIndex).toBe(0);
+    expect(front?.rotationY).toBeCloseTo(0);
+    expect(front?.position.z).toBeGreaterThan(0);
+    expect(back?.kitchenPlacement?.segmentIndex).toBe(1);
+    expect(Math.abs(controller.normalizeAngleRad(back?.rotationY ?? 0))).toBeCloseTo(Math.PI);
+    expect(back?.position.z).toBeLessThan(0);
+    expect(seam?.kitchenPlacement?.segmentIndex).toBe(0);
+
+    ctx.kitchenWorktops[0]!.params.mirrored = true;
+    const mirroredFront = controller.getKitchenPlacementConstraint(baseModule(), new THREE.Vector3(1, 0, 0.3));
+    expect(mirroredFront?.kitchenPlacement?.segmentIndex).toBe(1);
+  });
+
+  it("rebuilds supported base modules when their automatic end closure changes", () => {
+    const ctx = makeContext();
+    const inst = baseModule();
+    inst.module.userData.supportsKitchenRunEndClosure = true;
+    ctx.instances.push(inst);
+    const controller = createKitchenPlacementController(ctx);
+
+    expect(controller.applyKitchenPlacementBinding(inst, {
+      worktopId: "w1",
+      segmentIndex: 0,
+      offsetAlongM: 0.3
+    }, 45)).toBe(true);
+    expect(inst.params).toMatchObject({
+      kitchenEndClosureLeft: true,
+      kitchenEndClosureRight: false,
+      kitchenEndClosureBackGapMm: 45
+    });
+    expect(ctx.rebuildInstance).toHaveBeenCalledTimes(1);
+
+    inst.kitchenPlacement = null;
+    expect(controller.syncKitchenRunEndClosure(inst, 45)).toBe(true);
+    expect(inst.params).toMatchObject({
+      kitchenEndClosureLeft: false,
+      kitchenEndClosureRight: false,
+      kitchenEndClosureBackGapMm: 0
+    });
+    expect(ctx.rebuildInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it("resizes a bound base module and cascades its run neighbors inside the worktop", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    getGuide.mockImplementation(() => [new THREE.Vector3(0, 0, 0), new THREE.Vector3(2.4, 0, 0)]);
+    ctx.kitchenWorktops[0]!.params.path = [{ x: 0, z: 0 }, { x: 2400, z: 0 }];
+    const modules = [boundBaseModule("a", 0.3), boundBaseModule("b", 0.9), boundBaseModule("c", 1.5)];
+    ctx.instances.push(...modules);
+    ctx.rebuildInstance = vi.fn((inst) => {
+      const widthM = Number(inst.params.width ?? 600) / 1000;
+      inst.localBox.min.x = -widthM / 2;
+      inst.localBox.max.x = widthM / 2;
+      return true;
+    });
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.resizeKitchenRunModule("b", 900);
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 900, clamped: false });
+    expect(modules[1]!.params.width).toBe(900);
+    expect(modules.map((inst) => inst.kitchenPlacement?.offsetAlongM)).toEqual([0.3, 1.05, 1.8]);
+    expect(ctx.commitHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("clamps an impossible run width instead of putting a module outside the worktop", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    getGuide.mockImplementation(() => [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.8, 0, 0)]);
+    const modules = [boundBaseModule("a", 0.3), boundBaseModule("b", 0.9), boundBaseModule("c", 1.5)];
+    ctx.instances.push(...modules);
+    ctx.rebuildInstance = vi.fn(() => true);
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.resizeKitchenRunModule("b", 1000);
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 600, clamped: true });
+    expect(modules.map((inst) => inst.kitchenPlacement?.offsetAlongM)).toEqual([0.3, 0.9, 1.5]);
+  });
+
+  it("moves a selected module from an edited adjacent gap and keeps the run ordered", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    getGuide.mockImplementation(() => [new THREE.Vector3(0, 0, 0), new THREE.Vector3(2.4, 0, 0)]);
+    const modules = [boundBaseModule("a", 0.3), boundBaseModule("b", 1.1), boundBaseModule("c", 1.9)];
+    ctx.instances.push(...modules);
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.moveKitchenRunModuleByGap("b", "before", 50);
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 50, clamped: false });
+    expect(modules[1]!.kitchenPlacement?.offsetAlongM).toBeCloseTo(0.95);
+    expect((modules[2]!.kitchenPlacement?.offsetAlongM ?? 0) - (modules[1]!.kitchenPlacement?.offsetAlongM ?? 0)).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("creates one complete dimension source per U-shaped worktop segment", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    getGuide.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(2, 0, 0),
+      new THREE.Vector3(2, 0, 1.5),
+      new THREE.Vector3(0, 0, 1.5)
+    ]);
+    const controller = createKitchenPlacementController(ctx);
+
+    const sources = controller.getKitchenRunDimensionSources("kg1");
+
+    expect(sources).toHaveLength(3);
+    expect(sources.map((source) => Math.round(source.lengthMm))).toEqual([2000, 1500, 2000]);
+  });
+
+  it("dimensions worktop wings from their real path edges instead of the inset placement guide", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    ctx.kitchenWorktops[0]!.params.path = [{ x: 0, z: 0 }, { x: 2000, z: 0 }, { x: 2000, z: 1500 }];
+    getGuide.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0.045),
+      new THREE.Vector3(1.955, 0, 0.045),
+      new THREE.Vector3(1.955, 0, 1.5)
+    ]);
+    const controller = createKitchenPlacementController(ctx);
+
+    const sources = controller.getKitchenRunDimensionSources("kg1");
+
+    expect(sources.map((source) => Math.round(source.lengthMm))).toEqual([1955, 1455]);
+    expect(sources.map((source) => Math.round(source.worktopEdgeLengthMm ?? 0))).toEqual([2000, 1500]);
+    expect(sources[0]?.worktopEdgeEnd).toEqual({ x: 2, z: 0 });
+    expect(sources[1]?.worktopEdgeStart).toEqual({ x: 2, z: 0 });
+  });
+
+  it("builds independent lower and upper dimension chains from the same worktop", () => {
+    const ctx = makeContext();
+    const lower = boundBaseModule("lower", 0.3);
+    const upper = boundUpperModule("upper", 0.9);
+    ctx.instances.push(lower, upper);
+    const controller = createKitchenPlacementController(ctx);
+
+    expect(controller.getKitchenRunDimensionSources("kg1", "base")[0]!.modules.map((module) => module.id)).toEqual(["lower"]);
+    expect(controller.getKitchenRunDimensionSources("kg1", "upper")[0]!.modules.map((module) => module.id)).toEqual(["upper"]);
+  });
+
+  it("exposes both corner arms as independent reserved run dimensions", () => {
+    const ctx = makeContext();
+    ctx.getKitchenWorktopBackGuidePath = vi.fn(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(2.4, 0, 0),
+      new THREE.Vector3(2.4, 0, 2.4)
+    ]);
+    ctx.instances.push(boundCorner90Module());
+    const controller = createKitchenPlacementController(ctx);
+
+    const sources = controller.getKitchenRunDimensionSources("kg1", "base");
+
+    expect(sources[0]?.reservedEndArm).toMatchObject({ moduleId: "corner-90", axis: "z" });
+    expect(sources[0]?.reservedEndArm?.lengthMm).toBeCloseTo(900, 6);
+    expect(sources[1]?.reservedStartArm).toMatchObject({ moduleId: "corner-90", axis: "x" });
+    expect(sources[1]?.reservedStartArm?.lengthMm).toBeCloseTo(900, 6);
+  });
+
+  it("rewrites the selected 90-corner arm parameter and keeps straight modules inside the worktop", () => {
+    const ctx = makeContext();
+    ctx.getKitchenWorktopBackGuidePath = vi.fn(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(2.4, 0, 0),
+      new THREE.Vector3(2.4, 0, 2.4)
+    ]);
+    const corner = boundCorner90Module();
+    const straight = boundBaseModule("straight-z", 1.5);
+    straight.kitchenPlacement = { worktopId: "w1", segmentIndex: 0, offsetAlongM: 1.5 };
+    ctx.instances.push(corner, straight);
+    ctx.rebuildInstance = vi.fn((inst) => {
+      if (inst.id !== corner.id) return true;
+      const zAnchor = inst.module.getObjectByName("__kitchen_corner_z_anchor")!;
+      zAnchor.position.z = Number((inst.params as Record<string, unknown>).cornerLengthZMm ?? 900) / 1000;
+      inst.localBox.max.z = zAnchor.position.z;
+      inst.root.updateMatrixWorld(true);
+      return true;
+    });
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.resizeKitchenCornerArm(corner.id, "z", 1100);
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 1100, clamped: false });
+    expect((corner.params as Record<string, unknown>).cornerLengthZMm).toBe(1100);
+    expect(straight.kitchenPlacement?.offsetAlongM).toBeCloseTo(1, 6);
+    expect((straight.kitchenPlacement?.offsetAlongM ?? 0) + 0.3).toBeLessThanOrEqual(1.3);
+    expect(ctx.commitHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("resizes one worktop wing and moves its bound modules with the changed start point", () => {
+    const ctx = makeContext();
+    ctx.getKitchenWorktopBackGuidePath = vi.fn((params: KitchenWorktopInstance["params"]) => params.path.map((point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000)));
+    const straight = boundBaseModule("straight", 0.3);
+    ctx.instances.push(straight);
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.editKitchenWorktopSegment({ worktopId: "w1", segmentIndex: 0, lengthMm: 1400 });
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 1400, clamped: false });
+    expect(ctx.kitchenWorktops[0]?.params.path[0]).toEqual({ x: -400, z: 0 });
+    expect(straight.root.position.x).toBeCloseTo(-0.1, 6);
+    expect(straight.kitchenPlacement?.offsetAlongM).toBeCloseTo(0.3, 6);
+    expect(ctx.rebuildKitchenWorktop).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves a selected worktop wing and its modules when an adjacent dimension is rewritten", () => {
+    const ctx = makeContext();
+    ctx.kitchenWorktops[0]!.params.path = [{ x: 0, z: 0 }, { x: 1000, z: 0 }, { x: 1000, z: 1000 }];
+    ctx.getKitchenWorktopBackGuidePath = vi.fn((params: KitchenWorktopInstance["params"]) =>
+      params.path.map((point) => new THREE.Vector3(point.x / 1000, 0, point.z / 1000))
+    );
+    const straight = boundBaseModule("straight", 0.3);
+    ctx.instances.push(straight);
+    const controller = createKitchenPlacementController(ctx);
+    expect(controller.applyKitchenPlacementBinding(straight, straight.kitchenPlacement!, 45)).toBe(true);
+    const beforeZ = straight.root.position.z;
+
+    const result = controller.editKitchenWorktopSegment({
+      worktopId: "w1",
+      segmentIndex: 0,
+      adjacentSegmentIndex: 1,
+      lengthMm: 1400
+    });
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 1400, clamped: false });
+    expect(ctx.kitchenWorktops[0]?.params.path).toEqual([
+      { x: 0, z: -400 },
+      { x: 1000, z: -400 },
+      { x: 1000, z: 1000 }
+    ]);
+    expect(straight.root.position.z - beforeZ).toBeCloseTo(-0.4, 6);
+    expect(straight.kitchenPlacement?.offsetAlongM).toBeCloseTo(0.3, 6);
+    expect(ctx.commitHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("resizes an upper run without reflowing lower modules on the same worktop", () => {
+    const getGuide = vi.fn();
+    const ctx = makeContext(getGuide);
+    getGuide.mockImplementation(() => [new THREE.Vector3(0, 0, 0), new THREE.Vector3(2.4, 0, 0)]);
+    const lower = boundBaseModule("lower", 0.3);
+    const upperA = boundUpperModule("upper-a", 0.3);
+    const upperB = boundUpperModule("upper-b", 0.9);
+    ctx.instances.push(lower, upperA, upperB);
+    ctx.rebuildInstance = vi.fn((inst) => {
+      const widthM = Number(inst.params.width ?? 600) / 1000;
+      inst.localBox.min.x = -widthM / 2;
+      inst.localBox.max.x = widthM / 2;
+      return true;
+    });
+    const controller = createKitchenPlacementController(ctx);
+
+    const result = controller.resizeKitchenRunModule("upper-b", 900);
+
+    expect(result).toEqual({ ok: true, appliedValueMm: 900, clamped: false });
+    expect(lower.kitchenPlacement?.offsetAlongM).toBe(0.3);
+    expect(upperA.kitchenPlacement?.offsetAlongM).toBe(0.3);
+    expect(upperB.kitchenPlacement?.offsetAlongM).toBe(1.05);
   });
 
   it("resolves upper module placement height from group context with default fallback", () => {
@@ -249,6 +604,31 @@ describe("kitchen placement controller", () => {
       expect(relative.dot(armX)).toBeGreaterThanOrEqual(-1e-9);
       expect(relative.dot(armZ)).toBeGreaterThanOrEqual(-1e-9);
     }
+  });
+
+  it("reserves both worktop arms from the chamfered corner's real wall anchor", () => {
+    const getKitchenWorktopBackGuidePath = vi.fn();
+    const ctx = makeContext(getKitchenWorktopBackGuidePath);
+    getKitchenWorktopBackGuidePath.mockImplementation(() => [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(1, 0, 1)
+    ]);
+    const inst = chamferedCornerModule(Math.PI / 2);
+    ctx.instances.push(inst);
+    const controller = createKitchenPlacementController(ctx);
+    const placement = controller.getKitchenPlacementConstraint(inst, new THREE.Vector3(1, 0, 0));
+    if (!placement) throw new Error("Expected chamfered corner placement result");
+    inst.root.position.copy(placement.position);
+    inst.root.rotation.y = placement.rotationY;
+    inst.kitchenPlacement = placement.kitchenPlacement;
+    inst.root.updateMatrixWorld(true);
+
+    const worldAnchor = controller.getModuleWorldKitchenAnchor(inst).setY(0);
+    expect(worldAnchor.x).toBeCloseTo(1);
+    expect(worldAnchor.z).toBeCloseTo(0);
+    expect(controller.getKitchenSegmentReservedMargins("kg1", "w1", 0, 45)).toEqual({ startM: 0, endM: 0.9 });
+    expect(controller.getKitchenSegmentReservedMargins("kg1", "w1", 1, 45)).toEqual({ startM: 0.9, endM: 0 });
   });
 
   it("places zero-offset FWM upper L corner without adding an extra 90 degrees", () => {

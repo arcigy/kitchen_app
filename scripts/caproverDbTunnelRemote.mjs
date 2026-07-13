@@ -37,7 +37,13 @@ const server = net.createServer((client) => {
 
     if (header !== `TOKEN ${token}`) return close(client);
 
+    // The authentication deadline must not become an idle timeout for an
+    // authenticated PostgreSQL connection. Pools intentionally keep sockets
+    // idle between requests and would otherwise reconnect every ten seconds.
+    client.setTimeout(0);
+    client.setKeepAlive(true, 10_000);
     const db = net.connect({ host: dbHost, port: dbPort }, () => {
+      db.setKeepAlive(true, 10_000);
       if (rest.length) db.write(rest);
       client.pipe(db);
       db.pipe(client);

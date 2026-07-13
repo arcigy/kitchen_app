@@ -19,7 +19,12 @@ import {
   getKitchenWorktopThicknessOptions,
   resolveKitchenWorktopThickness,
 } from "./kitchenMaterialSync";
-import { getKitchenModuleRole } from "./kitchenModuleRules";
+import {
+  getKitchenModuleRole,
+  isKitchenModuleInEditLayer,
+  resolveKitchenModulePlanEmphasis,
+  type KitchenModuleEditLayer
+} from "./kitchenModuleRules";
 import {
   groupKitchenModulePackages,
   type KitchenCatalogRole,
@@ -67,6 +72,10 @@ import {
 import { isPrimaryPointerButton } from "../app/pointerButtons";
 import { SNAP_DISTANCE_PX } from "../app/snapToolProfiles";
 import type { PlanSnapKind } from "../app/planSnap";
+import { createKitchenRunDimensionOverlay } from "./kitchenRunDimensionOverlay";
+import type { KitchenRunDimensionSource } from "./kitchenRunDimensions";
+import { getKitchenWorktopSegmentDepthMm } from "./worktopGeometry";
+import type { KitchenWorktopSegmentRef } from "./worktopSegmentEditing";
 
 type GroupInstanceSnapshot = {
   id: string;
@@ -266,11 +275,18 @@ type CreateKitchenEditModeArgs = {
     worktop: string;
     done: string;
     cancel: string;
+    move: string;
+    align: string;
   };
 
   ensureLayoutMode: () => void;
   ensureFloorplanViewerTab: () => void;
   setToolSelect: () => void;
+  setToolAlign: () => void;
+  startTransformFromSelection: (
+    kind: "move",
+    opts?: { sticky?: boolean; toggle?: boolean },
+  ) => boolean;
   cancelPlacementIfActive: () => void;
   addInstance: (
     type: ModuleParams["type"],
@@ -292,6 +308,7 @@ type CreateKitchenEditModeArgs = {
   ) => LayoutInstance;
   findInstance: (id: string) => LayoutInstance | null;
   setSelectedModule: (id: string | null) => void;
+  getSelectedModuleIds: () => string[];
   getSelectedKitchenGroupId: () => string | null;
   setSelectedKitchenGroup: (id: string | null) => void;
   updateLayoutPanel: () => void;
@@ -324,6 +341,31 @@ type CreateKitchenEditModeArgs = {
   ) => THREE.Vector2;
   getViewMode?: () => "2d" | "3d";
   getActiveViewerTab?: () => string;
+  getKitchenRunDimensionSources: (
+    groupId: string,
+    moduleRole?: KitchenModuleEditLayer
+  ) => KitchenRunDimensionSource[];
+  resizeKitchenRunModule: (
+    instanceId: string,
+    widthMm: number,
+  ) => { ok: true; appliedValueMm: number; clamped: boolean } | { ok: false; reason: string };
+  resizeKitchenCornerArm: (
+    instanceId: string,
+    axis: "x" | "z",
+    lengthMm: number,
+  ) => { ok: true; appliedValueMm: number; clamped: boolean } | { ok: false; reason: string };
+  moveKitchenRunModuleByGap: (
+    instanceId: string,
+    side: "before" | "after",
+    gapMm: number,
+  ) => { ok: true; appliedValueMm: number; clamped: boolean } | { ok: false; reason: string };
+  editKitchenWorktopSegment: (args: {
+    worktopId: string;
+    segmentIndex: number;
+    depthMm?: number;
+    lengthMm?: number;
+    adjacentSegmentIndex?: number;
+  }) => { ok: true; appliedValueMm: number; clamped: boolean } | { ok: false; reason: string };
   catalog: ClientCatalog;
   modulePackages?: readonly FurnQuoteModulePackage[];
 };
@@ -346,6 +388,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   let activeTallDimensionBoundaryIndex: number | null = null;
   let activeTallDimensionInputSegmentIndex: number | null = null;
   let tallDimensionOverlaySignature = "";
+  let kitchenRunDimensionOverlay: ReturnType<typeof createKitchenRunDimensionOverlay> | null = null;
+  let selectedWorktopSegment: KitchenWorktopSegmentRef | null = null;
   const tallSubmoduleMoveState: TallSubmoduleMoveState = {
     active: false,
     operation: "move",
@@ -380,6 +424,12 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   let tallSubmoduleAlignHoverYMm: number | null = null;
 
   let activeName = "";
+  let activeModuleEditLayer: KitchenModuleEditLayer = "base";
+  const planOutlineSnapshots = new Map<THREE.LineBasicMaterial, {
+    color: THREE.Color;
+    opacity: number;
+    renderOrder: number;
+  }>();
   let snapshotName = "";
   let editingExistingGroupId: string | null = null;
   let activeTallEditorInstanceId: string | null = null;
@@ -546,6 +596,29 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     removeEscapeHandler();
     escapeHandler = (ev: KeyboardEvent) => {
       if (handleTallStackEditorKeyDown(ev)) return;
+      if (
+        args.S.kitchenEditMode &&
+        !activeTallStackEditorInstance() &&
+        !isTextEntryTarget(ev.target) &&
+        !ev.ctrlKey &&
+        !ev.metaKey &&
+        !ev.altKey
+      ) {
+        if (
+          ev.key.toLowerCase() === "m" &&
+          args.startTransformFromSelection("move", { sticky: true, toggle: true })
+        ) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        if (ev.key.toLowerCase() === "a") {
+          args.setToolAlign();
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+      }
       if (ev.key !== "Escape") return;
       if (ev.shiftKey) return;
       if (!args.S.kitchenEditMode) return;
@@ -1010,6 +1083,158 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
   const activeTallStackEditorInstance = () => {
     return tallStackInstanceById(activeTallEditorInstanceId);
+  };
+
+  const ensureKitchenRunDimensionOverlay = () => {
+    if (kitchenRunDimensionOverlay) return kitchenRunDimensionOverlay;
+    kitchenRunDimensionOverlay = createKitchenRunDimensionOverlay({
+      host: args.viewerEl,
+      getCamera: () => args.getCamera!(),
+      worldToScreen: (world, camera, rect) => args.worldToScreen!(world, camera, rect),
+      getSources: () => {
+        const groupId = args.S.activeKitchenGroupId;
+        return groupId ? args.getKitchenRunDimensionSources(groupId, activeModuleEditLayer) : [];
+      },
+      getSelectedModuleIds: args.getSelectedModuleIds,
+      getSelectedWorktopSegment: () => selectedWorktopSegment,
+      getBlockingModules: () => {
+        const blockers: Array<{ id: string; minX: number; maxX: number; minZ: number; maxZ: number }> = [];
+        for (const inst of args.S.instances) {
+          inst.module.updateMatrixWorld(true);
+          const bounds = new THREE.Box3().setFromObject(inst.module);
+          if (bounds.isEmpty()) continue;
+          blockers.push({
+            id: inst.id,
+            minX: bounds.min.x,
+            maxX: bounds.max.x,
+            minZ: bounds.min.z,
+            maxZ: bounds.max.z
+          });
+        }
+        return blockers;
+      },
+      selectModule: (instanceId) => args.setSelectedModule(instanceId),
+      selectWorktopSegment: (worktopId, segmentIndex) => {
+        selectedWorktopSegment = { worktopId, segmentIndex };
+        args.setSelectedModule(null);
+        args.refreshProps();
+      },
+      editModuleWidth: (instanceId, widthMm) => {
+        const result = args.resizeKitchenRunModule(instanceId, widthMm);
+        if (result.ok) {
+          args.refreshProps();
+          renderModuleCatalog();
+        }
+        return result;
+      },
+      editCornerArm: (instanceId, axis, lengthMm) => {
+        const result = args.resizeKitchenCornerArm(instanceId, axis, lengthMm);
+        if (result.ok) {
+          args.refreshProps();
+          renderModuleCatalog();
+        }
+        return result;
+      },
+      editModuleGap: (instanceId, side, gapMm) => {
+        const result = args.moveKitchenRunModuleByGap(instanceId, side, gapMm);
+        if (result.ok) args.refreshProps();
+        return result;
+      },
+      editWorktopLength: (worktopId, segmentIndex, lengthMm) => {
+        const result = args.editKitchenWorktopSegment({ worktopId, segmentIndex, lengthMm });
+        if (result.ok) args.refreshProps();
+        return result;
+      },
+      editWorktopAdjacentOffset: (worktopId, selectedSegmentIndex, adjacentSegmentIndex, lengthMm) => {
+        const result = args.editKitchenWorktopSegment({
+          worktopId,
+          segmentIndex: selectedSegmentIndex,
+          adjacentSegmentIndex,
+          lengthMm
+        });
+        if (result.ok) args.refreshProps();
+        return result;
+      },
+      setStatus: args.setUnderlayStatus
+    });
+    return kitchenRunDimensionOverlay;
+  };
+
+  const renderKitchenRunDimensionOverlay = () => {
+    const groupId = args.S.activeKitchenGroupId;
+    const visible =
+      !!groupId &&
+      args.S.kitchenEditMode &&
+      !activeTallStackEditorInstance() &&
+      (args.getViewMode?.() ?? "3d") === "2d" &&
+      (args.getActiveViewerTab?.() ?? "3d") === "floorplan" &&
+      !!args.getCamera &&
+      !!args.worldToScreen;
+    if (!visible) {
+      kitchenRunDimensionOverlay?.hide();
+      return;
+    }
+    ensureKitchenRunDimensionOverlay().sync(true);
+  };
+
+  const refreshKitchenDimensionOverlays = () => {
+    renderTallDimensionOverlay();
+    renderKitchenRunDimensionOverlay();
+  };
+
+  const restoreKitchenPlanPresentation = () => {
+    for (const [material, snapshot] of planOutlineSnapshots) {
+      material.color.copy(snapshot.color);
+      material.opacity = snapshot.opacity;
+      material.needsUpdate = true;
+    }
+    for (const inst of args.S.instances) {
+      const material = inst.outline.material as THREE.LineBasicMaterial;
+      const snapshot = planOutlineSnapshots.get(material);
+      if (snapshot) inst.outline.renderOrder = snapshot.renderOrder;
+    }
+    planOutlineSnapshots.clear();
+  };
+
+  const syncKitchenPlanPresentation = () => {
+    const groupId = args.S.activeKitchenGroupId;
+    const visible =
+      !!groupId &&
+      args.S.kitchenEditMode &&
+      !activeTallStackEditorInstance() &&
+      (args.getViewMode?.() ?? "3d") === "2d" &&
+      (args.getActiveViewerTab?.() ?? "3d") === "floorplan";
+    if (!visible) {
+      restoreKitchenPlanPresentation();
+      return;
+    }
+
+    const invalidSelection = args.getSelectedModuleIds().some((id) => {
+      const inst = args.findInstance(id);
+      return !inst || inst.kitchenGroupId !== groupId || !isKitchenModuleInEditLayer(inst.params as Record<string, unknown>, activeModuleEditLayer);
+    });
+    if (invalidSelection) args.setSelectedModule(null);
+
+    for (const inst of args.S.instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      const material = inst.outline.material as THREE.LineBasicMaterial;
+      if (!planOutlineSnapshots.has(material)) {
+        planOutlineSnapshots.set(material, {
+          color: material.color.clone(),
+          opacity: material.opacity,
+          renderOrder: inst.outline.renderOrder
+        });
+      }
+      const emphasis = resolveKitchenModulePlanEmphasis(
+        inst.params as Record<string, unknown>,
+        activeModuleEditLayer
+      );
+      if (material.color.getHex() !== emphasis.color) material.color.setHex(emphasis.color);
+      material.transparent = true;
+      material.opacity = emphasis.opacity;
+      material.needsUpdate = true;
+      inst.outline.renderOrder = emphasis.renderOrder;
+    }
   };
 
   const ensureTallDimensionOverlay = () => {
@@ -3289,6 +3514,57 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     });
   };
 
+  const setActiveModuleEditLayer = (next: KitchenModuleEditLayer) => {
+    if (activeModuleEditLayer === next) return;
+    activeModuleEditLayer = next;
+    selectedWorktopSegment = null;
+    args.cancelPlacementIfActive();
+    args.setToolSelect();
+    args.setSelectedModule(null);
+    kitchenRunDimensionOverlay?.hide();
+    syncKitchenPlanPresentation();
+    args.buildClassicTopbar();
+    args.refreshProps();
+    args.setUnderlayStatus(
+      next === "base"
+        ? "Kitchen: editing lower modules. Upper modules are reference lines only."
+        : "Kitchen: editing upper modules. Lower modules are reference lines only."
+    );
+  };
+
+  const mountKitchenModuleLayerTools = (row: HTMLElement) => {
+    const tools = args.tb.addGroup(t("Upravovať moduly"), { row });
+    const addLayerButton = (layer: KitchenModuleEditLayer, label: string, title: string) => {
+      const button = args.tb.toolButton(tools, {
+        title: t(title),
+        iconSvg: args.icons.cabinet,
+        label: t(label),
+        onClick: () => setActiveModuleEditLayer(layer)
+      });
+      const active = activeModuleEditLayer === layer;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    };
+    addLayerButton("base", "Spodné", "Upravovať spodné moduly");
+    addLayerButton("upper", "Vrchné", "Upravovať vrchné moduly");
+  };
+
+  const mountKitchenGroupEditorTools = (row: HTMLElement) => {
+    const tools = args.tb.addGroup(t("Editor tools"), { row });
+    args.tb.toolButton(tools, {
+      title: t("Move selected module (M)"),
+      iconSvg: args.icons.move,
+      label: t("Move"),
+      onClick: () => args.startTransformFromSelection("move", { sticky: true, toggle: true }),
+    });
+    args.tb.toolButton(tools, {
+      title: t("Align module (A)"),
+      iconSvg: args.icons.align,
+      label: t("Align"),
+      onClick: args.setToolAlign,
+    });
+  };
+
   const mountTopbar = (row: HTMLElement) => {
     const groupTools = args.tb.addGroup(t("Kitchen group"), { row });
     const runTopbarIntent = (intent: "accept" | "discard") => {
@@ -3329,6 +3605,10 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         onClick: () => runTopbarIntent("discard"),
       });
       if (activeTallStackEditorInstance()) mountTallStackTools(row);
+      else {
+        mountKitchenModuleLayerTools(row);
+        mountKitchenGroupEditorTools(row);
+      }
     } else {
       const selectedGroupId = args.getSelectedKitchenGroupId();
       if (selectedGroupId && findKitchenGroup(selectedGroupId)) {
@@ -3362,11 +3642,16 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     args.setToolSelect();
 
     activeName = name;
+    const focusInstance = focusInstanceId ? args.findInstance(focusInstanceId) : null;
+    activeModuleEditLayer = focusInstance && getKitchenModuleRole(focusInstance.params as Record<string, unknown>) === "upper"
+      ? "upper"
+      : "base";
     snapshotName = name;
     editingExistingGroupId = existingGroupId;
     activeTallEditorInstanceId = null;
     activeTallEditorSnapshot = null;
     clearTallSubmoduleSelectionState();
+    selectedWorktopSegment = null;
     kitchenCtxSnapshot = structuredClone(ctx);
     instanceSnapshots = captureGroupInstances(groupId);
     worktopSnapshots = captureGroupWorktops(groupId);
@@ -3381,6 +3666,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     addEscapeHandler();
     attachTallEditorPointerHandlers();
     args.setSelectedModule(focusInstanceId);
+    args.setUnderlayStatus(
+      "Kitchen: click a dimension to edit width or position. M = Move, A = Align; snapping is active and modules stay inside the worktop.",
+    );
     if (activeTallStackEditorInstance()) args.buildClassicTopbar();
     renderModuleCatalog();
     renderTallDimensionOverlay();
@@ -3478,6 +3766,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     activeTallEditorInstanceId = null;
     activeTallEditorSnapshot = null;
     clearTallSubmoduleSelectionState();
+    selectedWorktopSegment = null;
     activeName = "";
     snapshotName = "";
     editingExistingGroupId = null;
@@ -3487,6 +3776,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     resetTallSubmoduleAlign();
     resetTallSubmoduleInsert();
     hideTallDimensionOverlay();
+    kitchenRunDimensionOverlay?.hide();
+    restoreKitchenPlanPresentation();
     kitchenCtxSnapshot = null;
     instanceSnapshots = [];
     worktopSnapshots = [];
@@ -4015,7 +4306,15 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const currentName = isEditingActive ? activeName : (group?.name ?? "");
     if (!ctx) return false;
 
-    args.props.setTitle(t("Kitchen"));
+    const selectedWing = isEditingActive && selectedWorktopSegment
+      ? args.getGroupWorktops(groupId).find((worktop) =>
+          worktop.id === selectedWorktopSegment?.worktopId &&
+          selectedWorktopSegment.segmentIndex >= 0 &&
+          selectedWorktopSegment.segmentIndex < worktop.params.path.length - 1
+        ) ?? null
+      : null;
+    const selectedWingIndex = selectedWing ? selectedWorktopSegment!.segmentIndex : null;
+    args.props.setTitle(selectedWing ? `${t("Kitchen")} - Worktop ${selectedWingIndex! + 1}` : t("Kitchen"));
     const section = args.props.section();
 
     const nameInput = document.createElement("input");
@@ -4085,11 +4384,21 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     );
     addNumberRow(
       translateParamLabel("worktopDepthMm"),
-      ctx.worktopDepthMm,
-      (value, refreshProps) =>
-        commitCtx((base) => ({ ...base, worktopDepthMm: value }), {
-          refreshProps,
-        }),
+      selectedWing && selectedWingIndex != null
+        ? getKitchenWorktopSegmentDepthMm(selectedWing.params, selectedWingIndex)
+        : ctx.worktopDepthMm,
+      (value, refreshProps) => {
+        if (selectedWing && selectedWingIndex != null) {
+          const result = args.editKitchenWorktopSegment({
+            worktopId: selectedWing.id,
+            segmentIndex: selectedWingIndex,
+            depthMm: value
+          });
+          if (result.ok && refreshProps) args.refreshProps();
+          return;
+        }
+        commitCtx((base) => ({ ...base, worktopDepthMm: value }), { refreshProps });
+      },
     );
     addNumberRow(
       translateParamLabel("worktopFrontOffsetMm"),
@@ -4377,7 +4686,13 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       if (!activeGroupId) return null;
       const inst = args.findInstance(id);
       if (!inst) return null;
-      return inst.kitchenGroupId === activeGroupId ? id : null;
+      if (inst.kitchenGroupId !== activeGroupId) return null;
+      const tallHost = activeTallStackEditorInstance();
+      if (tallHost) return tallHost.id === id ? id : null;
+      return isKitchenModuleInEditLayer(
+        inst.params as Record<string, unknown>,
+        activeModuleEditLayer
+      ) ? id : null;
     },
     selectTallSubmoduleFromObject,
     selectTallSubmodulesFromObjects,
@@ -4389,7 +4704,25 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       activeTallStackEditorInstance()?.id ?? null,
     clearTallSubmoduleSelection,
     deleteActiveTallSubmodule,
-    refreshTallDimensionOverlay: renderTallDimensionOverlay,
+    refreshTallDimensionOverlay: refreshKitchenDimensionOverlays,
+    syncPlanPresentation: syncKitchenPlanPresentation,
+    getActiveModuleEditLayer: () => activeModuleEditLayer,
+    selectWorktopSegment(worktopId: string, segmentIndex: number) {
+      const groupId = args.S.activeKitchenGroupId;
+      const worktop = groupId ? args.getGroupWorktops(groupId).find((item) => item.id === worktopId) ?? null : null;
+      if (!worktop || segmentIndex < 0 || segmentIndex >= worktop.params.path.length - 1) return false;
+      selectedWorktopSegment = { worktopId, segmentIndex };
+      args.setSelectedModule(null);
+      kitchenRunDimensionOverlay?.hide();
+      args.refreshProps();
+      return true;
+    },
+    clearWorktopSegmentSelection() {
+      if (!selectedWorktopSegment) return;
+      selectedWorktopSegment = null;
+      kitchenRunDimensionOverlay?.hide();
+    },
+    getSelectedWorktopSegment: () => selectedWorktopSegment,
     refreshModuleCatalog: renderModuleCatalog,
     mountKitchenGroupProps,
     tryMountActiveTallSubmoduleProps: mountTallSubmoduleProps,

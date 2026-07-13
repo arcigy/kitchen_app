@@ -31,7 +31,7 @@ export function calculateBOM(params: SwingShelvesLowParams, ctx: KitchenContext,
   const boardT = num(source, "boardThickness", 18);
   const shelfT = num(source, "shelfThickness", boardT);
   const backT = num(source, "backThickness", 6);
-  const frontT = num(source, "frontThicknessMm", 19);
+  const frontT = num(source, "frontThicknessMm", 18);
   const plinthHeight = num(source, "plinthHeight", 100);
   const sideGap = num(source, "sideGap", 2);
   const topGap = num(source, "topGap", 2);

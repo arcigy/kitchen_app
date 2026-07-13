@@ -254,6 +254,8 @@ describe("FurnQuote module package validation", () => {
       const validated = validateFurnQuoteModulePackage(modulePackage);
       expect(["trusted-runtime", "declarative"]).toContain(validated.geometry.mode);
       expect(validated.parameters.parameters.some((parameter) => parameter.key === "type")).toBe(true);
+      const frontThickness = validated.parameters.parameters.find((parameter) => parameter.key === "frontThicknessMm");
+      if (frontThickness) expect(frontThickness.defaultValue).toBe(18);
     }
   });
 });

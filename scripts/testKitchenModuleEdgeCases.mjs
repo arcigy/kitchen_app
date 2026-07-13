@@ -477,7 +477,7 @@ async function runClusterCases(page) {
     const result = await patchModule(
       page,
       currentLeft.id,
-      { frontThicknessMm: Number(currentLeft.params.frontThicknessMm ?? 19) + 2 },
+      { frontThicknessMm: Number(currentLeft.params.frontThicknessMm ?? 18) + 2 },
       { sourceKey: "frontThicknessMm", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);

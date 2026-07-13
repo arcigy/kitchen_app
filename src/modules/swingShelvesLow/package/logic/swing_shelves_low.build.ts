@@ -20,7 +20,7 @@ export const defaultParams = {
   "backGrooveWidthMm": 8,
   "backGrooveOffsetMm": 12,
   "backGrooveClearanceMm": 1,
-  "frontThicknessMm": 19,
+  "frontThicknessMm": 18,
   "frontGap": 2,
   "sideGap": 2,
   "topGap": 2,

@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { gzipSync, gunzipSync } from "node:zlib";
 import type { EncryptedProjectFileEnvelope, ProjectBundledAssetPayload, ProjectExportPayload, ProjectSaveFile } from "./project-save-types";
 import { PROJECT_FILE_MAGIC } from "./project-save-file";
+import { loadProjectSaveFile } from "./project-save-loader";
 import { validateProjectSaveFile } from "./project-save-validation";
 
 export type ProjectFileCryptoOptions = {
@@ -145,8 +146,12 @@ export function decryptProjectExportPayload(envelopeValue: unknown, options: Pro
   const decrypted = Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, "base64")), decipher.final()]);
   const payload = JSON.parse(gunzipSync(decrypted).toString("utf-8")) as ProjectExportPayload | ProjectSaveFile;
   if (isRecord(payload) && "payloadType" in payload && payload.payloadType === "furnquote-project-export") {
-    validateProjectExportPayload(payload as ProjectExportPayload);
-    return payload as ProjectExportPayload;
+    const migratedPayload = {
+      ...payload,
+      save: loadProjectSaveFile(payload.save)
+    } as ProjectExportPayload;
+    validateProjectExportPayload(migratedPayload);
+    return migratedPayload;
   }
   throw new Error("Project export payload type is unsupported.");
 }

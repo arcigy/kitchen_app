@@ -16,6 +16,7 @@ type KitchenWorktopVisualOptions = {
 export function cloneKitchenWorktopParams(params: KitchenWorktopParams): KitchenWorktopParams {
   return {
     path: params.path.map((point) => ({ x: point.x, z: point.z })),
+    segmentDepthsMm: params.segmentDepthsMm?.map((value) => value),
     justification: params.justification,
     mirrored: !!params.mirrored,
     depthMm: params.depthMm,

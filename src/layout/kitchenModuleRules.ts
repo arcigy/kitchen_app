@@ -2,6 +2,14 @@ import type { FurnQuoteModulePackage } from "../core/module-package/module-packa
 
 export type KitchenModuleRole = "base" | "upper" | "tall";
 export type KitchenModuleContractRole = "low" | "top" | "tall";
+export type KitchenModuleEditLayer = "base" | "upper";
+
+export type KitchenModulePlanEmphasis = {
+  active: boolean;
+  color: number;
+  opacity: number;
+  renderOrder: number;
+};
 
 export function getKitchenModuleRole(params: Record<string, unknown> | null | undefined): KitchenModuleRole {
   const rawRole = typeof params?.kitchenModuleRole === "string" ? params.kitchenModuleRole.trim().toLowerCase() : "low";
@@ -15,6 +23,23 @@ export function getKitchenModuleContractRole(params: Record<string, unknown> | n
   if (role === "upper") return "top";
   if (role === "tall") return "tall";
   return "low";
+}
+
+export function isKitchenModuleInEditLayer(
+  params: Record<string, unknown> | null | undefined,
+  layer: KitchenModuleEditLayer
+) {
+  return getKitchenModuleRole(params) === layer;
+}
+
+export function resolveKitchenModulePlanEmphasis(
+  params: Record<string, unknown> | null | undefined,
+  layer: KitchenModuleEditLayer
+): KitchenModulePlanEmphasis {
+  const active = isKitchenModuleInEditLayer(params, layer);
+  return active
+    ? { active: true, color: 0x263247, opacity: 1, renderOrder: 60 }
+    : { active: false, color: 0xaab3c2, opacity: 0.14, renderOrder: 54 };
 }
 
 function isTruthyCornerShape(value: unknown) {

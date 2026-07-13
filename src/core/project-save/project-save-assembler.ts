@@ -1,6 +1,10 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "../module-package/module-package-file";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
+import {
+  createEmptyProjectMaterialAssignmentsState,
+  type ProjectMaterialAssignmentsState
+} from "../project-materials/project-material-types";
 import type { ProjectMetadata, ProjectPreview } from "../project/project-types";
 import type { ProjectAssetManifest, ProjectCatalogSnapshot, ProjectSaveFile, UsedModulePackageSnapshot } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
@@ -22,6 +26,7 @@ export type ProjectSaveAssemblerInput = {
   layoutState: unknown;
   kitchenState: unknown;
   moduleInstances: unknown[];
+  materialAssignments?: ProjectMaterialAssignmentsState;
   sceneState: unknown;
   editorState?: unknown;
   recentActivity?: unknown;
@@ -104,8 +109,26 @@ export function createCatalogSnapshot(
   source: unknown,
   modulePackages: readonly FurnQuoteModulePackage[] = []
 ): ProjectCatalogSnapshot {
-  const usedMaterialIds = collectStringIds(source, new Set(["materialId", "frontsMaterialId", "corpusMaterialId", "backMaterialId", "drawerBottomMaterialId", "worktopMaterialId"]));
-  const usedComponentIds = collectStringIds(source, new Set(["componentId", "handleComponentId", "hingeComponentId", "drawerSystemComponentId"]));
+  const usedMaterialIds = collectStringIds(source, new Set([
+    "materialId",
+    "frontsMaterialId",
+    "corpusMaterialId",
+    "backMaterialId",
+    "drawerBottomMaterialId",
+    "worktopMaterialId",
+    "edgeFrontId",
+    "edgeOtherId"
+  ]));
+  const usedComponentIds = collectStringIds(source, new Set([
+    "componentId",
+    "handleComponentId",
+    "hingeComponentId",
+    "drawerSystemComponentId",
+    "runnerComponentId",
+    "liftUpComponentId",
+    "legComponentId",
+    "fastenerComponentId"
+  ]));
   const usedModuleTypes = collectStringIds(source, new Set(["type", "moduleType"]));
   const usedModulePackageSnapshots = createUsedModulePackageSnapshots(modulePackages, usedModuleTypes, source);
   const usedCatalogIds = [...new Set([...usedMaterialIds, ...usedComponentIds])].sort();
@@ -140,10 +163,12 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
   const layoutState = cloneJson(input.layoutState);
   const kitchenState = cloneJson(input.kitchenState);
   const moduleInstances = cloneJson(input.moduleInstances);
+  const materialAssignments = cloneJson(input.materialAssignments ?? createEmptyProjectMaterialAssignmentsState());
   const appStateSource = {
     layoutState,
     kitchenState,
     moduleInstances,
+    materialAssignments,
     pricingSettings: input.pricingSettings,
     quoteSettings: input.quoteSettings
   };
@@ -164,6 +189,7 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
         layoutState,
         kitchenState,
         moduleInstances,
+        materialAssignments: cloneJson(materialAssignments),
         pricingSettings: cloneJson(input.pricingSettings),
         quoteSettings: cloneJson(input.quoteSettings),
         bomSnapshot: cloneJson(input.bomSnapshot),
@@ -176,6 +202,7 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
       layout: layoutState,
       kitchen: kitchenState,
       modules: moduleInstances,
+      materialAssignments,
       scene: cloneJson(input.sceneState),
       editor: cloneJson(input.editorState),
       recentActivity: cloneJson(input.recentActivity),

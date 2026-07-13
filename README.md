@@ -11,6 +11,18 @@ npm run dev
 
 Open the printed local URL.
 
+## Supplier Bridge (Phase 1)
+
+The user-assisted Chrome Side Panel, backend sync sessions, local supplier simulator, diagnostic recorder, security limits, and the future Démos-adapter workflow are documented in [`apps/supplier-bridge-extension/README.md`](apps/supplier-bridge-extension/README.md).
+
+```bash
+npm run dev
+npm run dev:supplier-simulator
+npm run build:debug
+```
+
+Load `apps/supplier-bridge-extension/dist-debug` as an unpacked extension in Chrome, then start the flow from the Arcigy Materials screen. Use `npm run build:production` for the localhost/mock-free production extension.
+
 ## Models
 
 - `drawer_low` (drawer fronts + internal drawer boxes + rails)

@@ -4,6 +4,8 @@ export type KitchenGroupLookup = {
 
 export type KitchenModeGroupSelectionApi = {
   findKitchenGroup: (id: string) => KitchenGroupLookup | null;
+  selectWorktopSegment?: (worktopId: string, segmentIndex: number) => boolean;
+  clearWorktopSegmentSelection?: () => void;
 };
 
 export type SelectionMarqueeState = {

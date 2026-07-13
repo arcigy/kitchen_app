@@ -59,6 +59,7 @@ function makeMeasureSelectionActionsContext(overrides: Partial<Parameters<typeof
     rebuildFloor: vi.fn(),
     rebuildKitchenWorktop: vi.fn(),
     applyKitchenPlacementBinding: vi.fn(() => true),
+    syncKitchenRunEndClosures: vi.fn(() => false),
     findKitchenWorktop: vi.fn(() => null),
     updateSelectionHighlights: vi.fn(),
     updateLayoutPanel: vi.fn(),
@@ -78,6 +79,27 @@ describe("measure selection actions", () => {
     expect(instance.root.position.z).toBe(0.05);
     expect(ctx.inferKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, "kg1", 45);
     expect(instance.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
+    expect(ctx.applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(
+      instance,
+      { worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 },
+      45
+    );
+    expect(ctx.syncKitchenRunEndClosures).toHaveBeenCalledExactlyOnceWith("kg1", 45);
+  });
+
+  it("rejects a measured or aligned move that would detach a bound module from its worktop", () => {
+    const ctx = makeMeasureSelectionActionsContext({ inferKitchenPlacementBinding: vi.fn(() => null) });
+    const instance = ctx.instances[0];
+    instance.kitchenPlacement = { worktopId: "w1", segmentIndex: 0, offsetAlongM: 0.3 };
+    const actions = createMeasureSelectionActions(ctx);
+
+    expect(actions.translateModuleByMeasure(instance.id, 100, 50)).toBe(false);
+
+    expect(instance.root.position.x).toBe(0);
+    expect(instance.root.position.z).toBe(0);
+    expect(instance.kitchenPlacement).toEqual({ worktopId: "w1", segmentIndex: 0, offsetAlongM: 0.3 });
+    expect(ctx.applyKitchenPlacementBinding).not.toHaveBeenCalled();
+    expect(ctx.syncKitchenRunEndClosures).not.toHaveBeenCalled();
   });
 
   it("blocks measure translation for a module in a locked align joint", () => {

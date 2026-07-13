@@ -294,7 +294,7 @@ type PointerInputHandlersDataContext = {
   axisLockXZ: (a: THREE.Vector3, b: THREE.Vector3) => THREE.Vector3;
   autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
   autoJoinAtMmPoint: (point: FloorBoundaryPoint) => void;
-  beginKitchenWorktopSelection: (worktopId: string, ev: PointerEvent) => boolean;
+  beginKitchenWorktopSelection: (worktopId: string, ev: PointerEvent, pointMm?: { x: number; z: number }) => boolean;
   findSelectableFloorplanWorktopAtPoint: (pointMm: { x: number; z: number }) => string | null;
   beginModuleSelection: (selectableId: string, ev: PointerEvent) => boolean;
   updateSelectionHover: (target: SelectionHighlightTarget | null) => void;
@@ -379,6 +379,7 @@ type PointerInputHandlersDataContext = {
   isVisibilityTargetPickable: (key: string | null | undefined) => boolean;
   isWindowPlacementActive: () => boolean;
   inferKitchenPlacementBinding: (instance: LayoutInstance, groupId: string, backOffsetMm: number) => KitchenPlacementBinding | null;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
   insertColumnAtPoint: (pointMm: FloorBoundaryPoint) => boolean;
   insertDoorAtWallPoint: (wallId: string, pointMm: FloorBoundaryPoint) => boolean;
   insertWindowAtWallPoint: (wallId: string, pointMm: FloorBoundaryPoint) => boolean;
@@ -616,6 +617,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (inst.kitchenGroupId !== groupId) continue;
       inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
     }
+    ctx.syncKitchenRunEndClosures?.(groupId, backOffsetMm);
   };
   const updateRaycasterFromPointer = (ev: Pick<PointerEvent, "clientX" | "clientY">, rect: DOMRect) => {
     setPointerNdcFromEvent(ctx.pointerNdc, ev, rect);
@@ -1452,7 +1454,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       handleFloorplanSelection({
         execution: {
           beginModuleSelection: (id) => ctx.beginModuleSelection(id, ev),
-          beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev),
+          beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev, pMm),
           cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
           continueMoveAfterSelection,
           hitPoint,
@@ -1519,7 +1521,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     return handleFloorplanSelection({
       execution: {
         beginModuleSelection: (id) => ctx.beginModuleSelection(id, ev),
-        beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev),
+        beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev, pMm),
         cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
         continueMoveAfterSelection,
         hitPoint,

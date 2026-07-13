@@ -109,7 +109,7 @@ describe("createWorkspaceNavigationController", () => {
     expect(createdInputs[0].clickCount).toBe(1);
   });
 
-  it("opens schedules as an overlay and Materials as the full project phase", () => {
+  it("opens schedules as an overlay and Materials as the full project phase", async () => {
     vi.stubGlobal("document", {
       addEventListener: vi.fn(),
       createElement: () => new WorkspaceFakeElement()
@@ -160,9 +160,38 @@ describe("createWorkspaceNavigationController", () => {
     expect((materialsPhase.warningsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("Materiály a komponenty");
 
-    controller.leaveMaterialsPhase();
+    await controller.leaveMaterialsPhase();
 
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
     expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+  });
+
+  it("delegates the live Materials phase to the interactive controller and closes it on exit", async () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [];
+    const materialsPhase = materialsPhaseHarness();
+    const open = vi.fn(async () => ({ warnings: [] }));
+    const close = vi.fn(async () => undefined);
+    const controller = createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: emptyAppState(),
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase,
+      materialsController: { open, close } as never,
+      setDesignTopbar: vi.fn(),
+      setVisualisationTopbar: vi.fn()
+    });
+
+    controller.openMaterials();
+    expect(open).toHaveBeenCalledOnce();
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+
+    await controller.leaveMaterialsPhase();
+    expect(close).toHaveBeenCalledOnce();
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
   });
 });

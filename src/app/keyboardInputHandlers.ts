@@ -70,6 +70,7 @@ type KeyboardInputHandlersContext = {
   instances: LayoutInstance[];
   instanceFitsRoom: (instance: LayoutInstance) => boolean;
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
   isDoorPlacementActive?: () => boolean;
   isTypingTarget: (target: EventTarget | null) => boolean;
   isWindowPlacementActive?: () => boolean;
@@ -167,6 +168,7 @@ type KeyboardNudgeSelectionCommandContext = Pick<
   | "findInstance"
   | "getKitchenPlacementConstraint"
   | "inferKitchenPlacementBinding"
+  | "syncKitchenRunEndClosures"
   | "instanceFitsRoom"
   | "instances"
   | "layoutTool"
@@ -543,6 +545,7 @@ export function nudgeSelectedModulesByDeltaMm(args: {
   kitchenGroups: Array<{ id: string; ctx: { worktopBackOffsetMm: number } }>;
   defaultWorktopBackOffsetMm: number;
   inferKitchenPlacementBinding: (instance: LayoutInstance, kitchenGroupId: string, backOffsetMm: number) => LayoutInstance["kitchenPlacement"];
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
   updateLayoutPanel: () => void;
   alignLocks?: AppState["alignLocks"];
 }) {
@@ -609,6 +612,12 @@ export function nudgeSelectedModulesByDeltaMm(args: {
       inferKitchenPlacementBinding: args.inferKitchenPlacementBinding
     });
   }
+  const affectedKitchenGroups = new Set(
+    args.instances
+      .map((instance) => instance.kitchenGroupId)
+      .filter((groupId): groupId is string => typeof groupId === "string")
+  );
+  for (const groupId of affectedKitchenGroups) args.syncKitchenRunEndClosures?.(groupId);
   args.updateLayoutPanel();
   return true;
 }
@@ -660,6 +669,7 @@ export function runKeyboardNudgeSelectionCommand(ctx: KeyboardNudgeSelectionComm
       kitchenGroups: ctx.S.kitchenGroups,
       defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
       inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding,
+      syncKitchenRunEndClosures: ctx.syncKitchenRunEndClosures,
       updateLayoutPanel: ctx.updateLayoutPanel,
       alignLocks: ctx.S.alignLocks
     }) || moved;

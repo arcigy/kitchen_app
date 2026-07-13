@@ -2,6 +2,7 @@ import type { ClientContext } from "../client/client-context";
 import type { ClientCatalog } from "../catalog/catalog-types";
 import type { CreateProjectInput, ProjectMetadata, ProjectPreview, ProjectVersionMetadata } from "./project-types";
 import type { ProjectRepository } from "./project-repository";
+import type { ProjectSnapshotSaveOptions } from "../project-materials/project-material-save-authority";
 import { assembleProjectSaveFile, type ProjectSaveAssemblerInput } from "../project-save/project-save-assembler";
 import { decryptProjectExportPayload, encryptProjectExportPayload, type ProjectFileCryptoOptions } from "../project-save/project-save-crypto";
 import { migrateProjectSaveFile } from "../project-save/project-save-migrations";
@@ -13,7 +14,12 @@ export type ProjectService = {
   createProject(ctx: ClientContext, input: CreateProjectInput): Promise<ProjectMetadata>;
   listProjects(ctx: ClientContext): Promise<ProjectMetadata[]>;
   getProject(ctx: ClientContext, projectId: string): Promise<ProjectMetadata>;
-  saveCurrentProject(ctx: ClientContext, input: Omit<ProjectSaveAssemblerInput, "clientId" | "catalog" | "projectPreview"> & { catalog: ClientCatalog; projectPreview?: unknown; editingSessionId?: unknown }): Promise<ProjectSaveFile>;
+  deleteProject(ctx: ClientContext, projectId: string): Promise<void>;
+  saveCurrentProject(
+    ctx: ClientContext,
+    input: Omit<ProjectSaveAssemblerInput, "clientId" | "catalog" | "projectPreview"> & { catalog: ClientCatalog; projectPreview?: unknown; editingSessionId?: unknown },
+    options?: ProjectSnapshotSaveOptions
+  ): Promise<ProjectSaveFile>;
   loadProject(ctx: ClientContext, projectId: string): Promise<ProjectSaveFile>;
   listProjectVersions(ctx: ClientContext, projectId: string): Promise<ProjectVersionMetadata[]>;
   loadProjectVersion(ctx: ClientContext, projectId: string, versionNumber: number): Promise<ProjectSaveFile>;
@@ -99,8 +105,12 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
     createProject: (ctx, input) => repository.createProject(ctx, input),
     listProjects: (ctx) => repository.listProjects(ctx),
     getProject: (ctx, projectId) => repository.getProject(ctx, projectId),
+    async deleteProject(ctx, projectId) {
+      await repository.getProject(ctx, projectId);
+      await repository.deleteProject(ctx, projectId);
+    },
 
-    async saveCurrentProject(ctx, input) {
+    async saveCurrentProject(ctx, input, options) {
       const metadata = await repository.getProject(ctx, input.projectId);
       const editingSessionId = normalizeEditingSessionId(input.editingSessionId, `legacy:${ctx.userId}:${metadata.projectId}`);
       const projectPreview = isProjectPreview(input.projectPreview) ? input.projectPreview : metadata.preview;
@@ -119,7 +129,7 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         appState: { ...save.appState, projectPreview }
       };
       validateProjectSaveFile(savedSave, { clientId: ctx.clientId, projectId: save.projectId });
-      await repository.saveProjectSnapshot(ctx, savedSave.projectId, savedSave.activePhaseId, savedSave);
+      await repository.saveProjectSnapshot(ctx, savedSave.projectId, savedSave.activePhaseId, savedSave, options);
       await repository.saveProjectMetadata(ctx, savedProject);
       await saveVersionForCurrentSnapshot(repository, ctx, savedSave, editingSessionId);
       return savedSave;
@@ -161,7 +171,9 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         }
       };
       validateProjectSaveFile(restoredSave, { clientId: ctx.clientId, projectId });
-      await repository.saveProjectSnapshot(ctx, restoredSave.projectId, restoredSave.activePhaseId, restoredSave);
+      await repository.saveProjectSnapshot(ctx, restoredSave.projectId, restoredSave.activePhaseId, restoredSave, {
+        materialAssignmentsMode: "restore-version"
+      });
       await repository.saveProjectMetadata(ctx, restoredProject);
       await saveVersionForCurrentSnapshot(repository, ctx, restoredSave, `restore:${ctx.userId}:${now}`);
       return restoredSave;

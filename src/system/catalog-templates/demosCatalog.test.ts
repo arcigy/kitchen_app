@@ -51,6 +51,9 @@ describe("Démos SK system catalog", () => {
     expect(pricingCatalog.getUnitPriceForCatalogId(material!.id)).toBeGreaterThan(0);
     expect(pricingCatalog.getUnitPriceForCatalogId(component!.id)).toBeGreaterThan(0);
     expect(seed.materials.some((item) => item.id === seed.kitchenDefaults.backPanelMaterialId)).toBe(true);
+    const defaultFront = seed.materials.find((item) => item.id === seed.kitchenDefaults.frontMaterialId);
+    expect(defaultFront?.boardFamily).toBe("front");
+    expect(defaultFront?.defaultThicknessMm).toBe(18);
     expect(seed.components.some((item) => item.id === seed.kitchenDefaults.defaultDrawerSystemComponentId)).toBe(true);
   });
 

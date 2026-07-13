@@ -43,6 +43,28 @@ const createWorktop = (id = "wt1", kitchenGroupId = "kg1"): KitchenWorktopInstan
     outline: new THREE.Line()
   }) as KitchenWorktopInstance;
 
+const createModuleInstance = (layoutRoot: THREE.Group, id = "module1", width = 1) => {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  module.add(new THREE.Mesh(new THREE.BoxGeometry(width, 1, 0.6), new THREE.MeshBasicMaterial()));
+  root.add(module);
+  layoutRoot.add(root);
+  return {
+    id,
+    root,
+    module,
+    params: { type: "base" },
+    kitchenGroupId: null,
+    kitchenPlacement: null,
+    localBox: new THREE.Box3(
+      new THREE.Vector3(-width / 2, -0.5, -0.3),
+      new THREE.Vector3(width / 2, 0.5, 0.3)
+    ),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+};
+
 describe("createWallSnapMarkers", () => {
   it("shows only endpoint and axis markers, not every solved outline vertex", () => {
     const layoutRoot = new THREE.Group();
@@ -76,6 +98,49 @@ describe("createWallSnapMarkers", () => {
 });
 
 describe("createSelectionHighlights", () => {
+  it("tracks the current selected module after move, geometry rebuild and delete", () => {
+    const layoutRoot = new THREE.Group();
+    const instance = createModuleInstance(layoutRoot);
+    const instances = [instance];
+    const selectedIds = new Set([instance.id]);
+    const { selectionHighlights, updateSelectionHighlights, syncSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getWalls: () => [] as WallInstance[],
+      getSelectedWallIds: () => new Set<string>(),
+      getSelectedInstanceIds: () => selectedIds,
+      getWallSolvedOutlines: () => new Map(),
+      getSelectedKind: () => "module",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => instances,
+      getModuleLocalBackCenter: () => new THREE.Vector3()
+    });
+
+    updateSelectionHighlights();
+    const initialBounds = new THREE.Box3().setFromObject(selectionHighlights);
+
+    instance.root.position.x = 2;
+    expect(syncSelectionHighlights()).toBe(true);
+    const movedBounds = new THREE.Box3().setFromObject(selectionHighlights);
+    expect(movedBounds.min.x - initialBounds.min.x).toBeCloseTo(2);
+
+    const previousModule = instance.module;
+    const rebuiltModule = new THREE.Group();
+    rebuiltModule.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 1, 0.6), new THREE.MeshBasicMaterial()));
+    instance.root.remove(previousModule);
+    instance.root.add(rebuiltModule);
+    instance.module = rebuiltModule;
+    expect(syncSelectionHighlights()).toBe(true);
+    const rebuiltBounds = new THREE.Box3().setFromObject(selectionHighlights);
+    expect(rebuiltBounds.max.x - rebuiltBounds.min.x).toBeCloseTo(1.6);
+
+    instances.splice(0, 1);
+    expect(syncSelectionHighlights()).toBe(true);
+    expect(selectionHighlights.children).toHaveLength(0);
+    expect(selectionHighlights.visible).toBe(false);
+  });
+
   it("highlights selected objects with transparent faces and exact edges", () => {
     const layoutRoot = new THREE.Group();
     const wall = createWall();
@@ -178,6 +243,72 @@ describe("createSelectionHighlights", () => {
 
     expect(selectionHighlights.visible).toBe(true);
     expect(selectionHighlights.children.map((child) => child.name).sort()).toEqual(["selectedEdgeHighlight", "selectedFillHighlight"]);
+  });
+
+  it("uses one lightweight plan highlight pair per kitchen module instead of every board mesh", () => {
+    const layoutRoot = new THREE.Group();
+    const instances = Array.from({ length: 30 }, (_, index) => {
+      const instance = createModuleInstance(layoutRoot, `module${index + 1}`);
+      instance.kitchenGroupId = "kg1";
+      for (let board = 0; board < 20; board += 1) {
+        instance.module.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), new THREE.MeshBasicMaterial()));
+      }
+      return instance;
+    });
+    const selectedIds = new Set(instances.map((instance) => instance.id));
+    const { selectionHighlights, updateSelectionHighlights, syncSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getWalls: () => [] as WallInstance[],
+      getSelectedWallIds: () => new Set<string>(),
+      getSelectedInstanceIds: () => selectedIds,
+      getWallSolvedOutlines: () => new Map(),
+      getSelectedKind: () => "kitchenGroup",
+      getSelectedKitchenGroupId: () => "kg1",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => instances,
+      getKitchenWorktops: () => [],
+      getModuleLocalBackCenter: () => new THREE.Vector3(0, 0, -0.3)
+    });
+
+    updateSelectionHighlights();
+
+    expect(selectionHighlights.children).toHaveLength(instances.length * 2);
+    expect(selectionHighlights.children.filter((child) => child.name === "selectedKitchenGroupPlanFill")).toHaveLength(instances.length);
+    expect(selectionHighlights.children.filter((child) => child.name === "selectedKitchenGroupPlanEdge")).toHaveLength(instances.length);
+    expect(syncSelectionHighlights()).toBe(false);
+  });
+
+  it("keeps exact 3D kitchen-group fills while reusing module and outline geometry", () => {
+    const layoutRoot = new THREE.Group();
+    const instance = createModuleInstance(layoutRoot);
+    instance.kitchenGroupId = "kg1";
+    instance.outline.geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 0.6));
+    const sourceGeometry = (instance.module.children[0] as THREE.Mesh).geometry;
+    const { selectionHighlights, updateSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getViewMode: () => "3d",
+      getWalls: () => [] as WallInstance[],
+      getSelectedWallIds: () => new Set<string>(),
+      getSelectedInstanceIds: () => new Set([instance.id]),
+      getWallSolvedOutlines: () => new Map(),
+      getSelectedKind: () => "kitchenGroup",
+      getSelectedKitchenGroupId: () => "kg1",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => [instance],
+      getKitchenWorktops: () => [],
+      getModuleLocalBackCenter: () => new THREE.Vector3(0, 0, -0.3)
+    });
+
+    updateSelectionHighlights();
+
+    const fills = selectionHighlights.children.filter((child) => child.name === "selectedKitchenGroup3dFill") as THREE.Mesh[];
+    expect(fills).toHaveLength(1);
+    expect(fills[0]!.geometry).toBe(sourceGeometry);
+    expect(selectionHighlights.children.filter((child) => child.name === "selectedKitchenGroup3dEdge")).toHaveLength(1);
   });
 
   it("highlights only the selected submodule inside a selected host module", () => {

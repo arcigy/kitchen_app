@@ -65,6 +65,7 @@ function makeInstanceRebuilderContext(overrides: Partial<Parameters<typeof creat
     propagateModuleResizeToPinnedNeighbors: vi.fn(() => ({ movedIds: [neighbor.id] })),
     renderErrors: vi.fn(),
     tagModuleGeometry: vi.fn(),
+    rebuildKitchenGroupWorktops: vi.fn(),
     updateLayoutPanel: vi.fn(),
     validateModule: vi.fn(() => []),
     ...overrides
@@ -83,5 +84,22 @@ describe("instance rebuilder", () => {
     expect(ctx.inferKitchenPlacementBinding).toHaveBeenNthCalledWith(2, neighbor, "missing", 80);
     expect(inst.kitchenPlacement).toEqual({ worktopId: "m1-kg1-45", segmentIndex: 0, offsetAlongM: 0 });
     expect(neighbor.kitchenPlacement).toEqual({ worktopId: "m2-missing-80", segmentIndex: 0, offsetAlongM: 0 });
+    expect(ctx.rebuildKitchenGroupWorktops).toHaveBeenCalledWith("kg1", ctx.S.kitchenGroups[0]!.ctx);
+    expect(ctx.rebuildKitchenGroupWorktops).toHaveBeenCalledWith("missing", ctx.S.kitchenCtx);
+  });
+
+  it("does not recursively rebuild worktops when their closure sync rebuilds a module", () => {
+    let rebuilder: ReturnType<typeof createInstanceRebuilder>;
+    const ctx = makeInstanceRebuilderContext({
+      propagateModuleResizeToPinnedNeighbors: vi.fn(() => ({ movedIds: [] }))
+    });
+    const rebuildKitchenGroupWorktops = vi.fn(() => {
+      expect(rebuilder.rebuildInstance(ctx.instances[0]!, { skipLayoutValidation: true })).toBe(true);
+    });
+    ctx.rebuildKitchenGroupWorktops = rebuildKitchenGroupWorktops;
+    rebuilder = createInstanceRebuilder(ctx);
+
+    expect(rebuilder.rebuildInstance(ctx.instances[0]!)).toBe(true);
+    expect(rebuildKitchenGroupWorktops).toHaveBeenCalledTimes(1);
   });
 });

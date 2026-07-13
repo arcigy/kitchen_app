@@ -47,7 +47,7 @@ async function main() {
   await installAuthSession(page);
   const consoleErrors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") consoleErrors.push(`${message.text()} (${message.location().url || "unknown-url"})`);
   });
 
   try {

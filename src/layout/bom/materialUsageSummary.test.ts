@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { summarizeMaterialUsage } from "./materialUsageSummary";
+import { projectMaterialQuantitiesFromUsageSummary } from "./projectMaterialQuantities";
 
 function quoteBom(items: PortableQuoteBomPayload["items"]): PortableQuoteBomPayload {
   return {
@@ -152,5 +153,76 @@ describe("material usage summary", () => {
     expect(summary.warnings.join(" ")).toContain("nemá priradený materiál alebo komponent");
     expect(summary.warnings.join(" ")).toContain("neznámu materiálovú skupinu");
     expect(summary.warnings.join(" ")).not.toContain("cena");
+  });
+
+  it("keeps plinth, front/other edges and hardware component quantities separate", () => {
+    const summary = summarizeMaterialUsage([
+      quoteBom([
+        {
+          id: "plinth",
+          itemType: "board",
+          category: "board",
+          name: "Plinth",
+          description: "Plinth",
+          pricingBasis: "sheet_area",
+          pricingUnit: "m2",
+          quantity: 2,
+          pricingQuantity: 0.48,
+          dimensionsMm: { length: 2400, width: 100, thickness: 18 },
+          materialGroup: "plinth",
+          material: { catalogId: "mat.plinth", displayName: "Plinth", boardFamily: "body" } as never
+        },
+        {
+          id: "front-edge",
+          itemType: "edge_band",
+          category: "edge",
+          name: "Front edge",
+          description: "Front edge",
+          pricingBasis: "linear_length",
+          pricingUnit: "lm",
+          quantity: 4,
+          pricingQuantity: 3.4,
+          metrics: { edgeLengthLm: 3.4 },
+          material: { catalogId: "mat.edge.front", displayName: "Front ABS", edgeFamily: "front" } as never
+        },
+        {
+          id: "other-edge",
+          itemType: "edge_band",
+          category: "edge",
+          name: "Other edge",
+          description: "Other edge",
+          pricingBasis: "linear_length",
+          pricingUnit: "lm",
+          quantity: 3,
+          pricingQuantity: 2.1,
+          metrics: { edgeLengthLm: 2.1 },
+          material: { catalogId: "mat.edge.body", displayName: "Body ABS", edgeFamily: "body" } as never
+        },
+        ...(["hinge", "runner", "lighting", "plinth_clip", "shelf_support", "hanging_bracket"] as const).map((componentType, index) => ({
+          id: componentType,
+          itemType: "hardware" as const,
+          category: componentType,
+          name: componentType,
+          description: componentType,
+          pricingBasis: "piece" as const,
+          pricingUnit: "pcs" as const,
+          quantity: index + 1,
+          pricingQuantity: index + 1,
+          component: { catalogId: `cmp.${componentType}`, displayName: componentType, componentType } as never
+        }))
+      ])
+    ]);
+
+    const quantities = projectMaterialQuantitiesFromUsageSummary(summary);
+    const value = (category: string) => quantities.find((item) => item.category === category)?.quantity;
+
+    expect(summary.groups.find((group) => group.id === "plinth")?.unit).toBe("lm");
+    expect(value("plinth")).toBe(4.8);
+    expect(value("edge_front")).toBe(3.4);
+    expect(value("edge_other")).toBe(2.1);
+    expect(value("hinge")).toBe(1);
+    expect(value("runner")).toBe(2);
+    expect(value("fastener")).toBe(15);
+    expect(value("other_component")).toBe(3);
   });
 });

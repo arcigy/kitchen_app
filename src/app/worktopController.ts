@@ -63,6 +63,7 @@ export type WorktopControllerContext = {
   catalog: ClientCatalog;
   instances?: LayoutInstance[];
   getModuleLocalBackCenter?: (inst: LayoutInstance) => THREE.Vector3;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
 };
 
 export function createWorktopController(ctx: WorktopControllerContext) {
@@ -121,6 +122,12 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     inst.params = cloneKitchenWorktopParams(inst.params);
     inst.params.path = sanitizeKitchenWorktopPath(inst.params.path);
     inst.params.depthMm = Math.max(1, Math.round(inst.params.depthMm));
+    if (inst.params.segmentDepthsMm) {
+      inst.params.segmentDepthsMm = Array.from(
+        { length: Math.max(0, inst.params.path.length - 1) },
+        (_, index) => Math.max(1, Math.round(inst.params.segmentDepthsMm?.[index] ?? inst.params.depthMm))
+      );
+    }
     inst.params.thicknessMm = Math.max(1, Math.round(inst.params.thicknessMm));
     inst.params.heightMm = Math.round(inst.params.heightMm);
     inst.params.overhangSideMm = Math.max(0, Math.round(inst.params.overhangSideMm));
@@ -154,6 +161,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     meshMaterial.opacity = ctx.getViewMode() === "2d" ? 0.35 : 1;
     meshMaterial.depthWrite = ctx.getViewMode() !== "2d";
     inst.root.updateMatrixWorld(true);
+    ctx.syncKitchenRunEndClosures?.(inst.kitchenGroupId);
   }
 
   function createKitchenWorktop(
@@ -226,6 +234,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     layoutRoot.remove(worktop.root);
     disposeObject3D(worktop.root);
     kitchenWorktops.splice(index, 1);
+    ctx.syncKitchenRunEndClosures?.(worktop.kitchenGroupId);
     if (!opts?.skipHistory) commitHistory(S);
   }
 
@@ -233,6 +242,10 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     nextWorktops: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>,
     nextCounter?: number
   ) {
+    const affectedGroupIds = new Set([
+      ...kitchenWorktops.map((worktop) => worktop.kitchenGroupId),
+      ...nextWorktops.map((worktop) => worktop.kitchenGroupId)
+    ]);
     for (const worktop of kitchenWorktops.splice(0, kitchenWorktops.length)) {
       layoutRoot.remove(worktop.root);
       disposeObject3D(worktop.root);
@@ -243,6 +256,9 @@ export function createWorktopController(ctx: WorktopControllerContext) {
         id: worktop.id,
         skipHistory: true
       });
+    }
+    for (const groupId of affectedGroupIds) {
+      ctx.syncKitchenRunEndClosures?.(groupId);
     }
   }
 
@@ -411,19 +427,21 @@ export function createWorktopController(ctx: WorktopControllerContext) {
         skipHistory: true
       });
     }
+    ctx.syncKitchenRunEndClosures?.(groupId);
     if (!opts?.skipHistory) commitHistory(S);
   };
 
-  const rebuildKitchenGroupWorktops = (groupId: string, ctx = S.kitchenCtx) => {
+  const rebuildKitchenGroupWorktops = (groupId: string, kitchenCtx = S.kitchenCtx) => {
     for (const worktop of kitchenWorktops) {
       if (worktop.kitchenGroupId !== groupId) continue;
-      worktop.params.depthMm = ctx.worktopDepthMm;
-      worktop.params.thicknessMm = ctx.worktopThicknessMm;
-      worktop.params.heightMm = ctx.heightMm;
-      worktop.params.overhangSideMm = ctx.worktopOverhangSideMm;
+      worktop.params.depthMm = kitchenCtx.worktopDepthMm;
+      worktop.params.thicknessMm = kitchenCtx.worktopThicknessMm;
+      worktop.params.heightMm = kitchenCtx.heightMm;
+      worktop.params.overhangSideMm = kitchenCtx.worktopOverhangSideMm;
       worktop.params.materialId = "";
       rebuildKitchenWorktop(worktop);
     }
+    ctx.syncKitchenRunEndClosures?.(groupId, kitchenCtx.worktopBackOffsetMm);
   };
 
   return {

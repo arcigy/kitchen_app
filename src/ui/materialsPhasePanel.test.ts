@@ -1,6 +1,26 @@
-import { describe, expect, it } from "vitest";
-import { renderProjectMaterialsPanel } from "./materialsPhasePanel";
+import { describe, expect, it, vi } from "vitest";
+import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { createDefaultProjectMaterialAssignments, createProjectMaterialsView } from "../core/project-materials/project-material-business";
+import { FakeElement, FakeInputElement } from "../app/testUtils/propertiesPanelHarness";
+import { mountProjectMaterialsPanel, renderProjectMaterialsPanel } from "./materialsPhasePanel";
 import { summarizeMaterialUsage } from "../layout/bom/materialUsageSummary";
+
+class MaterialsInput extends FakeInputElement {
+  removeAttribute(name: string) {
+    this.attributes.delete(name);
+  }
+}
+
+class MaterialsHost extends FakeElement {
+  error = new FakeElement();
+
+  querySelector<T = FakeElement>(selector: string): T | null {
+    return selector.includes("data-material-field-error") ? this.error as T : null;
+  }
+}
+
+const testCatalog = (): ClientCatalog => ({ clientId: "client_test", ...createSystemCatalogSeed() });
 
 describe("materials phase panel", () => {
   it("renders the approved material groups and quantities without pricing controls", () => {
@@ -46,5 +66,102 @@ describe("materials phase panel", () => {
     expect(html).toContain("Dub &lt;matný&gt;");
     expect(html).not.toContain("Cena");
     expect(html).not.toContain("Cenník");
+  });
+
+  it("renders compact quantities and global supplier launchers without per-row IDs", () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");
+    const view = createProjectMaterialsView(
+      state,
+      [
+        { category: "corpus", quantity: 24.56, unit: "m2", pieces: 32 },
+        { category: "edge_front", quantity: 28, unit: "lm" },
+        { category: "handle", quantity: 10, unit: "pcs" }
+      ],
+      catalog
+    );
+
+    const html = renderProjectMaterialsPanel(view);
+
+    expect(html).toContain("data-material-assignment-category=\"corpus\"");
+    expect(html).toContain("data-material-assignment-category=\"edge_front\"");
+    expect(html).toContain("Hrany frontov");
+    expect(html).toContain("Hrany korpusu");
+    expect(html).toContain("data-material-edge-split=\"edge_front\"");
+    expect(html).toContain("data-material-assignment-category=\"handle\"");
+    expect(html).not.toContain("Materiál ID");
+    expect(html).not.toContain("Komponent ID");
+    expect(html).toContain("24,56 m²");
+    expect(html).toContain("32 dosiek / ks");
+    expect(html).toContain("Varovania");
+    expect(html).toContain("Prehľad materiálov");
+    expect(html).not.toContain("Zdroj cenníka");
+    expect(html).toContain("Pre klienta nie je povolený žiadny dodávateľ");
+    expect(html).not.toContain("data-supplier-open");
+    expect(html).not.toContain("data-supplier-draft-field");
+    expect(html).not.toContain("Cena projektu");
+    expect(html).not.toContain("Celková cena");
+  });
+
+  it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");
+    const view = createProjectMaterialsView(state, [], catalog);
+    const host = new MaterialsHost();
+    const onCommitId = vi.fn().mockResolvedValue({ ok: false, error: "Neplatné ID. Ponechaná pôvodná hodnota." });
+    mountProjectMaterialsPanel(host as unknown as HTMLElement, view, { onCommitId });
+    const input = new MaterialsInput();
+    input.value = "missing.id";
+    input.dataset.materialAssignmentInput = "true";
+    input.dataset.materialCategory = "front";
+    input.dataset.materialIdField = "materialId";
+    input.dataset.committedValue = "material.front.old";
+
+    host.dispatch("focusout", { target: input });
+    await vi.waitFor(() => expect(onCommitId).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(input.disabled).toBe(false));
+
+    expect(input.value).toBe("material.front.old");
+    expect(input.attributes.get("aria-invalid")).toBe("true");
+    expect(host.error.textContent).toContain("Ponechaná pôvodná hodnota");
+    expect(host.innerHTML).toContain("General settings");
+  });
+
+  it("waits for an active blur commit and keeps Escape inside the ID field", async () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");
+    const view = createProjectMaterialsView(state, [], catalog);
+    let finishCommit: (result: { ok: boolean }) => void = () => {
+      throw new Error("Commit resolver was not initialized.");
+    };
+    const onCommitId = vi.fn(() => new Promise<{ ok: boolean }>((resolve) => {
+      finishCommit = resolve;
+    }));
+    const host = new MaterialsHost();
+    const handle = mountProjectMaterialsPanel(host as unknown as HTMLElement, view, { onCommitId });
+    const input = new MaterialsInput();
+    input.value = "material.front.new";
+    input.dataset.materialAssignmentInput = "true";
+    input.dataset.materialCategory = "front";
+    input.dataset.materialIdField = "materialId";
+    input.dataset.committedValue = "material.front.old";
+
+    host.dispatch("focusout", { target: input });
+    let flushed = false;
+    const flush = handle.flushPending().then(() => { flushed = true; });
+    await Promise.resolve();
+    expect(flushed).toBe(false);
+    finishCommit({ ok: true });
+    await flush;
+    expect(flushed).toBe(true);
+
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    (input as unknown as { blur: () => void }).blur = vi.fn();
+    input.value = "draft";
+    host.dispatch("keydown", { target: input, key: "Escape", preventDefault, stopPropagation });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(stopPropagation).toHaveBeenCalledOnce();
+    expect(input.value).toBe("material.front.new");
   });
 });

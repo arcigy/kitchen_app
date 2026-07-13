@@ -12,7 +12,10 @@ function assert(condition, message, context) {
 
 async function login(context) {
   const response = await context.request.post(new URL("/api/auth/login", baseUrl).toString(), {
-    data: { username: "arcigy", password: "kitchen2026" }
+    data: {
+      username: process.env.ARCIGY_UI_TEST_USERNAME ?? "arcigy",
+      password: process.env.ARCIGY_UI_TEST_PASSWORD ?? "kitchen2026"
+    }
   });
   if (!response.ok()) throw new Error(`Login failed: HTTP ${response.status()}`);
 }

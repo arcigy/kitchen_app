@@ -47,9 +47,47 @@ function createContext(overrides: Partial<WorktopControllerContext> = {}): Workt
 }
 
 describe("worktopController", () => {
+  it("resynchronizes a group whose worktop disappears during snapshot restore", () => {
+    const syncKitchenRunEndClosures = vi.fn(() => false);
+    const controller = createWorktopController(createContext({ syncKitchenRunEndClosures }));
+    controller.createKitchenWorktop(
+      {
+        path: [
+          { x: 0, z: 0 },
+          { x: 1200, z: 0 }
+        ],
+        justification: "back",
+        mirrored: false,
+        depthMm: 620,
+        thicknessMm: 38,
+        heightMm: 900,
+        overhangSideMm: 20,
+        materialId: ""
+      },
+      "removed-group",
+      { skipHistory: true }
+    );
+    syncKitchenRunEndClosures.mockClear();
+
+    controller.restoreKitchenWorktopsFromSnapshot([], 1);
+
+    expect(syncKitchenRunEndClosures).toHaveBeenCalledExactlyOnceWith("removed-group");
+  });
+
   function createFakeCornerInstance(worktopId: string): LayoutInstance {
     const root = new THREE.Group();
     const module = new THREE.Group();
+    const topGeometry = new THREE.BufferGeometry();
+    topGeometry.setAttribute("position", new THREE.Float32BufferAttribute([
+      0, 0, 0,
+      0.8, 0, 0,
+      0.8, 0, 0.8,
+      0.2, 0, 0.8,
+      0, 0, 0.6
+    ], 3));
+    const topPanel = new THREE.Mesh(topGeometry, new THREE.MeshBasicMaterial());
+    topPanel.userData.boardName = "top_panel";
+    module.add(topPanel);
     root.add(module);
     root.position.set(0.3, 0, 0.2);
     return {
@@ -110,11 +148,18 @@ describe("worktopController", () => {
     );
     const positions = worktop.outline.geometry.getAttribute("position");
     let maxZ = Number.NEGATIVE_INFINITY;
+    let hasChamferedSegment = false;
     for (let index = 0; index < positions.count; index += 1) {
       maxZ = Math.max(maxZ, positions.getZ(index));
+      const next = index + 1;
+      if (next >= positions.count) continue;
+      const dx = Math.abs(positions.getX(next) - positions.getX(index));
+      const dz = Math.abs(positions.getZ(next) - positions.getZ(index));
+      if (dx > 0.05 && dz > 0.05) hasChamferedSegment = true;
     }
 
-    expect(maxZ).toBeGreaterThan(1.05);
+    expect(maxZ).toBeGreaterThan(1.02);
+    expect(hasChamferedSegment).toBe(true);
   });
 
   it("preserves explicitly assigned worktop material metadata when a worktop is created", () => {
@@ -200,6 +245,31 @@ describe("worktopController", () => {
     expect(worktop.mesh.userData.catalogMaterialId).toBeUndefined();
     expect(worktop.mesh.userData.catalogMaterialName).toBeUndefined();
     expect(worktop.mesh.userData.materialRequest).toBeUndefined();
+  });
+
+  it("preserves per-wing depths through worktop snapshot restore", () => {
+    const ctx = createContext();
+    const controller = createWorktopController(ctx);
+    controller.createKitchenWorktop(
+      {
+        path: [{ x: 0, z: 0 }, { x: 1200, z: 0 }, { x: 1200, z: 900 }],
+        segmentDepthsMm: [620, 760],
+        justification: "back",
+        mirrored: false,
+        depthMm: 620,
+        thicknessMm: 38,
+        heightMm: 900,
+        overhangSideMm: 20,
+        materialId: ""
+      },
+      "kg1",
+      { id: "wt1", skipHistory: true }
+    );
+
+    const snapshot = controller.getKitchenGroupWorktops("kg1");
+    controller.replaceKitchenGroupWorktops("kg1", snapshot, { skipHistory: true });
+
+    expect(ctx.kitchenWorktops[0]?.params.segmentDepthsMm).toEqual([620, 760]);
   });
 
   it("cancels worktop drawing with current cleanup, status, and props refresh behavior", () => {

@@ -3,6 +3,7 @@ import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { assertValidProjectMetadata } from "../project/project-validation";
 import { assertNoMissingCriticalProjectSerializers } from "./project-save-serializers";
 import { validateProjectAppState } from "./project-app-state-validation";
+import { validateProjectMaterialAssignmentsState } from "../project-materials/project-material-validation";
 
 export type ProjectSaveValidationScope = {
   clientId?: string;
@@ -34,12 +35,31 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function areStructurallyEqual(left: unknown, right: unknown, seen = new WeakMap<object, object>()): boolean {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  if (seen.get(left) === right) return true;
+  seen.set(left, right);
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => areStructurallyEqual(value, right[index], seen));
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return leftKeys.length === rightKeys.length && leftKeys.every(
+    (key) => Object.prototype.hasOwnProperty.call(rightRecord, key) && areStructurallyEqual(leftRecord[key], rightRecord[key], seen)
+  );
+}
+
 export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSaveValidationScope = {}): void {
   assertNoMissingCriticalProjectSerializers();
   if (!isObject(save)) throw new Error("Project save must be an object.");
   if (save.format !== "kitchen-app-project") throw new Error("Unsupported project save format.");
   if (save.saveFormatVersion > CURRENT_PROJECT_SAVE_VERSION) throw new Error("Project save version is newer than this app supports.");
   if (save.saveFormatVersion < 1) throw new Error("Project save version is invalid.");
+  if (save.saveFormatVersion < CURRENT_PROJECT_SAVE_VERSION) throw new Error("Project save must be migrated before validation.");
   if (scope.clientId && save.clientId !== scope.clientId) throw new Error("Project save belongs to a different client.");
   if (scope.projectId && save.projectId !== scope.projectId) throw new Error("Project save projectId does not match route.");
   if (save.project.clientId !== save.clientId || save.project.projectId !== save.projectId) throw new Error("Project save metadata does not match save scope.");
@@ -51,6 +71,7 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
     if (phaseIds.has(phase.phaseId)) throw new Error("Project phase ids must be unique.");
     phaseIds.add(phase.phaseId);
     if (!Array.isArray(phase.moduleInstances)) throw new Error("Project phase moduleInstances must be an array.");
+    validateProjectMaterialAssignmentsState(phase.materialAssignments, `save.phases.${phase.phaseId}.materialAssignments`);
   }
   if (!phaseIds.has(save.activePhaseId)) throw new Error("activePhaseId must exist in phases.");
   if (!save.catalogSnapshot || !Array.isArray(save.catalogSnapshot.usedMaterialIds)) throw new Error("Project save must include catalogSnapshot.");
@@ -59,5 +80,10 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
   if (!("windows" in layout) || !Array.isArray(layout.windows)) throw new Error("Project save must include windows serializer data.");
   if (!("doors" in layout) || !Array.isArray(layout.doors)) throw new Error("Project save must include doors serializer data.");
   validateProjectAppState(save.appState);
+  validateProjectMaterialAssignmentsState(save.appState.materialAssignments, "save.appState.materialAssignments");
+  const activePhase = save.phases.find((phase) => phase.phaseId === save.activePhaseId)!;
+  if (!areStructurallyEqual(save.appState.materialAssignments, activePhase.materialAssignments)) {
+    throw new Error("Project save active phase materialAssignments must match appState.materialAssignments.");
+  }
   assertPlainSerializable(save);
 }
