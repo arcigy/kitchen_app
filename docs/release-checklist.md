@@ -5,7 +5,7 @@ Use this checklist before promoting `staging` to `main`.
 ## Automated checks
 
 - [ ] Dependencies install cleanly with `npm ci`.
-- [ ] `npm run security:dependencies` passes. Only npm advisories `1108110` and `1108111` for direct `xlsx` may be accepted, and only while npm still reports no fix; every other production `high` or `critical` finding blocks the release.
+- [ ] `npm run security:dependencies` passes with no production `high` or `critical` finding.
 - [ ] Repository secret scan passes with `npm run security:secrets`; findings contain no secret values.
 - [ ] Every GitHub Action uses a reviewed full commit SHA with a readable release-version comment.
 - [ ] CodeQL JavaScript/TypeScript analysis completes and every blocking result is reviewed before release.

@@ -17,8 +17,6 @@ export type ProductionAuditEvaluation = {
   blocked: AuditFinding[];
 };
 
-const ACCEPTED_ADVISORIES = new Set(["xlsx:1108110", "xlsx:1108111"]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -107,25 +105,13 @@ export function evaluateProductionDependencyAudit(
         typeof rawVia.source === "number" || typeof rawVia.source === "string"
           ? String(rawVia.source)
           : "unknown";
-      const key = `${packageName}:${advisoryId}`;
-      const isAccepted =
-        ACCEPTED_ADVISORIES.has(key) &&
-        advisorySeverity === "high" &&
-        rawVulnerability.isDirect === true &&
-        rawVulnerability.fixAvailable === false;
-
       const finding: AuditFinding = {
         packageName,
         advisoryId,
         severity: advisorySeverity,
-        reason: isAccepted
-          ? "reviewed export-only xlsx advisory with no available fix"
-          : ACCEPTED_ADVISORIES.has(key) &&
-              rawVulnerability.fixAvailable !== false
-            ? "an accepted advisory now has a remediation and requires review"
-            : "high-risk production advisory is not allowlisted",
+        reason: "high-risk production advisory blocks the release",
       };
-      (isAccepted ? accepted : blocked).push(finding);
+      blocked.push(finding);
     }
 
     if (!identifiedBlockingFinding) {
@@ -190,7 +176,7 @@ function main(): void {
     }
 
     console.log(
-      `Production dependency audit passed (${evaluation.accepted.length} explicitly reviewed xlsx advisory exception(s)).`,
+      "Production dependency audit passed (no high or critical production advisories).",
     );
   } catch (error) {
     console.error(

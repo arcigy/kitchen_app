@@ -63,9 +63,11 @@ The following journeys are release blockers and must not regress:
 
 Inactive catalog records cannot be blindly filtered: current inventory has about 6,682 active and 1,754 inactive materials, plus 14,661 active and 18,866 inactive components. Historical projects may reference inactive records.
 
-The `xlsx` dependency has one known high advisory with no available fix. Current usage is export-only and does not parse untrusted workbooks, so removing Excel export is not justified.
+The Excel workbook export now uses the official SheetJS 0.20.3 security release. Its public API compatibility was checked with a write/read roundtrip and the full browser regression; Excel export remains intact and production `npm audit` reports zero vulnerabilities.
 
 ## Local fixes completed in this audit
+
+- Post-audit supply-chain follow-up: Vite 6.4.3, tsx 4.23.1, and the official SheetJS 0.20.3 release replaced the prior vulnerable dependency set. `npm audit` and the production-only audit both report zero vulnerabilities; the audit policy now blocks every high/critical finding without an exception. The XLSX write/read compatibility check, 260 test files/1,789 tests, typecheck, build, secret scan, dependency policy, and isolated browser regression passed. No Excel export or other product function was removed.
 
 - Added gzip response compression for API, static JS/CSS, and other compressible responses.
 - Added baseline security headers without enforcing an untested CSP.
