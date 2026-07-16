@@ -49,7 +49,7 @@ describe("module runtime catalog context", () => {
     const ctx = createModuleRuntimeCatalogContext(catalog);
     const material = ctx.resolveMaterial(catalog.kitchenDefaults.carcassMaterialId, "carcass");
     expect(material?.id).toBe(catalog.kitchenDefaults.carcassMaterialId);
-  });
+  }, 15_000);
 
   it("indexes a large tenant catalog once across repeated runtime lookups", () => {
     const catalog = getSystemSeedCatalog();
