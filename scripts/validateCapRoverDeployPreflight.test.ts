@@ -125,6 +125,8 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toContain("/user/apps/appDefinitions/register");
     expect(workflow).toContain("CAPROVER_APP_URL is required");
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
+    expect(workflow).toContain("scripts/verifyReadinessResponse.ts \"$1\"");
+    expect(workflow).toContain("if verify_endpoint health && verify_endpoint ready; then");
     expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
     expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
     expect(workflow).toContain("npm run security:dependencies");

@@ -128,10 +128,14 @@ jobs:
         id: readiness
         if: steps.deploy_caprover.outcome == 'success'
         run: |
+          set -o pipefail
           base_url="${CAPROVER_APP_URL%/}"
+          verify_endpoint() {
+            curl --fail --silent --show-error --max-time 10 "$base_url/$1" | \
+              npx --no-install tsx scripts/verifyReadinessResponse.ts "$1"
+          }
           for attempt in $(seq 1 18); do
-            if curl --fail --silent --show-error --max-time 10 "$base_url/health" >/dev/null && \
-               curl --fail --silent --show-error --max-time 10 "$base_url/ready" >/dev/null; then
+            if verify_endpoint health && verify_endpoint ready; then
               echo "Deployment is healthy and ready."
               exit 0
             fi
