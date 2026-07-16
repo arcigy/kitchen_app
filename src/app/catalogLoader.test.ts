@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
 import { systemModulePackageTemplates } from "../system/module-packages";
 import {
@@ -99,6 +99,10 @@ function createRevision(clientId: string, storageRevision = "revision-1") {
 }
 
 describe("catalogLoader PINO tenant loading", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -122,6 +126,26 @@ describe("catalogLoader PINO tenant loading", () => {
     expect(catalog.clientId).toBe("client_pino_nobilia_vkh_2026");
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/catalog/bootstrap");
+  });
+
+  it("aborts a stalled catalog request and reports a retryable error", async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    }));
+
+    const loading = loadClientCatalogForApp("client_delfi");
+    const rejected = expect(loading).rejects.toThrow(
+      "Timed out loading client catalog after 45 seconds. Please try opening the project again."
+    );
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    await rejected;
+    expect(requestSignal?.aborted).toBe(true);
   });
 
   it("ignores cached demo app data when the active tenant client id is PINO", async () => {

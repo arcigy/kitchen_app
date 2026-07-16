@@ -29,6 +29,7 @@ const APP_DATA_PERSISTENT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const APP_DATA_PERSISTENT_CACHE_DB = "arcigy-kitchen-client-app-data";
 const APP_DATA_PERSISTENT_CACHE_STORE = "tenant-app-data";
 const APP_DATA_REVISION_TIMEOUT_MS = 5_000;
+const APP_DATA_FETCH_TIMEOUT_MS = 45_000;
 const CLIENT_APP_DATA_BOOTSTRAP_VERSION = "catalog-bootstrap-v1";
 
 type ClientAppData = {
@@ -97,16 +98,45 @@ function isClientCatalog(value: unknown): value is ClientCatalog {
   return !!value && typeof value === "object" && "clientId" in value && "materials" in value && "priceList" in value;
 }
 
+type AppDataEndpointJson = {
+  response: Response;
+  body: unknown;
+};
+
+async function fetchAppDataEndpointJson(endpoint: string, resource: string): Promise<AppDataEndpointJson> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Timed out loading ${resource} after 45 seconds. Please try opening the project again.`));
+      controller.abort();
+    }, APP_DATA_FETCH_TIMEOUT_MS);
+  });
+  try {
+    const response = await Promise.race([
+      fetch(endpoint, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal: controller.signal
+      }),
+      timeout
+    ]);
+    if (!response.ok) return { response, body: undefined };
+    const body = await Promise.race([response.json() as Promise<unknown>, timeout]);
+    return { response, body };
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 export async function loadClientCatalogForApp(expectedClientId?: string): Promise<ClientCatalog> {
   if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
 
   let response: Response;
+  let body: unknown;
   try {
-    response = await fetch("/api/catalog/bootstrap", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" }
-    });
+    ({ response, body } = await fetchAppDataEndpointJson("/api/catalog/bootstrap", "client catalog"));
   } catch (error) {
     if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
     throw error;
@@ -116,13 +146,6 @@ export async function loadClientCatalogForApp(expectedClientId?: string): Promis
     throw new Error(`Failed to load client catalog: HTTP ${response.status}`);
   }
 
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
-    throw error;
-  }
   const catalog = body && typeof body === "object" ? (body as { catalog?: unknown }).catalog : undefined;
   if (!isClientCatalog(catalog)) {
     if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
@@ -139,12 +162,9 @@ export async function loadClientModulePackagesForApp(expectedClientId?: string):
   if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
 
   let response: Response;
+  let body: unknown;
   try {
-    response = await fetch("/api/modules", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" }
-    });
+    ({ response, body } = await fetchAppDataEndpointJson("/api/modules", "client module packages"));
   } catch (error) {
     if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
     throw error;
@@ -154,13 +174,6 @@ export async function loadClientModulePackagesForApp(expectedClientId?: string):
     throw new Error(`Failed to load client module packages: HTTP ${response.status}`);
   }
 
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
-    throw error;
-  }
   const modules = body && typeof body === "object" ? (body as { modules?: unknown }).modules : undefined;
   if (!Array.isArray(modules) || !modules.every(isModulePackage)) {
     if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
