@@ -31,7 +31,10 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Review dependency changes
-        if: github.event_name == 'pull_request'
+        # GitHub refuses this action while the repository Dependency graph is
+        # disabled. The lockfile-backed policy below remains mandatory; turn
+        # this extra diff gate on once the repository setting is enabled.
+        if: github.event_name == 'pull_request' && vars.ARCIGY_DEPENDENCY_GRAPH_ENABLED == 'true'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high

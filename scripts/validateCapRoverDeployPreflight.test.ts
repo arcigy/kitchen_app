@@ -187,10 +187,13 @@ describe("CapRover deployment preflight", () => {
     expect(config).not.toMatch(/auto-?merge/i);
   });
 
-  it("blocks newly introduced high-risk dependencies only on pull requests", async () => {
+  it("keeps dependency diff review opt-in until GitHub Dependency graph is enabled", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8");
 
-    expect(workflow).toContain("name: Review dependency changes\n        if: github.event_name == 'pull_request'");
+    expect(workflow).toContain("name: Review dependency changes");
+    expect(workflow).toContain(
+      "if: github.event_name == 'pull_request' && vars.ARCIGY_DEPENDENCY_GRAPH_ENABLED == 'true'",
+    );
     expect(workflow).toContain(
       "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
     );
