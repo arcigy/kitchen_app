@@ -28,7 +28,7 @@ export function createProjectActions(args: {
   initialProject?: ProjectMetadata | null;
   initialProjectSave?: ProjectSaveFile | null;
 }): ProjectActions {
-  const createEditingSessionId = () => `edit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const createEditingSessionId = () => `edit_${Date.now().toString(36)}_${globalThis.crypto.randomUUID()}`;
   const state: ProjectRuntimeState = {
     currentProject: args.initialProjectSave?.project ?? args.initialProject ?? null,
     lastSavedAt: null,

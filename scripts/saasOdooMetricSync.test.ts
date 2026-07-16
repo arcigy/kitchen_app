@@ -70,6 +70,12 @@ describe("SaaS Odoo metric sync", () => {
     expect(samples.some((sample) => sample.labels.route === "/health")).toBe(true);
   });
 
+  it("preserves escaped label values without ambiguous backslash parsing", () => {
+    const samples = parsePrometheusText('arcigy_http_requests_total{route="A=\\!\\\\\\\"",status="200"} 1');
+    expect(samples).toHaveLength(1);
+    expect(samples[0]?.labels.route).toBe('A=\\!\\"');
+  });
+
   it("rejects HTML fallbacks and empty or unrelated metrics payloads", () => {
     expect(() => validatePrometheusPayload("<!doctype html><html></html>", "text/html; charset=utf-8"))
       .toThrow(/HTML instead of Prometheus/);

@@ -79,7 +79,7 @@ const RECOGNIZED_ARCIGY_METRICS = new Set([
 function parseLabels(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
   const labels: Record<string, string> = {};
-  const pattern = /([A-Za-z_][A-Za-z0-9_]*)="((?:\\.|[^"])*)"(?:,|$)/g;
+  const pattern = /([A-Za-z_][A-Za-z0-9_]*)="((?:\\.|[^"\\])*)"(?:,|$)/g;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(raw))) {
     labels[match[1]] = match[2]

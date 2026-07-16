@@ -3,7 +3,7 @@ import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-m
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { createProjectActions } from "./projectActions";
-import { saveProject } from "./projectApi";
+import { createProject, saveProject } from "./projectApi";
 
 vi.mock("./projectApi", () => ({
   createProject: vi.fn(),
@@ -83,5 +83,20 @@ describe("project actions", () => {
       7
     );
     expect(actions.getState().saveRevision).toBe(8);
+  });
+
+  it("rotates an opaque editing session when a project is created", async () => {
+    vi.mocked(createProject).mockResolvedValue(project);
+    const actions = createProjectActions({
+      buildAppState: () => appState,
+      restoreSave: vi.fn(),
+      onProjectChanged: vi.fn()
+    });
+    const initialSessionId = actions.getState().editingSessionId;
+
+    await actions.create({ name: "New project", address: "Main 1", contactName: "Jane" });
+
+    expect(actions.getState().editingSessionId).toMatch(/^edit_[a-z0-9]+_[0-9a-f-]{36}$/);
+    expect(actions.getState().editingSessionId).not.toBe(initialSessionId);
   });
 });
