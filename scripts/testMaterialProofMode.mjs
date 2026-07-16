@@ -35,7 +35,9 @@ async function main() {
     await page.getByRole("heading", { name: "Material Proof Mode" }).waitFor({ timeout: 5000 });
     const firstRenderMs = Date.now() - startedAt;
     await page.getByText("NO DEMOS TEXTURE USED").first().waitFor({ timeout: 30000 });
-    await page.locator(".material-proof-color-chip").first().waitFor({ timeout: 15000 });
+    // Sampling runs after the first render and exercises 20 proxied image
+    // requests; shared Linux runners can take longer than the local baseline.
+    await page.locator(".material-proof-color-chip").first().waitFor({ timeout: 30000 });
 
     const proof = await page.evaluate(() => {
       const text = document.body.textContent || "";
