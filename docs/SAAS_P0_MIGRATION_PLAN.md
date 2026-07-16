@@ -30,6 +30,28 @@ A persistent database volume protects against a container replacement. It does n
 
 The repository now contains a fail-closed synthetic PostgreSQL 16 backup/restore regression. It refuses configured database URLs and remote Docker engines, migrates and seeds only its own labelled disposable Docker container or loopback-only portable temp cluster, runs real `pg_dump`/`pg_restore`, and compares exact restored evidence. A portable PostgreSQL 16.14 run passed locally with 4 migrations, 24 tables, 32 rows, 49 constraints, 45 indexes, zero tenant-boundary leakage, synthetic RPO 0, and measured RTO 1.694 seconds; all processes and temp data were removed afterward. This makes the logical restore procedure executed and repeatable but does not close P0: the approved encrypted off-host destination, continuous WAL/PITR, real backup schedule, and real-backup restore evidence are still absent.
 
+## Backup implementation status (2026-07-16)
+
+The repository now contains a separate deployable worker in `ops/backup/`.
+It uses PostgreSQL 16 `pg_dump`, streams a custom-format dump through
+AES-256-GCM encryption with a scrypt-derived key, and uploads B2 large-file
+parts directly off-host. It writes no local dump file, never deletes a remote
+object, holds a PostgreSQL advisory lock to prevent overlapping schedules, and
+fails closed unless its B2 key is restricted to the target bucket plus the
+`arcigy/prod/` prefix with only `listFiles`, `readFiles`, and `writeFiles`.
+Its paired restore command defaults to a download/decrypt/archive verification
+only; actual `pg_restore` additionally requires an explicit acknowledgement and
+a newly named loopback `arcigy_restore_*` target, so it cannot target the live
+CapRover database.
+
+This is implementation and test evidence only. It is not a live backup until a
+single private CapRover worker is configured with server-side secrets, B2
+default Compliance retention is verified, a first object is uploaded, and a
+selected object is restored into an isolated PostgreSQL 16 target. The current
+B2 key shown during setup has broader permissions than this worker accepts, so
+it must be replaced by a dedicated least-privilege key before deployment. Do
+not use the broad key as a production backup credential.
+
 ## P0 credential containment prerequisite
 
 Before any Arcigy release:

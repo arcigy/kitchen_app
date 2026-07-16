@@ -96,7 +96,7 @@ Rollback when health/readiness fail, core smoke fails, tenant access changes une
 
 ## Backup and isolated restore
 
-Current state: no verified off-host backup/PITR/real-backup restore schedule has been approved. This remains P0. A repository-owned synthetic `pg_dump`/`pg_restore` drill now exercises migrations and exact logical restoration inside one labelled disposable PostgreSQL container; it is a CI regression gate, not evidence that a production backup exists.
+Current state: no verified off-host backup/PITR/real-backup restore schedule has been approved. This remains P0. A repository-owned synthetic `pg_dump`/`pg_restore` drill now exercises migrations and exact logical restoration inside one labelled disposable PostgreSQL container; it is a CI regression gate, not evidence that a production backup exists. The repository also contains an undeployed, fail-closed B2 streaming backup worker in `ops/backup/`; its focused encryption and permission tests do not prove an actual remote object or restore.
 
 The ordered implementation and rollback procedure is in `docs/SAAS_P0_MIGRATION_PLAN.md`.
 
