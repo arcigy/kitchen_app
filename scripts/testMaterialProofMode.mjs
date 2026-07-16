@@ -13,6 +13,28 @@ function assert(condition, message, context) {
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  const delayedReferencePng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zq9sAAAAASUVORK5CYII=",
+    "base64"
+  );
+  const csvBoards = Array.from({ length: 20 }, (_, index) => ({
+    catalogType: "demosDecorMapping",
+    vendor: "demos",
+    vendorDecorId: `demos_ci_${index + 1}`,
+    vendorSku: index === 0 ? "495386" : `49538${index}`,
+    displayName: `Demos CI board ${index + 1}`,
+    targetInternalMaterialId: "wood_fine_grain_neutral_template",
+    pbrMaterialId: "wood_light_plain",
+    proceduralTemplate: "wood_fine_grain_neutral_template",
+    colorPreviewHex: "#a8835a",
+    grainColorHex: "#6f4425",
+    mappingStatus: "mapped",
+    mappingLocked: true,
+    confidence: 0.9,
+    productionSafe: true,
+    usesExternalVendorTexture: false,
+    demosReferenceImageUrl: "https://reference.invalid/demos-ci.png"
+  }));
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
@@ -20,9 +42,26 @@ async function main() {
 
   try {
     await installAuthSession(page);
+    await page.route("**/api/material-proof/catalogs", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ csvBoards, production: [], staging: [] })
+      });
+    });
+    await page.route("**/api/material-proof/reference-image**", async (route) => {
+      if (route.request().resourceType() === "fetch") {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      await route.fulfill({ status: 200, contentType: "image/png", body: delayedReferencePng });
+    });
+    const startedAt = Date.now();
     await page.goto(new URL("/material-proof", baseUrl).toString(), { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Material Proof Mode" }).waitFor({ timeout: 30000 });
+    await page.getByRole("heading", { name: "Material Proof Mode" }).waitFor({ timeout: 5000 });
+    const firstRenderMs = Date.now() - startedAt;
     await page.getByText("NO DEMOS TEXTURE USED").first().waitFor({ timeout: 30000 });
+    // Sampling runs after the first render from the deterministic 20-board fixture.
+    await page.locator(".material-proof-color-chip").first().waitFor({ timeout: 15000 });
 
     const proof = await page.evaluate(() => {
       const text = document.body.textContent || "";
@@ -43,6 +82,7 @@ async function main() {
     assert(proof.hasDemosPhoto && proof.hasOurEstimate, "Side-by-side comparison did not render", proof);
     assert(proof.hasSku && proof.hasTargetTemplate && proof.hasPbrAsset, "Inferred first-board PBR mapping details did not render", proof);
     assert(proof.noDemosTexture, "No-Demos-texture indicator is missing", proof);
+    assert(firstRenderMs < 5000, "Material Proof first render waited for reference-image sampling", { firstRenderMs });
     assert(consoleErrors.length === 0, "Console errors found in Material Proof Mode", consoleErrors);
   } finally {
     await browser.close();

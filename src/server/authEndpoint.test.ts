@@ -3,9 +3,10 @@ import type http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createLoginRateLimiter } from "../core/auth/login-rate-limit";
+import { createInMemoryAuthSessionStore } from "../core/auth/auth-session-store";
 import { createInMemoryUserRepository, seedAuthUsers } from "../core/auth/user-repository";
 import { createUserService } from "../core/auth/user-service";
-import { parseClientSessionCookie, serializeClientSessionCookie } from "../core/client/session-cookie";
+import { parseClientSessionCookie, requireClientContextFromCookie, serializeClientSessionCookie } from "../core/client/session-cookie";
 import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
 
 type MockResponse = http.ServerResponse & {
@@ -14,9 +15,12 @@ type MockResponse = http.ServerResponse & {
   body: unknown;
 };
 
-function mockReq(args: { cookie?: string; ip?: string } = {}): http.IncomingMessage {
+function mockReq(args: { cookie?: string; ip?: string; forwardedFor?: string } = {}): http.IncomingMessage {
   return {
-    headers: args.cookie ? { cookie: args.cookie } : {},
+    headers: {
+      ...(args.cookie ? { cookie: args.cookie } : {}),
+      ...(args.forwardedFor ? { "x-forwarded-for": args.forwardedFor } : {})
+    },
     socket: { remoteAddress: args.ip ?? "127.0.0.1" }
   } as http.IncomingMessage;
 }
@@ -75,6 +79,8 @@ describe("auth endpoints", () => {
     expect(session?.role).toBe("owner");
     expect(session?.issuedAt).toEqual(expect.any(String));
     expect(session?.expiresAt).toEqual(expect.any(String));
+    expect(session?.sessionId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect((res.body as { session: { sessionId?: string } }).session.sessionId).toBeUndefined();
   });
 
   it("rejects bad password with safe error", async () => {
@@ -303,6 +309,64 @@ describe("auth endpoints", () => {
     expect(limited.body).toEqual({ ok: false, error: "Invalid credentials." });
   });
 
+  it("revokes the original cookie on logout for session and protected API checks", async () => {
+    const authSessionStore = createInMemoryAuthSessionStore();
+    const login = mockRes();
+    await handleAuthLogin(mockReq(), login, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+      userService: createTestUserService(),
+      loginRateLimiter: createLoginRateLimiter(),
+      authSessionStore
+    });
+    const cookie = String(login.headers["Set-Cookie"]);
+
+    const beforeLogout = mockRes();
+    await handleAuthSession(mockReq({ cookie }), beforeLogout, sendJson, {
+      userService: createTestUserService(),
+      authSessionStore
+    });
+    expect(beforeLogout.statusCode).toBe(200);
+    expect((beforeLogout.body as { session: { sessionId?: string } }).session.sessionId).toBeUndefined();
+
+    const logout = mockRes();
+    await handleAuthLogout(mockReq({ cookie }), logout, sendJson, { authSessionStore });
+    expect(logout.statusCode).toBe(200);
+
+    const afterLogout = mockRes();
+    await handleAuthSession(mockReq({ cookie }), afterLogout, sendJson, {
+      userService: createTestUserService(),
+      authSessionStore
+    });
+    expect(afterLogout.statusCode).toBe(401);
+
+    await expect(requireClientContextFromCookie(cookie, {
+      sessionLookup: (session) => authSessionStore.isActive(session),
+      userLookup: async () => ({ isActive: true, clientId: "client_arcigy_demo", role: "owner" })
+    })).rejects.toThrow("Missing authenticated client session.");
+  });
+
+  it("uses the trusted proxy-appended address instead of a spoofable first forwarded address", async () => {
+    const limiter = createLoginRateLimiter();
+    const userService = createTestUserService();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await handleAuthLogin(
+        mockReq({ forwardedFor: `198.51.100.${attempt}, 203.0.113.10` }),
+        mockRes(),
+        readBody({ username: "arcigy", password: "bad" }),
+        sendJson,
+        { userService, loginRateLimiter: limiter }
+      );
+    }
+    const limited = mockRes();
+    await handleAuthLogin(
+      mockReq({ forwardedFor: "198.51.100.99, 203.0.113.10" }),
+      limited,
+      readBody({ username: "arcigy", password: "bad" }),
+      sendJson,
+      { userService, loginRateLimiter: limiter }
+    );
+    expect(limited.statusCode).toBe(429);
+  });
+
   it("rejects validly signed session for missing user", async () => {
     const now = new Date().toISOString();
     const missingUserSession = {
@@ -342,6 +406,29 @@ describe("auth endpoints", () => {
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ ok: false, authenticated: false });
     expect(String(res.headers["Set-Cookie"])).toContain("Max-Age=0");
+  });
+
+  it("rejects a still-signed session after the live tenant or role changes", async () => {
+    const user = seedAuthUsers[0];
+    const session = {
+      version: 1 as const,
+      userId: user.userId,
+      clientId: user.clientId,
+      role: "owner" as const,
+      displayName: user.displayName,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    };
+    const cookie = serializeClientSessionCookie(session);
+    const changedUser = { ...user, role: "viewer" as const };
+    const res = mockRes();
+
+    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([changedUser]) });
+    expect(res.statusCode).toBe(401);
+    expect(String(res.headers["Set-Cookie"])).toContain("Max-Age=0");
+    await expect(requireClientContextFromCookie(cookie, {
+      userLookup: async () => ({ isActive: true, clientId: user.clientId, role: "viewer" })
+    })).rejects.toThrow("Missing authenticated client session.");
   });
 
   it("rejects tampered clientId/role payload even with a valid structure", () => {

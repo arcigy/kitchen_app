@@ -49,6 +49,49 @@ describe("module runtime catalog context", () => {
     const ctx = createModuleRuntimeCatalogContext(catalog);
     const material = ctx.resolveMaterial(catalog.kitchenDefaults.carcassMaterialId, "carcass");
     expect(material?.id).toBe(catalog.kitchenDefaults.carcassMaterialId);
+  }, 15_000);
+
+  it("indexes a large tenant catalog once across repeated runtime lookups", () => {
+    const catalog = getSystemSeedCatalog();
+    const materialTemplate = catalog.materials[0]!;
+    const componentTemplate = catalog.components[0]!;
+    let materialActiveReads = 0;
+    let componentActiveReads = 0;
+
+    catalog.materials = Array.from({ length: 2_000 }, (_, index) => {
+      const material = { ...materialTemplate, id: `material-${index}` };
+      Object.defineProperty(material, "isActive", {
+        enumerable: true,
+        configurable: true,
+        get: () => {
+          materialActiveReads += 1;
+          return true;
+        }
+      });
+      return material;
+    });
+    catalog.components = Array.from({ length: 2_000 }, (_, index) => {
+      const component = { ...componentTemplate, id: `component-${index}` };
+      Object.defineProperty(component, "isActive", {
+        enumerable: true,
+        configurable: true,
+        get: () => {
+          componentActiveReads += 1;
+          return true;
+        }
+      });
+      return component;
+    });
+
+    const firstContext = createModuleRuntimeCatalogContext(catalog);
+    const secondContext = createModuleRuntimeCatalogContext(catalog);
+    for (let index = 0; index < 50; index += 1) {
+      expect(firstContext.getMaterialById("material-1999")?.id).toBe("material-1999");
+      expect(secondContext.getComponentById("component-1999")?.id).toBe("component-1999");
+    }
+
+    expect(materialActiveReads).toBeLessThanOrEqual(catalog.materials.length * 2);
+    expect(componentActiveReads).toBeLessThanOrEqual(catalog.components.length * 2);
   });
 
   it("falls back through kitchen defaults, first material, then system placeholder", () => {

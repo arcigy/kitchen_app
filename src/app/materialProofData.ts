@@ -21,6 +21,7 @@ export type MaterialProofEntry = {
   baseColorHex?: string;
   sampledBaseColorHex?: string;
   sampledColors?: string[];
+  referenceImageAvailable?: boolean;
   grainColorHex?: string;
   tintStrength?: number;
   grainContrast?: number;

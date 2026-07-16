@@ -1,6 +1,6 @@
 import { Pool, type PoolClient } from "pg";
 import { quotePgIdentifier } from "./database-config";
-import { REQUIRED_DATABASE_MIGRATION_VERSION } from "./migration-version";
+import { REQUIRED_DATABASE_MIGRATION_VERSIONS } from "./migration-version";
 import { attachPostgresPoolErrorHandler } from "./postgres-pool-error-handler";
 import { isTransientPostgresError } from "./postgres-error";
 import { resolvePostgresPoolConfig } from "./postgres-pool-config";
@@ -32,13 +32,15 @@ export async function closeSchemaPools(): Promise<void> {
 async function assertSchemaMigrated(client: PoolClient, key: string, schema: string): Promise<void> {
   if (verifiedSchemas.has(key)) return;
   const result = await client.query<{ version: string }>(
-    "SELECT version FROM schema_migrations WHERE version = $1",
-    [REQUIRED_DATABASE_MIGRATION_VERSION]
+    "SELECT version FROM schema_migrations WHERE version = ANY($1::text[])",
+    [REQUIRED_DATABASE_MIGRATION_VERSIONS]
   ).catch((error: unknown) => {
     throw new Error(`Database schema "${schema}" is not migrated. Run npm run db:migrate -- --schema ${schema}. ${error instanceof Error ? error.message : String(error)}`);
   });
-  if (!result.rows[0]) {
-    throw new Error(`Database schema "${schema}" is missing migration ${REQUIRED_DATABASE_MIGRATION_VERSION}. Run npm run db:migrate -- --schema ${schema}.`);
+  const appliedVersions = new Set(result.rows.map((row) => row.version));
+  const missingVersions = REQUIRED_DATABASE_MIGRATION_VERSIONS.filter((version) => !appliedVersions.has(version));
+  if (missingVersions.length > 0) {
+    throw new Error(`Database schema "${schema}" is missing migration ${missingVersions[0]}. Run npm run db:migrate -- --schema ${schema}.`);
   }
   verifiedSchemas.add(key);
 }

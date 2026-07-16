@@ -19,15 +19,28 @@ import {
   assertFullSaveMaterialAssignmentsAllowed,
   type ProjectSnapshotSaveOptions
 } from "../project-materials/project-material-save-authority";
+import { prepareProjectSaveWrite } from "./project-write-consistency";
+import {
+  assertProjectOperationReplay,
+  attachProjectOperationReceipt,
+  preserveProjectOperationReceipt,
+  stripProjectOperationReceipt,
+  type ProjectOperationReceipt
+} from "./project-operation-idempotency";
 
 export { ProjectMaterialRevisionConflictError } from "../project-materials/project-material-errors";
 
 export type ProjectRepository = {
-  createProject(ctx: ClientContext, input: CreateProjectInput): Promise<ProjectMetadata>;
+  createProject(
+    ctx: ClientContext,
+    input: CreateProjectInput,
+    options?: { projectId?: string; receipt?: ProjectOperationReceipt }
+  ): Promise<ProjectMetadata>;
   listProjects(ctx: ClientContext): Promise<ProjectMetadata[]>;
   getProject(ctx: ClientContext, projectId: string): Promise<ProjectMetadata>;
   deleteProject(ctx: ClientContext, projectId: string): Promise<void>;
   saveProjectMetadata(ctx: ClientContext, metadata: ProjectMetadata): Promise<void>;
+  claimProjectMetadata(ctx: ClientContext, metadata: ProjectMetadata, receipt: ProjectOperationReceipt): Promise<ProjectMetadata>;
   loadProjectSave(ctx: ClientContext, projectId: string, phaseId: string): Promise<ProjectSaveFile>;
   saveProjectSnapshot(
     ctx: ClientContext,
@@ -35,7 +48,7 @@ export type ProjectRepository = {
     phaseId: string,
     save: ProjectSaveFile,
     options?: ProjectSnapshotSaveOptions
-  ): Promise<void>;
+  ): Promise<ProjectSaveFile>;
   updateProjectMaterialAssignments(
     ctx: ClientContext,
     projectId: string,
@@ -118,18 +131,29 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
     assertValidProjectMetadata(metadata);
     const safeProjectId = sanitizeStorageId(metadata.projectId, "projectId");
     const metaPath = projectMetaPath(root, ctx, safeProjectId);
-    await mkdir(path.dirname(metaPath), { recursive: true });
-    await writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
+    await withSavePathWriteLock(metaPath, async () => {
+      let existing: unknown = null;
+      try {
+        existing = await readJsonFile<unknown>(metaPath);
+      } catch (error) {
+        if (!isMissingFile(error)) throw error;
+      }
+      const stored = preserveProjectOperationReceipt(existing, metadata);
+      await mkdir(path.dirname(metaPath), { recursive: true });
+      await writeFile(metaPath, JSON.stringify(stored, null, 2), "utf-8");
+    });
   };
 
   return {
-    async createProject(ctx, input) {
+    async createProject(ctx, input, options) {
       assertValidCreateProjectInput(input);
-      const metadata = createProjectMetadata(ctx, input);
-      await saveProjectMetadata(ctx, metadata);
-      const scope = createClientProjectPhaseScope(ctx, { projectId: metadata.projectId, phaseId: metadata.activePhaseId });
+      const metadata = createProjectMetadata(ctx, input, options?.projectId);
+      const persisted = options?.receipt
+        ? await this.claimProjectMetadata(ctx, metadata, options.receipt)
+        : (await saveProjectMetadata(ctx, metadata), metadata);
+      const scope = createClientProjectPhaseScope(ctx, { projectId: persisted.projectId, phaseId: persisted.activePhaseId });
       await Promise.all((["saves", "backups", "exports", "renders", "uploads"] as const).map((bucket) => mkdir(resolvePhaseBucketPath(root, scope, bucket), { recursive: true })));
-      return metadata;
+      return persisted;
     },
 
     async listProjects(ctx) {
@@ -157,7 +181,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
     async getProject(ctx, projectId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       await assertProjectBelongsToClient(root, ctx.clientId, safeProjectId);
-      const metadata = await readJsonFile<ProjectMetadata>(projectMetaPath(root, ctx, safeProjectId));
+      const metadata = stripProjectOperationReceipt(await readJsonFile<unknown>(projectMetaPath(root, ctx, safeProjectId)));
       if (metadata.clientId !== ctx.clientId) throw new Error("Project does not belong to the current client.");
       assertValidProjectMetadata(metadata);
       return metadata;
@@ -180,6 +204,26 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
 
     saveProjectMetadata,
 
+    async claimProjectMetadata(ctx, metadata, receipt) {
+      if (metadata.clientId !== ctx.clientId) throw new Error("Project does not belong to the current client.");
+      assertValidProjectMetadata(metadata);
+      const safeProjectId = sanitizeStorageId(metadata.projectId, "projectId");
+      const metaPath = projectMetaPath(root, ctx, safeProjectId);
+      return withSavePathWriteLock(metaPath, async () => {
+        try {
+          const existing = await readJsonFile<unknown>(metaPath);
+          const replay = assertProjectOperationReplay(existing, receipt);
+          assertValidProjectMetadata(replay);
+          return replay;
+        } catch (error) {
+          if (!isMissingFile(error)) throw error;
+        }
+        await mkdir(path.dirname(metaPath), { recursive: true });
+        await writeFile(metaPath, JSON.stringify(attachProjectOperationReceipt(metadata, receipt), null, 2), "utf-8");
+        return metadata;
+      });
+    },
+
     async loadProjectSave(ctx, projectId, phaseId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
@@ -194,22 +238,26 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
       validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
       await assertClientProjectPhaseAccess(root, ctx.clientId, safeProjectId, safePhaseId, { mode: "write" });
       const target = savePath(root, ctx, safeProjectId, safePhaseId);
-      await withSavePathWriteLock(target, async () => {
+      return withSavePathWriteLock(target, async () => {
         let stored: ProjectSaveFile | null = null;
         try {
           stored = loadProjectSaveFile(await readJsonFile<unknown>(target), { clientId: ctx.clientId, projectId: safeProjectId });
         } catch (error) {
           if (!isMissingFile(error)) throw error;
         }
+        const prepared = prepareProjectSaveWrite({ stored, incoming: save, options });
+        if (prepared.replayed) return prepared.save;
         if (stored) {
           assertFullSaveMaterialAssignmentsAllowed(
             stored.appState.materialAssignments,
-            save.appState.materialAssignments,
+            prepared.save.appState.materialAssignments,
             options?.materialAssignmentsMode
           );
         }
+        validateProjectSaveFile(prepared.save, { clientId: ctx.clientId, projectId: safeProjectId });
         await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, JSON.stringify(save, null, 2), "utf-8");
+        await writeFile(target, JSON.stringify(prepared.save, null, 2), "utf-8");
+        return prepared.save;
       });
     },
 

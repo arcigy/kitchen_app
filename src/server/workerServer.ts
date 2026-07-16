@@ -5,51 +5,52 @@ import path from "node:path";
 import process from "node:process";
 import { requireClientContextFromCookie } from "../core/client/session-cookie";
 import type { UserService } from "../core/auth/user-service";
+import type { AuthSessionStore } from "../core/auth/auth-session-store";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
-import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
-import { handleClientProfileApi } from "./clientEndpoint";
-import { handleModulePackageApi } from "./modulePackageEndpoint";
-import { handleProjectApi } from "./projectEndpoint";
-import { handleProjectMaterialsApi } from "./projectMaterialsEndpoint";
-import { ProjectMaterialRevisionConflictError } from "../core/project-materials/project-material-errors";
-import { handleAssistantApi } from "./assistantEndpoint";
 import { createServerProjectRepository } from "./projectRepository";
-import { createServerCatalogRepository, createServerUserService } from "./serverRepositories";
-import { handleDemosMaterialImage, handleDemosMaterialLookup } from "./demosMaterialLookup";
+import {
+  createServerAuthSessionStore,
+  createServerCatalogRepository,
+  createServerModulePackageRepository,
+  createServerUserService
+} from "./serverRepositories";
 import { runBlenderExport } from "./blender/runBlenderExport";
 import { createClientCatalogService } from "../core/catalog/catalog-service";
 import { CatalogExactLookupCache } from "../core/catalog/catalog-exact-lookup";
-import { handleCatalogExactLookupApi } from "./catalogLookupEndpoint";
-import { handleSupplierBridgeApi } from "./supplierBridgeEndpoint";
 import { checkDatabaseReadiness } from "./databaseReadiness";
-import { databaseUnavailableStatus, publicServerErrorMessage } from "./server-error-response";
+import { sendResponseBody } from "./http-response-compression";
+import { readJsonRequestBody } from "./request-json-body";
+import { createHttpRequestMetrics } from "./http-request-metrics";
+import { createHttpRequestBudget, type HttpRequestBudget } from "./http-request-budget";
+import { createClientJourneyMetrics } from "./clientJourneyMetrics";
+import { createWorkerRequestHandler } from "./workerRequestPipeline";
+import { handleWorkerApiRequest } from "./workerApiRouter";
+import { assertWorkerRuntimeEnvironment } from "./workerRuntimeEnvironment";
+import { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
+import { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
 
-const PROJECT_ROOT = process.cwd();
 const DEFAULT_PROJECT_ROOT = process.cwd();
 type WorkerServerDependencies = {
   userService?: UserService;
+  authSessionStore?: AuthSessionStore;
   projectRoot?: string;
+  requestBudget?: HttpRequestBudget;
 };
 
-const readJsonBody = async (req: http.IncomingMessage) => {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
-  const raw = Buffer.concat(chunks).toString("utf-8");
-  return JSON.parse(raw) as unknown;
-};
+const readJsonBody = readJsonRequestBody;
 
 const sendJson = (res: http.ServerResponse, status: number, data: unknown) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(data));
+  sendResponseBody(res, JSON.stringify(data));
 };
 
 const sendText = (res: http.ServerResponse, status: number, text: string) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(text);
+  sendResponseBody(res, text);
 };
 
 const getStringField = (value: unknown, field: string): string | undefined => {
@@ -83,7 +84,9 @@ const contentTypeForFile = (fileName: string) => {
   return "application/octet-stream";
 };
 
+assertWorkerRuntimeEnvironment();
 const defaultUserService = createServerUserService();
+const defaultAuthSessionStore = createServerAuthSessionStore();
 
 async function verifyDatabaseReady(projectRoot: string): Promise<void> {
   const storage = process.env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -93,49 +96,18 @@ async function verifyDatabaseReady(projectRoot: string): Promise<void> {
   await repository.listProjects({ userId: "__startup_check", clientId: "__startup_check", role: "viewer" });
 }
 
-const getValidatedClientContext = (cookieHeader: string | string[] | undefined, userService?: UserService) =>
+const getValidatedClientContext = (
+  cookieHeader: string | string[] | undefined,
+  userService?: UserService,
+  authSessionStore?: AuthSessionStore
+) =>
   requireClientContextFromCookie(cookieHeader, {
+    sessionLookup: (session) => (authSessionStore ?? defaultAuthSessionStore).isActive(session),
     userLookup: async (userId) => {
       const user = await (userService ?? defaultUserService).getUserById(userId);
-      return user ? { isActive: user.isActive } : null;
+      return user ? { isActive: user.isActive, clientId: user.clientId, role: user.role } : null;
     }
   });
-
-const forbiddenErrorMessagePatterns = [
-  "Current session cannot access the requested client.",
-  "Current session cannot access the requested client storage.",
-  "Project does not belong to the current client.",
-  "Phase does not belong to the requested project.",
-  "Project ownership metadata is missing.",
-  "Project ownership metadata is invalid.",
-  "Invalid storage URL.",
-  "Unsupported storage bucket.",
-  "bucket is required.",
-  "fileName contains an unsafe path segment.",
-  "fileName is required.",
-  "Unexpected clientId in request body.",
-  "Imported project belongs to a different client.",
-  "Project save belongs to a different client."
-];
-
-const getErrorCode = (error: unknown): number => {
-  const unavailable = databaseUnavailableStatus(error);
-  if (unavailable) return unavailable;
-  if (error instanceof SyntaxError) return 400;
-  if (error instanceof Error) {
-    if (error instanceof ProjectMaterialRevisionConflictError) return 409;
-    if (error.message === "Missing authenticated client session.") return 401;
-    if (error.message === "Imported projectId already exists.") return 409;
-    if (error.message.startsWith("Invalid FurnQuote module package:")) return 400;
-    if (error.message === "Module import body is required.") return 400;
-    if (error.message.endsWith(" is required.")) return 400;
-    if (forbiddenErrorMessagePatterns.some((messagePattern) => error.message.includes(messagePattern))) return 403;
-    if (error.message.includes("Invalid storage URL")) return 400;
-    if (error.message === "Storage file not found.") return 404;
-    if ("code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") return 404;
-  }
-  return 500;
-};
 
 const isUnexpectedClientId = (body: unknown): boolean => {
   return getStringField(body, "clientId") !== undefined;
@@ -152,9 +124,10 @@ const serveStorageFile = async (
   reqUrl: URL,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  const context = await getValidatedClientContext(req.headers.cookie, userService);
+  const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const file = await readScopedStorageFile(projectRoot, context, reqUrl.pathname);
   res.statusCode = 200;
   res.setHeader("Cache-Control", "no-store");
@@ -166,9 +139,10 @@ const handleCatalog = async (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  const context = await getValidatedClientContext(req.headers.cookie, userService);
+  const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const repository = createServerCatalogRepository(projectRoot);
   const catalog = await repository.ensureCatalogExists(context);
   return sendJson(res, 200, { ok: true, catalog });
@@ -179,9 +153,10 @@ const handleCatalogLookup = async (
   reqUrl: URL,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  const context = await getValidatedClientContext(req.headers.cookie, userService);
+  const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const kind = reqUrl.searchParams.get("kind");
   const repository = createServerCatalogRepository(projectRoot);
   const service = createClientCatalogService({ context, repository });
@@ -453,9 +428,10 @@ const handleMaterialProofCatalogs = async (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  await getValidatedClientContext(req.headers.cookie, userService);
+  await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const [productionRaw, stagingRaw, references, csvBoards] = await Promise.all([
     readProjectJson(projectRoot, "backend/materials/material_frontend_catalog.json"),
     readProjectJson(projectRoot, "backend/materials/material_frontend_catalog_staging.json"),
@@ -471,9 +447,10 @@ const handleExport = async (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  const context = await getValidatedClientContext(req.headers.cookie, userService);
+  const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const body = await readJsonBody(req);
 
   if (isUnexpectedClientId(body)) {
@@ -548,9 +525,10 @@ const handleOpenBlenderOutput = async (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   userService: UserService,
+  authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  await getValidatedClientContext(req.headers.cookie, userService);
+  await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
   const body = await readJsonBody(req);
   const filePath = getRequiredStringField(body, "path");
   const resolved = assertOpenableBlenderOutputPath(projectRoot, filePath);
@@ -559,133 +537,58 @@ const handleOpenBlenderOutput = async (
   return sendJson(res, 200, { ok: true, path: resolved });
 };
 
-const createRequestUrl = (req: http.IncomingMessage, host: string, port: number) => {
-  const protocolHost = req.headers.host || `${host}:${port}`;
-  return new URL(req.url || "/", `http://${protocolHost}`);
-};
-
 export function startWorkerServer(
   port = Number(process.env.BLENDER_WORKER_PORT || 5191),
   host = process.env.BLENDER_WORKER_HOST || "127.0.0.1",
   dependencies: WorkerServerDependencies = {}
 ) {
   const userService = dependencies.userService ?? defaultUserService;
+  const authSessionStore = dependencies.authSessionStore ?? defaultAuthSessionStore;
   const projectRoot = dependencies.projectRoot ?? process.env.KITCHEN_APP_PROJECT_ROOT ?? DEFAULT_PROJECT_ROOT;
   const catalogLookupCache = new CatalogExactLookupCache();
-  const server = http.createServer(async (req, res) => {
-    try {
-      const url = createRequestUrl(req, host, port);
-
-      if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
-
-      if (req.method === "GET" && url.pathname === "/ready") {
-        try {
-          return sendJson(res, 200, await checkDatabaseReadiness());
-        } catch (error) {
-          res.setHeader("Retry-After", "2");
-          return sendJson(res, 503, { ok: false, error: publicServerErrorMessage(error, 503) });
-        }
-      }
-
-      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService });
-
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return await handleAuthSession(req, res, sendJson, { userService });
-
-      if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
-
-      if (
-        await handleClientProfileApi(req, res, url, {
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res, userService, projectRoot);
-
-      if (
-        await handleCatalogExactLookupApi(req, res, url, {
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          createRepository: () => createServerCatalogRepository(projectRoot),
-          cache: catalogLookupCache,
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname === "/api/catalog/lookup")
-        return await handleCatalogLookup(req, url, res, userService, projectRoot);
-
-      if (req.method === "GET" && url.pathname === "/api/material-proof/catalogs")
-        return await handleMaterialProofCatalogs(req, res, userService, projectRoot);
-
-      if (req.method === "GET" && url.pathname === "/api/demos/material-lookup")
-        return await handleDemosMaterialLookup(url, res, sendJson);
-
-      if (req.method === "GET" && url.pathname === "/api/demos/material-image")
-        return await handleDemosMaterialImage(url, res);
-
-      if (
-        await handleModulePackageApi(req, res, url, {
-          projectRoot,
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleProjectMaterialsApi(req, res, url, {
-          projectRoot,
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleSupplierBridgeApi(req, res, url, {
-          projectRoot,
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleProjectApi(req, res, url, {
-          projectRoot,
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleAssistantApi(req, res, url, {
-          projectRoot,
-          getContext: (cookieHeader) => getValidatedClientContext(cookieHeader, userService),
-          getCatalog: async (context) => createServerCatalogRepository(projectRoot).ensureCatalogExists(context),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname.startsWith("/storage/")) return await serveStorageFile(req, url, res, userService, projectRoot);
-
-      if (req.method === "POST" && url.pathname === "/api/blender/export")
-        return await handleExport(req, res, userService, projectRoot);
-
-      if (req.method === "POST" && url.pathname === "/api/blender/open-output")
-        return await handleOpenBlenderOutput(req, res, userService, projectRoot);
-
-      return sendText(res, 404, "Not found");
-    } catch (err: unknown) {
-      const status = getErrorCode(err);
-      if (status === 503) res.setHeader("Retry-After", "2");
-      const message = publicServerErrorMessage(err, status);
-      console.error(`[worker] ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${err instanceof Error ? err.message : String(err)}`);
-      return sendJson(res, status, { ok: false, error: message });
-    }
-  });
+  const clientCatalogBootstrapResponseCache = new ClientCatalogBootstrapResponseCache();
+  const clientModulePackagesResponseCache = new ClientModulePackagesResponseCache();
+  const requestMetrics = createHttpRequestMetrics();
+  const clientJourneyMetrics = createClientJourneyMetrics();
+  const requestBudget = dependencies.requestBudget ?? createHttpRequestBudget();
+  const getClientContext = (cookieHeader: string | string[] | undefined) =>
+    getValidatedClientContext(cookieHeader, userService, authSessionStore);
+  const server = http.createServer(createWorkerRequestHandler({
+    host,
+    port,
+    userService,
+    authSessionStore,
+    requestMetrics,
+    clientJourneyMetrics,
+    requestBudget,
+    readJsonBody,
+    sendJson,
+    sendText,
+    checkReadiness: checkDatabaseReadiness,
+    getClientContext,
+    handleApplicationRequest: (req, res, url) => handleWorkerApiRequest(req, res, url, {
+      projectRoot,
+      getClientContext,
+      readJsonBody,
+      sendJson,
+      clientCatalogBootstrapResponseCache,
+      clientModulePackagesResponseCache,
+      catalogLookupCache,
+      createCatalogRepository: () => createServerCatalogRepository(projectRoot),
+      createModulePackageRepository: () => createServerModulePackageRepository(projectRoot),
+      handleCatalog: (request, response) => handleCatalog(request, response, userService, authSessionStore, projectRoot),
+      handleCatalogLookup: (request, requestUrl, response) =>
+        handleCatalogLookup(request, requestUrl, response, userService, authSessionStore, projectRoot),
+      handleMaterialProofCatalogs: (request, response) =>
+        handleMaterialProofCatalogs(request, response, userService, authSessionStore, projectRoot),
+      handleStorageFile: (request, requestUrl, response) =>
+        serveStorageFile(request, requestUrl, response, userService, authSessionStore, projectRoot),
+      handleExport: (request, response) => handleExport(request, response, userService, authSessionStore, projectRoot),
+      handleOpenBlenderOutput: (request, response) =>
+        handleOpenBlenderOutput(request, response, userService, authSessionStore, projectRoot),
+      handleNotFound: async (_request, response) => sendText(response, 404, "Not found")
+    })
+  }));
 
   server.listen(port, host, () => {
     console.log(`[blender-worker] listening on http://${host}:${port}`);

@@ -48,7 +48,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
   root.innerHTML = `
     <header id="ribbon" aria-label="Ribbon toolbar"></header>
 
-    <div id="main" class="archux-main">
+    <div id="main" class="archux-main" role="main">
       <nav class="archux-side-nav" aria-label="Main navigation">
         ${navItems
           .map(

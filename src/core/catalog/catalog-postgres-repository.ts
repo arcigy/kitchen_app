@@ -14,6 +14,12 @@ type CatalogRow = {
   catalog: unknown;
 };
 
+type CatalogRevisionRow = {
+  catalog_version: number | string;
+  updated_at: Date | string;
+  db_updated_at: Date | string;
+};
+
 type CatalogItemRow = {
   item: unknown;
 };
@@ -201,6 +207,25 @@ export function createPostgresClientCatalogRepository(args: {
   return {
     getCatalogForClient(clientId) {
       return seed.getCatalogForClient(clientId);
+    },
+    async getRevision(ctx) {
+      return withSchemaClient(args.connectionString, args.schema, async (client) => {
+        const result = await client.query<CatalogRevisionRow>(
+          `
+            SELECT catalog_version, updated_at, db_updated_at
+            FROM arcigy_client_catalogs
+            WHERE client_id = $1
+          `,
+          [ctx.clientId]
+        );
+        const row = result.rows[0];
+        if (!row) return null;
+        return {
+          catalogVersion: Number(row.catalog_version),
+          updatedAt: new Date(row.updated_at).toISOString(),
+          storageRevision: new Date(row.db_updated_at).toISOString()
+        };
+      });
     },
     async getCatalog(ctx) {
       return (await readCatalog(ctx)) ?? seed.getCatalogForClient(ctx.clientId);

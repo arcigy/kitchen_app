@@ -9,9 +9,11 @@ import { migrateProjectSaveFile } from "../project-save/project-save-migrations"
 import type { ProjectSaveFile } from "../project-save/project-save-types";
 import { validateProjectSaveFile } from "../project-save/project-save-validation";
 import { createProjectId } from "./project-metadata";
+import { deterministicProjectId, type ProjectOperationReceipt } from "./project-operation-idempotency";
+import type { ProjectWriteIdempotency } from "./project-write-consistency";
 
 export type ProjectService = {
-  createProject(ctx: ClientContext, input: CreateProjectInput): Promise<ProjectMetadata>;
+  createProject(ctx: ClientContext, input: CreateProjectInput, idempotency?: ProjectWriteIdempotency): Promise<ProjectMetadata>;
   listProjects(ctx: ClientContext): Promise<ProjectMetadata[]>;
   getProject(ctx: ClientContext, projectId: string): Promise<ProjectMetadata>;
   deleteProject(ctx: ClientContext, projectId: string): Promise<void>;
@@ -23,18 +25,28 @@ export type ProjectService = {
   loadProject(ctx: ClientContext, projectId: string): Promise<ProjectSaveFile>;
   listProjectVersions(ctx: ClientContext, projectId: string): Promise<ProjectVersionMetadata[]>;
   loadProjectVersion(ctx: ClientContext, projectId: string, versionNumber: number): Promise<ProjectSaveFile>;
-  restoreProjectVersion(ctx: ClientContext, projectId: string, versionNumber: number): Promise<ProjectSaveFile>;
+  restoreProjectVersion(
+    ctx: ClientContext,
+    projectId: string,
+    versionNumber: number,
+    idempotency?: ProjectWriteIdempotency
+  ): Promise<ProjectSaveFile>;
   exportEncryptedProjectFile(ctx: ClientContext, projectId: string, options?: ProjectFileCryptoOptions): Promise<string>;
-  importEncryptedProjectFile(ctx: ClientContext, envelopeJson: string, options?: ProjectFileCryptoOptions): Promise<ProjectSaveFile>;
+  importEncryptedProjectFile(
+    ctx: ClientContext,
+    envelopeJson: string,
+    options?: ProjectFileCryptoOptions,
+    idempotency?: ProjectWriteIdempotency
+  ): Promise<ProjectSaveFile>;
 };
 
-function cloneImportedSaveForCurrentClient(save: ProjectSaveFile, ctx: ClientContext): ProjectSaveFile {
+function cloneImportedSaveForCurrentClient(save: ProjectSaveFile, ctx: ClientContext, projectId?: string): ProjectSaveFile {
   const now = new Date().toISOString();
-  const projectId = createProjectId(`${save.project.name} import`);
+  const importedProjectId = projectId ?? createProjectId(`${save.project.name} import`);
   const project = {
     ...save.project,
     clientId: ctx.clientId,
-    projectId,
+    projectId: importedProjectId,
     name: `${save.project.name} import`,
     createdAt: now,
     updatedAt: now,
@@ -48,7 +60,7 @@ function cloneImportedSaveForCurrentClient(save: ProjectSaveFile, ctx: ClientCon
   return {
     ...save,
     clientId: ctx.clientId,
-    projectId,
+    projectId: importedProjectId,
     project,
     phases: save.phases.map((phase) => ({ ...phase, updatedAt: now })),
     integrity: {
@@ -102,7 +114,14 @@ async function saveVersionForCurrentSnapshot(
 
 export function createProjectService(repository: ProjectRepository): ProjectService {
   return {
-    createProject: (ctx, input) => repository.createProject(ctx, input),
+    createProject(ctx, input, idempotency) {
+      if (!idempotency) return repository.createProject(ctx, input);
+      const receipt: ProjectOperationReceipt = { operation: "create", ...idempotency };
+      return repository.createProject(ctx, input, {
+        projectId: deterministicProjectId("project", receipt),
+        receipt
+      });
+    },
     listProjects: (ctx) => repository.listProjects(ctx),
     getProject: (ctx, projectId) => repository.getProject(ctx, projectId),
     async deleteProject(ctx, projectId) {
@@ -129,10 +148,16 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         appState: { ...save.appState, projectPreview }
       };
       validateProjectSaveFile(savedSave, { clientId: ctx.clientId, projectId: save.projectId });
-      await repository.saveProjectSnapshot(ctx, savedSave.projectId, savedSave.activePhaseId, savedSave, options);
-      await repository.saveProjectMetadata(ctx, savedProject);
-      await saveVersionForCurrentSnapshot(repository, ctx, savedSave, editingSessionId);
-      return savedSave;
+      const persistedSave = await repository.saveProjectSnapshot(
+        ctx,
+        savedSave.projectId,
+        savedSave.activePhaseId,
+        savedSave,
+        options
+      );
+      await repository.saveProjectMetadata(ctx, persistedSave.project);
+      await saveVersionForCurrentSnapshot(repository, ctx, persistedSave, editingSessionId);
+      return persistedSave;
     },
 
     async loadProject(ctx, projectId) {
@@ -150,7 +175,15 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
       return repository.loadProjectVersion(ctx, projectId, versionNumber);
     },
 
-    async restoreProjectVersion(ctx, projectId, versionNumber) {
+    async restoreProjectVersion(ctx, projectId, versionNumber, idempotency) {
+      const restoreSessionId = idempotency
+        ? `restore:${idempotency.keyHash.slice(0, 64)}`
+        : null;
+      if (restoreSessionId) {
+        const replay = (await repository.listProjectVersions(ctx, projectId))
+          .find((version) => version.editingSessionId === restoreSessionId);
+        if (replay) return repository.loadProjectVersion(ctx, projectId, replay.versionNumber);
+      }
       const metadata = await repository.getProject(ctx, projectId);
       const versionSave = await repository.loadProjectVersion(ctx, projectId, versionNumber);
       const now = new Date().toISOString();
@@ -171,12 +204,18 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         }
       };
       validateProjectSaveFile(restoredSave, { clientId: ctx.clientId, projectId });
-      await repository.saveProjectSnapshot(ctx, restoredSave.projectId, restoredSave.activePhaseId, restoredSave, {
-        materialAssignmentsMode: "restore-version"
+      const persistedSave = await repository.saveProjectSnapshot(ctx, restoredSave.projectId, restoredSave.activePhaseId, restoredSave, {
+        materialAssignmentsMode: "restore-version",
+        idempotency
       });
-      await repository.saveProjectMetadata(ctx, restoredProject);
-      await saveVersionForCurrentSnapshot(repository, ctx, restoredSave, `restore:${ctx.userId}:${now}`);
-      return restoredSave;
+      await repository.saveProjectMetadata(ctx, persistedSave.project);
+      await saveVersionForCurrentSnapshot(
+        repository,
+        ctx,
+        persistedSave,
+        restoreSessionId ?? `restore:${ctx.userId}:${now}`
+      );
+      return persistedSave;
     },
 
     async exportEncryptedProjectFile(ctx, projectId, options) {
@@ -191,24 +230,42 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
       }, options));
     },
 
-    async importEncryptedProjectFile(ctx, envelopeJson, options) {
+    async importEncryptedProjectFile(ctx, envelopeJson, options, idempotency) {
       const payload = decryptProjectExportPayload(JSON.parse(envelopeJson) as unknown, options);
       let save = migrateProjectSaveFile(payload.save);
       validateProjectSaveFile(save, { clientId: ctx.clientId });
       if (save.clientId !== ctx.clientId) throw new Error("Imported project belongs to a different client.");
-      let projectExists = false;
-      try {
-        await repository.getProject(ctx, save.projectId);
-        projectExists = true;
-      } catch {
-        projectExists = false;
+      const receipt: ProjectOperationReceipt | undefined = idempotency
+        ? { operation: "import", ...idempotency }
+        : undefined;
+      if (receipt) {
+        save = cloneImportedSaveForCurrentClient(save, ctx, deterministicProjectId("import", receipt));
+      } else {
+        let projectExists = false;
+        try {
+          await repository.getProject(ctx, save.projectId);
+          projectExists = true;
+        } catch {
+          projectExists = false;
+        }
+        if (projectExists) {
+          save = cloneImportedSaveForCurrentClient(save, ctx);
+        }
       }
-      if (projectExists) save = cloneImportedSaveForCurrentClient(save, ctx);
       validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: save.projectId });
-      const restoredSave = await repository.restoreProjectAssets(ctx, save, payload.bundledAssets);
-      await repository.saveProjectMetadata(ctx, { ...restoredSave.project, updatedAt: new Date().toISOString(), updatedByUserId: ctx.userId });
-      await repository.saveProjectSnapshot(ctx, restoredSave.projectId, restoredSave.activePhaseId, restoredSave);
-      return restoredSave;
+      const importedProject = { ...save.project, updatedAt: new Date().toISOString(), updatedByUserId: ctx.userId };
+      const persistedProject = receipt
+        ? await repository.claimProjectMetadata(ctx, importedProject, receipt)
+        : importedProject;
+      const restoredSave = await repository.restoreProjectAssets(ctx, { ...save, project: persistedProject }, payload.bundledAssets);
+      if (!receipt) await repository.saveProjectMetadata(ctx, persistedProject);
+      return repository.saveProjectSnapshot(
+        ctx,
+        restoredSave.projectId,
+        restoredSave.activePhaseId,
+        restoredSave,
+        receipt ? { idempotency } : undefined
+      );
     }
   };
 }

@@ -1,10 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
 import { ProjectMaterialAssignmentAuthorityError } from "./project-material-errors";
 import type { ProjectMaterialAssignmentsState } from "./project-material-types";
+import type { ProjectWriteConsistencyOptions } from "../project/project-write-consistency";
 
 export type ProjectSnapshotMaterialAssignmentsMode = "preserve" | "initialize" | "restore-version";
 
-export type ProjectSnapshotSaveOptions = {
+export type ProjectSnapshotSaveOptions = ProjectWriteConsistencyOptions & {
   materialAssignmentsMode?: ProjectSnapshotMaterialAssignmentsMode;
 };
 

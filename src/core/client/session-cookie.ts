@@ -12,10 +12,15 @@ export type SessionCookieParseResult =
   | { ok: true; session: AuthenticatedClientSession }
   | { ok: false; reason: "missing" | "invalid" | "expired" };
 
-export type UserLookup = (userId: string) => Promise<{ isActive: boolean } | null>;
+export type UserLookup = (userId: string) => Promise<{
+  isActive: boolean;
+  clientId?: string;
+  role?: AuthenticatedClientSession["role"];
+} | null>;
 
 export type RequireClientContextOptions = {
   userLookup?: UserLookup;
+  sessionLookup?: (session: AuthenticatedClientSession) => Promise<boolean>;
 };
 
 function base64UrlEncode(value: string): string {
@@ -56,6 +61,8 @@ function isSignedSession(value: unknown): value is AuthenticatedClientSession {
     typeof candidate.displayName === "string" &&
     typeof candidate.issuedAt === "string" &&
     typeof candidate.expiresAt === "string" &&
+    (candidate.sessionId === undefined ||
+      (typeof candidate.sessionId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.sessionId))) &&
     Number.isFinite(Date.parse(candidate.issuedAt)) &&
     Number.isFinite(Date.parse(candidate.expiresAt))
   );
@@ -133,9 +140,18 @@ export async function requireClientContextFromCookie(
   const session = parseClientSessionCookie(cookieHeader);
   if (!session) throw new Error("Missing authenticated client session.");
 
+  if (options.sessionLookup && !(await options.sessionLookup(session))) {
+    throw new Error("Missing authenticated client session.");
+  }
+
   if (options.userLookup) {
     const user = await options.userLookup(session.userId);
-    if (!user || !user.isActive) {
+    if (
+      !user ||
+      !user.isActive ||
+      (user.clientId !== undefined && user.clientId !== session.clientId) ||
+      (user.role !== undefined && user.role !== session.role)
+    ) {
       throw new Error("Missing authenticated client session.");
     }
   }

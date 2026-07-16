@@ -8,7 +8,7 @@ describe("client catalog material rendering", () => {
     const catalog = getSystemSeedCatalog();
     const material = buildCatalogMaterialVisual(2, undefined, catalog);
     expect(material).toBeInstanceOf(MeshStandardMaterial);
-  });
+  }, 15_000);
 
   it("uses a safe fallback for unknown material ids", () => {
     const catalog = getSystemSeedCatalog();

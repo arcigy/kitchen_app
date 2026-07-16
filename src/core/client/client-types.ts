@@ -84,6 +84,7 @@ export type AppSession = {
 
 export type AuthenticatedClientSession = AppSession & {
   version: 1;
+  sessionId?: string;
   displayName: string;
   issuedAt: string;
   expiresAt: string;

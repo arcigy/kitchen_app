@@ -3,6 +3,11 @@ import type { ClientContext } from "../core/client/client-context";
 import { createProjectService } from "../core/project/project-service";
 import type { CreateProjectInput } from "../core/project/project-types";
 import {
+  createProjectWriteIdempotency,
+  createProjectWriteIdempotencyForText,
+  readIdempotencyKey
+} from "../core/project/project-write-consistency";
+import {
   createDefaultProjectMaterialAssignments,
   type ProjectMaterialDefaultOverrides
 } from "../core/project-materials/project-material-business";
@@ -55,6 +60,15 @@ function assertNoClientIdPayload(body: unknown): void {
 function getBodyRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Expected JSON body.");
   return body as Record<string, unknown>;
+}
+
+function getExpectedSaveRevision(record: Record<string, unknown>): number | undefined {
+  const value = record.expectedSaveRevision;
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new SyntaxError("expectedSaveRevision must be a non-negative integer.");
+  }
+  return Number(value);
 }
 
 function projectMaterialOverrides(appState: Record<string, unknown>): ProjectMaterialDefaultOverrides {
@@ -114,7 +128,17 @@ export async function handleProjectApi(
   if (req.method === "POST" && url.pathname === "/api/projects") {
     const body = await deps.readJsonBody(req);
     assertNoClientIdPayload(body);
-    const project = await service.createProject(ctx, asCreateProjectInput(body));
+    const record = getBodyRecord(body);
+    const idempotencyKey = readIdempotencyKey(req.headers);
+    const idempotency = idempotencyKey
+      ? createProjectWriteIdempotency({
+          clientId: ctx.clientId,
+          scope: "project-create",
+          key: idempotencyKey,
+          request: record
+        })
+      : undefined;
+    const project = await service.createProject(ctx, asCreateProjectInput(body), idempotency);
     deps.sendJson(res, 201, { ok: true, project });
     return true;
   }
@@ -129,7 +153,16 @@ export async function handleProjectApi(
     assertNoClientIdPayload(body);
     const record = getBodyRecord(body);
     const envelopeText = typeof record.envelope === "string" ? record.envelope : JSON.stringify(record.envelope ?? body);
-    const save = await service.importEncryptedProjectFile(ctx, envelopeText);
+    const idempotencyKey = readIdempotencyKey(req.headers);
+    const idempotency = idempotencyKey
+      ? createProjectWriteIdempotencyForText({
+          clientId: ctx.clientId,
+          scope: "project-import",
+          key: idempotencyKey,
+          requestText: envelopeText
+        })
+      : undefined;
+    const save = await service.importEncryptedProjectFile(ctx, envelopeText, undefined, idempotency);
     deps.sendJson(res, 200, { ok: true, save });
     return true;
   }
@@ -160,6 +193,16 @@ export async function handleProjectApi(
     const body = await deps.readJsonBody(req);
     assertNoClientIdPayload(body);
     const record = getBodyRecord(body);
+    const expectedRevision = getExpectedSaveRevision(record);
+    const idempotencyKey = readIdempotencyKey(req.headers);
+    const idempotency = idempotencyKey
+      ? createProjectWriteIdempotency({
+          clientId: ctx.clientId,
+          scope: `project-save:${route.projectId}`,
+          key: idempotencyKey,
+          request: record
+        })
+      : undefined;
     const project = await service.getProject(ctx, route.projectId);
     const appState = getBodyRecord(record.appState ?? {});
     const catalog = await createServerCatalogRepository(deps.projectRoot).ensureCatalogExists(ctx);
@@ -202,7 +245,9 @@ export async function handleProjectApi(
       bomSnapshot: record.bomSnapshot,
       appVersion: typeof record.appVersion === "string" ? record.appVersion : undefined
     }, {
-      materialAssignmentsMode: initializeStoredAssignments ? "initialize" : "preserve"
+      materialAssignmentsMode: initializeStoredAssignments ? "initialize" : "preserve",
+      expectedRevision,
+      idempotency
     });
     deps.sendJson(res, 200, { ok: true, save });
     return true;
@@ -228,7 +273,22 @@ export async function handleProjectApi(
       deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot restore project versions." });
       return true;
     }
-    deps.sendJson(res, 200, { ok: true, save: await service.restoreProjectVersion(ctx, route.projectId, route.versionNumber) });
+    const body = await deps.readJsonBody(req);
+    assertNoClientIdPayload(body);
+    const record = getBodyRecord(body);
+    const idempotencyKey = readIdempotencyKey(req.headers);
+    const idempotency = idempotencyKey
+      ? createProjectWriteIdempotency({
+          clientId: ctx.clientId,
+          scope: `project-restore:${route.projectId}:${route.versionNumber}`,
+          key: idempotencyKey,
+          request: record
+        })
+      : undefined;
+    deps.sendJson(res, 200, {
+      ok: true,
+      save: await service.restoreProjectVersion(ctx, route.projectId, route.versionNumber, idempotency)
+    });
     return true;
   }
 

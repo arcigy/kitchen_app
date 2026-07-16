@@ -72,12 +72,14 @@ export function createScene(container: HTMLElement) {
     zoom2d: camera2d.zoom
   };
   const configureControls = (mode: "3d" | "2d") => {
-    controls.enableDamping = mode === "3d";
+    // Runtime navigation policy belongs to viewNavigation. Scene only creates
+    // a neutral controls instance so camera switches cannot reset its focus.
+    controls.enableDamping = false;
     controls.dampingFactor = 0.08;
     controls.screenSpacePanning = true;
-    controls.zoomSpeed = mode === "3d" ? 1.15 : 1;
-    controls.minDistance = mode === "3d" ? 0.001 : 0;
-    controls.maxDistance = mode === "3d" ? 500 : Infinity;
+    controls.zoomSpeed = 1;
+    controls.minDistance = 0;
+    controls.maxDistance = Infinity;
     const runtimeControls = controls as OrbitControlsRuntime;
     runtimeControls.minTargetRadius = 0;
     runtimeControls.maxTargetRadius = Infinity;
@@ -94,7 +96,6 @@ export function createScene(container: HTMLElement) {
       };
     } else {
       controls.enableRotate = true;
-      controls.target.set(0, 0.6, 0);
       controls.enablePan = true;
       runtimeControls.mouseButtons = {
         LEFT: THREE.MOUSE.ROTATE,

@@ -13,6 +13,8 @@ import type { ClientContext } from "./core/client/client-context";
 import type { ClientProfile } from "./core/client/client-types";
 import type { ProjectMetadata } from "./core/project/project-types";
 import type { ProjectSaveFile } from "./core/project-save/project-save-types";
+import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./app/clientJourneyTelemetry";
+import { sampleBrowserRuntimeMemory, startBrowserRuntimeTelemetry } from "./app/browserRuntimeTelemetry";
 
 const app = document.getElementById("app");
 
@@ -171,6 +173,7 @@ async function start(): Promise<void> {
   const { loadCurrentClientProfileForApp } = await import("./app/clientProfileLoader");
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
+  startBrowserRuntimeTelemetry();
   setBootStatus("Prihlasenie potvrdene", 22);
 
   if (window.location.pathname === "/material-proof") {
@@ -201,6 +204,11 @@ async function start(): Promise<void> {
         });
       }
     });
+    void import("./app/catalogLoader")
+      .then(({ prefetchClientAppDataForApp }) => prefetchClientAppDataForApp(clientContext.clientId))
+      .catch(() => {
+        // Opening a project retries through the normal workspace error path.
+      });
     createChatbotDock({ appRoot });
     return;
   }
@@ -208,12 +216,28 @@ async function start(): Promise<void> {
   await launchWorkspace({ clientContext, clientProfile, initialProject: null, initialProjectSave: null });
 }
 
-async function launchWorkspace(args: {
+type LaunchWorkspaceArgs = {
   clientContext: ClientContext;
   clientProfile: ClientProfile;
   initialProject: ProjectMetadata | null;
   initialProjectSave: ProjectSaveFile | null;
-}): Promise<void> {
+};
+
+async function launchWorkspace(args: LaunchWorkspaceArgs): Promise<void> {
+  const startedAt = browserJourneyNow();
+  const openType = args.initialProjectSave ? "loaded" : args.initialProject ? "created" : "blank";
+  try {
+    const source = await launchWorkspaceInner(args);
+    const variant = `${openType}_${source}` as BrowserJourneyMetric["variant"];
+    reportBrowserJourney({ journey: "project_open", variant, outcome: "success", durationMs: browserJourneyNow() - startedAt });
+    sampleBrowserRuntimeMemory();
+  } catch (error) {
+    reportBrowserJourney({ journey: "project_open", variant: openType, outcome: "failure", durationMs: browserJourneyNow() - startedAt });
+    throw error;
+  }
+}
+
+async function launchWorkspaceInner(args: LaunchWorkspaceArgs): Promise<"local" | "network" | "persistent_cache" | "session_cache"> {
   setBootStatus("Zobrazujem pracovisko", 88);
   const appDataPromise = import("./app/catalogLoader").then(({ loadClientAppDataForApp }) => loadClientAppDataForApp(args.clientContext.clientId));
   const appModulePromise = import("./app");
@@ -234,7 +258,7 @@ async function launchWorkspace(args: {
   }
 
   const viewerStartup = mountViewerStartupState(viewer);
-  const [{ clientCatalog, modulePackages }, { startApp }, { initDomI18n }, { initializeInstallableApp }] = await Promise.all([
+  const [appData, { startApp }, { initDomI18n }, { initializeInstallableApp }] = await Promise.all([
     appDataPromise,
     appModulePromise,
     i18nPromise,
@@ -244,6 +268,8 @@ async function launchWorkspace(args: {
   initDomI18n(document.body);
   initializeInstallableApp();
   viewerStartup.remove();
+
+  const { clientCatalog, modulePackages } = appData;
 
   startApp({
     viewerEl: viewer,
@@ -257,4 +283,6 @@ async function launchWorkspace(args: {
     initialProjectSave: args.initialProjectSave,
     openProjectManager
   });
+  const { getClientAppDataLoadSource } = await import("./app/catalogLoader");
+  return getClientAppDataLoadSource(appData) ?? "network";
 }

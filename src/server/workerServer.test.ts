@@ -13,8 +13,10 @@ import { CLIENT_SESSION_COOKIE, serializeClientSessionCookie } from "../core/cli
 import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
 import { createCatalogModuleDefinitionFromPackage } from "../core/module-package/module-package-catalog";
 import { startWorkerServer } from "./workerServer";
+import { createHttpRequestBudget, type HttpRequestBudget } from "./http-request-budget";
 import cornerShelfLowerFixture from "../core/module-package/fixtures/cornerShelfLower.fqm.source.json";
 import { createPinoSideCabinetTenantPackage } from "../system/module-packages/pinoSideCabinet";
+import type { ProjectSaveFile } from "../core/project-save/project-save-types";
 
 vi.mock("./blender/runBlenderExport", () => ({
   runBlenderExport: async (args: {
@@ -141,8 +143,12 @@ const fileExists = async (filePath: string) => {
   }
 };
 
-const createServer = async (projectRoot: string, userService: UserService): Promise<WorkerServerController> => {
-  const server = startWorkerServer(0, "127.0.0.1", { userService, projectRoot });
+const createServer = async (
+  projectRoot: string,
+  userService: UserService,
+  requestBudget?: HttpRequestBudget
+): Promise<WorkerServerController> => {
+  const server = startWorkerServer(0, "127.0.0.1", { userService, projectRoot, requestBudget });
   const [listening] = await once(server, "listening");
   const address = (server.address() ?? listening) as AddressInfo;
   const port = typeof address.port === "number" ? address.port : Number(process.env.BLENDER_WORKER_PORT);
@@ -154,6 +160,7 @@ describe("multi-client worker isolation", () => {
   let projectRoot = "";
   const previousLegacyRead = process.env.ALLOW_LEGACY_PROJECT_READ;
   const previousNodeEnv = process.env.NODE_ENV;
+  const previousMetricsToken = process.env.ARCIGY_METRICS_TOKEN;
   const users = [
     ...seedAuthUsers,
     {
@@ -177,7 +184,18 @@ describe("multi-client worker isolation", () => {
       isActive: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
-    }
+    },
+    ...(["admin", "designer", "viewer"] as const).map((role) => ({
+      userId: `user_arcigy_${role}`,
+      username: `arcigy-${role}`,
+      displayName: `Arcigy ${role}`,
+      passwordHash: seedAuthUsers[0].passwordHash,
+      clientId: "client_arcigy_demo",
+      role,
+      isActive: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }))
   ] as const;
   const activeUserService = createUserService(createInMemoryUserRepository(users));
 
@@ -186,11 +204,11 @@ describe("multi-client worker isolation", () => {
     controller = await createServer(projectRoot, activeUserService);
   };
 
-  const replaceServer = async (userService: UserService) => {
+  const replaceServer = async (userService: UserService, requestBudget?: HttpRequestBudget) => {
     if (controller) {
       await new Promise<void>((resolve) => controller!.server.close(() => resolve()));
     }
-    controller = await createServer(projectRoot, userService);
+    controller = await createServer(projectRoot, userService, requestBudget);
   };
 
   beforeEach(async () => {
@@ -215,6 +233,8 @@ describe("multi-client worker isolation", () => {
     if (previousLegacyRead === undefined) delete process.env.ALLOW_LEGACY_PROJECT_READ;
     else process.env.ALLOW_LEGACY_PROJECT_READ = previousLegacyRead;
     process.env.NODE_ENV = previousNodeEnv;
+    if (previousMetricsToken === undefined) delete process.env.ARCIGY_METRICS_TOKEN;
+    else process.env.ARCIGY_METRICS_TOKEN = previousMetricsToken;
     delete process.env.PROJECT_FILE_SECRET;
   });
 
@@ -223,6 +243,21 @@ describe("multi-client worker isolation", () => {
     await access(clientAFile);
     const response = await requestWorker(controller!.port, "/storage/clients/client_a_demo/projects/project-a/phases/phase-a/renders/a.json");
     expect(response.status).toBe(401);
+  });
+
+  it("returns 413 for a JSON body above the configured route limit", async () => {
+    process.env.HTTP_JSON_BODY_MAX_MB = "0.0001";
+    try {
+      const response = await requestWorker(controller!.port, "/api/auth/login", {
+        method: "POST",
+        body: { username: "arcigy", password: "x".repeat(1_000) }
+      });
+      expect(response.status).toBe(413);
+      expect(response.body).toEqual({ ok: false, error: "Request body exceeds the 1 MB limit." });
+      expect(response.headers.get("x-request-id")).toBeTruthy();
+    } finally {
+      delete process.env.HTTP_JSON_BODY_MAX_MB;
+    }
   });
 
   it("returns retryable 503 for a database session failure and keeps serving requests", async () => {
@@ -251,18 +286,126 @@ describe("multi-client worker isolation", () => {
     expect(readiness.body).toMatchObject({ ok: true, storage: "file" });
   });
 
+  it("serves bounded metrics in development and protects them in production", async () => {
+    await requestWorker(controller!.port, "/api/projects/private-project-id?secret=hidden");
+
+    const developmentMetrics = await requestWorker(controller!.port, "/metrics");
+    expect(developmentMetrics.status).toBe(200);
+    expect(developmentMetrics.headers.get("content-type")).toContain("text/plain");
+    expect(developmentMetrics.text).toContain("arcigy_http_requests_total");
+    expect(developmentMetrics.text).toContain("/api/projects/:projectId");
+    expect(developmentMetrics.text).not.toContain("private-project-id");
+    expect(developmentMetrics.text).not.toContain("hidden");
+
+    process.env.NODE_ENV = "production";
+    delete process.env.ARCIGY_METRICS_TOKEN;
+    expect((await requestWorker(controller!.port, "/metrics")).status).toBe(404);
+
+    process.env.ARCIGY_METRICS_TOKEN = "test-metrics-token";
+    expect((await requestWorker(controller!.port, "/metrics")).status).toBe(404);
+    const authorized = await requestWorker(controller!.port, "/metrics", {
+      headers: { Authorization: "Bearer test-metrics-token" }
+    });
+    expect(authorized.status).toBe(200);
+    expect(authorized.text).toContain("arcigy_process_uptime_seconds");
+  });
+
+  it("accepts authenticated privacy-safe browser runtime signals end to end", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+
+    expect((await requestWorker(controller!.port, "/api/client-metrics", {
+      method: "POST",
+      body: { signal: "long_task", value: 125 }
+    })).status).toBe(401);
+
+    expect((await requestWorker(controller!.port, "/api/client-metrics", {
+      cookie,
+      method: "POST",
+      body: { signal: "long_task", value: 125 }
+    })).status).toBe(202);
+    expect((await requestWorker(controller!.port, "/api/client-metrics", {
+      cookie,
+      method: "POST",
+      body: { signal: "memory_used", value: 256 * 1024 * 1024 }
+    })).status).toBe(202);
+
+    const rejected = await requestWorker(controller!.port, "/api/client-metrics", {
+      cookie,
+      method: "POST",
+      body: { signal: "js_error", value: 1, projectId: "private-project" }
+    });
+    expect(rejected.status).toBe(400);
+
+    const metrics = await requestWorker(controller!.port, "/metrics");
+    expect(metrics.text).toContain('arcigy_browser_long_task_duration_seconds_bucket{le="0.25"} 1');
+    expect(metrics.text).toContain('arcigy_browser_memory_used_bytes_bucket{le="268435456"} 1');
+    expect(metrics.text).not.toContain("private-project");
+  });
+
+  it("returns retry guidance when a tenant exceeds an expensive-route budget", async () => {
+    await replaceServer(activeUserService, createHttpRequestBudget({
+      policies: [{
+        operation: "catalog-test",
+        method: "GET",
+        pathname: /^\/api\/catalog$/,
+        maxRequests: 1,
+        windowMs: 60_000,
+        maxConcurrent: 2
+      }]
+    }));
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+
+    expect((await requestWorker(controller!.port, "/api/catalog", { cookie })).status).toBe(200);
+    const limited = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+    expect(Number(limited.headers.get("retry-after"))).toBeLessThanOrEqual(60);
+    expect(limited.body).toEqual({ ok: false, error: "Request limit reached. Please retry shortly." });
+  }, 60_000);
+
   it("loads client catalog from server session and stores it in the client namespace", async () => {
     const response = await requestWorker(controller!.port, "/api/catalog", {
       cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("content-encoding")).toBe("gzip");
+    expect(response.headers.get("vary")).toContain("Accept-Encoding");
     const body = response.body as { catalog?: { clientId?: string; priceList?: { prices?: Record<string, number> } } };
     expect(body.catalog?.clientId).toBe("client_arcigy_demo");
     const storedPath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog", "pricing.json");
     const stored = JSON.parse(await readFile(storedPath, "utf-8")) as { prices?: Record<string, number> };
     const priceId = Object.keys(stored.prices ?? {})[0]!;
     expect(stored.prices?.[priceId]).toBe(body.catalog?.priceList?.prices?.[priceId]);
+  }, 60_000);
+
+  it("keeps the full catalog API while serving a lighter browser bootstrap view", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    expect((await requestWorker(controller!.port, "/api/catalog/bootstrap")).status).toBe(401);
+    const fullResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    const bootstrapResponse = await requestWorker(controller!.port, "/api/catalog/bootstrap", { cookie });
+    type CatalogBody = {
+      view?: string;
+      catalog?: {
+        clientId: string;
+        materials: Array<{ id: string; supplierSource?: { supplierProductId?: string } }>;
+        components: Array<{ id: string; supplierSource?: { supplierProductId?: string } }>;
+      };
+    };
+    const full = (fullResponse.body as CatalogBody).catalog!;
+    const bootstrap = (bootstrapResponse.body as CatalogBody).catalog!;
+
+    expect(fullResponse.status).toBe(200);
+    expect(bootstrapResponse.status).toBe(200);
+    expect((bootstrapResponse.body as CatalogBody).view).toBe("catalog-bootstrap-v1");
+    expect(full.materials.some((item) => !!item.supplierSource)).toBe(true);
+    expect(full.components.some((item) => !!item.supplierSource)).toBe(true);
+    expect(bootstrap.clientId).toBe(full.clientId);
+    expect(bootstrap.materials.map((item) => item.id)).toEqual(full.materials.map((item) => item.id));
+    expect(bootstrap.components.map((item) => item.id)).toEqual(full.components.map((item) => item.id));
+    expect(bootstrap.materials.every((item) => item.supplierSource === undefined)).toBe(true);
+    expect(bootstrap.components.every((item) => item.supplierSource === undefined)).toBe(true);
+    expect(JSON.stringify(bootstrapResponse.body).length).toBeLessThan(JSON.stringify(fullResponse.body).length);
   }, 60_000);
 
   it("looks up tenant catalog entities by exact ID, aliases, unit price, and inactive state", async () => {
@@ -765,35 +908,96 @@ describe("multi-client worker isolation", () => {
   it("keeps module package routes registered in the dev:local root worker entrypoint", async () => {
     const rootServer = await readFile(path.join(process.cwd(), "server", "workerServer.ts"), "utf-8");
     const srcServer = await readFile(path.join(process.cwd(), "src", "server", "workerServer.ts"), "utf-8");
+    const sharedRouter = await readFile(path.join(process.cwd(), "src", "server", "workerApiRouter.ts"), "utf-8");
     for (const source of [rootServer, srcServer]) {
-      expect(source).toContain("handleModulePackageApi");
-      expect(source).toContain("modulePackageEndpoint");
+      expect(source).toContain("handleWorkerApiRequest");
+      expect(source).toContain("workerApiRouter");
     }
+    expect(sharedRouter).toContain("handleModulePackageApi");
+    expect(sharedRouter).toContain("modulePackageEndpoint");
   });
 
   it("creates, saves, loads, and downloads an encrypted tenant project", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
+    const catalog = (catalogResponse.body as {
+      catalog: {
+        materials: Array<{ id: string; supplierSource?: { supplierProductId?: string } }>;
+        components: Array<{ id: string; supplierSource?: { supplierProductId?: string } }>;
+      };
+    }).catalog;
+    const supplierMaterial = catalog.materials.find((item) => !!item.supplierSource);
+    const supplierComponent = catalog.components.find((item) => !!item.supplierSource);
+    expect(supplierMaterial?.supplierSource?.supplierProductId).toBeTruthy();
+    expect(supplierComponent?.supplierSource?.supplierProductId).toBeTruthy();
+    const createBody = { name: "Private Kitchen", address: "Main 1", city: "Bratislava", contactName: "Jane Client", email: "jane@example.com" };
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
-      body: { name: "Private Kitchen", address: "Main 1", city: "Bratislava", contactName: "Jane Client", email: "jane@example.com" }
+      headers: { "Idempotency-Key": "worker-create-request-0001" },
+      body: createBody
     });
     expect(created.status).toBe(201);
     const project = (created.body as { project: { projectId: string; activePhaseId: string } }).project;
+    const createReplay = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-create-request-0001" },
+      body: createBody
+    });
+    expect(createReplay.status).toBe(201);
+    expect((createReplay.body as { project: { projectId: string } }).project.projectId).toBe(project.projectId);
+    const createConflict = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-create-request-0001" },
+      body: { ...createBody, name: "Different Kitchen" }
+    });
+    expect(createConflict.status).toBe(409);
 
+    const saveBody = {
+      expectedSaveRevision: 0,
+      appState: {
+        layout: { snapshot: { wallCounter: 1, walls: [], instanceCounter: 1, instances: [], pinnedWallIds: [], pinnedInstanceIds: [], underlayPinned: false, selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] } }, windows: [], doors: [] },
+        kitchen: { groups: [], context: { handleComponentId: supplierComponent!.id } },
+        modules: [{ id: "m1", type: "drawer_low", params: { materialId: supplierMaterial!.id } }],
+        scene: { viewMode: "3d" }
+      }
+    };
     const saved = await requestWorker(controller!.port, `/api/projects/${project.projectId}/save`, {
       method: "POST",
       cookie,
-      body: {
-        appState: {
-          layout: { snapshot: { wallCounter: 1, walls: [], instanceCounter: 1, instances: [], pinnedWallIds: [], pinnedInstanceIds: [], underlayPinned: false, selected: { kind: null, wallId: null, wallIds: [], instId: null, instIds: [] } }, windows: [], doors: [] },
-          kitchen: { groups: [] },
-          modules: [{ id: "m1", type: "drawer_low", params: { materialId: "mat.board.body.dtd.grey.18" } }],
-          scene: { viewMode: "3d" }
-        }
-      }
+      headers: { "Idempotency-Key": "worker-save-request-0001" },
+      body: saveBody
     });
     expect(saved.status).toBe(200);
+    const savedFile = (saved.body as { save: ProjectSaveFile }).save;
+    expect(savedFile.integrity.saveRevision).toBe(1);
+    expect(savedFile.catalogSnapshot.materials.find((item) => (item as { id?: string }).id === supplierMaterial!.id))
+      .toMatchObject({ supplierSource: supplierMaterial!.supplierSource });
+    expect(savedFile.catalogSnapshot.components.find((item) => (item as { id?: string }).id === supplierComponent!.id))
+      .toMatchObject({ supplierSource: supplierComponent!.supplierSource });
+
+    const replay = await requestWorker(controller!.port, `/api/projects/${project.projectId}/save`, {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-save-request-0001" },
+      body: saveBody
+    });
+    expect(replay.status).toBe(200);
+    expect((replay.body as { save: ProjectSaveFile }).save).toEqual((saved.body as { save: ProjectSaveFile }).save);
+
+    const stale = await requestWorker(controller!.port, `/api/projects/${project.projectId}/save`, {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-save-request-0002" },
+      body: {
+        ...saveBody,
+        appState: { ...saveBody.appState, scene: { viewMode: "2d" } }
+      }
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ ok: false, error: "Project changed since it was loaded. Reload the project before saving again." });
 
     const savePath = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "projects", project.projectId, "phases", project.activePhaseId, "saves", "save.json");
     await access(savePath);
@@ -808,13 +1012,40 @@ describe("multi-client worker isolation", () => {
     expect(downloaded.text).toContain("FURNQUOTE_ENCRYPTED_PROJECT");
     expect(downloaded.text).not.toContain("Private Kitchen");
     expect(downloaded.text).not.toContain("Jane Client");
-  });
+
+    const imported = await requestWorker(controller!.port, "/api/projects/import", {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-import-request-0001" },
+      body: { envelope: downloaded.text }
+    });
+    expect(imported.status).toBe(200);
+    const importedProjectId = (imported.body as { save: { projectId: string } }).save.projectId;
+    expect(importedProjectId).not.toBe(project.projectId);
+    const importReplay = await requestWorker(controller!.port, "/api/projects/import", {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-import-request-0001" },
+      body: { envelope: downloaded.text }
+    });
+    expect(importReplay.status).toBe(200);
+    expect((importReplay.body as { save: { projectId: string } }).save.projectId).toBe(importedProjectId);
+    const importConflict = await requestWorker(controller!.port, "/api/projects/import", {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "worker-import-request-0001" },
+      body: { envelope: `${downloaded.text} ` }
+    });
+    expect(importConflict.status).toBe(409);
+    const projects = await requestWorker(controller!.port, "/api/projects", { cookie });
+    expect((projects.body as { projects: unknown[] }).projects).toHaveLength(2);
+  }, 15_000);
 
   it("deletes a tenant project with its versions and files only for owners or admins", async () => {
     const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const adminCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "admin" });
-    const designerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "designer" });
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "viewer" });
+    const adminCookie = makeCookieHeader({ userId: "user_arcigy_admin", clientId: "client_arcigy_demo", role: "admin" });
+    const designerCookie = makeCookieHeader({ userId: "user_arcigy_designer", clientId: "client_arcigy_demo", role: "designer" });
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
     const otherTenantCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
@@ -854,7 +1085,7 @@ describe("multi-client worker isolation", () => {
 
   it("keeps generic project saves read-only for material assignments and denies viewers", async () => {
     const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "viewer" });
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: ownerCookie,
@@ -939,6 +1170,25 @@ describe("multi-client worker isolation", () => {
       cookie: viewerCookie
     });
     expect(viewerRestore.status).toBe(403);
+    const versionsBeforeRestore = await requestWorker(controller!.port, `/api/projects/${projectId}/versions`, { cookie: ownerCookie });
+    const versionCountBefore = (versionsBeforeRestore.body as { versions: unknown[] }).versions.length;
+    const restored = await requestWorker(controller!.port, `/api/projects/${projectId}/versions/1/restore`, {
+      method: "POST",
+      cookie: ownerCookie,
+      headers: { "Idempotency-Key": "worker-restore-request-0001" },
+      body: {}
+    });
+    expect(restored.status).toBe(200);
+    const restoreReplay = await requestWorker(controller!.port, `/api/projects/${projectId}/versions/1/restore`, {
+      method: "POST",
+      cookie: ownerCookie,
+      headers: { "Idempotency-Key": "worker-restore-request-0001" },
+      body: {}
+    });
+    expect(restoreReplay.status).toBe(200);
+    expect((restoreReplay.body as { save: ProjectSaveFile }).save).toEqual((restored.body as { save: ProjectSaveFile }).save);
+    const versionsAfterRestore = await requestWorker(controller!.port, `/api/projects/${projectId}/versions`, { cookie: ownerCookie });
+    expect((versionsAfterRestore.body as { versions: unknown[] }).versions).toHaveLength(versionCountBefore + 1);
     const afterViewerRestore = await requestWorker(controller!.port, `/api/projects/${projectId}/load`, { cookie: ownerCookie });
     expect(afterViewerRestore.status).toBe(200);
     expect((afterViewerRestore.body as { save: { appState: { layout: { marker: string }; materialAssignments: unknown } } }).save.appState)
@@ -1196,6 +1446,17 @@ describe("multi-client worker isolation", () => {
     expect(response.status).toBe(403);
   });
 
+  it("returns a client error for a structurally invalid project JSON body", async () => {
+    const response = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      body: []
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as { error?: string }).error).toBe("Expected JSON body.");
+  });
+
   it("rejects foreign encrypted project import", async () => {
     const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
@@ -1218,7 +1479,7 @@ describe("multi-client worker isolation", () => {
     expect(response.status).toBe(403);
   });
 
-  it("lists only current client projects and blocks cross-client load", async () => {
+  it("keeps project saves, downloads, and version history isolated between clients", async () => {
     const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const projectA = await requestWorker(controller!.port, "/api/projects", {
@@ -1232,13 +1493,60 @@ describe("multi-client worker isolation", () => {
       body: { name: "Client B Project", address: "B street", contactName: "Bob" }
     });
     const idB = (projectB.body as { project: { projectId: string } }).project.projectId;
+    const saveB = await requestWorker(controller!.port, `/api/projects/${idB}/save`, {
+      method: "POST",
+      cookie: clientBCookie,
+      body: {
+        appState: {
+          layout: { marker: "client-b-layout", windows: [], doors: [] },
+          kitchen: {},
+          modules: [],
+          scene: {}
+        }
+      }
+    });
+    expect(saveB.status).toBe(200);
+
     const listA = await requestWorker(controller!.port, "/api/projects", { cookie: clientACookie });
     expect(JSON.stringify(listA.body)).toContain("Client A Project");
     expect(JSON.stringify(listA.body)).not.toContain("Client B Project");
-    const crossLoad = await requestWorker(controller!.port, `/api/projects/${idB}/load`, { cookie: clientACookie });
-    expect(crossLoad.status).toBe(403);
+
+    const crossClientRequests = [
+      requestWorker(controller!.port, `/api/projects/${idB}/load`, { cookie: clientACookie }),
+      requestWorker(controller!.port, `/api/projects/${idB}/download`, { cookie: clientACookie }),
+      requestWorker(controller!.port, `/api/projects/${idB}/versions`, { cookie: clientACookie }),
+      requestWorker(controller!.port, `/api/projects/${idB}/versions/1/load`, { cookie: clientACookie }),
+      requestWorker(controller!.port, `/api/projects/${idB}/save`, {
+        method: "POST",
+        cookie: clientACookie,
+        headers: { "Idempotency-Key": "cross-client-save-denied-0001" },
+        body: {
+          expectedSaveRevision: 1,
+          appState: {
+            layout: { marker: "forged-client-a-layout", windows: [], doors: [] },
+            kitchen: {},
+            modules: [],
+            scene: {}
+          }
+        }
+      }),
+      requestWorker(controller!.port, `/api/projects/${idB}/versions/1/restore`, {
+        method: "POST",
+        cookie: clientACookie,
+        headers: { "Idempotency-Key": "cross-client-restore-denied-0001" },
+        body: {}
+      })
+    ];
+    const crossClientResponses = await Promise.all(crossClientRequests);
+    expect(crossClientResponses.map((response) => response.status)).toEqual([403, 403, 403, 403, 403, 403]);
+
+    const versionsB = await requestWorker(controller!.port, `/api/projects/${idB}/versions`, { cookie: clientBCookie });
+    expect((versionsB.body as { versions: unknown[] }).versions).toHaveLength(1);
+    const loadB = await requestWorker(controller!.port, `/api/projects/${idB}/load`, { cookie: clientBCookie });
+    expect((loadB.body as { save: { appState: { layout: { marker: string } } } }).save.appState.layout.marker)
+      .toBe("client-b-layout");
     expect(projectA.status).toBe(201);
-  });
+  }, 30_000);
 
   it("imports an encrypted project as a copy when the project already exists", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });

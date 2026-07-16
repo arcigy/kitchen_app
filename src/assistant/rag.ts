@@ -1,7 +1,11 @@
 import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { Pool } from "pg";
-import { quotePgIdentifier, resolveDatabaseConfig } from "../core/database/database-config";
+import { Pool, type PoolClient } from "pg";
+import {
+  quotePgIdentifier,
+  resolveDatabaseConfig,
+  type ArcigyDatabaseConfig
+} from "../core/database/database-config";
 import { attachPostgresPoolErrorHandler } from "../core/database/postgres-pool-error-handler";
 import type { ClientContext } from "../core/client/client-context";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -14,6 +18,7 @@ export type AssistantRagIndex = {
 };
 
 const RAG_TABLE = "assistant_rag_chunks";
+const MAX_TRANSIENT_TENANT_INDEXES = 64;
 const MAX_FILE_BYTES = 180_000;
 const MAX_CHUNK_CHARS = 1500;
 const SOURCE_GLOBS = [
@@ -27,7 +32,25 @@ const SOURCE_GLOBS = [
 ];
 
 const poolCache = new Map<string, Pool>();
-let transientCache: AssistantRagIndex | null = null;
+const transientCacheByClient = new Map<string, AssistantRagIndex>();
+
+function getTransientIndex(clientId: string): AssistantRagIndex | null {
+  const index = transientCacheByClient.get(clientId);
+  if (!index) return null;
+  transientCacheByClient.delete(clientId);
+  transientCacheByClient.set(clientId, index);
+  return index;
+}
+
+function setTransientIndex(clientId: string, index: AssistantRagIndex): void {
+  transientCacheByClient.delete(clientId);
+  transientCacheByClient.set(clientId, index);
+  while (transientCacheByClient.size > MAX_TRANSIENT_TENANT_INDEXES) {
+    const oldestClientId = transientCacheByClient.keys().next().value as string | undefined;
+    if (!oldestClientId) break;
+    transientCacheByClient.delete(oldestClientId);
+  }
+}
 
 function getPool(connectionString: string, schema: string): Pool {
   const key = `${connectionString}#${schema}`;
@@ -41,11 +64,11 @@ function getPool(connectionString: string, schema: string): Pool {
 
 async function ensureTable(pool: Pool, schema: string): Promise<void> {
   const client = await pool.connect();
+  const qualifiedTable = `${quotePgIdentifier(schema)}.${quotePgIdentifier(RAG_TABLE)}`;
   try {
     await client.query(`CREATE SCHEMA IF NOT EXISTS ${quotePgIdentifier(schema)}`);
-    await client.query(`SET search_path TO ${quotePgIdentifier(schema)}, public`);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS ${RAG_TABLE} (
+      CREATE TABLE IF NOT EXISTS ${qualifiedTable} (
         client_id text NOT NULL,
         chunk_id text NOT NULL,
         source text NOT NULL,
@@ -61,11 +84,27 @@ async function ensureTable(pool: Pool, schema: string): Promise<void> {
   }
 }
 
-function databaseConfigOrNull() {
+export async function replaceAssistantRagIndex(
+  client: Pick<PoolClient, "query">,
+  schema: string,
+  ctx: ClientContext,
+  index: AssistantRagIndex
+): Promise<void> {
+  const qualifiedTable = `${quotePgIdentifier(schema)}.${quotePgIdentifier(RAG_TABLE)}`;
+  await client.query("BEGIN");
   try {
-    return resolveDatabaseConfig();
-  } catch {
-    return null;
+    await client.query(`DELETE FROM ${qualifiedTable} WHERE client_id = $1`, [ctx.clientId]);
+    for (const chunk of index.chunks) {
+      await client.query(
+        `INSERT INTO ${qualifiedTable} (client_id, chunk_id, source, title, text, tags, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)`,
+        [ctx.clientId, chunk.id, chunk.source, chunk.title, chunk.text, JSON.stringify(chunk.tags), chunk.updatedAt]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
   }
 }
 
@@ -166,36 +205,29 @@ export async function reindexAssistantRag(
   catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">
 ): Promise<AssistantRagIndex> {
   const index = await buildAssistantRagIndex(projectRoot, catalog);
-  transientCache = index;
-  const config = databaseConfigOrNull();
+  setTransientIndex(ctx.clientId, index);
+  const config = resolveDatabaseConfig();
   if (!config) return index;
   const pool = getPool(config.connectionString, config.schema);
   await ensureTable(pool, config.schema);
   const client = await pool.connect();
   try {
-    await client.query(`SET search_path TO ${quotePgIdentifier(config.schema)}, public`);
-    await client.query(`DELETE FROM ${RAG_TABLE} WHERE client_id = $1`, [ctx.clientId]);
-    for (const chunk of index.chunks) {
-      await client.query(
-        `INSERT INTO ${RAG_TABLE} (client_id, chunk_id, source, title, text, tags, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)`,
-        [ctx.clientId, chunk.id, chunk.source, chunk.title, chunk.text, JSON.stringify(chunk.tags), chunk.updatedAt]
-      );
-    }
+    await replaceAssistantRagIndex(client, config.schema, ctx, index);
     return { chunks: index.chunks, persisted: true };
   } finally {
     client.release();
   }
 }
 
-async function loadPersistedIndex(ctx: ClientContext): Promise<AssistantRagIndex | null> {
-  const config = databaseConfigOrNull();
-  if (!config) return null;
+async function loadPersistedIndex(
+  ctx: ClientContext,
+  config: ArcigyDatabaseConfig
+): Promise<AssistantRagIndex | null> {
   const pool = getPool(config.connectionString, config.schema);
   await ensureTable(pool, config.schema);
   const client = await pool.connect();
+  const qualifiedTable = `${quotePgIdentifier(config.schema)}.${quotePgIdentifier(RAG_TABLE)}`;
   try {
-    await client.query(`SET search_path TO ${quotePgIdentifier(config.schema)}, public`);
     const result = await client.query<{
       chunk_id: string;
       source: string;
@@ -203,7 +235,7 @@ async function loadPersistedIndex(ctx: ClientContext): Promise<AssistantRagIndex
       text: string;
       tags: unknown;
       updated_at: Date;
-    }>(`SELECT chunk_id, source, title, text, tags, updated_at FROM ${RAG_TABLE} WHERE client_id = $1`, [ctx.clientId]);
+    }>(`SELECT chunk_id, source, title, text, tags, updated_at FROM ${qualifiedTable} WHERE client_id = $1`, [ctx.clientId]);
     if (result.rows.length === 0) return null;
     return {
       persisted: true,
@@ -242,8 +274,11 @@ export async function searchAssistantRag(args: {
   limit?: number;
   catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">;
 }): Promise<AssistantRagChunk[]> {
-  const persisted = await loadPersistedIndex(args.ctx).catch(() => null);
-  const baseIndex = persisted ?? transientCache ?? await buildAssistantRagIndex(args.projectRoot, args.catalog);
+  const config = resolveDatabaseConfig();
+  const persisted = config ? await loadPersistedIndex(args.ctx, config).catch(() => null) : null;
+  const baseIndex = persisted
+    ?? getTransientIndex(args.ctx.clientId)
+    ?? await buildAssistantRagIndex(args.projectRoot, args.catalog);
   const tenantChunks = args.catalog ? buildPinoCatalogAssistantRagChunks(args.catalog) : [];
   const seenChunkIds = new Set(baseIndex.chunks.map((chunk) => chunk.id));
   const index = tenantChunks.length === 0
@@ -255,7 +290,7 @@ export async function searchAssistantRag(args: {
           ...tenantChunks.filter((chunk) => !seenChunkIds.has(chunk.id))
         ]
       };
-  transientCache = index;
+  setTransientIndex(args.ctx.clientId, index);
   const queryTokens = normalizePinoSearchText(args.query).split(/[^a-z0-9]+/iu).filter(Boolean);
   return [...index.chunks]
     .map((chunk) => ({ chunk, score: scoreChunk(queryTokens, chunk) }))

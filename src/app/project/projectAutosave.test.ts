@@ -55,7 +55,7 @@ describe("project autosave", () => {
   });
 
   it("announces autosave when a project opens and saves changed state", async () => {
-    const state: ProjectRuntimeState = { currentProject: null, lastSavedAt: null, editingSessionId: "test_session_1" };
+    const state: ProjectRuntimeState = { currentProject: null, lastSavedAt: null, editingSessionId: "test_session_1", saveRevision: 0 };
     let token = "initial";
     const toast = vi.fn();
     const actions = createActions(state, async () => {});
@@ -80,7 +80,7 @@ describe("project autosave", () => {
   });
 
   it("does not save unchanged project state", async () => {
-    const state: ProjectRuntimeState = { currentProject: project, lastSavedAt: null, editingSessionId: "test_session_2" };
+    const state: ProjectRuntimeState = { currentProject: project, lastSavedAt: null, editingSessionId: "test_session_2", saveRevision: 0 };
     const actions = createActions(state, async () => {});
     const autosave = createProjectAutosaveController({
       actions,

@@ -98,6 +98,40 @@ describe("createWallSnapMarkers", () => {
 });
 
 describe("createSelectionHighlights", () => {
+  it("returns exact bounds for the selected worktop wing", () => {
+    const layoutRoot = new THREE.Group();
+    const worktop = createWorktop();
+    worktop.params.path = [
+      { x: 0, z: 0 },
+      { x: 2000, z: 0 },
+      { x: 2000, z: 1000 }
+    ];
+    worktop.params.segmentDepthsMm = [600, 900];
+    layoutRoot.add(worktop.root);
+    const { getSelectionBounds } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getWalls: () => [] as WallInstance[],
+      getSelectedWallIds: () => new Set<string>(),
+      getSelectedInstanceIds: () => new Set<string>(),
+      getWallSolvedOutlines: () => new Map(),
+      getSelectedKind: () => null,
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => [] as LayoutInstance[],
+      getKitchenWorktops: () => [worktop],
+      getSelectedWorktopSegment: () => ({ worktopId: worktop.id, segmentIndex: 1 }),
+      getModuleLocalBackCenter: () => new THREE.Vector3()
+    });
+
+    const bounds = getSelectionBounds();
+
+    expect(bounds).not.toBeNull();
+    expect(bounds!.max.x - bounds!.min.x).toBeCloseTo(0.9, 5);
+    expect(bounds!.max.z - bounds!.min.z).toBeCloseTo(1, 5);
+    expect(bounds!.max.y - bounds!.min.y).toBeCloseTo(0.038, 5);
+  });
+
   it("tracks the current selected module after move, geometry rebuild and delete", () => {
     const layoutRoot = new THREE.Group();
     const instance = createModuleInstance(layoutRoot);

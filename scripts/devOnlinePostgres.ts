@@ -138,6 +138,7 @@ async function main() {
     "-o", "ExitOnForwardFailure=yes",
     "-o", "ServerAliveInterval=15",
     "-o", "ServerAliveCountMax=3",
+    "-C",
     "-N",
     "-L", `${sshForwardPort}:127.0.0.1:${remoteTunnelPort}`,
     sshTarget

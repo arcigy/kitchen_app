@@ -113,6 +113,11 @@ export type ProjectSaveFile = {
     savedAt: string;
     appVersion?: string;
     saveSchemaHash?: string;
+    saveRevision?: number;
+    lastWrite?: {
+      keyHash: string;
+      requestHash: string;
+    };
   };
 };
 

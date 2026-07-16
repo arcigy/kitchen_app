@@ -138,7 +138,22 @@ The `.fqp` file must be a complete portable project package:
 - recent activity
 - import metadata when imported as a copy
 
+The browser may use a lighter catalog bootstrap for interactive startup, but it is not save authority. Every save must rebuild `catalogSnapshot`, prices, used material/component definitions, and module package snapshots from the authenticated server repository. Server-only supplier provenance omitted from the browser bootstrap must remain present in stored saves and `.fqp` exports. The full `/api/catalog` contract remains available for existing integrations and exact supplier workflows.
+
 Importing a `.fqp` into the same client when the source project already exists must create a new copy. It must not overwrite the original project.
+
+## Retry and concurrency rule
+
+Current browser create, save, import, and version-restore mutations send a fresh `Idempotency-Key` per user action. The server hashes the key together with tenant and route scope; raw keys are never persisted or logged.
+
+- Exact create/import retries resolve to the same project instead of creating another copy.
+- Exact save retries return the committed save and do not create another revision.
+- Saves carry a monotonic `integrity.saveRevision`; a stale concurrent writer receives HTTP 409 instead of silently overwriting newer project state.
+- Exact version-restore retries reuse the same restore version and do not reapply the mutation after a later edit.
+- Reusing one key with a different request is HTTP 409.
+- Callers without an idempotency key retain the legacy API behavior for backward compatibility.
+
+Operation receipts are internal repository metadata. They must remain tenant-scoped, survive normal metadata updates, and never appear in project-list/get responses or portable `.fqp` content.
 
 ## Validation Rule
 
