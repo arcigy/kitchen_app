@@ -71,6 +71,9 @@ jobs:
       - name: Test
         run: npm run test --if-present
 
+      - name: Build off-host backup worker image
+        run: docker build --file ops/backup/Dockerfile --tag arcigy-kitchen-backup:ci ops/backup
+
       - name: PostgreSQL backup and restore drill
         timeout-minutes: 10
         env:

@@ -140,6 +140,8 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toMatch(/push:\s+branches:\s+- develop\s+- main/m);
     expect(workflow).toContain("npm run security:secrets");
     expect(workflow).toContain("npm run security:dependencies");
+    expect(workflow).toContain("name: Build off-host backup worker image");
+    expect(workflow).toContain("docker build --file ops/backup/Dockerfile --tag arcigy-kitchen-backup:ci ops/backup");
     expect(workflow).toContain("name: PostgreSQL backup and restore drill");
     expect(workflow).toContain('ARCIGY_RESTORE_DRILL_ISOLATED: "true"');
     expect(workflow).toContain("npm run test:db-restore-drill");
