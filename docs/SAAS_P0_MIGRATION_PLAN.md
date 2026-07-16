@@ -54,6 +54,12 @@ application key has broader permissions than this worker accepts, so it must be
 replaced by a dedicated least-privilege key before deployment. Do not use the
 broad key as a production backup credential.
 
+As of 2026-07-16, the provider also reports that B2 access is suspended until
+the account is returned to good standing and a phone number is present for API
+access. This is an external account prerequisite: do not deploy the worker,
+copy a backup credential into another store, or weaken its permission checks
+while the account is suspended.
+
 ## P0 credential containment prerequisite
 
 Before any Arcigy release:
