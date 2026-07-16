@@ -6,6 +6,7 @@ import {
   getClientAppDataLoadSource,
   loadClientAppDataForApp,
   loadClientCatalogForApp,
+  loadClientModulePackagesForApp,
   prefetchClientAppDataForApp
 } from "./catalogLoader";
 
@@ -141,6 +142,26 @@ describe("catalogLoader PINO tenant loading", () => {
     const loading = loadClientCatalogForApp("client_delfi");
     const rejected = expect(loading).rejects.toThrow(
       "Timed out loading client catalog after 45 seconds. Please try opening the project again."
+    );
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    await rejected;
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it("aborts a stalled module request and reports a retryable error", async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    }));
+
+    const loading = loadClientModulePackagesForApp("client_delfi");
+    const rejected = expect(loading).rejects.toThrow(
+      "Timed out loading client module packages after 45 seconds. Please try opening the project again."
     );
     await vi.advanceTimersByTimeAsync(45_000);
 
