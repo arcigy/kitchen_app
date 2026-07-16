@@ -142,8 +142,9 @@ export function patchProjectSaveMaterialAssignments(input: PatchProjectMaterialA
     updatedAt,
     updatedByUserId: input.updatedByUserId
   };
+  const { lastWrite: _lastWrite, ...integrity } = next.integrity;
   next.integrity = {
-    ...next.integrity,
+    ...integrity,
     updatedAt,
     savedAt: updatedAt
   };

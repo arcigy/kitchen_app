@@ -6,6 +6,7 @@ export type ProjectRuntimeState = {
   currentProject: ProjectMetadata | null;
   lastSavedAt: string | null;
   editingSessionId: string;
+  saveRevision: number;
 };
 
 export type ProjectActions = {
@@ -25,12 +26,14 @@ export function createProjectActions(args: {
   restoreSave: (save: ProjectSaveFile) => void;
   onProjectChanged: (project: ProjectMetadata | null, status?: string) => void;
   initialProject?: ProjectMetadata | null;
+  initialProjectSave?: ProjectSaveFile | null;
 }): ProjectActions {
   const createEditingSessionId = () => `edit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const state: ProjectRuntimeState = {
-    currentProject: args.initialProject ?? null,
+    currentProject: args.initialProjectSave?.project ?? args.initialProject ?? null,
     lastSavedAt: null,
-    editingSessionId: createEditingSessionId()
+    editingSessionId: createEditingSessionId(),
+    saveRevision: args.initialProjectSave?.integrity.saveRevision ?? 0
   };
 
   const setProject = (project: ProjectMetadata | null, status?: string, resetSession = false) => {
@@ -43,6 +46,7 @@ export function createProjectActions(args: {
     getState: () => state,
     async create(input) {
       const project = await createProject(input);
+      state.saveRevision = 0;
       setProject(project, "Project created.", true);
       return project;
     },
@@ -52,9 +56,11 @@ export function createProjectActions(args: {
         state.currentProject.projectId,
         args.buildAppState(),
         state.editingSessionId,
-        args.buildBomSnapshot?.()
+        args.buildBomSnapshot?.(),
+        state.saveRevision
       );
       state.lastSavedAt = save.integrity.savedAt;
+      state.saveRevision = save.integrity.saveRevision ?? state.saveRevision;
       setProject(save.project, "Saved.");
       return save;
     },
@@ -66,6 +72,7 @@ export function createProjectActions(args: {
       if (!state.currentProject) throw new Error("Select a project before loading.");
       const save = await loadProject(state.currentProject.projectId);
       args.restoreSave(save);
+      state.saveRevision = save.integrity.saveRevision ?? 0;
       setProject(save.project, "Loaded.", true);
       return save;
     },
@@ -73,12 +80,14 @@ export function createProjectActions(args: {
     async loadById(projectId) {
       const save = await loadProject(projectId);
       args.restoreSave(save);
+      state.saveRevision = save.integrity.saveRevision ?? 0;
       setProject(save.project, "Loaded.", true);
       return save;
     },
     async importFile(file) {
       const save = await importProjectFile(file);
       args.restoreSave(save);
+      state.saveRevision = save.integrity.saveRevision ?? 0;
       setProject(save.project, "Imported.", true);
       return save;
     }

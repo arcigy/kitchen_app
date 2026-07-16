@@ -5,48 +5,50 @@ import path from "node:path";
 import process from "node:process";
 import { requireClientContextFromCookie } from "../src/core/client/session-cookie";
 import { createStorageService, readScopedStorageFile } from "../src/core/storage/storageService";
-import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "../src/server/authEndpoint";
-import { handleClientProfileApi } from "../src/server/clientEndpoint";
-import { handleModulePackageApi } from "../src/server/modulePackageEndpoint";
-import { handleProjectApi } from "../src/server/projectEndpoint";
-import { handleProjectMaterialsApi } from "../src/server/projectMaterialsEndpoint";
-import { ProjectMaterialRevisionConflictError } from "../src/core/project-materials/project-material-errors";
-import { handleAssistantApi } from "../src/server/assistantEndpoint";
-import { createServerCatalogRepository, createServerUserService } from "../src/server/serverRepositories";
-import { handleDemosMaterialImage, handleDemosMaterialLookup } from "../src/server/demosMaterialLookup";
+import {
+  createServerAuthSessionStore,
+  createServerCatalogRepository,
+  createServerModulePackageRepository,
+  createServerUserService
+} from "../src/server/serverRepositories";
 import { createClientCatalogService } from "../src/core/catalog/catalog-service";
 import { CatalogExactLookupCache } from "../src/core/catalog/catalog-exact-lookup";
-import { handleCatalogExactLookupApi } from "../src/server/catalogLookupEndpoint";
-import { handleSupplierBridgeApi } from "../src/server/supplierBridgeEndpoint";
 import { runBlenderExport } from "./blender/runBlenderExport";
 import { checkDatabaseReadiness } from "../src/server/databaseReadiness";
-import { databaseUnavailableStatus, publicServerErrorMessage } from "../src/server/server-error-response";
+import { sendResponseBody } from "../src/server/http-response-compression";
+import { readJsonRequestBody } from "../src/server/request-json-body";
+import { fetchExternalBytes } from "../src/server/external-http";
+import { createHttpRequestMetrics } from "../src/server/http-request-metrics";
+import { createHttpRequestBudget } from "../src/server/http-request-budget";
+import { createClientJourneyMetrics } from "../src/server/clientJourneyMetrics";
+import { createWorkerRequestHandler } from "../src/server/workerRequestPipeline";
+import { handleWorkerApiRequest } from "../src/server/workerApiRouter";
+import { assertWorkerRuntimeEnvironment } from "../src/server/workerRuntimeEnvironment";
+import { ClientCatalogBootstrapResponseCache } from "../src/server/clientCatalogBootstrapResponseCache";
+import { ClientModulePackagesResponseCache } from "../src/server/clientModulePackagesResponseCache";
 
+assertWorkerRuntimeEnvironment();
 const PROJECT_ROOT = process.cwd();
 const serverUserService = createServerUserService();
+const serverAuthSessionStore = createServerAuthSessionStore();
 const catalogLookupCache = new CatalogExactLookupCache();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-const readJsonBody = async (req: http.IncomingMessage) => {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
-  const raw = Buffer.concat(chunks).toString("utf-8");
-  return JSON.parse(raw) as unknown;
-};
+const readJsonBody = readJsonRequestBody;
 
 const sendJson = (res: http.ServerResponse, status: number, data: unknown) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(data));
+  sendResponseBody(res, JSON.stringify(data));
 };
 
 const sendText = (res: http.ServerResponse, status: number, text: string) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(text);
+  sendResponseBody(res, text);
 };
 
 const getOptionalFiniteNumber = (value: string | null): number | undefined => {
@@ -97,7 +99,9 @@ const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerRespons
     res.setHeader("Content-Type", getStaticMimeType(requestedFile));
     res.setHeader("Cache-Control", requestedFile.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable");
     if (req.method === "HEAD") return res.end(), true;
-    res.end(await readFile(requestedFile));
+    const body = await readFile(requestedFile);
+    const compressible = /^(text\/|application\/(?:json|javascript|xml)|image\/svg\+xml)/i.test(getStaticMimeType(requestedFile));
+    sendResponseBody(res, body, { compressible });
     return true;
   } catch {
     const indexPath = path.join(staticRoot, "index.html");
@@ -105,40 +109,19 @@ const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerRespons
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");
     if (req.method === "HEAD") return res.end(), true;
-    res.end(await readFile(indexPath));
+    sendResponseBody(res, await readFile(indexPath));
     return true;
   }
 };
 
-const port = Number(process.env.BLENDER_WORKER_PORT || 5191);
-const host = process.env.BLENDER_WORKER_HOST || "127.0.0.1";
-
 const getValidatedClientContext = async (cookieHeader: string | string[] | undefined) => {
   return requireClientContextFromCookie(cookieHeader, {
+    sessionLookup: (session) => serverAuthSessionStore.isActive(session),
     userLookup: async (userId) => {
       const user = await serverUserService.getUserById(userId);
-      return user ? { isActive: user.isActive } : null;
+      return user ? { isActive: user.isActive, clientId: user.clientId, role: user.role } : null;
     }
   });
-};
-
-const isUnauthorizedError = (error: Error): boolean => error.message === "Missing authenticated client session.";
-const isForbiddenError = (error: Error): boolean => {
-  return [
-    "Current session cannot access the requested client.",
-    "Current session cannot access the requested client storage.",
-    "Project does not belong to the current client.",
-    "Phase does not belong to the requested project.",
-    "Project ownership metadata is missing.",
-    "Project ownership metadata is invalid.",
-    "Unsupported storage bucket.",
-    "bucket is required.",
-    "fileName contains an unsafe path segment.",
-    "fileName is required.",
-    "Unexpected clientId in request body.",
-    "Imported project belongs to a different client.",
-    "Project save belongs to a different client."
-  ].some((message) => error.message.includes(message));
 };
 
 const getStringField = (value: unknown, field: string): string | undefined => {
@@ -192,16 +175,30 @@ const serveMaterialProofReferenceImage = async (reqUrl: URL, res: http.ServerRes
   } catch {
     return sendText(res, 400, "Invalid reference image URL.");
   }
-  if (!["https:", "http:"].includes(parsed.protocol) || !parsed.hostname.endsWith("demos-trade.sk")) {
+  if (parsed.protocol !== "https:" || (parsed.hostname !== "demos-trade.sk" && !parsed.hostname.endsWith(".demos-trade.sk"))) {
     return sendText(res, 400, "Unsupported reference image host.");
   }
-  const response = await fetch(parsed);
-  if (!response.ok) return sendText(res, 502, `Failed to fetch reference image: ${response.status}`);
+  const unavailable = () => {
+    res.statusCode = 200;
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+    res.setHeader("X-Arcigy-Reference-Image", "unavailable");
+    res.end('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#e2e8f0"/><text x="320" y="180" text-anchor="middle" dominant-baseline="middle" fill="#475569" font-family="sans-serif" font-size="22">Reference temporarily unavailable</text></svg>');
+  };
+  let external: Awaited<ReturnType<typeof fetchExternalBytes>>;
+  try {
+    external = await fetchExternalBytes(parsed, {}, { timeoutMs: 8_000, maxBytes: 12 * 1024 * 1024 });
+  } catch {
+    return unavailable();
+  }
+  const { response, body } = external;
+  if (!response.ok) return unavailable();
   const contentType = response.headers.get("content-type") || "image/jpeg";
+  if (!contentType.toLowerCase().startsWith("image/")) return unavailable();
   res.statusCode = 200;
   res.setHeader("Cache-Control", "public, max-age=3600");
   res.setHeader("Content-Type", contentType);
-  res.end(Buffer.from(await response.arrayBuffer()));
+  res.end(Buffer.from(body));
 };
 
 type DemosPreviewColorCache = Record<string, { hex: string; samples: string[]; updatedAt: string }>;
@@ -209,7 +206,7 @@ type DemosPreviewColorCache = Record<string, { hex: string; samples: string[]; u
 const isAllowedDemosImageUrl = (value: string) => {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "https:" && parsed.hostname.endsWith("demos-trade.sk");
+    return parsed.protocol === "https:" && (parsed.hostname === "demos-trade.sk" || parsed.hostname.endsWith(".demos-trade.sk"));
   } catch {
     return false;
   }
@@ -724,149 +721,68 @@ const handleMaterialProofCatalogs = async (req: http.IncomingMessage, res: http.
   return sendJson(res, 200, { production, staging, csvBoards });
 };
 
-const getErrorCode = (error: unknown): number => {
-  const unavailable = databaseUnavailableStatus(error);
-  if (unavailable) return unavailable;
-  if (error instanceof SyntaxError) return 400;
-  if (error instanceof Error) {
-    if (error instanceof ProjectMaterialRevisionConflictError) return 409;
-    if (isUnauthorizedError(error)) return 401;
-    if (error.message === "Imported projectId already exists.") return 409;
-    if (error.message.startsWith("Invalid FurnQuote module package:")) return 400;
-    if (error.message === "Module import body is required.") return 400;
-    if (error.message.endsWith(" is required.")) return 400;
-    if (isForbiddenError(error)) return 403;
-    if (error.message.includes("Invalid storage URL")) return 400;
-    if (error.message.includes("Expected JSON body")) return 400;
-    if (error.message === "Storage file not found.") return 404;
-    if ("code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") return 404;
-  }
-  return 500;
-};
-
 export function startWorkerServer() {
   const port = Number(process.env.BLENDER_WORKER_PORT || 5191);
   const host = process.env.BLENDER_WORKER_HOST || "127.0.0.1";
 
-  const server = http.createServer(async (req, res) => {
-    try {
-      const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
-
-      if (req.method === "GET" && url.pathname === "/health") return sendJson(res, 200, { ok: true });
-
-      if (req.method === "GET" && url.pathname === "/ready") {
-        try {
-          return sendJson(res, 200, await checkDatabaseReadiness());
-        } catch (error) {
-          res.setHeader("Retry-After", "2");
-          return sendJson(res, 503, { ok: false, error: publicServerErrorMessage(error, 503) });
+  const requestMetrics = createHttpRequestMetrics();
+  const clientJourneyMetrics = createClientJourneyMetrics();
+  const requestBudget = createHttpRequestBudget();
+  const clientCatalogBootstrapResponseCache = new ClientCatalogBootstrapResponseCache();
+  const clientModulePackagesResponseCache = new ClientModulePackagesResponseCache();
+  const server = http.createServer(createWorkerRequestHandler({
+    host,
+    port,
+    userService: serverUserService,
+    authSessionStore: serverAuthSessionStore,
+    requestMetrics,
+    clientJourneyMetrics,
+    requestBudget,
+    readJsonBody,
+    sendJson,
+    sendText,
+    checkReadiness: checkDatabaseReadiness,
+    getClientContext: getValidatedClientContext,
+    handleApplicationRequest: (req, res, url) => handleWorkerApiRequest(req, res, url, {
+      projectRoot: PROJECT_ROOT,
+      getClientContext: getValidatedClientContext,
+      readJsonBody,
+      sendJson,
+      clientCatalogBootstrapResponseCache,
+      clientModulePackagesResponseCache,
+      catalogLookupCache,
+      createCatalogRepository: () => createServerCatalogRepository(PROJECT_ROOT),
+      createModulePackageRepository: () => createServerModulePackageRepository(PROJECT_ROOT),
+      handleCatalog,
+      handleCatalogLookup,
+      handleMaterialProofCatalogs,
+      handleStorageFile: serveStorageFile,
+      handleExport,
+      handleOpenBlenderOutput,
+      handleEntrySpecificRoute: async (request, response, requestUrl) => {
+        if (request.method === "GET" && requestUrl.pathname === "/api/material-proof/asset") {
+          await serveMaterialProofAsset(requestUrl, response);
+          return true;
         }
+        if (request.method === "GET" && requestUrl.pathname === "/api/material-proof/reference-image") {
+          await serveMaterialProofReferenceImage(requestUrl, response);
+          return true;
+        }
+        if (
+          (request.method === "GET" || request.method === "POST") &&
+          requestUrl.pathname === "/api/material-proof/color-cache"
+        ) {
+          await handleDemosPreviewColorCache(request, response, requestUrl);
+          return true;
+        }
+        return false;
+      },
+      handleNotFound: async (request, response, requestUrl) => {
+        if (await serveStaticApp(request, response, requestUrl)) return;
+        sendText(response, 404, "Not found");
       }
-
-      if (req.method === "POST" && url.pathname === "/api/auth/login") return await handleAuthLogin(req, res, readJsonBody, sendJson, { userService: serverUserService });
-
-      if (req.method === "GET" && url.pathname === "/api/auth/session") return await handleAuthSession(req, res, sendJson, { userService: serverUserService });
-
-      if (req.method === "POST" && url.pathname === "/api/auth/logout") return handleAuthLogout(req, res, sendJson);
-
-      if (
-        await handleClientProfileApi(req, res, url, {
-          getContext: getValidatedClientContext,
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname === "/api/catalog") return await handleCatalog(req, res);
-
-      if (
-        await handleCatalogExactLookupApi(req, res, url, {
-          getContext: getValidatedClientContext,
-          createRepository: () => createServerCatalogRepository(PROJECT_ROOT),
-          cache: catalogLookupCache,
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname === "/api/catalog/lookup") return await handleCatalogLookup(req, url, res);
-
-      if (req.method === "GET" && url.pathname === "/api/material-proof/catalogs") return await handleMaterialProofCatalogs(req, res);
-
-      if (req.method === "GET" && url.pathname === "/api/demos/material-lookup") return await handleDemosMaterialLookup(url, res, sendJson);
-
-      if (req.method === "GET" && url.pathname === "/api/demos/material-image") return await handleDemosMaterialImage(url, res);
-
-      if (req.method === "GET" && url.pathname === "/api/material-proof/asset") return await serveMaterialProofAsset(url, res);
-
-      if (req.method === "GET" && url.pathname === "/api/material-proof/reference-image") return await serveMaterialProofReferenceImage(url, res);
-
-      if (
-        (req.method === "GET" || req.method === "POST") &&
-        url.pathname === "/api/material-proof/color-cache"
-      ) return await handleDemosPreviewColorCache(req, res, url);
-
-      if (
-        await handleModulePackageApi(req, res, url, {
-          projectRoot: PROJECT_ROOT,
-          getContext: getValidatedClientContext,
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleProjectMaterialsApi(req, res, url, {
-          projectRoot: PROJECT_ROOT,
-          getContext: getValidatedClientContext,
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleSupplierBridgeApi(req, res, url, {
-          projectRoot: PROJECT_ROOT,
-          getContext: getValidatedClientContext,
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleProjectApi(req, res, url, {
-          projectRoot: PROJECT_ROOT,
-          getContext: getValidatedClientContext,
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (
-        await handleAssistantApi(req, res, url, {
-          projectRoot: PROJECT_ROOT,
-          getContext: getValidatedClientContext,
-          getCatalog: async (context) => createServerCatalogRepository(PROJECT_ROOT).ensureCatalogExists(context),
-          readJsonBody,
-          sendJson
-        })
-      ) return;
-
-      if (req.method === "GET" && url.pathname.startsWith("/storage/")) return await serveStorageFile(req, url, res);
-
-      if (req.method === "POST" && url.pathname === "/api/blender/export") return await handleExport(req, res);
-
-      if (req.method === "POST" && url.pathname === "/api/blender/open-output") return await handleOpenBlenderOutput(req, res);
-
-      if (await serveStaticApp(req, res, url)) return;
-
-      return sendText(res, 404, "Not found");
-    } catch (err: unknown) {
-      const status = getErrorCode(err);
-      if (status === 503) res.setHeader("Retry-After", "2");
-      const message = publicServerErrorMessage(err, status);
-      console.error(`[worker] ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${err instanceof Error ? err.message : String(err)}`);
-      return sendJson(res, status, { ok: false, error: message });
-    }
-  });
+    })
+  }));
 
   server.listen(port, host, () => {
     console.log(`[blender-worker] listening on http://${host}:${port}`);

@@ -63,6 +63,15 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
   if (scope.clientId && save.clientId !== scope.clientId) throw new Error("Project save belongs to a different client.");
   if (scope.projectId && save.projectId !== scope.projectId) throw new Error("Project save projectId does not match route.");
   if (save.project.clientId !== save.clientId || save.project.projectId !== save.projectId) throw new Error("Project save metadata does not match save scope.");
+  if (save.integrity.saveRevision !== undefined && (!Number.isSafeInteger(save.integrity.saveRevision) || save.integrity.saveRevision < 1)) {
+    throw new Error("Project save revision is invalid.");
+  }
+  if (save.integrity.lastWrite !== undefined) {
+    const sha256 = /^[0-9a-f]{64}$/;
+    if (!sha256.test(save.integrity.lastWrite.keyHash) || !sha256.test(save.integrity.lastWrite.requestHash)) {
+      throw new Error("Project save idempotency receipt is invalid.");
+    }
+  }
   assertValidProjectMetadata(save.project);
   if (!Array.isArray(save.phases) || save.phases.length === 0) throw new Error("Project save must include phases.");
   const phaseIds = new Set<string>();

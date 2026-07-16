@@ -267,6 +267,7 @@ import { createDemosLivePreviewColorController } from "./app/demosLivePreviewCol
 import { createCameraPlacementController } from "./app/cameraPlacementController";
 import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
+import { createNavigationFocusProvider } from "./app/navigationFocus";
 import { createRecentActivityController } from "./app/recentActivityController";
 import { setupMagneticButtons } from "./app/magneticButtons";
 import { createViewerToolModeController } from "./app/viewerToolModeController";
@@ -486,7 +487,12 @@ export function startApp(initialArgs: AppArgs) {
 
   let kitchenMode: ReturnType<typeof createKitchenEditMode> | null = null;
 
-  const { updateSelectionHighlights, syncSelectionHighlights, updateSelectionHover } = createSelectionHighlights({
+  const {
+    getSelectionBounds,
+    updateSelectionHighlights,
+    syncSelectionHighlights,
+    updateSelectionHover
+  } = createSelectionHighlights({
     layoutRoot,
     getMode: () => mode,
     getViewMode: () => viewMode,
@@ -510,6 +516,7 @@ export function startApp(initialArgs: AppArgs) {
     getDoors: () => doors,
     getSelectedSubmoduleHighlightTarget: () => kitchenMode?.getSelectedTallSubmoduleHighlightTarget?.() ?? null,
     getSelectedSubmoduleHighlightTargets: () => kitchenMode?.getSelectedTallSubmoduleHighlightTargets?.() ?? [],
+    getSelectedWorktopSegment: () => kitchenMode?.getSelectedWorktopSegment?.() ?? null,
     getModuleLocalBackCenter: (inst) => getModuleLocalBackCenter(inst)
   });
 
@@ -616,6 +623,15 @@ export function startApp(initialArgs: AppArgs) {
     if (wardrobeKeys.length > 0) return wardrobeKeys;
     return [];
   };
+
+  const navigationFocusProvider = createNavigationFocusProvider({
+    getMode: () => mode,
+    getBuildSelectionBounds: () => selectedMesh ? new THREE.Box3().setFromObject(selectedMesh) : null,
+    getLayoutSelectionBounds: () => getSelectionBounds(),
+    getSelectedTargetKeys: getSelectedVisibilityTargetKeys,
+    getVisibilityTargets,
+    getBuildProjectBounds: getNavigationSceneBounds
+  });
 
   let syncClassicTopbarVisibility = () => {};
   let syncViewerDownbar = () => {};
@@ -1276,7 +1292,7 @@ export function startApp(initialArgs: AppArgs) {
       Boolean(floorEdit.drag) ||
       underlayDragState.active ||
       !!transformState.kind,
-    getSceneBounds: () => getNavigationSceneBounds(),
+    focusProvider: navigationFocusProvider,
     refreshDetailView: () => {
       detailViewController.activeDetailClipPlanes = [];
       updateDetailViewCamera();
@@ -3306,7 +3322,8 @@ export function startApp(initialArgs: AppArgs) {
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
     },
-    initialProject: args.initialProjectSave?.project ?? args.initialProject ?? null
+    initialProject: args.initialProject,
+    initialProjectSave: args.initialProjectSave
   });
   if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
   const materialWarningListEl = document.querySelector<HTMLElement>("[data-material-warning-list]")!;

@@ -1,4 +1,6 @@
 import { createInMemoryUserRepository } from "../core/auth/user-repository";
+import { createInMemoryAuthSessionStore, type AuthSessionStore } from "../core/auth/auth-session-store";
+import { createPostgresAuthSessionStore } from "../core/auth/auth-session-postgres-store";
 import { createPostgresUserRepository } from "../core/auth/user-postgres-repository";
 import { createUserService, type UserService } from "../core/auth/user-service";
 import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
@@ -30,6 +32,13 @@ export function createServerUserService(): UserService {
   return createUserService(databaseConfig
     ? createPostgresUserRepository(databaseConfig)
     : createInMemoryUserRepository());
+}
+
+export function createServerAuthSessionStore(): AuthSessionStore {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresAuthSessionStore(databaseConfig)
+    : createInMemoryAuthSessionStore();
 }
 
 export function createServerCatalogRepository(projectRoot: string): ClientCatalogRepository {

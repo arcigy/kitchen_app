@@ -1,1 +1,8 @@
-export const REQUIRED_DATABASE_MIGRATION_VERSION = "0004_client_suppliers";
+export const REQUIRED_DATABASE_MIGRATION_VERSIONS = [
+  "0001_core",
+  "0002_supplier_bridge",
+  "0003_supplier_exact_catalog",
+  "0004_client_suppliers"
+] as const;
+
+export const REQUIRED_DATABASE_MIGRATION_VERSION = REQUIRED_DATABASE_MIGRATION_VERSIONS.at(-1)!;

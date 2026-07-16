@@ -43,6 +43,76 @@ export const SYSTEM_PLACEHOLDER_MATERIAL: ResolvedRenderMaterial = {
   source: "system-placeholder"
 };
 
+type RuntimeCatalogIndex = {
+  materials: ClientCatalog["materials"];
+  components: ClientCatalog["components"];
+  componentGeometry: ClientCatalog["componentGeometry"];
+  catalogVersion: number;
+  updatedAt: string;
+  activeMaterialById: Map<string, MaterialDefinition>;
+  firstActiveMaterial: MaterialDefinition | undefined;
+  activeComponentById: Map<string, ComponentDefinition>;
+  firstActiveComponentByType: Map<ComponentType, ComponentDefinition>;
+  componentGeometryById: Map<string, ComponentGeometryDefinition>;
+};
+
+const runtimeCatalogIndexes = new WeakMap<ClientCatalog, RuntimeCatalogIndex>();
+
+function buildRuntimeCatalogIndex(catalog: ClientCatalog): RuntimeCatalogIndex {
+  const activeMaterialById = new Map<string, MaterialDefinition>();
+  let firstActiveMaterial: MaterialDefinition | undefined;
+  for (const material of catalog.materials ?? []) {
+    if (!material.isActive) continue;
+    firstActiveMaterial ??= material;
+    if (!activeMaterialById.has(material.id)) activeMaterialById.set(material.id, material);
+  }
+
+  const activeComponentById = new Map<string, ComponentDefinition>();
+  const firstActiveComponentByType = new Map<ComponentType, ComponentDefinition>();
+  for (const component of catalog.components ?? []) {
+    if (!component.isActive) continue;
+    if (!activeComponentById.has(component.id)) activeComponentById.set(component.id, component);
+    if (!firstActiveComponentByType.has(component.componentType)) {
+      firstActiveComponentByType.set(component.componentType, component);
+    }
+  }
+
+  const componentGeometryById = new Map<string, ComponentGeometryDefinition>();
+  for (const geometry of catalog.componentGeometry ?? []) {
+    if (!componentGeometryById.has(geometry.id)) componentGeometryById.set(geometry.id, geometry);
+  }
+
+  return {
+    materials: catalog.materials,
+    components: catalog.components,
+    componentGeometry: catalog.componentGeometry,
+    catalogVersion: catalog.meta?.catalogVersion ?? 0,
+    updatedAt: catalog.meta?.updatedAt ?? "",
+    activeMaterialById,
+    firstActiveMaterial,
+    activeComponentById,
+    firstActiveComponentByType,
+    componentGeometryById
+  };
+}
+
+function runtimeCatalogIndex(catalog: ClientCatalog): RuntimeCatalogIndex {
+  const existing = runtimeCatalogIndexes.get(catalog);
+  if (
+    existing &&
+    existing.materials === catalog.materials &&
+    existing.components === catalog.components &&
+    existing.componentGeometry === catalog.componentGeometry &&
+    existing.catalogVersion === (catalog.meta?.catalogVersion ?? 0) &&
+    existing.updatedAt === (catalog.meta?.updatedAt ?? "")
+  ) {
+    return existing;
+  }
+  const next = buildRuntimeCatalogIndex(catalog);
+  runtimeCatalogIndexes.set(catalog, next);
+  return next;
+}
+
 function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -79,22 +149,19 @@ function defaultComponentId(catalog: ClientCatalog, kind?: ComponentDefaultKind)
 }
 
 export function createModuleRuntimeCatalogContext(catalog: ClientCatalog): ModuleRuntimeCatalogContext {
-  const activeMaterials = () => catalog.materials.filter((material) => material.isActive);
-  const activeComponents = () => catalog.components.filter((component) => component.isActive);
-
   const getMaterialById = (materialId: string | undefined | null) => {
     const id = readString(materialId);
-    return id ? activeMaterials().find((material) => material.id === id) : undefined;
+    return id ? runtimeCatalogIndex(catalog).activeMaterialById.get(id) : undefined;
   };
 
   const getComponentById = (componentId: string | undefined | null) => {
     const id = readString(componentId);
-    return id ? activeComponents().find((component) => component.id === id) : undefined;
+    return id ? runtimeCatalogIndex(catalog).activeComponentById.get(id) : undefined;
   };
 
   const getComponentGeometryById = (geometryId: string | undefined | null) => {
     const id = readString(geometryId);
-    return id ? catalog.componentGeometry.find((geometry) => geometry.id === id) : undefined;
+    return id ? runtimeCatalogIndex(catalog).componentGeometryById.get(id) : undefined;
   };
 
   const getComponentGeometryForComponentId = (componentId: string | undefined | null) => {
@@ -110,7 +177,7 @@ export function createModuleRuntimeCatalogContext(catalog: ClientCatalog): Modul
     const fromDefault = getMaterialById(defaultId);
     if (fromDefault) return fromDefault;
 
-    return activeMaterials()[0];
+    return runtimeCatalogIndex(catalog).firstActiveMaterial;
   };
 
   const resolveComponent = (
@@ -124,7 +191,7 @@ export function createModuleRuntimeCatalogContext(catalog: ClientCatalog): Modul
     const fromDefault = getComponentById(defaultComponentId(catalog, defaultKind));
     if (fromDefault?.componentType === componentType) return fromDefault;
 
-    return activeComponents().find((component) => component.componentType === componentType);
+    return runtimeCatalogIndex(catalog).firstActiveComponentByType.get(componentType);
   };
 
   return {

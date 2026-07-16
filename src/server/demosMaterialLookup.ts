@@ -1,8 +1,11 @@
 import type http from "node:http";
+import { fetchExternalBytes, fetchExternalText } from "./external-http";
 
 const DEMOS_CZ_ORIGIN = "https://www.demos-trade.cz";
 const DEMOS_TRACKER_ID = "39755-295903";
 const FETCH_TIMEOUT_MS = 8_000;
+const MAX_TEXT_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_RESPONSE_BYTES = 12 * 1024 * 1024;
 
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
 
@@ -64,21 +67,14 @@ type DemosMaterialResult = {
 };
 
 const fetchText = async (url: string): Promise<string> => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "accept": "text/html,application/xhtml+xml,application/json",
-        "user-agent": "Mozilla/5.0 ArcigyKitchenMaterialScraper/1.0"
-      }
-    });
-    if (!response.ok) throw new Error(`Demos request failed: ${response.status}`);
-    return await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
+  const { response, text } = await fetchExternalText(url, {
+    headers: {
+      "accept": "text/html,application/xhtml+xml,application/json",
+      "user-agent": "Mozilla/5.0 ArcigyKitchenMaterialScraper/1.0"
+    }
+  }, { timeoutMs: FETCH_TIMEOUT_MS, maxBytes: MAX_TEXT_RESPONSE_BYTES });
+  if (!response.ok) throw new Error(`Demos request failed: ${response.status}`);
+  return text;
 };
 
 const decodeHtml = (value: string): string => {
@@ -403,14 +399,22 @@ export async function handleDemosMaterialImage(reqUrl: URL, res: http.ServerResp
     res.end("Unsupported image URL.");
     return;
   }
-  const response = await fetch(parsed, { headers: { "user-agent": "Mozilla/5.0 ArcigyKitchenMaterialScraper/1.0" } });
+  const { response, body } = await fetchExternalBytes(parsed, {
+    headers: { "user-agent": "Mozilla/5.0 ArcigyKitchenMaterialScraper/1.0" }
+  }, { timeoutMs: FETCH_TIMEOUT_MS, maxBytes: MAX_IMAGE_RESPONSE_BYTES });
   if (!response.ok) {
     res.statusCode = 502;
     res.end(`Failed to fetch Demos image: ${response.status}`);
     return;
   }
+  const contentType = response.headers.get("content-type") || "image/jpeg";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    res.statusCode = 502;
+    res.end("Demos image response has an invalid content type.");
+    return;
+  }
   res.statusCode = 200;
   res.setHeader("Cache-Control", "public, max-age=3600");
-  res.setHeader("Content-Type", response.headers.get("content-type") || "image/jpeg");
-  res.end(Buffer.from(await response.arrayBuffer()));
+  res.setHeader("Content-Type", contentType);
+  res.end(Buffer.from(body));
 }

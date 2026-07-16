@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ClientContext } from "../client/client-context";
 import { createCatalogModuleDefinitionFromPackage } from "../module-package/module-package-catalog";
@@ -208,6 +209,24 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   return {
     getCatalogForClient(clientId: string): ClientCatalog {
       return memory.getCatalogForClient(clientId);
+    },
+    async getRevision(ctx) {
+      const meta = await readJson<ClientCatalog["meta"]>(ctx, names.meta);
+      if (!meta) return null;
+      try {
+        const entries = await Promise.all(Object.values(names).map(async (fileName) => {
+          const info = await stat(filePath(ctx, fileName));
+          return `${fileName}\u0000${info.size}\u0000${info.mtimeMs}`;
+        }));
+        return {
+          catalogVersion: meta.catalogVersion,
+          updatedAt: meta.updatedAt,
+          storageRevision: createHash("sha256").update(entries.join("\n")).digest("hex")
+        };
+      } catch (error: unknown) {
+        if ((error as { code?: string }).code === "ENOENT") return null;
+        throw error;
+      }
     },
     async getCatalog(ctx) {
       return (await readCatalog(ctx)) ?? memory.getCatalogForClient(ctx.clientId);

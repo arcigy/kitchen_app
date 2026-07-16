@@ -3,25 +3,61 @@ name: CI
 on:
   pull_request:
     branches:
+      - develop
       - staging
       - main
+  push:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown
+          warn-only: false
+          comment-summary-in-pr: never
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@02c5e83432fe5497fd85b873b6c9f16a8578e1d9 # v3.37.0
+        with:
+          languages: javascript-typescript
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate production SBOM
+        run: npm sbom --omit=dev --sbom-format=cyclonedx > sbom.cdx.json
+
+      - name: Scan tracked files for secrets
+        run: npm run security:secrets
 
       - name: Typecheck
         run: npm run typecheck --if-present
@@ -32,5 +68,81 @@ jobs:
       - name: Test
         run: npm run test --if-present
 
+      - name: PostgreSQL backup and restore drill
+        timeout-minutes: 10
+        env:
+          ARCIGY_RESTORE_DRILL_ISOLATED: "true"
+        run: npm run test:db-restore-drill
+
       - name: Build
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated UI runtime
+        env:
+          BLENDER_WORKER_PORT: "5191"
+          KITCHEN_PROJECT_STORAGE: file
+          APP_ENV: dev
+          DATABASE_SCHEMA: dev
+          ARCIGY_OBJECT_STORAGE_PREFIX: dev
+        run: |
+          set -euo pipefail
+          setsid node node_modules/tsx/dist/cli.mjs scripts/devLocal.ts > "${RUNNER_TEMP}/arcigy-ui.log" 2>&1 &
+          echo "ARCIGY_UI_PID=$!" >> "${GITHUB_ENV}"
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:5180/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "${RUNNER_TEMP}/arcigy-ui.log"
+          exit 1
+
+      - name: Full UI and accessibility regression
+        timeout-minutes: 15
+        env:
+          KITCHEN_UI_BASE_URL: http://127.0.0.1:5180/
+          PRICING_UI_BASE_URL: http://127.0.0.1:5180/
+        run: npm run test:ui-regression
+
+      - name: Stop isolated UI runtime
+        if: always()
+        run: |
+          if [[ -z "${ARCIGY_UI_PID:-}" ]]; then
+            exit 0
+          fi
+          kill -TERM -- "-${ARCIGY_UI_PID}" 2>/dev/null || true
+          for attempt in {1..10}; do
+            if ! kill -0 -- "-${ARCIGY_UI_PID}" 2>/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          kill -KILL -- "-${ARCIGY_UI_PID}" 2>/dev/null || true
+
+      - name: Upload failed UI runtime log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: arcigy-ui-runtime-log-${{ github.sha }}
+          path: ${{ runner.temp }}/arcigy-ui.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Production dependency policy
+        run: npm run security:dependencies
+
+      - name: Upload production SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: arcigy-production-sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Analyze CodeQL
+        uses: github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9 # v3.37.0
+        with:
+          category: /language:javascript-typescript

@@ -5,10 +5,9 @@ import type { ClientContext } from "../client/client-context";
 import { closeSchemaPools, withSchemaClient } from "../database/postgres-client";
 import { resolveClientStoragePath, resolveProjectStoragePath } from "../storage/storage-path-resolver";
 import { createClientProjectPhaseScope, sanitizeStorageId } from "../storage/storage-types";
-import type { CreateProjectInput, ProjectMetadata, ProjectVersionMetadata } from "./project-types";
+import type { ProjectMetadata, ProjectVersionMetadata } from "./project-types";
 import { createProjectMetadata } from "./project-metadata";
 import { assertValidCreateProjectInput, assertValidProjectMetadata } from "./project-validation";
-import type { ProjectBundledAssetPayload, ProjectSaveFile } from "../project-save/project-save-types";
 import { loadProjectSaveFile } from "../project-save/project-save-loader";
 import { validateProjectSaveFile } from "../project-save/project-save-validation";
 import { bundleProjectAssets, restoreBundledProjectAssets } from "../project-save/project-asset-bundling";
@@ -18,6 +17,14 @@ import { validateProjectMaterialAssignmentsState } from "../project-materials/pr
 import { ProjectMaterialRevisionConflictError } from "../project-materials/project-material-errors";
 import { patchProjectSaveMaterialAssignments } from "../project-materials/project-material-save-patch";
 import { assertFullSaveMaterialAssignmentsAllowed } from "../project-materials/project-material-save-authority";
+import { prepareProjectSaveWrite } from "./project-write-consistency";
+import {
+  PROJECT_OPERATION_RECEIPT_KEY,
+  assertProjectOperationReplay,
+  attachProjectOperationReceipt,
+  stripProjectOperationReceipt,
+  type ProjectOperationReceipt
+} from "./project-operation-idempotency";
 
 export async function closePostgresProjectPools(): Promise<void> {
   await closeSchemaPools();
@@ -77,7 +84,11 @@ async function saveMetadata(client: PoolClient, ctx: ClientContext, metadata: Pr
       )
       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::timestamptz, $8::timestamptz, $9, $10, now())
       ON CONFLICT (client_id, project_id) DO UPDATE SET
-        metadata = EXCLUDED.metadata,
+        metadata = EXCLUDED.metadata || CASE
+          WHEN arcigy_projects.metadata ? '${PROJECT_OPERATION_RECEIPT_KEY}'
+            THEN jsonb_build_object('${PROJECT_OPERATION_RECEIPT_KEY}', arcigy_projects.metadata -> '${PROJECT_OPERATION_RECEIPT_KEY}')
+          ELSE '{}'::jsonb
+        END,
         name = EXCLUDED.name,
         status = EXCLUDED.status,
         active_phase_id = EXCLUDED.active_phase_id,
@@ -100,9 +111,52 @@ async function saveMetadata(client: PoolClient, ctx: ClientContext, metadata: Pr
   );
 }
 
+async function claimMetadata(
+  client: PoolClient,
+  ctx: ClientContext,
+  metadata: ProjectMetadata,
+  receipt: ProjectOperationReceipt
+): Promise<ProjectMetadata> {
+  assertProjectClient(ctx, metadata);
+  assertValidProjectMetadata(metadata);
+  const storedMetadata = attachProjectOperationReceipt(metadata, receipt);
+  const inserted = await client.query<{ metadata: unknown }>(
+    `
+      INSERT INTO arcigy_projects (
+        client_id, project_id, metadata, name, status, active_phase_id,
+        created_at, updated_at, created_by_user_id, updated_by_user_id, db_updated_at
+      )
+      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::timestamptz, $8::timestamptz, $9, $10, now())
+      ON CONFLICT (client_id, project_id) DO NOTHING
+      RETURNING metadata
+    `,
+    [
+      metadata.clientId,
+      metadata.projectId,
+      JSON.stringify(storedMetadata),
+      metadata.name,
+      metadata.status,
+      metadata.activePhaseId,
+      metadata.createdAt,
+      metadata.updatedAt,
+      metadata.createdByUserId,
+      metadata.updatedByUserId
+    ]
+  );
+  if (inserted.rows[0]) return stripProjectOperationReceipt(inserted.rows[0].metadata);
+  const existing = await client.query<{ metadata: unknown }>(
+    "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2 FOR UPDATE",
+    [ctx.clientId, metadata.projectId]
+  );
+  if (!existing.rows[0]) throw new Error("Project idempotency claim disappeared.");
+  const replay = assertProjectOperationReplay(existing.rows[0].metadata, receipt);
+  assertValidProjectMetadata(replay);
+  return replay;
+}
+
 function rowMetadata(row: { metadata: unknown } | undefined): ProjectMetadata {
   if (!row) throw notFound("Project not found.");
-  const metadata = row.metadata as ProjectMetadata;
+  const metadata = stripProjectOperationReceipt(row.metadata);
   assertValidProjectMetadata(metadata);
   return metadata;
 }
@@ -126,13 +180,14 @@ export function createPostgresProjectRepository(args: {
     withSchemaClient(args.connectionString, schema, fn);
 
   return {
-    async createProject(ctx, input) {
+    async createProject(ctx, input, options) {
       assertValidCreateProjectInput(input);
-      const metadata = createProjectMetadata(ctx, input);
-      await withClient(async (client) => {
+      const metadata = createProjectMetadata(ctx, input, options?.projectId);
+      return withClient(async (client) => {
+        if (options?.receipt) return claimMetadata(client, ctx, metadata, options.receipt);
         await saveMetadata(client, ctx, metadata);
+        return metadata;
       });
-      return metadata;
     },
 
     async listProjects(ctx) {
@@ -187,6 +242,10 @@ export function createPostgresProjectRepository(args: {
       });
     },
 
+    async claimProjectMetadata(ctx, metadata, receipt) {
+      return withClient((client) => claimMetadata(client, ctx, metadata, receipt));
+    },
+
     async loadProjectSave(ctx, projectId, phaseId) {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
@@ -209,8 +268,8 @@ export function createPostgresProjectRepository(args: {
       const safeProjectId = sanitizeStorageId(projectId, "projectId");
       const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
       validateProjectSaveFile(save, { clientId: ctx.clientId, projectId: safeProjectId });
-      await withClient(async (client) => {
-        await withTransaction(client, async () => {
+      return withClient(async (client) => {
+        return withTransaction(client, async () => {
           const project = rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
             "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2 FOR UPDATE",
             [ctx.clientId, safeProjectId]
@@ -220,14 +279,19 @@ export function createPostgresProjectRepository(args: {
             "SELECT save FROM arcigy_project_saves WHERE client_id = $1 AND project_id = $2 AND phase_id = $3 FOR UPDATE",
             [ctx.clientId, safeProjectId, safePhaseId]
           );
-          if (storedResult.rows[0]) {
-            const stored = loadProjectSaveFile(storedResult.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
+          const stored = storedResult.rows[0]
+            ? loadProjectSaveFile(storedResult.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId })
+            : null;
+          const prepared = prepareProjectSaveWrite({ stored, incoming: save, options });
+          if (prepared.replayed) return prepared.save;
+          if (stored) {
             assertFullSaveMaterialAssignmentsAllowed(
               stored.appState.materialAssignments,
-              save.appState.materialAssignments,
+              prepared.save.appState.materialAssignments,
               options?.materialAssignmentsMode
             );
           }
+          validateProjectSaveFile(prepared.save, { clientId: ctx.clientId, projectId: safeProjectId });
           await client.query(
             `
               INSERT INTO arcigy_project_saves (client_id, project_id, phase_id, save, saved_at, saved_by_user_id, db_updated_at)
@@ -238,8 +302,9 @@ export function createPostgresProjectRepository(args: {
                 saved_by_user_id = EXCLUDED.saved_by_user_id,
                 db_updated_at = now()
             `,
-            [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(save), save.integrity.savedAt, ctx.userId]
+            [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(prepared.save), prepared.save.integrity.savedAt, ctx.userId]
           );
+          return prepared.save;
         });
       });
     },

@@ -1,9 +1,22 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { REQUIRED_DATABASE_MIGRATION_VERSION } from "./migration-version";
+import {
+  REQUIRED_DATABASE_MIGRATION_VERSION,
+  REQUIRED_DATABASE_MIGRATION_VERSIONS
+} from "./migration-version";
 
 describe("database migration files", () => {
+  it("keeps the runtime readiness manifest synchronized with every migration file", async () => {
+    const migrationFiles = (await readdir(path.join(process.cwd(), "db", "migrations")))
+      .filter((file) => file.endsWith(".sql"))
+      .sort((a, b) => a.localeCompare(b))
+      .map((file) => file.replace(/\.sql$/i, ""));
+
+    expect([...REQUIRED_DATABASE_MIGRATION_VERSIONS]).toEqual(migrationFiles);
+    expect(REQUIRED_DATABASE_MIGRATION_VERSION).toBe(migrationFiles.at(-1));
+  });
+
   it("contains the core and required Supplier Bridge migrations", async () => {
     const coreSql = await readFile(path.join(process.cwd(), "db", "migrations", "0001_core.sql"), "utf-8");
     expect(coreSql).toContain("CREATE TABLE IF NOT EXISTS schema_migrations");

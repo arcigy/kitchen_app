@@ -1,0 +1,168 @@
+import * as THREE from "three";
+
+export const MIN_NAVIGATION_FOCUS_DISTANCE = 0.001;
+
+const MAX_NORMALIZED_WHEEL_DELTA = 240;
+const WHEEL_EXPONENT_PER_PIXEL = 0.00075;
+const MAX_ORBIT_ELEVATION = Math.PI / 2 - THREE.MathUtils.degToRad(0.5);
+
+export type NavigationViewport = {
+  width: number;
+  height: number;
+};
+
+export type NavigationPointerNdc = {
+  x: number;
+  y: number;
+};
+
+export function normalizeNavigationWheelDelta(
+  deltaY: number,
+  deltaMode = 0,
+  viewportHeight = 800
+) {
+  const pixels = deltaMode === 1
+    ? deltaY * 16
+    : deltaMode === 2
+      ? deltaY * Math.max(1, viewportHeight)
+      : deltaY;
+  return THREE.MathUtils.clamp(pixels, -MAX_NORMALIZED_WHEEL_DELTA, MAX_NORMALIZED_WHEEL_DELTA);
+}
+
+export function navigationWheelScale(deltaY: number) {
+  return Math.exp(deltaY * WHEEL_EXPONENT_PER_PIXEL);
+}
+
+export function pointerNdcFromClient(
+  clientX: number,
+  clientY: number,
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">
+): NavigationPointerNdc {
+  return {
+    x: ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+    y: -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1
+  };
+}
+
+export function applyPerspectiveWheelZoom(
+  camera: THREE.PerspectiveCamera,
+  compatibilityTarget: THREE.Vector3,
+  pointerNdc: NavigationPointerNdc,
+  normalizedDeltaY: number,
+  focusDistance: number
+) {
+  const currentDistance = Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, focusDistance);
+  const nextDistance = Math.max(
+    MIN_NAVIGATION_FOCUS_DISTANCE,
+    currentDistance * navigationWheelScale(normalizedDeltaY)
+  );
+  const travel = currentDistance - nextDistance;
+  if (Math.abs(travel) > 1e-12) {
+    const rayDirection = new THREE.Vector3(pointerNdc.x, pointerNdc.y, 0.5)
+      .unproject(camera)
+      .sub(camera.position)
+      .normalize();
+    camera.position.addScaledVector(rayDirection, travel);
+  }
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  compatibilityTarget.copy(camera.position).addScaledVector(forward, nextDistance);
+  camera.updateMatrixWorld(true);
+  return nextDistance;
+}
+
+export function applyOrthographicWheelZoom(
+  camera: THREE.OrthographicCamera,
+  compatibilityTarget: THREE.Vector3,
+  pointerNdc: NavigationPointerNdc,
+  normalizedDeltaY: number,
+  focusDistance: number
+) {
+  const before = new THREE.Vector3(pointerNdc.x, pointerNdc.y, 0).unproject(camera);
+  const scale = navigationWheelScale(normalizedDeltaY);
+  camera.zoom = THREE.MathUtils.clamp(camera.zoom / scale, 1e-6, 1e6);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  const after = new THREE.Vector3(pointerNdc.x, pointerNdc.y, 0).unproject(camera);
+  const correction = before.sub(after);
+  camera.position.add(correction);
+  compatibilityTarget.add(correction);
+  camera.updateMatrixWorld(true);
+  return Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, focusDistance * scale);
+}
+
+export function panCameraInViewPlane(
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+  compatibilityTarget: THREE.Vector3,
+  deltaX: number,
+  deltaY: number,
+  focusDistance: number,
+  viewport: NavigationViewport
+) {
+  const width = Math.max(1, viewport.width);
+  const height = Math.max(1, viewport.height);
+  let unitsPerPixelX: number;
+  let unitsPerPixelY: number;
+
+  if (camera instanceof THREE.PerspectiveCamera) {
+    const visibleHeight = 2
+      * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+      * Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, focusDistance);
+    unitsPerPixelY = visibleHeight / height;
+    unitsPerPixelX = visibleHeight * camera.aspect / width;
+  } else {
+    const zoom = Math.max(1e-6, camera.zoom);
+    unitsPerPixelX = (camera.right - camera.left) / (width * zoom);
+    unitsPerPixelY = (camera.top - camera.bottom) / (height * zoom);
+  }
+
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
+  const translation = right
+    .multiplyScalar(-deltaX * unitsPerPixelX)
+    .add(up.multiplyScalar(deltaY * unitsPerPixelY));
+  camera.position.add(translation);
+  compatibilityTarget.add(translation);
+  camera.updateMatrixWorld(true);
+  return translation;
+}
+
+export function orbitCameraAroundPivot(
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+  pivot: THREE.Vector3,
+  deltaX: number,
+  deltaY: number,
+  viewportHeight: number,
+  rotateSpeed = 0.85
+) {
+  const height = Math.max(1, viewportHeight);
+  const offset = camera.position.clone().sub(pivot);
+  if (offset.lengthSq() < 1e-12) return false;
+
+  const yaw = -Math.PI * 2 * deltaX / height * rotateSpeed;
+  const yawRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  offset.applyQuaternion(yawRotation);
+  camera.quaternion.premultiply(yawRotation);
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  const currentElevation = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
+  const requestedPitch = -Math.PI * 2 * deltaY / height * rotateSpeed;
+  const nextElevation = THREE.MathUtils.clamp(
+    currentElevation + requestedPitch,
+    -MAX_ORBIT_ELEVATION,
+    MAX_ORBIT_ELEVATION
+  );
+  const pitch = nextElevation - currentElevation;
+  if (Math.abs(pitch) > 1e-12) {
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    const pitchRotation = new THREE.Quaternion().setFromAxisAngle(right, pitch);
+    offset.applyQuaternion(pitchRotation);
+    camera.quaternion.premultiply(pitchRotation);
+  }
+
+  camera.position.copy(pivot).add(offset);
+  camera.quaternion.normalize();
+  camera.up.set(0, 1, 0);
+  camera.updateMatrixWorld(true);
+  return true;
+}

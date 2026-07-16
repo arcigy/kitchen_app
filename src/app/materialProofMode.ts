@@ -13,6 +13,7 @@ import {
   type MaterialProofMode
 } from "./materialProofData";
 import { MATERIAL_PBR_OPTIONS as PBR_OPTIONS } from "./materialPbrOptions";
+import { mapWithConcurrency } from "./materialProofSampling";
 
 const SURFACE_PROFILES = [
   "wood_raw_matte",
@@ -46,7 +47,7 @@ export async function startMaterialProofMode(root: HTMLElement): Promise<void> {
   root.className = "material-proof-app";
   root.innerHTML = `<main class="material-proof"><div class="material-proof-loading">Loading Material Proof Mode...</div></main>`;
   const catalogs = await loadCatalogs();
-  const csvBoards = await applySampledPreviewColors(catalogs.csvBoards.slice(0, 20));
+  const csvBoards = catalogs.csvBoards.slice(0, 20);
   const production = demosEntries(catalogs.production);
   const staging = demosEntries(catalogs.staging);
   const state: State = {
@@ -60,6 +61,14 @@ export async function startMaterialProofMode(root: HTMLElement): Promise<void> {
     referenceImageUrls: readReferenceUrls("materialProofDemosReferenceImageUrls"),
     pbrOverrides: readReferenceUrls("materialProofPbrOverridesV2")
   };
+  render(root, state);
+  void refreshSampledPreviewColors(root, state);
+}
+
+async function refreshSampledPreviewColors(root: HTMLElement, state: State): Promise<void> {
+  const sampled = await applySampledPreviewColors(state.csvBoards);
+  if (!root.isConnected || !root.classList.contains("material-proof-app")) return;
+  state.csvBoards = sampled;
   render(root, state);
 }
 
@@ -78,28 +87,21 @@ async function loadCatalogs(): Promise<MaterialProofCatalogs> {
 }
 
 async function applySampledPreviewColors(entries: MaterialProofEntry[]): Promise<MaterialProofEntry[]> {
-  const sampled: MaterialProofEntry[] = [];
-  for (const entry of entries) {
+  return mapWithConcurrency(entries, 4, async (entry) => {
     const imageUrl = demosReferenceImageUrl(entry);
-    if (!imageUrl) {
-      sampled.push(entry);
-      continue;
-    }
+    if (!imageUrl) return entry;
     const colors = await sampleFiveImageColors(proxiedReferenceImageUrl(imageUrl));
-    if (colors.length === 0) {
-      sampled.push(entry);
-      continue;
-    }
+    if (colors.length === 0) return { ...entry, referenceImageAvailable: false };
     const sampledBaseColorHex = averageHexColors(colors);
-    sampled.push({
+    return {
       ...entry,
+      referenceImageAvailable: true,
       sampledColors: colors,
       sampledBaseColorHex,
       baseColorHex: sampledBaseColorHex,
       colorPreviewHex: sampledBaseColorHex
-    });
-  }
-  return sampled;
+    };
+  });
 }
 
 function proxiedReferenceImageUrl(imageUrl: string): string {
@@ -107,6 +109,20 @@ function proxiedReferenceImageUrl(imageUrl: string): string {
 }
 
 async function sampleFiveImageColors(imageUrl: string): Promise<string[]> {
+  let objectUrl = "";
+  try {
+    const response = await fetch(imageUrl, { credentials: "include" });
+    if (!response.ok || response.headers.get("X-Arcigy-Reference-Image") === "unavailable") return [];
+    objectUrl = URL.createObjectURL(await response.blob());
+    return await sampleImageColors(objectUrl);
+  } catch {
+    return [];
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function sampleImageColors(imageUrl: string): Promise<string[]> {
   return new Promise((resolve) => {
     const image = document.createElement("img");
     image.onload = () => {
@@ -216,7 +232,8 @@ function renderFinalComparison(entries: MaterialProofEntry[]): string {
 }
 
 function renderComparisonCard(entry: MaterialProofEntry, index: number): string {
-  const imageUrl = demosReferenceImageUrl(entry) ?? "";
+  const configuredImageUrl = demosReferenceImageUrl(entry) ?? "";
+  const imageUrl = entry.referenceImageAvailable === false ? "" : configuredImageUrl;
   const displayImageUrl = proxiedReferenceImageUrl(imageUrl);
   const pageUrl = demosReferencePageUrl(entry) ?? "";
   return `
@@ -231,7 +248,9 @@ function renderComparisonCard(entry: MaterialProofEntry, index: number): string 
       <div class="material-proof-side-by-side">
         <div>
           <strong>Demos web photo</strong>
-          ${displayImageUrl ? `<img class="material-proof-reference-image" src="${escapeAttr(displayImageUrl)}" alt="${escapeAttr(entry.displayName ?? "Demos board")}" />` : `<div class="material-proof-reference-empty">No CSV image URL</div>`}
+          ${displayImageUrl
+            ? `<img class="material-proof-reference-image" src="${escapeAttr(displayImageUrl)}" alt="${escapeAttr(entry.displayName ?? "Demos board")}" />`
+            : `<div class="material-proof-reference-empty">${configuredImageUrl ? "Demos reference temporarily unavailable" : "No CSV image URL"}</div>`}
           ${pageUrl ? `<a href="${escapeAttr(pageUrl)}" target="_blank" rel="noreferrer">Open Demos link</a>` : ""}
         </div>
         <div>

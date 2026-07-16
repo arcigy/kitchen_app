@@ -30,10 +30,20 @@ export type CreateProjectRequest = {
   notes?: string;
 };
 
+function createIdempotencyKey(prefix: string): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return `${prefix}:${randomUuid}`;
+  const bytes = new Uint8Array(16);
+  globalThis.crypto?.getRandomValues?.(bytes);
+  const random = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `${prefix}:${Date.now().toString(36)}:${random}:${Math.random().toString(36).slice(2)}`;
+}
+
 export async function createProject(input: CreateProjectRequest): Promise<ProjectMetadata> {
+  const idempotencyKey = createIdempotencyKey("project-create");
   const data = await readJson<{ project: ProjectMetadata }>(await fetch("/api/projects", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     credentials: "include",
     body: JSON.stringify(input)
   }));
@@ -56,13 +66,21 @@ export async function saveProject(
   projectId: string,
   appState: ProjectSaveFile["appState"],
   editingSessionId?: string,
-  bomSnapshot?: unknown
+  bomSnapshot?: unknown,
+  expectedSaveRevision?: number
 ): Promise<ProjectSaveFile> {
+  const idempotencyKey = createIdempotencyKey("project-save");
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/save`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     credentials: "include",
-    body: JSON.stringify({ appState, editingSessionId, bomSnapshot, appVersion: import.meta.env?.VITE_APP_VERSION })
+    body: JSON.stringify({
+      appState,
+      editingSessionId,
+      bomSnapshot,
+      expectedSaveRevision,
+      appVersion: import.meta.env?.VITE_APP_VERSION
+    })
   }));
   return data.save;
 }
@@ -83,9 +101,10 @@ export async function loadProjectVersion(projectId: string, versionNumber: numbe
 }
 
 export async function restoreProjectVersion(projectId: string, versionNumber: number): Promise<ProjectSaveFile> {
+  const idempotencyKey = createIdempotencyKey("project-restore");
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions/${versionNumber}/restore`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     credentials: "include",
     body: JSON.stringify({})
   }));
@@ -106,9 +125,10 @@ export async function downloadProject(project: ProjectMetadata): Promise<void> {
 
 export async function importProjectFile(file: File): Promise<ProjectSaveFile> {
   const envelope = await file.text();
+  const idempotencyKey = createIdempotencyKey("project-import");
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch("/api/projects/import", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     credentials: "include",
     body: JSON.stringify({ envelope })
   }));

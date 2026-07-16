@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { getKitchenWorktopSegmentPolygon } from "../layout/worktopGeometry";
+import type { KitchenWorktopSegmentRef } from "../layout/worktopSegmentEditing";
 import type { ColumnInstance, FloorInstance, KitchenWorktopInstance, SelectedKind, WallInstance, WindowInstance } from "../layout/appState";
 import type { DoorInstance, LayoutInstance, SectionInstance } from "./localTypes";
 import { getModulePlanLocalPolygon } from "./planSnap";
@@ -214,6 +216,7 @@ export function createSelectionHighlights(args: {
   getDoors?: () => DoorInstance[];
   getSelectedSubmoduleHighlightTarget?: () => SelectionHighlightTarget | null;
   getSelectedSubmoduleHighlightTargets?: () => SelectionHighlightTarget[];
+  getSelectedWorktopSegment?: () => KitchenWorktopSegmentRef | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
 }) {
   const selectionHighlights = new THREE.Group();
@@ -573,6 +576,30 @@ export function createSelectionHighlights(args: {
     return parts.join("|");
   };
 
+  const getSelectionBounds = () => {
+    const box = new THREE.Box3();
+    const selectedWorktopSegment = args.getSelectedWorktopSegment?.() ?? null;
+    if (selectedWorktopSegment) {
+      const worktop = getWorktopById(selectedWorktopSegment.worktopId);
+      if (worktop) {
+        const polygon = getKitchenWorktopSegmentPolygon(worktop.params, selectedWorktopSegment.segmentIndex);
+        const bottomY = worktop.params.heightMm / 1000 - worktop.params.thicknessMm / 1000;
+        const topY = worktop.params.heightMm / 1000;
+        worktop.root.updateMatrixWorld(true);
+        for (const point of polygon) {
+          box.expandByPoint(worktop.root.localToWorld(new THREE.Vector3(point.x, bottomY, point.z)));
+          box.expandByPoint(worktop.root.localToWorld(new THREE.Vector3(point.x, topY, point.z)));
+        }
+      }
+      if (!box.isEmpty()) return box;
+    }
+
+    for (const target of selectedTargets()) {
+      for (const object of getHighlightTargets(target)) box.expandByObject(object);
+    }
+    return box.isEmpty() ? null : box;
+  };
+
   const updateSelectionHover = (target: SelectionHighlightTarget | null) => {
     const nextKey = target ? `${target.kind}:${target.id}` : null;
     if (nextKey === activeHoverKey) return;
@@ -615,7 +642,14 @@ export function createSelectionHighlights(args: {
     return true;
   };
 
-  return { selectionHighlights, hoverHighlights, updateSelectionHighlights, syncSelectionHighlights, updateSelectionHover };
+  return {
+    selectionHighlights,
+    hoverHighlights,
+    getSelectionBounds,
+    updateSelectionHighlights,
+    syncSelectionHighlights,
+    updateSelectionHover
+  };
 }
 
 export function createUnderlayController(args: {

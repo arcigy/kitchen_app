@@ -61,6 +61,26 @@ async function main() {
     }));
     assert(boot.title === "Arcigy Kitchen Layout" && boot.hasDebug, "Boot/debug check failed", boot);
 
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("error"));
+      window.dispatchEvent(new Event("unhandledrejection"));
+      const until = performance.now() + 75;
+      while (performance.now() < until) {
+        // Deliberately exercise the Long Tasks observer without reading any page data.
+      }
+    });
+    await page.waitForFunction(async () => {
+      const metrics = await fetch("/metrics").then((response) => response.text());
+      return (
+        metrics.includes('arcigy_browser_runtime_errors_total{signal="js_error"} 1') &&
+        metrics.includes('arcigy_browser_runtime_errors_total{signal="unhandled_rejection"} 1') &&
+        /arcigy_browser_long_task_duration_seconds_count [1-9]\d*/.test(metrics) &&
+        /arcigy_browser_memory_used_bytes_count [1-9]\d*/.test(metrics)
+      );
+    }, null, { timeout: 15000 });
+    const runtimeMetrics = await page.evaluate(() => fetch("/metrics").then((response) => response.text()));
+    assert(!/client_arcigy_demo|user_arcigy_owner|projectId|private-project/.test(runtimeMetrics), "Browser metrics exposed customer identifiers", runtimeMetrics);
+
     assert(await clickTopbarTab(page, ["Kitchen", "Kuchyňa"]), "Kitchen tab not found");
     const kitchenTab = await page.evaluate(() => {
       const rows = document.querySelector(".topbar-rows");
@@ -293,6 +313,7 @@ async function main() {
           baseUrl,
           checks: [
             "boot",
+            "privacy-safe-browser-runtime-metrics",
             "debug-api",
             "create-kitchen-scenario",
             "patch-module-params",

@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { assistantToolSummary } from "./toolRegistry";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { fetchExternalText } from "../server/external-http";
 import {
   applyPinoResolvedQueryToParams,
   resolvePinoModuleDescription
@@ -184,15 +185,14 @@ async function callGeminiJson(input: AgentInput): Promise<Partial<AssistantTurnR
   const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key;
   if (!apiKey) return null;
   const model = normalizeGeminiModel(process.env.GEMINI_ASSISTANT_MODEL || (isLikelyFullKitchenRequest(input.message) ? DEFAULT_FLASH_MODEL : DEFAULT_LITE_MODEL));
-  const response = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
+  const { response, text } = await fetchExternalText(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
       generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     })
-  });
-  const text = await response.text();
+  }, { timeoutMs: 30_000, maxBytes: 2 * 1024 * 1024 });
   if (!response.ok) throw new Error(`Gemini assistant request failed: HTTP ${response.status}`);
   const parsed = JSON.parse(text) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const jsonText = parsed.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();

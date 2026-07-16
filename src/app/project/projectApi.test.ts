@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-materials/project-material-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
-import { deleteProject, saveProject } from "./projectApi";
+import { createProject, deleteProject, importProjectFile, restoreProjectVersion, saveProject } from "./projectApi";
 
 describe("project API", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -23,13 +23,15 @@ describe("project API", () => {
       materialQuantities: [{ category: "corpus", quantity: 2.5, unit: "m2" }]
     };
 
-    await saveProject("project_1", appState, "editing_1", bomSnapshot);
+    await saveProject("project_1", appState, "editing_1", bomSnapshot, 7);
 
     const request = fetchMock.mock.calls[0]?.[1];
     if (!request) throw new Error("Missing fetch request options.");
     const body = JSON.parse(String(request.body)) as Record<string, unknown>;
     expect(body.bomSnapshot).toEqual(bomSnapshot);
     expect(body.appState).toEqual(appState);
+    expect(body.expectedSaveRevision).toBe(7);
+    expect((request.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^project-save:/);
   });
 
   it("deletes a project through the tenant-authenticated project route", async () => {
@@ -45,6 +47,28 @@ describe("project API", () => {
       method: "DELETE",
       credentials: "include"
     });
+  });
+
+  it("sends a fresh idempotency key for create and import user actions", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(
+      String(input).endsWith("/import") ? { save: {} } : { project: {} }
+    ), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createProject({ name: "Kitchen", address: "Main 1", contactName: "Jane" });
+    await importProjectFile({ text: async () => "encrypted-envelope" } as File);
+    await restoreProjectVersion("project-1", 2);
+
+    const createHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    const importHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    const restoreHeaders = fetchMock.mock.calls[2]?.[1]?.headers as Record<string, string>;
+    expect(createHeaders["Idempotency-Key"]).toMatch(/^project-create:/);
+    expect(importHeaders["Idempotency-Key"]).toMatch(/^project-import:/);
+    expect(importHeaders["Idempotency-Key"]).not.toBe(createHeaders["Idempotency-Key"]);
+    expect(restoreHeaders["Idempotency-Key"]).toMatch(/^project-restore:/);
   });
 
   it("reports a plain-text server error without leaking a JSON parser failure", async () => {

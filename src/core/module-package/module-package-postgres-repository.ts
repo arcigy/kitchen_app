@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ClientContext } from "../client/client-context";
 import { withSchemaClient } from "../database/postgres-client";
 import { computeModulePackageHash } from "./module-package-file";
@@ -9,6 +10,13 @@ import { systemModulePackageTemplates } from "../../system/module-packages";
 
 type PackageRow = {
   package: unknown;
+};
+
+type PackageRevisionRow = {
+  module_package_id: string;
+  package_hash: string;
+  package_version: string;
+  updated_at: Date | string;
 };
 
 export function createPostgresModulePackageRepository(args: {
@@ -96,6 +104,34 @@ export function createPostgresModulePackageRepository(args: {
     async listPackages(ctx) {
       await ensureSystemPackages(ctx);
       return listPackages(ctx);
+    },
+    async getRevision(ctx) {
+      return withSchemaClient(args.connectionString, args.schema, async (client) => {
+        const result = await client.query<PackageRevisionRow>(
+          `
+            SELECT module_package_id, package_hash, package_version, updated_at
+            FROM arcigy_module_packages
+            WHERE client_id = $1
+            ORDER BY module_package_id
+          `,
+          [ctx.clientId]
+        );
+        const revisionSource = result.rows.map((row) => [
+          row.module_package_id,
+          row.package_hash,
+          row.package_version,
+          new Date(row.updated_at).toISOString()
+        ].join("\u0000")).join("\n");
+        const updatedAtMs = result.rows.reduce(
+          (latest, row) => Math.max(latest, new Date(row.updated_at).getTime()),
+          0
+        );
+        return {
+          count: result.rows.length,
+          updatedAt: updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : null,
+          storageRevision: createHash("sha256").update(revisionSource).digest("hex")
+        };
+      });
     }
   };
 }

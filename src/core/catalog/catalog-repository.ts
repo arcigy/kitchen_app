@@ -6,6 +6,7 @@ import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
 
 export type ClientCatalogRepository = {
   getCatalogForClient(clientId: string): ClientCatalog;
+  getRevision(ctx: ClientContext): Promise<ClientCatalogRevision | null>;
   getCatalog(ctx: ClientContext): Promise<ClientCatalog>;
   saveCatalog(ctx: ClientContext, catalog: ClientCatalog): Promise<void>;
   ensureCatalogExists(ctx: ClientContext): Promise<ClientCatalog>;
@@ -16,6 +17,12 @@ export type ClientCatalogRepository = {
   getModuleByType(ctx: ClientContext, moduleType: string): Promise<ClientCatalog["modules"][number] | null>;
   getPrice(ctx: ClientContext, priceRef: string): Promise<number | null>;
   getKitchenDefaults(ctx: ClientContext): Promise<ClientCatalog["kitchenDefaults"]>;
+};
+
+export type ClientCatalogRevision = {
+  catalogVersion: number;
+  updatedAt: string;
+  storageRevision: string;
 };
 
 function cloneSeed(): ClientCatalogSeed {
@@ -76,11 +83,13 @@ function assertCatalogClient(ctx: ClientContext, catalog: ClientCatalog) {
 }
 
 function createRepositoryFromStore(store: Map<string, ClientCatalog>): ClientCatalogRepository {
+  const revisions = new Map<string, number>();
   const ensureSync = (clientId: string): ClientCatalog => {
     const existing = store.get(clientId);
     if (existing) return cloneCatalog(existing);
     const catalog = catalogFromSeed(clientId);
     store.set(clientId, cloneCatalog(catalog));
+    revisions.set(clientId, 1);
     return catalog;
   };
 
@@ -88,12 +97,21 @@ function createRepositoryFromStore(store: Map<string, ClientCatalog>): ClientCat
     getCatalogForClient(clientId: string): ClientCatalog {
       return ensureSync(clientId);
     },
+    async getRevision(ctx) {
+      const catalog = ensureSync(ctx.clientId);
+      return {
+        catalogVersion: catalog.meta.catalogVersion,
+        updatedAt: catalog.meta.updatedAt,
+        storageRevision: String(revisions.get(ctx.clientId) ?? 1)
+      };
+    },
     async getCatalog(ctx) {
       return ensureSync(ctx.clientId);
     },
     async saveCatalog(ctx, catalog) {
       assertCatalogClient(ctx, catalog);
       store.set(ctx.clientId, cloneCatalog(validateClientCatalog(catalog)));
+      revisions.set(ctx.clientId, (revisions.get(ctx.clientId) ?? 0) + 1);
       invalidateCatalogExactLookupCaches(ctx.clientId);
     },
     async ensureCatalogExists(ctx) {

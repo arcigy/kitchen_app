@@ -1,4 +1,5 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ClientContext } from "../client/client-context";
 import { resolveClientModulePackagePath, resolveClientModulePackagesPath } from "../storage/storage-path-resolver";
@@ -13,6 +14,13 @@ export type ModulePackageRepository = {
   savePackage(ctx: ClientContext, modulePackage: FurnQuoteModulePackage, options?: SaveModulePackageOptions): Promise<FurnQuoteModulePackage>;
   getPackage(ctx: ClientContext, modulePackageId: string): Promise<FurnQuoteModulePackage | null>;
   listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]>;
+  getRevision(ctx: ClientContext): Promise<ModulePackageRepositoryRevision>;
+};
+
+export type ModulePackageRepositoryRevision = {
+  count: number;
+  updatedAt: string | null;
+  storageRevision: string;
 };
 
 export type SaveModulePackageOptions = {
@@ -104,6 +112,34 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
         )
       );
       return packages.filter((modulePackage): modulePackage is FurnQuoteModulePackage => !!modulePackage);
+    },
+    async getRevision(ctx) {
+      const root = resolveClientModulePackagesPath(projectRoot, ctx);
+      let entries: string[];
+      try {
+        entries = await readdir(root);
+      } catch (error: unknown) {
+        if ((error as { code?: string }).code === "ENOENT") {
+          return { count: 0, updatedAt: null, storageRevision: createHash("sha256").update("").digest("hex") };
+        }
+        throw error;
+      }
+      const metadata = (await Promise.all(entries.sort().map(async (entry) => {
+        try {
+          const info = await stat(path.join(root, sanitizeStorageFileName(entry), PACKAGE_FILE_NAME));
+          return { entry, size: info.size, mtimeMs: info.mtimeMs };
+        } catch (error: unknown) {
+          if ((error as { code?: string }).code === "ENOENT") return null;
+          throw error;
+        }
+      }))).filter((value): value is { entry: string; size: number; mtimeMs: number } => value !== null);
+      const updatedAtMs = metadata.reduce((latest, entry) => Math.max(latest, entry.mtimeMs), 0);
+      const revisionSource = metadata.map((entry) => `${entry.entry}\u0000${entry.size}\u0000${entry.mtimeMs}`).join("\n");
+      return {
+        count: metadata.length,
+        updatedAt: updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : null,
+        storageRevision: createHash("sha256").update(revisionSource).digest("hex")
+      };
     }
   };
 }
