@@ -20,13 +20,13 @@ function xlsxVulnerability(overrides: Record<string, unknown> = {}) {
 }
 
 describe("production dependency audit policy", () => {
-  it("accepts only the two reviewed direct xlsx advisories while no fix exists", () => {
+  it("blocks the historical xlsx advisories now that the package is remediated", () => {
     const result = evaluateProductionDependencyAudit(
       report({ xlsx: xlsxVulnerability() }),
     );
 
-    expect(result.blocked).toEqual([]);
-    expect(result.accepted.map((finding) => finding.advisoryId)).toEqual([
+    expect(result.accepted).toEqual([]);
+    expect(result.blocked.map((finding) => finding.advisoryId)).toEqual([
       "1108110",
       "1108111",
     ]);
@@ -35,7 +35,6 @@ describe("production dependency audit policy", () => {
   it("blocks every other high or critical production advisory", () => {
     const result = evaluateProductionDependencyAudit(
       report({
-        xlsx: xlsxVulnerability(),
         unsafe: {
           severity: "critical",
           isDirect: false,
@@ -54,7 +53,7 @@ describe("production dependency audit policy", () => {
     ]);
   });
 
-  it("requires review as soon as an accepted xlsx advisory gets a fix", () => {
+  it("blocks xlsx regardless of whether npm reports a remediation", () => {
     const result = evaluateProductionDependencyAudit(
       report({
         xlsx: xlsxVulnerability({
@@ -69,9 +68,7 @@ describe("production dependency audit policy", () => {
 
     expect(result.accepted).toEqual([]);
     expect(result.blocked).toHaveLength(2);
-    expect(
-      result.blocked.every((finding) => finding.reason.includes("remediation")),
-    ).toBe(true);
+    expect(result.blocked.every((finding) => finding.reason.includes("blocks"))).toBe(true);
   });
 
   it("fails closed for unidentified or malformed high-risk records", () => {
