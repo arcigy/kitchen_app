@@ -2,7 +2,7 @@
 
 Date: 2026-07-16  
 Scope: `kitchen_app`, develop URL, current CapRover topology, PostgreSQL tenant data, supplied 25-area SaaS checklist  
-Change state: local working branch only; not committed, pushed, or deployed
+Change state: verified work is committed on draft PR #7; no develop/production deployment or live data/configuration mutation has occurred
 
 ## Executive result
 
@@ -313,6 +313,14 @@ These are starting targets to validate, not claims of achieved capacity:
 - Fresh public-runtime recheck: develop `/health` and `/ready` return JSON 200 with PostgreSQL readiness. Production `/health` returns JSON 200, but `https://app.arcigy.cloud/ready` returns the frontend HTML instead of a readiness response. The current `workerRequestPipeline` handles `/ready` before static fallback, so this proves stale or misrouted live production rather than a source-code static-fallback bug. It is a live routing/observability defect: it prevents a meaningful production readiness check and must be corrected only after the backup-first P0 sequence, with pre-change route evidence and rollback.
 
 - Fresh local security recheck: the value-safe tracked secret scanner passed all 1,351 text files and the production dependency policy reports no high or critical production advisory. This does not resolve the three historical GitHub secret-scanning alerts, which still require provider-side revocation evidence; no secret value was read or logged.
+
+- Continuation audit against the supplied 25-area SaaS research: the research requirements were rechecked against the source, the tested branch, the current GitHub control plane, and read-only public endpoints. The branch now contains `ad482be1` (`fix(projects): bound stalled catalog startup`): catalog and module startup requests share a 45-second aborting boundary, and Project Manager receives the rejected workspace start instead of leaving an infinite loading state. The focused catalog suite passed 10/10; local typecheck, 261 Vitest files/1,798 tests, production build, and complete isolated file-storage UI regression passed with project create/open/save/reopen, FQP import/reload, pricing, BOM, modules, materials, accessibility, and zero browser-console errors. GitHub Actions run `29532670599` then passed the same gates plus the encrypted-worker image, disposable PostgreSQL restore drill, SBOM, dependency policy, and CodeQL. The draft PR is clean and has not been merged or deployed.
+
+- Fresh live boundary evidence after that CI run: develop `/health` returned JSON 200 and `/ready` returned PostgreSQL JSON 200 with 31 ms reported latency, but its root still references `/assets/index-CJNmEugv.js`, so it cannot contain the current startup recovery fix. Production `/health` returned JSON 200 while production `/ready` still returned frontend HTML. This separates source correctness from live deployment correctness: no project/catalog/module/customer row, service definition, route, credential, backup object, or storage file was changed during the recheck.
+
+- Function-removal decision: none. The measured initial catalog payload remains an operational cost, but its active and inactive materials/components, customer-specific rules, and historical project references are product data rather than safe dead functionality. The approved preservation-safe direction remains revision-aware compression/prefetch now, followed only by characterized project-aware catalog partitioning; no catalog field, module, export, editor behavior, or historical record is recommended for deletion.
+
+- Current 100-percent gate: not reached. The remaining P0s are independent live prerequisites: off-host account/key/first-object/isolated real restore proof, develop-vs-production schema/object-prefix separation with a deliberate decision about development data, persistent application storage migration with checksum/redeploy proof, production readiness routing correction, and provider-side verification/revocation of historical Google keys. The user explicitly deferred the Backblaze billing/account prerequisite; local code and a green CI run cannot substitute for those live proofs.
 
 ## Definition of Done for this program
 
