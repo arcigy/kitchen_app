@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 import {
   assertDisposableContainerName,
   assertEquivalentRestoreEvidence,
@@ -53,8 +54,9 @@ describe("PostgreSQL restore drill safety config", () => {
   it("requires an absolute portable PostgreSQL binary directory", () => {
     expect(() => resolvePortablePostgresBin({})).toThrow("ARCIGY_RESTORE_DRILL_POSTGRES_BIN");
     expect(() => resolvePortablePostgresBin({ ARCIGY_RESTORE_DRILL_POSTGRES_BIN: "pgsql/bin" })).toThrow("absolute");
-    expect(resolvePortablePostgresBin({ ARCIGY_RESTORE_DRILL_POSTGRES_BIN: "C:\\tools\\pgsql\\bin" }))
-      .toBe("C:\\tools\\pgsql\\bin");
+    const absoluteBinPath = path.resolve("tools", "pgsql", "bin");
+    expect(resolvePortablePostgresBin({ ARCIGY_RESTORE_DRILL_POSTGRES_BIN: absoluteBinPath }))
+      .toBe(path.normalize(absoluteBinPath));
   });
 
   it("generates and validates only disposable resource names", () => {
