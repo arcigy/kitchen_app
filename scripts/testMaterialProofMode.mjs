@@ -17,6 +17,24 @@ async function main() {
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zq9sAAAAASUVORK5CYII=",
     "base64"
   );
+  const csvBoards = Array.from({ length: 20 }, (_, index) => ({
+    catalogType: "demosDecorMapping",
+    vendor: "demos",
+    vendorDecorId: `demos_ci_${index + 1}`,
+    vendorSku: index === 0 ? "495386" : `49538${index}`,
+    displayName: `Demos CI board ${index + 1}`,
+    targetInternalMaterialId: "wood_fine_grain_neutral_template",
+    pbrMaterialId: "wood_light_plain",
+    proceduralTemplate: "wood_fine_grain_neutral_template",
+    colorPreviewHex: "#a8835a",
+    grainColorHex: "#6f4425",
+    mappingStatus: "mapped",
+    mappingLocked: true,
+    confidence: 0.9,
+    productionSafe: true,
+    usesExternalVendorTexture: false,
+    demosReferenceImageUrl: "https://reference.invalid/demos-ci.png"
+  }));
   const consoleErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
@@ -24,6 +42,13 @@ async function main() {
 
   try {
     await installAuthSession(page);
+    await page.route("**/api/material-proof/catalogs", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ csvBoards, production: [], staging: [] })
+      });
+    });
     await page.route("**/api/material-proof/reference-image**", async (route) => {
       if (route.request().resourceType() === "fetch") {
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -35,9 +60,8 @@ async function main() {
     await page.getByRole("heading", { name: "Material Proof Mode" }).waitFor({ timeout: 5000 });
     const firstRenderMs = Date.now() - startedAt;
     await page.getByText("NO DEMOS TEXTURE USED").first().waitFor({ timeout: 30000 });
-    // Sampling runs after the first render and exercises 20 proxied image
-    // requests; shared Linux runners can take longer than the local baseline.
-    await page.locator(".material-proof-color-chip").first().waitFor({ timeout: 30000 });
+    // Sampling runs after the first render from the deterministic 20-board fixture.
+    await page.locator(".material-proof-color-chip").first().waitFor({ timeout: 15000 });
 
     const proof = await page.evaluate(() => {
       const text = document.body.textContent || "";
