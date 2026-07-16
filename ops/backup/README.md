@@ -29,8 +29,11 @@ ARCIGY_BACKUP_PART_BYTES=10485760
 ```
 
 The bucket must already have default **Compliance** Object Lock retention.
-The worker intentionally has no delete capability; lifecycle/retention changes
-are a separate, approval-required administrator operation.
+At the time of the first deployment, verify both the retention period and the
+mode in the provider UI or API; a displayed day count alone does not prove that
+the bucket is in Compliance mode. The worker intentionally has no delete
+capability; lifecycle/retention changes are a separate, approval-required
+administrator operation.
 
 ## Restore proof
 

@@ -45,12 +45,14 @@ a newly named loopback `arcigy_restore_*` target, so it cannot target the live
 CapRover database.
 
 This is implementation and test evidence only. It is not a live backup until a
-single private CapRover worker is configured with server-side secrets, B2
-default Compliance retention is verified, a first object is uploaded, and a
-selected object is restored into an isolated PostgreSQL 16 target. The current
-B2 key shown during setup has broader permissions than this worker accepts, so
-it must be replaced by a dedicated least-privilege key before deployment. Do
-not use the broad key as a production backup credential.
+single private CapRover worker is configured with server-side secrets, a first
+object is uploaded, and a selected object is restored into an isolated
+PostgreSQL 16 target. The B2 bucket has a displayed 35-day default Object Lock
+retention period, but the provider UI did not independently expose whether its
+mode is Compliance; verify the mode before deployment. The existing B2
+application key has broader permissions than this worker accepts, so it must be
+replaced by a dedicated least-privilege key before deployment. Do not use the
+broad key as a production backup credential.
 
 ## P0 credential containment prerequisite
 
