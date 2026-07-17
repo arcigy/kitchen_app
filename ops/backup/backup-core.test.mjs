@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { authorizeB2 } from "./b2-native.mjs";
 import { hasExclusiveAdvisoryLock } from "./backup-runner.mjs";
+import { Readable } from "node:stream";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { encryptReadableToFile } from "./filesystem-backup-runner.mjs";
+import {
+  buildFilesystemBackupPath,
+  buildIsolatedDatabaseRestoreScript,
+  buildProductionDumpScript,
+  selectLatestFilesystemBackup,
+  validateFilesystemBackupEnvironment,
+  validateFilesystemRestoreEnvironment
+} from "./filesystem-backup-core.mjs";
 import {
   BACKUP_MAGIC,
   buildBackupObjectKey,
@@ -91,6 +104,79 @@ describe("Arcigy off-host backup contract", () => {
       expect(globalThis.fetch).toHaveBeenCalledWith("https://api.backblazeb2.com/b2api/v4/b2_authorize_account", expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Basic /u) }) }));
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("validates an acknowledged absolute filesystem target and contained restore artifact", () => {
+    const root = path.resolve("C:/Arcigy Backups/Production");
+    const artifact = buildFilesystemBackupPath(root, new Date("2026-07-17T12:34:56.789Z"));
+    const env = {
+      ARCIGY_BACKUP_OFFSITE_ACK: "true",
+      ARCIGY_BACKUP_TARGET_ROOT: root,
+      ARCIGY_BACKUP_ENCRYPTION_PASSPHRASE: safeEnvironment.ARCIGY_BACKUP_ENCRYPTION_PASSPHRASE,
+      ARCIGY_BACKUP_SSH_HOST: "178.104.175.242",
+      ARCIGY_BACKUP_SSH_USER: "root",
+      ARCIGY_BACKUP_SSH_KNOWN_HOSTS: path.resolve("C:/Arcigy/.ssh-known-hosts"),
+      ARCIGY_RESTORE_ISOLATED: "true",
+      ARCIGY_RESTORE_FILE: artifact
+    };
+    expect(validateFilesystemBackupEnvironment(env)).toMatchObject({ targetRoot: root, intervalHours: 24 });
+    expect(validateFilesystemRestoreEnvironment(env).artifactPath).toBe(artifact);
+    expect(validateFilesystemRestoreEnvironment({ ...env, ARCIGY_RESTORE_FILE: "", ARCIGY_RESTORE_LATEST: "true" })).toMatchObject({ selectLatest: true, artifactPath: undefined });
+    expect(artifact.replaceAll("\\", "/")).toContain("2026/07/17/2026-07-17T12-34-56-789Z-postgres-prod.pgdump.arcigy");
+    expect(() => validateFilesystemRestoreEnvironment({ ...env, ARCIGY_RESTORE_FILE: path.resolve(root, "../other.pgdump.arcigy") })).toThrow(/inside ARCIGY_BACKUP_TARGET_ROOT/);
+    expect(() => validateFilesystemBackupEnvironment({ ...env, ARCIGY_BACKUP_OFFSITE_ACK: "false" })).toThrow(/OFFSITE_ACK/);
+  });
+
+  it("uses fixed production and isolated restore service contracts", () => {
+    const dump = buildProductionDumpScript();
+    expect(dump).toContain("srv-captain--kitchenapp-db");
+    expect(dump).toContain("--schema=prod");
+    expect(dump).toContain("--format=custom");
+    expect(dump).toContain("flock --nonblock /tmp/arcigy-production-backup.lock");
+    expect(dump).not.toContain("ARCIGY_BACKUP");
+    const restore = buildIsolatedDatabaseRestoreScript("0123456789abcdef");
+    expect(restore).toContain("--network none");
+    expect(restore).toContain("com.arcigy.restore-drill=true");
+    expect(restore).toContain("postgres:16-alpine");
+    expect(restore).toContain("docker rm -f");
+    expect(restore).toContain("rowCountSha256");
+    expect(restore).not.toContain("kitchenapp\"");
+  });
+
+  it("streams an authenticated filesystem artifact without plaintext temp output", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "arcigy-filesystem-backup-test-"));
+    const targetPath = path.join(directory, "synthetic.pgdump.arcigy");
+    const plaintext = Buffer.from("synthetic production pg_dump fixture");
+    try {
+      const result = await encryptReadableToFile({
+        readable: Readable.from([plaintext.subarray(0, 10), plaintext.subarray(10)]),
+        targetPath,
+        passphrase: safeEnvironment.ARCIGY_BACKUP_ENCRYPTION_PASSPHRASE
+      });
+      const encrypted = await readFile(targetPath);
+      expect(result.plaintextBytes).toBe(plaintext.length);
+      expect(result.encryptedBytes).toBe(encrypted.length);
+      expect(decryptBackupPayload(encrypted, safeEnvironment.ARCIGY_BACKUP_ENCRYPTION_PASSPHRASE)).toEqual(plaintext);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("selects only the lexically latest completed encrypted database artifact", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "arcigy-filesystem-latest-test-"));
+    try {
+      const olderDirectory = path.join(directory, "2026", "07", "16");
+      const newerDirectory = path.join(directory, "2026", "07", "17");
+      await mkdir(olderDirectory, { recursive: true });
+      await mkdir(newerDirectory, { recursive: true });
+      await writeFile(path.join(olderDirectory, "2026-07-16T00-00-00-000Z-postgres-prod.pgdump.arcigy"), "older");
+      const newest = path.join(newerDirectory, "2026-07-17T00-00-00-000Z-postgres-prod.pgdump.arcigy");
+      await writeFile(newest, "newest");
+      await writeFile(`${newest}.partial-test`, "partial");
+      await expect(selectLatestFilesystemBackup(directory)).resolves.toBe(newest);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

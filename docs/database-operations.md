@@ -101,7 +101,7 @@ Remove-Item Env:PROJECT_DATABASE_URL -ErrorAction SilentlyContinue
 npm run test:db-restore-drill
 ```
 
-This proves the repository migration and logical restore path on synthetic data. It does not prove that production has an automated off-host backup, WAL/PITR, approved retention, or a successful restore of a real encrypted backup.
+This proves the repository migration and logical restore path on synthetic data. Separately, the filesystem backup runner now has a real encrypted production artifact, daily shared-Google-Drive schedule, weekly latest-artifact restore schedule, and exact isolated real-restore evidence recorded in the SaaS audit. WAL/PITR remains intentionally deferred while the selected RPO is 24 hours; require it before approving a tighter RPO.
 
 When Docker is unavailable, use the portable backend with an explicitly reviewed PostgreSQL 16 binary directory:
 
