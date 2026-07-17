@@ -1,17 +1,18 @@
 # Arcigy P0 infrastructure migration plan
 
 Date: 2026-07-17
-State: partially executed; the production-to-develop database snapshot below is complete, but no CapRover service or production data was changed
+State: partially executed; the production-to-develop snapshot, isolated persistent develop service, canonical develop cutover, redeploy durability proof, and live write-isolation proof are complete. Production application files and production service remain unchanged.
 
 Use together with `SAAS_SCALE_READINESS_AUDIT_2026-07-15.md`, `SAAS_OPERATIONS_RUNBOOK.md`, and `release-checklist.md`.
 
 ## Fresh read-only evidence
 
-The live CapRover inspection refreshed on 2026-07-16 proved:
+The live CapRover inspection refreshed on 2026-07-17 proves:
 
-- host root disk: 38 GB total, 35 GB used, 1.5 GB free, 97%;
+- host root disk: about 38 GB total, 45% used, and about 20.6 GB free; the earlier 97%-used condition was cleared outside this audit without any image deletion by this run;
 - Docker images: 28.04 GB, with 26.73 GB reported reclaimable;
-- `arcigy-kitchen-develop`: `APP_ENV=prod`, `DATABASE_SCHEMA=prod`, no mount;
+- `arcigy-kitchen-develop`: `APP_ENV=dev`, `DATABASE_SCHEMA=dev`, object prefix `dev`, PostgreSQL project storage, one replica, and named persistent volume `captain--arcigy-kitchen-develop-next-storage` mounted at `/app/storage`;
+- `arcigy-kitchen-develop-legacy-20260717`: retained prior production-bound develop image for explicit rollback;
 - `kitchenapp`: `APP_ENV=prod`, `DATABASE_SCHEMA=prod`, no mount;
 - production `/app/storage`: approximately 56 MB in 23 files inside the running container;
 - PostgreSQL data uses the persistent volume `captain--kitchenapp-db-data`;
@@ -20,9 +21,9 @@ The live CapRover inspection refreshed on 2026-07-16 proved:
 - the `prod` schema has all 4 repository migrations, 3 projects, 3 active saves, and 19 versions; the existing `dev` schema has only migration `0001`, zero projects, zero saves, and only 5 module packages, so switching develop to it without an approved migrate-and-seed/copy step would hide current projects and modules;
 - GitHub provider secret scanning and push protection are enabled, but three unresolved historical Google API key alerts remain: one in `.env.bak` and two in `GEMINI.md`; one historical line labels its key as the production Railway key. Current CapRover definitions for `arcigy-kitchen-develop` and `kitchenapp` do not contain `GEMINI_API_KEY`.
 
-The repository deploy workflow now has a fail-closed preflight for the target app definition. It refuses a missing app, develop-to-production namespace cross-wiring, ephemeral or read-only `/app/storage`, multiple replicas with local volume storage, and volume-changing service overrides. A read-only check confirms the current develop definition is rejected at `APP_ENV`; this is a guardrail, not a substitute for the approved migration below.
+The repository deploy workflow has a fail-closed preflight for the target app definition. It refuses a missing app, develop-to-production namespace cross-wiring, ephemeral or read-only `/app/storage`, multiple replicas with local volume storage, and volume-changing service overrides. The canonical develop definition now passes that preflight exactly.
 
-Both worker entrypoints also fail before repository creation when a production build is configured with file/implicit project storage, a missing database connection, an implicit namespace, or mismatched environment/schema/object prefix. A real negative startup probe exited without opening the worker port and without exposing its database URL. This closes the silent production fallback path locally, but the current live develop namespace and mount remain unchanged until the approved migration.
+Both worker entrypoints also fail before repository creation when a production build is configured with file/implicit project storage, a missing database connection, an implicit namespace, or mismatched environment/schema/object prefix. A real negative startup probe exited without opening the worker port and without exposing its database URL. The live canonical develop service now satisfies this boundary and returns PostgreSQL readiness JSON.
 
 Database readiness now verifies the complete ordered repository migration manifest, not only the latest migration marker. The manifest is regression-locked to every SQL file, and a schema missing any earlier migration fails before application work; the check is read-only and never auto-migrates live data.
 
@@ -89,7 +90,7 @@ The operator must provide the approved backup destination and credentials throug
 
 The owner explicitly approved a compatibility-testing snapshot of the current production data into `dev`. The repository command migrated only `dev`, then copied `prod` to `dev` in one repeatable-read transaction. It permits only that exact direction, rejects schema/table/column/foreign-key mismatches and external references, truncates only `dev`, verifies an order-independent content fingerprint plus row count after every copied table, and rolls the full `dev` replacement back on any failure. Authentication sessions and migration metadata are deliberately excluded, so a development browser must sign in again and production sessions are never copied.
 
-The completed run copied 3 projects, 3 active saves, 19 project versions, 21 module packages, 2 client catalogs, 2 organizations, and the related tenant identities/memberships. Production was read-only throughout. This completes only the database snapshot portion of step 4: the public develop CapRover service remains on the old production namespace and must not be switched until its separate durable file storage, deploy verification, and write-isolation proof exist.
+The completed run copied 3 projects, 3 active saves, 19 project versions, 21 module packages, 2 client catalogs, 2 organizations, and the related tenant identities/memberships. Production was read-only throughout. The canonical public develop service now uses this `dev` namespace and its separate persistent volume. A temporary project created through the authenticated live API appeared only in develop, was absent from the retained production-bound rollback service, and was deleted with both list counts restored.
 
 ## Mandatory execution order
 
