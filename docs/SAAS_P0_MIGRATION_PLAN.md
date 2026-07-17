@@ -1,7 +1,7 @@
 # Arcigy P0 infrastructure migration plan
 
-Date: 2026-07-16  
-State: execution plan only; no live mutation is authorized by this document
+Date: 2026-07-17
+State: partially executed; the production-to-develop database snapshot below is complete, but no CapRover service or production data was changed
 
 Use together with `SAAS_SCALE_READINESS_AUDIT_2026-07-15.md`, `SAAS_OPERATIONS_RUNBOOK.md`, and `release-checklist.md`.
 
@@ -85,6 +85,12 @@ Recommended baseline:
 
 The operator must provide the approved backup destination and credentials through the server secret store. Never put credentials in this repository, commands committed to Git, logs, or chat.
 
+## Executed develop database snapshot (2026-07-17)
+
+The owner explicitly approved a compatibility-testing snapshot of the current production data into `dev`. The repository command migrated only `dev`, then copied `prod` to `dev` in one repeatable-read transaction. It permits only that exact direction, rejects schema/table/column/foreign-key mismatches and external references, truncates only `dev`, verifies an order-independent content fingerprint plus row count after every copied table, and rolls the full `dev` replacement back on any failure. Authentication sessions and migration metadata are deliberately excluded, so a development browser must sign in again and production sessions are never copied.
+
+The completed run copied 3 projects, 3 active saves, 19 project versions, 21 module packages, 2 client catalogs, 2 organizations, and the related tenant identities/memberships. Production was read-only throughout. This completes only the database snapshot portion of step 4: the public develop CapRover service remains on the old production namespace and must not be switched until its separate durable file storage, deploy verification, and write-isolation proof exist.
+
 ## Mandatory execution order
 
 ### 0. Change freeze and evidence
@@ -155,7 +161,7 @@ production: APP_ENV=prod  DATABASE_SCHEMA=prod  object prefix=prod
 ```
 
 - create and migrate schema `dev` using the current transactional migration command;
-- populate it with synthetic data or the explicitly approved tenant snapshot;
+- populate it with synthetic data or the explicitly approved tenant snapshot; **completed 2026-07-17 with the approved current production snapshot**;
 - switch only `arcigy-kitchen-develop` to the `dev` namespace and develop storage volume;
 - verify that a create/save/delete in develop changes no production row count, timestamp, object key, or file checksum;
 - run login, project list/open/save/reopen, catalog, Materials, pricing/BOM, export/render, and cross-tenant negative tests.

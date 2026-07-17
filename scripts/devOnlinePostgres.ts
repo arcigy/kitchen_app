@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { Client } from "pg";
+import { snapshotProductionToDev } from "./productionSnapshotToDev";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_LOCAL_PORT = 55432;
@@ -83,6 +84,10 @@ function waitForPort(host: string, port: number, tunnel: ChildProcess, timeoutMs
 }
 
 async function main() {
+  const snapshotProductionToDevRequested = process.argv.includes("--snapshot-prod-to-dev");
+  if (snapshotProductionToDevRequested && process.env.ARCIGY_APPROVE_PRODUCTION_SNAPSHOT !== "true") {
+    throw new Error("Set ARCIGY_APPROVE_PRODUCTION_SNAPSHOT=true to copy prod data into dev.");
+  }
   const envFile = process.env.CAPROVER_ENV_FILE ?? path.join(os.homedir(), "Downloads", "CAPROVER", ".env");
   const knownHostsFile = process.env.CAPROVER_SSH_KNOWN_HOSTS ?? path.join(path.dirname(envFile), ".ssh-known-hosts");
   const localEnv = parseEnvFile(await readFile(envFile, "utf-8"));
@@ -182,9 +187,34 @@ async function main() {
   const username = requireValue(databaseEnv, "POSTGRES_USER");
   const database = requireValue(databaseEnv, "POSTGRES_DB");
   const databaseUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(requireValue(databaseEnv, "POSTGRES_PASSWORD"))}@127.0.0.1:${localPort}/${encodeURIComponent(database)}`;
-  const verification = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000, query_timeout: 5_000 });
+  const verification = new Client({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5_000,
+    query_timeout: snapshotProductionToDevRequested ? 125_000 : 5_000
+  });
   await verification.connect();
   await verification.query("SELECT 1");
+  if (snapshotProductionToDevRequested) {
+    try {
+      const migrationRunner = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+      await execFileAsync(process.execPath, [migrationRunner, "scripts/dbMigrate.ts", "--schema", "dev", "--app-env", "dev"], {
+        env: {
+          ...process.env,
+          DATABASE_URL: databaseUrl,
+          APP_ENV: "dev",
+          DATABASE_SCHEMA: "dev",
+          ARCIGY_OBJECT_STORAGE_PREFIX: "dev"
+        },
+        windowsHide: true
+      });
+      const result = await snapshotProductionToDev(verification);
+      console.log(JSON.stringify({ ok: true, sourceSchema: "prod", targetSchema: "dev", ...result }));
+    } finally {
+      await verification.end().catch(() => undefined);
+      stopTunnel();
+    }
+    return;
+  }
   await verification.end();
 
   process.env.DATABASE_URL = databaseUrl;
