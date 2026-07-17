@@ -1,4 +1,8 @@
-import { reportBrowserRuntime, type BrowserRuntimeMetric } from "./clientJourneyTelemetry";
+import {
+  reportBrowserRuntime,
+  type BrowserRuntimeFailureKind,
+  type BrowserRuntimeMetric
+} from "./clientJourneyTelemetry";
 
 const MAX_LONG_TASKS = 100;
 const MAX_RUNTIME_FAILURES = 20;
@@ -38,12 +42,12 @@ export function createBrowserRuntimeTelemetry(deps: BrowserRuntimeTelemetryDepen
     }
   };
 
-  const reportFailure = (signal: RuntimeFailureSignal): void => {
+  const reportFailure = (signal: RuntimeFailureSignal, kind: BrowserRuntimeFailureKind): void => {
     const count = signal === "js_error" ? jsErrorCount : rejectionCount;
     if (!started || count >= MAX_RUNTIME_FAILURES) return;
     if (signal === "js_error") jsErrorCount += 1;
     else rejectionCount += 1;
-    send({ signal, value: 1 });
+    send({ signal, value: 1, kind });
   };
 
   const reportLongTask = (durationMs: number): void => {
@@ -52,8 +56,8 @@ export function createBrowserRuntimeTelemetry(deps: BrowserRuntimeTelemetryDepen
     send({ signal: "long_task", value: Math.min(MAX_LONG_TASK_MS, durationMs) });
   };
 
-  const onJsError: EventListener = () => reportFailure("js_error");
-  const onUnhandledRejection: EventListener = () => reportFailure("unhandled_rejection");
+  const onJsError: EventListener = (event) => reportFailure("js_error", classifyBrowserRuntimeFailure(event));
+  const onUnhandledRejection: EventListener = () => reportFailure("unhandled_rejection", "runtime");
 
   const sampleMemory = async (): Promise<void> => {
     if (!started || memorySampleCount >= MAX_MEMORY_SAMPLES) return;
@@ -151,4 +155,16 @@ export function startBrowserRuntimeTelemetry(): void {
 
 export function sampleBrowserRuntimeMemory(): void {
   void getDefaultController()?.sampleMemory();
+}
+
+export function classifyBrowserRuntimeFailure(event: Event): BrowserRuntimeFailureKind {
+  const target = event.target;
+  const tagName = target && typeof target === "object" && "tagName" in target && typeof target.tagName === "string"
+    ? target.tagName.toLowerCase()
+    : "";
+  if (tagName === "img") return "image";
+  if (tagName === "link") return "link";
+  if (tagName === "script") return "script";
+  if (tagName === "style") return "style";
+  return "runtime" in event || "message" in event ? "runtime" : "unknown";
 }

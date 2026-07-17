@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  classifyBrowserRuntimeFailure,
   createBrowserRuntimeTelemetry,
   type BrowserRuntimeTelemetryDependencies
 } from "./browserRuntimeTelemetry";
@@ -48,11 +49,19 @@ describe("browser runtime telemetry", () => {
     await vi.waitFor(() => expect(harness.send).toHaveBeenCalledTimes(4));
 
     expect(harness.send.mock.calls.map(([metric]) => metric)).toEqual([
-      { signal: "js_error", value: 1 },
-      { signal: "unhandled_rejection", value: 1 },
+      { signal: "js_error", value: 1, kind: "unknown" },
+      { signal: "unhandled_rejection", value: 1, kind: "runtime" },
       { signal: "long_task", value: 125.5 },
       { signal: "memory_used", value: 256 * 1024 * 1024 }
     ]);
+  });
+
+  it("classifies only fixed resource categories without retaining error details", () => {
+    expect(classifyBrowserRuntimeFailure({ target: { tagName: "IMG" } } as unknown as Event)).toBe("image");
+    expect(classifyBrowserRuntimeFailure({ target: { tagName: "SCRIPT" } } as unknown as Event)).toBe("script");
+    expect(classifyBrowserRuntimeFailure({ target: { tagName: "LINK" } } as unknown as Event)).toBe("link");
+    expect(classifyBrowserRuntimeFailure({ message: "private message" } as unknown as Event)).toBe("runtime");
+    expect(classifyBrowserRuntimeFailure(new Event("error"))).toBe("unknown");
   });
 
   it("bounds per-page volume and clamps numeric measurements", async () => {

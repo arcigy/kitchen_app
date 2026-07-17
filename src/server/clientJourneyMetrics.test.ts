@@ -32,6 +32,8 @@ describe("client journey metrics", () => {
       signal: "memory_used",
       value: 256 * 1024 * 1024
     });
+    expect(parseClientRuntimeMetric({ signal: "js_error", value: 1, kind: "image" })).toEqual({ signal: "js_error", value: 1, kind: "image" });
+    expect(parseClientRuntimeMetric({ signal: "js_error", value: 1 })).toEqual({ signal: "js_error", value: 1, kind: "unknown" });
     expect(parseClientRuntimeMetric({ signal: "js_error", value: 1, url: "private" })).toBeNull();
     expect(parseClientRuntimeMetric({ signal: "js_error", value: 2 })).toBeNull();
     expect(parseClientRuntimeMetric({ signal: "private", value: 1 })).toBeNull();
@@ -42,8 +44,8 @@ describe("client journey metrics", () => {
     const metrics = createClientJourneyMetrics();
     metrics.record({ journey: "project_open", variant: "loaded", outcome: "success", durationMs: 4_250 });
     metrics.record({ journey: "project_open", variant: "loaded", outcome: "success", durationMs: 5_500 });
-    metrics.recordRuntime({ signal: "js_error", value: 1 });
-    metrics.recordRuntime({ signal: "unhandled_rejection", value: 1 });
+    metrics.recordRuntime({ signal: "js_error", value: 1, kind: "image" });
+    metrics.recordRuntime({ signal: "unhandled_rejection", value: 1, kind: "runtime" });
     metrics.recordRuntime({ signal: "long_task", value: 125 });
     metrics.recordRuntime({ signal: "memory_used", value: 256 * 1024 * 1024 });
     const output = metrics.render();
@@ -52,6 +54,8 @@ describe("client journey metrics", () => {
     expect(output).toContain('arcigy_browser_journey_duration_seconds_bucket{journey="project_open",variant="loaded",outcome="success",le="10"} 2');
     expect(output).toContain('arcigy_browser_runtime_errors_total{signal="js_error"} 1');
     expect(output).toContain('arcigy_browser_runtime_errors_total{signal="unhandled_rejection"} 1');
+    expect(output).toContain('arcigy_browser_runtime_failure_categories_total{signal="js_error",kind="image"} 1');
+    expect(output).toContain('arcigy_browser_runtime_failure_categories_total{signal="unhandled_rejection",kind="runtime"} 1');
     expect(output).toContain('arcigy_browser_long_task_duration_seconds_bucket{le="0.25"} 1');
     expect(output).toContain("arcigy_browser_long_task_duration_seconds_sum 0.125");
     expect(output).toContain('arcigy_browser_memory_used_bytes_bucket{le="268435456"} 1');
@@ -78,10 +82,11 @@ describe("client journey metrics", () => {
     expect(sent.at(-1)).toEqual({ status: 202, data: { ok: true } });
     expect(metrics.render()).toContain('journey="app_data_load",variant="network",outcome="success"');
 
-    deps.readJsonBody.mockResolvedValueOnce({ signal: "js_error", value: 1 });
+    deps.readJsonBody.mockResolvedValueOnce({ signal: "js_error", value: 1, kind: "image" });
     await handleClientJourneyMetricsApi(req, res, new URL("http://localhost/api/client-metrics"), deps);
     expect(sent.at(-1)).toEqual({ status: 202, data: { ok: true } });
     expect(metrics.render()).toContain('arcigy_browser_runtime_errors_total{signal="js_error"} 1');
+    expect(metrics.render()).toContain('arcigy_browser_runtime_failure_categories_total{signal="js_error",kind="image"} 1');
 
     deps.readJsonBody.mockResolvedValueOnce({ tenantId: "client-b" });
     await handleClientJourneyMetricsApi(req, res, new URL("http://localhost/api/client-metrics"), deps);

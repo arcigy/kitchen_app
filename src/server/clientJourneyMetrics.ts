@@ -50,10 +50,18 @@ export type ClientJourneyMetric = {
   durationMs: number;
 };
 
-export type ClientRuntimeMetric = {
-  signal: "js_error" | "long_task" | "memory_used" | "unhandled_rejection";
-  value: number;
-};
+type ClientRuntimeFailureKind = "image" | "link" | "runtime" | "script" | "style" | "unknown";
+
+export type ClientRuntimeMetric =
+  | {
+      signal: "js_error" | "unhandled_rejection";
+      value: 1;
+      kind: ClientRuntimeFailureKind;
+    }
+  | {
+      signal: "long_task" | "memory_used";
+      value: number;
+    };
 
 type Aggregate = ClientJourneyMetric & {
   count: number;
@@ -89,15 +97,31 @@ export function parseClientJourneyMetric(value: unknown): ClientJourneyMetric | 
 
 export function parseClientRuntimeMetric(value: unknown): ClientRuntimeMetric | null {
   if (!isRecord(value)) return null;
-  if (Object.keys(value).sort().join("\u0000") !== "signal\u0000value") return null;
+  const keys = Object.keys(value).sort().join("\u0000");
+  if (keys !== "kind\u0000signal\u0000value" && keys !== "signal\u0000value") return null;
   const signal = value.signal;
   const metricValue = value.value;
   if (signal !== "js_error" && signal !== "long_task" && signal !== "memory_used" && signal !== "unhandled_rejection") return null;
   if (typeof metricValue !== "number" || !Number.isFinite(metricValue)) return null;
-  if ((signal === "js_error" || signal === "unhandled_rejection") && metricValue !== 1) return null;
+  if (signal === "js_error" || signal === "unhandled_rejection") {
+    if (metricValue !== 1) return null;
+    const kind = value.kind;
+    if (kind !== undefined && !isClientRuntimeFailureKind(kind)) return null;
+    return { signal, value: 1, kind: kind ?? "unknown" };
+  }
+  if (value.kind !== undefined) return null;
   if (signal === "long_task" && (metricValue < 0 || metricValue > MAX_DURATION_MS)) return null;
   if (signal === "memory_used" && (metricValue < 0 || metricValue > MAX_MEMORY_BYTES)) return null;
   return { signal, value: metricValue };
+}
+
+function isClientRuntimeFailureKind(value: unknown): value is ClientRuntimeFailureKind {
+  return value === "image"
+    || value === "link"
+    || value === "runtime"
+    || value === "script"
+    || value === "style"
+    || value === "unknown";
 }
 
 function metricKey(metric: ClientJourneyMetric): string {
@@ -137,6 +161,7 @@ function appendHistogram(
 export function createClientJourneyMetrics() {
   const aggregates = new Map<string, Aggregate>();
   const runtimeErrorCounts = new Map<ClientRuntimeMetric["signal"], number>();
+  const runtimeFailureKinds = new Map<string, number>();
   const longTasks = createHistogramAggregate(LONG_TASK_BUCKETS_SECONDS.length);
   const memorySamples = createHistogramAggregate(MEMORY_BUCKETS_BYTES.length);
 
@@ -160,6 +185,8 @@ export function createClientJourneyMetrics() {
   const recordRuntime = (metric: ClientRuntimeMetric): void => {
     if (metric.signal === "js_error" || metric.signal === "unhandled_rejection") {
       runtimeErrorCounts.set(metric.signal, (runtimeErrorCounts.get(metric.signal) ?? 0) + 1);
+      const key = `${metric.signal}\u0000${metric.kind}`;
+      runtimeFailureKinds.set(key, (runtimeFailureKinds.get(key) ?? 0) + 1);
       return;
     }
     if (metric.signal === "long_task") {
@@ -177,6 +204,8 @@ export function createClientJourneyMetrics() {
       "# TYPE arcigy_browser_journey_duration_seconds histogram",
       "# HELP arcigy_browser_runtime_errors_total Authenticated browser runtime failures by fixed signal.",
       "# TYPE arcigy_browser_runtime_errors_total counter",
+      "# HELP arcigy_browser_runtime_failure_categories_total Authenticated browser runtime failures by fixed privacy-safe category.",
+      "# TYPE arcigy_browser_runtime_failure_categories_total counter",
       "# HELP arcigy_browser_long_task_duration_seconds Authenticated browser main-thread long-task duration in seconds.",
       "# TYPE arcigy_browser_long_task_duration_seconds histogram",
       "# HELP arcigy_browser_memory_used_bytes Authenticated browser page memory samples in bytes.",
@@ -195,6 +224,10 @@ export function createClientJourneyMetrics() {
     for (const signal of ["js_error", "unhandled_rejection"] as const) {
       const count = runtimeErrorCounts.get(signal);
       if (count) lines.push(`arcigy_browser_runtime_errors_total{signal="${signal}"} ${count}`);
+    }
+    for (const [key, count] of [...runtimeFailureKinds.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      const [signal, kind] = key.split("\u0000");
+      lines.push(`arcigy_browser_runtime_failure_categories_total{signal="${signal}",kind="${kind}"} ${count}`);
     }
     appendHistogram(lines, "arcigy_browser_long_task_duration_seconds", longTasks, LONG_TASK_BUCKETS_SECONDS);
     appendHistogram(lines, "arcigy_browser_memory_used_bytes", memorySamples, MEMORY_BUCKETS_BYTES);
