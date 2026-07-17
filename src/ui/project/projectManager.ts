@@ -1,7 +1,12 @@
 import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import type { ClientRole, OrganizationUser } from "../../core/client/client-types";
-import { findOrganizationUser, organizationUserInitial, organizationUserName } from "../../core/client/organization-users";
+import {
+  findOrganizationUser,
+  organizationUserInitial,
+  organizationUserName,
+  organizationUserPhotoUrl
+} from "../../core/client/organization-users";
 import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
 import {
@@ -232,9 +237,10 @@ function renderActor(users: readonly OrganizationUser[], userId: string, label: 
   row.className = "project-manager-actor";
   const avatar = document.createElement("span");
   avatar.className = "project-manager-actor-avatar";
-  if (user?.photoUrl) {
+  const photoUrl = organizationUserPhotoUrl(user);
+  if (photoUrl) {
     const image = document.createElement("img");
-    image.src = user.photoUrl;
+    image.src = photoUrl;
     image.alt = "";
     avatar.appendChild(image);
   } else {
