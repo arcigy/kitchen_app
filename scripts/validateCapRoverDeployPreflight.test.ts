@@ -145,8 +145,8 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
     expect(workflow).toContain("scripts/verifyReadinessResponse.ts \"$1\"");
     expect(workflow).toContain("if verify_endpoint health && verify_endpoint ready; then");
-    expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(workflow).toContain("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+    expect(workflow).toContain("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
     expect(workflow).toContain("npm run security:dependencies");
     expect(workflow).not.toContain("npm audit --omit=dev --audit-level=critical");
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d+/);
@@ -186,11 +186,11 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain('ARCIGY_RESTORE_DRILL_ISOLATED: "true"');
     expect(workflow).toContain("npm run test:db-restore-drill");
     expect(workflow).not.toContain("npm audit --omit=dev --audit-level=critical");
-    expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
-    expect(workflow).toContain("github/codeql-action/init@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
-    expect(workflow).toContain("github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
-    expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+    expect(workflow).toContain("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
+    expect(workflow).toContain("github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a");
+    expect(workflow).toContain("github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a");
+    expect(workflow).toContain("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
     expect(workflow).toContain("security-events: write");
     expect(workflow).toContain("npm sbom --omit=dev --sbom-format=cyclonedx > sbom.cdx.json");
     expect(workflow).toContain("if-no-files-found: error");
