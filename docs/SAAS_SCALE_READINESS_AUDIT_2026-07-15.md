@@ -1,12 +1,12 @@
 # Arcigy SaaS scale and safety audit
 
 Date: 2026-07-17
-Scope: `kitchen_app`, develop URL, current CapRover topology, PostgreSQL tenant data, supplied 25-area SaaS checklist  
+Scope: `kitchen_app`, develop URL, current CapRover topology, PostgreSQL tenant data, and the supplied 25-area SaaS research checklist.
 Change state: verified work is committed on draft PR #7; the isolated develop snapshot, persistent volume and canonical develop deployment are live. Production rows, files and service remain unchanged.
 
 ## Executive result
 
-The canonical develop URL now runs commit `28ec8688` on an isolated `dev` schema/object prefix and a dedicated persistent volume. The approved production-data snapshot supplies current compatibility projects without copying sessions or allowing develop writes into `prod`. Live authenticated checks proved project list/load, catalog, modules, write isolation and cleanup; a second full deployment preserved the exact storage marker hash. The browser login is credential-safe and has zero console errors.
+The canonical develop URL runs the current verified application slice on an isolated `dev` schema/object prefix and a dedicated persistent volume. The approved production-data snapshot supplies current compatibility projects without copying sessions or allowing develop writes into `prod`. Live authenticated checks proved project list/load, catalog, modules, write isolation and cleanup; a second full deployment preserved the exact storage marker hash. The login is credential-safe, project cards load, and the representative `Website` project opens with its two walls and seven modules. Browser failure telemetry records only fixed privacy-safe categories; a generic boot-time event has not been falsely declared eliminated.
 
 The full local baseline and CI/CodeQL are green. A real encrypted `prod` backup is now stored on the ArciGy shared Google Drive, a daily Windows task completed successfully, and the selected artifact restored into an unnetworked disposable PostgreSQL 16 container with exact production row-count evidence. The current production container has PostgreSQL project storage and no `/app/storage`, uploads, outputs, exports, or mounts, so the previously reported 23-file tree is not present on the canonical production service; the next production release still must create and redeploy-test its required empty persistent mount. Remaining P0 release blockers are the production readiness/persistent-mount deployment and provider-side disposition of three historical Google API keys. The host remains at safe 45% disk use.
 
