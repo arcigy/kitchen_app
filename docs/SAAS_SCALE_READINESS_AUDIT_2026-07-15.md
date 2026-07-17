@@ -339,6 +339,8 @@ These are starting targets to validate, not claims of achieved capacity:
 
 - Production GitHub environment follow-up: the exact `production` environment now exists separately from develop. It requires review by `arcigy`, permits deployments only from branch `main`, and owns `CAPROVER_PRODUCTION_APP=kitchenapp` plus `CAPROVER_PRODUCTION_APP_URL=https://app.arcigy.cloud`. Repository-level CapRover credentials were not read, copied, or changed. Creating this control did not dispatch a workflow, approve a release, change CapRover, mount storage, restart a container, alter routing, or touch customer data. The empty durable `/app/storage` mapping and live production promotion remain explicit approval gates.
 
+- Isolated develop load-smoke follow-up: after isolation and persistent storage were already proven, a deliberately bounded 20.152-second remote read-only health/readiness run used no authentication or data endpoint. Its one virtual user completed 110/110 HTTP 200 requests with zero failures; aggregate p50/p95/p99/max latency was 48.976/80.543/154.154/166.806 ms and `/ready` p95 was 65.190 ms. This is only a develop liveness/readiness observation, not a production, authenticated project/catalog, capacity, spike, soak, failure/recovery, or 1,000-user claim. Larger remote load work remains gated on host and database telemetry.
+
 ## Definition of Done for this program
 
 The program is not 100% complete while a P0 is only documented. Completion requires all P0s fixed and live-verified or explicitly accepted by the user as named residual risks, all preservation workflows passing, a tested restore, isolated develop data, durable files, safe disk headroom, approved deployment, and post-deploy evidence.
