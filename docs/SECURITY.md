@@ -39,7 +39,7 @@ This document defines the engineering security contract for Arcigy. It is not a 
 |---|---|---|
 | Cross-tenant object access | Signed session, live user/tenant/role revalidation, tenant-scoped repositories, composite keys, storage path validation, negative tests | PostgreSQL RLS and least-privilege runtime role |
 | Session theft or stale access | HttpOnly, Secure production cookie, SameSite=Lax, expiry, durable PostgreSQL-backed revocation for new logins, active user/role/tenant revalidation | Re-authentication/MFA for sensitive actions; legacy pre-rollout cookies age out within their existing seven-day expiry |
-| Login abuse | Generic errors, IP+username failed-attempt limiter with bounded memory | Trusted shared/distributed limiter and alerting |
+| Login abuse and credential disclosure | Generic errors, no credential examples in the browser login surface/bundle, IP+username failed-attempt limiter with bounded memory | Trusted shared/distributed limiter and alerting |
 | CSRF, XSS, clickjacking, and foreign origins | Unsafe cookie-authenticated methods validate Origin/Sec-Fetch-Site; token bridge remains separate; enforced CSP limits scripts to same-origin, blocks objects and framing, and `X-Frame-Options: DENY` provides legacy clickjacking defense | Nonce-based styles if the current inline-style product surface is later removed; independent penetration review |
 | Oversized requests | Route-aware JSON limits, early `Content-Length` rejection, streamed overflow rejection, HTTP 413 | Explicit response limits/pagination for every growing list |
 | SSRF/external dependency abuse | Exact host rules, timeouts, size caps, redirect denial, content-type checks | Central egress policy and dependency SLOs |
