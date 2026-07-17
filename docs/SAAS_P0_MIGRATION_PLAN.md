@@ -45,15 +45,12 @@ only; actual `pg_restore` additionally requires an explicit acknowledgement and
 a newly named loopback `arcigy_restore_*` target, so it cannot target the live
 CapRover database.
 
-This is implementation and test evidence only. It is not a live backup until a
-single private CapRover worker is configured with server-side secrets, a first
-object is uploaded, and a selected object is restored into an isolated
-PostgreSQL 16 target. The B2 bucket has a displayed 35-day default Object Lock
-retention period, but the provider UI did not independently expose whether its
-mode is Compliance; verify the mode before deployment. The existing B2
-application key has broader permissions than this worker accepts, so it must be
-replaced by a dedicated least-privilege key before deployment. Do not use the
-broad key as a production backup credential.
+The B2 worker has implementation and test evidence only and is not the selected
+live baseline. The B2 bucket displayed a 35-day default Object Lock period, but
+the provider UI did not independently expose whether its mode is Compliance.
+The existing B2 application key also has broader permissions than the worker
+accepts. Do not deploy that worker or use the broad key as a production backup
+credential while the account is suspended.
 
 As of 2026-07-16, the provider also reports that B2 access is suspended until
 the account is returned to good standing and a phone number is present for API
@@ -85,6 +82,8 @@ Before any Arcigy release:
 6. do not rewrite Git history unless separately approved; revocation is the security fix and history rewriting is only disruptive cleanup.
 
 Credential rotation, provider revocation, GitHub alert resolution, and enabling validity checks are external mutations and require explicit user authorization plus access to the owning Google Cloud/Railway accounts.
+
+Read-only Google Cloud inventory on 2026-07-17 covered all six projects visible to the signed-in owner. Two projects had no API keys and the eight visible current keys in the remaining projects were compared by SHA-256 entirely in memory; none matched alerts 1–3. This proves the exposed values are not any key currently visible to that account, but does not prove provider revocation because the values may be purged or owned by another account/project. Definitive `lookupKey`, revocation evidence, and GitHub alert resolution remain required.
 
 ## Decisions required before execution
 

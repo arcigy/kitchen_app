@@ -22,6 +22,7 @@ Use this checklist before promoting `staging` to `main`.
 - [ ] Deployment `/health` and `/ready` smoke succeeds.
 - [ ] A production-startup negative check proves file/implicit storage and cross-wired namespaces fail before repository creation or port binding, while the selected explicit PostgreSQL namespace starts normally.
 - [ ] The CapRover preflight proves the existing target has the expected environment/schema/object prefix, PostgreSQL mode, one replica, and a writable persistent `/app/storage` mount; missing apps are never created implicitly.
+- [ ] Production is dispatched manually from `main` with target `production`, exact confirmation `DEPLOY PRODUCTION`, separately configured `CAPROVER_PRODUCTION_APP` and `CAPROVER_PRODUCTION_APP_URL`, and a protected `production` GitHub environment. No production variable may fall back to the develop target.
 - [ ] Metrics scrape succeeds with the protected production token and has no tenant/project labels.
 - [ ] An approved request-budget smoke returns 429 with `Retry-After` only after the configured test threshold and does not affect another tenant.
 - [ ] A test mutation produces one `mutation_audit` event correlated by request ID and contains no raw tenant, user, project, session, token, query, or payload data.

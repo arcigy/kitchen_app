@@ -115,6 +115,24 @@ describe("CapRover deployment preflight", () => {
     })).toEqual(expected);
   });
 
+  it("resolves an explicit production expectation without falling back to develop", () => {
+    expect(resolveCapRoverDeployExpectation({
+      CAPROVER_APP: "kitchenapp",
+      CAPROVER_APP_URL: "https://app.arcigy.cloud/",
+      ARCIGY_DEPLOY_APP_ENV: "prod",
+      ARCIGY_DEPLOY_DATABASE_SCHEMA: "prod",
+      ARCIGY_DEPLOY_OBJECT_PREFIX: "prod",
+      ARCIGY_DEPLOY_STORAGE_PATH: "/app/storage"
+    })).toEqual({
+      appName: "kitchenapp",
+      appEnv: "prod",
+      databaseSchema: "prod",
+      objectStoragePrefix: "prod",
+      storageContainerPath: "/app/storage",
+      publicUrl: "https://app.arcigy.cloud/"
+    });
+  });
+
   it("wires the preflight before deploy and fails on missing readiness evidence", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
     const preflight = workflow.indexOf("scripts/validateCapRoverDeployPreflight.ts");
@@ -132,6 +150,26 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain("npm run security:dependencies");
     expect(workflow).not.toContain("npm audit --omit=dev --audit-level=critical");
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d+/);
+  });
+
+  it("keeps develop automatic and makes production manual, main-only, and fail-closed", async () => {
+    const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
+
+    expect(workflow).toMatch(/push:\s+branches:\s+- develop/m);
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("- production");
+    expect(workflow).toContain("inputs.target == 'production' && 'production' || 'develop'");
+    expect(workflow).toContain('DEPLOY_REF" != "refs/heads/main"');
+    expect(workflow).toContain('DEPLOY_CONFIRMATION" != "DEPLOY PRODUCTION"');
+    expect(workflow).toContain("vars.CAPROVER_PRODUCTION_APP");
+    expect(workflow).toContain("vars.CAPROVER_PRODUCTION_APP_URL");
+    expect(workflow).toContain('namespace="prod"');
+    expect(workflow).toContain('namespace="dev"');
+    expect(workflow).toContain('echo "CAPROVER_APP=$selected_app"');
+    expect(workflow).toContain('echo "CAPROVER_APP_URL=$selected_url"');
+    expect(workflow).toContain('os.environ.get("CAPROVER_APP", f"unselected-{os.environ[\'DEPLOY_TARGET\']}"');
+    expect(workflow).not.toContain("vars.CAPROVER_PRODUCTION_APP || vars.CAPROVER_APP");
+    expect(workflow).not.toContain("vars.CAPROVER_PRODUCTION_APP_URL || vars.CAPROVER_APP_URL");
   });
 
   it("runs CI for pull requests and direct protected-branch updates", async () => {

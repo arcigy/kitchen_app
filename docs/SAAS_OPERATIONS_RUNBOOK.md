@@ -83,6 +83,12 @@ npm run ops:storage-manifest -- --verify-source storage-before.json --verify-tar
 
 The tool is permanently read-only. It recursively hashes regular file contents, counts exact bytes/files/directories, records POSIX mode/UID/GID, uses only contained relative paths, rejects symbolic links and special files, detects entries changing during capture, validates manifest digests before comparison, and fails on every missing, extra, content, size, type, owner, group, or mode mismatch. The absolute source and target roots may differ, but their complete relative trees must match. The manifest is evidence only and cannot copy, move, delete, mount, deploy, or authorize cutover.
 
+## Production deployment guard
+
+The CapRover workflow keeps pushes to `develop` on the existing automatic develop path. Production is manual-only and must be dispatched from `main` with target `production` and exact confirmation `DEPLOY PRODUCTION`. Configure `CAPROVER_PRODUCTION_APP` and `CAPROVER_PRODUCTION_APP_URL` separately in a protected `production` GitHub environment; never reuse or fall back to the develop values.
+
+Before the workflow can upload an archive, it reads the existing CapRover definition and fails unless the selected production app already has `prod/prod/prod`, PostgreSQL project storage, one replica, the matching public origin, and a writable persistent `/app/storage` mount. It never creates an app or volume. After deploy it accepts only JSON `/health` and PostgreSQL `/ready`. A failed deploy or readiness check fails the workflow; rollback remains the explicit operator procedure below.
+
 ## Bad deploy
 
 Rollback when health/readiness fail, core smoke fails, tenant access changes unexpectedly, or project/pricing preservation cannot be proven.
@@ -96,7 +102,7 @@ Rollback when health/readiness fail, core smoke fails, tenant access changes une
 
 ## Backup and isolated restore
 
-Current state: no verified off-host backup/PITR/real-backup restore schedule has been approved. This remains P0. A repository-owned synthetic `pg_dump`/`pg_restore` drill now exercises migrations and exact logical restoration inside one labelled disposable PostgreSQL container; it is a CI regression gate, not evidence that a production backup exists. The repository also contains an undeployed, fail-closed B2 streaming backup worker in `ops/backup/`; its focused encryption and permission tests do not prove an actual remote object or restore.
+Current state: the selected RPO 24-hour baseline has a real encrypted production backup on the company ArciGy shared Google Drive, a daily 03:30 task, and a weekly Sunday 05:00 isolated latest-backup restore. The exercised artifact restored into an unnetworked disposable PostgreSQL 16 container and exactly matched live production row-count evidence at 24 tables and 72 rows; measured RTO was 48 seconds against the 4-hour target, and cleanup left no restore container. The encryption secret remains in an ACL-protected operator file outside Git and Drive. PITR is intentionally deferred until a tighter RPO is approved. The B2 worker remains undeployed because the provider account is suspended and is not the selected baseline.
 
 The ordered implementation and rollback procedure is in `docs/SAAS_P0_MIGRATION_PLAN.md`.
 

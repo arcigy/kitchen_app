@@ -5,23 +5,95 @@ on:
     branches:
       - develop
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+          - production
+      confirmation:
+        description: Type DEPLOY PRODUCTION for a production deployment
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-develop
+  group: deploy-${{ inputs.target || 'develop' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: develop
+    environment: ${{ inputs.target == 'production' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      DEPLOY_TARGET: ${{ inputs.target || 'develop' }}
+      DEPLOY_CONFIRMATION: ${{ inputs.confirmation || '' }}
+      DEVELOP_CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+      DEVELOP_CAPROVER_APP_URL: ${{ vars.CAPROVER_APP_URL }}
+      PRODUCTION_CAPROVER_APP: ${{ vars.CAPROVER_PRODUCTION_APP }}
+      PRODUCTION_CAPROVER_APP_URL: ${{ vars.CAPROVER_PRODUCTION_APP_URL }}
 
     steps:
+      - name: Validate deployment intent
+        env:
+          DEPLOY_EVENT: ${{ github.event_name }}
+          DEPLOY_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$DEPLOY_TARGET" = "production" ]; then
+            if [ "$DEPLOY_EVENT" != "workflow_dispatch" ] || [ "$DEPLOY_REF" != "refs/heads/main" ]; then
+              echo "Production deployment is manual-only and must run from main."
+              exit 1
+            fi
+            if [ "$DEPLOY_CONFIRMATION" != "DEPLOY PRODUCTION" ]; then
+              echo "Production deployment confirmation is missing or incorrect."
+              exit 1
+            fi
+            if [ -z "$PRODUCTION_CAPROVER_APP" ] || [ -z "$PRODUCTION_CAPROVER_APP_URL" ]; then
+              echo "CAPROVER_PRODUCTION_APP and CAPROVER_PRODUCTION_APP_URL are required."
+              exit 1
+            fi
+            selected_app="$PRODUCTION_CAPROVER_APP"
+            selected_url="$PRODUCTION_CAPROVER_APP_URL"
+            namespace="prod"
+          elif [ "$DEPLOY_TARGET" = "develop" ]; then
+            if [ -z "$DEVELOP_CAPROVER_APP" ] || [ -z "$DEVELOP_CAPROVER_APP_URL" ]; then
+              echo "CAPROVER_APP and CAPROVER_APP_URL are required."
+              exit 1
+            fi
+            selected_app="$DEVELOP_CAPROVER_APP"
+            selected_url="$DEVELOP_CAPROVER_APP_URL"
+            namespace="dev"
+          else
+            echo "Unknown deployment target."
+            exit 1
+          fi
+
+          if [[ ! "$selected_app" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "Selected CapRover application name is invalid."
+            exit 1
+          fi
+          if [[ "$selected_url" == *$'\n'* || "$selected_url" == *$'\r'* ]]; then
+            echo "Selected CapRover application URL is invalid."
+            exit 1
+          fi
+
+          {
+            echo "CAPROVER_APP=$selected_app"
+            echo "CAPROVER_APP_URL=$selected_url"
+            echo "ARCIGY_DEPLOY_APP_ENV=$namespace"
+            echo "ARCIGY_DEPLOY_DATABASE_SCHEMA=$namespace"
+            echo "ARCIGY_DEPLOY_OBJECT_PREFIX=$namespace"
+            echo "ARCIGY_DEPLOY_STORAGE_PATH=/app/storage"
+          } >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -106,12 +178,6 @@ jobs:
         env:
           CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
-          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
-          CAPROVER_APP_URL: ${{ vars.CAPROVER_APP_URL }}
-          ARCIGY_DEPLOY_APP_ENV: dev
-          ARCIGY_DEPLOY_DATABASE_SCHEMA: dev
-          ARCIGY_DEPLOY_OBJECT_PREFIX: dev
-          ARCIGY_DEPLOY_STORAGE_PATH: /app/storage
 
       - name: Deploy
         id: deploy_caprover
@@ -122,7 +188,6 @@ jobs:
         env:
           CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
-          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
 
       - name: Verify deployed health and readiness
         id: readiness
@@ -143,8 +208,6 @@ jobs:
           done
           echo "Deployment did not become healthy and ready in time."
           exit 1
-        env:
-          CAPROVER_APP_URL: ${{ vars.CAPROVER_APP_URL }}
 
       - name: Notify deploy result
         if: always() && env.NTFY_TOPIC != ''
@@ -152,7 +215,7 @@ jobs:
           python - <<'PY' > payload.json
           import json, os
           payload = {
-            "app": os.environ["APP_NAME"],
+            "app": os.environ.get("CAPROVER_APP", f"unselected-{os.environ['DEPLOY_TARGET']}"),
             "status": os.environ["DEPLOY_STATUS"],
             "commit": os.environ["GITHUB_SHA"],
             "branch": os.environ["GITHUB_REF_NAME"],
@@ -163,7 +226,6 @@ jobs:
           PY
           curl -fsS -X POST --data-binary @payload.json "https://ntfy.sh/$NTFY_TOPIC" || true
         env:
-          APP_NAME: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
           DEPLOY_STATUS: ${{ steps.deploy_caprover.outcome == 'success' && steps.readiness.outcome == 'success' && 'success' || 'failure' }}
 
       - name: Fail if deploy or readiness failed
