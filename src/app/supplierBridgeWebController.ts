@@ -4,7 +4,7 @@ import { cancelSupplierSyncSession, createSupplierSyncSession, loadConfiguredSup
 
 export type ConfiguredSupplierId = string;
 
-type BridgeRequestType = "START_SUPPLIER_SESSION" | "OPEN_SUPPLIER_BRIDGE" | "GET_SUPPLIER_SESSION_STATUS" | "CANCEL_SUPPLIER_SESSION";
+type BridgeRequestType = "START_SUPPLIER_SESSION" | "OPEN_SUPPLIER_BRIDGE" | "GET_SUPPLIER_SESSION_STATUS" | "CANCEL_SUPPLIER_SESSION" | "SET_SUPPLIER_PROJECT_CONTEXT";
 type BridgeResponse = { source: "ARCIGY_EXTENSION"; type: "ARCIGY_BRIDGE_READY" | "SUPPLIER_BRIDGE_RESULT"; requestId: string; nonce: string; sessionId: string | null; ok: boolean; opened: boolean; errorCode: string | null };
 
 export type SupplierBridgeWebControllerArgs = {
@@ -44,6 +44,7 @@ function stateFromView(view: SupplierSyncSessionView, current: SupplierBridgePan
 export function createSupplierBridgeWebController(args: SupplierBridgeWebControllerArgs) {
   let active = false;
   let sessionId: string | null = null;
+  let sessionProjectId: string | null = null;
   let pollTimer: number | null = null;
   let pollAbort: AbortController | null = null;
   let state: SupplierBridgePanelState = { ...EMPTY_SUPPLIER_BRIDGE_PANEL_STATE };
@@ -79,7 +80,8 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
         requestId,
         nonce,
         sessionId: requestedSessionId,
-        ...(bridgeToken ? { bridgeToken, projectLabel: args.getProjectLabel?.() ?? "" } : {})
+        ...(bridgeToken ? { bridgeToken, projectLabel: args.getProjectLabel?.() ?? "" } : {}),
+        ...(type === "SET_SUPPLIER_PROJECT_CONTEXT" ? { projectId: args.getProjectId() ?? "", projectLabel: args.getProjectLabel?.() ?? "" } : {})
       }, window.location.origin);
     });
   };
@@ -89,6 +91,21 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
     pollTimer = null;
     pollAbort?.abort();
     pollAbort = null;
+  };
+
+  const resetProjectSession = (projectId: string | null) => {
+    if (sessionProjectId === projectId) return;
+    sessionId = null;
+    sessionProjectId = projectId;
+    lastCompleted = 0;
+    emit({ ...state, sessionStatus: null, processed: 0, total: 0, needsConfirmation: 0, completed: 0, warnings: [] });
+  };
+
+  const syncProjectContext = async (): Promise<void> => {
+    const projectId = args.getProjectId();
+    resetProjectSession(projectId);
+    if (!projectId) return;
+    await requestExtension("SET_SUPPLIER_PROJECT_CONTEXT", "arcigy-project-context", undefined, 1_200);
   };
 
   const schedulePoll = () => {
@@ -122,11 +139,16 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
   return {
     async open(): Promise<void> {
       active = true;
+      const projectId = args.getProjectId();
       emit({ ...state, connection: "checking" });
       try {
         emit({ ...state, suppliers: await loadConfiguredSuppliers() });
       } catch (error) {
         emit({ ...state, suppliers: [], warnings: [...state.warnings, error instanceof Error ? error.message : "Zoznam dodávateľov sa nepodarilo načítať."].slice(-4) });
+      }
+      if (projectId) {
+        try { await syncProjectContext(); }
+        catch { /* The connection check below displays extension availability. */ }
       }
       try {
         await requestExtension("OPEN_SUPPLIER_BRIDGE", sessionId ?? "arcigy-connection-probe", undefined, 1_200);
@@ -137,6 +159,9 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
       schedulePoll();
     },
     close(): void { active = false; stopPolling(); },
+    async syncProjectContext(): Promise<void> {
+      await syncProjectContext();
+    },
     async start(supplierId: ConfiguredSupplierId): Promise<void> {
       const projectId = args.getProjectId();
       if (!projectId) {
@@ -162,6 +187,7 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
       try {
         const created = await createSupplierSyncSession(projectId, supplierId);
         sessionId = created.view.session.id;
+        sessionProjectId = projectId;
         lastCompleted = created.view.counts.completed;
         emit({ ...stateFromView(created.view, state), busy: true });
         try {

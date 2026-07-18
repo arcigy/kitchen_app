@@ -12,11 +12,12 @@ export const BRIDGE_CHANNEL = "arcigy-supplier-bridge" as const;
 
 export type ArcigyWindowRequest = {
   source: "ARCIGY_WEB";
-  type: "START_SUPPLIER_SESSION" | "OPEN_SUPPLIER_BRIDGE" | "GET_SUPPLIER_SESSION_STATUS" | "CANCEL_SUPPLIER_SESSION";
+  type: "START_SUPPLIER_SESSION" | "OPEN_SUPPLIER_BRIDGE" | "GET_SUPPLIER_SESSION_STATUS" | "CANCEL_SUPPLIER_SESSION" | "SET_SUPPLIER_PROJECT_CONTEXT";
   requestId: string;
   nonce: string;
   sessionId: string;
   bridgeToken?: string;
+  projectId?: string;
   projectLabel?: string;
 };
 
@@ -40,6 +41,16 @@ export type BridgeRuntimeRequest =
       sessionId: string;
       bridgeToken: string;
       arcigyOrigin: string;
+      projectLabel: string;
+    }
+  | {
+      channel: typeof BRIDGE_CHANNEL;
+      type: "SET_SUPPLIER_PROJECT_CONTEXT";
+      requestId: string;
+      nonce: string;
+      sessionId: string;
+      arcigyOrigin: string;
+      projectId: string;
       projectLabel: string;
     }
   | {
@@ -161,9 +172,10 @@ function safeText(value: unknown, maxLength = 8_192): value is string {
 export function parseArcigyWindowRequest(value: unknown): ArcigyWindowRequest | null {
   const input = record(value);
   if (!input || input.source !== "ARCIGY_WEB") return null;
-  if (!["START_SUPPLIER_SESSION", "OPEN_SUPPLIER_BRIDGE", "GET_SUPPLIER_SESSION_STATUS", "CANCEL_SUPPLIER_SESSION"].includes(String(input.type))) return null;
+  if (!["START_SUPPLIER_SESSION", "OPEN_SUPPLIER_BRIDGE", "GET_SUPPLIER_SESSION_STATUS", "CANCEL_SUPPLIER_SESSION", "SET_SUPPLIER_PROJECT_CONTEXT"].includes(String(input.type))) return null;
   if (!safeText(input.requestId, 160) || !safeText(input.nonce, 160) || !safeText(input.sessionId, 200)) return null;
   if (input.type === "START_SUPPLIER_SESSION" && !safeText(input.bridgeToken, 8_192)) return null;
+  if (input.type === "SET_SUPPLIER_PROJECT_CONTEXT" && (!safeText(input.projectId, 200) || typeof input.projectLabel !== "string" || input.projectLabel.length > 300)) return null;
   return {
     source: "ARCIGY_WEB",
     type: input.type as ArcigyWindowRequest["type"],
@@ -171,6 +183,7 @@ export function parseArcigyWindowRequest(value: unknown): ArcigyWindowRequest | 
     nonce: input.nonce,
     sessionId: input.sessionId,
     ...(typeof input.bridgeToken === "string" ? { bridgeToken: input.bridgeToken } : {}),
+    ...(typeof input.projectId === "string" ? { projectId: input.projectId } : {}),
     ...(typeof input.projectLabel === "string" ? { projectLabel: input.projectLabel.slice(0, 300) } : {})
   };
 }
@@ -226,7 +239,7 @@ export function parseBridgeRuntimeRequest(value: unknown): BridgeRuntimeRequest 
       pageType: input.pageType as SupplierSourcePageType
     };
   }
-  if (!["START_SUPPLIER_SESSION", "OPEN_SUPPLIER_BRIDGE", "GET_SUPPLIER_SESSION_STATUS", "CANCEL_SUPPLIER_SESSION"].includes(input.type)) return null;
+  if (!["START_SUPPLIER_SESSION", "OPEN_SUPPLIER_BRIDGE", "GET_SUPPLIER_SESSION_STATUS", "CANCEL_SUPPLIER_SESSION", "SET_SUPPLIER_PROJECT_CONTEXT"].includes(input.type)) return null;
   if (!safeText(input.requestId, 160) || !safeText(input.nonce, 160) || !safeText(input.sessionId, 200) || !safeText(input.arcigyOrigin, 300)) return null;
   if (input.type === "START_SUPPLIER_SESSION") {
     if (!safeText(input.bridgeToken, 8_192)) return null;
@@ -239,6 +252,19 @@ export function parseBridgeRuntimeRequest(value: unknown): BridgeRuntimeRequest 
       bridgeToken: input.bridgeToken,
       arcigyOrigin: input.arcigyOrigin,
       projectLabel: typeof input.projectLabel === "string" ? input.projectLabel.slice(0, 300) : ""
+    };
+  }
+  if (input.type === "SET_SUPPLIER_PROJECT_CONTEXT") {
+    if (!safeText(input.projectId, 200) || typeof input.projectLabel !== "string" || input.projectLabel.length > 300) return null;
+    return {
+      channel: BRIDGE_CHANNEL,
+      type: "SET_SUPPLIER_PROJECT_CONTEXT",
+      requestId: input.requestId,
+      nonce: input.nonce,
+      sessionId: input.sessionId,
+      arcigyOrigin: input.arcigyOrigin,
+      projectId: input.projectId,
+      projectLabel: input.projectLabel
     };
   }
   return {

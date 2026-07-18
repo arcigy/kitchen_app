@@ -12,7 +12,8 @@ import {
   type DiagnosticFieldCapture,
   type DiagnosticPageAnalysis
 } from "./messages";
-import { parseSupplierBridgeProgress } from "./storage";
+import { parseSupplierBridgeProgress, parseSupplierBridgeProjectContext, type SupplierBridgeProjectContext, type SupplierBridgeTrace } from "./storage";
+import { supplierTargetGroups, supplierTargetProductText, supplierTargetsForScope, supplierViewForProject, type SupplierTarget, type SupplierTargetScope } from "./sidepanelModel";
 import "./sidepanel.css";
 
 const diagnosticFields: Array<{ field: DiagnosticField; label: string }> = [
@@ -159,39 +160,54 @@ function currentTargetText(view: SupplierSyncSessionView, item: SupplierSyncItem
 function App(): React.JSX.Element {
   const [view, setView] = useState<SupplierSyncSessionView | null>(null);
   const [projectLabel, setProjectLabel] = useState("");
+  const [projectContext, setProjectContext] = useState<SupplierBridgeProjectContext | null>(null);
+  const [trace, setTrace] = useState<SupplierBridgeTrace[]>([]);
   const [choosingTarget, setChoosingTarget] = useState(false);
-  const [targetScope, setTargetScope] = useState<"general" | "module" | "addition">("general");
+  const [targetScope, setTargetScope] = useState<SupplierTargetScope>("general");
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
-    const result = await command("status");
-    if (result.view) setView(result.view);
-    if (!result.ok) throw new Error(result.message ?? result.errorCode ?? "Session sa nepodarila načítať.");
-  };
   useEffect(() => {
-    const initial = window.setTimeout(() => void refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Supplier Bridge nie je pripojený.")), 0);
     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== "local" || !changes.arcigySupplierBridgeProgress) return;
-      const progress = parseSupplierBridgeProgress(changes.arcigySupplierBridgeProgress.newValue);
-      if (progress) { setView(progress.view); setProjectLabel(progress.projectLabel); }
+      if (area !== "local") return;
+      if (changes.arcigySupplierBridgeProjectContext) {
+        const context = parseSupplierBridgeProjectContext(changes.arcigySupplierBridgeProjectContext.newValue);
+        setProjectContext(context);
+        setProjectLabel(context?.projectLabel ?? "");
+        setView((current) => supplierViewForProject(current, context?.projectId));
+      }
+      if (changes.arcigySupplierBridgeProgress) {
+        const progress = parseSupplierBridgeProgress(changes.arcigySupplierBridgeProgress.newValue);
+        if (progress) { setView(progress.view); setProjectLabel(progress.projectLabel); setTrace(progress.trace); }
+      }
     };
-    void chrome.storage.local.get("arcigySupplierBridgeProgress").then((stored) => {
+    void chrome.storage.local.get(["arcigySupplierBridgeProgress", "arcigySupplierBridgeProjectContext"]).then((stored) => {
       const progress = parseSupplierBridgeProgress(stored.arcigySupplierBridgeProgress);
-      if (progress) { setView(progress.view); setProjectLabel(progress.projectLabel); }
+      const context = parseSupplierBridgeProjectContext(stored.arcigySupplierBridgeProjectContext);
+      setProjectContext(context);
+      setProjectLabel(context?.projectLabel ?? progress?.projectLabel ?? "");
+      if (progress) { setView(supplierViewForProject(progress.view, context?.projectId)); setTrace(progress.trace); }
     });
     chrome.storage.onChanged.addListener(listener);
-    return () => { window.clearTimeout(initial); chrome.storage.onChanged.removeListener(listener); };
+    return () => { chrome.storage.onChanged.removeListener(listener); };
   }, []);
 
   const targets = (view?.items.flatMap((item) => targetFor(item) ?? []) ?? [])
     .filter((target) => (target.item.targetScope ?? "general") === targetScope);
-  const targetGroups = [...targets.reduce((groups, target) => {
+  const _legacyTargetGroups = [...targets.reduce((groups, target) => {
     const group = target.item.targetLabel?.split(" · ")[0] ?? target.label;
     groups.set(group, [...(groups.get(group) ?? []), target]);
     return groups;
   }, new Map<string, Array<{ item: SupplierSyncItem; label: string }>>())];
+  const moduleGroups = supplierTargetGroups(supplierTargetsForScope(view, "module"));
+  const targetGroups = targetScope === "module" && selectedModule
+    ? moduleGroups.filter(([group]) => group === selectedModule)
+    : supplierTargetGroups(supplierTargetsForScope(view, targetScope));
+  const assignedTargets = (["general", "module", "addition"] as const)
+    .flatMap((scope) => supplierTargetsForScope(view, scope))
+    .filter((target) => target.assigned);
   const run = async (name: string, action: () => Promise<BridgeRuntimeResponse>, success: string): Promise<boolean> => {
     setBusy(name); setError(null); setMessage(null);
     try {
@@ -207,7 +223,7 @@ function App(): React.JSX.Element {
       setBusy(null);
     }
   };
-  const assignTo = async (target: { item: SupplierSyncItem; label: string }): Promise<void> => {
+  const assignTo = async (target: SupplierTarget): Promise<void> => {
     const assigned = await run(`assign:${target.item.id}`, async () => {
       const permissionError = await requestCurrentSupplierPermission(view);
       return permissionError ?? command("assign_current", { syncItemId: target.item.id });
@@ -217,7 +233,7 @@ function App(): React.JSX.Element {
 
   return <main className="shell">
     <header className="topbar"><div className="logo">A</div><div><strong>Arcigy Supplier Bridge</strong><small>Priradenie z otvoreného produktu</small></div><StatusBadge value={view?.session.status ?? "disconnected"} /></header>
-    {!view ? <section className="card empty"><h1>Čakám na projekt</h1><p>V Arcigy otvorte Materiály a kliknite na jedného dodávateľa.</p></section> : <>
+    {!view ? <section className="card empty"><h1>{projectLabel || "Čakám na projekt"}</h1><p>{projectContext ? "Projekt je pripravený. V Arcigy vyberte dodávateľa." : "V Arcigy otvorte Materiály a kliknite na jedného dodávateľa."}</p></section> : <>
       <section className="card project-context">
         <div><div className="eyebrow">Aktuálny projekt</div><h1>{projectLabel || view.session.projectId}</h1>{projectLabel && <small>{view.session.projectId}</small>}</div>
         <div className="project-context__count"><strong>{view.counts.completed}</strong><span>priradené</span></div>
@@ -229,15 +245,27 @@ function App(): React.JSX.Element {
         <button className="button button--primary" data-sidepanel-action="choose-target" disabled={busy !== null} onClick={() => setChoosingTarget((current) => !current)}>{choosingTarget ? "Zavrieť výber" : "Pridať aktuálny produkt"}</button>
       </section>
       <nav className="scope-tabs" aria-label="Nastavenia materiálov">
-        {(["general", "module", "addition"] as const).map((scope) => <button key={scope} className={targetScope === scope ? "scope-tab scope-tab--active" : "scope-tab"} onClick={() => setTargetScope(scope)}>{scope === "general" ? "General settings" : scope === "module" ? "Module settings" : "Additions"}</button>)}
+        {(["general", "module", "addition"] as const).map((scope) => <button key={scope} className={targetScope === scope ? "scope-tab scope-tab--active" : "scope-tab"} onClick={() => { setTargetScope(scope); if (scope === "module") setSelectedModule(moduleGroups[0]?.[0] ?? null); }}>{scope === "general" ? "General settings" : scope === "module" ? "Module settings" : "Additions"}</button>)}
       </nav>
+      {targetScope === "module" && moduleGroups.length > 0 && <label className="field module-picker">Aktívny modul
+        <select value={selectedModule ?? moduleGroups[0]?.[0] ?? ""} onChange={(event) => setSelectedModule(event.target.value)}>{moduleGroups.map(([group]) => <option key={group} value={group}>{group}</option>)}</select>
+      </label>}
       {choosingTarget && <section className="card targets">
         <h2>Kam produkt priradiť?</h2>
         {targets.length === 0 ? <p className="muted">V tejto časti zatiaľ nie je položka projektu.</p> : targetGroups.map(([group, entries]) => <section className="target-group" key={group}><h3>{group}</h3><div className="targets__grid">{entries.map((target) => <button key={target.item.id} className="target" data-material-target={target.item.materialAssignmentId.replace("material-assignment:", "")} disabled={busy !== null} onClick={() => void assignTo(target)}><strong>{target.item.targetLabel ?? target.label}</strong><small>{view ? currentTargetText(view, target.item) : "Nepriradené"}</small></button>)}</div></section>)}
       </section>}
+      {assignedTargets.length > 0 && <section className="card assigned-summary" aria-label="Priradené materiály">
+        <div className="eyebrow">Potvrdené priradenia</div>
+        <strong>{assignedTargets.length} materiálov je priradených</strong>
+        <ul>{assignedTargets.slice(-4).map((target) => <li key={target.item.id}>✓ {target.group} · {supplierTargetProductText(view, target.item)}</li>)}</ul>
+      </section>}
       {(message || error) && <p className={error ? "notice notice--error" : "notice"} role={error ? "alert" : "status"}>{error ?? message}</p>}
       <button className="link" disabled={busy !== null || view.session.status === "cancelled"} onClick={() => void run("cancel", () => command("cancel"), "Prepojenie projektu bolo ukončené.")}>Ukončiť prepojenie projektu</button>
     </>}
+    {view && <details className="card bridge-debug"><summary>Diagnostika spojenia</summary>
+      <dl><div><dt>Rozšírenie</dt><dd>v{supplierBridgeBuild.version}</dd></div><div><dt>Dodávateľ</dt><dd>{view.session.supplierId}</dd></div><div><dt>Session</dt><dd>{view.session.status}</dd></div></dl>
+      {trace.length > 0 ? <ol className="bridge-debug__trace">{trace.slice().reverse().map((entry) => <li key={`${entry.at}:${entry.stage}`} className={`bridge-debug__trace--${entry.outcome}`}>{entry.stage}{entry.code ? ` · ${entry.code}` : ""}</li>)}</ol> : <p className="muted">Čakám na prvú udalosť.</p>}
+    </details>}
     {__SUPPLIER_BRIDGE_DEBUG__ ? <DiagnosticPanel /> : null}
     <footer>Arcigy Supplier Bridge · {supplierBridgeBuild.version}{__SUPPLIER_BRIDGE_DEBUG__ ? " · DEBUG" : ""}</footer>
   </main>;

@@ -14,16 +14,24 @@ function sanitize(details: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
-export function bridgeLog(level: BridgeLogLevel, event: string, details: Record<string, unknown> = {}): void {
-  if (level === "debug" && !supplierBridgeBuild.debug) return;
+export function formatBridgeLog(level: BridgeLogLevel, event: string, details: Record<string, unknown> = {}): string {
   const payload = {
     scope: "arcigy-supplier-bridge",
+    level,
     event,
     at: new Date().toISOString(),
     ...sanitize(details)
   };
-  if (level === "error") console.error(payload);
-  else if (level === "warn") console.warn(payload);
-  else if (level === "info") console.info(payload);
-  else console.debug(payload);
+  // chrome://extensions renders logged objects only as "[object Object]".
+  // A bounded JSON string preserves the safe diagnostic details in its Errors view.
+  return `[Arcigy Supplier Bridge] ${JSON.stringify(payload)}`;
+}
+
+export function bridgeLog(level: BridgeLogLevel, event: string, details: Record<string, unknown> = {}): void {
+  if (level === "debug" && !supplierBridgeBuild.debug) return;
+  const message = formatBridgeLog(level, event, details);
+  if (level === "error") console.error(message);
+  else if (level === "warn") console.warn(message);
+  else if (level === "info") console.info(message);
+  else console.debug(message);
 }

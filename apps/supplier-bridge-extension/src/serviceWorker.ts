@@ -23,14 +23,21 @@ import {
 import {
   loadSupplierBridgeProgress,
   loadSupplierBridgeSecrets,
+  appendSupplierBridgeTrace,
+  saveSupplierBridgeProjectContext,
   saveSupplierBridgeProgress,
   saveSupplierBridgeSecrets,
   type SupplierBridgeProgress
 } from "./storage";
 
+const sidePanelOpenedFromArcigyClick = new Set<number>();
+
 async function openSidePanel(tabId?: number): Promise<boolean> {
   try {
-    if (typeof tabId === "number") await chrome.sidePanel.open({ tabId });
+    if (typeof tabId === "number") {
+      await chrome.sidePanel.open({ tabId });
+      sidePanelOpenedFromArcigyClick.add(tabId);
+    }
     else {
       const window = await chrome.windows.getLastFocused();
       if (typeof window.id !== "number") return false;
@@ -47,6 +54,12 @@ async function saveView(progress: SupplierBridgeProgress, view: SupplierSyncSess
   const latest = await loadSupplierBridgeProgress();
   const base = latest?.sessionId === progress.sessionId ? latest : progress;
   const next: SupplierBridgeProgress = { ...base, view, lastWarning: warning === undefined ? base.lastWarning : warning, updatedAt: new Date().toISOString() };
+  await saveSupplierBridgeProgress(next);
+  return next;
+}
+
+async function trace(progress: SupplierBridgeProgress, stage: string, outcome: "ok" | "warning" | "error", code: string | null = null): Promise<SupplierBridgeProgress> {
+  const next = appendSupplierBridgeTrace(progress, { stage, outcome, code });
   await saveSupplierBridgeProgress(next);
   return next;
 }
@@ -79,6 +92,12 @@ async function startSession(message: Extract<BridgeRuntimeRequest, { type: "STAR
     accessTokenExpiresAt: null
   });
   const attachment = await attachSupplierBridgeSession(backendBaseUrl, message.sessionId, message.bridgeToken);
+  await saveSupplierBridgeProjectContext({
+    version: 1,
+    projectId: attachment.view.session.projectId,
+    projectLabel: message.projectLabel,
+    updatedAt: new Date().toISOString()
+  });
   await saveSupplierBridgeSecrets({
     version: 1,
     sessionId: message.sessionId,
@@ -97,12 +116,15 @@ async function startSession(message: Extract<BridgeRuntimeRequest, { type: "STAR
     supplierTabState: null,
     view: attachment.view,
     lastWarning: null,
+    trace: [{ at: new Date().toISOString(), stage: "Projekt pripojený", outcome: "ok", code: null }],
     updatedAt: new Date().toISOString()
   });
   bridgeLog("info", "session_attached", { sessionId: message.sessionId });
   const supplier = await openSupplier();
   const progress = await loadSupplierBridgeProgress();
-  const opened = await openSidePanel(progress?.activeSupplierTabId ?? tabId);
+  const openedFromSupplierClick = typeof tabId === "number" && sidePanelOpenedFromArcigyClick.delete(tabId);
+  const opened = openedFromSupplierClick || await openSidePanel(progress?.activeSupplierTabId ?? tabId);
+  if (progress) await trace(progress, "Otvorenie panelu", opened ? "ok" : "error", opened ? (openedFromSupplierClick ? "OPENED_FROM_SUPPLIER_CLICK" : null) : "SIDE_PANEL_OPEN_FAILED");
   return {
     ok: supplier.ok,
     opened,
@@ -110,6 +132,16 @@ async function startSession(message: Extract<BridgeRuntimeRequest, { type: "STAR
     errorCode: supplier.ok ? (opened ? null : "SIDE_PANEL_OPEN_FAILED") : supplier.errorCode ?? "SUPPLIER_OPEN_FAILED",
     ...(supplier.message ? { message: supplier.message } : {})
   };
+}
+
+async function setProjectContext(message: Extract<BridgeRuntimeRequest, { type: "SET_SUPPLIER_PROJECT_CONTEXT" }>): Promise<BridgeRuntimeResponse> {
+  await saveSupplierBridgeProjectContext({
+    version: 1,
+    projectId: message.projectId,
+    projectLabel: message.projectLabel,
+    updatedAt: new Date().toISOString()
+  });
+  return { ok: true, opened: false };
 }
 
 async function openSupplier(): Promise<BridgeRuntimeResponse> {
@@ -164,6 +196,7 @@ async function openSupplier(): Promise<BridgeRuntimeResponse> {
     updatedAt: new Date().toISOString()
   };
   await saveSupplierBridgeProgress(next);
+  await trace(next, "Karta dodávateľa otvorená", "ok");
   return { ok: true, view: next.view };
 }
 
@@ -249,6 +282,7 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   }
   const warning = [...capture.warnings, ...(capture.errorCode ? [capture.errorCode] : [])].join(" ") || null;
   await saveView(progress, view, warning);
+  await trace(await loadSupplierBridgeProgress() ?? progress, "Produkt načítaný", capture.candidates.length > 0 ? "ok" : "error", capture.errorCode);
   bridgeLog("info", "page_captured", { sessionId: progress.sessionId, candidateCount: capture.candidates.length });
   return { ok: capture.candidates.length > 0, view, capture, errorCode: capture.candidates.length > 0 ? null : capture.errorCode };
 }
@@ -275,7 +309,7 @@ async function confirm(candidateId?: string, syncItemId?: string): Promise<Bridg
     return { ok: false, errorCode: "CANDIDATE_SELECTION_REQUIRED", message: "Select a captured candidate first." };
   }
   const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
-  await saveView(progress, view, null);
+  await trace(await saveView(progress, view, null), "Materiál priradený", "ok");
   return { ok: true, view };
 }
 
@@ -335,10 +369,13 @@ async function handleSideCommand(message: Extract<BridgeRuntimeRequest, { type: 
 
 async function routeMessage(message: BridgeRuntimeRequest, sender: chrome.runtime.MessageSender): Promise<BridgeRuntimeResponse> {
   if (message.type === "START_SUPPLIER_SESSION") return startSession(message, sender.tab?.id);
+  if (message.type === "SET_SUPPLIER_PROJECT_CONTEXT") return setProjectContext(message);
   if (message.type === "OPEN_SUPPLIER_BRIDGE") {
     const progress = await loadSupplierBridgeProgress();
-    if (!progress || progress.sessionId !== message.sessionId) return { ok: false, opened: false, errorCode: "SESSION_NOT_FOUND" };
-    return { ok: true, opened: await openSidePanel(sender.tab?.id), view: progress.view };
+    const opened = await openSidePanel(sender.tab?.id);
+    if (!progress || progress.sessionId !== message.sessionId) return { ok: opened, opened, errorCode: opened ? null : "SIDE_PANEL_OPEN_FAILED" };
+    await trace(progress, "Panel otvorený kliknutím v Arcigy", opened ? "ok" : "error", opened ? null : "SIDE_PANEL_OPEN_FAILED");
+    return { ok: opened, opened, view: progress.view, errorCode: opened ? null : "SIDE_PANEL_OPEN_FAILED" };
   }
   if (message.type === "GET_SUPPLIER_SESSION_STATUS") return { ok: true, view: await refresh() };
   if (message.type === "CANCEL_SUPPLIER_SESSION") return cancel();
