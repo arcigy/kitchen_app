@@ -20,6 +20,12 @@ import {
   type ProjectSnapshotSaveOptions
 } from "../project-materials/project-material-save-authority";
 import { prepareProjectSaveWrite } from "./project-write-consistency";
+import type { ProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { normalizeProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { assertNextProjectMarginRevision } from "../project-margins/project-margin-validation";
+import { ProjectMarginRevisionConflictError } from "../project-margins/project-margin-errors";
+import { patchProjectSaveMarginSettings } from "../project-margins/project-margin-save-patch";
+import { assertFullSaveProjectMarginSettingsAllowed } from "../project-margins/project-margin-save-authority";
 import {
   assertProjectOperationReplay,
   attachProjectOperationReceipt,
@@ -29,6 +35,7 @@ import {
 } from "./project-operation-idempotency";
 
 export { ProjectMaterialRevisionConflictError } from "../project-materials/project-material-errors";
+export { ProjectMarginRevisionConflictError } from "../project-margins/project-margin-errors";
 
 export type ProjectRepository = {
   createProject(
@@ -55,6 +62,13 @@ export type ProjectRepository = {
     phaseId: string,
     expectedRevision: number,
     nextState: ProjectMaterialAssignmentsState
+  ): Promise<ProjectSaveFile>;
+  updateProjectMarginSettings(
+    ctx: ClientContext,
+    projectId: string,
+    phaseId: string,
+    expectedRevision: number,
+    nextState: ProjectMarginSettingsState
   ): Promise<ProjectSaveFile>;
   listProjectVersions(ctx: ClientContext, projectId: string): Promise<ProjectVersionMetadata[]>;
   loadProjectVersion(ctx: ClientContext, projectId: string, versionNumber: number): Promise<ProjectSaveFile>;
@@ -253,6 +267,12 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
             prepared.save.appState.materialAssignments,
             options?.materialAssignmentsMode
           );
+          assertFullSaveProjectMarginSettingsAllowed(
+            stored.appState.quoteSettings,
+            prepared.save.appState.quoteSettings,
+            options?.marginSettingsMode
+              ?? (options?.materialAssignmentsMode === "restore-version" ? "restore-version" : undefined)
+          );
         }
         validateProjectSaveFile(prepared.save, { clientId: ctx.clientId, projectId: safeProjectId });
         await mkdir(path.dirname(target), { recursive: true });
@@ -278,6 +298,31 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
           throw new ProjectMaterialRevisionConflictError(expectedRevision, actualRevision);
         }
         const patched = patchProjectSaveMaterialAssignments({
+          save: stored,
+          phaseId: safePhaseId,
+          nextState,
+          updatedByUserId: ctx.userId
+        });
+        validateProjectSaveFile(patched, { clientId: ctx.clientId, projectId: safeProjectId });
+        await writeFile(target, JSON.stringify(patched, null, 2), "utf-8");
+        await saveProjectMetadata(ctx, patched.project);
+        return patched;
+      });
+    },
+
+    async updateProjectMarginSettings(ctx, projectId, phaseId, expectedRevision, nextState) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
+      assertNextProjectMarginRevision(expectedRevision, nextState);
+      await assertClientProjectPhaseAccess(root, ctx.clientId, safeProjectId, safePhaseId, { mode: "write" });
+      const target = savePath(root, ctx, safeProjectId, safePhaseId);
+      return withSavePathWriteLock(target, async () => {
+        const stored = loadProjectSaveFile(await readJsonFile<unknown>(target), { clientId: ctx.clientId, projectId: safeProjectId });
+        const actualRevision = normalizeProjectMarginSettingsState(stored.appState.quoteSettings).revision;
+        if (actualRevision !== expectedRevision) {
+          throw new ProjectMarginRevisionConflictError(expectedRevision, actualRevision);
+        }
+        const patched = patchProjectSaveMarginSettings({
           save: stored,
           phaseId: safePhaseId,
           nextState,

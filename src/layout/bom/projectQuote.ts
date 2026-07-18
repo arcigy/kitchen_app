@@ -1,4 +1,10 @@
 import type { ProjectPricingView } from "./projectPricing";
+import {
+  isProjectMarginSettingsState,
+  normalizeProjectMarginSettingsState,
+  type ProjectMarginSettingsState
+} from "../../core/project-margins/project-margin-types";
+import { buildProjectMarginsView, type ProjectMarginsView } from "./projectMargins";
 
 export type CatalogAggregateRow = {
   catalogId: string;
@@ -16,6 +22,8 @@ export type ProjectQuoteSettings = {
   marginPercent: number;
 };
 
+export type ProjectQuoteSettingsInput = Partial<ProjectQuoteSettings> | ProjectMarginSettingsState | null | undefined;
+
 export type ProjectQuoteSummary = {
   settings: ProjectQuoteSettings;
   boardsCost: number;
@@ -29,6 +37,7 @@ export type ProjectQuoteSummary = {
   marginPercent: number;
   marginAmount: number;
   finalPrice: number;
+  marginView: ProjectMarginsView;
   formulas: {
     boardPricing: string;
     materialCost: string;
@@ -63,9 +72,18 @@ export function sanitizeProjectQuoteSettings(settings?: Partial<ProjectQuoteSett
 
 export function buildProjectQuoteSummary(
   entries: ProjectPricingView[],
-  settings?: Partial<ProjectQuoteSettings> | null
+  settings?: ProjectQuoteSettingsInput
 ): ProjectQuoteSummary {
-  const normalized = sanitizeProjectQuoteSettings(settings);
+  const normalized = isProjectMarginSettingsState(settings)
+    ? {
+        additionalLaborCost: settings.additionalLaborCost,
+        marginPercent: settings.defaultMarginPercent
+      }
+    : sanitizeProjectQuoteSettings(settings);
+  const marginState = isProjectMarginSettingsState(settings)
+    ? normalizeProjectMarginSettingsState(settings)
+    : normalizeProjectMarginSettingsState(normalized);
+  const marginView = buildProjectMarginsView(entries, marginState);
   const boardsCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.boards.cost, 0));
   const edgesCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.edge_bands.cost, 0));
   const hardwareCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.hardware.cost, 0));
@@ -74,9 +92,9 @@ export function buildProjectQuoteSummary(
   const additionalLaborCost = round(normalized.additionalLaborCost);
   const laborCostTotal = round(moduleLaborCost + additionalLaborCost);
   const subtotalBeforeMargin = round(materialCost + laborCostTotal);
-  const marginPercent = normalized.marginPercent;
-  const marginAmount = round(subtotalBeforeMargin * (marginPercent / 100));
-  const finalPrice = round(subtotalBeforeMargin + marginAmount);
+  const marginPercent = marginView.summary.combinedMarginPercent;
+  const marginAmount = marginView.summary.marginAmount;
+  const finalPrice = marginView.summary.finalPrice;
 
   return {
     settings: normalized,
@@ -91,12 +109,13 @@ export function buildProjectQuoteSummary(
     marginPercent,
     marginAmount,
     finalPrice,
+    marginView,
     formulas: {
       boardPricing: "pricedAreaM2 = netAreaM2 * wasteMultiplier",
       materialCost: "boards + edge bands + hardware",
       laborCost: "module labor + additional project labor",
       subtotalBeforeMargin: "materialCost + laborCostTotal",
-      marginAmount: "subtotalBeforeMargin * (marginPercent / 100)",
+      marginAmount: "sum(lineCost * effectiveMarginPercent / 100)",
       finalPrice: "subtotalBeforeMargin + marginAmount"
     }
   };

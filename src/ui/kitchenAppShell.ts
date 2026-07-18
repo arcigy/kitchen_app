@@ -27,8 +27,8 @@ const navItems = [
     icon: `<path d="M5.3 5.5h13.4v13.3H5.3V5.5Z" /><path d="M5.3 9.1h13.4" /><path d="M8.3 3.9v3.1" /><path d="M15.7 3.9v3.1" /><path d="M8.4 12.1h2.2" /><path d="M13.4 12.1h2.2" /><path d="M8.4 15.4h2.2" /><path d="M13.4 15.4h2.2" />`
   },
   {
-    id: "quantities",
-    label: "Quantities",
+    id: "margins",
+    label: "Marže",
     imgSrc: "/cad-icons/quantities.svg"
   },
   {
@@ -166,6 +166,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
       </div>
 
       <section id="materialsPhase" class="archux-materials-phase-panel" aria-label="Materiály a komponenty" hidden></section>
+      <section id="marginsPhase" class="archux-margins-phase-panel" aria-label="Marže projektu" hidden></section>
 
       <aside id="properties" aria-label="Properties"></aside>
 

@@ -4,6 +4,8 @@ import { assertValidProjectMetadata } from "../project/project-validation";
 import { assertNoMissingCriticalProjectSerializers } from "./project-save-serializers";
 import { validateProjectAppState } from "./project-app-state-validation";
 import { validateProjectMaterialAssignmentsState } from "../project-materials/project-material-validation";
+import { isProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { validateProjectMarginSettingsState } from "../project-margins/project-margin-validation";
 
 export type ProjectSaveValidationScope = {
   clientId?: string;
@@ -81,6 +83,9 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
     phaseIds.add(phase.phaseId);
     if (!Array.isArray(phase.moduleInstances)) throw new Error("Project phase moduleInstances must be an array.");
     validateProjectMaterialAssignmentsState(phase.materialAssignments, `save.phases.${phase.phaseId}.materialAssignments`);
+    if (isProjectMarginSettingsState(phase.quoteSettings)) {
+      validateProjectMarginSettingsState(phase.quoteSettings, `save.phases.${phase.phaseId}.quoteSettings`);
+    }
   }
   if (!phaseIds.has(save.activePhaseId)) throw new Error("activePhaseId must exist in phases.");
   if (!save.catalogSnapshot || !Array.isArray(save.catalogSnapshot.usedMaterialIds)) throw new Error("Project save must include catalogSnapshot.");
@@ -93,6 +98,15 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
   const activePhase = save.phases.find((phase) => phase.phaseId === save.activePhaseId)!;
   if (!areStructurallyEqual(save.appState.materialAssignments, activePhase.materialAssignments)) {
     throw new Error("Project save active phase materialAssignments must match appState.materialAssignments.");
+  }
+  const appMarginsRecognized = isProjectMarginSettingsState(save.appState.quoteSettings);
+  const phaseMarginsRecognized = isProjectMarginSettingsState(activePhase.quoteSettings);
+  if (appMarginsRecognized) validateProjectMarginSettingsState(save.appState.quoteSettings, "save.appState.quoteSettings");
+  if (appMarginsRecognized !== phaseMarginsRecognized) {
+    throw new Error("Project save active phase quoteSettings must match appState.quoteSettings.");
+  }
+  if (appMarginsRecognized && !areStructurallyEqual(save.appState.quoteSettings, activePhase.quoteSettings)) {
+    throw new Error("Project save active phase quoteSettings must match appState.quoteSettings.");
   }
   assertPlainSerializable(save);
 }

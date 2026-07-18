@@ -4,6 +4,7 @@ dist/
 **/dist-production/
 .vite/
 tmp/
+.tmp/
 storage/
 output/
 outputs/
@@ -14,6 +15,8 @@ public/debug-pdf/
 *.pyc
 *.blend1
 *.log
+*.tar
+material-basecolor-files.txt
 .codex/*.log
 dev.err
 dev.out

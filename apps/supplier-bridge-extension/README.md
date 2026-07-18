@@ -36,10 +36,14 @@ The export is limited to 64 KB and contains only the selected node, at most two 
 ## Builds and security
 
 - `npm run build:debug` includes exact localhost Arcigy/API/simulator origins, the mock adapter, diagnostic recorder, and debug UI.
-- `npm run build:production` includes only the exact configured Arcigy production origin and excludes localhost, simulator fixtures, mock adapter code, diagnostic recorder, and debug screens. Override the known deployment only with `SUPPLIER_BRIDGE_ARCIGY_PRODUCTION_ORIGIN=https://exact-origin.example` at build time.
+- `npm run build:production` includes the two maintained exact Arcigy origins (production and develop) and excludes localhost, simulator fixtures, mock adapter code, diagnostic recorder, and debug screens. Override both only with the audited comma-separated `SUPPLIER_BRIDGE_ARCIGY_ORIGINS=https://one.example,https://two.example`; legacy per-environment overrides remain `SUPPLIER_BRIDGE_ARCIGY_PRODUCTION_ORIGIN` and `SUPPLIER_BRIDGE_ARCIGY_DEVELOP_ORIGIN`. Broad wildcards, HTTP origins, paths, queries, and credentials are rejected at build time.
 - The manifest does not request `all_urls`, `cookies`, `debugger`, `webRequest`, or `offscreen`. Supplier access is optional and requested only after the user clicks **Otvoriť supplier**, only for that supplier's exact Czech origin.
 - Capture waits for the supplier tab to finish loading, rejects navigation outside the configured origin, never reads browser profile files, and never performs cart, quick-buy, order, login, logout or account mutations.
 - Logs are structured and remove token-, cookie-, authorization-, password-, secret-, and DOM-like fields.
+
+## Tenant supplier access
+
+Supplier visibility is deliberately tenant-scoped. To prevent accidental cross-client access, use the dry-run-first helper: `npm run db:assign-client-suppliers -- --clientId client_example --suppliers all --dry-run`. Add `--write` only after reviewing the result. A production write additionally requires `ARCIGY_APPROVE_PRODUCTION_SUPPLIER_ASSIGNMENT=true`; once production is correct, run the approved production-to-develop snapshot so both environments remain identical.
 
 ## Maintaining real supplier adapters
 

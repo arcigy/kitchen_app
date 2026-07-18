@@ -143,7 +143,7 @@ function completeSessionWhenDone(state: SupplierBridgeTenantState, sessionId: st
 }
 
 export function supplierMappingKey(mapping: Omit<MaterialSupplierMapping, "supplierProductCode" | "createdByUserId" | "confirmedAt">): string {
-  return [
+  const parts = [
     mapping.tenantId,
     mapping.supplierId,
     mapping.manufacturer,
@@ -151,7 +151,10 @@ export function supplierMappingKey(mapping: Omit<MaterialSupplierMapping, "suppl
     mapping.surfaceCode,
     mapping.productType,
     String(mapping.thicknessMm)
-  ].map((value) => value.trim().toLocaleLowerCase("sk-SK")).join("\u0000");
+  ].map((value) => value.replace(/\u0000/g, "").trim().toLocaleLowerCase("sk-SK"));
+  // JSON array encoding is deterministic and collision-safe without using the
+  // U+0000 separator forbidden by PostgreSQL text/jsonb.
+  return JSON.stringify(parts);
 }
 
 export function createSupplierBridgeRepositoryFromStateStore(store: SupplierBridgeTenantStateStore): SupplierBridgeRepository {

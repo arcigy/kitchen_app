@@ -30,7 +30,9 @@ function record(value: unknown, path: string): Record<string, unknown> {
 
 function text(value: unknown, path: string, maxLength = 500): string {
   if (typeof value !== "string") throw new SupplierBridgeValidationError(`${path} must be a string.`);
-  const normalized = value.trim();
+  // PostgreSQL jsonb cannot store U+0000. Supplier pages can hide it inside
+  // otherwise valid product text, so remove it at the shared trust boundary.
+  const normalized = value.replace(/\u0000/g, "").trim();
   if (!normalized) throw new SupplierBridgeValidationError(`${path} is required.`);
   if (normalized.length > maxLength) throw new SupplierBridgeValidationError(`${path} is too long.`);
   return normalized;

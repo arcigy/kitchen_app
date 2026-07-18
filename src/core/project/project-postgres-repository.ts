@@ -18,6 +18,12 @@ import { ProjectMaterialRevisionConflictError } from "../project-materials/proje
 import { patchProjectSaveMaterialAssignments } from "../project-materials/project-material-save-patch";
 import { assertFullSaveMaterialAssignmentsAllowed } from "../project-materials/project-material-save-authority";
 import { prepareProjectSaveWrite } from "./project-write-consistency";
+import type { ProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { normalizeProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { assertNextProjectMarginRevision } from "../project-margins/project-margin-validation";
+import { ProjectMarginRevisionConflictError } from "../project-margins/project-margin-errors";
+import { patchProjectSaveMarginSettings } from "../project-margins/project-margin-save-patch";
+import { assertFullSaveProjectMarginSettingsAllowed } from "../project-margins/project-margin-save-authority";
 import {
   PROJECT_OPERATION_RECEIPT_KEY,
   assertProjectOperationReplay,
@@ -48,6 +54,10 @@ function assertNextMaterialRevision(expectedRevision: number, nextState: Project
   if (nextState.revision !== expectedRevision + 1) {
     throw new Error("Next material assignment revision must increment expectedRevision by one.");
   }
+}
+
+function assertNextMarginRevision(expectedRevision: number, nextState: ProjectMarginSettingsState): void {
+  assertNextProjectMarginRevision(expectedRevision, nextState);
 }
 
 function notFound(message: string): Error {
@@ -290,6 +300,12 @@ export function createPostgresProjectRepository(args: {
               prepared.save.appState.materialAssignments,
               options?.materialAssignmentsMode
             );
+            assertFullSaveProjectMarginSettingsAllowed(
+              stored.appState.quoteSettings,
+              prepared.save.appState.quoteSettings,
+              options?.marginSettingsMode
+                ?? (options?.materialAssignmentsMode === "restore-version" ? "restore-version" : undefined)
+            );
           }
           validateProjectSaveFile(prepared.save, { clientId: ctx.clientId, projectId: safeProjectId });
           await client.query(
@@ -330,6 +346,46 @@ export function createPostgresProjectRepository(args: {
           throw new ProjectMaterialRevisionConflictError(expectedRevision, actualRevision);
         }
         const patched = patchProjectSaveMaterialAssignments({
+          save: stored,
+          phaseId: safePhaseId,
+          nextState,
+          updatedByUserId: ctx.userId
+        });
+        validateProjectSaveFile(patched, { clientId: ctx.clientId, projectId: safeProjectId });
+        await client.query(
+          `
+            UPDATE arcigy_project_saves
+            SET save = $4::jsonb, saved_at = $5::timestamptz, saved_by_user_id = $6, db_updated_at = now()
+            WHERE client_id = $1 AND project_id = $2 AND phase_id = $3
+          `,
+          [ctx.clientId, safeProjectId, safePhaseId, JSON.stringify(patched), patched.integrity.savedAt, ctx.userId]
+        );
+        await saveMetadata(client, ctx, patched.project);
+        return patched;
+      }));
+    },
+
+    async updateProjectMarginSettings(ctx, projectId, phaseId, expectedRevision, nextState) {
+      const safeProjectId = sanitizeStorageId(projectId, "projectId");
+      const safePhaseId = sanitizeStorageId(phaseId, "phaseId");
+      assertNextMarginRevision(expectedRevision, nextState);
+      return withClient(async (client) => withTransaction(client, async () => {
+        const project = rowMetadata((await client.query<{ metadata: ProjectMetadata }>(
+          "SELECT metadata FROM arcigy_projects WHERE client_id = $1 AND project_id = $2 FOR UPDATE",
+          [ctx.clientId, safeProjectId]
+        )).rows[0]);
+        assertPhaseBelongsToProject(project, safePhaseId);
+        const storedResult = await client.query<{ save: unknown }>(
+          "SELECT save FROM arcigy_project_saves WHERE client_id = $1 AND project_id = $2 AND phase_id = $3 FOR UPDATE",
+          [ctx.clientId, safeProjectId, safePhaseId]
+        );
+        if (!storedResult.rows[0]) throw notFound("Project save not found.");
+        const stored = loadProjectSaveFile(storedResult.rows[0].save, { clientId: ctx.clientId, projectId: safeProjectId });
+        const actualRevision = normalizeProjectMarginSettingsState(stored.appState.quoteSettings).revision;
+        if (actualRevision !== expectedRevision) {
+          throw new ProjectMarginRevisionConflictError(expectedRevision, actualRevision);
+        }
+        const patched = patchProjectSaveMarginSettings({
           save: stored,
           phaseId: safePhaseId,
           nextState,

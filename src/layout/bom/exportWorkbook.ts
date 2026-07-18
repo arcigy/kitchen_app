@@ -690,13 +690,13 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
     { value: "Medzisucet pred marzou", style: "summaryLabel" },
     { value: formulaNumber(`B${materialsRow}+B${totalLaborRow}`), style: "summaryCurrency" }
   ]);
-  const marginPercentRow = builder.addRow([
-    { value: "Marza %", style: "summaryLabel" },
+  builder.addRow([
+    { value: "Kombinovana marza %", style: "summaryLabel" },
     { value: summary.marginPercent, style: "decimal" }
   ]);
   const marginAmountRow = builder.addRow([
     { value: "Marza", style: "summaryLabel" },
-    { value: formulaNumber(`B${subtotalRow}*(B${marginPercentRow}/100)`), style: "summaryCurrency" }
+    { value: summary.marginAmount, style: "summaryCurrency" }
   ]);
   const finalOfferRow = builder.addRow([
     { value: "Vysledok Create Sheet / ponuka", style: "totalLabel" },

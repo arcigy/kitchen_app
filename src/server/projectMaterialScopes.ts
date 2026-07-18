@@ -9,27 +9,7 @@ import { buildProjectPricingViews } from "../layout/bom/projectPricing";
 import { calculateModuleBOM } from "../layout/bom/calculateBOM";
 import type { PortableQuoteBomItem, PortableQuoteBomPayload } from "../modules/runtime/portableCommercial";
 import { resolveProjectMaterialInputs } from "./projectMaterialQuantityResolver";
-
-function categoryFor(item: PortableQuoteBomItem): MaterialAssignmentCategory | null {
-  if (item.itemType === "edge_band") {
-    return String(item.materialGroup).toLowerCase().includes("front") ? "edge_front" : "edge_other";
-  }
-  if (item.itemType === "hardware") {
-    const type = item.component?.componentType;
-    if (type === "handle" || type === "hinge" || type === "runner" || type === "lift_up" || type === "leg") return type;
-    return type === "fastener" || type === "plinth_clip" || type === "shelf_support" || type === "hanging_bracket"
-      ? "fastener"
-      : "other_component";
-  }
-  const group = String(item.materialGroup ?? item.material?.boardFamily ?? "").toLowerCase();
-  if (["corpus", "carcass", "body", "shelf"].includes(group)) return "corpus";
-  if (group === "front") return "front";
-  if (group === "worktop") return "worktop";
-  if (group === "plinth") return "plinth";
-  if (group === "back") return "back";
-  if (group === "drawer_bottom") return "drawer_bottom";
-  return null;
-}
+import { projectMaterialCategoryForBomItem } from "../layout/bom/projectMaterialCategory";
 
 function quantityFor(item: PortableQuoteBomItem, category: MaterialAssignmentCategory): { quantity: number; unit: PricingUnit } | null {
   const pieces = finite(item.quantity) ?? 1;
@@ -63,7 +43,7 @@ function finite(value: unknown): number | null {
 
 function itemsFor(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem[] {
   return quoteBom.items.flatMap((item) => {
-    const category = categoryFor(item);
+    const category = projectMaterialCategoryForBomItem(item);
     if (!category) return [];
     const amount = quantityFor(item, category);
     if (!amount) return [];

@@ -90,6 +90,108 @@ describe("supplier bridge service integration", () => {
     expect(cancelled.session.status).toBe("cancelled");
   });
 
+  it("keeps a project material assignment retry-safe when Bridge bookkeeping fails after it was applied", async () => {
+    const repository = createInMemorySupplierBridgeRepository();
+    const originalConfirmItem = repository.confirmItem;
+    let confirmationAttempts = 0;
+    repository.confirmItem = async (args) => {
+      confirmationAttempts += 1;
+      if (confirmationAttempts === 1) {
+        const failure = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        throw failure;
+      }
+      return originalConfirmItem(args);
+    };
+    const applyConfirmedCandidate = vi.fn(async () => undefined);
+    const service = createSupplierBridgeService({
+      repository,
+      applyConfirmedCandidate,
+      now: () => new Date("2026-07-10T08:00:00.000Z")
+    });
+    const created = await service.createSession(ctx, "project-a", "demos", [{
+      materialAssignmentId: "material-assignment:corpus",
+      query: "corpus",
+      expectedManufacturer: null,
+      expectedDecorCode: null,
+      expectedSurfaceCode: null,
+      expectedProductType: "board",
+      expectedThicknessMm: null
+    }]);
+    const attached = await service.attachSession(created.view.session.id, created.bridgeToken);
+    const itemId = attached.view.currentItem!.id;
+    const submitted = await service.submitCandidate(created.view.session.id, attached.accessToken, {
+      submissionId: "persistence-retry",
+      syncItemId: itemId,
+      supplierProductCode: "PERSISTENCE-RETRY",
+      normalizedProduct: {
+        displayName: "Retry board",
+        manufacturer: null,
+        decorCode: null,
+        surfaceCode: null,
+        productType: "board",
+        thicknessMm: 18,
+        widthMm: null,
+        lengthMm: null,
+        availability: "available"
+      },
+      sourcePageType: "product",
+      sourcePath: "/retry",
+      observedAt: "2026-07-10T08:00:00.000Z",
+      price: null
+    });
+
+    await expect(service.confirmCandidate(created.view.session.id, attached.accessToken, itemId, submitted.candidate.id))
+      .rejects.toMatchObject({ status: 503, errorCode: "BRIDGE_CONFIRMATION_PERSIST_DATABASE_SCHEMA_MISSING" });
+
+    const recovered = await service.confirmCandidate(created.view.session.id, attached.accessToken, itemId, submitted.candidate.id);
+    expect(recovered.counts.completed).toBe(1);
+    expect(confirmationAttempts).toBe(2);
+    expect(applyConfirmedCandidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a precise target error when the project material write cannot find its assignment", async () => {
+    const repository = createInMemorySupplierBridgeRepository();
+    const service = createSupplierBridgeService({
+      repository,
+      applyConfirmedCandidate: async () => { throw new Error("Material assignment for supplier sync item no longer exists."); },
+      now: () => new Date("2026-07-10T08:00:00.000Z")
+    });
+    const created = await service.createSession(ctx, "project-a", "demos", [{
+      materialAssignmentId: "material-assignment:corpus",
+      query: "corpus",
+      expectedManufacturer: null,
+      expectedDecorCode: null,
+      expectedSurfaceCode: null,
+      expectedProductType: "board",
+      expectedThicknessMm: null
+    }]);
+    const attached = await service.attachSession(created.view.session.id, created.bridgeToken);
+    const itemId = attached.view.currentItem!.id;
+    const submitted = await service.submitCandidate(created.view.session.id, attached.accessToken, {
+      submissionId: "missing-assignment",
+      syncItemId: itemId,
+      supplierProductCode: "MISSING-ASSIGNMENT",
+      normalizedProduct: {
+        displayName: "Missing assignment board",
+        manufacturer: null,
+        decorCode: null,
+        surfaceCode: null,
+        productType: "board",
+        thicknessMm: 18,
+        widthMm: null,
+        lengthMm: null,
+        availability: "available"
+      },
+      sourcePageType: "product",
+      sourcePath: "/missing-assignment",
+      observedAt: "2026-07-10T08:00:00.000Z",
+      price: null
+    });
+
+    await expect(service.confirmCandidate(created.view.session.id, attached.accessToken, itemId, submitted.candidate.id))
+      .rejects.toMatchObject({ status: 422, errorCode: "PROJECT_MATERIAL_TARGET_MISSING" });
+  });
+
   it("confirms a manually selected current product without old material identity fields", async () => {
     const repository = createInMemorySupplierBridgeRepository();
     const applyConfirmedCandidate = vi.fn(async () => undefined);

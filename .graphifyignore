@@ -15,6 +15,7 @@ coverage/
 .cache/
 **/.cache/
 tmp/
+.tmp/
 **/tmp/
 output/
 outputs/

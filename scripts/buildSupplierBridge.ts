@@ -13,7 +13,7 @@ const mode = process.argv.includes("--mode") ? process.argv[process.argv.indexOf
 if (mode !== "debug" && mode !== "production") throw new Error("Use --mode debug or --mode production.");
 const buildMode: BuildMode = mode;
 const debug = buildMode === "debug";
-const version = "0.1.1";
+const version = "0.3.1";
 const releaseOrigins = supplierBridgeReleaseOrigins();
 const arcigyOrigins = debug
   ? ["http://127.0.0.1:5180", "http://localhost:5180", ...releaseOrigins]
@@ -63,6 +63,7 @@ await build({
 await build(sourceBuild("src/serviceWorker.ts", "service-worker.js", "es"));
 await build(sourceBuild("src/content/arcigyBridge.ts", "arcigy-content.js", "iife"));
 await build(sourceBuild("src/content/supplierCapture.ts", "supplier-content.js", "iife"));
+await cp(path.join(extensionRoot, "assets", "icon-128.png"), path.join(outDir, "icon-128.png"));
 if (debug) {
   await build(sourceBuild("src/content/diagnosticRecorder.ts", "diagnostic-recorder.js", "iife"));
 }
@@ -71,14 +72,16 @@ const manifest = {
   manifest_version: 3,
   name: debug ? "Arcigy Supplier Bridge (Debug)" : "Arcigy Supplier Bridge",
   version,
-  description: "User-assisted supplier material and price capture for Arcigy.",
+  description: "Sign in to Arcigy, choose a project, and assign the current supplier product to an exact material target.",
+  homepage_url: "https://kitchenapp.178.104.175.242.sslip.io/",
+  icons: { 128: "icon-128.png" },
   minimum_chrome_version: "116",
   action: { default_title: "Open Arcigy Supplier Bridge" },
   side_panel: { default_path: "sidepanel.html" },
   background: { service_worker: "service-worker.js", type: "module" },
   permissions: debug
     ? ["storage", "sidePanel", "tabs", "activeTab", "scripting", "downloads"]
-    : ["storage", "sidePanel", "tabs", "activeTab", "scripting"],
+    : ["storage", "sidePanel", "tabs", "scripting"],
   host_permissions: debug
     ? [
         "http://127.0.0.1:5180/*",
@@ -115,7 +118,7 @@ await writeFile(path.join(outDir, "manifest.json"), `${JSON.stringify(manifest, 
 
 if (buildMode === "production") {
   const forbidden = ["localhost", "127.0.0.1", "mock-supplier", "supplier-simulator", "exact-single-result", "diagnostic-recorder.js"];
-  const files = ["manifest.json", "service-worker.js", "arcigy-content.js", "supplier-content.js", "sidepanel.html"];
+  const files = ["manifest.json", "service-worker.js", "arcigy-content.js", "supplier-content.js", "sidepanel.html", "icon-128.png"];
   const assetsDir = path.join(outDir, "assets");
   try {
     const { readdir } = await import("node:fs/promises");

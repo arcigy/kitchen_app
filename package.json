@@ -54,7 +54,8 @@
     "db:migrate": "tsx scripts/dbMigrate.ts",
     "db:seed": "tsx scripts/dbSeedArcigy.ts",
     "db:seed:pino-nobilia": "tsx scripts/dbSeedPinoNobilia.ts",
-    "db:assign-client-modules": "tsx scripts/assignClientModules.ts"
+    "db:assign-client-modules": "tsx scripts/assignClientModules.ts",
+    "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts"
   },
   "dependencies": {
     "fflate": "^0.8.2",

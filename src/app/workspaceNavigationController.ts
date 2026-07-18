@@ -1,11 +1,12 @@
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ProjectMaterialsView } from "../core/project-materials/project-material-types";
+import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 import type { AppState, LayoutInstance } from "../layout/appState";
 import { buildProjectMaterialUsageSummary } from "../layout/bom/materialUsageSummary";
 import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materialsPhasePanel";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
-type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "quantities" | "materials" | "settings";
+type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
 
 type WorkspaceNavigationControllerArgs = {
   root: HTMLElement;
@@ -20,6 +21,14 @@ type WorkspaceNavigationControllerArgs = {
   };
   materialsController?: {
     open: () => Promise<ProjectMaterialsView>;
+    close: () => Promise<void>;
+  };
+  marginsPhase?: {
+    mainEl: HTMLElement;
+    hostEl: HTMLElement;
+  };
+  marginsController?: {
+    open: () => Promise<ProjectMarginsView>;
     close: () => Promise<void>;
   };
   setVisualisationTopbar: () => void;
@@ -47,6 +56,8 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const sheets = [...defaultSheets];
   let overlay: HTMLElement | null = null;
   let materialsPhaseActive = false;
+  let marginsPhaseActive = false;
+  let marginsOpenPromise: Promise<ProjectMarginsView> | null = null;
 
   const setActiveNav = (id: WorkspaceNavId) => {
     for (const button of navButtons) button.classList.toggle("active", button.dataset.workspaceNav === id);
@@ -66,6 +77,17 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.materialsPhase.hostEl.hidden = true;
     args.materialsPhase.viewsEl.hidden = false;
     args.materialsPhase.warningsEl.hidden = true;
+  };
+
+  const leaveMarginsPhase = async () => {
+    if (!marginsPhaseActive && !marginsOpenPromise) return;
+    marginsPhaseActive = false;
+    const opening = marginsOpenPromise;
+    if (opening) await opening.catch(() => undefined);
+    await args.marginsController?.close();
+    args.root.classList.remove("archux-margins-phase");
+    args.marginsPhase?.mainEl.classList.remove("archux-margins-phase");
+    if (args.marginsPhase) args.marginsPhase.hostEl.hidden = true;
   };
 
   const openOverlay = (title: string, subtitle: string, body: HTMLElement, width: "wide" | "xl" = "wide") => {
@@ -187,6 +209,29 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(summary);
   };
 
+  const openMargins = () => {
+    if (marginsPhaseActive) return;
+    closeOverlay();
+    args.setDesignTopbar();
+    if (!args.marginsPhase || !args.marginsController) {
+      openPlaceholder("Marže", "Marže projektu sa nepodarilo inicializovať.");
+      return;
+    }
+    args.root.classList.add("archux-margins-phase");
+    args.marginsPhase.mainEl.classList.add("archux-margins-phase");
+    args.marginsPhase.hostEl.hidden = false;
+    marginsPhaseActive = true;
+    const opening = args.marginsController.open();
+    marginsOpenPromise = opening;
+    void opening.catch((error: unknown) => {
+      if (!marginsPhaseActive || !args.marginsPhase) return;
+      const message = error instanceof Error ? error.message : "Marže sa nepodarilo načítať.";
+      args.marginsPhase.hostEl.innerHTML = `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">Marže sa nedajú bezpečne otvoriť. ${escapeHtml(message)}</p>`;
+    }).finally(() => {
+      if (marginsOpenPromise === opening) marginsOpenPromise = null;
+    });
+  };
+
   const openPlaceholder = (title: string, subtitle: string) => {
     const body = document.createElement("div");
     body.className = "workspace-placeholder";
@@ -200,6 +245,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const handleNav = async (id: WorkspaceNavId) => {
     if (id === "design") {
       await leaveMaterialsPhase();
+      await leaveMarginsPhase();
       closeOverlay();
       setActiveNav("design");
       args.setDesignTopbar();
@@ -207,18 +253,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     }
     if (id === "visualisation") {
       await leaveMaterialsPhase();
+      await leaveMarginsPhase();
       closeOverlay();
       setActiveNav("visualisation");
       args.setVisualisationTopbar();
       return;
     }
     if (id !== "materials") await leaveMaterialsPhase();
+    if (id !== "margins") await leaveMarginsPhase();
     setActiveNav(id);
     if (id === "sheets") openSheets();
     else if (id === "schedules") openSchedules();
     else if (id === "materials") openMaterials();
+    else if (id === "margins") openMargins();
     else if (id === "documents") openPlaceholder("Documents", "Dokumenty budu samostatny priestor pre zmluvy, poznamky a projektove subory.");
-    else if (id === "quantities") openPlaceholder("Quantities", "Vykazy mnozstiev ostavaju zatial ako samostatny layout.");
     else if (id === "settings") openPlaceholder("Settings", "Nastavenia organizacie, projektu a workspace budu napojene neskor.");
   };
 
@@ -240,13 +288,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       });
       return;
     }
+    if (marginsPhaseActive) {
+      void leaveMarginsPhase().then(() => {
+        setActiveNav("design");
+        args.setDesignTopbar();
+      });
+      return;
+    }
     if (overlay) {
       closeOverlay();
       setActiveNav("design");
     }
   });
 
-  return { closeOverlay, openSheets, openSchedules, openMaterials, leaveMaterialsPhase };
+  return { closeOverlay, openSheets, openSchedules, openMaterials, openMargins, leaveMaterialsPhase, leaveMarginsPhase };
 }
 
 function escapeHtml(value: string): string {

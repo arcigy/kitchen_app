@@ -12,6 +12,7 @@ import { handleDemosMaterialImage, handleDemosMaterialLookup } from "./demosMate
 import { handleModulePackageApi } from "./modulePackageEndpoint";
 import { handleProjectApi } from "./projectEndpoint";
 import { handleProjectMaterialsApi } from "./projectMaterialsEndpoint";
+import { handleProjectMarginsApi } from "./projectMarginsEndpoint";
 import { handleSupplierBridgeApi } from "./supplierBridgeEndpoint";
 import type { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
 import type { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
@@ -114,6 +115,15 @@ export async function handleWorkerApiRequest(
 
   if (
     await handleProjectMaterialsApi(req, res, url, {
+      projectRoot: context.projectRoot,
+      getContext: context.getClientContext,
+      readJsonBody: context.readJsonBody,
+      sendJson: context.sendJson
+    })
+  ) return;
+
+  if (
+    await handleProjectMarginsApi(req, res, url, {
       projectRoot: context.projectRoot,
       getContext: context.getClientContext,
       readJsonBody: context.readJsonBody,

@@ -1,4 +1,9 @@
 import { MATERIAL_ASSIGNMENT_CATEGORIES } from "../core/project-materials/project-material-business";
+import {
+  generalProjectMaterialAssignment,
+  resolveEffectiveProjectMaterialAssignment,
+  topLevelProjectMaterialAssignments
+} from "../core/project-materials/project-material-assignment-resolution";
 import type {
   MaterialAssignmentCategory,
   ProjectMaterialAssignment,
@@ -255,9 +260,12 @@ export function mountProjectMaterialsPanel(
   };
 }
 
-export function renderProjectMaterialsPanel(input: ProjectMaterialUsageSummary | ProjectMaterialsView): string {
+export function renderProjectMaterialsPanel(
+  input: ProjectMaterialUsageSummary | ProjectMaterialsView,
+  state: { activeSettingsTab?: "general" | "modules" | "additions"; selectedScopeId?: string | null } = {}
+): string {
   return isProjectMaterialsView(input)
-    ? renderInteractiveProjectMaterialsPanel(input, {})
+    ? renderInteractiveProjectMaterialsPanel(input, state)
     : renderLegacyProjectMaterialsPanel(input);
 }
 
@@ -287,9 +295,12 @@ function renderInteractiveProjectMaterialsPanel(
     selectedScopeId?: string | null;
   }
 ): string {
-  const generalAssignments = view.assignments.assignments.filter((assignment) => assignment.assignmentId.startsWith(`material-assignment:${assignment.category}`) && !assignment.assignmentId.includes(":module:") && !assignment.assignmentId.includes(":addition:"));
-  const assignmentByCategory = new Map(generalAssignments.map((assignment) => [assignment.category, assignment]));
-  const assignmentById = new Map(view.assignments.assignments.map((assignment) => [assignment.assignmentId, assignment]));
+  const generalAssignments = topLevelProjectMaterialAssignments(view.assignments.assignments);
+  const assignmentByCategory = new Map<MaterialAssignmentCategory, ProjectMaterialAssignment>();
+  for (const { category } of MATERIAL_ASSIGNMENT_CATEGORIES) {
+    const assignment = generalProjectMaterialAssignment(view.assignments.assignments, category);
+    if (assignment) assignmentByCategory.set(category, assignment);
+  }
   const visibleCategories = MATERIAL_ASSIGNMENT_CATEGORIES;
   const assignedCount = visibleCategories.filter((definition) => hasSupplierAssignment(assignmentByCategory.get(definition.category))).length;
 
@@ -308,9 +319,9 @@ function renderInteractiveProjectMaterialsPanel(
     ${state.globalError ? `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(state.globalError)}</p>` : ""}
     ${renderSettingsTabs(state.activeSettingsTab ?? "general")}
     ${state.activeSettingsTab === "modules"
-      ? renderScopeSettings(view, "module", state.selectedScopeId, assignmentByCategory, assignmentById)
+      ? renderScopeSettings(view, "module", state.selectedScopeId)
       : state.activeSettingsTab === "additions"
-        ? renderScopeSettings(view, "addition", state.selectedScopeId, assignmentByCategory, assignmentById)
+        ? renderScopeSettings(view, "addition", state.selectedScopeId)
         : `<div class="materials-phase__content"><section class="materials-phase__groups" aria-label="General settings">${visibleCategories.map((definition) => renderAssignmentGroup(definition, generalAssignments.filter((assignment) => assignment.category === definition.category), view)).join("")}</section>${renderMaterialsSidebar(view, visibleCategories, assignmentByCategory)}</div>`}
   `;
 }
@@ -323,9 +334,7 @@ function renderSettingsTabs(active: "general" | "modules" | "additions"): string
 function renderScopeSettings(
   view: ProjectMaterialsView,
   kind: "module" | "addition",
-  selectedScopeId: string | null | undefined,
-  assignments: Map<MaterialAssignmentCategory, ProjectMaterialAssignment>,
-  assignmentsById: Map<string, ProjectMaterialAssignment>
+  selectedScopeId: string | null | undefined
 ): string {
   const scopes = (view.scopes ?? []).filter((scope) => scope.kind === kind);
   const selected = scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0];
@@ -334,19 +343,23 @@ function renderScopeSettings(
   return `<section class="materials-scope-settings" aria-label="${escapeHtml(selected.label)}">
     <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Dosky a komponenty dedia materiál z General settings.</p></div>
     <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-material-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
-    <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(MATERIAL_ASSIGNMENT_CATEGORIES.find((definition) => definition.category === category)?.label ?? category)}</h3>${selected.items.filter((item) => item.category === category).map((item) => renderScopeItem(selected.id, item, assignmentsById.get(scopeAssignmentId(selected.id, item)) ?? assignments.get(category))).join("")}</section>`).join("")}</div>
+    <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(MATERIAL_ASSIGNMENT_CATEGORIES.find((definition) => definition.category === category)?.label ?? category)}</h3>${selected.items.filter((item) => item.category === category).map((item) => {
+      const effective = resolveEffectiveProjectMaterialAssignment(view.assignments.assignments, selected.id, item);
+      return renderScopeItem(item, effective.assignment, effective.source);
+    }).join("")}</section>`).join("")}</div>
   </section>`;
 }
 
-function scopeAssignmentId(scopeId: string, item: NonNullable<ProjectMaterialsView["scopes"]>[number]["items"][number]): string {
-  return `material-assignment:${scopeId}:${item.category}:${item.id}`;
-}
-
-function renderScopeItem(scopeId: string, item: NonNullable<ProjectMaterialsView["scopes"]>[number]["items"][number], assignment: ProjectMaterialAssignment | undefined): string {
+function renderScopeItem(
+  item: NonNullable<ProjectMaterialsView["scopes"]>[number]["items"][number],
+  assignment: ProjectMaterialAssignment | null,
+  source: "override" | "general" | null
+): string {
   const supplier = supplierAssignmentDetails(assignment);
   const snapshot = assignmentSnapshot(assignment);
-  const overridden = assignment?.assignmentId === scopeAssignmentId(scopeId, item);
-  return `<article class="materials-scope-item" data-material-scope-item="${escapeHtml(item.id)}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(item.quantity, item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${supplier ? `${escapeHtml(snapshot?.definition.displayName ?? "Produkt")} · ${escapeHtml(supplier.productCode)}` : overridden ? "Priradené" : "Zdedené z General settings"}</small><strong>${supplier ? formatUnitPrice(snapshot?.unitPrice ?? null, snapshot?.currency ?? "EUR", snapshot?.definition.pricingUnit) : "Nepriradené"}</strong></div></article>`;
+  const sourceLabel = source === "override" ? "Vlastné priradenie" : source === "general" ? "Zdedené z General settings" : "Nepriradené";
+  const product = supplier ? `${escapeHtml(snapshot?.definition.displayName ?? "Produkt")} · ${escapeHtml(supplier.productCode)}` : snapshot?.definition.displayName ? escapeHtml(snapshot.definition.displayName) : "Nepriradené";
+  return `<article class="materials-scope-item" data-material-scope-item="${escapeHtml(item.id)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(item.quantity, item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}</small><strong>${snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit) : "Nepriradené"}</strong></div></article>`;
 }
 
 function renderSupplierBridge(state: SupplierBridgePanelState): string {
@@ -359,10 +372,6 @@ function renderSupplierBridge(state: SupplierBridgePanelState): string {
     ${state.fallbackInstruction ? `<small class="materials-supplier-launcher__warning">Side Panel otvorte cez ikonu Arcigy Supplier Bridge v Chrome.</small>` : ""}
     ${state.warnings.map((warning) => `<small class="materials-supplier-launcher__warning">${escapeHtml(warning)}</small>`).join("")}
   </section>`;
-}
-
-function supplierButton(supplierId: ProjectSupplierId, label: string, disabled: boolean): string {
-  return `<button type="button" class="materials-supplier-bridge__supplier" data-supplier-open="${escapeHtml(supplierId)}" ${disabled ? "disabled" : ""}>${escapeHtml(label)}</button>`;
 }
 
 function renderAssignmentGroup(
@@ -414,7 +423,7 @@ function renderAssignmentSelection(
   </div>`;
 }
 
-function supplierAssignmentDetails(assignment: ProjectMaterialAssignment | undefined): { label: string; productCode: string } | null {
+function supplierAssignmentDetails(assignment: ProjectMaterialAssignment | null | undefined): { label: string; productCode: string } | null {
   const bridge = assignment?.customValues?.supplierBridge;
   const value = bridge && typeof bridge === "object" && !Array.isArray(bridge) ? bridge as Record<string, unknown> : {};
   if (typeof value.supplierProductCode !== "string" || !value.supplierProductCode) return null;
@@ -478,7 +487,7 @@ function setInputError(container: HTMLElement, input: HTMLInputElement, message:
   else input.removeAttribute("aria-invalid");
 }
 
-function assignmentSnapshot(assignment: ProjectMaterialAssignment | undefined) {
+function assignmentSnapshot(assignment: ProjectMaterialAssignment | null | undefined) {
   if (!assignment) return undefined;
   return assignment.kind === "material" ? assignment.snapshots.material : assignment.snapshots.component;
 }

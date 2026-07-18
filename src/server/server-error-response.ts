@@ -1,5 +1,6 @@
 import { isTransientPostgresError } from "../core/database/postgres-error";
 import { ProjectMaterialRevisionConflictError } from "../core/project-materials/project-material-errors";
+import { ProjectMarginRevisionConflictError } from "../core/project-margins/project-margin-errors";
 import { ProjectIdempotencyConflictError, ProjectSaveRevisionConflictError } from "../core/project/project-write-consistency";
 import { RequestBodyTooLargeError } from "./request-json-body";
 
@@ -35,6 +36,7 @@ export function getServerErrorStatus(error: unknown): number {
 
   if (
     error instanceof ProjectMaterialRevisionConflictError ||
+    error instanceof ProjectMarginRevisionConflictError ||
     error instanceof ProjectSaveRevisionConflictError ||
     error instanceof ProjectIdempotencyConflictError
   ) return 409;

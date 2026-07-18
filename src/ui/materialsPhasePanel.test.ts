@@ -103,6 +103,38 @@ describe("materials phase panel", () => {
     expect(html).not.toContain("Celková cena");
   });
 
+  it("shows global assignments on every module part and keeps an individual override distinct", () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-18T20:30:00.000Z");
+    const corpus = state.assignments.find((assignment) => assignment.category === "corpus")!;
+    corpus.customValues = { supplierBridge: { supplierId: "demos", supplierProductCode: "GLOBAL-100" } };
+    if (corpus.snapshots.material) corpus.snapshots.material.definition.displayName = "Globálny korpus";
+    const override = structuredClone(corpus);
+    override.assignmentId = "material-assignment:module:base-1:corpus:panel-override";
+    override.customValues = { supplierBridge: { supplierId: "demos", supplierProductCode: "OWN-200" } };
+    if (override.snapshots.material) override.snapshots.material.definition.displayName = "Vlastný korpus";
+    state.assignments.push(override);
+    const view = createProjectMaterialsView(state, [], catalog);
+    view.scopes = [{
+      id: "module:base-1",
+      kind: "module",
+      label: "Spodná skrinka",
+      items: [
+        { id: "panel-general", category: "corpus", label: "Bok", description: "720 × 560 × 18 mm", quantity: 1, unit: "m2", pieces: 1 },
+        { id: "panel-override", category: "corpus", label: "Dno", description: "600 × 560 × 18 mm", quantity: 1, unit: "m2", pieces: 1 }
+      ]
+    }];
+
+    const html = renderProjectMaterialsPanel(view, { activeSettingsTab: "modules", selectedScopeId: "module:base-1" });
+
+    expect(html).toContain('data-material-scope-item="panel-general"');
+    expect(html).toContain('data-material-assignment-source="general"');
+    expect(html).toContain("Globálny korpus · GLOBAL-100 · Zdedené z General settings");
+    expect(html).toContain('data-material-scope-item="panel-override"');
+    expect(html).toContain('data-material-assignment-source="override"');
+    expect(html).toContain("Vlastný korpus · OWN-200 · Vlastné priradenie");
+  });
+
   it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");

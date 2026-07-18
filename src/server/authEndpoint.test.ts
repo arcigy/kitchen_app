@@ -7,7 +7,14 @@ import { createInMemoryAuthSessionStore } from "../core/auth/auth-session-store"
 import { createInMemoryUserRepository, seedAuthUsers } from "../core/auth/user-repository";
 import { createUserService } from "../core/auth/user-service";
 import { parseClientSessionCookie, requireClientContextFromCookie, serializeClientSessionCookie } from "../core/client/session-cookie";
-import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
+import {
+  handleAuthLogin,
+  handleAuthLogout,
+  handleAuthSession,
+  handleExtensionAuthLogin,
+  handleExtensionAuthLogout,
+  handleExtensionAuthSession
+} from "./authEndpoint";
 
 type MockResponse = http.ServerResponse & {
   statusCode: number;
@@ -15,10 +22,11 @@ type MockResponse = http.ServerResponse & {
   body: unknown;
 };
 
-function mockReq(args: { cookie?: string; ip?: string; forwardedFor?: string } = {}): http.IncomingMessage {
+function mockReq(args: { cookie?: string; authorization?: string; ip?: string; forwardedFor?: string } = {}): http.IncomingMessage {
   return {
     headers: {
       ...(args.cookie ? { cookie: args.cookie } : {}),
+      ...(args.authorization ? { authorization: args.authorization } : {}),
       ...(args.forwardedFor ? { "x-forwarded-for": args.forwardedFor } : {})
     },
     socket: { remoteAddress: args.ip ?? "127.0.0.1" }
@@ -114,6 +122,33 @@ describe("auth endpoints", () => {
 
     expect(res.statusCode).toBe(200);
     expect((res.body as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("issues a revocable bearer session for the extension without exposing the password or session id", async () => {
+    const userService = createTestUserService();
+    const authSessionStore = createInMemoryAuthSessionStore();
+    const login = mockRes();
+    await handleExtensionAuthLogin(mockReq(), login, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+      userService,
+      authSessionStore,
+      loginRateLimiter: createLoginRateLimiter()
+    });
+    const body = login.body as { accessToken: string; session: { sessionId?: string } };
+    expect(login.statusCode).toBe(200);
+    expect(body.accessToken).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(body.session.sessionId).toBeUndefined();
+    expect(login.headers["Set-Cookie"]).toBeUndefined();
+
+    const session = mockRes();
+    const request = mockReq({ authorization: `Bearer ${body.accessToken}` });
+    await handleExtensionAuthSession(request, session, sendJson, { userService, authSessionStore });
+    expect(session.statusCode).toBe(200);
+    expect(session.body).toMatchObject({ ok: true, authenticated: true, session: { clientId: "client_arcigy_demo" } });
+
+    await handleExtensionAuthLogout(request, mockRes(), sendJson, { authSessionStore });
+    const revoked = mockRes();
+    await handleExtensionAuthSession(request, revoked, sendJson, { userService, authSessionStore });
+    expect(revoked.statusCode).toBe(401);
   });
 
   it("logs in Andrej with organization credentials", async () => {
