@@ -166,7 +166,7 @@ function drawSummaryCards(pages: RenderPage[], summary: ProjectQuoteSummary) {
   const cards: Array<[string, string]> = [
     ["Material", formatCurrency(summary.materialCost)],
     ["Praca spolu", formatCurrency(summary.laborCostTotal)],
-    ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`],
+    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`],
     ["Finalna cenova ponuka", formatCurrency(summary.finalPrice)]
   ];
 
@@ -330,7 +330,7 @@ export async function exportMarketingOfferPdf(entries: ProjectPricingView[], sum
     ["Modulova praca", formatCurrency(summary.moduleLaborCost)],
     ["Dodatocna praca projektu", formatCurrency(summary.additionalLaborCost)],
     ["Medzisucet pred marzou", formatCurrency(summary.subtotalBeforeMargin)],
-    ["Marza", `${formatNumber(summary.marginPercent, 2)} %`],
+    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} %`],
     ["Finalna cenova ponuka", formatCurrency(summary.finalPrice)]
   ]);
 

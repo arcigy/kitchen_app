@@ -2,7 +2,14 @@ import type http from "node:http";
 import type { AuthSessionStore } from "../core/auth/auth-session-store";
 import type { UserService } from "../core/auth/user-service";
 import type { ClientContext } from "../core/client/client-context";
-import { handleAuthLogin, handleAuthLogout, handleAuthSession } from "./authEndpoint";
+import {
+  handleAuthLogin,
+  handleAuthLogout,
+  handleAuthSession,
+  handleExtensionAuthLogin,
+  handleExtensionAuthLogout,
+  handleExtensionAuthSession
+} from "./authEndpoint";
 import type { ClientJourneyMetrics } from "./clientJourneyMetrics";
 import { handleClientJourneyMetricsApi } from "./clientJourneyMetrics";
 import type { HttpRequestBudget } from "./http-request-budget";
@@ -84,6 +91,23 @@ export function createWorkerRequestHandler(context: WorkerRequestPipelineContext
       }
       if (req.method === "POST" && url.pathname === "/api/auth/logout") {
         return await handleAuthLogout(req, res, context.sendJson, {
+          authSessionStore: context.authSessionStore
+        });
+      }
+      if (req.method === "POST" && url.pathname === "/api/auth/extension-login") {
+        return await handleExtensionAuthLogin(req, res, context.readJsonBody, context.sendJson, {
+          userService: context.userService,
+          authSessionStore: context.authSessionStore
+        });
+      }
+      if (req.method === "GET" && url.pathname === "/api/auth/extension-session") {
+        return await handleExtensionAuthSession(req, res, context.sendJson, {
+          userService: context.userService,
+          authSessionStore: context.authSessionStore
+        });
+      }
+      if (req.method === "POST" && url.pathname === "/api/auth/extension-logout") {
+        return await handleExtensionAuthLogout(req, res, context.sendJson, {
           authSessionStore: context.authSessionStore
         });
       }

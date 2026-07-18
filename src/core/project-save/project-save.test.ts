@@ -53,6 +53,10 @@ import {
   deterministicProjectId,
   type ProjectOperationReceipt,
 } from "../project/project-operation-idempotency";
+import {
+  createDefaultProjectMarginSettingsState,
+  projectMarginTargetId,
+} from "../project-margins/project-margin-types";
 
 const ctxA: ClientContext = {
   userId: "user_a",
@@ -506,12 +510,28 @@ describe("project create/save/encryption", () => {
     expect(loaded.integrity.saveRevision).toBe(2);
   });
 
-  it("preserves project material assignment snapshots through export and import", async () => {
+  it("preserves project material and margin settings through encrypted FQP export and import", async () => {
     const repo = createFileProjectRepository(root);
     const service = createProjectService(repo);
     const project = await service.createProject(ctxA, createInput);
     const catalog = { ...getSystemSeedCatalog(), clientId: ctxA.clientId };
     const materialAssignments = createMaterialAssignments(catalog);
+    const marginTarget = {
+      scopeId: "module:base-1",
+      itemId: "left-side",
+      category: "corpus" as const,
+    };
+    const quoteSettings = {
+      ...createDefaultProjectMarginSettingsState(),
+      initialized: true,
+      groupMargins: { corpus: 15, front: 25 },
+      itemOverrides: [{
+        ...marginTarget,
+        targetId: projectMarginTargetId(marginTarget),
+        marginPercent: 33.25,
+      }],
+      updatedAt: "2026-07-18T19:00:00.000Z",
+    };
     const saved = await service.saveCurrentProject(ctxA, {
       projectId: project.projectId,
       activePhaseId: project.activePhaseId,
@@ -522,7 +542,8 @@ describe("project create/save/encryption", () => {
       moduleInstances: [],
       materialAssignments,
       sceneState: {},
-    });
+      quoteSettings,
+    }, { marginSettingsMode: "initialize" });
 
     const envelope = await service.exportEncryptedProjectFile(
       ctxA,
@@ -535,6 +556,8 @@ describe("project create/save/encryption", () => {
     expect(imported.projectId).not.toBe(saved.projectId);
     expect(imported.appState.materialAssignments).toEqual(materialAssignments);
     expect(imported.phases[0].materialAssignments).toEqual(materialAssignments);
+    expect(imported.appState.quoteSettings).toEqual(quoteSettings);
+    expect(imported.phases[0].quoteSettings).toEqual(quoteSettings);
     expect(
       imported.appState.materialAssignments.assignments[0].customValues,
     ).toEqual({

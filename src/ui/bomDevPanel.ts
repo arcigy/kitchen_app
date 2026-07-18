@@ -3,6 +3,7 @@ import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState"
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { isProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 import { DEFAULT_PHASE_ID, DEFAULT_PROJECT_ID } from "../core/storage/storage-types";
 import { exportMarketingOfferPdf } from "../layout/bom/exportMarketingPdf";
 import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
@@ -13,7 +14,8 @@ import {
   aggregateProjectEdges,
   buildProjectQuoteSummary,
   sanitizeProjectQuoteSettings,
-  type ProjectQuoteSettings
+  type ProjectQuoteSettings,
+  type ProjectQuoteSettingsInput
 } from "../layout/bom/projectQuote";
 import {
   formatDisplayCurrency,
@@ -198,11 +200,12 @@ export function mountBomDevPanel(
   worktops: KitchenWorktopInstance[],
   customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
-  catalog: ClientCatalog
+  catalog: ClientCatalog,
+  options: { quoteSettings?: ProjectQuoteSettingsInput } = {}
 ): void {
   const entries = buildProjectPricingViews(instances, worktops, customFurniture, ctx, catalog);
   const storageKey = quoteSettingsStorageKey(catalog);
-  let settings = readStoredSettings(storageKey);
+  let settings: ProjectQuoteSettingsInput = options.quoteSettings ?? readStoredSettings(storageKey);
   let displayCurrency = readPriceDisplayCurrency();
 
   container.className = "bom-dev";
@@ -218,8 +221,12 @@ export function mountBomDevPanel(
       return;
     }
 
-    settings = sanitizeProjectQuoteSettings(settings);
-    writeStoredSettings(storageKey, settings);
+    const projectMarginsManaged = isProjectMarginSettingsState(settings);
+    const legacySettings = projectMarginsManaged ? null : sanitizeProjectQuoteSettings(settings);
+    if (legacySettings) {
+      settings = legacySettings;
+      writeStoredSettings(storageKey, legacySettings);
+    }
 
     const boards = aggregateProjectBoards(entries);
     const edges = aggregateProjectEdges(entries);
@@ -301,21 +308,28 @@ export function mountBomDevPanel(
       "Project pricing inputs",
       "Tieto dve hodnoty sa pouziju rovnako v appke, v Create Sheet aj v marketingovom PDF."
     );
-    const settingsGrid = document.createElement("div");
-    settingsGrid.className = "bom-dev__settings-grid";
-    settingsGrid.appendChild(
-      buildNumberInput("Dodatocna praca projektu", settings.additionalLaborCost, (value) => {
-        settings = sanitizeProjectQuoteSettings({ ...settings, additionalLaborCost: value });
-        render();
-      }, "EUR base")
-    );
-    settingsGrid.appendChild(
-      buildNumberInput("Marza", settings.marginPercent, (value) => {
-        settings = sanitizeProjectQuoteSettings({ ...settings, marginPercent: value });
-        render();
-      }, "%")
-    );
-    settingsSection.appendChild(settingsGrid);
+    if (projectMarginsManaged) {
+      const managedNotice = document.createElement("p");
+      managedNotice.className = "bom-dev__section-description";
+      managedNotice.textContent = "Marže a dodatočná práca sú uložené v projekte. Upravujú sa v sekcii Marže, aby appka, Excel, PDF a JSON používali rovnaké hodnoty.";
+      settingsSection.appendChild(managedNotice);
+    } else if (legacySettings) {
+      const settingsGrid = document.createElement("div");
+      settingsGrid.className = "bom-dev__settings-grid";
+      settingsGrid.appendChild(
+        buildNumberInput("Dodatocna praca projektu", legacySettings.additionalLaborCost, (value) => {
+          settings = sanitizeProjectQuoteSettings({ ...legacySettings, additionalLaborCost: value });
+          render();
+        }, "EUR base")
+      );
+      settingsGrid.appendChild(
+        buildNumberInput("Marza", legacySettings.marginPercent, (value) => {
+          settings = sanitizeProjectQuoteSettings({ ...legacySettings, marginPercent: value });
+          render();
+        }, "%")
+      );
+      settingsSection.appendChild(settingsGrid);
+    }
     container.appendChild(settingsSection);
 
     const results = section(

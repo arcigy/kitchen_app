@@ -2,6 +2,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
+import type { ProjectQuoteSettingsInput } from "../layout/bom/projectQuote";
 import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 import { createButtonElement } from "./propsPanelElements";
 
@@ -11,6 +12,7 @@ type BomPanelArgs = {
   customFurniture: CustomFurnitureInstance[];
   kitchenCtx: KitchenContext;
   catalog: ClientCatalog;
+  quoteSettings?: ProjectQuoteSettingsInput;
 };
 
 function mountPanelError(container: HTMLElement, message: string) {
@@ -63,7 +65,9 @@ export function openBomPanel(args: BomPanelArgs) {
       if (!overlay.isConnected) return;
       title.textContent = "Kusovník";
       content.innerHTML = "";
-      mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.customFurniture, args.kitchenCtx, args.catalog);
+      mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.customFurniture, args.kitchenCtx, args.catalog, {
+        quoteSettings: args.quoteSettings
+      });
     })
     .catch(() => mountPanelError(content, "BOM could not be loaded."));
 }

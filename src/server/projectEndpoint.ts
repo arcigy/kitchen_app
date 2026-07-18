@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import type { ClientContext } from "../core/client/client-context";
 import { createProjectService } from "../core/project/project-service";
 import type { CreateProjectInput } from "../core/project/project-types";
@@ -11,6 +12,7 @@ import {
   createDefaultProjectMaterialAssignments,
   type ProjectMaterialDefaultOverrides
 } from "../core/project-materials/project-material-business";
+import { isProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 import { PROJECT_FILE_MIME_TYPE, toSafeProjectFileName } from "../core/project-save/project-save-file";
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository, createServerModulePackageRepository } from "./serverRepositories";
@@ -121,7 +123,7 @@ export async function handleProjectApi(
 ): Promise<boolean> {
   if (!isProjectRoute(url.pathname)) return false;
 
-  const ctx = await deps.getContext(req.headers.cookie);
+  const ctx = await deps.getContext(clientSessionHeaderFromRequest(req));
   const repository = createServerProjectRepository({ projectRoot: deps.projectRoot });
   const service = createProjectService(repository);
 
@@ -212,8 +214,10 @@ export async function handleProjectApi(
       projectMaterialOverrides(appState)
     );
     let initializeStoredAssignments = false;
+    let storedQuoteSettings: unknown;
     try {
       const stored = await repository.loadProjectSave(ctx, project.projectId, project.activePhaseId);
+      storedQuoteSettings = stored.appState.quoteSettings;
       if (stored.appState.materialAssignments.initialized) {
         materialAssignments = stored.appState.materialAssignments;
       } else {
@@ -222,6 +226,17 @@ export async function handleProjectApi(
     } catch (error) {
       if (!isMissingProjectSave(error)) throw error;
     }
+    const incomingQuoteSettings = appState.quoteSettings;
+    const storedMarginsRecognized = isProjectMarginSettingsState(storedQuoteSettings);
+    const incomingMarginsRecognized = isProjectMarginSettingsState(incomingQuoteSettings);
+    // Once canonical margins exist, only the dedicated revision-checked margins
+    // endpoint may change them. A generic save can therefore persist layout
+    // changes from an older tab without erasing or blocking on stale margins.
+    const quoteSettings = storedMarginsRecognized
+      ? storedQuoteSettings
+      : incomingMarginsRecognized
+        ? incomingQuoteSettings
+        : storedQuoteSettings ?? incomingQuoteSettings;
     const modulePackages = await createServerModulePackageRepository(deps.projectRoot).listPackages(ctx);
     const save = await service.saveCurrentProject(ctx, {
       projectId: project.projectId,
@@ -239,13 +254,14 @@ export async function handleProjectApi(
       cameraState: appState.camera,
       selections: appState.selections,
       pricingSettings: appState.pricingSettings,
-      quoteSettings: appState.quoteSettings,
+      quoteSettings,
       projectPreview: appState.projectPreview,
       editingSessionId: record.editingSessionId,
       bomSnapshot: record.bomSnapshot,
       appVersion: typeof record.appVersion === "string" ? record.appVersion : undefined
     }, {
       materialAssignmentsMode: initializeStoredAssignments ? "initialize" : "preserve",
+      marginSettingsMode: !storedMarginsRecognized && incomingMarginsRecognized ? "initialize" : "preserve",
       expectedRevision,
       idempotency
     });

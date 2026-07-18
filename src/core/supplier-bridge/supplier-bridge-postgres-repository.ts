@@ -15,8 +15,31 @@ import {
   type SupplierBridgeRepository,
   type SupplierBridgeSessionAggregate
 } from "./supplier-bridge-repository";
+import { stringifySupplierBridgeJson, supplierBridgePostgresValues } from "./supplier-bridge-postgres-json";
 
 type DataRow = { data: unknown };
+
+export class SupplierBridgePersistenceError extends Error {
+  readonly bridgeStage: string;
+  readonly code: string | undefined;
+
+  constructor(stage: string, error: unknown) {
+    super(`Supplier Bridge persistence failed at ${stage}.`);
+    this.name = "SupplierBridgePersistenceError";
+    this.bridgeStage = stage;
+    this.code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+      ? error.code
+      : undefined;
+  }
+}
+
+async function persistAt<T>(stage: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new SupplierBridgePersistenceError(stage, error);
+  }
+}
 
 function data<T>(row: DataRow | undefined, label: string): T {
   if (!row?.data || typeof row.data !== "object") throw new Error(`${label} is invalid.`);
@@ -76,7 +99,7 @@ async function saveSession(client: PoolClient, session: SupplierSyncSession): Pr
       SET status = $3, expires_at = $4::timestamptz, data = $5::jsonb, db_updated_at = now()
       WHERE client_id = $1 AND session_id = $2
     `,
-    [session.tenantId, session.id, session.status, session.expiresAt, JSON.stringify(session)]
+    [session.tenantId, session.id, session.status, session.expiresAt, stringifySupplierBridgeJson(session)]
   );
 }
 
@@ -112,7 +135,7 @@ export function createPostgresSupplierBridgeRepository(args: {
               (client_id, session_id, project_id, user_id, supplier_id, status, expires_at, data)
             VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::jsonb)
           `,
-          [tenantId, session.id, session.projectId, session.userId, session.supplierId, session.status, session.expiresAt, JSON.stringify(session)]
+          [tenantId, session.id, session.projectId, session.userId, session.supplierId, session.status, session.expiresAt, stringifySupplierBridgeJson(session)]
         );
         for (const item of items) {
           await client.query(
@@ -121,7 +144,7 @@ export function createPostgresSupplierBridgeRepository(args: {
                 (client_id, session_id, sync_item_id, material_assignment_id, status, data)
               VALUES ($1, $2, $3, $4, $5, $6::jsonb)
             `,
-            [tenantId, session.id, item.id, item.materialAssignmentId, item.status, JSON.stringify(item)]
+            [tenantId, session.id, item.id, item.materialAssignmentId, item.status, stringifySupplierBridgeJson(item)]
           );
         }
         await client.query(
@@ -130,7 +153,7 @@ export function createPostgresSupplierBridgeRepository(args: {
               (client_id, session_id, token_id, kind, token_hash, expires_at, used_at, data)
             VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8::jsonb)
           `,
-          [tenantId, session.id, bridgeToken.id, bridgeToken.kind, bridgeToken.tokenHash, bridgeToken.expiresAt, bridgeToken.usedAt, JSON.stringify(bridgeToken)]
+          [tenantId, session.id, bridgeToken.id, bridgeToken.kind, bridgeToken.tokenHash, bridgeToken.expiresAt, bridgeToken.usedAt, stringifySupplierBridgeJson(bridgeToken)]
         );
       }));
     },
@@ -146,7 +169,7 @@ export function createPostgresSupplierBridgeRepository(args: {
               (client_id, session_id, token_id, kind, token_hash, expires_at, used_at, data)
             VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8::jsonb)
           `,
-          [tenantId, token.sessionId, token.id, token.kind, token.tokenHash, token.expiresAt, token.usedAt, JSON.stringify(token)]
+          [tenantId, token.sessionId, token.id, token.kind, token.tokenHash, token.expiresAt, token.usedAt, stringifySupplierBridgeJson(token)]
         );
       });
     },
@@ -184,54 +207,54 @@ export function createPostgresSupplierBridgeRepository(args: {
     },
     async submitCandidate(input) {
       return run((client) => transaction(client, async () => {
-        const sessionRow = await client.query<DataRow>(
+        const sessionRow = await persistAt("CANDIDATE_SESSION_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_supplier_sync_sessions WHERE client_id = $1 AND session_id = $2 FOR UPDATE",
-          [input.tenantId, input.sessionId]
-        );
-        const itemRow = await client.query<DataRow>(
+          supplierBridgePostgresValues(input.tenantId, input.sessionId)
+        ));
+        const itemRow = await persistAt("CANDIDATE_ITEM_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_supplier_sync_items WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3 FOR UPDATE",
-          [input.tenantId, input.sessionId, input.candidate.syncItemId]
-        );
+          supplierBridgePostgresValues(input.tenantId, input.sessionId, input.candidate.syncItemId)
+        ));
         const session = data<SupplierSyncSession>(sessionRow.rows[0], "Supplier sync session");
         const item = data<SupplierSyncItem>(itemRow.rows[0], "Supplier sync item");
         if (["cancelled", "completed", "expired", "failed"].includes(session.status)) throw new Error("Supplier sync session is not active.");
-        const existing = await client.query<DataRow>(
+        const existing = await persistAt("CANDIDATE_IDEMPOTENCY_READ", () => client.query<DataRow>(
           `
             SELECT data FROM arcigy_supplier_product_candidates
             WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3 AND submission_id = $4
           `,
-          [input.tenantId, input.sessionId, input.candidate.syncItemId, input.submissionId]
-        );
+          supplierBridgePostgresValues(input.tenantId, input.sessionId, input.candidate.syncItemId, input.submissionId)
+        ));
         if (existing.rows[0]) {
           const candidate = data<SupplierProductCandidate>(existing.rows[0], "Supplier product candidate");
-          const observation = await client.query<DataRow>(
+          const observation = await persistAt("CANDIDATE_REPLAY_PRICE_READ", () => client.query<DataRow>(
             "SELECT data FROM arcigy_supplier_price_observations WHERE client_id = $1 AND candidate_id = $2",
-            [input.tenantId, candidate.id]
-          );
+            supplierBridgePostgresValues(input.tenantId, candidate.id)
+          ));
           return {
             candidate,
             priceObservation: observation.rows[0] ? data<SupplierPriceObservation>(observation.rows[0], "Supplier price observation") : null,
             idempotent: true
           };
         }
-        await client.query(
+        await persistAt("CANDIDATE_INSERT", () => client.query(
           `
             INSERT INTO arcigy_supplier_product_candidates
               (client_id, session_id, sync_item_id, candidate_id, submission_id, supplier_product_code, data)
             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
           `,
-          [input.tenantId, input.sessionId, input.candidate.syncItemId, input.candidate.id, input.submissionId, input.candidate.supplierProductCode, JSON.stringify(input.candidate)]
-        );
+          supplierBridgePostgresValues(input.tenantId, input.sessionId, input.candidate.syncItemId, input.candidate.id, input.submissionId, input.candidate.supplierProductCode, stringifySupplierBridgeJson(input.candidate))
+        ));
         if (input.priceObservation && input.persistPriceObservation) {
           const observation = input.priceObservation;
-          await client.query(
+          await persistAt("CANDIDATE_PRICE_INSERT", () => client.query(
             `
               INSERT INTO arcigy_supplier_price_observations
                 (client_id, session_id, sync_item_id, candidate_id, observation_id, supplier_id, supplier_product_code, observed_at, data)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::jsonb)
             `,
-            [input.tenantId, input.sessionId, observation.syncItemId, observation.candidateId, observation.id, observation.supplierId, observation.supplierProductCode, observation.observedAt, JSON.stringify(observation)]
-          );
+            supplierBridgePostgresValues(input.tenantId, input.sessionId, observation.syncItemId, observation.candidateId, observation.id, observation.supplierId, observation.supplierProductCode, observation.observedAt, stringifySupplierBridgeJson(observation))
+          ));
         }
         item.status = "needs_confirmation";
         if (item.exactLookup) {
@@ -243,59 +266,59 @@ export function createPostgresSupplierBridgeRepository(args: {
         item.updatedAt = input.candidate.observedAt;
         session.status = "active";
         session.updatedAt = input.candidate.observedAt;
-        await client.query(
+        await persistAt("CANDIDATE_ITEM_UPDATE", () => client.query(
           "UPDATE arcigy_supplier_sync_items SET status = $4, data = $5::jsonb, db_updated_at = now() WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3",
-          [input.tenantId, input.sessionId, item.id, item.status, JSON.stringify(item)]
-        );
-        await saveSession(client, session);
+          supplierBridgePostgresValues(input.tenantId, input.sessionId, item.id, item.status, stringifySupplierBridgeJson(item))
+        ));
+        await persistAt("CANDIDATE_SESSION_UPDATE", () => saveSession(client, session));
         return { candidate: structuredClone(input.candidate), priceObservation: structuredClone(input.priceObservation), idempotent: false };
       }));
     },
     async findLatestPriceObservation(observationArgs) {
       return run(async (client) => {
-        const result = await client.query<DataRow>(
+        const result = await persistAt("PRICE_LATEST_READ", () => client.query<DataRow>(
           `
             SELECT data FROM arcigy_supplier_price_observations
             WHERE client_id = $1 AND supplier_id = $2 AND supplier_product_code = $3
             ORDER BY observed_at DESC, db_created_at DESC
             LIMIT 1
           `,
-          [observationArgs.tenantId, observationArgs.supplierId, observationArgs.supplierProductCode]
-        );
+          supplierBridgePostgresValues(observationArgs.tenantId, observationArgs.supplierId, observationArgs.supplierProductCode)
+        ));
         return result.rows[0] ? data<SupplierPriceObservation>(result.rows[0], "Supplier price observation") : null;
       });
     },
     async touchPriceObservation(observationArgs) {
       return run(async (client) => {
-        const result = await client.query<DataRow>(
+        const result = await persistAt("PRICE_TOUCH", () => client.query<DataRow>(
           `
             UPDATE arcigy_supplier_price_observations
             SET data = jsonb_set(data, '{lastVerifiedAt}', to_jsonb($3::text), true), db_updated_at = now()
             WHERE client_id = $1 AND observation_id = $2
             RETURNING data
           `,
-          [observationArgs.tenantId, observationArgs.observationId, observationArgs.lastVerifiedAt]
-        );
+          supplierBridgePostgresValues(observationArgs.tenantId, observationArgs.observationId, observationArgs.lastVerifiedAt)
+        ));
         return data<SupplierPriceObservation>(result.rows[0], "Supplier price observation");
       });
     },
     async confirmItem(confirmArgs) {
       return run((client) => transaction(client, async () => {
-        const sessionRow = await client.query<DataRow>(
+        const sessionRow = await persistAt("SESSION_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_supplier_sync_sessions WHERE client_id = $1 AND session_id = $2 FOR UPDATE",
           [confirmArgs.tenantId, confirmArgs.sessionId]
-        );
-        const itemRow = await client.query<DataRow>(
+        ));
+        const itemRow = await persistAt("ITEM_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_supplier_sync_items WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3 FOR UPDATE",
           [confirmArgs.tenantId, confirmArgs.sessionId, confirmArgs.syncItemId]
-        );
-        const candidateRow = await client.query<DataRow>(
+        ));
+        const candidateRow = await persistAt("CANDIDATE_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_supplier_product_candidates WHERE client_id = $1 AND sync_item_id = $2 AND candidate_id = $3",
           [confirmArgs.tenantId, confirmArgs.syncItemId, confirmArgs.candidateId]
-        );
-        const session = data<SupplierSyncSession>(sessionRow.rows[0], "Supplier sync session");
-        const item = data<SupplierSyncItem>(itemRow.rows[0], "Supplier sync item");
-        data<SupplierProductCandidate>(candidateRow.rows[0], "Supplier product candidate");
+        ));
+        const session = await persistAt("SESSION_DATA", async () => data<SupplierSyncSession>(sessionRow.rows[0], "Supplier sync session"));
+        const item = await persistAt("ITEM_DATA", async () => data<SupplierSyncItem>(itemRow.rows[0], "Supplier sync item"));
+        await persistAt("CANDIDATE_DATA", async () => data<SupplierProductCandidate>(candidateRow.rows[0], "Supplier product candidate"));
         if (item.status === "confirmed" && item.selectedCandidateId === confirmArgs.candidateId) {
           return requireAggregate(client, confirmArgs.tenantId, confirmArgs.sessionId);
         }
@@ -305,13 +328,14 @@ export function createPostgresSupplierBridgeRepository(args: {
         item.selectedCandidateId = confirmArgs.candidateId;
         item.errorCode = null;
         item.updatedAt = confirmArgs.now;
-        await client.query(
+        await persistAt("ITEM_UPDATE", () => client.query(
           "UPDATE arcigy_supplier_sync_items SET status = $4, data = $5::jsonb, db_updated_at = now() WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3",
-          [confirmArgs.tenantId, confirmArgs.sessionId, item.id, item.status, JSON.stringify(item)]
-        );
+          [confirmArgs.tenantId, confirmArgs.sessionId, item.id, item.status, stringifySupplierBridgeJson(item)]
+        ));
         if (confirmArgs.mapping) {
-          const mappingKey = supplierMappingKey(confirmArgs.mapping);
-          await client.query(
+          const mapping = confirmArgs.mapping;
+          const mappingKey = supplierMappingKey(mapping);
+          await persistAt("MAPPING_UPSERT", () => client.query(
             `
               INSERT INTO arcigy_material_supplier_mappings
                 (client_id, mapping_key, supplier_id, supplier_product_code, confirmed_at, data)
@@ -323,27 +347,27 @@ export function createPostgresSupplierBridgeRepository(args: {
                 data = EXCLUDED.data,
                 db_updated_at = now()
             `,
-            [confirmArgs.tenantId, mappingKey, confirmArgs.mapping.supplierId, confirmArgs.mapping.supplierProductCode, confirmArgs.mapping.confirmedAt, JSON.stringify(confirmArgs.mapping)]
-          );
+            [confirmArgs.tenantId, mappingKey, mapping.supplierId, mapping.supplierProductCode, mapping.confirmedAt, stringifySupplierBridgeJson(mapping)]
+          ));
         }
         if (confirmArgs.catalogItem) {
           const catalogItem: SupplierCatalogItem = confirmArgs.catalogItem;
-          await client.query(
+          await persistAt("CATALOG_UPSERT", () => client.query(
             `
               INSERT INTO arcigy_supplier_catalog_items
                 (client_id, catalog_item_id, supplier_id, supplier_product_id, last_verified_at, data)
               VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb)
               ON CONFLICT (client_id, supplier_id, supplier_product_id) DO UPDATE SET
                 last_verified_at = EXCLUDED.last_verified_at,
-                data = jsonb_set(EXCLUDED.data, '{firstObservedAt}', arcigy_supplier_catalog_items.data->'firstObservedAt', true),
+                data = jsonb_set(EXCLUDED.data, '{firstObservedAt}', COALESCE(arcigy_supplier_catalog_items.data->'firstObservedAt', EXCLUDED.data->'firstObservedAt'), true),
                 db_updated_at = now()
             `,
-            [catalogItem.tenantId, catalogItem.id, catalogItem.supplierId, catalogItem.supplierProductId, catalogItem.lastVerifiedAt, JSON.stringify(catalogItem)]
-          );
+            [catalogItem.tenantId, catalogItem.id, catalogItem.supplierId, catalogItem.supplierProductId, catalogItem.lastVerifiedAt, stringifySupplierBridgeJson(catalogItem)]
+          ));
         }
         if (confirmArgs.materialSupplierAssignment) {
           const assignment: MaterialSupplierAssignment = confirmArgs.materialSupplierAssignment;
-          await client.query(
+          await persistAt("MATERIAL_ASSIGNMENT_UPSERT", () => client.query(
             `
               INSERT INTO arcigy_material_supplier_assignments
                 (client_id, material_assignment_id, supplier_catalog_item_id, selected_price_observation_id, price_locked, assigned_at, data)
@@ -356,11 +380,11 @@ export function createPostgresSupplierBridgeRepository(args: {
                 data = EXCLUDED.data,
                 db_updated_at = now()
             `,
-            [assignment.tenantId, assignment.materialAssignmentId, assignment.supplierCatalogItemId, assignment.selectedPriceObservationId, assignment.priceLocked, assignment.assignedAt, JSON.stringify(assignment)]
-          );
+            [assignment.tenantId, assignment.materialAssignmentId, assignment.supplierCatalogItemId, assignment.selectedPriceObservationId, assignment.priceLocked, assignment.assignedAt, stringifySupplierBridgeJson(assignment)]
+          ));
         }
-        await completeSessionWhenDone(client, session, confirmArgs.now);
-        return requireAggregate(client, confirmArgs.tenantId, confirmArgs.sessionId);
+        await persistAt("SESSION_COMPLETE", () => completeSessionWhenDone(client, session, confirmArgs.now));
+        return persistAt("AGGREGATE_READ", () => requireAggregate(client, confirmArgs.tenantId, confirmArgs.sessionId));
       }));
     },
     async skipItem(skipArgs) {
@@ -382,7 +406,7 @@ export function createPostgresSupplierBridgeRepository(args: {
           item.updatedAt = skipArgs.now;
           await client.query(
             "UPDATE arcigy_supplier_sync_items SET status = $4, data = $5::jsonb, db_updated_at = now() WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3",
-            [skipArgs.tenantId, skipArgs.sessionId, item.id, item.status, JSON.stringify(item)]
+            [skipArgs.tenantId, skipArgs.sessionId, item.id, item.status, stringifySupplierBridgeJson(item)]
           );
         }
         await completeSessionWhenDone(client, session, skipArgs.now);
@@ -409,7 +433,7 @@ export function createPostgresSupplierBridgeRepository(args: {
             item.updatedAt = statusArgs.now;
             await client.query(
               "UPDATE arcigy_supplier_sync_items SET data = $4::jsonb, db_updated_at = now() WHERE client_id = $1 AND session_id = $2 AND sync_item_id = $3",
-              [statusArgs.tenantId, statusArgs.sessionId, item.id, JSON.stringify(item)]
+              [statusArgs.tenantId, statusArgs.sessionId, item.id, stringifySupplierBridgeJson(item)]
             );
           }
         }
@@ -420,10 +444,10 @@ export function createPostgresSupplierBridgeRepository(args: {
     },
     async findMapping(mappingArgs) {
       return run(async (client) => {
-        const result = await client.query<DataRow>(
+        const result = await persistAt("MAPPING_READ", () => client.query<DataRow>(
           "SELECT data FROM arcigy_material_supplier_mappings WHERE client_id = $1 AND mapping_key = $2",
-          [mappingArgs.tenantId, supplierMappingKey(mappingArgs)]
-        );
+          supplierBridgePostgresValues(mappingArgs.tenantId, supplierMappingKey(mappingArgs))
+        ));
         return result.rows[0] ? data<MaterialSupplierMapping>(result.rows[0], "Material supplier mapping") : null;
       });
     }

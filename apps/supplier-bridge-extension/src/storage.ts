@@ -4,6 +4,10 @@ import { parseSupplierSyncSessionView } from "./sessionViewValidation";
 const PROGRESS_KEY = "arcigySupplierBridgeProgress";
 const SECRETS_KEY = "arcigySupplierBridgeSessionSecrets";
 const PROJECT_CONTEXT_KEY = "arcigySupplierBridgeProjectContext";
+const PRIVACY_CONSENT_KEY = "arcigySupplierBridgePrivacyConsent";
+const ACCOUNT_KEY = "arcigySupplierBridgeAccount";
+
+export const SUPPLIER_BRIDGE_PRIVACY_POLICY_VERSION = "2026-07-18";
 
 export type SupplierBridgeProjectContext = {
   version: 1;
@@ -11,6 +15,47 @@ export type SupplierBridgeProjectContext = {
   projectLabel: string;
   updatedAt: string;
 };
+
+export type SupplierBridgePrivacyConsent = {
+  version: 1;
+  policyVersion: typeof SUPPLIER_BRIDGE_PRIVACY_POLICY_VERSION;
+  acceptedAt: string;
+};
+
+export type SupplierBridgeAccount = {
+  version: 1;
+  baseUrl: string;
+  accessToken: string;
+  userId: string;
+  clientId: string;
+  role: "owner" | "editor" | "viewer";
+  displayName: string;
+  expiresAt: string;
+};
+
+export function parseSupplierBridgeAccount(value: unknown): SupplierBridgeAccount | null {
+  const input = record(value);
+  if (!input || input.version !== 1 || typeof input.baseUrl !== "string" || typeof input.accessToken !== "string" ||
+    typeof input.userId !== "string" || typeof input.clientId !== "string" || !["owner", "editor", "viewer"].includes(String(input.role)) ||
+    typeof input.displayName !== "string" || typeof input.expiresAt !== "string" || !Number.isFinite(Date.parse(input.expiresAt))) return null;
+  return input as SupplierBridgeAccount;
+}
+
+export async function loadSupplierBridgeAccount(): Promise<SupplierBridgeAccount | null> {
+  const stored = await chrome.storage.local.get(ACCOUNT_KEY);
+  const account = parseSupplierBridgeAccount(stored[ACCOUNT_KEY]);
+  return account && Date.parse(account.expiresAt) > Date.now() ? account : null;
+}
+
+export async function saveSupplierBridgeAccount(account: SupplierBridgeAccount): Promise<void> {
+  const validated = parseSupplierBridgeAccount(account);
+  if (!validated) throw new Error("Arcigy extension account is invalid.");
+  await chrome.storage.local.set({ [ACCOUNT_KEY]: validated });
+}
+
+export async function clearSupplierBridgeAccount(): Promise<void> {
+  await chrome.storage.local.remove(ACCOUNT_KEY);
+}
 
 export type SupplierBridgeProgress = {
   version: 1;
@@ -51,6 +96,12 @@ export function parseSupplierBridgeProjectContext(value: unknown): SupplierBridg
   const input = record(value);
   if (!input || input.version !== 1 || typeof input.projectId !== "string" || input.projectId.length === 0 || input.projectId.length > 200 || typeof input.projectLabel !== "string" || input.projectLabel.length > 300 || typeof input.updatedAt !== "string" || !Number.isFinite(Date.parse(input.updatedAt))) return null;
   return { version: 1, projectId: input.projectId, projectLabel: input.projectLabel, updatedAt: input.updatedAt };
+}
+
+export function parseSupplierBridgePrivacyConsent(value: unknown): SupplierBridgePrivacyConsent | null {
+  const input = record(value);
+  if (!input || input.version !== 1 || input.policyVersion !== SUPPLIER_BRIDGE_PRIVACY_POLICY_VERSION || typeof input.acceptedAt !== "string" || !Number.isFinite(Date.parse(input.acceptedAt))) return null;
+  return { version: 1, policyVersion: SUPPLIER_BRIDGE_PRIVACY_POLICY_VERSION, acceptedAt: input.acceptedAt };
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -152,6 +203,25 @@ export async function saveSupplierBridgeProjectContext(context: SupplierBridgePr
   const validated = parseSupplierBridgeProjectContext(context);
   if (!validated) throw new Error("Supplier Bridge project context is invalid.");
   await chrome.storage.local.set({ [PROJECT_CONTEXT_KEY]: validated });
+}
+
+export async function loadSupplierBridgePrivacyConsent(): Promise<SupplierBridgePrivacyConsent | null> {
+  const stored = await chrome.storage.local.get(PRIVACY_CONSENT_KEY);
+  return parseSupplierBridgePrivacyConsent(stored[PRIVACY_CONSENT_KEY]);
+}
+
+export async function saveSupplierBridgePrivacyConsent(): Promise<SupplierBridgePrivacyConsent> {
+  const consent: SupplierBridgePrivacyConsent = {
+    version: 1,
+    policyVersion: SUPPLIER_BRIDGE_PRIVACY_POLICY_VERSION,
+    acceptedAt: new Date().toISOString()
+  };
+  await chrome.storage.local.set({ [PRIVACY_CONSENT_KEY]: consent });
+  return consent;
+}
+
+export async function clearSupplierBridgePrivacyConsent(): Promise<void> {
+  await chrome.storage.local.remove(PRIVACY_CONSENT_KEY);
 }
 
 export async function loadSupplierBridgeSecrets(): Promise<SupplierBridgeSessionSecrets | null> {

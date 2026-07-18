@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import type { ClientCatalog, ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { ClientContext } from "../core/client/client-context";
 import {
@@ -252,7 +253,7 @@ export async function handleProjectMaterialsApi(
 ): Promise<boolean> {
   const route = parseRoute(url.pathname);
   if (!route) return false;
-  const ctx = await deps.getContext(req.headers.cookie);
+  const ctx = await deps.getContext(clientSessionHeaderFromRequest(req));
   if (req.method === "PUT" && ctx.role === "viewer") {
     deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot change project materials." });
     return true;

@@ -4,13 +4,12 @@ import {
   cancelSupplierBridgeSession,
   confirmSupplierCandidate,
   loadSupplierBridgeSession,
-  SupplierBridgeApiError,
   skipSupplierSyncItem,
-  submitSupplierCandidate
+  submitSupplierCandidate,
+  SupplierBridgeApiError
 } from "./api";
 import { mockSupplierAdapter } from "./adapters/mockSupplierAdapter";
-import { backendBaseUrlForArcigyOrigin } from "./config";
-import { configuredSupplierPortal } from "./config";
+import { backendBaseUrlForArcigyOrigin, configuredSupplierPortal, supplierPortals } from "./config";
 import { exactAdapterForSupplier } from "./suppliers/registry";
 import { bridgeLog } from "./logger";
 import {
@@ -25,11 +24,13 @@ import {
   loadSupplierBridgeProgress,
   loadSupplierBridgeSecrets,
   appendSupplierBridgeTrace,
+  clearSupplierBridgeState,
   saveSupplierBridgeProjectContext,
   saveSupplierBridgeProgress,
   saveSupplierBridgeSecrets,
   type SupplierBridgeProgress
 } from "./storage";
+import { SupplierBridgeSessionRecoveryError } from "./sessionRecovery";
 
 const sidePanelOpenedFromArcigyClick = new Set<number>();
 
@@ -72,8 +73,10 @@ function safeBridgeFailureMessage(error: unknown): string {
 
 function failureTraceCode(error: unknown): string {
   if (error instanceof SupplierBridgeApiError) {
-    return error.requestId ? `HTTP_${error.status}:${error.requestId}` : `HTTP_${error.status}`;
+    const code = error.code ?? `BACKEND_HTTP_${error.status}`;
+    return error.requestId ? `${code};REQUEST_ID=${error.requestId}` : code;
   }
+  if (error instanceof SupplierBridgeSessionRecoveryError) return error.code;
   return "BRIDGE_REQUEST_FAILED";
 }
 
@@ -82,17 +85,19 @@ async function recordRouteFailure(message: BridgeRuntimeRequest, error: unknown)
   if (!progress) return;
   const stage = message.type === "SIDE_PANEL_COMMAND" && message.command === "assign_current"
     ? "Priradenie materiálu zlyhalo"
-    : "Požiadavka Bridge zlyhala";
+    : `Požiadavka ${message.type} zlyhala`;
   await trace({ ...progress, lastWarning: safeBridgeFailureMessage(error) }, stage, "error", failureTraceCode(error));
 }
 
 async function activeSession(): Promise<{ progress: SupplierBridgeProgress; accessToken: string }> {
   const [progress, secrets] = await Promise.all([loadSupplierBridgeProgress(), loadSupplierBridgeSecrets()]);
   if (!progress || !secrets || secrets.sessionId !== progress.sessionId || !secrets.accessToken) {
-    throw new Error("Supplier Bridge is not attached to an active session.");
+    if (progress || secrets) await clearSupplierBridgeState();
+    throw new SupplierBridgeSessionRecoveryError();
   }
   if (secrets.accessTokenExpiresAt && Date.parse(secrets.accessTokenExpiresAt) <= Date.now()) {
-    throw new Error("Supplier Bridge access expired. Start a new session in Arcigy.");
+    await clearSupplierBridgeState();
+    throw new SupplierBridgeSessionRecoveryError();
   }
   return { progress, accessToken: secrets.accessToken };
 }
@@ -309,6 +314,37 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   return { ok: capture.candidates.length > 0, view, capture, errorCode: capture.candidates.length > 0 ? null : capture.errorCode };
 }
 
+async function captureActiveSupplierProduct(): Promise<BridgeRuntimeResponse> {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (typeof tab?.id !== "number" || !tab.url) {
+    return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Otvorte detail produktu dodávateľa." };
+  }
+  let origin: string;
+  try { origin = new URL(tab.url).origin; } catch {
+    return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Aktívna karta nie je podporovaný dodávateľ." };
+  }
+  const supplier = Object.entries(supplierPortals).find(([, portal]) => (portal.origins as readonly string[]).includes(origin));
+  if (!supplier) return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Aktívna karta nie je podporovaný dodávateľ." };
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["supplier-content.js"] });
+  const raw = await chrome.tabs.sendMessage(tab.id, {
+    channel: BRIDGE_CHANNEL,
+    type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT",
+    expectedProductType: "unknown",
+    expectedManufacturer: null,
+    expectedThicknessMm: null
+  });
+  const response = parseBridgeRuntimeResponse(raw);
+  const capture = response?.ok ? parseSupplierPageCapture(response.capture) : null;
+  if (!capture || capture.pageType !== "product" || capture.candidates.length !== 1) {
+    return {
+      ok: false,
+      errorCode: response?.errorCode ?? "PRODUCT_DETAIL_REQUIRED",
+      message: response?.message ?? "Otvorte detail jedného produktu a skúste znova."
+    };
+  }
+  return { ok: true, capture };
+}
+
 async function assignCurrentProduct(syncItemId?: string): Promise<BridgeRuntimeResponse> {
   if (!syncItemId) return { ok: false, errorCode: "TARGET_GROUP_REQUIRED", message: "Vyberte cieľovú materiálovú skupinu." };
   const captured = await captureCurrentPage(syncItemId);
@@ -330,9 +366,40 @@ async function confirm(candidateId?: string, syncItemId?: string): Promise<Bridg
   if (!item || !candidate || candidate.syncItemId !== item.id) {
     return { ok: false, errorCode: "CANDIDATE_SELECTION_REQUIRED", message: "Select a captured candidate first." };
   }
-  const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
-  await trace(await saveView(progress, view, null), "Materiál priradený", "ok");
-  return { ok: true, view };
+  try {
+    const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
+    await trace(await saveView(progress, view, null), "Materiál priradený", "ok");
+    return { ok: true, view };
+  } catch (error) {
+    if (error instanceof SupplierBridgeApiError && error.status === 503 && error.code) {
+      const pendingCode = `${error.code}${error.requestId ? `;REQUEST_ID=${error.requestId}` : ""}`;
+      await trace(progress, "Materiál uložený, dokončujem potvrdenie Bridge", "warning", pendingCode);
+      try {
+        const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
+        await trace(await saveView(progress, view, null), "Materiál priradený po bezpečnom opakovaní", "ok");
+        return { ok: true, view };
+      } catch (retryError) {
+        const retryCode = retryError instanceof SupplierBridgeApiError
+          ? `${retryError.code ?? `BACKEND_HTTP_${retryError.status}`}${retryError.requestId ? `;REQUEST_ID=${retryError.requestId}` : ""}`
+          : "CONFIRM_RETRY_FAILED";
+        const retryMessage = safeBridgeFailureMessage(retryError);
+        await trace(progress, "Materiál je uložený, potvrdenie Bridge stále čaká", "error", retryCode);
+        bridgeLog("error", "confirm_retry_failed", { code: retryCode, message: retryMessage });
+        return {
+          ok: false,
+          view: progress.view,
+          errorCode: retryError instanceof SupplierBridgeApiError ? retryError.code ?? "BRIDGE_CONFIRMATION_PENDING" : "BRIDGE_CONFIRMATION_PENDING",
+          message: retryError instanceof Error ? retryMessage : "Materiál je uložený, potvrdenie Bridge čaká na opakovanie."
+        };
+      }
+    }
+    const code = error instanceof SupplierBridgeApiError
+      ? `${error.code ?? `BACKEND_HTTP_${error.status}`}${error.requestId ? `;REQUEST_ID=${error.requestId}` : ""}`
+      : "CONFIRM_REQUEST_FAILED";
+    await trace(progress, "Priradenie materiálu zlyhalo", "error", code);
+    bridgeLog("error", "confirm_failed", { code, message: safeBridgeFailureMessage(error) });
+    throw error;
+  }
 }
 
 async function skip(syncItemId?: string): Promise<BridgeRuntimeResponse> {
@@ -402,6 +469,7 @@ async function routeMessage(message: BridgeRuntimeRequest, sender: chrome.runtim
   if (message.type === "GET_SUPPLIER_SESSION_STATUS") return { ok: true, view: await refresh() };
   if (message.type === "CANCEL_SUPPLIER_SESSION") return cancel();
   if (message.type === "SIDE_PANEL_COMMAND") return handleSideCommand(message);
+  if (message.type === "CAPTURE_ACTIVE_SUPPLIER_PRODUCT") return captureActiveSupplierProduct();
   if (message.type === "START_DIAGNOSTIC_PICK") return diagnosticPick(message);
   return { ok: false, errorCode: "UNSUPPORTED_MESSAGE" };
 }
@@ -413,13 +481,16 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse: (respo
   if (!message || message.type === "CAPTURE_SUPPLIER_PAGE") return false;
   void routeMessage(message, sender)
     .then(sendResponse)
-    .catch((error: unknown) => {
+    .catch(async (error: unknown) => {
       const errorMessage = safeBridgeFailureMessage(error);
-      bridgeLog("error", "request_failed", { type: message.type, message: errorMessage, code: failureTraceCode(error) });
-      void recordRouteFailure(message, error).catch((traceError: unknown) => {
+      const errorCode = failureTraceCode(error);
+      bridgeLog("error", "request_failed", { type: message.type, errorCode, message: errorMessage });
+      try {
+        await recordRouteFailure(message, error);
+      } catch (traceError) {
         bridgeLog("warn", "failure_trace_unavailable", { message: safeBridgeFailureMessage(traceError) });
-      });
-      sendResponse({ ok: false, errorCode: "BRIDGE_REQUEST_FAILED", message: errorMessage });
+      }
+      sendResponse({ ok: false, errorCode, message: errorMessage });
     });
   return true;
 });

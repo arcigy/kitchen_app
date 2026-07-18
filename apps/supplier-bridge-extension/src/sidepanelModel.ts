@@ -50,36 +50,26 @@ export function supplierTargetProductText(view: SupplierSyncSessionView, item: S
   return `${product.displayName} · ${candidate.supplierProductCode}${dimensions}${price?.normalizedAmount != null ? ` · ${price.normalizedAmount} ${price.currency}` : ""}`;
 }
 
-function safeDiagnosticText(value: string | null): string | null {
-  if (!value) return null;
-  return value
-    .replace(/\b(?:authorization|bearer|(?:access|bridge)?[_-]?token|cookie|password|secret)\b\s*[:=]?\s*\S+/gi, "[redacted]")
-    .slice(0, 500);
-}
-
-export function buildSupplierBridgeDebugText(input: {
-  extensionVersion: string;
+export function createSupplierBridgeDebugReport(input: {
+  version: string;
   view: SupplierSyncSessionView;
-  projectLabel: string;
-  lastWarning: string | null;
-  uiError: string | null;
   trace: readonly SupplierBridgeTrace[];
+  lastWarning: string | null;
+  visibleError: string | null;
 }): string {
-  return JSON.stringify({
-    schema: "arcigy-supplier-bridge-debug-v1",
-    generatedAt: new Date().toISOString(),
-    extensionVersion: input.extensionVersion,
-    project: { label: safeDiagnosticText(input.projectLabel), id: input.view.session.projectId },
-    session: { id: input.view.session.id, supplierId: input.view.session.supplierId, status: input.view.session.status },
-    counts: input.view.counts,
-    lastWarning: safeDiagnosticText(input.lastWarning),
-    uiError: safeDiagnosticText(input.uiError),
-    trace: input.trace.map((entry) => ({
-      at: entry.at,
-      stage: safeDiagnosticText(entry.stage),
-      outcome: entry.outcome,
-      code: safeDiagnosticText(entry.code)
-    })),
-    privacy: "No cookies, passwords, bridge tokens, access tokens or supplier page contents are included."
-  }, null, 2);
+  const lines = [
+    "Arcigy Supplier Bridge diagnostics",
+    `extension_version=${input.version}`,
+    `supplier=${input.view.session.supplierId}`,
+    `session_status=${input.view.session.status}`,
+    `completed=${input.view.counts.completed}`,
+    `pending=${input.view.counts.pending}`,
+    `last_warning=${input.lastWarning ?? "none"}`,
+    `visible_error=${input.visibleError ?? "none"}`,
+    "trace:"
+  ];
+  for (const entry of input.trace.slice(-16)) {
+    lines.push(`${entry.at} | ${entry.outcome} | ${entry.stage} | ${entry.code ?? "-"}`);
+  }
+  return lines.join("\n");
 }

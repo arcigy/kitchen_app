@@ -39,6 +39,13 @@ function materialsPhaseHarness() {
   };
 }
 
+function marginsPhaseHarness() {
+  return {
+    mainEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    hostEl: new WorkspaceFakeElement() as unknown as HTMLElement
+  };
+}
+
 function emptyAppState() {
   return {
     instances: [],
@@ -193,5 +200,112 @@ describe("createWorkspaceNavigationController", () => {
     await controller.leaveMaterialsPhase();
     expect(close).toHaveBeenCalledOnce();
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+  });
+
+  it("opens the real Margins phase from workspace navigation and closes it when returning to design", async () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+    const marginsButton = new WorkspaceFakeElement();
+    marginsButton.dataset.workspaceNav = "margins";
+    const designButton = new WorkspaceFakeElement();
+    designButton.dataset.workspaceNav = "design";
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [marginsButton, designButton] as never[];
+    const marginsPhase = marginsPhaseHarness();
+    const open = vi.fn(async () => ({}));
+    const close = vi.fn(async () => undefined);
+    const setDesignTopbar = vi.fn();
+    createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: emptyAppState(),
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase: materialsPhaseHarness(),
+      marginsPhase,
+      marginsController: { open, close } as never,
+      setDesignTopbar,
+      setVisualisationTopbar: vi.fn()
+    });
+
+    marginsButton.click();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledOnce());
+    expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+    expect(root.classList.contains("archux-margins-phase")).toBe(true);
+    expect((marginsPhase.mainEl as unknown as WorkspaceFakeElement).classList.contains("archux-margins-phase")).toBe(true);
+    expect(marginsButton.classList.contains("active")).toBe(true);
+
+    designButton.click();
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect(root.classList.contains("archux-margins-phase")).toBe(false);
+    expect(designButton.classList.contains("active")).toBe(true);
+    expect(setDesignTopbar).toHaveBeenCalled();
+  });
+
+  it("keeps Margins closed when Design is selected before the pending open finishes", async () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+    const marginsButton = new WorkspaceFakeElement();
+    marginsButton.dataset.workspaceNav = "margins";
+    const designButton = new WorkspaceFakeElement();
+    designButton.dataset.workspaceNav = "design";
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [marginsButton, designButton] as never[];
+    const marginsPhase = marginsPhaseHarness();
+    let resolveOpen!: (value: unknown) => void;
+    const pendingOpen = new Promise((resolve) => { resolveOpen = resolve; });
+    const open = vi.fn(() => pendingOpen);
+    const close = vi.fn(async () => undefined);
+    createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: emptyAppState(),
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase: materialsPhaseHarness(),
+      marginsPhase,
+      marginsController: { open, close } as never,
+      setDesignTopbar: vi.fn(),
+      setVisualisationTopbar: vi.fn()
+    });
+
+    marginsButton.click();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledOnce());
+    designButton.click();
+    resolveOpen({});
+
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect(root.classList.contains("archux-margins-phase")).toBe(false);
+    expect(designButton.classList.contains("active")).toBe(true);
+  });
+
+  it("escapes a Margins load failure before rendering it into the workspace", async () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [];
+    const marginsPhase = marginsPhaseHarness();
+    const controller = createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: emptyAppState(),
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase: materialsPhaseHarness(),
+      marginsPhase,
+      marginsController: {
+        open: vi.fn(async () => { throw new Error('<img src=x onerror="alert(1)">'); }),
+        close: vi.fn(async () => undefined)
+      } as never,
+      setDesignTopbar: vi.fn(),
+      setVisualisationTopbar: vi.fn()
+    });
+
+    controller.openMargins();
+    await vi.waitFor(() => expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("data-margin-error"));
+    expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).not.toContain("<img");
   });
 });

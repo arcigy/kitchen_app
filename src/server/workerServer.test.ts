@@ -286,6 +286,60 @@ describe("multi-client worker isolation", () => {
     expect(readiness.body).toMatchObject({ ok: true, storage: "file" });
   });
 
+  it("lets the extension login and list only its tenant projects with the issued bearer", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Extension Visible", address: "Bridge 2", contactName: "Jane" }
+    });
+    expect(created.status).toBe(201);
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie,
+      body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+    });
+
+    const login = await requestWorker(controller!.port, "/api/auth/extension-login", {
+      method: "POST",
+      body: { username: "arcigy", password: "kitchen2026" }
+    });
+    expect(login.status).toBe(200);
+    const accessToken = (login.body as { accessToken: string }).accessToken;
+    expect(accessToken).toBeTruthy();
+
+    const projects = await requestWorker(controller!.port, "/api/projects", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    expect(projects.status).toBe(200);
+    expect((projects.body as { projects: Array<{ name: string; clientId: string }> }).projects).toContainEqual(
+      expect.objectContaining({ name: "Extension Visible", clientId: "client_arcigy_demo" })
+    );
+    const authHeaders = { Authorization: `Bearer ${accessToken}` };
+    const materials = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { headers: authHeaders });
+    expect(materials.status).toBe(200);
+    const assignment = (materials.body as { view: { assignments: { assignments: Array<{ assignmentId: string }> } } }).view.assignments.assignments[0]!;
+    const session = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        projectId,
+        supplierId: "demos",
+        lookups: [{
+          requestId: "extension-one-target",
+          projectId,
+          materialAssignmentId: assignment.assignmentId,
+          supplierId: "demos",
+          supplierProductId: "DEMO-ONE",
+          expectedProductType: "board"
+        }]
+      }
+    });
+    expect(session.status).toBe(201);
+    expect((session.body as { view: { counts: { total: number } } }).view.counts.total).toBe(1);
+  }, 30_000);
+
   it("serves bounded metrics in development and protects them in production", async () => {
     await requestWorker(controller!.port, "/api/projects/private-project-id?secret=hidden");
 
@@ -1546,6 +1600,131 @@ describe("multi-client worker isolation", () => {
     expect((loadB.body as { save: { appState: { layout: { marker: string } } } }).save.appState.layout.marker)
       .toBe("client-b-layout");
     expect(projectA.status).toBe(201);
+  }, 30_000);
+
+  it("keeps project margins tenant-scoped, read-only for viewers, and revision-safe", async () => {
+    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const otherTenantCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie: ownerCookie,
+      body: { name: "Margin boundaries", address: "Margin street", contactName: "Owner" }
+    });
+    expect(created.status).toBe(201);
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    const initialSave = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie: ownerCookie,
+      body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+    });
+    expect(initialSave.status).toBe(200);
+    const initialSaveRevision = (initialSave.body as { save: { integrity: { saveRevision: number } } }).save.integrity.saveRevision;
+
+    const ownerView = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: ownerCookie });
+    expect(ownerView.status).toBe(200);
+    expect(ownerView.body).toMatchObject({
+      ok: true,
+      view: { revision: 0, editable: true, settings: { defaultMarginPercent: 20 } }
+    });
+    const viewerView = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: viewerCookie });
+    expect(viewerView.status).toBe(200);
+    expect(viewerView.body).toMatchObject({ ok: true, view: { revision: 0, editable: false } });
+
+    const viewerWrite = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+      method: "PUT",
+      cookie: viewerCookie,
+      body: { revision: 0, operation: { type: "set_group", category: "corpus", marginPercent: 15 } }
+    });
+    expect(viewerWrite.status).toBe(403);
+    expect(viewerWrite.body).toMatchObject({ ok: false, code: "MARGIN_WRITE_FORBIDDEN" });
+
+    const updated = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+      method: "PUT",
+      cookie: ownerCookie,
+      body: { revision: 0, operation: { type: "set_group", category: "corpus", marginPercent: 15 } }
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({
+      ok: true,
+      view: { revision: 1, settings: { groupMargins: { corpus: 15 } } }
+    });
+
+    const staleGenericSave = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie: ownerCookie,
+      body: {
+        expectedSaveRevision: initialSaveRevision,
+        appState: {
+          layout: { marker: "layout-saved-with-stale-margin", windows: [], doors: [] },
+          kitchen: {},
+          modules: [],
+          scene: {},
+          quoteSettings: {
+            schemaVersion: 1,
+            initialized: true,
+            revision: 0,
+            calculationMode: "markup_on_cost",
+            defaultMarginPercent: 20,
+            additionalLaborCost: 0,
+            groupMargins: {},
+            itemOverrides: []
+          }
+        }
+      }
+    });
+    expect(staleGenericSave.status).toBe(200);
+    expect(staleGenericSave.body).toMatchObject({
+      save: {
+        appState: {
+          layout: { marker: "layout-saved-with-stale-margin" },
+          quoteSettings: { revision: 1, groupMargins: { corpus: 15 } }
+        }
+      }
+    });
+
+    const stale = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+      method: "PUT",
+      cookie: ownerCookie,
+      body: { revision: 0, operation: { type: "set_group", category: "front", marginPercent: 25 } }
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ ok: false, code: "PROJECT_MARGIN_REVISION_CONFLICT", revision: 1 });
+
+    const forgedClient = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+      method: "PUT",
+      cookie: ownerCookie,
+      body: {
+        clientId: "client_b_demo",
+        revision: 1,
+        operation: { type: "set_group", category: "front", marginPercent: 25 }
+      }
+    });
+    expect(forgedClient.status).toBe(400);
+    expect(forgedClient.body).toMatchObject({ ok: false, code: "INVALID_MARGIN_REQUEST" });
+
+    const staleTarget = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+      method: "PUT",
+      cookie: ownerCookie,
+      body: {
+        revision: 1,
+        operation: {
+          type: "set_item",
+          target: { scopeId: "module:deleted", itemId: "side", category: "corpus" },
+          marginPercent: 40
+        }
+      }
+    });
+    expect(staleTarget.status).toBe(422);
+    expect(staleTarget.body).toMatchObject({ ok: false, code: "STALE_MARGIN_TARGET" });
+
+    const crossTenantRead = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: otherTenantCookie });
+    expect(crossTenantRead.status).toBe(403);
+    const reloaded = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: ownerCookie });
+    expect(reloaded.body).toMatchObject({
+      ok: true,
+      view: { revision: 1, settings: { groupMargins: { corpus: 15 } } }
+    });
   }, 30_000);
 
   it("imports an encrypted project as a copy when the project already exists", async () => {

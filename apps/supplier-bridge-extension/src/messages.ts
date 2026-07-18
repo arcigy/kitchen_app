@@ -74,6 +74,10 @@ export type BridgeRuntimeRequest =
     }
   | {
       channel: typeof BRIDGE_CHANNEL;
+      type: "CAPTURE_ACTIVE_SUPPLIER_PRODUCT";
+    }
+  | {
+      channel: typeof BRIDGE_CHANNEL;
       type: "CAPTURE_EXACT_SUPPLIER_PRODUCT";
       requestedProductId: string;
       expectedProductType: SupplierExpectedProductType;
@@ -201,7 +205,9 @@ export function parseBridgeRuntimeRequest(value: unknown): BridgeRuntimeRequest 
       ...(typeof input.syncItemId === "string" ? { syncItemId: input.syncItemId } : {})
     };
   }
-  if (input.type === "CAPTURE_SUPPLIER_PAGE") return { channel: BRIDGE_CHANNEL, type: "CAPTURE_SUPPLIER_PAGE" };
+  if (input.type === "CAPTURE_SUPPLIER_PAGE" || input.type === "CAPTURE_ACTIVE_SUPPLIER_PRODUCT") {
+    return { channel: BRIDGE_CHANNEL, type: input.type };
+  }
   if (input.type === "CAPTURE_EXACT_SUPPLIER_PRODUCT") {
     if (!safeText(input.requestedProductId, 160)) return null;
     if (!["board", "worktop", "edge_band", "hinge", "drawer_system", "hardware", "component", "unknown"].includes(String(input.expectedProductType))) return null;

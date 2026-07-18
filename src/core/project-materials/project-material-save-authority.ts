@@ -2,11 +2,13 @@ import { isDeepStrictEqual } from "node:util";
 import { ProjectMaterialAssignmentAuthorityError } from "./project-material-errors";
 import type { ProjectMaterialAssignmentsState } from "./project-material-types";
 import type { ProjectWriteConsistencyOptions } from "../project/project-write-consistency";
+import type { ProjectSnapshotMarginSettingsMode } from "../project-margins/project-margin-save-authority";
 
 export type ProjectSnapshotMaterialAssignmentsMode = "preserve" | "initialize" | "restore-version";
 
 export type ProjectSnapshotSaveOptions = ProjectWriteConsistencyOptions & {
   materialAssignmentsMode?: ProjectSnapshotMaterialAssignmentsMode;
+  marginSettingsMode?: ProjectSnapshotMarginSettingsMode;
 };
 
 export function assertFullSaveMaterialAssignmentsAllowed(

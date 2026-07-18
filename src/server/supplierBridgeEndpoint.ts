@@ -19,6 +19,12 @@ import { resolveProjectMaterialScopes } from "./projectMaterialScopes";
 import { applyConfirmedSupplierCandidateToProject } from "./supplierBridgeProjectUpdater";
 import type { SupplierLookupRequest } from "../core/supplier-bridge/supplier-bridge-types";
 import type { MaterialAssignmentCategory, ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
+import {
+  resolveEffectiveProjectMaterialAssignment,
+  topLevelProjectMaterialAssignments
+} from "../core/project-materials/project-material-assignment-resolution";
+import { clientSessionHeaderFromRequest } from "./requestAuthentication";
+import { SupplierBridgePersistenceError } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
 
 type SupplierBridgeEndpointDeps = {
   projectRoot: string;
@@ -138,13 +144,29 @@ async function projectMaterialInputs(
   const service = createProjectService(createServerProjectRepository({ projectRoot }));
   const save = await service.loadProject(ctx, projectId);
   const assignments = save.appState.materialAssignments.assignments;
-  const generalAssignments = assignments.filter((assignment) => assignment.assignmentId.startsWith(`material-assignment:${assignment.category}`) && !assignment.assignmentId.includes(":module:") && !assignment.assignmentId.includes(":addition:"));
+  const generalAssignments = topLevelProjectMaterialAssignments(assignments);
+  const scopes = resolveProjectMaterialScopes(save, await createServerCatalogRepository(projectRoot).ensureCatalogExists(ctx));
+  const scopedTargets = new Map<string, { scope: (typeof scopes)[number]; item: (typeof scopes)[number]["items"][number] }>(scopes.flatMap((scope) => scope.items.map((item) => [
+    `material-assignment:${scope.id}:${item.category}:${item.id}`,
+    { scope, item }
+  ] as const)));
   const selectedAssignments: Array<{ assignment: ProjectMaterialAssignment; lookup: SupplierLookupRequest | null; materialAssignmentId?: string; targetLabel?: string; targetScope?: "general" | "module" | "addition" }> = lookups.length > 0
     ? lookups.map((lookup) => {
         if (lookup.projectId !== projectId) throw new SupplierBridgeValidationError("Supplier lookup projectId must match the route project.");
-        const assignment = assignments.find((candidate) => candidate.assignmentId === lookup.materialAssignmentId);
+        const scoped = scopedTargets.get(lookup.materialAssignmentId);
+        const assignment = scoped
+          ? resolveEffectiveProjectMaterialAssignment(assignments, scoped.scope.id, scoped.item).assignment
+          : assignments.find((candidate) => candidate.assignmentId === lookup.materialAssignmentId);
         if (!assignment) throw new SupplierBridgeValidationError(`Material assignment ${lookup.materialAssignmentId} was not found in the project.`);
-        return { assignment, lookup };
+        return {
+          assignment,
+          lookup,
+          ...(scoped ? {
+            materialAssignmentId: lookup.materialAssignmentId,
+            targetLabel: `${scoped.scope.label} · ${scoped.item.label} · ${currentAssignmentText(assignment)}`,
+            targetScope: scoped.scope.kind
+          } : {})
+        };
       })
     : [
       ...generalAssignments.map((assignment) => ({
@@ -153,12 +175,10 @@ async function projectMaterialInputs(
         targetLabel: `${assignment.category}${assignment.customValues.splitIndex === 2 ? " · ohranenie 2" : ""} · ${currentAssignmentText(assignment)}`,
         targetScope: "general" as const
       })),
-      ...resolveProjectMaterialScopes(save, await createServerCatalogRepository(projectRoot).ensureCatalogExists(ctx)).flatMap((scope) => scope.items.flatMap((item) => {
-        const assignment = generalAssignments.find((candidate) => candidate.category === item.category);
-        if (!assignment) return [];
-        const scopedId = `material-assignment:${scope.id}:${item.category}:${item.id}`;
-        const scopedAssignment = assignments.find((candidate) => candidate.assignmentId === scopedId) ?? assignment;
-        return [{ assignment, lookup: null, materialAssignmentId: scopedId, targetLabel: `${scope.label} · ${item.label} · ${currentAssignmentText(scopedAssignment)}`, targetScope: scope.kind }];
+      ...scopes.flatMap((scope) => scope.items.flatMap((item) => {
+        const effective = resolveEffectiveProjectMaterialAssignment(assignments, scope.id, item);
+        if (!effective.assignment) return [];
+        return [{ assignment: effective.assignment, lookup: null, materialAssignmentId: effective.assignmentId, targetLabel: `${scope.label} · ${item.label} · ${currentAssignmentText(effective.assignment)}`, targetScope: scope.kind }];
       }))
     ];
   return selectedAssignments.flatMap<SupplierSyncMaterialInput>(({ assignment, lookup, materialAssignmentId, targetLabel, targetScope }) => {
@@ -236,13 +256,13 @@ export async function handleSupplierBridgeApi(
   try {
     if (route.kind === "configuration") {
       if (req.method !== "GET") return false;
-      const ctx = await deps.getContext(req.headers.cookie);
+      const ctx = await deps.getContext(clientSessionHeaderFromRequest(req));
       const suppliers = await createServerSupplierConfigurationRepository().listEnabledForClient(ctx);
       deps.sendJson(res, 200, { ok: true, suppliers });
       return true;
     }
     if (route.kind === "web") {
-      const ctx = await deps.getContext(req.headers.cookie);
+      const ctx = await deps.getContext(clientSessionHeaderFromRequest(req));
       if (route.action === "create" && req.method === "POST") {
         const request = validateCreateSupplierSessionRequest(await deps.readJsonBody(req));
         if (request.projectId && request.projectId !== route.projectId) throw new SupplierBridgeValidationError("Supplier session projectId must match the route project.");
@@ -314,11 +334,23 @@ export async function handleSupplierBridgeApi(
     return false;
   } catch (error) {
     if (error instanceof SupplierBridgeServiceError) {
-      deps.sendJson(res, error.status, { ok: false, error: error.message });
+      deps.sendJson(res, error.status, {
+        ok: false,
+        error: error.message,
+        ...(error.errorCode ? { code: error.errorCode } : {})
+      });
       return true;
     }
     if (error instanceof SupplierBridgeValidationError) {
       deps.sendJson(res, 400, { ok: false, error: error.message });
+      return true;
+    }
+    if (error instanceof SupplierBridgePersistenceError) {
+      deps.sendJson(res, 500, {
+        ok: false,
+        error: "Supplier Bridge database write failed.",
+        code: `SUPPLIER_BRIDGE_DB_${error.bridgeStage}`
+      });
       return true;
     }
     throw error;

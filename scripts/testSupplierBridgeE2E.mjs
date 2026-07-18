@@ -122,6 +122,8 @@ async function main() {
   await supplier.bringToFront();
   await panel.bringToFront();
   await panel.locator('[data-sidepanel-action="choose-target"]').click();
+  await panel.getByRole("button", { name: "Rozumiem a pokračovať" }).click();
+  assert(true, "user explicitly accepted the Supplier Bridge data disclosure before capture");
   await panel.locator('[data-material-target="corpus"]').click();
   await panel.waitForFunction(() => Boolean(document.querySelector(".notice") || document.querySelector(".notice--error")), undefined, { timeout: 15_000 });
   const captureError = await panel.locator(".notice--error").count() ? await panel.locator(".notice--error").innerText() : null;

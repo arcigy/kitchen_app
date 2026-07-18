@@ -191,6 +191,7 @@ import { createViewNavigation } from "./app/viewNavigation";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
 import { createMaterialsPhaseController } from "./app/materialsPhaseController";
+import { createMarginsPhaseController } from "./app/marginsPhaseController";
 import { createSupplierBridgeWebController } from "./app/supplierBridgeWebController";
 import { createProjectAutosaveController } from "./app/project/projectAutosave";
 import { captureProjectPreview } from "./app/project/projectPreview";
@@ -232,6 +233,11 @@ import {
   type ProjectMaterialAssignmentsState
 } from "./core/project-materials/project-material-types";
 import { createDefaultProjectMaterialAssignments } from "./core/project-materials/project-material-business";
+import {
+  createDefaultProjectMarginSettingsState,
+  normalizeProjectMarginSettingsState,
+  type ProjectMarginSettingsState
+} from "./core/project-margins/project-margin-types";
 import { buildProjectMaterialScopes, buildProjectMaterialUsageSummary } from "./layout/bom/materialUsageSummary";
 import { projectMaterialQuantitiesFromUsageSummary } from "./layout/bom/projectMaterialQuantities";
 import { renderMaterialWarnings } from "./ui/materialsPhasePanel";
@@ -287,7 +293,9 @@ export function startApp(initialArgs: AppArgs) {
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
   let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
+  let projectMarginSettings: ProjectMarginSettingsState = createDefaultProjectMarginSettingsState();
   let materialsPhaseController: ReturnType<typeof createMaterialsPhaseController> | null = null;
+  let marginsPhaseController: ReturnType<typeof createMarginsPhaseController> | null = null;
   let supplierBridgeController: ReturnType<typeof createSupplierBridgeWebController> | null = null;
 
   const enabledModulePackages = getEnabledModulePackageDefinitions(clientCatalog, modulePackages);
@@ -767,7 +775,7 @@ export function startApp(initialArgs: AppArgs) {
   S.history = history;
 
   const openBomPanelForState = (panelArgs: Pick<AppState, "instances" | "kitchenWorktops" | "customFurniture" | "kitchenCtx">) => {
-    openBomPanel({ ...panelArgs, catalog: clientCatalog });
+    openBomPanel({ ...panelArgs, catalog: clientCatalog, quoteSettings: projectMarginSettings });
   };
 
   const openPricingCatalogForState = () => {
@@ -3234,14 +3242,16 @@ export function startApp(initialArgs: AppArgs) {
         selectedInstanceIds: [...selectedInstanceIds]
       },
       pricingSettings: null,
-      quoteSettings: null,
+      quoteSettings: cloneJson(projectMarginSettings),
       projectPreview
     };
   };
 
   const restoreProjectSave = (save: ProjectSaveFile) => {
     resetProjectInteractionStateForLoad();
+    marginsPhaseController?.destroy();
     projectMaterialAssignments = cloneJson(save.appState.materialAssignments);
+    projectMarginSettings = normalizeProjectMarginSettingsState(save.appState.quoteSettings);
     const layout = save.appState.layout as {
       snapshot?: unknown;
       windows?: Array<{ id: string; params: WindowParams }>;
@@ -3319,6 +3329,10 @@ export function startApp(initialArgs: AppArgs) {
     }),
     restoreSave: restoreProjectSave,
     onProjectChanged: (project, status) => {
+      if (status === "Project created.") {
+        projectMarginSettings = createDefaultProjectMarginSettingsState();
+        marginsPhaseController?.destroy();
+      }
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
       void supplierBridgeController?.syncProjectContext().catch(() => undefined);
@@ -3355,6 +3369,13 @@ export function startApp(initialArgs: AppArgs) {
     onStateChanged: (state) => materialsPhaseController?.setSupplierBridgeState(state),
     onProjectMaterialsChanged: async () => { await materialsPhaseController?.open(); }
   });
+  marginsPhaseController = createMarginsPhaseController({
+    container: document.getElementById("marginsPhase")!,
+    getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    onViewChanged: (view) => {
+      projectMarginSettings = cloneJson(view.settings);
+    }
+  });
   createWorkspaceNavigationController({
     root: document.getElementById("app") ?? document.body,
     S,
@@ -3378,6 +3399,19 @@ export function startApp(initialArgs: AppArgs) {
       close: async () => {
         await materialsPhaseController?.close();
         supplierBridgeController?.close();
+      }
+    },
+    marginsPhase: {
+      mainEl: document.getElementById("main")!,
+      hostEl: document.getElementById("marginsPhase")!
+    },
+    marginsController: {
+      open: async () => {
+        if (projectActions.getState().currentProject) await projectActions.save();
+        return marginsPhaseController!.open();
+      },
+      close: async () => {
+        await marginsPhaseController?.close();
       }
     },
     setVisualisationTopbar: () => {
@@ -3404,7 +3438,8 @@ export function startApp(initialArgs: AppArgs) {
         visibility: visibilityController.getSaveState(),
         dimensions: technicalDimensions.getSaveState(),
         wardrobe: wardrobeMode?.getSaveState() ?? null,
-        materialAssignments: materialsPhaseController?.getSaveState() ?? projectMaterialAssignments
+        materialAssignments: materialsPhaseController?.getSaveState() ?? projectMaterialAssignments,
+        marginSettings: projectMarginSettings
       }),
     formatSavedMessage: (save) =>
       `Autosave ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`

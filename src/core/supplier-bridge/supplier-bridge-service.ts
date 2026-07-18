@@ -33,9 +33,80 @@ function configuredSupplierId(value: string): Exclude<SupplierId, "mock-supplier
 }
 
 export class SupplierBridgeServiceError extends Error {
-  constructor(message: string, readonly status: 400 | 401 | 403 | 404 | 409 | 422) {
+  constructor(
+    message: string,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 422 | 503,
+    readonly errorCode: string | null = null
+  ) {
     super(message);
   }
+}
+
+function confirmationPersistenceErrorCode(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code.toUpperCase()
+    : null;
+  const stage = error && typeof error === "object" && "bridgeStage" in error && typeof error.bridgeStage === "string"
+    ? error.bridgeStage
+    : null;
+  const databaseCode = code === "42P01" ? "DATABASE_SCHEMA_MISSING"
+    : code === "23505" ? "DATABASE_DUPLICATE_CONFLICT"
+      : code === "23503" ? "DATABASE_REFERENCE_MISSING"
+        : code === "23502" ? "DATABASE_REQUIRED_VALUE_MISSING"
+          : code === "22P02" ? "DATABASE_INVALID_VALUE"
+            : "FAILED";
+  return stage ? `BRIDGE_${stage}_${databaseCode}` : `BRIDGE_CONFIRMATION_PERSIST_${databaseCode}`;
+}
+
+function projectMaterialApplyFailure(error: unknown): {
+  status: 409 | 422 | 503;
+  errorCode: string;
+  message: string;
+} {
+  const message = error instanceof Error ? error.message : "";
+  const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code.toUpperCase()
+    : "";
+  if (code === "PROJECT_MATERIAL_REVISION_CONFLICT") {
+    return {
+      status: 409,
+      errorCode: "PROJECT_MATERIAL_REVISION_CONFLICT",
+      message: "Projekt bol medzitým zmenený. Materiál sa neprepísal; skúste priradenie znova."
+    };
+  }
+  if (message === "Material assignment for supplier sync item no longer exists.") {
+    return {
+      status: 422,
+      errorCode: "PROJECT_MATERIAL_TARGET_MISSING",
+      message: "Vybraný cieľ materiálu už v projekte neexistuje. Obnovte projekt a vyberte cieľ znova."
+    };
+  }
+  if (message === "Supplier synchronization target has no matching catalog snapshot.") {
+    return {
+      status: 422,
+      errorCode: "PROJECT_MATERIAL_SNAPSHOT_MISSING",
+      message: "Vybraný cieľ materiálu nemá platný snapshot katalógu. Materiál sa nezmenil."
+    };
+  }
+  if (message === "Project save not found.") {
+    return {
+      status: 422,
+      errorCode: "PROJECT_SAVE_MISSING",
+      message: "Aktívna fáza projektu už nemá uložený projektový stav. Materiál sa nezmenil."
+    };
+  }
+  if (["23503", "23505", "23514", "23502"].includes(code)) {
+    return {
+      status: 503,
+      errorCode: "PROJECT_MATERIAL_DATABASE_CONSTRAINT",
+      message: "Projektový zápis materiálu čaká na bezpečné opakovanie. Rozšírenie ho skúsi dokončiť znova."
+    };
+  }
+  return {
+    status: 503,
+    errorCode: "PROJECT_MATERIAL_APPLY_FAILED",
+    message: "Projektový zápis materiálu sa nedokončil. Rozšírenie ho skúsi bezpečne zopakovať."
+  };
 }
 
 export type SupplierSyncMaterialInput = {
@@ -442,24 +513,53 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         assignedAt: confirmedAt,
         priceLocked: false
       } : null;
-      await deps.applyConfirmedCandidate({
-        context: authorized.context,
-        session: authorized.aggregate.session,
-        item,
-        candidate,
-        priceObservation,
-        mapping
-      });
-      const aggregate = await deps.repository.confirmItem({
-        tenantId: authorized.payload.tenantId,
-        sessionId,
-        syncItemId,
-        candidateId,
-        mapping,
-        catalogItem,
-        materialSupplierAssignment,
-        now: confirmedAt
-      });
+      try {
+        await deps.applyConfirmedCandidate({
+          context: authorized.context,
+          session: authorized.aggregate.session,
+          item,
+          candidate,
+          priceObservation,
+          mapping
+        });
+      } catch (error) {
+        const failure = projectMaterialApplyFailure(error);
+        logSupplierBridge("error", {
+          event: "candidate_project_material_apply_failed",
+          sessionId,
+          syncItemId,
+          errorCode: failure.errorCode
+        });
+        throw new SupplierBridgeServiceError(failure.message, failure.status, failure.errorCode);
+      }
+      let aggregate: SupplierBridgeSessionAggregate;
+      try {
+        aggregate = await deps.repository.confirmItem({
+          tenantId: authorized.payload.tenantId,
+          sessionId,
+          syncItemId,
+          candidateId,
+          mapping,
+          catalogItem,
+          materialSupplierAssignment,
+          now: confirmedAt
+        });
+      } catch (error) {
+        const errorCode = confirmationPersistenceErrorCode(error);
+        logSupplierBridge("error", {
+          event: "candidate_confirmation_persistence_failed",
+          sessionId,
+          syncItemId,
+          errorCode
+        });
+        // The project update above is idempotent for this session/candidate pair.
+        // A retry therefore completes only the failed Bridge bookkeeping write.
+        throw new SupplierBridgeServiceError(
+          "Materiál je uložený v projekte. Potvrdenie evidencie dodávateľa sa nedokončilo; rozšírenie ho skúsi dokončiť znova.",
+          503,
+          errorCode
+        );
+      }
       logSupplierBridge("info", { event: "candidate_confirmed", sessionId, syncItemId, status: aggregate.session.status });
       return createSupplierSyncSessionView(aggregate);
     },
