@@ -1,4 +1,5 @@
 import type { SupplierSyncItem, SupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-bridge-types";
+import type { SupplierBridgeTrace } from "./storage";
 
 export type SupplierTargetScope = "general" | "module" | "addition";
 
@@ -47,4 +48,38 @@ export function supplierTargetProductText(view: SupplierSyncSessionView, item: S
   const dimensions = product.widthMm != null || product.thicknessMm != null ? ` · ${product.widthMm ?? "—"} × ${product.thicknessMm ?? "—"} mm` : "";
   const price = view.priceObservations.find((entry) => entry.candidateId === candidate.id);
   return `${product.displayName} · ${candidate.supplierProductCode}${dimensions}${price?.normalizedAmount != null ? ` · ${price.normalizedAmount} ${price.currency}` : ""}`;
+}
+
+function safeDiagnosticText(value: string | null): string | null {
+  if (!value) return null;
+  return value
+    .replace(/\b(?:authorization|bearer|(?:access|bridge)?[_-]?token|cookie|password|secret)\b\s*[:=]?\s*\S+/gi, "[redacted]")
+    .slice(0, 500);
+}
+
+export function buildSupplierBridgeDebugText(input: {
+  extensionVersion: string;
+  view: SupplierSyncSessionView;
+  projectLabel: string;
+  lastWarning: string | null;
+  uiError: string | null;
+  trace: readonly SupplierBridgeTrace[];
+}): string {
+  return JSON.stringify({
+    schema: "arcigy-supplier-bridge-debug-v1",
+    generatedAt: new Date().toISOString(),
+    extensionVersion: input.extensionVersion,
+    project: { label: safeDiagnosticText(input.projectLabel), id: input.view.session.projectId },
+    session: { id: input.view.session.id, supplierId: input.view.session.supplierId, status: input.view.session.status },
+    counts: input.view.counts,
+    lastWarning: safeDiagnosticText(input.lastWarning),
+    uiError: safeDiagnosticText(input.uiError),
+    trace: input.trace.map((entry) => ({
+      at: entry.at,
+      stage: safeDiagnosticText(entry.stage),
+      outcome: entry.outcome,
+      code: safeDiagnosticText(entry.code)
+    })),
+    privacy: "No cookies, passwords, bridge tokens, access tokens or supplier page contents are included."
+  }, null, 2);
 }

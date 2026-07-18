@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-bridge-types";
-import { supplierTargetGroups, supplierTargetsForScope, supplierViewForProject } from "./sidepanelModel";
+import { buildSupplierBridgeDebugText, supplierTargetGroups, supplierTargetsForScope, supplierViewForProject } from "./sidepanelModel";
 
 const view = {
   schemaVersion: 1,
@@ -24,5 +24,22 @@ describe("Supplier Bridge target model", () => {
   it("never shows a stored session from a different active project", () => {
     expect(supplierViewForProject(view, "project-website")).toBeNull();
     expect(supplierViewForProject(view, "project-1")).toBe(view);
+  });
+
+  it("exports a short diagnostic with request IDs but no secrets", () => {
+    const debug = buildSupplierBridgeDebugText({
+      extensionVersion: "1.2.3",
+      view,
+      projectLabel: "Website project",
+      lastWarning: "Internal server error.",
+      uiError: "accessToken=must-not-leak",
+      trace: [{ at: "2026-07-18T08:10:00.000Z", stage: "Priradenie materiálu zlyhalo", outcome: "error", code: "HTTP_500:request-abc" }]
+    });
+
+    expect(debug).toContain("HTTP_500:request-abc");
+    expect(debug).toContain('"schema": "arcigy-supplier-bridge-debug-v1"');
+    expect(debug).not.toContain("accessToken");
+    expect(debug).not.toContain("bridgeToken");
+    expect(debug).not.toContain("must-not-leak");
   });
 });

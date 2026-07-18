@@ -253,7 +253,7 @@ describe("multi-client worker isolation", () => {
         body: { username: "arcigy", password: "x".repeat(1_000) }
       });
       expect(response.status).toBe(413);
-      expect(response.body).toEqual({ ok: false, error: "Request body exceeds the 1 MB limit." });
+      expect(response.body).toMatchObject({ ok: false, error: "Request body exceeds the 1 MB limit.", requestId: expect.any(String) });
       expect(response.headers.get("x-request-id")).toBeTruthy();
     } finally {
       delete process.env.HTTP_JSON_BODY_MAX_MB;
@@ -272,7 +272,7 @@ describe("multi-client worker isolation", () => {
 
     const failedSession = await requestWorker(controller!.port, "/api/auth/session", { cookie });
     expect(failedSession.status).toBe(503);
-    expect(failedSession.body).toEqual({ ok: false, error: "Database temporarily unavailable. Please retry." });
+    expect(failedSession.body).toMatchObject({ ok: false, error: "Database temporarily unavailable. Please retry.", requestId: expect.any(String) });
     expect(failedSession.headers.get("retry-after")).toBe("2");
 
     const liveness = await requestWorker(controller!.port, "/health");

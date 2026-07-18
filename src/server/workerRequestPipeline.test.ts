@@ -111,6 +111,10 @@ describe("shared worker request pipeline", () => {
     });
     const failed = await errorHarness.request("/explode");
     expect(failed.status).toBe(500);
-    expect(await failed.json()).toEqual({ ok: false, error: "Internal server error." });
+    expect(await failed.json()).toMatchObject({
+      ok: false,
+      error: "Internal server error.",
+      requestId: expect.any(String)
+    });
   });
 });

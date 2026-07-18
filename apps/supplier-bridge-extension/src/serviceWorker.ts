@@ -4,6 +4,7 @@ import {
   cancelSupplierBridgeSession,
   confirmSupplierCandidate,
   loadSupplierBridgeSession,
+  SupplierBridgeApiError,
   skipSupplierSyncItem,
   submitSupplierCandidate
 } from "./api";
@@ -62,6 +63,27 @@ async function trace(progress: SupplierBridgeProgress, stage: string, outcome: "
   const next = appendSupplierBridgeTrace(progress, { stage, outcome, code });
   await saveSupplierBridgeProgress(next);
   return next;
+}
+
+function safeBridgeFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Supplier Bridge request failed.";
+  return message.replace(/\b(?:authorization|bearer|(?:access|bridge)?[_-]?token|cookie|password|secret)\b\s*[:=]?\s*\S+/gi, "[redacted]").slice(0, 500);
+}
+
+function failureTraceCode(error: unknown): string {
+  if (error instanceof SupplierBridgeApiError) {
+    return error.requestId ? `HTTP_${error.status}:${error.requestId}` : `HTTP_${error.status}`;
+  }
+  return "BRIDGE_REQUEST_FAILED";
+}
+
+async function recordRouteFailure(message: BridgeRuntimeRequest, error: unknown): Promise<void> {
+  const progress = await loadSupplierBridgeProgress();
+  if (!progress) return;
+  const stage = message.type === "SIDE_PANEL_COMMAND" && message.command === "assign_current"
+    ? "Priradenie materiálu zlyhalo"
+    : "Požiadavka Bridge zlyhala";
+  await trace({ ...progress, lastWarning: safeBridgeFailureMessage(error) }, stage, "error", failureTraceCode(error));
 }
 
 async function activeSession(): Promise<{ progress: SupplierBridgeProgress; accessToken: string }> {
@@ -392,8 +414,12 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse: (respo
   void routeMessage(message, sender)
     .then(sendResponse)
     .catch((error: unknown) => {
-      bridgeLog("error", "request_failed", { type: message.type, message: error instanceof Error ? error.message : "unknown" });
-      sendResponse({ ok: false, errorCode: "BRIDGE_REQUEST_FAILED", message: error instanceof Error ? error.message : "Supplier Bridge request failed." });
+      const errorMessage = safeBridgeFailureMessage(error);
+      bridgeLog("error", "request_failed", { type: message.type, message: errorMessage, code: failureTraceCode(error) });
+      void recordRouteFailure(message, error).catch((traceError: unknown) => {
+        bridgeLog("warn", "failure_trace_unavailable", { message: safeBridgeFailureMessage(traceError) });
+      });
+      sendResponse({ ok: false, errorCode: "BRIDGE_REQUEST_FAILED", message: errorMessage });
     });
   return true;
 });
