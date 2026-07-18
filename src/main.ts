@@ -195,8 +195,8 @@ async function start(): Promise<void> {
       organizationUsers: clientProfile.organization.users,
       currentUserId: clientContext.userId,
       currentUserRole: clientContext.role,
-      onSelect: (selection) => {
-        void launchWorkspace({
+      onSelect: async (selection) => {
+        await launchWorkspace({
           clientContext,
           clientProfile,
           initialProject: selection.kind === "created" ? selection.project : null,

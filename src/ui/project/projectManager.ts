@@ -1,7 +1,12 @@
 import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import type { ClientRole, OrganizationUser } from "../../core/client/client-types";
-import { findOrganizationUser, organizationUserInitial, organizationUserName } from "../../core/client/organization-users";
+import {
+  findOrganizationUser,
+  organizationUserInitial,
+  organizationUserName,
+  organizationUserPhotoUrl
+} from "../../core/client/organization-users";
 import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
 import {
@@ -22,13 +27,22 @@ export type ProjectManagerSelection =
   | { kind: "created"; project: ProjectMetadata }
   | { kind: "loaded"; save: ProjectSaveFile };
 
+export type ProjectManagerSelectionHandler = (selection: ProjectManagerSelection) => void | Promise<void>;
+
+export async function dispatchProjectSelection(
+  onSelect: ProjectManagerSelectionHandler,
+  selection: ProjectManagerSelection
+): Promise<void> {
+  await onSelect(selection);
+}
+
 type ProjectManagerArgs = {
   root: HTMLElement;
   clientName: string;
   organizationUsers: OrganizationUser[];
   currentUserId: string;
   currentUserRole: ClientRole;
-  onSelect: (selection: ProjectManagerSelection) => void;
+  onSelect: ProjectManagerSelectionHandler;
 };
 
 export function createProjectVersionActionButton(label: string): HTMLButtonElement {
@@ -223,9 +237,10 @@ function renderActor(users: readonly OrganizationUser[], userId: string, label: 
   row.className = "project-manager-actor";
   const avatar = document.createElement("span");
   avatar.className = "project-manager-actor-avatar";
-  if (user?.photoUrl) {
+  const photoUrl = organizationUserPhotoUrl(user);
+  if (photoUrl) {
     const image = document.createElement("img");
-    image.src = user.photoUrl;
+    image.src = photoUrl;
     image.alt = "";
     avatar.appendChild(image);
   } else {
@@ -590,7 +605,7 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
     try {
       renderProjects(args.root, await listProjects(), args.organizationUsers, async (projectId) => {
         const save = await loadProject(projectId);
-        args.onSelect({ kind: "loaded", save });
+        await dispatchProjectSelection(args.onSelect, { kind: "loaded", save });
       }, args.currentUserRole === "owner" || args.currentUserRole === "admin", loadProjects);
       setStatus(args.root, "Project manager pripraveny.");
     } catch (error) {
@@ -610,15 +625,21 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
     if (submit) submit.disabled = true;
     try {
-      args.onSelect({ kind: "created", project: await createProject(input) });
+      await dispatchProjectSelection(args.onSelect, { kind: "created", project: await createProject(input) });
     } catch (error) {
       setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
       if (submit) submit.disabled = false;
     }
   });
 
-  args.root.querySelector<HTMLButtonElement>("[data-project-manager-blank]")?.addEventListener("click", () => {
-    args.onSelect({ kind: "blank" });
+  args.root.querySelector<HTMLButtonElement>("[data-project-manager-blank]")?.addEventListener("click", async () => {
+    const progress = beginProjectLoadProgress(args.root, "Otváram pracovisko");
+    try {
+      await dispatchProjectSelection(args.onSelect, { kind: "blank" });
+      progress.done();
+    } catch (error) {
+      progress.fail(error instanceof Error ? error.message : String(error));
+    }
   });
   args.root.querySelector<HTMLButtonElement>("[data-project-manager-new]")?.addEventListener("click", () => {
     const panel = args.root.querySelector<HTMLElement>("[data-project-manager-create-panel]");
@@ -629,8 +650,8 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       const progress = beginProjectLoadProgress(args.root, "Importujem projekt");
       try {
         const save = await importProjectFile(file);
+        await dispatchProjectSelection(args.onSelect, { kind: "loaded", save });
         progress.done();
-        args.onSelect({ kind: "loaded", save });
       } catch (error) {
         progress.fail(error instanceof Error ? error.message : String(error));
       }

@@ -26,6 +26,7 @@ import { handleWorkerApiRequest } from "../src/server/workerApiRouter";
 import { assertWorkerRuntimeEnvironment } from "../src/server/workerRuntimeEnvironment";
 import { ClientCatalogBootstrapResponseCache } from "../src/server/clientCatalogBootstrapResponseCache";
 import { ClientModulePackagesResponseCache } from "../src/server/clientModulePackagesResponseCache";
+import { sendStaticAppFile } from "./staticAppResponse";
 
 assertWorkerRuntimeEnvironment();
 const PROJECT_ROOT = process.cwd();
@@ -65,6 +66,7 @@ const STATIC_MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
@@ -99,9 +101,7 @@ const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerRespons
     res.setHeader("Content-Type", getStaticMimeType(requestedFile));
     res.setHeader("Cache-Control", requestedFile.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable");
     if (req.method === "HEAD") return res.end(), true;
-    const body = await readFile(requestedFile);
-    const compressible = /^(text\/|application\/(?:json|javascript|xml)|image\/svg\+xml)/i.test(getStaticMimeType(requestedFile));
-    sendResponseBody(res, body, { compressible });
+    await sendStaticAppFile(req, res, requestedFile, getStaticMimeType(requestedFile));
     return true;
   } catch {
     const indexPath = path.join(staticRoot, "index.html");

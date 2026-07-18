@@ -37,13 +37,13 @@ describe("browser journey telemetry", () => {
     })).not.toThrow();
   });
 
-  it("sends runtime telemetry with only the fixed numeric schema", async () => {
+  it("sends runtime telemetry with only the fixed allowlisted schema", async () => {
     const sendBeacon = vi.fn((_url: string, _body: Blob) => true);
     vi.stubGlobal("window", { navigator: { sendBeacon } });
 
-    reportBrowserRuntime({ signal: "long_task", value: 125, privateUrl: "/private" } as never);
+    reportBrowserRuntime({ signal: "js_error", value: 99, kind: "image", privateUrl: "/private" } as never);
 
     const body = sendBeacon.mock.calls[0]?.[1] as Blob;
-    expect(JSON.parse(await body.text())).toEqual({ signal: "long_task", value: 125 });
+    expect(JSON.parse(await body.text())).toEqual({ signal: "js_error", value: 1, kind: "image" });
   });
 });

@@ -24,10 +24,18 @@ export type BrowserJourneyMetric = {
   durationMs: number;
 };
 
-export type BrowserRuntimeMetric = {
-  signal: "js_error" | "long_task" | "memory_used" | "unhandled_rejection";
-  value: number;
-};
+export type BrowserRuntimeFailureKind = "image" | "link" | "runtime" | "script" | "style" | "unknown";
+
+export type BrowserRuntimeMetric =
+  | {
+      signal: "js_error" | "unhandled_rejection";
+      value: number;
+      kind?: BrowserRuntimeFailureKind;
+    }
+  | {
+      signal: "long_task" | "memory_used";
+      value: number;
+    };
 
 export function browserJourneyNow(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
@@ -56,5 +64,22 @@ export function reportBrowserJourney(metric: BrowserJourneyMetric): void {
 }
 
 export function reportBrowserRuntime(metric: BrowserRuntimeMetric): void {
+  if (metric.signal === "js_error" || metric.signal === "unhandled_rejection") {
+    reportBrowserMetric({
+      signal: metric.signal,
+      value: 1,
+      kind: isBrowserRuntimeFailureKind(metric.kind) ? metric.kind : "unknown"
+    });
+    return;
+  }
   reportBrowserMetric({ signal: metric.signal, value: metric.value });
+}
+
+function isBrowserRuntimeFailureKind(value: unknown): value is BrowserRuntimeFailureKind {
+  return value === "image"
+    || value === "link"
+    || value === "runtime"
+    || value === "script"
+    || value === "style"
+    || value === "unknown";
 }

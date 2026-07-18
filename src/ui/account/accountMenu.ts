@@ -1,5 +1,10 @@
 import type { OrganizationUser } from "../../core/client/client-types";
-import { findOrganizationUser, organizationUserEmail, organizationUserInitial } from "../../core/client/organization-users";
+import {
+  findOrganizationUser,
+  organizationUserEmail,
+  organizationUserInitial,
+  organizationUserPhotoUrl
+} from "../../core/client/organization-users";
 import { logoutClient } from "../../app/logoutClient";
 
 type AccountMenuArgs = {
@@ -130,10 +135,11 @@ export function createAccountMenu(args: AccountMenuArgs): void {
 function renderAvatar(user: OrganizationUser | null, className: string): HTMLElement {
   const avatar = document.createElement("span");
   avatar.className = className;
-  if (user?.photoUrl) {
+  const photoUrl = organizationUserPhotoUrl(user);
+  if (photoUrl) {
     const image = document.createElement("img");
-    image.src = user.photoUrl;
-    image.alt = user.name;
+    image.src = photoUrl;
+    image.alt = user?.name ?? "";
     image.loading = "eager";
     image.decoding = "async";
     avatar.appendChild(image);

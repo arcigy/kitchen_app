@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeElement, installFakeDocument } from "../../app/testUtils/propertiesPanelHarness";
-import { createProjectDeleteActionButton, createProjectDeleteDialog, createProjectVersionActionButton } from "./projectManager";
+import {
+  createProjectDeleteActionButton,
+  createProjectDeleteDialog,
+  createProjectVersionActionButton,
+  dispatchProjectSelection
+} from "./projectManager";
 
 function findByText(root: FakeElement, text: string): FakeElement | null {
   if (root.textContent === text) return root;
@@ -23,6 +28,29 @@ describe("project manager", () => {
 
     expect(button.type).toBe("button");
     expect(button.textContent).toBe("Pozriet");
+  });
+
+  it("waits for workspace startup and propagates startup failures to the caller", async () => {
+    let finishStartup: (() => void) | undefined;
+    const startup = new Promise<void>((resolve) => {
+      finishStartup = resolve;
+    });
+    const onSelect = vi.fn(async () => startup);
+    const pending = dispatchProjectSelection(onSelect, { kind: "blank" });
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(onSelect).toHaveBeenCalledWith({ kind: "blank" });
+    expect(settled).toBe(false);
+
+    finishStartup?.();
+    await expect(pending).resolves.toBeUndefined();
+    await expect(dispatchProjectSelection(async () => {
+      throw new Error("Catalog load failed");
+    }, { kind: "blank" })).rejects.toThrow("Catalog load failed");
   });
 
   it("opens the custom delete flow without using a native browser confirmation", () => {

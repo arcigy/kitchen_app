@@ -55,6 +55,12 @@ describe("requireClientSession login form", () => {
     expect(passwordInput.autocomplete).toBe("current-password");
     expect(passwordInput.required).toBe(true);
 
+    const hint = form.children[2]!;
+    expect(hint.innerHTML).toContain("spravca organizacie");
+    expect(hint.innerHTML).not.toContain("branislav2026");
+    expect(hint.innerHTML).not.toContain("andrej2026");
+    expect(hint.innerHTML).not.toContain("tenant heslo");
+
     const submit = form.children[4]!;
     expect(submit.type).toBe("submit");
     expect(submit.textContent).toBe("Prihlasit do workspace");

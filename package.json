@@ -15,6 +15,8 @@
     "lint": "eslint apps/supplier-bridge-extension/src apps/supplier-simulator/src src/core/supplier-bridge src/app/supplierBridgeApi.ts src/app/supplierBridgeWebController.ts src/server/supplierBridgeEndpoint.ts src/server/supplierBridgeProjectUpdater.ts scripts/buildSupplierBridge.ts --max-warnings 0",
     "security:secrets": "tsx scripts/scanTrackedSecrets.ts",
     "security:dependencies": "tsx scripts/verifyProductionDependencyAudit.ts",
+    "backup:filesystem": "node ops/backup/filesystem-backup-runner.mjs",
+    "restore:filesystem": "node ops/backup/filesystem-restore-runner.mjs",
     "test": "vitest run",
     "test:supplier-bridge": "vitest run src/core/supplier-bridge apps/supplier-bridge-extension/src",
     "test:supplier-bridge:integration": "vitest run src/server/workerServer.test.ts --testNamePattern=\"supplier bridge\"",

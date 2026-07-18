@@ -166,7 +166,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const hint = document.createElement("p");
   hint.className = "auth-hint";
-  hint.innerHTML = `<strong>Dostupne ucty</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span><span>pino_nobilia / tenant heslo</span>`;
+  hint.innerHTML = `<strong>Firemny ucet</strong><span>Prihlaste sa udajmi, ktore vam pridelil spravca organizacie.</span>`;
 
   form.append(usernameLabel, passwordLabel, hint, error, submit);
   content.append(heading, profiles, form);

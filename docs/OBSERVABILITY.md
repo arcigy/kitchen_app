@@ -11,16 +11,16 @@ Observability must explain user-visible failures without exposing customer data 
 - `mutation_audit`: static action, source, status/outcome, role, and HMAC-scoped references only;
 - `/metrics`: worker uptime, request in-flight count, normalized route/status counters, and duration histogram;
 - authenticated browser journey counters and duration histograms for `app_data_load` and `project_open`, split only by fixed app-data source plus open-type combinations and success/failure;
-- authenticated browser runtime error counters plus long-task duration and best-available memory histograms, with fixed signal names and no diagnostic text or attribution;
+- authenticated browser runtime error counters plus long-task duration and best-available memory histograms, with fixed signal names and one fixed resource category only (`image`, `link`, `runtime`, `script`, `style`, or `unknown`), never diagnostic text or attribution;
 - HTTP 413, 429, 503, and 5xx are visible through status metrics.
 
 `src/server/workerRequestPipeline.ts` is the single owner of this HTTP security and observability boundary for both worker entrypoints. Entry-specific runtime routes are composed outside it and must not duplicate origin, readiness, authentication, budget, telemetry, audit, or public-error handling.
 
 Production `/metrics` requires `ARCIGY_METRICS_TOKEN` and HTTPS. Never label metrics with tenant, user, project, session, file, token, query, supplier product, or request ID.
 
-Browser reports are same-origin, authenticated, best-effort beacons with an 8 KiB request limit and exact allowlisted schemas. Journey payloads contain only `journey`, `variant`, `outcome`, and `durationMs`; runtime payloads contain only `signal` and numeric `value`. They contain no tenant, user, project, URL, stack, message, catalog, module, price, or attribution. Telemetry failure never blocks the measured product journey.
+Browser reports are same-origin, authenticated, best-effort beacons with an 8 KiB request limit and exact allowlisted schemas. Journey payloads contain only `journey`, `variant`, `outcome`, and `durationMs`; runtime payloads contain only `signal`, numeric `value`, and, for failures, one fixed `kind` category. They contain no tenant, user, project, URL, stack, message, catalog, module, price, or attribution. Telemetry failure never blocks the measured product journey.
 
-Runtime collection starts only after authentication. Error and unhandled-rejection listeners count events without reading their contents. The feature-detected [W3C Long Tasks API](https://www.w3.org/TR/longtasks-1/) contributes duration only, never task attribution. Memory sampling prefers the feature-detected [Measure Memory API](https://wicg.github.io/performance-measure-memory/) total and discards its URL/type breakdown; a Chromium compatibility fallback reports only `usedJSHeapSize`. Samples are capped per page, so the fallback is a trend signal rather than a cross-browser absolute comparison.
+Runtime collection starts only after authentication. Error and unhandled-rejection listeners count events without reading their contents; errors add only a fixed element category when the browser exposes an element tag. The feature-detected [W3C Long Tasks API](https://www.w3.org/TR/longtasks-1/) contributes duration only, never task attribution. Memory sampling prefers the feature-detected [Measure Memory API](https://wicg.github.io/performance-measure-memory/) total and discards its URL/type breakdown; a Chromium compatibility fallback reports only `usedJSHeapSize`. Samples are capped per page, so the fallback is a trend signal rather than a cross-browser absolute comparison.
 
 ## Required dashboards
 

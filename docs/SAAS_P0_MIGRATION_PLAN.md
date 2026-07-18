@@ -1,34 +1,74 @@
 # Arcigy P0 infrastructure migration plan
 
-Date: 2026-07-16  
-State: execution plan only; no live mutation is authorized by this document
+Date: 2026-07-17
+State: partially executed; develop isolation/durability, encrypted off-host production backup, daily scheduling, real isolated restore, disk recovery and live write-isolation are complete. Production application service remains unchanged.
 
 Use together with `SAAS_SCALE_READINESS_AUDIT_2026-07-15.md`, `SAAS_OPERATIONS_RUNBOOK.md`, and `release-checklist.md`.
 
 ## Fresh read-only evidence
 
-The live CapRover inspection refreshed on 2026-07-16 proved:
+The live CapRover inspection refreshed on 2026-07-17 proves:
 
-- host root disk: 38 GB total, 35 GB used, 1.5 GB free, 97%;
+- host root disk: about 38 GB total, 45% used, and about 20.6 GB free; the earlier 97%-used condition was cleared outside this audit without any image deletion by this run;
 - Docker images: 28.04 GB, with 26.73 GB reported reclaimable;
-- `arcigy-kitchen-develop`: `APP_ENV=prod`, `DATABASE_SCHEMA=prod`, no mount;
-- `kitchenapp`: `APP_ENV=prod`, `DATABASE_SCHEMA=prod`, no mount;
-- production `/app/storage`: approximately 56 MB in 23 files inside the running container;
+- `arcigy-kitchen-develop`: `APP_ENV=dev`, `DATABASE_SCHEMA=dev`, object prefix `dev`, PostgreSQL project storage, one replica, and named persistent volume `captain--arcigy-kitchen-develop-next-storage` mounted at `/app/storage`;
+- `arcigy-kitchen-develop-legacy-20260717`: retained prior production-bound develop image for explicit rollback;
+- `kitchenapp`: `APP_ENV=prod`, `DATABASE_SCHEMA=prod`, PostgreSQL project storage, no mount;
+- fresh canonical production evidence supersedes the earlier 23-file attribution: `/app/storage`, `/app/uploads`, `/app/outputs`, and `/app/exports` are absent, so no current production application-file payload requires copying;
 - PostgreSQL data uses the persistent volume `captain--kitchenapp-db-data`;
 - PostgreSQL: `archive_mode=off`, `archive_command=(disabled)`, `wal_level=replica`;
-- no application PostgreSQL backup timer, cron entry, backup container, or WAL archive process was found.
+- no server-side PostgreSQL backup timer or WAL archive process exists; a workstation daily encrypted shared-Drive backup and weekly isolated restore task are now active with `StartWhenAvailable`.
 - the `prod` schema has all 4 repository migrations, 3 projects, 3 active saves, and 19 versions; the existing `dev` schema has only migration `0001`, zero projects, zero saves, and only 5 module packages, so switching develop to it without an approved migrate-and-seed/copy step would hide current projects and modules;
 - GitHub provider secret scanning and push protection are enabled, but three unresolved historical Google API key alerts remain: one in `.env.bak` and two in `GEMINI.md`; one historical line labels its key as the production Railway key. Current CapRover definitions for `arcigy-kitchen-develop` and `kitchenapp` do not contain `GEMINI_API_KEY`.
 
-The repository deploy workflow now has a fail-closed preflight for the target app definition. It refuses a missing app, develop-to-production namespace cross-wiring, ephemeral or read-only `/app/storage`, multiple replicas with local volume storage, and volume-changing service overrides. A read-only check confirms the current develop definition is rejected at `APP_ENV`; this is a guardrail, not a substitute for the approved migration below.
+The repository deploy workflow has a fail-closed preflight for the target app definition. It refuses a missing app, develop-to-production namespace cross-wiring, ephemeral or read-only `/app/storage`, multiple replicas with local volume storage, and volume-changing service overrides. The canonical develop definition now passes that preflight exactly.
 
-Both worker entrypoints also fail before repository creation when a production build is configured with file/implicit project storage, a missing database connection, an implicit namespace, or mismatched environment/schema/object prefix. A real negative startup probe exited without opening the worker port and without exposing its database URL. This closes the silent production fallback path locally, but the current live develop namespace and mount remain unchanged until the approved migration.
+Both worker entrypoints also fail before repository creation when a production build is configured with file/implicit project storage, a missing database connection, an implicit namespace, or mismatched environment/schema/object prefix. A real negative startup probe exited without opening the worker port and without exposing its database URL. The live canonical develop service now satisfies this boundary and returns PostgreSQL readiness JSON.
 
 Database readiness now verifies the complete ordered repository migration manifest, not only the latest migration marker. The manifest is regression-locked to every SQL file, and a schema missing any earlier migration fails before application work; the check is read-only and never auto-migrates live data.
 
 A persistent database volume protects against a container replacement. It does not protect against database corruption, operator error, host loss, ransomware, or deletion of the volume and is not an off-host backup.
 
-The repository now contains a fail-closed synthetic PostgreSQL 16 backup/restore regression. It refuses configured database URLs and remote Docker engines, migrates and seeds only its own labelled disposable Docker container or loopback-only portable temp cluster, runs real `pg_dump`/`pg_restore`, and compares exact restored evidence. A portable PostgreSQL 16.14 run passed locally with 4 migrations, 24 tables, 32 rows, 49 constraints, 45 indexes, zero tenant-boundary leakage, synthetic RPO 0, and measured RTO 1.694 seconds; all processes and temp data were removed afterward. This makes the logical restore procedure executed and repeatable but does not close P0: the approved encrypted off-host destination, continuous WAL/PITR, real backup schedule, and real-backup restore evidence are still absent.
+The synthetic PostgreSQL 16 gate remains green. Real recovery evidence is now also present: a 9,524,975-byte AES-256-GCM `prod` dump was stored on the ArciGy shared Google Drive and restored into an unnetworked disposable PostgreSQL 16 container. It reproduced 24 tables, 72 total rows, 4 migrations, 49 constraints and 45 indexes; the sorted per-table row-count digest exactly matched live production, measured RTO was 48 seconds, and cleanup left zero restore containers.
+
+## Backup implementation status (2026-07-17)
+
+The repository now contains a separate deployable worker in `ops/backup/`.
+It uses PostgreSQL 16 `pg_dump`, streams a custom-format dump through
+AES-256-GCM encryption with a scrypt-derived key, and uploads B2 large-file
+parts directly off-host. It writes no local dump file, never deletes a remote
+object, holds a PostgreSQL advisory lock to prevent overlapping schedules, and
+fails closed unless its B2 key is restricted to the target bucket plus the
+`arcigy/prod/` prefix with only `listFiles`, `readFiles`, and `writeFiles`.
+Its paired restore command defaults to a download/decrypt/archive verification
+only; actual `pg_restore` additionally requires an explicit acknowledgement and
+a newly named loopback `arcigy_restore_*` target, so it cannot target the live
+CapRover database.
+
+The B2 worker has implementation and test evidence only and is not the selected
+live baseline. The B2 bucket displayed a 35-day default Object Lock period, but
+the provider UI did not independently expose whether its mode is Compliance.
+The existing B2 application key also has broader permissions than the worker
+accepts. Do not deploy that worker or use the broad key as a production backup
+credential while the account is suspended.
+
+As of 2026-07-16, the provider also reports that B2 access is suspended until
+the account is returned to good standing and a phone number is present for API
+access. This is an external account prerequisite: do not deploy the worker,
+copy a backup credential into another store, or weaken its permission checks
+while the account is suspended.
+
+The no-payment fallback is now live. `filesystem-backup-runner.mjs` streams the
+fixed production `prod` schema over host-key-pinned SSH through the same
+authenticated-encryption envelope into the ArciGy shared Google Drive. Its
+64-byte random passphrase is stored only in an ACL-protected operator file
+outside Git and Drive. A daily 03:30 task completed with result 0; a weekly
+Sunday 05:00 task selects only the newest completed contained artifact and
+restores it into an unnetworked labelled container. The current baseline is
+RPO 24 hours, RTO 4 hours, with at least 90 daily restore points and no
+automatic deletion. The shared drive has about 421 GB free, so the current
+roughly 9.5 MB daily artifact size does not require a destructive lifecycle
+job. PITR is deferred until a tighter RPO is approved.
 
 ## P0 credential containment prerequisite
 
@@ -43,17 +83,25 @@ Before any Arcigy release:
 
 Credential rotation, provider revocation, GitHub alert resolution, and enabling validity checks are external mutations and require explicit user authorization plus access to the owning Google Cloud/Railway accounts.
 
+Read-only Google Cloud inventory on 2026-07-17 covered all six projects visible to the signed-in owner. Two projects had no API keys and the eight visible current keys in the remaining projects were compared by SHA-256 entirely in memory; none matched alerts 1–3. This proves the exposed values are not any key currently visible to that account, but does not prove provider revocation because the values may be purged or owned by another account/project. Definitive `lookupKey`, revocation evidence, and GitHub alert resolution remain required.
+
 ## Decisions required before execution
 
 Recommended baseline:
 
 1. Develop data: create schema `dev`; copy only an explicitly approved tenant snapshot for compatibility testing, otherwise seed synthetic data.
-2. App files: use separate CapRover persistent volumes now (`prod` and `dev`) because the current 56 MB migration is small and requires no product rewrite. Re-evaluate S3-compatible object storage after file growth and multi-replica needs are measured.
-3. Backup: encrypted S3-compatible off-host storage in a different failure domain; continuous WAL archive plus daily full backup.
-4. Recovery target: RPO 15 minutes, RTO 4 hours; retain 7 daily, 4 weekly, and 6 monthly restore points.
+2. App files: develop is durable; canonical production currently has no application-file tree, so create an empty production volume and prove it across the approved release redeploy. Re-evaluate S3-compatible object storage after file growth and multi-replica needs are measured.
+3. Backup: completed baseline uses an encrypted daily full backup on the company shared Google Drive plus a weekly isolated restore. Add immutable object retention before the threat model or contractual target requires it.
+4. Recovery target: current approved engineering baseline is RPO 24 hours and RTO 4 hours, retaining at least 90 daily points. Require WAL/PITR before accepting a tighter RPO.
 5. Docker rollback retention: current image plus three previous successful releases per Arcigy app; remove only older images not referenced by a running container.
 
 The operator must provide the approved backup destination and credentials through the server secret store. Never put credentials in this repository, commands committed to Git, logs, or chat.
+
+## Executed develop database snapshot (2026-07-17)
+
+The owner explicitly approved a compatibility-testing snapshot of the current production data into `dev`. The repository command migrated only `dev`, then copied `prod` to `dev` in one repeatable-read transaction. It permits only that exact direction, rejects schema/table/column/foreign-key mismatches and external references, truncates only `dev`, verifies an order-independent content fingerprint plus row count after every copied table, and rolls the full `dev` replacement back on any failure. Authentication sessions and migration metadata are deliberately excluded, so a development browser must sign in again and production sessions are never copied.
+
+The completed run copied 3 projects, 3 active saves, 19 project versions, 21 module packages, 2 client catalogs, 2 organizations, and the related tenant identities/memberships. Production was read-only throughout. The canonical public develop service now uses this `dev` namespace and its separate persistent volume. A temporary project created through the authenticated live API appeared only in develop, was absent from the retained production-bound rollback service, and was deleted with both list counts restored.
 
 ## Mandatory execution order
 
@@ -71,7 +119,7 @@ Rollback: no state has changed.
 
 - configure an encrypted backup tool with credentials supplied only through CapRover secrets;
 - stream the first full PostgreSQL backup directly off-host because the server has insufficient local disk headroom;
-- copy the current production `/app/storage` tree off-host with tenant paths and checksums preserved;
+- if a production application-file tree exists at execution time, copy it off-host with tenant paths and checksums preserved; current canonical evidence shows none;
 - verify remote object size, checksum, encryption, retention lock/versioning where supported, and backup logs;
 - restore both artifacts into an isolated database/container and prove representative login, project list/open, catalog, BOM/pricing, asset access, and tenant-negative checks;
 - record achieved RPO/RTO and the exact restore-point identifier.
@@ -104,8 +152,8 @@ Rollback: retained image IDs remain available. If a required image was omitted f
 
 - create separate persistent volumes for production and develop;
 - stop writes or briefly stop the production app for the final delta;
-- copy `/app/storage` to the production volume without deleting the source;
-- verify 23/23 files, total bytes, per-file checksums, owner/mode, and tenant-safe relative paths;
+- copy `/app/storage` only if a source tree exists at release time; current source is absent, so initialize an empty production volume;
+- verify the exact empty/source manifest, total bytes, owner/mode, and tenant-safe relative paths;
 - configure the CapRover persistent-directory mapping to mount the production volume at `/app/storage`;
 - start one replica and verify assets, export, render, project open/save, and tenant access;
 - redeploy once and prove the same files/checksums remain;
@@ -125,7 +173,7 @@ production: APP_ENV=prod  DATABASE_SCHEMA=prod  object prefix=prod
 ```
 
 - create and migrate schema `dev` using the current transactional migration command;
-- populate it with synthetic data or the explicitly approved tenant snapshot;
+- populate it with synthetic data or the explicitly approved tenant snapshot; **completed 2026-07-17 with the approved current production snapshot**;
 - switch only `arcigy-kitchen-develop` to the `dev` namespace and develop storage volume;
 - verify that a create/save/delete in develop changes no production row count, timestamp, object key, or file checksum;
 - run login, project list/open/save/reopen, catalog, Materials, pricing/BOM, export/render, and cross-tenant negative tests.

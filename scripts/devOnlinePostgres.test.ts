@@ -16,4 +16,16 @@ describe("online PostgreSQL development tunnel", () => {
     expect(compressionFlag).toBeGreaterThan(tunnelSpawn);
     expect(compressionFlag).toBeLessThan(forwardingFlag);
   });
+
+  it("requires an explicit local approval before copying production data into dev", async () => {
+    const source = await readFile(
+      path.join(process.cwd(), "scripts", "devOnlinePostgres.ts"),
+      "utf-8"
+    );
+    expect(source).toContain('process.argv.includes("--snapshot-prod-to-dev")');
+    expect(source).toContain('ARCIGY_APPROVE_PRODUCTION_SNAPSHOT !== "true"');
+    expect(source).toContain('scripts/dbMigrate.ts", "--schema", "dev", "--app-env", "dev"');
+    expect(source).toContain("snapshotProductionToDev(verification)");
+    expect(source).toContain("stopTunnel();");
+  });
 });

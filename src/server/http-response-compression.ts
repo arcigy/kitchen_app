@@ -34,14 +34,18 @@ export function acceptsGzip(value: string | string[] | undefined): boolean {
   return (codings.find((entry) => entry.coding === "*")?.quality ?? 0) > 0;
 }
 
-export function sendPrecompressedGzipJson(res: http.ServerResponse, body: Buffer): void {
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
+export function sendPrecompressedGzipBody(res: http.ServerResponse, body: Buffer): void {
   appendVary(res, "Accept-Encoding");
   res.setHeader("Content-Encoding", "gzip");
   res.setHeader("Content-Length", String(body.byteLength));
   res.end(body);
+}
+
+export function sendPrecompressedGzipJson(res: http.ServerResponse, body: Buffer): void {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  sendPrecompressedGzipBody(res, body);
 }
 
 export function gzipJsonBody(value: unknown): Promise<Buffer | null> {
