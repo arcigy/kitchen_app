@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import react from "@vitejs/plugin-react";
 import { build, type InlineConfig } from "vite";
+import { supplierBridgeReleaseOrigins } from "./supplierBridgeBuildConfig";
 
 type BuildMode = "debug" | "production";
 
@@ -12,11 +13,11 @@ const mode = process.argv.includes("--mode") ? process.argv[process.argv.indexOf
 if (mode !== "debug" && mode !== "production") throw new Error("Use --mode debug or --mode production.");
 const buildMode: BuildMode = mode;
 const debug = buildMode === "debug";
-const version = "0.1.0";
-const productionOrigin = (process.env.SUPPLIER_BRIDGE_ARCIGY_PRODUCTION_ORIGIN ?? "https://kitchenapp.178.104.175.242.sslip.io").replace(/\/$/, "");
+const version = "0.1.1";
+const releaseOrigins = supplierBridgeReleaseOrigins();
 const arcigyOrigins = debug
-  ? ["http://127.0.0.1:5180", "http://localhost:5180", productionOrigin]
-  : [productionOrigin];
+  ? ["http://127.0.0.1:5180", "http://localhost:5180", ...releaseOrigins]
+  : releaseOrigins;
 const simulatorOrigins = debug ? ["http://127.0.0.1:5192", "http://localhost:5192"] : [];
 const outDir = path.join(extensionRoot, `dist-${buildMode}`);
 
@@ -86,9 +87,9 @@ const manifest = {
         "http://localhost:5191/*",
         "http://127.0.0.1:5192/*",
         "http://localhost:5192/*",
-        `${productionOrigin}/*`
+        ...releaseOrigins.map((origin) => `${origin}/*`)
       ]
-    : [`${productionOrigin}/*`],
+    : releaseOrigins.map((origin) => `${origin}/*`),
   optional_host_permissions: [
     "https://www.demos24plus.com/*",
     "https://webshop.schachermayer.com/*",
@@ -98,8 +99,8 @@ const manifest = {
   content_scripts: [
     {
       matches: debug
-        ? ["http://127.0.0.1:5180/*", "http://localhost:5180/*", `${productionOrigin}/*`]
-        : [`${productionOrigin}/*`],
+        ? ["http://127.0.0.1:5180/*", "http://localhost:5180/*", ...releaseOrigins.map((origin) => `${origin}/*`)]
+        : releaseOrigins.map((origin) => `${origin}/*`),
       js: ["arcigy-content.js"],
       run_at: "document_start"
     },
@@ -133,4 +134,4 @@ const readme = path.join(extensionRoot, "README.md");
 if (debug) {
   try { await cp(readme, path.join(outDir, "README.md")); } catch { /* README is added by the feature slice. */ }
 }
-console.log(JSON.stringify({ ok: true, mode: buildMode, outDir, productionOrigin }));
+console.log(JSON.stringify({ ok: true, mode: buildMode, outDir, arcigyOrigins }));

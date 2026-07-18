@@ -38,6 +38,8 @@ describe("supplier bridge web controller", () => {
     await controller.open();
     await controller.start("demos");
 
+    const context = posted.find((message) => message.type === "SET_SUPPLIER_PROJECT_CONTEXT");
+    expect(context).toMatchObject({ source: "ARCIGY_WEB", projectId: "project-1", projectLabel: "Kuchyňa Novák" });
     expect(openWindow).toHaveBeenCalledWith("https://www.demos24plus.com/", "_blank", "noopener");
     expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/supplier-sync-sessions", expect.objectContaining({ body: JSON.stringify({ supplierId: "demos", projectId: "project-1", lookups: [] }) }));
     const start = posted.find((message) => message.type === "START_SUPPLIER_SESSION");

@@ -51,7 +51,10 @@ async function main() {
   await app.route("**/api/suppliers", async (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ ok: true, suppliers: [] })
+    body: JSON.stringify({
+      ok: true,
+      suppliers: [{ supplierId: "demos", displayName: "Demos", startUrl: simulatorUrl, adapterKey: "mock", sortOrder: 1 }]
+    })
   }));
   await app.addInitScript(() => localStorage.removeItem("arcigy.kitchen.autostartWorkspace"));
   const warmUrl = new URL(appUrl);
@@ -78,9 +81,20 @@ async function main() {
   const projectsBody = await projectsResponse.json();
   projectId = projectsBody.projects?.find((project) => project.name === name)?.projectId ?? null;
   assert(Boolean(projectId), "created project identifier resolved");
+  const supplierPicker = app.locator('[data-supplier-picker="true"]');
+  await supplierPicker.locator('option[value="demos"]').waitFor({ state: "attached", timeout: 15_000 });
+  await supplierPicker.selectOption("demos");
+  assert(true, "supplier selection triggered from the Arcigy UI");
+  const panel = await context.newPage();
+  panel.on("console", (message) => { if (message.type() === "error") result.consoleErrors.push(`panel: ${message.text()}`); });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await panel.locator(".project-context").waitFor({ timeout: 15_000 });
+  const started = await panel.evaluate(async () => (await chrome.storage.local.get("arcigySupplierBridgeProgress")).arcigySupplierBridgeProgress);
+  assert(started?.view?.session?.projectId === projectId, "Side Panel displays the selected Arcigy project", started);
+  assert(started?.trace?.some((entry) => entry.stage === "Otvorenie panelu"), "supplier launch records the Side Panel opening result", started?.trace);
   const sessionResponse = await context.request.post(new URL(`/api/projects/${projectId}/supplier-sync-sessions`, appUrl).toString(), { data: { supplierId: "mock-supplier", projectId, lookups: [] } });
   const sessionBody = await sessionResponse.json();
-  assert(sessionResponse.ok() && Boolean(sessionBody.bridgeToken && sessionBody.view?.session?.id), "mock supplier session created for automated test");
+  assert(sessionResponse.ok() && Boolean(sessionBody.bridgeToken && sessionBody.view?.session?.id), "mock supplier session created for automated capture test");
   const startResult = await app.evaluate(({ sessionId, bridgeToken, projectLabel }) => new Promise((resolve) => {
     const requestId = crypto.randomUUID();
     const nonce = crypto.randomUUID();
@@ -97,12 +111,6 @@ async function main() {
   }), { sessionId: sessionBody.view.session.id, bridgeToken: sessionBody.bridgeToken, projectLabel: name });
   assert(startResult.ok === true, "extension accepted supplier session", startResult);
   assert(true, "Arcigy created and attached supplier session");
-
-  const panel = await context.newPage();
-  panel.on("console", (message) => { if (message.type() === "error") result.consoleErrors.push(`panel: ${message.text()}`); });
-  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-  await panel.locator(".project-context").waitFor({ timeout: 15_000 });
-  assert(true, "Side Panel displays active project");
   const supplier = context.pages().find((page) => page.url().startsWith(simulatorUrl.slice(0, -1)))
     ?? await context.waitForEvent("page", { predicate: (page) => page.url().startsWith(simulatorUrl.slice(0, -1)), timeout: 15_000 });
   supplier.on("console", (message) => { if (message.type() === "error") result.consoleErrors.push(`supplier: ${message.text()}`); });
@@ -126,7 +134,7 @@ async function main() {
   assert(Boolean(projectId && sessionId), "extension progress restored from backend identifiers");
   const backendStatus = await context.request.get(new URL(`/api/projects/${projectId}/supplier-sync-sessions/${sessionId}`, appUrl).toString());
   const statusBody = await backendStatus.json();
-  assert(backendStatus.ok() && statusBody.view.priceObservations.length > 0, "backend stored price observation", statusBody.view);
+  assert(backendStatus.ok() && statusBody.view.items.some((item) => item.status === "confirmed" && item.selectedCandidateId) && statusBody.view.candidates.length > 0, "backend stored the confirmed material assignment", statusBody.view);
 
   await app.bringToFront();
   await app.locator('[data-workspace-nav="materials"]').click();

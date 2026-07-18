@@ -9,6 +9,13 @@ describe("supplier bridge message validation", () => {
     expect(parseArcigyWindowRequest({ ...valid, bridgeToken: "" })).toBeNull();
   });
 
+  it("accepts a project context only when it identifies the active project", () => {
+    const valid = { source: "ARCIGY_WEB", type: "SET_SUPPLIER_PROJECT_CONTEXT", requestId: "request-1", nonce: "nonce-1", sessionId: "arcigy-project-context", projectId: "project-website", projectLabel: "Website" };
+    expect(parseArcigyWindowRequest(valid)).toEqual(valid);
+    expect(parseArcigyWindowRequest({ ...valid, projectId: "" })).toBeNull();
+    expect(parseBridgeRuntimeRequest({ channel: BRIDGE_CHANNEL, ...valid, arcigyOrigin: "https://arcigy-kitchen-develop.178.104.175.242.sslip.io" })).toMatchObject({ type: "SET_SUPPLIER_PROJECT_CONTEXT", projectId: "project-website", projectLabel: "Website" });
+  });
+
   it("rejects unknown runtime commands and validates diagnostic fields", () => {
     expect(parseBridgeRuntimeRequest({ channel: BRIDGE_CHANNEL, type: "SIDE_PANEL_COMMAND", command: "crawl" })).toBeNull();
     expect(parseBridgeRuntimeRequest({ channel: BRIDGE_CHANNEL, type: "START_DIAGNOSTIC_PICK", field: "price", pageType: "product" })).toMatchObject({ field: "price", pageType: "product" });

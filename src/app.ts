@@ -3321,6 +3321,7 @@ export function startApp(initialArgs: AppArgs) {
     onProjectChanged: (project, status) => {
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
+      void supplierBridgeController?.syncProjectContext().catch(() => undefined);
     },
     initialProject: args.initialProject,
     initialProjectSave: args.initialProjectSave

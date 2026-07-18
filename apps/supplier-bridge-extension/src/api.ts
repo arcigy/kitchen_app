@@ -13,6 +13,9 @@ function record(value: unknown): Record<string, unknown> | null {
 async function requestJson(url: string, init: RequestInit): Promise<unknown> {
   const response = await fetch(url, {
     ...init,
+    // Supplier Bridge authenticates only with its short-lived bearer/bridge token.
+    // Never forward the signed-in Arcigy browser cookie from an extension origin.
+    credentials: "omit",
     headers: {
       Accept: "application/json",
       ...(init.body ? { "Content-Type": "application/json" } : {}),

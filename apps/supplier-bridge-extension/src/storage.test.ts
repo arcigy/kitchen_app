@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-bridge-types";
-import { parseSupplierBridgeProgress, parseSupplierBridgeSessionSecrets } from "./storage";
+import { appendSupplierBridgeTrace, parseSupplierBridgeProgress, parseSupplierBridgeSessionSecrets } from "./storage";
 
 const view: SupplierSyncSessionView = {
   schemaVersion: 1,
@@ -12,6 +12,12 @@ const view: SupplierSyncSessionView = {
 describe("supplier bridge storage serialization", () => {
   it("accepts recoverable progress without secrets", () => {
     expect(parseSupplierBridgeProgress({ version: 1, sessionId: "session-1", arcigyOrigin: "http://127.0.0.1:5180", backendBaseUrl: "http://127.0.0.1:5191", supplierId: "mock-supplier", activeSupplierTabId: 42, view, lastWarning: null, updatedAt: "2026-07-10T08:01:00.000Z" })).toMatchObject({ sessionId: "session-1", activeSupplierTabId: 42 });
+  });
+
+  it("keeps a bounded, secret-free trace while accepting prior recoverable progress", () => {
+    const progress = parseSupplierBridgeProgress({ version: 1, sessionId: "session-1", arcigyOrigin: "http://127.0.0.1:5180", backendBaseUrl: "http://127.0.0.1:5191", supplierId: "mock-supplier", activeSupplierTabId: 42, view, lastWarning: null, updatedAt: "2026-07-10T08:01:00.000Z" });
+    expect(progress?.trace).toEqual([]);
+    expect(progress && appendSupplierBridgeTrace(progress, { stage: "Panel opened", outcome: "ok", code: null }).trace).toHaveLength(1);
   });
 
   it("requires the persisted view and progress to describe the same session", () => {

@@ -57,6 +57,17 @@ if (isAllowedArcigyOrigin(origin)) {
           arcigyOrigin: origin,
           projectLabel: message.projectLabel ?? ""
         }
+      : message.type === "SET_SUPPLIER_PROJECT_CONTEXT"
+        ? {
+            channel: BRIDGE_CHANNEL,
+            type: "SET_SUPPLIER_PROJECT_CONTEXT",
+            requestId: message.requestId,
+            nonce: message.nonce,
+            sessionId: message.sessionId,
+            arcigyOrigin: origin,
+            projectId: message.projectId!,
+            projectLabel: message.projectLabel ?? ""
+          }
       : {
           channel: BRIDGE_CHANNEL,
           type: message.type,
