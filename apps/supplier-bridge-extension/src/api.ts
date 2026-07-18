@@ -10,6 +10,17 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+export class SupplierBridgeApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly requestId: string | null
+  ) {
+    super(message);
+    this.name = "SupplierBridgeApiError";
+  }
+}
+
 async function requestJson(url: string, init: RequestInit): Promise<unknown> {
   const response = await fetch(url, {
     ...init,
@@ -31,7 +42,11 @@ async function requestJson(url: string, init: RequestInit): Promise<unknown> {
   }
   if (!response.ok) {
     const message = record(body)?.error;
-    throw new Error(typeof message === "string" ? message : `Supplier Bridge HTTP ${response.status}.`);
+    throw new SupplierBridgeApiError(
+      typeof message === "string" ? message : `Supplier Bridge HTTP ${response.status}.`,
+      response.status,
+      response.headers.get("X-Request-Id")
+    );
   }
   return body;
 }

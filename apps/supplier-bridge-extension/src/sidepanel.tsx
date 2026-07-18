@@ -13,7 +13,7 @@ import {
   type DiagnosticPageAnalysis
 } from "./messages";
 import { parseSupplierBridgeProgress, parseSupplierBridgeProjectContext, type SupplierBridgeProjectContext, type SupplierBridgeTrace } from "./storage";
-import { supplierTargetGroups, supplierTargetProductText, supplierTargetsForScope, supplierViewForProject, type SupplierTarget, type SupplierTargetScope } from "./sidepanelModel";
+import { buildSupplierBridgeDebugText, supplierTargetGroups, supplierTargetProductText, supplierTargetsForScope, supplierViewForProject, type SupplierTarget, type SupplierTargetScope } from "./sidepanelModel";
 import "./sidepanel.css";
 
 const diagnosticFields: Array<{ field: DiagnosticField; label: string }> = [
@@ -162,6 +162,7 @@ function App(): React.JSX.Element {
   const [projectLabel, setProjectLabel] = useState("");
   const [projectContext, setProjectContext] = useState<SupplierBridgeProjectContext | null>(null);
   const [trace, setTrace] = useState<SupplierBridgeTrace[]>([]);
+  const [lastWarning, setLastWarning] = useState<string | null>(null);
   const [choosingTarget, setChoosingTarget] = useState(false);
   const [targetScope, setTargetScope] = useState<SupplierTargetScope>("general");
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -180,7 +181,7 @@ function App(): React.JSX.Element {
       }
       if (changes.arcigySupplierBridgeProgress) {
         const progress = parseSupplierBridgeProgress(changes.arcigySupplierBridgeProgress.newValue);
-        if (progress) { setView(progress.view); setProjectLabel(progress.projectLabel); setTrace(progress.trace); }
+        if (progress) { setView(progress.view); setProjectLabel(progress.projectLabel); setTrace(progress.trace); setLastWarning(progress.lastWarning); }
       }
     };
     void chrome.storage.local.get(["arcigySupplierBridgeProgress", "arcigySupplierBridgeProjectContext"]).then((stored) => {
@@ -188,7 +189,7 @@ function App(): React.JSX.Element {
       const context = parseSupplierBridgeProjectContext(stored.arcigySupplierBridgeProjectContext);
       setProjectContext(context);
       setProjectLabel(context?.projectLabel ?? progress?.projectLabel ?? "");
-      if (progress) { setView(supplierViewForProject(progress.view, context?.projectId)); setTrace(progress.trace); }
+      if (progress) { setView(supplierViewForProject(progress.view, context?.projectId)); setTrace(progress.trace); setLastWarning(progress.lastWarning); }
     });
     chrome.storage.onChanged.addListener(listener);
     return () => { chrome.storage.onChanged.removeListener(listener); };
@@ -208,17 +209,17 @@ function App(): React.JSX.Element {
   const assignedTargets = (["general", "module", "addition"] as const)
     .flatMap((scope) => supplierTargetsForScope(view, scope))
     .filter((target) => target.assigned);
-  const run = async (name: string, action: () => Promise<BridgeRuntimeResponse>, success: string): Promise<boolean> => {
+  const run = async (name: string, action: () => Promise<BridgeRuntimeResponse>, success: string): Promise<BridgeRuntimeResponse | null> => {
     setBusy(name); setError(null); setMessage(null);
     try {
       const result = await action();
       if (result.view) setView(result.view);
       if (!result.ok) throw new Error(result.message ?? result.errorCode ?? "Operácia zlyhala.");
       setMessage(success);
-      return true;
+      return result;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Operácia zlyhala.");
-      return false;
+      return null;
     } finally {
       setBusy(null);
     }
@@ -228,7 +229,29 @@ function App(): React.JSX.Element {
       const permissionError = await requestCurrentSupplierPermission(view);
       return permissionError ?? command("assign_current", { syncItemId: target.item.id });
     }, `Produkt bol priradený do skupiny ${target.label}.`);
-    if (assigned) setChoosingTarget(false);
+    if (!assigned?.ok || !assigned.view) return;
+    const confirmedItem = assigned.view.items.find((item) => item.id === target.item.id);
+    const product = confirmedItem ? supplierTargetProductText(assigned.view, confirmedItem) : "Produkt";
+    const destination = confirmedItem?.targetLabel ?? target.label;
+    setMessage(`Materiál „${product}“ bol prevzatý a priradený do „${destination}“.`);
+    setChoosingTarget(false);
+  };
+  const copyDebug = async (): Promise<void> => {
+    if (!view) return;
+    try {
+      await navigator.clipboard.writeText(buildSupplierBridgeDebugText({
+        extensionVersion: supplierBridgeBuild.version,
+        view,
+        projectLabel,
+        lastWarning,
+        uiError: error,
+        trace
+      }));
+      setError(null);
+      setMessage("Debug bol skopírovaný. Pošlite mi ho sem.");
+    } catch {
+      setError("Debug sa nepodarilo skopírovať. Skontrolujte povolenie schránky v Chrome.");
+    }
   };
 
   return <main className="shell">
@@ -264,6 +287,7 @@ function App(): React.JSX.Element {
     </>}
     {view && <details className="card bridge-debug"><summary>Diagnostika spojenia</summary>
       <dl><div><dt>Rozšírenie</dt><dd>v{supplierBridgeBuild.version}</dd></div><div><dt>Dodávateľ</dt><dd>{view.session.supplierId}</dd></div><div><dt>Session</dt><dd>{view.session.status}</dd></div></dl>
+      <button className="button button--secondary" data-sidepanel-action="copy-debug" onClick={() => void copyDebug()}>Kopírovať debug</button>
       {trace.length > 0 ? <ol className="bridge-debug__trace">{trace.slice().reverse().map((entry) => <li key={`${entry.at}:${entry.stage}`} className={`bridge-debug__trace--${entry.outcome}`}>{entry.stage}{entry.code ? ` · ${entry.code}` : ""}</li>)}</ol> : <p className="muted">Čakám na prvú udalosť.</p>}
     </details>}
     {__SUPPLIER_BRIDGE_DEBUG__ ? <DiagnosticPanel /> : null}

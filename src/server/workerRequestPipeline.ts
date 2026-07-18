@@ -112,7 +112,7 @@ export function createWorkerRequestHandler(context: WorkerRequestPipelineContext
       (context.logError ?? console.error)(
         `[worker] requestId=${requestId} ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${error instanceof Error ? error.message : String(error)}`
       );
-      return context.sendJson(res, status, { ok: false, error: message });
+      return context.sendJson(res, status, { ok: false, error: message, requestId });
     }
   };
 }
