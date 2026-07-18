@@ -1,9 +1,42 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
 import type { SupplierConfirmationApplyInput } from "../core/supplier-bridge/supplier-bridge-service";
-import { updatedSupplierAssignment } from "./supplierBridgeProjectUpdater";
+import { baseAssignmentForSupplierTarget, updatedSupplierAssignment } from "./supplierBridgeProjectUpdater";
 
 describe("supplier bridge project updater", () => {
+  it("uses the captured category for scoped targets whose opaque BOM item ID contains colons", () => {
+    const corpus = {
+      assignmentId: "material-assignment:corpus",
+      category: "corpus",
+      kind: "material",
+      customValues: {},
+      source: "auto",
+      snapshots: {},
+      updatedAt: "2026-07-10T08:00:00.000Z"
+    } satisfies ProjectMaterialAssignment;
+    const front = { ...corpus, assignmentId: "material-assignment:front", category: "front" as const } satisfies ProjectMaterialAssignment;
+    const item = {
+      id: "item-1",
+      sessionId: "session-1",
+      materialAssignmentId: "material-assignment:module:website:corpus:part:side:left",
+      assignmentCategory: "corpus" as const,
+      query: "corpus",
+      expectedManufacturer: null,
+      expectedDecorCode: null,
+      expectedSurfaceCode: null,
+      expectedProductType: "board",
+      expectedThicknessMm: null,
+      exactLookup: null,
+      status: "pending" as const,
+      selectedCandidateId: null,
+      errorCode: null,
+      createdAt: "2026-07-10T08:00:00.000Z",
+      updatedAt: "2026-07-10T08:00:00.000Z"
+    };
+
+    expect(baseAssignmentForSupplierTarget([corpus, front], item)).toBe(corpus);
+  });
+
   it("updates an exact component assignment without board mapping fields", () => {
     const current = {
       assignmentId: "material-assignment:hinge",
