@@ -1,4 +1,5 @@
 import type { ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
+import type { SupplierSyncItem } from "../core/supplier-bridge/supplier-bridge-types";
 import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
 import { ProjectMaterialRevisionConflictError } from "../core/project/project-repository";
 import { createProjectService } from "../core/project/project-service";
@@ -109,6 +110,24 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
   };
 }
 
+/**
+ * Scoped module/addition target IDs contain opaque BOM item IDs, which may themselves
+ * contain colons. Prefer the category captured when the session was created and only
+ * use a unique known-category segment for legacy sessions.
+ */
+export function baseAssignmentForSupplierTarget(
+  assignments: readonly ProjectMaterialAssignment[],
+  item: SupplierSyncItem
+): ProjectMaterialAssignment | null {
+  const general = assignments.filter((assignment) => assignment.assignmentId === `material-assignment:${assignment.category}`);
+  if (item.assignmentCategory) {
+    return general.find((assignment) => assignment.category === item.assignmentCategory) ?? null;
+  }
+  const matches = general.filter((assignment) => item.materialAssignmentId.includes(`:${assignment.category}:`));
+  if (matches.length === 1) return matches[0]!;
+  return general.find((assignment) => assignment.assignmentId === item.materialAssignmentId) ?? null;
+}
+
 export async function applyConfirmedSupplierCandidateToProject(
   projectRoot: string,
   input: SupplierConfirmationApplyInput
@@ -122,7 +141,7 @@ export async function applyConfirmedSupplierCandidateToProject(
     const now = new Date().toISOString();
     const assignments = structuredClone(currentState.assignments);
     if (index < 0) {
-      const base = assignments.find((assignment) => assignment.assignmentId === `material-assignment:${categoryFromAssignmentId(input.item.materialAssignmentId)}`);
+      const base = baseAssignmentForSupplierTarget(assignments, input.item);
       if (!base) throw new Error("Material assignment for supplier sync item no longer exists.");
       assignments.push({ ...structuredClone(base), assignmentId: input.item.materialAssignmentId, updatedAt: now });
       index = assignments.length - 1;
@@ -151,11 +170,4 @@ export async function applyConfirmedSupplierCandidateToProject(
       if (!(error instanceof ProjectMaterialRevisionConflictError) || attempt === 2) throw error;
     }
   }
-}
-
-function categoryFromAssignmentId(assignmentId: string): string {
-  const parts = assignmentId.split(":");
-  if (parts.length === 2) return parts[1] ?? "";
-  const category = parts[parts.length - 2];
-  return category ?? "";
 }

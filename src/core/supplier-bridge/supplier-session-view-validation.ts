@@ -15,6 +15,10 @@ function record(value: unknown): Record<string, unknown> | null {
 function boundedString(value: unknown): value is string { return typeof value === "string" && value.length <= 8_192; }
 function nullableString(value: unknown): value is string | null { return value === null || boundedString(value); }
 function finite(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
+const assignmentCategories = new Set([
+  "corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "edge_front", "edge_other",
+  "handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component"
+]);
 
 function parseSession(value: unknown): SupplierSyncSession | null {
   const input = record(value);
@@ -27,6 +31,7 @@ function parseItem(value: unknown): SupplierSyncItem | null {
   const input = record(value);
   if (!input || !["pending", "needs_confirmation", "confirmed", "skipped", "failed"].includes(String(input.status))) return null;
   for (const key of ["id", "sessionId", "materialAssignmentId", "query", "createdAt", "updatedAt"] as const) if (!boundedString(input[key])) return null;
+  if (input.assignmentCategory !== undefined && !assignmentCategories.has(String(input.assignmentCategory))) return null;
   if (input.targetLabel !== undefined && !boundedString(input.targetLabel)) return null;
   if (input.targetScope !== undefined && !["general", "module", "addition"].includes(String(input.targetScope))) return null;
   for (const key of ["expectedManufacturer", "expectedDecorCode", "expectedSurfaceCode", "expectedProductType", "selectedCandidateId", "errorCode"] as const) if (!nullableString(input[key])) return null;

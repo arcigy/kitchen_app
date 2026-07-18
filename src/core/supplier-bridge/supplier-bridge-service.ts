@@ -24,6 +24,7 @@ import {
   parseSupplierBridgeToken
 } from "./supplier-bridge-token";
 import { logSupplierBridge } from "./supplier-bridge-logger";
+import type { MaterialAssignmentCategory } from "../project-materials/project-material-types";
 
 const SESSION_TTL_MS = 30 * 60_000;
 
@@ -39,6 +40,7 @@ export class SupplierBridgeServiceError extends Error {
 
 export type SupplierSyncMaterialInput = {
   materialAssignmentId: string;
+  assignmentCategory?: MaterialAssignmentCategory;
   targetLabel?: string;
   targetScope?: "general" | "module" | "addition";
   query: string;
@@ -215,6 +217,7 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         id: `supplier-item-${randomUUID()}`,
         sessionId,
         materialAssignmentId: material.materialAssignmentId,
+        ...(material.assignmentCategory ? { assignmentCategory: material.assignmentCategory } : {}),
         ...(material.targetLabel ? { targetLabel: material.targetLabel } : {}),
         ...(material.targetScope ? { targetScope: material.targetScope } : {}),
         query: material.query,

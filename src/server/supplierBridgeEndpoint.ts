@@ -187,6 +187,7 @@ async function projectMaterialInputs(
     if (!lookup && browseFirst) {
       return [{
         materialAssignmentId: materialAssignmentId ?? assignment.assignmentId,
+        assignmentCategory: assignment.category,
         ...(targetLabel ? { targetLabel } : {}),
         ...(targetScope ? { targetScope } : {}),
         query: assignment.category,
@@ -202,6 +203,7 @@ async function projectMaterialInputs(
       .join(" ");
     return [{
       materialAssignmentId: materialAssignmentId ?? assignment.assignmentId,
+      assignmentCategory: assignment.category,
       ...(targetLabel ? { targetLabel } : {}),
       ...(targetScope ? { targetScope } : {}),
       query,
