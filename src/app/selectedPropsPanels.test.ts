@@ -632,7 +632,8 @@ describe("selected props panels", () => {
       args: { propertiesEl: section },
       clientCatalog: {},
       rebuildInstance: vi.fn(() => true),
-      appendLinkedMeasureInputs: vi.fn()
+      appendLinkedMeasureInputs: vi.fn(),
+      mountModuleCommercialProperties: vi.fn()
     };
 
     mountModulePropsPanel(ctx as unknown as Parameters<typeof mountModulePropsPanel>[0], "module-1");
@@ -645,6 +646,8 @@ describe("selected props panels", () => {
     expect(rows[1]!.control.type).toBe("checkbox");
     expect(rows[1]!.control.checked).toBe(false);
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "module", instanceId: "module-1" });
+    expect(ctx.mountModuleCommercialProperties).toHaveBeenCalledWith(section.children.at(-1), "module-1");
+    expect(section.children.at(-1)?.className).toBe("module-commercial-props-host");
   });
 
   it("renders FWM catalog wall open end properties from the package UI instead of stale instance params", () => {

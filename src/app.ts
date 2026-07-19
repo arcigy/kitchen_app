@@ -192,6 +192,7 @@ import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
 import { createMaterialsPhaseController } from "./app/materialsPhaseController";
 import { createMarginsPhaseController } from "./app/marginsPhaseController";
+import { createModuleCommercialPropsController } from "./app/moduleCommercialPropsController";
 import { createSupplierBridgeWebController } from "./app/supplierBridgeWebController";
 import { createProjectAutosaveController } from "./app/project/projectAutosave";
 import { captureProjectPreview } from "./app/project/projectPreview";
@@ -296,6 +297,7 @@ export function startApp(initialArgs: AppArgs) {
   let projectMarginSettings: ProjectMarginSettingsState = createDefaultProjectMarginSettingsState();
   let materialsPhaseController: ReturnType<typeof createMaterialsPhaseController> | null = null;
   let marginsPhaseController: ReturnType<typeof createMarginsPhaseController> | null = null;
+  let moduleCommercialPropsController: ReturnType<typeof createModuleCommercialPropsController> | null = null;
   let supplierBridgeController: ReturnType<typeof createSupplierBridgeWebController> | null = null;
 
   const enabledModulePackages = getEnabledModulePackageDefinitions(clientCatalog, modulePackages);
@@ -2185,6 +2187,7 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; },
     markUnderlaySelected: () => { selectedKind = "underlay"; },
     scheduleKitchenWorktopPreviewUpdate,
+    mountModuleCommercialProperties: (host, instanceId) => moduleCommercialPropsController?.mount(host, instanceId),
     recordActivity: (label) => recentActivityController.record(label)
   });
   const mountProps = () => propertiesRouter.mountProps();
@@ -3380,6 +3383,26 @@ export function startApp(initialArgs: AppArgs) {
     footerContainer: document.querySelector<HTMLElement>("[data-margin-footer]")!,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     onViewChanged: (view) => {
+      projectMarginSettings = cloneJson(view.settings);
+    }
+  });
+  moduleCommercialPropsController = createModuleCommercialPropsController({
+    getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    getModuleScope: (instanceId) => buildProjectMaterialScopes({
+      instances: S.instances,
+      worktops: S.kitchenWorktops,
+      customFurniture: S.customFurniture,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups,
+      catalog: clientCatalog
+    }).find((scope) => scope.id === `module:${instanceId}`) ?? null,
+    ensureProjectSaved: async () => {
+      if (projectActions.getState().currentProject) await projectActions.save();
+    },
+    onMaterialsChanged: (view) => {
+      projectMaterialAssignments = cloneJson(view.assignments);
+    },
+    onMarginsChanged: (view) => {
       projectMarginSettings = cloneJson(view.settings);
     }
   });

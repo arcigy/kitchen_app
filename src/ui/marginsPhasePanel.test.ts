@@ -110,6 +110,7 @@ describe("project margins phase panel", () => {
     expect(html).toContain('data-margin-settings-tab="general"');
     expect(html).toContain('data-margin-settings-tab="modules"');
     expect(html).toContain('data-margin-settings-tab="additions"');
+    expect(html).toContain('data-margin-settings-scroll');
     expect(html).toContain('class="materials-settings-tab materials-settings-tab--active"');
     expect(html).toContain('data-margin-settings-panel="general"');
     expect(html).toContain('data-margin-group="corpus"');

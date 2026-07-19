@@ -6,6 +6,7 @@ import {
   createProjectMaterialsView
 } from "../core/project-materials/project-material-business";
 import {
+  copyProjectMaterialAssignment,
   loadProjectMaterials,
   lookupProjectMaterialCatalogItem,
   updateProjectMaterialAssignment
@@ -77,5 +78,35 @@ describe("project materials API", () => {
     expect(init.method).toBe("PUT");
     expect(init.credentials).toBe("include");
     expect(JSON.parse(String(init.body))).toEqual({ revision: state.revision, assignment });
+  });
+
+  it("copies a complete project assignment through a stable scoped target operation", async () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, NOW);
+    const view = createProjectMaterialsView(state, [], catalog);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ view }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await copyProjectMaterialAssignment("project copy", {
+      revision: state.revision,
+      sourceAssignmentId: state.assignments[0]!.assignmentId,
+      target: { scopeId: "module:m1", itemId: "left-side", category: "corpus" }
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/projects/project%20copy/materials");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe("PUT");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(String(init.body))).toEqual({
+      revision: state.revision,
+      operation: {
+        type: "copy_assignment",
+        sourceAssignmentId: state.assignments[0]!.assignmentId,
+        target: { scopeId: "module:m1", itemId: "left-side", category: "corpus" }
+      }
+    });
   });
 });

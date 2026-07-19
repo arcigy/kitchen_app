@@ -8,12 +8,16 @@ import {
   getMaterialAssignmentCategoryDefinition,
   isComponentAllowedForCategory,
   isMaterialAllowedForCategory,
+  MATERIAL_ASSIGNMENT_CATEGORIES,
   normalizeAutoProjectMaterialAssignments
 } from "../core/project-materials/project-material-business";
+import { copyProjectMaterialAssignmentToScope } from "../core/project-materials/project-material-copy";
 import type {
   CatalogItemSnapshot,
+  MaterialAssignmentCategory,
   ProjectMaterialAssignment,
   ProjectMaterialAssignmentsState,
+  ProjectMaterialScopeItem,
   ProjectMaterialsView
 } from "../core/project-materials/project-material-types";
 import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
@@ -154,7 +158,7 @@ function authoritativeEdge(
 }
 
 class ProjectMaterialUpdateError extends Error {
-  constructor(message: string, readonly status: 409 | 422) {
+  constructor(message: string, readonly status: 400 | 409 | 422, readonly code = "PROJECT_MATERIAL_UPDATE_FAILED") {
     super(message);
   }
 }
@@ -245,6 +249,98 @@ function updatedState(
   return state;
 }
 
+const MATERIAL_CATEGORIES = new Set<MaterialAssignmentCategory>(
+  MATERIAL_ASSIGNMENT_CATEGORIES.map((definition) => definition.category)
+);
+
+type ProjectMaterialCopyTarget = Pick<ProjectMaterialScopeItem, "id" | "category"> & { scopeId: string };
+
+function copyTarget(value: unknown): ProjectMaterialCopyTarget {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ProjectMaterialUpdateError("Material copy target is required.", 400, "INVALID_MATERIAL_COPY_REQUEST");
+  }
+  const target = value as Record<string, unknown>;
+  const scopeId = typeof target.scopeId === "string" ? target.scopeId.trim() : "";
+  const id = typeof target.itemId === "string" ? target.itemId.trim() : "";
+  const category = target.category;
+  if (!scopeId || !id || typeof category !== "string" || !MATERIAL_CATEGORIES.has(category as MaterialAssignmentCategory)) {
+    throw new ProjectMaterialUpdateError("Material copy target is invalid.", 400, "INVALID_MATERIAL_COPY_REQUEST");
+  }
+  return { scopeId, id, category: category as MaterialAssignmentCategory };
+}
+
+function validateCopyCompatibility(
+  source: ProjectMaterialAssignment,
+  category: MaterialAssignmentCategory
+): void {
+  const definition = source.kind === "material"
+    ? source.snapshots.material?.definition
+    : source.snapshots.component?.definition;
+  const compatible = definition?.entityType === "material"
+    ? isMaterialAllowedForCategory(definition, category)
+    : definition?.entityType === "component"
+      ? isComponentAllowedForCategory(definition, category)
+      : false;
+  if (!compatible) {
+    throw new ProjectMaterialUpdateError(
+      "Source material is not compatible with the selected project item.",
+      422,
+      "INCOMPATIBLE_MATERIAL_COPY"
+    );
+  }
+}
+
+function copiedAssignmentIsUnchanged(
+  existing: ProjectMaterialAssignment | undefined,
+  copied: ProjectMaterialAssignment
+): boolean {
+  if (!existing) return false;
+  return JSON.stringify(existing) === JSON.stringify({ ...copied, updatedAt: existing.updatedAt });
+}
+
+function copiedState(
+  current: ProjectMaterialAssignmentsState,
+  save: ProjectSaveFile,
+  catalog: ClientCatalog,
+  operation: Record<string, unknown>,
+  expectedRevision: unknown,
+  now: string
+): { state: ProjectMaterialAssignmentsState; changed: boolean } {
+  if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new ProjectMaterialUpdateError("A valid material assignment revision is required.", 409, "PROJECT_MATERIAL_REVISION_CONFLICT");
+  }
+  if (current.revision !== expectedRevision) {
+    throw new ProjectMaterialUpdateError("Material assignments changed in another session. Reload and try again.", 409, "PROJECT_MATERIAL_REVISION_CONFLICT");
+  }
+  const sourceAssignmentId = typeof operation.sourceAssignmentId === "string" ? operation.sourceAssignmentId.trim() : "";
+  if (!sourceAssignmentId) {
+    throw new ProjectMaterialUpdateError("Source assignment is required.", 400, "INVALID_MATERIAL_COPY_REQUEST");
+  }
+  const source = current.assignments.find((assignment) => assignment.assignmentId === sourceAssignmentId);
+  if (!source) {
+    throw new ProjectMaterialUpdateError("Source assignment was not found in this project.", 422, "SOURCE_ASSIGNMENT_NOT_FOUND");
+  }
+  const target = copyTarget(operation.target);
+  const scope = resolveProjectMaterialScopes(save, catalog).find((candidate) => candidate.id === target.scopeId);
+  const scopeItem = scope?.items.find((item) => item.id === target.id && item.category === target.category);
+  if (!scope || !scopeItem) {
+    throw new ProjectMaterialUpdateError("The selected project item no longer exists.", 422, "STALE_MATERIAL_TARGET");
+  }
+  validateCopyCompatibility(source, target.category);
+  const copied = copyProjectMaterialAssignmentToScope(source, target.scopeId, scopeItem, now);
+  const existing = current.assignments.find((assignment) => assignment.assignmentId === copied.assignmentId);
+  if (copiedAssignmentIsUnchanged(existing, copied)) return { state: current, changed: false };
+  const state: ProjectMaterialAssignmentsState = {
+    schemaVersion: 1,
+    initialized: true,
+    revision: current.revision + 1,
+    assignments: [...current.assignments.filter((assignment) => assignment.assignmentId !== copied.assignmentId), copied],
+    updatedAt: now
+  };
+  validateProjectMaterialAssignmentsState(state);
+  return { state, changed: true };
+}
+
 export async function handleProjectMaterialsApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -288,31 +384,44 @@ export async function handleProjectMaterialsApi(
   if (req.method === "PUT" && route.action === "materials") {
     const body = bodyRecord(await deps.readJsonBody(req));
     const assignment = body.assignment;
+    const operation = body.operation;
     const revision = body.revision;
-    if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
-      deps.sendJson(res, 400, { ok: false, error: "assignment is required." });
+    const copyOperation = operation && typeof operation === "object" && !Array.isArray(operation)
+      && (operation as Record<string, unknown>).type === "copy_assignment"
+      ? operation as Record<string, unknown>
+      : null;
+    if (!copyOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
+      deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: "assignment or copy_assignment operation is required." });
       return true;
     }
-    const structuralCandidate: ProjectMaterialAssignmentsState = {
-      schemaVersion: 1,
-      initialized: true,
-      revision: current.revision,
-      assignments: [assignment as ProjectMaterialAssignment]
-    };
-    try {
-      validateProjectMaterialAssignmentsState(structuralCandidate, "request assignment");
-    } catch (error) {
-      deps.sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : "Invalid material assignment." });
-      return true;
+    if (!copyOperation) {
+      const structuralCandidate: ProjectMaterialAssignmentsState = {
+        schemaVersion: 1,
+        initialized: true,
+        revision: current.revision,
+        assignments: [assignment as ProjectMaterialAssignment]
+      };
+      try {
+        validateProjectMaterialAssignmentsState(structuralCandidate, "request assignment");
+      } catch (error) {
+        deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: error instanceof Error ? error.message : "Invalid material assignment." });
+        return true;
+      }
     }
     try {
-      const next = updatedState(current, assignment as ProjectMaterialAssignment, revision, catalog, new Date().toISOString());
+      const result = copyOperation
+        ? copiedState(current, save, catalog, copyOperation, revision, new Date().toISOString())
+        : { state: updatedState(current, assignment as ProjectMaterialAssignment, revision, catalog, new Date().toISOString()), changed: true };
+      if (!result.changed) {
+        deps.sendJson(res, 200, { ok: true, view: projectMaterialsView(save, current, catalog) });
+        return true;
+      }
       const saved = await projectRepository.updateProjectMaterialAssignments(
         ctx,
         save.projectId,
         save.activePhaseId,
         current.revision,
-        next
+        result.state
       );
       deps.sendJson(res, 200, {
         ok: true,
@@ -324,7 +433,7 @@ export async function handleProjectMaterialsApi(
         return true;
       }
       if (error instanceof ProjectMaterialUpdateError) {
-        deps.sendJson(res, error.status, { ok: false, error: error.message });
+        deps.sendJson(res, error.status, { ok: false, code: error.code, revision: current.revision, error: error.message });
         return true;
       }
       throw error;
