@@ -215,6 +215,7 @@ type ModulePropsContext = {
   clientCatalog: ClientCatalog;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+  mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
 };
 
 export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
@@ -1178,6 +1179,13 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
     }
 
     appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
+
+    if (ctx.mountModuleCommercialProperties) {
+      const commercialHost = document.createElement("div");
+      commercialHost.className = "module-commercial-props-host";
+      s.appendChild(commercialHost);
+      ctx.mountModuleCommercialProperties(commercialHost, inst.id);
+    }
 
 }
 

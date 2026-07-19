@@ -17,6 +17,7 @@ import { createHttpRequestBudget, type HttpRequestBudget } from "./http-request-
 import cornerShelfLowerFixture from "../core/module-package/fixtures/cornerShelfLower.fqm.source.json";
 import { createPinoSideCabinetTenantPackage } from "../system/module-packages/pinoSideCabinet";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
+import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
 vi.mock("./blender/runBlenderExport", () => ({
   runBlenderExport: async (args: {
@@ -1358,6 +1359,85 @@ describe("multi-client worker isolation", () => {
       cookie: makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" })
     });
     expect([403, 404]).toContain(crossTenant.status);
+  }, 30_000);
+
+  it("copies the complete current-project material snapshot only to a live module BOM target", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Scoped Material Copy", address: "Material 2", contactName: "Jane" }
+    });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, {
+      method: "POST",
+      cookie,
+      body: {
+        appState: {
+          layout: { windows: [], doors: [] },
+          kitchen: {},
+          modules: [{ id: "m1", type: "drawer_low", params: makeDefaultModuleParams("drawer_low") }],
+          scene: {}
+        }
+      }
+    });
+
+    const initial = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    expect(initial.status).toBe(200);
+    const initialView = (initial.body as {
+      view: {
+        assignments: { revision: number; assignments: Array<Record<string, unknown>> };
+        scopes: Array<{ id: string; items: Array<{ id: string; category: string }> }>;
+      };
+    }).view;
+    const source = initialView.assignments.assignments.find((assignment) => assignment.category === "corpus")!;
+    const target = initialView.scopes.find((scope) => scope.id === "module:m1")?.items.find((item) => item.category === "corpus");
+    expect(target).toBeTruthy();
+
+    const copied = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: {
+        revision: initialView.assignments.revision,
+        operation: {
+          type: "copy_assignment",
+          sourceAssignmentId: source.assignmentId,
+          target: { scopeId: "module:m1", itemId: target!.id, category: target!.category }
+        }
+      }
+    });
+    expect(copied.status).toBe(200);
+    const copiedState = (copied.body as {
+      view: { assignments: { revision: number; assignments: Array<Record<string, unknown>> } };
+    }).view.assignments;
+    expect(copiedState.revision).toBe(initialView.assignments.revision + 1);
+    const scoped = copiedState.assignments.find((assignment) =>
+      assignment.assignmentId === `material-assignment:module:m1:${target!.category}:${target!.id}`
+    );
+    expect(scoped).toMatchObject({
+      category: source.category,
+      kind: source.kind,
+      materialId: source.materialId,
+      customValues: source.customValues,
+      snapshots: source.snapshots,
+      source: "user"
+    });
+    expect(scoped?.snapshots).not.toBe(source.snapshots);
+
+    const stale = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT",
+      cookie,
+      body: {
+        revision: copiedState.revision,
+        operation: {
+          type: "copy_assignment",
+          sourceAssignmentId: source.assignmentId,
+          target: { scopeId: "module:m1", itemId: "deleted-part", category: "corpus" }
+        }
+      }
+    });
+    expect(stale.status).toBe(422);
+    expect(stale.body).toMatchObject({ code: "STALE_MATERIAL_TARGET" });
   }, 30_000);
 
   it("runs the supplier bridge assisted session through attachment, idempotent capture and explicit confirmation", async () => {

@@ -335,12 +335,14 @@ export function renderProjectMarginsPanel(view: ProjectMarginsView, state: Rende
     ${state.loadingMessage ? `<p class="margins-phase__status" data-margin-status role="status" aria-live="polite">${escapeHtml(state.loadingMessage)}</p>` : ""}
     ${state.globalError ? `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">${escapeHtml(state.globalError)}</p>` : ""}
     ${!view.editable ? `<p class="margins-phase__status">Marže sú iba na čítanie. Na úpravu nemáte oprávnenie.</p>` : ""}
-    ${renderMarginSettingsTabs(activeSettingsTab)}
-    ${activeSettingsTab === "modules"
-      ? renderMarginScopeSettings(view, "module", state.selectedScopeId, disabled, busyKeys)
-      : activeSettingsTab === "additions"
-        ? renderMarginScopeSettings(view, "addition", state.selectedScopeId, disabled, busyKeys)
-        : renderGeneralMarginSettings(view, disabled, busyKeys)}
+    <div class="margins-settings-scroll" data-margin-settings-scroll>
+      ${renderMarginSettingsTabs(activeSettingsTab)}
+      ${activeSettingsTab === "modules"
+        ? renderMarginScopeSettings(view, "module", state.selectedScopeId, disabled, busyKeys)
+        : activeSettingsTab === "additions"
+          ? renderMarginScopeSettings(view, "addition", state.selectedScopeId, disabled, busyKeys)
+          : renderGeneralMarginSettings(view, disabled, busyKeys)}
+    </div>
   </div>`;
 }
 

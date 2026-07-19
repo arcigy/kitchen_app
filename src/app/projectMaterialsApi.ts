@@ -18,6 +18,16 @@ export type UpdateProjectMaterialAssignmentRequest = {
   assignment: ProjectMaterialAssignment;
 };
 
+export type CopyProjectMaterialAssignmentRequest = {
+  revision: number;
+  sourceAssignmentId: string;
+  target: {
+    scopeId: string;
+    itemId: string;
+    category: MaterialAssignmentCategory;
+  };
+};
+
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   let data: unknown = {};
@@ -75,6 +85,28 @@ export async function updateProjectMaterialAssignment(
     credentials: "include",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(request),
+    signal
+  });
+  return unwrapProjectMaterialsView(await readJson(response));
+}
+
+export async function copyProjectMaterialAssignment(
+  projectId: string,
+  request: CopyProjectMaterialAssignmentRequest,
+  signal?: AbortSignal
+): Promise<ProjectMaterialsView> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/materials`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      revision: request.revision,
+      operation: {
+        type: "copy_assignment",
+        sourceAssignmentId: request.sourceAssignmentId,
+        target: request.target
+      }
+    }),
     signal
   });
   return unwrapProjectMaterialsView(await readJson(response));
