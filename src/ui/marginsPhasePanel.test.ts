@@ -15,9 +15,14 @@ import { mountProjectMarginsPanel, renderProjectMarginsPanel } from "./marginsPh
 const target = { scopeId: "module:base-1", itemId: "left-side", category: "corpus" as const };
 
 function marginItem(overrides: Partial<ProjectMarginItemView> = {}): ProjectMarginItemView {
+  const itemTarget = {
+    scopeId: overrides.scopeId ?? target.scopeId,
+    itemId: overrides.itemId ?? target.itemId,
+    category: overrides.category ?? target.category
+  };
   return {
-    ...target,
-    targetId: projectMarginTargetId(target),
+    ...itemTarget,
+    targetId: projectMarginTargetId(itemTarget),
     label: "Ľavý bok",
     scopeLabel: "Spodná skrinka <A>",
     resourceLabel: "DTDL biela & matná",
@@ -95,29 +100,62 @@ describe("project margins phase panel", () => {
     expect(html).not.toContain("€");
   });
 
-  it("renders stable summary, group and collapsed disclosure selectors", () => {
+  it("renders the same General, Module and Additions hierarchy used by Materials", () => {
     const html = renderProjectMarginsPanel(marginsView());
 
     expect(html).toContain('data-margin-summary-value="base-cost"');
     expect(html).toContain('data-margin-summary-value="margin-amount"');
     expect(html).toContain('data-margin-summary-value="combined-margin-percent"');
     expect(html).toContain('data-margin-summary-value="final-price"');
+    expect(html).toContain('data-margin-settings-tab="general"');
+    expect(html).toContain('data-margin-settings-tab="modules"');
+    expect(html).toContain('data-margin-settings-tab="additions"');
+    expect(html).toContain('class="materials-settings-tab materials-settings-tab--active"');
+    expect(html).toContain('data-margin-settings-panel="general"');
     expect(html).toContain('data-margin-group="corpus"');
-    expect(html).toContain('data-margin-group-toggle="corpus"');
-    expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('data-margin-item-id=');
   });
 
-  it("expands individual rows, marks overrides and escapes tenant-controlled labels", () => {
-    const html = renderProjectMarginsPanel(marginsView(), { expandedGroups: new Set(["corpus"]) });
+  it("renders a selected module in material-style category groups and escapes tenant-controlled labels", () => {
+    const html = renderProjectMarginsPanel(marginsView(), {
+      activeSettingsTab: "modules",
+      selectedScopeId: "module:base-1"
+    });
 
     expect(html).toContain(`data-margin-item-id="${projectMarginTargetId(target)}"`);
     expect(html).toContain('data-margin-source="override"');
+    expect(html).toContain('data-margin-settings-panel="modules"');
+    expect(html).toContain('data-margin-scope-select="true"');
+    expect(html).toContain('class="materials-scope-group margins-scope-group"');
     expect(html).toContain('data-margin-item-input=');
     expect(html).toContain('data-margin-item-reset=');
     expect(html).toContain("Spodná skrinka &lt;A&gt;");
     expect(html).toContain("DTDL biela &amp; matná");
     expect(html).not.toContain("Spodná skrinka <A>");
+  });
+
+  it("keeps modules and additions separated and selects one scope at a time", () => {
+    const first = marginItem();
+    const second = marginItem({ scopeId: "module:base-2", scopeLabel: "Horná skrinka", itemId: "top" });
+    const addition = marginItem({ scopeId: "addition:worktop-1", scopeLabel: "Pracovná doska", itemId: "worktop", category: "worktop" });
+    const view = marginsView({
+      groups: [
+        marginGroup(first, { items: [first, second] }),
+        marginGroup(addition, { category: "worktop", label: "Pracovná doska", items: [addition] })
+      ]
+    });
+
+    const moduleHtml = renderProjectMarginsPanel(view, { activeSettingsTab: "modules", selectedScopeId: "module:base-2" });
+    expect(moduleHtml).toContain("Horná skrinka");
+    expect(moduleHtml).toContain(`data-margin-item-id="${second.targetId}"`);
+    expect(moduleHtml).not.toContain(`data-margin-item-id="${first.targetId}"`);
+    expect(moduleHtml).not.toContain(`data-margin-item-id="${addition.targetId}"`);
+
+    const additionHtml = renderProjectMarginsPanel(view, { activeSettingsTab: "additions", selectedScopeId: "addition:worktop-1" });
+    expect(additionHtml).toContain('data-margin-settings-panel="additions"');
+    expect(additionHtml).toContain("Pracovná doska");
+    expect(additionHtml).toContain(`data-margin-item-id="${addition.targetId}"`);
+    expect(additionHtml).not.toContain(`data-margin-item-id="${first.targetId}"`);
   });
 
   it("shows missing-price state and disables every edit control for read-only users", () => {
@@ -127,13 +165,17 @@ describe("project margins phase panel", () => {
       summary: { ...marginsView().summary, missingPriceCount: 1 },
       groups: [marginGroup(missing, { missingPriceCount: 1 })]
     });
-    const html = renderProjectMarginsPanel(view, { expandedGroups: new Set(["corpus"]) });
+    const generalHtml = renderProjectMarginsPanel(view);
+    const moduleHtml = renderProjectMarginsPanel(view, {
+      activeSettingsTab: "modules",
+      selectedScopeId: "module:base-1"
+    });
 
-    expect(html).toContain('role="alert"');
-    expect(html).toContain("1 položiek nemá cenu");
-    expect(html).toContain("iba na čítanie");
-    expect(html).toMatch(/data-margin-group-input="corpus"[^>]*disabled/);
-    expect(html).toMatch(/data-margin-item-input="[^"]+"[^>]*disabled/);
+    expect(generalHtml).toContain('role="alert"');
+    expect(generalHtml).toContain("1 položiek nemá cenu");
+    expect(generalHtml).toContain("iba na čítanie");
+    expect(generalHtml).toMatch(/data-margin-group-input="corpus"[^>]*disabled/);
+    expect(moduleHtml).toMatch(/data-margin-item-input="[^"]+"[^>]*disabled/);
   });
 
   it("commits project, group and item edits and resets overrides through stable IDs", async () => {
@@ -168,8 +210,6 @@ describe("project margins phase panel", () => {
     await handle.flushPending();
     expect(actions.onCommitAdditionalLabor).toHaveBeenCalledWith({ additionalLaborCost: 125.75, committedValue: 0 });
 
-    host.querySelector<HTMLButtonElement>('[data-margin-group-toggle="corpus"]')!.click();
-
     const groupInput = host.querySelector<HTMLInputElement>('[data-margin-group-input="corpus"]')!;
     groupInput.value = "18.5";
     host.querySelector<HTMLButtonElement>('[data-margin-group-apply-all="corpus"]')!.click();
@@ -180,6 +220,7 @@ describe("project margins phase panel", () => {
     await handle.flushPending();
     expect(actions.onResetGroup).toHaveBeenCalledWith("corpus");
 
+    host.querySelector<HTMLButtonElement>('[data-margin-settings-tab="modules"]')!.click();
     const itemInput = host.querySelector<HTMLInputElement>(`[data-margin-item-input="${projectMarginTargetId(target)}"]`)!;
     itemInput.value = "33.25";
     itemInput.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));

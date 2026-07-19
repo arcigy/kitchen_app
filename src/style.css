@@ -4902,6 +4902,26 @@ textarea {
   cursor: pointer;
 }
 
+.margins-group-label {
+  cursor: default;
+}
+
+.margins-general-group--warning {
+  border-color: #f3d7d9;
+  background: #fffafa;
+}
+
+.margins-general-group__summary .margin-source {
+  justify-self: start;
+}
+
+.margins-general-group__control {
+  min-width: 0;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid #f0f1f5;
+}
+
 .margins-group-toggle:focus-visible,
 .margins-group-control button:focus-visible,
 .margins-item-control button:focus-visible,
@@ -5101,6 +5121,38 @@ textarea {
   gap: 5px;
 }
 
+.margins-scope-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(230px, .9fr) minmax(155px, auto);
+  align-items: center;
+}
+
+.margins-scope-item__identity,
+.margins-scope-item__price {
+  min-width: 0;
+}
+
+.margins-scope-item__identity strong,
+.margins-scope-item__identity small,
+.margins-scope-item__price strong,
+.margins-scope-item__price small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.margins-scope-item__price {
+  text-align: right;
+}
+
+.margins-scope-item__price .margin-source {
+  margin-top: 5px;
+}
+
+.margins-scope-item.margins-item--missing {
+  background: #fff9f9;
+}
+
 .margin-source {
   display: inline-flex;
   align-items: center;
@@ -5186,6 +5238,14 @@ textarea {
 
   .margins-items-wrap {
     padding-left: 10px;
+  }
+
+  .margins-scope-item {
+    grid-template-columns: 1fr;
+  }
+
+  .margins-scope-item__price {
+    text-align: left;
   }
 }
 
