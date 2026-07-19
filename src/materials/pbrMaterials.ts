@@ -9,11 +9,17 @@ export type PbrMaterialRef = {
   tintStrength?: number; // 0..1
 };
 
-type LoadedSet = {
+export type LoadedSet = {
   baseColor: THREE.Texture;
   normal: THREE.Texture;
   roughness: THREE.Texture;
 };
+
+type TextureLoad = (
+  url: string,
+  onLoad: (texture: THREE.Texture) => void,
+  onError: () => void
+) => void;
 
 const loader = new THREE.TextureLoader();
 const textureCache = new Map<string, Promise<LoadedSet | null>>();
@@ -71,18 +77,25 @@ function urlFor(id: PbrMaterialId, file: "BaseColor.jpg" | "Normal.png" | "Rough
   return `/materials/${id}/${file}`;
 }
 
-function loadSet(id: PbrMaterialId): Promise<LoadedSet> {
+export function loadPbrTextureSet(
+  id: PbrMaterialId,
+  loadTexture: TextureLoad = (url, onLoad, onError) => {
+    loader.load(url, onLoad, undefined, onError);
+  }
+): Promise<LoadedSet | null> {
   const load = (url: string) =>
-    new Promise<THREE.Texture>((resolve, reject) => {
-      loader.load(url, resolve, undefined, reject);
+    new Promise<THREE.Texture | null>((resolve) => {
+      loadTexture(url, resolve, () => resolve(null));
     });
 
   return Promise.all([load(urlFor(id, "BaseColor.jpg")), load(urlFor(id, "Normal.png")), load(urlFor(id, "Roughness.jpg"))]).then(
-    ([baseColor, normal, roughness]) => ({ baseColor, normal, roughness })
+    ([baseColor, normal, roughness]) => baseColor && normal && roughness
+      ? { baseColor, normal, roughness }
+      : null
   );
 }
 
-export async function recoverPbrTextureSet(load: () => Promise<LoadedSet>): Promise<LoadedSet | null> {
+export async function recoverPbrTextureSet(load: () => Promise<LoadedSet | null>): Promise<LoadedSet | null> {
   try {
     return await load();
   } catch {
@@ -122,7 +135,7 @@ export function getPbrMaterial(params: {
   const setPromise =
     textureCache.get(params.ref.id) ??
     (() => {
-      const p = recoverPbrTextureSet(() => loadSet(params.ref.id));
+      const p = recoverPbrTextureSet(() => loadPbrTextureSet(params.ref.id));
       textureCache.set(params.ref.id, p);
       return p;
     })();
