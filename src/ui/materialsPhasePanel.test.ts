@@ -108,7 +108,11 @@ describe("materials phase panel", () => {
     const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-18T20:30:00.000Z");
     const corpus = state.assignments.find((assignment) => assignment.category === "corpus")!;
     corpus.customValues = { supplierBridge: { supplierId: "demos", supplierProductCode: "GLOBAL-100" } };
-    if (corpus.snapshots.material) corpus.snapshots.material.definition.displayName = "Globálny korpus";
+    if (corpus.snapshots.material) {
+      corpus.snapshots.material.definition.displayName = "Globálny korpus";
+      corpus.snapshots.material.unitPrice = 10;
+      corpus.snapshots.material.currency = "EUR";
+    }
     const override = structuredClone(corpus);
     override.assignmentId = "material-assignment:module:base-1:corpus:panel-override";
     override.customValues = { supplierBridge: { supplierId: "demos", supplierProductCode: "OWN-200" } };
@@ -125,7 +129,11 @@ describe("materials phase panel", () => {
       ]
     }];
 
-    const html = renderProjectMaterialsPanel(view, { activeSettingsTab: "modules", selectedScopeId: "module:base-1" });
+    const html = renderProjectMaterialsPanel(view, {
+      activeSettingsTab: "modules",
+      selectedScopeId: "module:base-1",
+      displayCurrency: "CZK"
+    });
 
     expect(html).toContain('data-material-scope-item="panel-general"');
     expect(html).toContain('data-material-assignment-source="general"');
@@ -133,6 +141,7 @@ describe("materials phase panel", () => {
     expect(html).toContain('data-material-scope-item="panel-override"');
     expect(html).toContain('data-material-assignment-source="override"');
     expect(html).toContain("Vlastný korpus · OWN-200 · Vlastné priradenie");
+    expect(html).toContain("241,93 CZK / m²");
   });
 
   it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {

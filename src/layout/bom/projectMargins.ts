@@ -1,4 +1,11 @@
 import type { PricingUnit } from "../../core/catalog/catalog-types";
+import type { ProjectMaterialAssignment } from "../../core/project-materials/project-material-types";
+import { resolveEffectiveProjectMaterialAssignment } from "../../core/project-materials/project-material-assignment-resolution";
+import {
+  convertPriceCurrency,
+  isPriceCurrency,
+  type PriceCurrency
+} from "../../core/pricing/currency";
 import {
   MATERIAL_ASSIGNMENT_CATEGORIES,
   getMaterialAssignmentCategoryDefinition
@@ -22,7 +29,7 @@ import { projectMaterialCategoryForBomItem } from "./projectMaterialCategory";
 export type ProjectMarginItemSource = "override" | "group" | "fallback";
 
 export type ProjectMarginWarning = {
-  code: "missing_price" | "unclassified_item" | "orphaned_override" | "pricing_incomplete";
+  code: "missing_price" | "unsupported_currency" | "unclassified_item" | "orphaned_override" | "pricing_incomplete";
   message: string;
   targetId?: string;
 };
@@ -71,7 +78,7 @@ export type ProjectMarginSummaryView = {
 export type ProjectMarginsView = {
   revision: number;
   editable: boolean;
-  currency: "EUR";
+  currency: PriceCurrency;
   priceAuthority: string;
   settings: ProjectMarginSettingsState;
   summary: ProjectMarginSummaryView;
@@ -116,6 +123,56 @@ function itemScopeId(entry: ProjectPricingView): string {
 
 function resourceLabel(item: PortableQuoteBomItem): string {
   return item.material?.displayName ?? item.component?.displayName ?? "Neocenená položka";
+}
+
+type AssignedPriceResolution = {
+  baseCost: number | null;
+  resourceLabel: string;
+  warning?: string;
+};
+
+function assignedPriceResolution(
+  assignments: readonly ProjectMaterialAssignment[],
+  scopeId: string,
+  category: ProjectMarginCategory,
+  item: PortableQuoteBomItem,
+  targetCurrency: PriceCurrency
+): AssignedPriceResolution | null {
+  if (category === "labor") return null;
+  const effective = resolveEffectiveProjectMaterialAssignment(assignments, scopeId, { id: item.id, category });
+  const assignment = effective.assignment;
+  if (!assignment) return null;
+  const snapshot = assignment.kind === "material"
+    ? assignment.snapshots.material
+    : assignment.snapshots.component;
+  if (!snapshot) {
+    return { baseCost: null, resourceLabel: "Nepriradená položka" };
+  }
+  const label = snapshot.definition.displayName || snapshot.definition.name || "Priradená položka";
+  const quantity = item.pricingQuantity;
+  if (snapshot.unitPrice == null || !Number.isFinite(quantity) || quantity < 0) {
+    return { baseCost: null, resourceLabel: label };
+  }
+  if (!isPriceCurrency(snapshot.currency)) {
+    return {
+      baseCost: null,
+      resourceLabel: label,
+      warning: `Priradená položka ${label} používa nepodporovanú menu ${snapshot.currency}.`
+    };
+  }
+  return {
+    baseCost: convertPriceCurrency(snapshot.unitPrice * quantity, snapshot.currency, targetCurrency),
+    resourceLabel: label
+  };
+}
+
+function bomBaseCost(
+  value: number | null | undefined,
+  sourceCurrency: unknown,
+  targetCurrency: PriceCurrency
+): number | null {
+  if (value == null || !isPriceCurrency(sourceCurrency)) return null;
+  return convertPriceCurrency(value, sourceCurrency, targetCurrency);
 }
 
 function itemLabel(item: PortableQuoteBomItem): string {
@@ -208,7 +265,12 @@ const ORDERED_CATEGORIES: readonly ProjectMarginCategory[] = [
 export function buildProjectMarginsView(
   entries: readonly ProjectPricingView[],
   inputState: ProjectMarginSettingsState | unknown,
-  options: { editable?: boolean; warnings?: readonly string[] } = {}
+  options: {
+    editable?: boolean;
+    warnings?: readonly string[];
+    currency?: PriceCurrency;
+    materialAssignments?: readonly ProjectMaterialAssignment[];
+  } = {}
 ): ProjectMarginsView {
   const state = normalizeProjectMarginSettingsState(inputState);
   validateProjectMarginSettingsState(state);
@@ -218,6 +280,8 @@ export function buildProjectMarginsView(
   }));
   const drafts: DraftMarginItem[] = [];
   const seenTargetIds = new Set<string>();
+  const currency = options.currency ?? "EUR";
+  const materialAssignments = options.materialAssignments ?? [];
 
   for (const entry of entries) {
     const scopeId = itemScopeId(entry);
@@ -242,7 +306,18 @@ export function buildProjectMarginsView(
         throw new Error(`Duplicate project margin target ${targetId} in the current BOM.`);
       }
       seenTargetIds.add(targetId);
-      const missingPrice = item.itemCost == null;
+      const assignedPrice = assignedPriceResolution(materialAssignments, scopeId, category, item, currency);
+      if (assignedPrice?.warning) {
+        warnings.push({
+          code: "unsupported_currency",
+          targetId,
+          message: assignedPrice.warning
+        });
+      }
+      const baseCost = assignedPrice
+        ? assignedPrice.baseCost
+        : bomBaseCost(item.itemCost, entry.result.pricing.priceInputs.currency, currency);
+      const missingPrice = baseCost == null;
       if (missingPrice) {
         warnings.push({
           code: "missing_price",
@@ -255,10 +330,10 @@ export function buildProjectMarginsView(
         target,
         label: itemLabel(item),
         scopeLabel: entry.label,
-        resourceLabel: resourceLabel(item),
+        resourceLabel: assignedPrice?.resourceLabel ?? resourceLabel(item),
         quantity: Number.isFinite(item.pricingQuantity) ? item.pricingQuantity : 0,
         unit: item.pricingUnit,
-        baseCost: item.itemCost ?? 0,
+        baseCost: baseCost ?? 0,
         missingPrice
       }));
     }
@@ -275,7 +350,11 @@ export function buildProjectMarginsView(
       resourceLabel: "Práca",
       quantity: 1,
       unit: "custom",
-      baseCost: entry.result.pricing.laborCostFixed,
+      baseCost: bomBaseCost(
+        entry.result.pricing.laborCostFixed,
+        entry.result.pricing.priceInputs.currency,
+        currency
+      ) ?? 0,
       missingPrice: false
     }));
   }
@@ -338,8 +417,8 @@ export function buildProjectMarginsView(
   return {
     revision: state.revision,
     editable: options.editable ?? true,
-    currency: "EUR",
-    priceAuthority: "Nákupné ceny vychádzajú z aktuálneho projektového BOM a jeho cenového katalógu. Marža sa zachováva ako prirážka k nákladu.",
+    currency,
+    priceAuthority: "Nákupné ceny vychádzajú z materiálov a komponentov aktuálne priradených v projekte. Skupinové priradenie sa dedí do jednotlivých častí, kým ho neprepíše vlastné priradenie.",
     settings: structuredClone(state),
     summary: {
       baseCost: baseCents / 100,

@@ -15,7 +15,6 @@ type WorkspaceNavigationControllerArgs = {
   materialsPhase: {
     mainEl: HTMLElement;
     hostEl: HTMLElement;
-    viewsEl: HTMLElement;
     warningsEl: HTMLElement;
     warningListEl: HTMLElement;
   };
@@ -26,6 +25,7 @@ type WorkspaceNavigationControllerArgs = {
   marginsPhase?: {
     mainEl: HTMLElement;
     hostEl: HTMLElement;
+    footerEl: HTMLElement;
   };
   marginsController?: {
     open: () => Promise<ProjectMarginsView>;
@@ -75,7 +75,6 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.root.classList.remove("archux-materials-phase");
     args.materialsPhase.mainEl.classList.remove("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = true;
-    args.materialsPhase.viewsEl.hidden = false;
     args.materialsPhase.warningsEl.hidden = true;
   };
 
@@ -87,7 +86,10 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     await args.marginsController?.close();
     args.root.classList.remove("archux-margins-phase");
     args.marginsPhase?.mainEl.classList.remove("archux-margins-phase");
-    if (args.marginsPhase) args.marginsPhase.hostEl.hidden = true;
+    if (args.marginsPhase) {
+      args.marginsPhase.hostEl.hidden = true;
+      args.marginsPhase.footerEl.hidden = true;
+    }
   };
 
   const openOverlay = (title: string, subtitle: string, body: HTMLElement, width: "wide" | "xl" = "wide") => {
@@ -179,7 +181,6 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.root.classList.add("archux-materials-phase");
     args.materialsPhase.mainEl.classList.add("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = false;
-    args.materialsPhase.viewsEl.hidden = true;
     args.materialsPhase.warningsEl.hidden = false;
     materialsPhaseActive = true;
     if (args.materialsController) {
@@ -220,6 +221,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.root.classList.add("archux-margins-phase");
     args.marginsPhase.mainEl.classList.add("archux-margins-phase");
     args.marginsPhase.hostEl.hidden = false;
+    args.marginsPhase.footerEl.hidden = false;
     marginsPhaseActive = true;
     const opening = args.marginsController.open();
     marginsOpenPromise = opening;

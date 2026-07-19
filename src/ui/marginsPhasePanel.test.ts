@@ -86,6 +86,15 @@ afterEach(() => {
 });
 
 describe("project margins phase panel", () => {
+  it("renders all client-profile CZK monetary values and the labor input in CZK", () => {
+    const html = renderProjectMarginsPanel(marginsView({ currency: "CZK" }));
+
+    expect(html).toContain("100,00");
+    expect(html).toContain("Kč");
+    expect(html).toContain(">CZK</span>");
+    expect(html).not.toContain("€");
+  });
+
   it("renders stable summary, group and collapsed disclosure selectors", () => {
     const html = renderProjectMarginsPanel(marginsView());
 
@@ -129,7 +138,8 @@ describe("project margins phase panel", () => {
 
   it("commits project, group and item edits and resets overrides through stable IDs", async () => {
     const host = document.createElement("section");
-    document.body.appendChild(host);
+    const footer = document.createElement("section");
+    document.body.append(host, footer);
     const actions = {
       onCommitDefault: vi.fn(async () => ({ ok: true })),
       onCommitAdditionalLabor: vi.fn(async () => ({ ok: true })),
@@ -138,18 +148,23 @@ describe("project margins phase panel", () => {
       onCommitItem: vi.fn(async () => ({ ok: true })),
       onResetItem: vi.fn(async () => ({ ok: true }))
     };
-    const handle = mountProjectMarginsPanel(host, marginsView(), actions);
+    const handle = mountProjectMarginsPanel(host, marginsView({ currency: "CZK" }), actions, { footerContainer: footer });
     handle.setInputsDisabled(false);
 
-    const defaultInput = host.querySelector<HTMLInputElement>("[data-margin-default-input]")!;
+    expect(host.querySelector("[data-margin-summary]")).toBeNull();
+    expect(host.querySelector(".margins-project-controls")).toBeNull();
+    expect(footer.querySelector("[data-margin-summary]")?.textContent).toContain("Kč");
+    expect(footer.querySelector(".margins-project-controls")).not.toBeNull();
+
+    const defaultInput = footer.querySelector<HTMLInputElement>("[data-margin-default-input]")!;
     defaultInput.value = "22.5";
     defaultInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await handle.flushPending();
     expect(actions.onCommitDefault).toHaveBeenCalledWith({ marginPercent: 22.5, committedValue: 20 });
 
-    const laborInput = host.querySelector<HTMLInputElement>("[data-margin-additional-labor-input]")!;
+    const laborInput = footer.querySelector<HTMLInputElement>("[data-margin-additional-labor-input]")!;
     laborInput.value = "125.75";
-    host.querySelector<HTMLButtonElement>("[data-margin-additional-labor-save]")!.click();
+    footer.querySelector<HTMLButtonElement>("[data-margin-additional-labor-save]")!.click();
     await handle.flushPending();
     expect(actions.onCommitAdditionalLabor).toHaveBeenCalledWith({ additionalLaborCost: 125.75, committedValue: 0 });
 

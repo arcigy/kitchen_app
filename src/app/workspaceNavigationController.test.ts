@@ -33,7 +33,6 @@ function materialsPhaseHarness() {
   return {
     mainEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     hostEl: new WorkspaceFakeElement() as unknown as HTMLElement,
-    viewsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     warningsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     warningListEl: new WorkspaceFakeElement() as unknown as HTMLElement
   };
@@ -42,7 +41,8 @@ function materialsPhaseHarness() {
 function marginsPhaseHarness() {
   return {
     mainEl: new WorkspaceFakeElement() as unknown as HTMLElement,
-    hostEl: new WorkspaceFakeElement() as unknown as HTMLElement
+    hostEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    footerEl: new WorkspaceFakeElement() as unknown as HTMLElement
   };
 }
 
@@ -163,14 +163,12 @@ describe("createWorkspaceNavigationController", () => {
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect((materialsPhase.mainEl as unknown as WorkspaceFakeElement).classList.contains("archux-materials-phase")).toBe(true);
     expect(root.classList.contains("archux-materials-phase")).toBe(true);
-    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
     expect((materialsPhase.warningsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("Materiály a komponenty");
 
     await controller.leaveMaterialsPhase();
 
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
-    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
   });
 
   it("delegates the live Materials phase to the interactive controller and closes it on exit", async () => {
@@ -231,6 +229,7 @@ describe("createWorkspaceNavigationController", () => {
     marginsButton.click();
     await vi.waitFor(() => expect(open).toHaveBeenCalledOnce());
     expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
+    expect((marginsPhase.footerEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect(root.classList.contains("archux-margins-phase")).toBe(true);
     expect((marginsPhase.mainEl as unknown as WorkspaceFakeElement).classList.contains("archux-margins-phase")).toBe(true);
     expect(marginsButton.classList.contains("active")).toBe(true);
@@ -238,6 +237,7 @@ describe("createWorkspaceNavigationController", () => {
     designButton.click();
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect((marginsPhase.footerEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
     expect(root.classList.contains("archux-margins-phase")).toBe(false);
     expect(designButton.classList.contains("active")).toBe(true);
     expect(setDesignTopbar).toHaveBeenCalled();
@@ -277,6 +277,7 @@ describe("createWorkspaceNavigationController", () => {
 
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect((marginsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect((marginsPhase.footerEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
     expect(root.classList.contains("archux-margins-phase")).toBe(false);
     expect(designButton.classList.contains("active")).toBe(true);
   });

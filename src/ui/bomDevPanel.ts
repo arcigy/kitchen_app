@@ -201,12 +201,16 @@ export function mountBomDevPanel(
   customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
   catalog: ClientCatalog,
-  options: { quoteSettings?: ProjectQuoteSettingsInput } = {}
+  options: {
+    quoteSettings?: ProjectQuoteSettingsInput;
+    displayCurrency?: PriceDisplayCurrency;
+    lockDisplayCurrency?: boolean;
+  } = {}
 ): void {
   const entries = buildProjectPricingViews(instances, worktops, customFurniture, ctx, catalog);
   const storageKey = quoteSettingsStorageKey(catalog);
   let settings: ProjectQuoteSettingsInput = options.quoteSettings ?? readStoredSettings(storageKey);
-  let displayCurrency = readPriceDisplayCurrency();
+  let displayCurrency = options.displayCurrency ?? readPriceDisplayCurrency();
 
   container.className = "bom-dev";
 
@@ -257,23 +261,26 @@ export function mountBomDevPanel(
     currencyText.textContent = "Ceny";
     const currencySelect = document.createElement("select");
     currencySelect.value = displayCurrency;
-    for (const currency of ["CZK", "EUR"] as const) {
+    const currencies = options.lockDisplayCurrency ? [displayCurrency] : ["CZK", "EUR"] as const;
+    for (const currency of currencies) {
       const option = document.createElement("option");
       option.value = currency;
       option.textContent = currency;
       currencySelect.appendChild(option);
     }
     currencySelect.addEventListener("change", () => {
+      if (options.lockDisplayCurrency) return;
       displayCurrency = currencySelect.value === "EUR" ? "EUR" : "CZK";
       writePriceDisplayCurrency(displayCurrency);
       render();
     });
+    currencySelect.disabled = options.lockDisplayCurrency === true;
     currencyLabel.append(currencyText, currencySelect);
     actions.appendChild(currencyLabel);
 
     const exportBtn = createButton("Create Sheet");
     exportBtn.addEventListener("click", () => {
-      exportProjectPricingWorkbook(entries, summary);
+      exportProjectPricingWorkbook(entries, summary, displayCurrency);
     });
     actions.appendChild(exportBtn);
 
@@ -283,7 +290,7 @@ export function mountBomDevPanel(
       const previous = pdfBtn.textContent;
       pdfBtn.textContent = "Generujem...";
       try {
-        await exportMarketingOfferPdf(entries, summary);
+        await exportMarketingOfferPdf(entries, summary, displayCurrency);
       } finally {
         pdfBtn.disabled = false;
         pdfBtn.textContent = previous;
@@ -320,7 +327,7 @@ export function mountBomDevPanel(
         buildNumberInput("Dodatocna praca projektu", legacySettings.additionalLaborCost, (value) => {
           settings = sanitizeProjectQuoteSettings({ ...legacySettings, additionalLaborCost: value });
           render();
-        }, "EUR base")
+        }, displayCurrency)
       );
       settingsGrid.appendChild(
         buildNumberInput("Marza", legacySettings.marginPercent, (value) => {

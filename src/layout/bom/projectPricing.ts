@@ -144,7 +144,7 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number, c
         sourcePartIds: [worktop.id],
         notes: [
           `Plocha: ${round(areaM2, 4)} m2`,
-          `Cena: ${round(areaM2, 4)} m2 x ${round(pricingCatalog.getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} EUR/m2`,
+          `Cena: ${round(areaM2, 4)} m2 x ${round(pricingCatalog.getUnitPriceForCatalogId(worktop.params.materialId) ?? 0, 2)} ${catalog.priceList.currency}/m2`,
           `Tvar: ${formulaView.shapeKey}`,
           ...formulaView.segmentLengthsMm.map((lengthMm, segmentIndex) => `Úsek ${segmentIndex + 1}: ${lengthMm} mm`),
           `Hĺbka: ${formulaView.depthMm} mm`

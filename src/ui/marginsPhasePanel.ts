@@ -66,7 +66,8 @@ type RenderState = {
 export function mountProjectMarginsPanel(
   container: HTMLElement,
   initialView: ProjectMarginsView,
-  actions: ProjectMarginsPanelActions
+  actions: ProjectMarginsPanelActions,
+  options: { footerContainer?: HTMLElement } = {}
 ): ProjectMarginsPanelHandle {
   let view = structuredClone(initialView);
   let loadingMessage: string | null = null;
@@ -76,6 +77,10 @@ export function mountProjectMarginsPanel(
   const expandedGroups = new Set<string>();
   const busyKeys = new Set<string>();
   const pendingCommits = new Set<Promise<void>>();
+  const footerContainer = options.footerContainer;
+
+  const queryPanel = <T extends Element>(selector: string): T | null =>
+    footerContainer?.querySelector<T>(selector) ?? container.querySelector<T>(selector);
 
   const render = () => {
     if (destroyed) return;
@@ -87,6 +92,16 @@ export function mountProjectMarginsPanel(
       inputsDisabled,
       busyKeys
     });
+    if (footerContainer) {
+      footerContainer.replaceChildren();
+      const summary = container.querySelector<HTMLElement>("[data-margin-summary]");
+      const controls = container.querySelector<HTMLElement>(".margins-project-controls");
+      const footer = document.createElement("div");
+      footer.className = "margins-footer";
+      if (summary) footer.appendChild(summary);
+      if (controls) footer.appendChild(controls);
+      footerContainer.appendChild(footer);
+    }
     container.scrollTop = scrollTop;
   };
 
@@ -128,7 +143,7 @@ export function mountProjectMarginsPanel(
 
     const defaultSave = element?.closest<HTMLButtonElement>("[data-margin-default-save]");
     if (defaultSave) {
-      const input = container.querySelector<HTMLInputElement>("[data-margin-default-input]");
+      const input = queryPanel<HTMLInputElement>("[data-margin-default-input]");
       if (!input) return;
       const marginPercent = finiteInputValue(input, PROJECT_MARGIN_PERCENT_MAX);
       const committedValue = finiteCommittedValue(input);
@@ -144,12 +159,12 @@ export function mountProjectMarginsPanel(
 
     const laborSave = element?.closest<HTMLButtonElement>("[data-margin-additional-labor-save]");
     if (laborSave) {
-      const input = container.querySelector<HTMLInputElement>("[data-margin-additional-labor-input]");
+      const input = queryPanel<HTMLInputElement>("[data-margin-additional-labor-input]");
       if (!input) return;
       const additionalLaborCost = finiteInputValue(input, PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX);
       const committedValue = finiteCommittedValue(input);
       if (additionalLaborCost == null) {
-        globalError = `Dodatočná práca musí byť číslo od 0 do ${formatNumber(PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX, 0)} €.`;
+        globalError = `Dodatočná práca musí byť číslo od 0 do ${formatNumber(PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX, 0)} ${view.currency}.`;
         render();
         return;
       }
@@ -170,7 +185,7 @@ export function mountProjectMarginsPanel(
     const apply = element?.closest<HTMLButtonElement>("[data-margin-group-apply-all]");
     const groupId = apply?.dataset.marginGroupApplyAll;
     if (groupId) {
-      const input = container.querySelector<HTMLInputElement>(`[data-margin-group-input="${cssEscape(groupId)}"]`);
+      const input = queryPanel<HTMLInputElement>(`[data-margin-group-input="${cssEscape(groupId)}"]`);
       if (!input) return;
       const marginPercent = finiteInputValue(input, PROJECT_MARGIN_PERCENT_MAX);
       const committedValue = finiteCommittedValue(input);
@@ -225,11 +240,11 @@ export function mountProjectMarginsPanel(
     if (event.key !== "Enter") return;
     event.preventDefault();
     if (input.dataset.marginDefaultInput !== undefined) {
-      container.querySelector<HTMLButtonElement>("[data-margin-default-save]")?.click();
+      queryPanel<HTMLButtonElement>("[data-margin-default-save]")?.click();
     } else if (input.dataset.marginAdditionalLaborInput !== undefined) {
-      container.querySelector<HTMLButtonElement>("[data-margin-additional-labor-save]")?.click();
+      queryPanel<HTMLButtonElement>("[data-margin-additional-labor-save]")?.click();
     } else if (input.dataset.marginGroupInput) {
-      container.querySelector<HTMLButtonElement>(`[data-margin-group-apply-all="${cssEscape(input.dataset.marginGroupInput)}"]`)?.click();
+      queryPanel<HTMLButtonElement>(`[data-margin-group-apply-all="${cssEscape(input.dataset.marginGroupInput)}"]`)?.click();
     } else {
       input.blur();
     }
@@ -238,6 +253,9 @@ export function mountProjectMarginsPanel(
   container.addEventListener("click", onClick);
   container.addEventListener("focusout", onFocusOut);
   container.addEventListener("keydown", onKeyDown);
+  footerContainer?.addEventListener("click", onClick);
+  footerContainer?.addEventListener("focusout", onFocusOut);
+  footerContainer?.addEventListener("keydown", onKeyDown);
   render();
 
   return {
@@ -271,6 +289,9 @@ export function mountProjectMarginsPanel(
       container.removeEventListener("click", onClick);
       container.removeEventListener("focusout", onFocusOut);
       container.removeEventListener("keydown", onKeyDown);
+      footerContainer?.removeEventListener("click", onClick);
+      footerContainer?.removeEventListener("focusout", onFocusOut);
+      footerContainer?.removeEventListener("keydown", onKeyDown);
     }
   };
 }
@@ -318,7 +339,7 @@ function renderProjectControls(
     </div>
     <div class="margins-project-control">
       <label for="margin-additional-labor-input"><strong>Dodatočná práca</strong><small>Projektová práca navyše mimo práce vypočítanej z modulov.</small></label>
-      <div class="margins-project-control__editor"><div><input id="margin-additional-labor-input" type="number" min="0" max="${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.additionalLaborCost)}" data-committed-value="${numberInputValue(view.settings.additionalLaborCost)}" data-margin-additional-labor-input ${laborDisabled ? "disabled" : ""} /><span aria-hidden="true">€</span></div><button type="button" data-margin-additional-labor-save ${laborDisabled ? "disabled" : ""}>${laborBusy ? "Ukladám…" : "Uložiť"}</button></div>
+      <div class="margins-project-control__editor"><div><input id="margin-additional-labor-input" type="number" min="0" max="${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.additionalLaborCost)}" data-committed-value="${numberInputValue(view.settings.additionalLaborCost)}" data-margin-additional-labor-input ${laborDisabled ? "disabled" : ""} /><span aria-hidden="true">${escapeHtml(view.currency)}</span></div><button type="button" data-margin-additional-labor-save ${laborDisabled ? "disabled" : ""}>${laborBusy ? "Ukladám…" : "Uložiť"}</button></div>
     </div>
   </section>`;
 }
@@ -410,9 +431,9 @@ function summarySelector(key: keyof ProjectMarginsView["summary"]): string {
   return key;
 }
 
-function formatCurrency(value: number, currency: string): string {
+function formatCurrency(value: number, currency: ProjectMarginsView["currency"]): string {
   try {
-    return new Intl.NumberFormat("sk-SK", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+    return new Intl.NumberFormat(currency === "CZK" ? "cs-CZ" : "sk-SK", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
   } catch {
     return `${formatNumber(value, 2)} ${currency}`;
   }
