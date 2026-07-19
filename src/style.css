@@ -3113,6 +3113,7 @@ body {
   box-shadow: 0 8px 24px rgba(31, 37, 58, 0.1);
 }
 
+.viewer-tabbar,
 #resetViewBtn {
   display: none !important;
 }
