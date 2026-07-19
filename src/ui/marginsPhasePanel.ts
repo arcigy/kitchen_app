@@ -56,11 +56,21 @@ export type ProjectMarginsPanelHandle = {
 };
 
 type RenderState = {
-  expandedGroups?: ReadonlySet<string>;
+  activeSettingsTab?: MarginSettingsTab;
+  selectedScopeId?: string | null;
   loadingMessage?: string | null;
   globalError?: string | null;
   inputsDisabled?: boolean;
   busyKeys?: ReadonlySet<string>;
+};
+
+type MarginSettingsTab = "general" | "modules" | "additions";
+type MarginScopeKind = "module" | "addition";
+
+type MarginScopeView = {
+  id: string;
+  label: string;
+  items: ProjectMarginItemView[];
 };
 
 export function mountProjectMarginsPanel(
@@ -74,7 +84,8 @@ export function mountProjectMarginsPanel(
   let globalError: string | null = null;
   let inputsDisabled = true;
   let destroyed = false;
-  const expandedGroups = new Set<string>();
+  let activeSettingsTab: MarginSettingsTab = "general";
+  let selectedScopeId: string | null = null;
   const busyKeys = new Set<string>();
   const pendingCommits = new Set<Promise<void>>();
   const footerContainer = options.footerContainer;
@@ -86,7 +97,8 @@ export function mountProjectMarginsPanel(
     if (destroyed) return;
     const scrollTop = container.scrollTop;
     container.innerHTML = renderProjectMarginsPanel(view, {
-      expandedGroups,
+      activeSettingsTab,
+      selectedScopeId,
       loadingMessage,
       globalError,
       inputsDisabled,
@@ -141,6 +153,15 @@ export function mountProjectMarginsPanel(
   const onClick = (event: MouseEvent) => {
     const element = event.target instanceof Element ? event.target : null;
 
+    const settingsTab = element?.closest<HTMLElement>("[data-margin-settings-tab]")?.dataset.marginSettingsTab;
+    if (isMarginSettingsTab(settingsTab)) {
+      activeSettingsTab = settingsTab;
+      const kind = settingsTab === "modules" ? "module" : settingsTab === "additions" ? "addition" : null;
+      selectedScopeId = kind ? marginScopes(view, kind)[0]?.id ?? null : null;
+      render();
+      return;
+    }
+
     const defaultSave = element?.closest<HTMLButtonElement>("[data-margin-default-save]");
     if (defaultSave) {
       const input = queryPanel<HTMLInputElement>("[data-margin-default-input]");
@@ -170,15 +191,6 @@ export function mountProjectMarginsPanel(
       }
       if (additionalLaborCost === committedValue) return;
       runCommit("labor", () => actions.onCommitAdditionalLabor({ additionalLaborCost, committedValue }), input);
-      return;
-    }
-
-    const toggle = element?.closest<HTMLElement>("[data-margin-group-toggle]");
-    if (toggle?.dataset.marginGroupToggle) {
-      const groupId = toggle.dataset.marginGroupToggle;
-      if (expandedGroups.has(groupId)) expandedGroups.delete(groupId);
-      else expandedGroups.add(groupId);
-      render();
       return;
     }
 
@@ -250,9 +262,17 @@ export function mountProjectMarginsPanel(
     }
   };
 
+  const onChange = (event: Event) => {
+    const select = event.target as HTMLSelectElement | null;
+    if (select?.dataset.marginScopeSelect !== "true") return;
+    selectedScopeId = select.value || null;
+    render();
+  };
+
   container.addEventListener("click", onClick);
   container.addEventListener("focusout", onFocusOut);
   container.addEventListener("keydown", onKeyDown);
+  container.addEventListener("change", onChange);
   footerContainer?.addEventListener("click", onClick);
   footerContainer?.addEventListener("focusout", onFocusOut);
   footerContainer?.addEventListener("keydown", onKeyDown);
@@ -263,8 +283,9 @@ export function mountProjectMarginsPanel(
       view = structuredClone(nextView);
       loadingMessage = null;
       globalError = null;
-      for (const groupId of [...expandedGroups]) {
-        if (!view.groups.some((group) => group.category === groupId)) expandedGroups.delete(groupId);
+      if (activeSettingsTab !== "general") {
+        const kind = activeSettingsTab === "modules" ? "module" : "addition";
+        if (!marginScopes(view, kind).some((scope) => scope.id === selectedScopeId)) selectedScopeId = null;
       }
       render();
     },
@@ -289,6 +310,7 @@ export function mountProjectMarginsPanel(
       container.removeEventListener("click", onClick);
       container.removeEventListener("focusout", onFocusOut);
       container.removeEventListener("keydown", onKeyDown);
+      container.removeEventListener("change", onChange);
       footerContainer?.removeEventListener("click", onClick);
       footerContainer?.removeEventListener("focusout", onFocusOut);
       footerContainer?.removeEventListener("keydown", onKeyDown);
@@ -299,7 +321,7 @@ export function mountProjectMarginsPanel(
 export function renderProjectMarginsPanel(view: ProjectMarginsView, state: RenderState = {}): string {
   const disabled = state.inputsDisabled || !view.editable;
   const busyKeys = state.busyKeys ?? new Set<string>();
-  const expanded = state.expandedGroups ?? new Set<string>();
+  const activeSettingsTab = state.activeSettingsTab ?? "general";
   const phaseState = state.globalError ? "error" : state.loadingMessage ? "loading" : disabled ? "readonly" : "ready";
   return `<div class="margins-phase" data-margin-phase-state="${phaseState}" aria-labelledby="margins-phase-title">
     <header class="margins-phase__header">
@@ -313,14 +335,28 @@ export function renderProjectMarginsPanel(view: ProjectMarginsView, state: Rende
     ${state.loadingMessage ? `<p class="margins-phase__status" data-margin-status role="status" aria-live="polite">${escapeHtml(state.loadingMessage)}</p>` : ""}
     ${state.globalError ? `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">${escapeHtml(state.globalError)}</p>` : ""}
     ${!view.editable ? `<p class="margins-phase__status">Marže sú iba na čítanie. Na úpravu nemáte oprávnenie.</p>` : ""}
-    <div class="margins-table-wrap" data-margin-groups>
-      <table class="margins-table">
-        <caption class="sr-only">Marže podľa materiálových a cenových skupín</caption>
-        <thead><tr><th scope="col">Skupina</th><th scope="col">Náklad</th><th scope="col">Skupinová marža</th><th scope="col">Suma marže</th><th scope="col">Predajná cena</th><th scope="col">Stav</th></tr></thead>
-        ${view.groups.map((group) => renderGroup(view, group, expanded.has(group.category), disabled, busyKeys)).join("")}
-      </table>
-    </div>
+    ${renderMarginSettingsTabs(activeSettingsTab)}
+    ${activeSettingsTab === "modules"
+      ? renderMarginScopeSettings(view, "module", state.selectedScopeId, disabled, busyKeys)
+      : activeSettingsTab === "additions"
+        ? renderMarginScopeSettings(view, "addition", state.selectedScopeId, disabled, busyKeys)
+        : renderGeneralMarginSettings(view, disabled, busyKeys)}
   </div>`;
+}
+
+function renderMarginSettingsTabs(active: MarginSettingsTab): string {
+  const tab = (id: MarginSettingsTab, label: string) => `<button type="button" class="materials-settings-tab ${active === id ? "materials-settings-tab--active" : ""}" data-margin-settings-tab="${id}" aria-pressed="${active === id}">${label}</button>`;
+  return `<nav class="materials-settings-tabs" aria-label="Nastavenia marží">${tab("general", "General settings")}${tab("modules", "Module settings")}${tab("additions", "Additions")}</nav>`;
+}
+
+function renderGeneralMarginSettings(
+  view: ProjectMarginsView,
+  disabled: boolean,
+  busyKeys: ReadonlySet<string>
+): string {
+  return `<section class="materials-phase__groups margins-general-groups" data-margin-groups data-margin-settings-panel="general" aria-label="General settings">
+    ${view.groups.map((group) => renderGroup(view, group, disabled, busyKeys)).join("")}
+  </section>`;
 }
 
 function renderProjectControls(
@@ -360,12 +396,10 @@ function renderSummary(view: ProjectMarginsView): string {
 function renderGroup(
   view: ProjectMarginsView,
   group: ProjectMarginGroupView,
-  expanded: boolean,
   disabled: boolean,
   busyKeys: ReadonlySet<string>
 ): string {
   const groupId = group.category;
-  const controlsId = `margin-items-${safeDomId(groupId)}`;
   const inputId = `margin-group-input-${safeDomId(groupId)}`;
   const busy = busyKeys.has(`group:${groupId}`);
   const groupDisabled = disabled || busy;
@@ -376,30 +410,43 @@ function renderGroup(
     : group.overrideCount > 0
       ? `${formatNumber(group.overrideCount, 0)} vlastné · efektívne ${formatPercent(effectivePercent)}`
       : "Skupinová marža";
-  return `<tbody data-margin-group="${escapeHtml(groupId)}">
-    <tr class="margins-group-row${group.missingPriceCount > 0 ? " margins-group-row--warning" : ""}">
-      <th scope="row"><button type="button" class="margins-group-toggle" data-margin-group-toggle="${escapeHtml(groupId)}" aria-expanded="${expanded}" aria-controls="${controlsId}"><span class="margins-group-toggle__icon" aria-hidden="true">${expanded ? "−" : "+"}</span><span><strong>${escapeHtml(group.label)}</strong><small>${escapeHtml(group.description)} · ${formatNumber(group.items.length, 0)} položiek</small></span></button></th>
-      <td>${formatCurrency(group.baseCost, view.currency)}</td>
-      <td><div class="margins-group-control"><label class="sr-only" for="${inputId}">Skupinová marža ${escapeHtml(group.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(group.marginPercent)}" data-committed-value="${numberInputValue(group.marginPercent)}" data-margin-group-input="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div class="margins-group-control__actions"><button type="button" data-margin-group-apply-all="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""}>${busy ? "Ukladám…" : "Použiť na celú skupinu"}</button><button type="button" class="margins-group-reset" data-margin-group-reset="${escapeHtml(groupId)}" ${groupDisabled || !hasGroupOrItemOverride ? "disabled" : ""}>Obnoviť základnú</button></div>${group.overrideCount > 0 ? `<small>Prepíše aj ${formatNumber(group.overrideCount, 0)} vlastné marže.</small>` : ""}</div></td>
-      <td>${formatCurrency(group.marginAmount, view.currency)}</td>
-      <td><strong>${formatCurrency(group.finalPrice, view.currency)}</strong></td>
-      <td><span class="margin-source margin-source--${group.missingPriceCount > 0 ? "missing" : group.overrideCount > 0 ? "override" : "group"}">${escapeHtml(stateLabel)}</span></td>
-    </tr>
-    ${expanded ? `<tr class="margins-group-details"><td colspan="6"><div id="${controlsId}" data-margin-group-items="${escapeHtml(groupId)}">${renderItemsTable(view, group, disabled, busyKeys)}</div></td></tr>` : ""}
-  </tbody>`;
+  return `<article class="materials-group margins-general-group materials-group--${escapeHtml(groupId)}${group.missingPriceCount > 0 ? " margins-general-group--warning" : ""}" data-margin-group="${escapeHtml(groupId)}">
+    <div class="materials-group__icon" aria-hidden="true">${marginCategoryIcon(group.category)}</div>
+    <div class="materials-group__body">
+      <header><div><h2>${escapeHtml(group.label)}</h2><p>${escapeHtml(group.description)}</p></div><div class="materials-group__quantity"><strong>${formatCurrency(group.baseCost, view.currency)}</strong><small>${formatNumber(group.items.length, 0)} položiek</small></div></header>
+      <div class="materials-group__selection margins-general-group__summary">
+        <div><small>Stav</small><strong><span class="margin-source margin-source--${group.missingPriceCount > 0 ? "missing" : group.overrideCount > 0 ? "override" : "group"}">${escapeHtml(stateLabel)}</span></strong></div>
+        <span><small>Suma marže</small><strong>${formatCurrency(group.marginAmount, view.currency)}</strong></span>
+        <span><small>Predajná cena</small><strong>${formatCurrency(group.finalPrice, view.currency)}</strong></span>
+      </div>
+      <div class="margins-group-control margins-general-group__control"><label class="sr-only" for="${inputId}">Skupinová marža ${escapeHtml(group.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(group.marginPercent)}" data-committed-value="${numberInputValue(group.marginPercent)}" data-margin-group-input="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div class="margins-group-control__actions"><button type="button" data-margin-group-apply-all="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""}>${busy ? "Ukladám…" : "Použiť na celú skupinu"}</button><button type="button" class="margins-group-reset" data-margin-group-reset="${escapeHtml(groupId)}" ${groupDisabled || !hasGroupOrItemOverride ? "disabled" : ""}>Obnoviť základnú</button></div>${group.overrideCount > 0 ? `<small>Prepíše aj ${formatNumber(group.overrideCount, 0)} vlastné marže.</small>` : ""}</div>
+    </div>
+  </article>`;
 }
 
-function renderItemsTable(
+function renderMarginScopeSettings(
   view: ProjectMarginsView,
-  group: ProjectMarginGroupView,
+  kind: MarginScopeKind,
+  selectedScopeId: string | null | undefined,
   disabled: boolean,
   busyKeys: ReadonlySet<string>
 ): string {
-  if (group.items.length === 0) return `<p class="margins-items-empty">V tejto skupine zatiaľ nie sú žiadne položky.</p>`;
-  return `<div class="margins-items-wrap"><table class="margins-items-table"><caption class="sr-only">Jednotlivé položky skupiny ${escapeHtml(group.label)}</caption><thead><tr><th scope="col">Položka</th><th scope="col">Modul / rozsah</th><th scope="col">Materiál / komponent</th><th scope="col">Množstvo</th><th scope="col">Náklad</th><th scope="col">Marža</th><th scope="col">Suma marže</th><th scope="col">Predajná cena</th><th scope="col">Zdroj</th></tr></thead><tbody>${group.items.map((item) => renderItem(view, item, disabled, busyKeys)).join("")}</tbody></table></div>`;
+  const scopes = marginScopes(view, kind);
+  const selected = scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0];
+  if (!selected) {
+    return `<section class="materials-scope-empty" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}"><strong>${kind === "module" ? "V layoute zatiaľ nie je modul." : "V projekte zatiaľ nie sú additions."}</strong><p>Po vložení položky sa tu zobrazia jej cenové skupiny a marže.</p></section>`;
+  }
+  const groups = view.groups
+    .map((group) => ({ group, items: selected.items.filter((item) => item.category === group.category) }))
+    .filter(({ items }) => items.length > 0);
+  return `<section class="materials-scope-settings margins-scope-settings" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}" aria-label="${escapeHtml(selected.label)}">
+    <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Položky dedia maržu z General settings. Každú môžete prepísať samostatne.</p></div>
+    <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-margin-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
+    <div class="materials-scope-groups">${groups.map(({ group, items }) => `<section class="materials-scope-group margins-scope-group" data-margin-scope-group="${escapeHtml(group.category)}"><h3>${escapeHtml(group.label)}</h3>${items.map((item) => renderScopeItem(view, item, disabled, busyKeys)).join("")}</section>`).join("")}</div>
+  </section>`;
 }
 
-function renderItem(
+function renderScopeItem(
   view: ProjectMarginsView,
   item: ProjectMarginItemView,
   disabled: boolean,
@@ -410,17 +457,41 @@ function renderItem(
   const itemDisabled = disabled || busy;
   const inputId = `margin-item-input-${safeDomId(itemId)}`;
   const sourceLabel = item.missingPrice ? "Chýba cena" : item.source === "override" ? "Vlastná marža" : item.source === "group" ? "Zo skupiny" : "Predvolená";
-  return `<tr data-margin-item-id="${escapeHtml(itemId)}" class="${item.missingPrice ? "margins-item--missing" : ""}">
-    <th scope="row"><strong>${escapeHtml(item.label)}</strong></th>
-    <td>${escapeHtml(item.scopeLabel)}</td>
-    <td>${escapeHtml(item.resourceLabel)}</td>
-    <td>${formatNumber(item.quantity)} ${escapeHtml(item.unit)}</td>
-    <td>${item.baseCost == null ? "—" : formatCurrency(item.baseCost, view.currency)}</td>
-    <td><div class="margins-item-control"><label class="sr-only" for="${inputId}">Marža ${escapeHtml(item.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(item.marginPercent)}" data-committed-value="${numberInputValue(item.marginPercent)}" data-margin-item-input="${escapeHtml(itemId)}" ${itemDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-margin-item-reset="${escapeHtml(itemId)}" aria-label="Obnoviť skupinovú maržu pre ${escapeHtml(item.label)}" ${itemDisabled || item.source !== "override" ? "disabled" : ""}>${busy ? "Ukladám…" : "Obnoviť"}</button></div></td>
-    <td>${item.marginAmount == null ? "—" : formatCurrency(item.marginAmount, view.currency)}</td>
-    <td>${item.finalPrice == null ? "—" : formatCurrency(item.finalPrice, view.currency)}</td>
-    <td><span class="margin-source margin-source--${item.missingPrice ? "missing" : item.source}" data-margin-source="${item.source}">${escapeHtml(sourceLabel)}</span></td>
-  </tr>`;
+  return `<article class="materials-scope-item margins-scope-item${item.missingPrice ? " margins-item--missing" : ""}" data-margin-item-id="${escapeHtml(itemId)}" data-margin-source="${item.source}">
+    <div class="margins-scope-item__identity"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.resourceLabel)} · ${formatNumber(item.quantity)} ${escapeHtml(item.unit)}</small></div>
+    <div class="margins-scope-item__price"><small>Náklad ${item.baseCost == null ? "—" : formatCurrency(item.baseCost, view.currency)} · marža ${item.marginAmount == null ? "—" : formatCurrency(item.marginAmount, view.currency)}</small><strong>Predajná cena ${item.finalPrice == null ? "—" : formatCurrency(item.finalPrice, view.currency)}</strong><span class="margin-source margin-source--${item.missingPrice ? "missing" : item.source}">${escapeHtml(sourceLabel)}</span></div>
+    <div class="margins-item-control"><label class="sr-only" for="${inputId}">Marža ${escapeHtml(item.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(item.marginPercent)}" data-committed-value="${numberInputValue(item.marginPercent)}" data-margin-item-input="${escapeHtml(itemId)}" ${itemDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-margin-item-reset="${escapeHtml(itemId)}" aria-label="Obnoviť skupinovú maržu pre ${escapeHtml(item.label)}" ${itemDisabled || item.source !== "override" ? "disabled" : ""}>${busy ? "Ukladám…" : "Obnoviť"}</button></div>
+  </article>`;
+}
+
+function marginScopes(view: ProjectMarginsView, kind: MarginScopeKind): MarginScopeView[] {
+  const scopes = new Map<string, MarginScopeView>();
+  for (const group of view.groups) {
+    for (const item of group.items) {
+      if (marginScopeKind(item.scopeId) !== kind) continue;
+      const scope = scopes.get(item.scopeId) ?? { id: item.scopeId, label: item.scopeLabel, items: [] };
+      scope.items.push(item);
+      scopes.set(item.scopeId, scope);
+    }
+  }
+  return [...scopes.values()];
+}
+
+function marginScopeKind(scopeId: string): MarginScopeKind | null {
+  if (scopeId.startsWith("module:")) return "module";
+  if (scopeId.startsWith("addition:")) return "addition";
+  return null;
+}
+
+function isMarginSettingsTab(value: string | undefined): value is MarginSettingsTab {
+  return value === "general" || value === "modules" || value === "additions";
+}
+
+function marginCategoryIcon(category: ProjectMarginGroupView["category"]): string {
+  if (["corpus", "front", "worktop", "plinth", "back", "drawer_bottom"].includes(category)) return "&#9635;";
+  if (category === "edge_front" || category === "edge_other") return "&#9673;";
+  if (category === "labor") return "&#9638;";
+  return "&#9881;";
 }
 
 function summarySelector(key: keyof ProjectMarginsView["summary"]): string {
