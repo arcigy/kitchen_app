@@ -286,7 +286,7 @@
   grid-area: bottom;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(310px, 1.2fr) minmax(250px, 1fr) 260px 210px;
+  grid-template-columns: minmax(0, 1fr) 230px;
   overflow: hidden;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
@@ -301,6 +301,44 @@
 
 .archux-bottom > section:last-child {
   border-right: 0;
+}
+
+.archux-margin-footer,
+.archux-material-warning-panel {
+  grid-column: 1;
+}
+
+.archux-margin-footer {
+  padding: 8px 12px !important;
+}
+
+.margins-footer {
+  height: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.margins-footer .margins-summary {
+  align-content: stretch;
+}
+
+.margins-footer .margins-summary__card {
+  min-height: 0;
+  padding: 7px 10px;
+}
+
+.margins-footer .margins-summary__card strong {
+  font-size: 16px;
+}
+
+.margins-footer .margins-project-control {
+  padding: 6px 9px;
+}
+
+.margins-footer .margins-project-control__editor input {
+  min-height: 28px;
 }
 
 .archux-bottom p,
@@ -318,6 +356,7 @@
 }
 
 .archux-activity {
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   min-height: 0;

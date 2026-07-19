@@ -1,4 +1,9 @@
 import { PDFDocument } from "pdf-lib";
+import {
+  convertPriceCurrency,
+  priceCurrencyLocale,
+  type PriceCurrency
+} from "../../core/pricing/currency";
 import type { ProjectPricingView } from "./projectPricing";
 import {
   aggregateProjectBoards,
@@ -24,12 +29,12 @@ function formatNumber(value: number, digits = 3) {
   return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: digits }).format(value);
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("sk-SK", {
+function formatCurrency(value: number, currency: PriceCurrency) {
+  return new Intl.NumberFormat(priceCurrencyLocale(currency), {
     style: "currency",
-    currency: "EUR",
+    currency,
     maximumFractionDigits: 2
-  }).format(value);
+  }).format(convertPriceCurrency(value, "EUR", currency));
 }
 
 function createCanvasPage(pageNumber: number): RenderPage {
@@ -159,15 +164,15 @@ function drawParagraph(pages: RenderPage[], text: string) {
   page.cursorY = drawWrappedText(page.ctx, text, PAGE_MARGIN, page.cursorY, CONTENT_WIDTH, 30, "#2f2722") + 12;
 }
 
-function drawSummaryCards(pages: RenderPage[], summary: ProjectQuoteSummary) {
+function drawSummaryCards(pages: RenderPage[], summary: ProjectQuoteSummary, currency: PriceCurrency) {
   const page = ensureSpace(pages, 250);
   const cardWidth = (CONTENT_WIDTH - 20) / 2;
   const cardHeight = 96;
   const cards: Array<[string, string]> = [
-    ["Material", formatCurrency(summary.materialCost)],
-    ["Praca spolu", formatCurrency(summary.laborCostTotal)],
-    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`],
-    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice)]
+    ["Material", formatCurrency(summary.materialCost, currency)],
+    ["Praca spolu", formatCurrency(summary.laborCostTotal, currency)],
+    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, currency)}`],
+    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice, currency)]
   ];
 
   cards.forEach(([label, value], index) => {
@@ -301,7 +306,11 @@ function downloadPdf(bytes: Uint8Array, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export async function exportMarketingOfferPdf(entries: ProjectPricingView[], summary: ProjectQuoteSummary) {
+export async function exportMarketingOfferPdf(
+  entries: ProjectPricingView[],
+  summary: ProjectQuoteSummary,
+  currency: PriceCurrency = "EUR"
+) {
   const boards = aggregateProjectBoards(entries);
   const edges = aggregateProjectEdges(entries);
   const components = aggregateProjectComponents(entries);
@@ -320,18 +329,18 @@ export async function exportMarketingOfferPdf(entries: ProjectPricingView[], sum
     pages,
     "Vybrane povrchy a kovania su orientovane na premium dojem, cisty detail, dobru odolnost v kazdodennom pouzivani a konzistentny vizual napriec celou zostavou."
   );
-  drawSummaryCards(pages, summary);
+  drawSummaryCards(pages, summary, currency);
 
   drawSectionTitle(pages, "Prehlad kalkulacie");
   drawKeyValueList(pages, [
-    ["Dosky", formatCurrency(summary.boardsCost)],
-    ["Olepovanie", formatCurrency(summary.edgesCost)],
-    ["Komponenty", formatCurrency(summary.hardwareCost)],
-    ["Modulova praca", formatCurrency(summary.moduleLaborCost)],
-    ["Dodatocna praca projektu", formatCurrency(summary.additionalLaborCost)],
-    ["Medzisucet pred marzou", formatCurrency(summary.subtotalBeforeMargin)],
+    ["Dosky", formatCurrency(summary.boardsCost, currency)],
+    ["Olepovanie", formatCurrency(summary.edgesCost, currency)],
+    ["Komponenty", formatCurrency(summary.hardwareCost, currency)],
+    ["Modulova praca", formatCurrency(summary.moduleLaborCost, currency)],
+    ["Dodatocna praca projektu", formatCurrency(summary.additionalLaborCost, currency)],
+    ["Medzisucet pred marzou", formatCurrency(summary.subtotalBeforeMargin, currency)],
     ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} %`],
-    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice)]
+    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice, currency)]
   ]);
 
   drawAggregateBullets(
@@ -339,19 +348,19 @@ export async function exportMarketingOfferPdf(entries: ProjectPricingView[], sum
     "Pouzite materialy",
     boards,
     (row) =>
-      `${formatNumber(row.quantity)} m2 netto, ${formatNumber(row.pricedQuantity ?? row.quantity)} m2 fakturovane, ${formatCurrency(row.unitPrice)} / m2, spolu ${formatCurrency(row.cost)}.`
+      `${formatNumber(row.quantity)} m2 netto, ${formatNumber(row.pricedQuantity ?? row.quantity)} m2 fakturovane, ${formatCurrency(row.unitPrice, currency)} / m2, spolu ${formatCurrency(row.cost, currency)}.`
   );
   drawAggregateBullets(
     pages,
     "Hrany a dokoncovacie prvky",
     edges,
-    (row) => `${formatNumber(row.quantity)} lm, ${formatCurrency(row.unitPrice)} / lm, spolu ${formatCurrency(row.cost)}.`
+    (row) => `${formatNumber(row.quantity)} lm, ${formatCurrency(row.unitPrice, currency)} / lm, spolu ${formatCurrency(row.cost, currency)}.`
   );
   drawAggregateBullets(
     pages,
     "Katalogove komponenty",
     components,
-    (row) => `${formatNumber(row.quantity)} ks, ${formatCurrency(row.unitPrice)} / ks, spolu ${formatCurrency(row.cost)}.`
+    (row) => `${formatNumber(row.quantity)} ks, ${formatCurrency(row.unitPrice, currency)} / ks, spolu ${formatCurrency(row.cost, currency)}.`
   );
 
   drawTable(
@@ -360,11 +369,11 @@ export async function exportMarketingOfferPdf(entries: ProjectPricingView[], sum
     ["Modul", "Dosky", "Hrany", "Komponenty", "Praca", "Celkom"],
     entries.map((entry) => [
       entry.label,
-      formatCurrency(entry.result.pricing.groups.boards.cost),
-      formatCurrency(entry.result.pricing.groups.edge_bands.cost),
-      formatCurrency(entry.result.pricing.groups.hardware.cost),
-      formatCurrency(entry.result.pricing.laborCostFixed),
-      formatCurrency(entry.result.pricing.finalPrice)
+      formatCurrency(entry.result.pricing.groups.boards.cost, currency),
+      formatCurrency(entry.result.pricing.groups.edge_bands.cost, currency),
+      formatCurrency(entry.result.pricing.groups.hardware.cost, currency),
+      formatCurrency(entry.result.pricing.laborCostFixed, currency),
+      formatCurrency(entry.result.pricing.finalPrice, currency)
     ]),
     [340, 150, 150, 150, 130, 160]
   );

@@ -3,6 +3,7 @@ import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { ProjectQuoteSettingsInput } from "../layout/bom/projectQuote";
+import type { PriceCurrency } from "../core/pricing/currency";
 import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 import { createButtonElement } from "./propsPanelElements";
 
@@ -13,6 +14,7 @@ type BomPanelArgs = {
   kitchenCtx: KitchenContext;
   catalog: ClientCatalog;
   quoteSettings?: ProjectQuoteSettingsInput;
+  displayCurrency?: PriceCurrency;
 };
 
 function mountPanelError(container: HTMLElement, message: string) {
@@ -66,13 +68,15 @@ export function openBomPanel(args: BomPanelArgs) {
       title.textContent = "Kusovník";
       content.innerHTML = "";
       mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.customFurniture, args.kitchenCtx, args.catalog, {
-        quoteSettings: args.quoteSettings
+        quoteSettings: args.quoteSettings,
+        displayCurrency: args.displayCurrency,
+        lockDisplayCurrency: args.displayCurrency !== undefined
       });
     })
     .catch(() => mountPanelError(content, "BOM could not be loaded."));
 }
 
-export function openPricingCatalog(catalog: ClientCatalog) {
+export function openPricingCatalog(catalog: ClientCatalog, displayCurrency: PriceCurrency = "EUR") {
   const overlay = document.createElement("div");
   overlay.className = "pricing-catalog-modal";
   overlay.style.position = "fixed";
@@ -128,6 +132,6 @@ export function openPricingCatalog(catalog: ClientCatalog) {
     if (event.target === overlay) close();
   });
 
-  mountPricingCatalogPanel(content, catalog);
+  mountPricingCatalogPanel(content, catalog, displayCurrency);
   document.body.appendChild(overlay);
 }

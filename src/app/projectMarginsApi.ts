@@ -1,4 +1,5 @@
 import type { ProjectMarginCategory, ProjectMarginTarget } from "../core/project-margins/project-margin-types";
+import { isPriceCurrency } from "../core/pricing/currency";
 import type { ProjectMarginSettingsOperation, ProjectMarginsView } from "../layout/bom/projectMargins";
 
 export class ProjectMarginsApiError extends Error {
@@ -87,7 +88,7 @@ function unwrapProjectMarginsView(data: unknown): ProjectMarginsView {
   if (
     typeof view.revision !== "number"
     || typeof view.editable !== "boolean"
-    || view.currency !== "EUR"
+    || !isPriceCurrency(view.currency)
     || !Array.isArray(view.groups)
     || !Array.isArray(view.warnings)
     || !view.summary

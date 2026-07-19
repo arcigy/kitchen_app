@@ -88,7 +88,7 @@ async function openProjectCreateForm(page) {
 
 async function clickBottomView(page, label) {
   const clicked = await page.evaluate((wanted) => {
-    const button = [...document.querySelectorAll("[data-bottom-view-key]")]
+    const button = [...document.querySelectorAll("[data-bottom-view-key], .viewer-tab")]
       .find((item) => (item.textContent || "").trim() === wanted);
     if (!button) return false;
     button.click();

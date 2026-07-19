@@ -55,7 +55,8 @@
     "db:seed": "tsx scripts/dbSeedArcigy.ts",
     "db:seed:pino-nobilia": "tsx scripts/dbSeedPinoNobilia.ts",
     "db:assign-client-modules": "tsx scripts/assignClientModules.ts",
-    "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts"
+    "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts",
+    "db:set-client-currency": "tsx scripts/setClientCurrency.ts"
   },
   "dependencies": {
     "fflate": "^0.8.2",

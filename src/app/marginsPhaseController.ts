@@ -58,6 +58,7 @@ export type MarginsPhaseControllerApi = {
 
 export type MarginsPhaseControllerArgs = {
   container: HTMLElement;
+  footerContainer?: HTMLElement;
   getProjectId: () => string | null;
   onViewChanged?: (view: ProjectMarginsView) => void;
   api?: Partial<MarginsPhaseControllerApi>;
@@ -103,7 +104,7 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       onResetGroup: resetGroup,
       onCommitItem: commitItem,
       onResetItem: resetItem
-    });
+    }, { footerContainer: args.footerContainer });
     return panel;
   };
 

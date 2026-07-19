@@ -1,4 +1,5 @@
 import type { ClientCatalog, ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import {
   createDefaultProjectMaterialAssignments,
   createProjectMaterialsView,
@@ -58,6 +59,7 @@ export type MaterialsPhaseControllerArgs = {
   onCancelSupplierBridge?: () => Promise<void>;
   api?: Partial<MaterialsPhaseControllerApi>;
   now?: () => string;
+  displayCurrency?: PriceCurrency;
 };
 
 const DEFAULT_API: MaterialsPhaseControllerApi = {
@@ -85,7 +87,8 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       onCommitId: commitId,
       onOpenSupplier: args.onOpenSupplier,
       onCancelSupplierBridge: args.onCancelSupplierBridge,
-      onSplitEdge: splitEdge
+      onSplitEdge: splitEdge,
+      displayCurrency: args.displayCurrency
     });
     panel.updateSupplierBridge(supplierBridgeState);
     return panel;

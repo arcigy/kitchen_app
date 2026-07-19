@@ -2,6 +2,8 @@ import type http from "node:http";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ClientContext } from "../core/client/client-context";
+import type { ClientProfile } from "../core/client/client-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import {
   normalizeProjectMarginSettingsState,
   type ProjectMarginCategory,
@@ -28,7 +30,7 @@ import type { KitchenContext } from "../layout/kitchenContext";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import { resolveProjectMaterialInputs } from "./projectMaterialQuantityResolver";
 import { createServerProjectRepository } from "./projectRepository";
-import { createServerCatalogRepository } from "./serverRepositories";
+import { createServerCatalogRepository, loadServerClientProfile } from "./serverRepositories";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -41,6 +43,7 @@ export type ProjectMarginsEndpointDeps = {
   sendJson: SendJson;
   createProjectRepository?: () => ProjectRepository;
   createCatalogRepository?: () => ClientCatalogRepository;
+  loadClientProfile?: (clientId: string) => Promise<ClientProfile | null>;
 };
 
 type ProjectMarginsRoute = { projectId: string };
@@ -162,12 +165,15 @@ export function resolveProjectMarginKitchenContext(
 export function projectMarginsViewFromSave(
   save: ProjectSaveFile,
   catalog: ClientCatalog,
-  editable: boolean
+  editable: boolean,
+  currency: PriceCurrency = "EUR"
 ): ProjectMarginsView {
   const { entries, warnings } = entriesFromSave(save, catalog);
   return buildProjectMarginsView(entries, normalizeProjectMarginSettingsState(save.appState.quoteSettings), {
     editable,
-    warnings
+    warnings,
+    currency,
+    materialAssignments: save.appState.materialAssignments.assignments
   });
 }
 
@@ -191,10 +197,14 @@ export async function handleProjectMarginsApi(
 
   const repository = deps.createProjectRepository?.() ?? createServerProjectRepository({ projectRoot: deps.projectRoot });
   const catalogRepository = deps.createCatalogRepository?.() ?? createServerCatalogRepository(deps.projectRoot);
-  const catalog = await catalogRepository.ensureCatalogExists(ctx);
+  const [catalog, profile] = await Promise.all([
+    catalogRepository.ensureCatalogExists(ctx),
+    (deps.loadClientProfile ?? loadServerClientProfile)(ctx.clientId)
+  ]);
+  const currency = profile?.defaults.currency ?? "EUR";
   const save = await createProjectService(repository).loadProject(ctx, route.projectId);
   const currentState = normalizeProjectMarginSettingsState(save.appState.quoteSettings);
-  const currentView = projectMarginsViewFromSave(save, catalog, ctx.role !== "viewer");
+  const currentView = projectMarginsViewFromSave(save, catalog, ctx.role !== "viewer", currency);
 
   if (req.method === "GET") {
     deps.sendJson(res, 200, { ok: true, view: currentView });
@@ -236,7 +246,7 @@ export async function handleProjectMarginsApi(
       revision,
       nextState
     );
-    deps.sendJson(res, 200, { ok: true, view: projectMarginsViewFromSave(updatedSave, catalog, true) });
+    deps.sendJson(res, 200, { ok: true, view: projectMarginsViewFromSave(updatedSave, catalog, true, currency) });
     return true;
   } catch (error) {
     if (error instanceof ProjectMarginRevisionConflictError) {

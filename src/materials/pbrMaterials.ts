@@ -16,7 +16,7 @@ type LoadedSet = {
 };
 
 const loader = new THREE.TextureLoader();
-const textureCache = new Map<string, Promise<LoadedSet>>();
+const textureCache = new Map<string, Promise<LoadedSet | null>>();
 const materialCache = new Map<string, THREE.MeshStandardMaterial>();
 
 const MATERIAL_META: Record<PbrMaterialId, { worldSizeM: number }> = {
@@ -82,6 +82,14 @@ function loadSet(id: PbrMaterialId): Promise<LoadedSet> {
   );
 }
 
+export async function recoverPbrTextureSet(load: () => Promise<LoadedSet>): Promise<LoadedSet | null> {
+  try {
+    return await load();
+  } catch {
+    return null;
+  }
+}
+
 export function getPbrWoodMaterial(params: { fallbackColor: string; ref: PbrMaterialRef }): THREE.MeshStandardMaterial {
   return getPbrMaterial(params);
 }
@@ -114,12 +122,13 @@ export function getPbrMaterial(params: {
   const setPromise =
     textureCache.get(params.ref.id) ??
     (() => {
-      const p = loadSet(params.ref.id);
+      const p = recoverPbrTextureSet(() => loadSet(params.ref.id));
       textureCache.set(params.ref.id, p);
       return p;
     })();
 
   void setPromise.then((set) => {
+    if (!set) return;
     const rot = params.ref.rotationDeg ?? 0;
 
     const baseColor = cloneForUse(set.baseColor);

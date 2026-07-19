@@ -5,6 +5,7 @@ import {
   type ProjectMarginSettingsState
 } from "../../core/project-margins/project-margin-types";
 import type { PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
+import type { ProjectMaterialAssignment } from "../../core/project-materials/project-material-types";
 import { buildProjectPricingPayload, type ProjectPricingView } from "./projectPricing";
 import { buildProjectQuoteSummary } from "./projectQuote";
 import {
@@ -18,6 +19,7 @@ function pricedItem(args: {
   group?: string;
   cost: number | null;
   itemType?: PortableQuoteBomItem["itemType"];
+  quantity?: number;
 }): PortableQuoteBomItem {
   const itemType = args.itemType ?? "board";
   return {
@@ -29,7 +31,7 @@ function pricedItem(args: {
     pricingBasis: itemType === "hardware" ? "piece" : "sheet_area",
     pricingUnit: itemType === "hardware" ? "pcs" : "m2",
     quantity: 1,
-    pricingQuantity: 1,
+    pricingQuantity: args.quantity ?? 1,
     materialGroup: args.group ?? "body",
     itemCost: args.cost,
     unitPrice: args.cost,
@@ -98,6 +100,62 @@ function initializedState(overrides: Partial<ProjectMarginSettingsState> = {}): 
 }
 
 describe("project margin calculation", () => {
+  it("uses effective assigned material snapshots, including scoped overrides, as the CZK cost authority", () => {
+    const assignment = (
+      assignmentId: string,
+      unitPrice: number,
+      displayName: string
+    ): ProjectMaterialAssignment => ({
+      assignmentId,
+      category: "corpus",
+      kind: "material",
+      materialId: displayName.toLowerCase().replaceAll(" ", "-"),
+      customValues: {},
+      source: "user",
+      snapshots: {
+        material: {
+          definition: {
+            id: displayName.toLowerCase().replaceAll(" ", "-"),
+            name: displayName,
+            displayName,
+            pricingUnit: "m2"
+          } as never,
+          unitPrice,
+          currency: "CZK",
+          priceListId: "supplier-observation:demos",
+          capturedAt: "2026-07-18T00:00:00.000Z"
+        }
+      },
+      updatedAt: "2026-07-18T00:00:00.000Z"
+    });
+    const view = buildProjectMarginsView([
+      entry({ instanceId: "a", items: [pricedItem({ id: "side", cost: 1, quantity: 2 })] }),
+      entry({ instanceId: "b", items: [pricedItem({ id: "side", cost: 1, quantity: 2 })] })
+    ], initializedState({ defaultMarginPercent: 10 }), {
+      currency: "CZK",
+      materialAssignments: [
+        assignment("material-assignment:corpus", 100, "Demos general"),
+        assignment("material-assignment:module:a:corpus:side", 250, "Demos override")
+      ]
+    });
+
+    const items = view.groups.find((group) => group.category === "corpus")!.items;
+    expect(view.currency).toBe("CZK");
+    expect(items.map((item) => [item.scopeId, item.resourceLabel, item.baseCost])).toEqual([
+      ["module:a", "Demos override", 500],
+      ["module:b", "Demos general", 200]
+    ]);
+    expect(view.summary).toMatchObject({ baseCost: 700, marginAmount: 70, finalPrice: 770 });
+  });
+
+  it("converts legacy EUR BOM costs to the client display currency when no assignment exists", () => {
+    const view = buildProjectMarginsView([
+      entry({ instanceId: "a", items: [pricedItem({ id: "side", cost: 100 })] })
+    ], initializedState(), { currency: "CZK" });
+
+    expect(view.groups.find((group) => group.category === "corpus")!.baseCost).toBe(2419.3);
+  });
+
   it("preserves the legacy project-wide markup total exactly", () => {
     const view = buildProjectMarginsView([
       entry({ instanceId: "a", items: [pricedItem({ id: "corpus", cost: 100 })], labor: 25 }),

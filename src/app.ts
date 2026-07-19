@@ -775,11 +775,16 @@ export function startApp(initialArgs: AppArgs) {
   S.history = history;
 
   const openBomPanelForState = (panelArgs: Pick<AppState, "instances" | "kitchenWorktops" | "customFurniture" | "kitchenCtx">) => {
-    openBomPanel({ ...panelArgs, catalog: clientCatalog, quoteSettings: projectMarginSettings });
+    openBomPanel({
+      ...panelArgs,
+      catalog: clientCatalog,
+      quoteSettings: projectMarginSettings,
+      displayCurrency: args.clientProfile?.defaults.currency
+    });
   };
 
   const openPricingCatalogForState = () => {
-    openPricingCatalog(clientCatalog);
+    openPricingCatalog(clientCatalog, args.clientProfile?.defaults.currency ?? "EUR");
   };
 
   document.querySelector<HTMLButtonElement>("[data-open-bom-panel]")?.addEventListener("click", () => {
@@ -3345,6 +3350,7 @@ export function startApp(initialArgs: AppArgs) {
   materialsPhaseController = createMaterialsPhaseController({
     container: document.getElementById("materialsPhase")!,
     catalog: clientCatalog,
+    displayCurrency: args.clientProfile?.defaults.currency,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     getQuantities: buildProjectMaterialQuantities,
     getScopes: () => buildProjectMaterialScopes({
@@ -3371,6 +3377,7 @@ export function startApp(initialArgs: AppArgs) {
   });
   marginsPhaseController = createMarginsPhaseController({
     container: document.getElementById("marginsPhase")!,
+    footerContainer: document.querySelector<HTMLElement>("[data-margin-footer]")!,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     onViewChanged: (view) => {
       projectMarginSettings = cloneJson(view.settings);
@@ -3383,7 +3390,6 @@ export function startApp(initialArgs: AppArgs) {
     materialsPhase: {
       mainEl: document.getElementById("main")!,
       hostEl: document.getElementById("materialsPhase")!,
-      viewsEl: document.querySelector<HTMLElement>("[data-bottom-views]")!,
       warningsEl: document.querySelector<HTMLElement>("[data-material-warning-panel]")!,
       warningListEl: materialWarningListEl
     },
@@ -3403,7 +3409,8 @@ export function startApp(initialArgs: AppArgs) {
     },
     marginsPhase: {
       mainEl: document.getElementById("main")!,
-      hostEl: document.getElementById("marginsPhase")!
+      hostEl: document.getElementById("marginsPhase")!,
+      footerEl: document.querySelector<HTMLElement>("[data-margin-footer]")!
     },
     marginsController: {
       open: async () => {

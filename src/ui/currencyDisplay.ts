@@ -1,11 +1,19 @@
-export type PriceDisplayCurrency = "CZK" | "EUR";
+import {
+  convertPriceCurrency,
+  EUR_TO_CZK_RATE,
+  isPriceCurrency,
+  priceCurrencyLocale,
+  type PriceCurrency
+} from "../core/pricing/currency";
+
+export type PriceDisplayCurrency = PriceCurrency;
 
 export const DEFAULT_PRICE_DISPLAY_CURRENCY: PriceDisplayCurrency = "CZK";
-export const EUR_TO_CZK_RATE = 24.193;
+export { EUR_TO_CZK_RATE };
 export const PRICE_DISPLAY_CURRENCY_STORAGE_KEY = "arcigy.priceDisplayCurrency";
 
 export function isPriceDisplayCurrency(value: string | null | undefined): value is PriceDisplayCurrency {
-  return value === "CZK" || value === "EUR";
+  return isPriceCurrency(value);
 }
 
 export function readPriceDisplayCurrency(): PriceDisplayCurrency {
@@ -26,7 +34,7 @@ export function writePriceDisplayCurrency(currency: PriceDisplayCurrency) {
 }
 
 export function eurToDisplayCurrency(valueEur: number, currency: PriceDisplayCurrency): number {
-  return currency === "CZK" ? valueEur * EUR_TO_CZK_RATE : valueEur;
+  return convertPriceCurrency(valueEur, "EUR", currency);
 }
 
 export function czkToEur(valueCzk: number): number {
@@ -34,7 +42,7 @@ export function czkToEur(valueCzk: number): number {
 }
 
 export function formatDisplayCurrency(valueEur: number, currency: PriceDisplayCurrency): string {
-  return new Intl.NumberFormat(currency === "CZK" ? "cs-CZ" : "sk-SK", {
+  return new Intl.NumberFormat(priceCurrencyLocale(currency), {
     style: "currency",
     currency,
     maximumFractionDigits: 2

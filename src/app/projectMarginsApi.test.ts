@@ -19,6 +19,15 @@ const view = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("project margins API adapter", () => {
+  it("accepts the client-profile CZK currency in the server view", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      view: { ...view, currency: "CZK" }
+    }), { status: 200 })));
+
+    await expect(loadProjectMargins("project-a")).resolves.toMatchObject({ currency: "CZK" });
+  });
+
   it("sends group apply-all as one revisioned operation", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe("PUT");
