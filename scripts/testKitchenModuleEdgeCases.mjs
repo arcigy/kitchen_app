@@ -847,7 +847,9 @@ async function runUpperFlapUiPlacementCases(page) {
   const groupId = created.group.id;
 
   await page.getByRole("button", { name: "Upraviť kuchyňu" }).click();
-  await page.getByRole("button", { name: "Pôdorys" }).click();
+  await page.getByRole("button", { name: "Zobrazenie", exact: true }).click();
+  await page.getByRole("button", { name: /^(2D pohľad|2D View)$/ }).click();
+  await page.getByRole("button", { name: "Kuchyňa", exact: true }).click();
   await page.locator('#moduleCatalog button[data-module-type="flap_shelves_low"]').click();
   const target = await evalApi(page, () => {
     const api = window.__kitchenDebug;
