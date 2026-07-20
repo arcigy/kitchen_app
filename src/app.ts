@@ -35,6 +35,7 @@ import {
   getSelectionMeasureBindings,
   type MeasureSelectionTarget
 } from "./app/measureEditing";
+import { createDeferredLinkedMeasureInputs } from "./app/deferredLinkedMeasureInputs";
 import { createSnapOverlay } from "./app/snapOverlay";
 import { createTechnicalDimensionManager } from "./app/technicalDimensions";
 import { createTemporaryDimensionManager } from "./app/temporaryDimensionManager";
@@ -2094,11 +2095,12 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayStatus("Column: nastav parametre a klikni miesto v podoryse. Esc zrusi.");
     mountProps();
   }
+  const deferredLinkedMeasureInputs = createDeferredLinkedMeasureInputs();
   const propertiesRouter = createPropertiesRouter({
     S,
     args,
     alignState,
-    appendLinkedMeasureInputs: (section: HTMLElement, target: MeasureSelectionTarget | null) => appendLinkedMeasureInputs(section, target),
+    appendLinkedMeasureInputs: deferredLinkedMeasureInputs.append,
     anyOverlap,
     clearAllMeasurements,
     clearUnderlay,
@@ -4250,9 +4252,9 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
 
-  const appendLinkedMeasureInputs = (section: HTMLElement, target: MeasureSelectionTarget | null) => {
+  deferredLinkedMeasureInputs.connect((section: HTMLElement, target: MeasureSelectionTarget | null) => {
     measureInlineEditor.appendLinkedMeasureInputs(section, target);
-  };
+  });
 
   const updateMeasureLabelInteractivity = () => {
     measureInlineEditor.updateMeasureLabelInteractivity();
