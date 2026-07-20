@@ -44,7 +44,11 @@ describe("module catalog previews", () => {
     expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers", " /custom/preview.png ")))
       .toBe("/custom/preview.png");
     expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers")))
-      .toBe("/module-icons/furniture/fwm_catalog_base_drawers.png");
+      .toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
+    expect(resolveModuleCatalogPreviewImage(modulePackage(
+      "fwm_catalog_base_drawers",
+      "/module-icons/furniture/fwm_catalog_base_drawers.png"
+    ))).toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
   });
 
   it("replaces a broken preview with the generated SVG fallback", () => {
@@ -58,7 +62,7 @@ describe("module catalog previews", () => {
     });
 
     const image = host.querySelector("img");
-    expect(image?.getAttribute("src")).toBe("/module-icons/furniture/fwm_catalog_base_drawers.png");
+    expect(image?.getAttribute("src")).toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
     expect(image?.getAttribute("alt")).toBe("");
     expect(fallbackSvg).not.toHaveBeenCalled();
 

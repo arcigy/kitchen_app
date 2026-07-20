@@ -100,12 +100,26 @@ async function main() {
       }));
       const catalogRect = catalog?.getBoundingClientRect();
       const viewerRect = document.querySelector("#viewer")?.getBoundingClientRect();
-      const cardRects = [...(catalog?.querySelectorAll(".module-catalog-card") ?? [])].map((card) => {
+      const genericCards = [...(catalog?.querySelectorAll(".module-catalog-card:not(.module-catalog-card-vendor)") ?? [])];
+      const cardRects = genericCards.map((card) => {
         const rect = card.getBoundingClientRect();
         return {
           width: Math.round(rect.width),
           height: Math.round(rect.height),
           top: Math.round(rect.top)
+        };
+      });
+      const iconRects = genericCards.map((card) => {
+        const rect = card.querySelector(".module-catalog-card-icon")?.getBoundingClientRect();
+        return { width: Math.round(rect?.width ?? 0), height: Math.round(rect?.height ?? 0) };
+      });
+      const labelMetrics = genericCards.map((card) => {
+        const label = card.querySelector(".module-catalog-card-label");
+        return {
+          clientHeight: label?.clientHeight ?? 0,
+          clientWidth: label?.clientWidth ?? 0,
+          scrollHeight: label?.scrollHeight ?? 0,
+          scrollWidth: label?.scrollWidth ?? 0
         };
       });
       const maxCardsPerRow = Math.max(
@@ -124,6 +138,8 @@ async function main() {
         catalogWidth: catalogRect?.width ?? 0,
         catalogText: (catalog?.textContent || "").toLowerCase(),
         children,
+        iconRects,
+        labelMetrics,
         maxCardsPerRow,
         text,
         toolTitles,
@@ -139,9 +155,11 @@ async function main() {
     assert(!kitchenTab.catalogHidden && /modul/.test(kitchenTab.catalogText), "Kitchen module catalog is not visible", kitchenTab);
     assert(kitchenTab.catalogWidth >= 280 && kitchenTab.catalogWidth <= 360 && kitchenTab.viewerWidth > kitchenTab.catalogWidth * 2, "Kitchen module catalog layout is stretched", kitchenTab);
     assert(
-      kitchenTab.maxCardsPerRow >= 5 &&
-        kitchenTab.cardRects.some((rect) => rect.width <= 60 && rect.height <= 64 && Math.abs(rect.width - rect.height) <= 8),
-      "Kitchen module catalog cards are not compact five-column squares",
+      kitchenTab.maxCardsPerRow === 3 &&
+        kitchenTab.cardRects.every((rect) => rect.width >= 80 && rect.height >= 116) &&
+        kitchenTab.iconRects.every((rect) => rect.height >= 72) &&
+        kitchenTab.labelMetrics.every((label) => label.scrollHeight <= label.clientHeight + 1 && label.scrollWidth <= label.clientWidth + 1),
+      "Kitchen module catalog cards do not preserve the larger three-column preview and full readable label contract",
       kitchenTab
     );
     assert(

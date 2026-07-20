@@ -19,7 +19,7 @@ describe("FWM module preview images", () => {
   it("maps every approved catalog family to a shipped PNG asset", () => {
     for (const moduleType of previewedModuleTypes) {
       const publicUrl = getFwmModulePreviewImage(moduleType);
-      expect(publicUrl).toBe(`/module-icons/furniture/${moduleType}.png`);
+      expect(publicUrl).toBe(`/module-icons/furniture/v2/${moduleType}.png`);
       expect(existsSync(resolve(process.cwd(), "public", publicUrl!.slice(1)))).toBe(true);
     }
   });

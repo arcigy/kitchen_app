@@ -10986,8 +10986,8 @@ canvas.material-modify-picking {
 
 .module-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .module-catalog-grid-vendor {
@@ -11006,17 +11006,16 @@ canvas.material-modify-picking {
 }
 
 .module-catalog-card {
-  aspect-ratio: 1 / 1;
-  min-height: 0;
-  padding: 4px;
+  min-height: 116px;
+  padding: 6px;
   display: grid;
-  grid-template-rows: 24px minmax(0, 1fr);
-  align-items: center;
+  grid-template-rows: 72px auto;
+  align-items: start;
   justify-items: center;
-  gap: 2px;
-  font-size: 8.5px;
+  gap: 5px;
+  font-size: 9.5px;
   font-weight: 720;
-  line-height: 1.05;
+  line-height: 1.15;
   text-align: center;
 }
 
@@ -11035,15 +11034,15 @@ canvas.material-modify-picking {
 
 .module-catalog-card-icon {
   width: 100%;
-  height: 24px;
+  height: 72px;
   display: grid;
   place-items: center;
   color: #1f2937;
 }
 
 .module-catalog-card svg {
-  width: 27px;
-  height: 22px;
+  width: 56px;
+  height: 48px;
   display: block;
 }
 
@@ -11056,11 +11055,10 @@ canvas.material-modify-picking {
 
 .module-catalog-card-label {
   width: 100%;
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
+  overflow: visible;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .module-catalog-card-meta {

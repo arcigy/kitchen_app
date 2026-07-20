@@ -3,7 +3,11 @@ import { getFwmModulePreviewImage } from "../modules/fwmFurniture/modulePreviewI
 
 export function resolveModuleCatalogPreviewImage(modulePackage: FurnQuoteModulePackage): string | undefined {
   const declaredPreview = modulePackage.ui.previewImage?.trim();
-  return declaredPreview || getFwmModulePreviewImage(modulePackage.module.moduleType);
+  const moduleType = modulePackage.module.moduleType;
+  const builtInPreview = getFwmModulePreviewImage(moduleType);
+  const legacyBuiltInPreview = `/module-icons/furniture/${moduleType}.png`;
+  if (builtInPreview && (!declaredPreview || declaredPreview === legacyBuiltInPreview)) return builtInPreview;
+  return declaredPreview || builtInPreview;
 }
 
 export function renderModuleCatalogPreview(args: {

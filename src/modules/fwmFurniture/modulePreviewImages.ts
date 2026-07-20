@@ -1,4 +1,4 @@
-const FWM_MODULE_PREVIEW_ROOT = "/module-icons/furniture";
+const FWM_MODULE_PREVIEW_ROOT = "/module-icons/furniture/v2";
 
 const FWM_MODULE_PREVIEW_IMAGE_BY_TYPE: Readonly<Record<string, string>> = {
   base_bottle_pullout: `${FWM_MODULE_PREVIEW_ROOT}/base_bottle_pullout.png`,
