@@ -623,7 +623,7 @@ describe("FWM furniture module packages", () => {
     expect(modulePackage!.module.moduleType).toBe("wall_corner_90");
     expect(modulePackage!.module.moduleType.startsWith("fwm_catalog_")).toBe(false);
     expect(modulePackage!.module.displayName).toBe("Horna rohova skrinka 90");
-    expect(modulePackage!.ui.previewImage).toBe("/module-icons/furniture/v2/variants/wall_corner_90.png");
+    expect(modulePackage!.ui.previewImage).toBe("/module-icons/furniture/v3/variants/wall_corner_90.png");
     expect(modulePackage!.geometry.mode).toBe("trusted-runtime");
     if (modulePackage!.geometry.mode !== "trusted-runtime") throw new Error("Expected trusted runtime geometry.");
     expect(modulePackage!.geometry.runtimeBuilderKey).toBe("fwm_catalog_wall_cabinet.v1");
