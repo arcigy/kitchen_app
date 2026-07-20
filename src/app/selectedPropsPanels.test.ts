@@ -18,6 +18,9 @@ import type { AppState } from "../layout/appState";
 import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
+import { createCatalogModuleDefinitionFromPackage } from "../core/module-package/module-package-catalog";
+import { createModulePackageDefaultParams } from "../core/module-package/runtime/module-runtime-adapter";
 import { extendedFurnitureModulePackages } from "../system/module-packages/extendedFurniture";
 
 function makeColumnParams(): ColumnParams {
@@ -612,25 +615,31 @@ describe("selected props panels", () => {
     expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
   });
 
-  it("keeps module rotation control mounted with current degrees and measure target", () => {
+  it("replaces the technical module header with a compatible module selector and swaps immediately", () => {
     installFakeDocument();
     const { props, rows, section } = makePropertiesPanelHarness();
     const inst = makeLayoutInstance();
+    const currentPackage = extendedFurnitureModulePackages.find((candidate) => candidate.module.moduleType === "fwm_catalog_base_doors")!;
+    const targetPackage = extendedFurnitureModulePackages.find((candidate) => candidate.module.moduleType === "fwm_catalog_base_drawers")!;
+    const excludedCornerPackage = extendedFurnitureModulePackages.find((candidate) => candidate.module.moduleType === "fwm_catalog_base_corner")!;
+    const catalog = { clientId: "client_test", ...createSystemCatalogSeed() };
+    catalog.modules = [currentPackage, targetPackage, excludedCornerPackage].map((modulePackage) =>
+      createCatalogModuleDefinitionFromPackage(modulePackage, { catalog, enabled: true })
+    );
+    inst.params = createModulePackageDefaultParams({ modulePackage: currentPackage, catalog }) as LayoutInstance["params"];
+    (inst.params as Record<string, unknown>).width = 777;
+    const originalPosition = inst.root.position;
+    const originalRotation = inst.root.rotation;
     const ctx = {
       findInstance: vi.fn(() => inst),
       showNoProps: vi.fn(),
       props,
-      pinnedInstanceIds: new Set<string>(),
-      instanceFitsRoom: vi.fn(() => true),
-      anyOverlap: vi.fn(() => false),
-      moduleOverlapsWalls: vi.fn(() => false),
-      moduleOverlapsKitchenWorktops: vi.fn(() => false),
       commitHistory: vi.fn(),
       S: {} as AppState,
       mountProps: vi.fn(),
-      modulePackages: [],
+      modulePackages: [currentPackage, targetPackage, excludedCornerPackage],
       args: { propertiesEl: section },
-      clientCatalog: {},
+      clientCatalog: catalog,
       rebuildInstance: vi.fn(() => true),
       appendLinkedMeasureInputs: vi.fn(),
       mountModuleCommercialProperties: vi.fn()
@@ -638,13 +647,33 @@ describe("selected props panels", () => {
 
     mountModulePropsPanel(ctx as unknown as Parameters<typeof mountModulePropsPanel>[0], "module-1");
 
-    expect(props.setTitle).toHaveBeenCalledWith("Module (module-1)");
-    expect(rows.map((row) => row.label)).toEqual(["Rotation (deg)", "Pinned"]);
-    expect(rows[0]!.control.type).toBe("number");
-    expect(rows[0]!.control.step).toBe("1");
-    expect(rows[0]!.control.value).toBe("90");
-    expect(rows[1]!.control.type).toBe("checkbox");
-    expect(rows[1]!.control.checked).toBe(false);
+    expect(props.setTitle).toHaveBeenCalledWith("Modul");
+    expect(rows.map((row) => row.label)).toEqual(["Typ modulu"]);
+    expect(rows[0]!.control.value).toBe(currentPackage.module.modulePackageId);
+    expect(rows[0]!.control.children.map((child) => child.value)).toEqual(expect.arrayContaining([
+      currentPackage.module.modulePackageId,
+      targetPackage.module.modulePackageId
+    ]));
+    expect(rows[0]!.control.children.map((child) => child.value)).not.toContain(excludedCornerPackage.module.modulePackageId);
+
+    rows[0]!.control.value = targetPackage.module.modulePackageId;
+    rows[0]!.control.dispatch("change");
+
+    expect(ctx.rebuildInstance).toHaveBeenCalledOnce();
+    expect(ctx.rebuildInstance).toHaveBeenCalledWith(inst, expect.objectContaining({
+      preserveBackAnchor: true,
+      sourceKey: "moduleType",
+      previousParams: expect.objectContaining({ modulePackageId: currentPackage.module.modulePackageId, width: 777 })
+    }));
+    expect(inst.params).toMatchObject({
+      modulePackageId: targetPackage.module.modulePackageId,
+      type: targetPackage.module.moduleType,
+      width: 777
+    });
+    expect(inst.root.position).toBe(originalPosition);
+    expect(inst.root.rotation).toBe(originalRotation);
+    expect(ctx.commitHistory).toHaveBeenCalledOnce();
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "module", instanceId: "module-1" });
     expect(ctx.mountModuleCommercialProperties).toHaveBeenCalledWith(section.children.at(-1), "module-1");
     expect(section.children.at(-1)?.className).toBe("module-commercial-props-host");
