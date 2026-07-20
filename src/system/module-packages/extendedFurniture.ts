@@ -1969,6 +1969,7 @@ function createWallCorner90ModulePackage(): FurnQuoteModulePackage {
   const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
   modulePackage.ui = {
     ...modulePackage.ui,
+    previewImage: getFwmModulePreviewImage(WALL_CORNER_90_PACKAGE_ID),
     controls: modulePackage.ui.controls.filter((control) => WALL_CORNER_90_USER_PARAMETER_KEYS.has(control.parameterKey))
   };
   modulePackage.materials = {

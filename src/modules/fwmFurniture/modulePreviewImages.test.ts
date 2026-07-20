@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getFwmModulePreviewImage } from "./modulePreviewImages";
+import { getFwmModulePreviewImage, resolveFwmModulePreviewImage } from "./modulePreviewImages";
 
 const previewedModuleTypes = [
   "base_bottle_pullout",
@@ -26,5 +26,30 @@ describe("FWM module preview images", () => {
 
   it("does not claim an image for module families without an exported preview", () => {
     expect(getFwmModulePreviewImage("fwm_catalog_wall_corner_90")).toBeUndefined();
+  });
+
+  it("maps every DELFI corner variant to a shipped, variant-specific preview", () => {
+    const cases = [
+      ["fwm_catalog_base_corner", "corner_90", "fwm_catalog_base_corner__corner_90.png"],
+      ["fwm_catalog_base_corner", "corner_90_1p", "fwm_catalog_base_corner__corner_90.png"],
+      ["fwm_catalog_base_corner", "corner_chamfered", "fwm_catalog_base_corner__corner_chamfered.png"],
+      ["fwm_catalog_wall_cabinet", "corner_90", "fwm_catalog_wall_cabinet__corner_90.png"],
+      ["fwm_catalog_wall_cabinet", "corner_chamfered_1p", "fwm_catalog_wall_cabinet__corner_chamfered.png"],
+      ["fwm_catalog_wall_cabinet", "corner_open_chamfered", "fwm_catalog_wall_cabinet__corner_open_chamfered.png"]
+    ] as const;
+
+    for (const [moduleType, variant, fileName] of cases) {
+      const publicUrl = resolveFwmModulePreviewImage({ moduleType, variant });
+      expect(publicUrl).toBe(`/module-icons/furniture/v2/variants/${fileName}`);
+      expect(existsSync(resolve(process.cwd(), "public", publicUrl!.slice(1)))).toBe(true);
+    }
+
+    const wallCornerUrl = resolveFwmModulePreviewImage({
+      moduleType: "wall_corner_90",
+      modulePackageId: "wall_corner_90",
+      variant: "corner_90"
+    });
+    expect(wallCornerUrl).toBe("/module-icons/furniture/v2/variants/wall_corner_90.png");
+    expect(existsSync(resolve(process.cwd(), "public", wallCornerUrl!.slice(1)))).toBe(true);
   });
 });
