@@ -35,6 +35,7 @@ import {
   type PinoVendorKitchenCatalogEntry,
 } from "./pinoVendorKitchenCatalog";
 import { getModuleCatalogCardPresentation } from "./moduleCatalogCardPresentation";
+import { renderModuleCatalogPreview } from "./moduleCatalogPreview";
 import { createAxonometricLineSvgFromObject } from "./moduleAxonometricIcon";
 import { t, translateParamLabel } from "../i18n";
 import type { EditorPropsApi, EditorTopbarApi } from "../app/editorModeApis";
@@ -956,9 +957,13 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
             button.title = entry.productTemplateName;
             const icon = document.createElement("span");
             icon.className = "module-catalog-card-icon";
-            icon.innerHTML = moduleCatalogIconSvg(modulePackage, {
-              cacheKey: `${entry.productTemplateId}:${entry.catalogKey}`,
-              params: entry.params,
+            renderModuleCatalogPreview({
+              host: icon,
+              modulePackage,
+              fallbackSvg: () => moduleCatalogIconSvg(modulePackage, {
+                cacheKey: `${entry.productTemplateId}:${entry.catalogKey}`,
+                params: entry.params,
+              }),
             });
             const label = document.createElement("span");
             label.className = vendorPresentation.labelClassName;
@@ -1012,7 +1017,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
             button.title = modulePackage.module.displayName;
             const icon = document.createElement("span");
             icon.className = "module-catalog-card-icon";
-            icon.innerHTML = moduleCatalogIconSvg(modulePackage);
+            renderModuleCatalogPreview({
+              host: icon,
+              modulePackage,
+              fallbackSvg: () => moduleCatalogIconSvg(modulePackage),
+            });
             const label = document.createElement("span");
             label.className = genericPresentation.labelClassName;
             label.textContent = modulePackage.module.displayName;

@@ -11047,6 +11047,13 @@ canvas.material-modify-picking {
   display: block;
 }
 
+.module-catalog-card-preview {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 .module-catalog-card-label {
   width: 100%;
   display: -webkit-box;

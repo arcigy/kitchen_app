@@ -1,0 +1,83 @@
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from "vitest";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
+import { renderModuleCatalogPreview, resolveModuleCatalogPreviewImage } from "./moduleCatalogPreview";
+
+function modulePackage(moduleType: string, previewImage?: string): FurnQuoteModulePackage {
+  return {
+    format: "furnquote-module",
+    packageVersion: 1,
+    module: {
+      modulePackageId: `${moduleType}_package`,
+      moduleType,
+      familyName: moduleType,
+      displayName: moduleType,
+      category: "custom",
+      version: "1.0.0",
+      isSystemModule: true,
+      tags: []
+    },
+    parameters: { parameters: [] },
+    placement: { allowedContexts: ["custom"] },
+    constraints: { dimensionRules: {}, validationRules: [] },
+    snapping: { enabled: false, snapTargets: [], priority: [], snapDistanceMm: 0, rotationSnapDeg: 90 },
+    geometry: { mode: "trusted-runtime", runtimeBuilderKey: "test.v1" },
+    materials: { slots: [] },
+    components: { slots: [] },
+    bom: { rules: [] },
+    pricing: {},
+    ui: { previewImage, groups: [], controls: [] },
+    exports: {},
+    assets: { files: [] },
+    compatibility: {},
+    integrity: {
+      createdAt: "2026-07-20T00:00:00.000Z",
+      updatedAt: "2026-07-20T00:00:00.000Z",
+      author: "test"
+    }
+  };
+}
+
+describe("module catalog previews", () => {
+  it("uses package metadata first and falls back to the built-in image for stored FWM packages", () => {
+    expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers", " /custom/preview.png ")))
+      .toBe("/custom/preview.png");
+    expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers")))
+      .toBe("/module-icons/furniture/fwm_catalog_base_drawers.png");
+  });
+
+  it("replaces a broken preview with the generated SVG fallback", () => {
+    const host = document.createElement("span");
+    const fallbackSvg = vi.fn(() => '<svg data-fallback="true"></svg>');
+
+    renderModuleCatalogPreview({
+      host,
+      modulePackage: modulePackage("fwm_catalog_base_drawers"),
+      fallbackSvg
+    });
+
+    const image = host.querySelector("img");
+    expect(image?.getAttribute("src")).toBe("/module-icons/furniture/fwm_catalog_base_drawers.png");
+    expect(image?.getAttribute("alt")).toBe("");
+    expect(fallbackSvg).not.toHaveBeenCalled();
+
+    image?.dispatchEvent(new Event("error"));
+    expect(fallbackSvg).toHaveBeenCalledOnce();
+    expect(host.querySelector("svg")?.dataset.fallback).toBe("true");
+  });
+
+  it("renders the generated SVG immediately when no preview is available", () => {
+    const host = document.createElement("span");
+    const fallbackSvg = vi.fn(() => '<svg data-fallback="true"></svg>');
+
+    renderModuleCatalogPreview({
+      host,
+      modulePackage: modulePackage("unknown_module"),
+      fallbackSvg
+    });
+
+    expect(fallbackSvg).toHaveBeenCalledOnce();
+    expect(host.querySelector("svg")?.dataset.fallback).toBe("true");
+  });
+});

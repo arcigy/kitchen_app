@@ -15,6 +15,7 @@ import {
   type FwmFurnitureSpec
 } from "../../modules/fwmFurniture/definitions";
 import { FWM_DRAWER_SYSTEM_BRAND_OPTIONS } from "../../modules/fwmFurniture/drawerSystemPresets";
+import { getFwmModulePreviewImage } from "../../modules/fwmFurniture/modulePreviewImages";
 import { createModuleInternalEditingDefinition } from "../../layout/moduleInternalEditing";
 
 const now = "2026-06-09T00:00:00.000Z";
@@ -1464,7 +1465,12 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
       "number";
     return [{ parameterKey: key, controlType, groupId, order: index }];
   }) satisfies ModuleUiDefinition["controls"];
-  return { icon: "box", groups, controls };
+  return {
+    icon: "box",
+    previewImage: getFwmModulePreviewImage(spec.moduleType),
+    groups,
+    controls
+  };
 }
 
 function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavior"] | undefined {
