@@ -1,12 +1,29 @@
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { getFwmModulePreviewImage } from "../modules/fwmFurniture/modulePreviewImages";
+import {
+  getFwmModulePreviewImage,
+  resolveFwmModulePreviewImage
+} from "../modules/fwmFurniture/modulePreviewImages";
+
+function defaultModuleVariant(modulePackage: FurnQuoteModulePackage): unknown {
+  return modulePackage.parameters.parameters.find((parameter) => parameter.key === "variant")?.defaultValue;
+}
 
 export function resolveModuleCatalogPreviewImage(modulePackage: FurnQuoteModulePackage): string | undefined {
   const declaredPreview = modulePackage.ui.previewImage?.trim();
   const moduleType = modulePackage.module.moduleType;
-  const builtInPreview = getFwmModulePreviewImage(moduleType);
+  const genericBuiltInPreview = getFwmModulePreviewImage(moduleType);
+  const builtInPreview = resolveFwmModulePreviewImage({
+    moduleType,
+    modulePackageId: modulePackage.module.modulePackageId,
+    variant: defaultModuleVariant(modulePackage)
+  });
   const legacyBuiltInPreview = `/module-icons/furniture/${moduleType}.png`;
-  if (builtInPreview && (!declaredPreview || declaredPreview === legacyBuiltInPreview)) return builtInPreview;
+  const usesGeneratedFurniturePreview = declaredPreview?.startsWith("/module-icons/furniture/") === true;
+  const usesManagedPreview = !declaredPreview
+    || declaredPreview === legacyBuiltInPreview
+    || declaredPreview === genericBuiltInPreview
+    || usesGeneratedFurniturePreview;
+  if (builtInPreview && usesManagedPreview) return builtInPreview;
   return declaredPreview || builtInPreview;
 }
 
