@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCIGY_MODULE_ICON_RELEASE_ROOT,
   ARCIGY_MODULE_ICON_STYLE,
   ARCIGY_MODULE_ICON_TARGETS,
   resolveArcigyModuleIconTargets
@@ -11,6 +12,8 @@ describe("Arcigy module icon rendering contract", () => {
     expect(ARCIGY_MODULE_ICON_STYLE.edgeThresholdAngleDeg).toBeGreaterThanOrEqual(25);
     expect(ARCIGY_MODULE_ICON_STYLE.cameraAzimuthDeg).toBe(45);
     expect(ARCIGY_MODULE_ICON_STYLE.outputSizePx).toBe(640);
+    expect(ARCIGY_MODULE_ICON_RELEASE_ROOT).toBe("public/module-icons/furniture/v3/variants");
+    expect(ARCIGY_MODULE_ICON_TARGETS.every((target) => target.outputPath.startsWith(`${ARCIGY_MODULE_ICON_RELEASE_ROOT}/`))).toBe(true);
     expect(new Set(ARCIGY_MODULE_ICON_TARGETS.map((target) => target.outputPath)).size)
       .toBe(ARCIGY_MODULE_ICON_TARGETS.length);
     const openNiche = resolveArcigyModuleIconTargets(["wall-corner-open-chamfered"])[0]!;

@@ -1,5 +1,7 @@
 const FWM_MODULE_PREVIEW_ROOT = "/module-icons/furniture/v2";
-const FWM_MODULE_VARIANT_PREVIEW_ROOT = `${FWM_MODULE_PREVIEW_ROOT}/variants`;
+// Variant assets are immutable for one year in production. Bump the release
+// directory whenever their pixels change so browsers cannot keep an old icon.
+const FWM_MODULE_VARIANT_PREVIEW_ROOT = "/module-icons/furniture/v3/variants";
 
 const FWM_MODULE_PREVIEW_IMAGE_BY_TYPE: Readonly<Record<string, string>> = {
   base_bottle_pullout: `${FWM_MODULE_PREVIEW_ROOT}/base_bottle_pullout.png`,
