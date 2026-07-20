@@ -15,6 +15,7 @@ type WorkspaceNavigationControllerArgs = {
   materialsPhase: {
     mainEl: HTMLElement;
     hostEl: HTMLElement;
+    viewsEl: HTMLElement;
     warningsEl: HTMLElement;
     warningListEl: HTMLElement;
   };
@@ -75,6 +76,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.root.classList.remove("archux-materials-phase");
     args.materialsPhase.mainEl.classList.remove("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = true;
+    args.materialsPhase.viewsEl.hidden = false;
     args.materialsPhase.warningsEl.hidden = true;
   };
 
@@ -181,6 +183,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.root.classList.add("archux-materials-phase");
     args.materialsPhase.mainEl.classList.add("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = false;
+    args.materialsPhase.viewsEl.hidden = true;
     args.materialsPhase.warningsEl.hidden = false;
     materialsPhaseActive = true;
     if (args.materialsController) {

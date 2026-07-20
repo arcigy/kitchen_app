@@ -171,9 +171,44 @@ export function renderKitchenAppShell(root: HTMLElement): void {
       <aside id="properties" aria-label="Properties"></aside>
 
       <footer class="archux-bottom" aria-label="Project overview">
-        <section class="archux-levels archux-material-warning-panel" data-material-warning-panel hidden>
+        <section class="archux-levels archux-view-list" data-bottom-default data-bottom-views>
+          <strong>VIEWS</strong>
+          <div class="archux-view-list-scroll">
+            <button type="button" data-bottom-view-key="floorplan"><span>Floorplan</span></button>
+            <button type="button" data-bottom-view-key="3d" class="active"><span>3D</span></button>
+            <button type="button" data-bottom-view-key="elevation:north"><span>North</span></button>
+            <button type="button" data-bottom-view-key="elevation:east"><span>East</span></button>
+            <button type="button" data-bottom-view-key="elevation:south"><span>South</span></button>
+            <button type="button" data-bottom-view-key="elevation:west"><span>West</span></button>
+          </div>
+        </section>
+        <section class="archux-levels archux-material-warning-panel" data-bottom-default data-material-warning-panel hidden>
           <strong>VAROVANIA</strong>
           <div class="archux-material-warning-list" data-material-warning-list></div>
+        </section>
+        <section class="archux-area archux-live-price" data-bottom-default>
+          <strong>BOM / PRICING</strong>
+          <div class="archux-price-total">
+            <span>Status</span>
+            <b>On demand</b>
+          </div>
+          <div class="archux-price-breakdown">
+            <p><span>Live calculation</span><b>Off</b></p>
+            <p><span>Refresh impact</span><b>Reduced</b></p>
+            <p><span>100+ modules</span><b>Ready</b></p>
+          </div>
+          <div class="archux-bom-preview">
+            <span>BOM ITEMS</span>
+            <div>
+              <p><span>Calculated only when opened</span><b>Manual</b></p>
+            </div>
+            <button class="archux-activity-open" type="button" data-open-bom-panel>Open BOM</button>
+          </div>
+        </section>
+        <section class="archux-sheet" data-bottom-default>
+          <strong>SHEET PREVIEW</strong>
+          <div></div>
+          <span>A101 - Floor Plan Level 1</span>
         </section>
         <section class="archux-margin-footer" data-margin-footer hidden></section>
         <section class="archux-activity">

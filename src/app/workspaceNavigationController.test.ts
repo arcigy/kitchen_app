@@ -33,6 +33,7 @@ function materialsPhaseHarness() {
   return {
     mainEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     hostEl: new WorkspaceFakeElement() as unknown as HTMLElement,
+    viewsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     warningsEl: new WorkspaceFakeElement() as unknown as HTMLElement,
     warningListEl: new WorkspaceFakeElement() as unknown as HTMLElement
   };
@@ -163,12 +164,14 @@ describe("createWorkspaceNavigationController", () => {
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect((materialsPhase.mainEl as unknown as WorkspaceFakeElement).classList.contains("archux-materials-phase")).toBe(true);
     expect(root.classList.contains("archux-materials-phase")).toBe(true);
+    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
     expect((materialsPhase.warningsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain("Materiály a komponenty");
 
     await controller.leaveMaterialsPhase();
 
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
+    expect((materialsPhase.viewsEl as unknown as WorkspaceFakeElement).hidden).toBe(false);
   });
 
   it("delegates the live Materials phase to the interactive controller and closes it on exit", async () => {
