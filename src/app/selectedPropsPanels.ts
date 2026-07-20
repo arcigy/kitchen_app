@@ -28,6 +28,7 @@ import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
 import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
 import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
+import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -202,11 +203,6 @@ type ModulePropsContext = {
   findInstance: (id: string) => LayoutInstance | null;
   showNoProps: () => void;
   props: PropertiesPanelApi;
-  pinnedInstanceIds: Set<string>;
-  instanceFitsRoom: (inst: LayoutInstance) => boolean;
-  anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
-  moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
-  moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
@@ -1058,64 +1054,58 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
 }
 
 export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
-  const { findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, modulePackages, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
+  const { findInstance, showNoProps, props, commitHistory, S, mountProps, modulePackages, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
     const inst = findInstance(id);
     if (!inst) return showNoProps();
-    props.setTitle(`Module (${inst.id})`);
+    const modulePackage = findModulePackageForParams(modulePackages, inst.params);
+    props.setTitle("Modul");
     const s = props.section();
-    const type = document.createElement("div");
-    type.className = "muted";
-    type.textContent = `Type: ${inst.params.type}`;
-    s.appendChild(type);
-    const pos = document.createElement("div");
-    pos.className = "muted";
-    pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
-    s.appendChild(pos);
 
-    const rowHost = document.createElement("div");
-    rowHost.style.marginTop = "10px";
-    s.appendChild(rowHost);
-
-    const rot = createInputElement("number", String(Math.round((inst.root.rotation.y * 180) / Math.PI)), { step: "1" });
-    props.row(rowHost, "Rotation (deg)", rot);
-
-    const pinned = createCheckboxElement(pinnedInstanceIds.has(inst.id));
-    props.row(rowHost, "Pinned", pinned);
-
-    const applyRot = () => {
-      const n = Number(String(rot.value).trim().replace(",", "."));
-      if (!Number.isFinite(n)) return;
-      const deg = ((n % 360) + 360) % 360;
-      const next = (deg * Math.PI) / 180;
-      const prevRot = inst.root.rotation.y;
-      inst.root.rotation.y = next;
-      const inRoom = instanceFitsRoom(inst);
-      const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
-      if (!inRoom || overlaps) {
-        inst.root.rotation.y = prevRot;
-        rot.value = String(Math.round((prevRot * 180) / Math.PI));
-        return;
-      }
-      commitHistory(S);
-      mountProps();
-    };
-
-    rot.addEventListener("change", applyRot);
-    rot.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") applyRot();
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
-        rot.select();
-      }
-    });
-
-    pinned.addEventListener("change", () => {
-      if (pinned.checked) pinnedInstanceIds.add(inst.id);
-      else pinnedInstanceIds.delete(inst.id);
-      commitHistory(S);
-      mountProps();
-    });
+    if (modulePackage) {
+      const compatibleOptions = listCompatibleModuleTypeOptions({
+        currentPackage: modulePackage,
+        modulePackages,
+        catalog: ctx.clientCatalog
+      });
+      const typeSelect = createSelectElement(
+        modulePackage.module.modulePackageId,
+        compatibleOptions.map((option) => ({ value: option.value, label: option.label }))
+      );
+      typeSelect.dataset.moduleTypeSelector = "true";
+      typeSelect.disabled = compatibleOptions.length <= 1;
+      props.row(s, "Typ modulu", typeSelect);
+      typeSelect.addEventListener("change", () => {
+        const target = compatibleOptions.find((option) => option.value === typeSelect.value);
+        if (!target || target.modulePackage.module.modulePackageId === modulePackage.module.modulePackageId) return;
+        const previousParams = structuredClone(inst.params);
+        inst.params = createReplacementModuleParams({
+          currentParams: previousParams,
+          currentPackage: modulePackage,
+          targetPackage: target.modulePackage,
+          catalog: ctx.clientCatalog
+        });
+        let accepted = false;
+        try {
+          accepted = rebuildInstance(inst, {
+            previousParams,
+            preserveBackAnchor: true,
+            sourceKey: "moduleType"
+          });
+        } catch {
+          const failure = document.createElement("div");
+          failure.className = "muted";
+          failure.textContent = "Modul sa nepodarilo zmeniť. Pôvodný modul zostal zachovaný.";
+          s.appendChild(failure);
+        }
+        if (!accepted) {
+          inst.params = previousParams;
+          typeSelect.value = modulePackage.module.modulePackageId;
+          return;
+        }
+        commitHistory(S);
+        mountProps();
+      });
+    }
 
     const editorHost = document.createElement("div");
     editorHost.style.marginTop = "10px";
@@ -1130,12 +1120,10 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
       });
       if (!accepted) return false;
       commitHistory(S);
-      pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
       mountProps();
       return true;
     };
 
-    const modulePackage = findModulePackageForParams(modulePackages, inst.params);
     if (!modulePackage) {
       const missing = document.createElement("div");
       missing.className = "muted";

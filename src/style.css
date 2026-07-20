@@ -5865,7 +5865,7 @@ body.button-magnet-capturing * {
   grid-area: bottom;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 230px;
+  grid-template-columns: minmax(310px, 1.2fr) minmax(250px, 1fr) 260px 210px;
   overflow: hidden;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
@@ -5882,13 +5882,28 @@ body.button-magnet-capturing * {
   border-right: 0;
 }
 
-.archux-margin-footer,
 .archux-material-warning-panel {
   grid-column: 1;
 }
 
 .archux-margin-footer {
   padding: 8px 12px !important;
+}
+
+.archux-margins-phase .archux-bottom {
+  grid-template-columns: minmax(0, 1fr) 230px;
+}
+
+.archux-margins-phase .archux-bottom > [data-bottom-default] {
+  display: none;
+}
+
+.archux-margins-phase .archux-margin-footer {
+  grid-column: 1;
+}
+
+.archux-margins-phase .archux-activity {
+  grid-column: 2;
 }
 
 .margins-footer {
@@ -5939,7 +5954,6 @@ body.button-magnet-capturing * {
 }
 
 .archux-activity {
-  grid-column: 2;
   display: flex;
   flex-direction: column;
   min-height: 0;
