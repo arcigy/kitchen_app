@@ -136,6 +136,38 @@ function createWallCorner90Instance(): LayoutInstance {
 }
 
 describe("module plan geometry", () => {
+  it("suppresses imported triangulation seams when a module board declares a higher edge threshold", () => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+      0, 0, 0,
+      1, 0, 0,
+      1, 0, 1,
+      0, 0.1, 1
+    ], 3));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    const root = new THREE.Group();
+    const module = new THREE.Group();
+    const panel = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    module.add(panel);
+    root.add(module);
+    const inst = {
+      id: "joined-solid",
+      params: { type: "fwm_catalog_wall_cabinet" },
+      root,
+      module,
+      localBox: new THREE.Box3().setFromObject(module),
+      pick: new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+      outline: new THREE.LineSegments()
+    } as unknown as LayoutInstance;
+
+    const rawEdges = buildModuleEdgeGeometry(inst, false, () => new THREE.Vector3());
+    expect(rawEdges.getAttribute("position").count).toBe(10);
+
+    panel.userData.moduleEdgeThresholdAngleDeg = 28;
+    const filteredEdges = buildModuleEdgeGeometry(inst, false, () => new THREE.Vector3());
+    expect(filteredEdges.getAttribute("position").count).toBe(8);
+  });
+
   it("uses the real chamfered corner board silhouette in floorplan instead of a width-depth rectangle", () => {
     const inst = createChamferedCornerInstance();
     const polygon = getModulePlanLocalPolygon(inst, () => new THREE.Vector3());

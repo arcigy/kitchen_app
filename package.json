@@ -11,6 +11,7 @@
     "build:production": "tsx scripts/buildSupplierBridge.ts --mode production",
     "build:supplier-simulator": "vite build apps/supplier-simulator --config apps/supplier-simulator/vite.config.ts --outDir dist",
     "build:demos-catalog": "tsx scripts/buildDemosCatalog.ts",
+    "generate:module-icons": "node scripts/generateArcigyModuleIcons.mjs",
     "typecheck": "tsc --noEmit && tsc -p apps/supplier-bridge-extension/tsconfig.json --noEmit && tsc -p apps/supplier-simulator/tsconfig.json --noEmit",
     "lint": "eslint apps/supplier-bridge-extension/src apps/supplier-simulator/src src/core/supplier-bridge src/app/supplierBridgeApi.ts src/app/supplierBridgeWebController.ts src/server/supplierBridgeEndpoint.ts src/server/supplierBridgeProjectUpdater.ts scripts/buildSupplierBridge.ts --max-warnings 0",
     "security:secrets": "tsx scripts/scanTrackedSecrets.ts",
