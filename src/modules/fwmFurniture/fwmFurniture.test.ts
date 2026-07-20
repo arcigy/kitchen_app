@@ -262,6 +262,15 @@ function polygonAreaMm2(points: PlanPoint[]) {
   return Math.abs(area) / 2;
 }
 
+function hasConsistentPlanTurns(points: PlanPoint[]) {
+  const turns = points.map((current, index) => {
+    const next = points[(index + 1) % points.length]!;
+    const after = points[(index + 2) % points.length]!;
+    return (next.x - current.x) * (after.z - next.z) - (next.z - current.z) * (after.x - next.x);
+  }).filter((turn) => Math.abs(turn) > 1e-6);
+  return turns.length === points.length && turns.every((turn) => Math.sign(turn) === Math.sign(turns[0]!));
+}
+
 function triangulatedPlanMm(mesh: Mesh) {
   const profile = meshPlanOverlapProfileMm(mesh);
   if (profile.length < 3) return [];
@@ -1394,7 +1403,11 @@ describe("FWM furniture module packages", () => {
     expect(getMeshByBoardName(chamfered, "diagonal_handle")?.userData.componentType).toBe("handle");
     expect(getMeshByBoardName(openNiche, "diagonal_front")).toBeNull();
     expect(getMeshByBoardName(openNiche, "diagonal_handle")).toBeNull();
-    expect(meshes(openNiche).filter((mesh) => /^corner_chamfered_shelf_/.test(mesh.name))).toHaveLength(2);
+    const openNicheShelves = meshes(openNiche).filter((mesh) => /^corner_chamfered_shelf_/.test(mesh.name));
+    expect(openNicheShelves).toHaveLength(2);
+    expect(openNicheShelves.every((mesh) => meshPlanProfileMm(mesh).length === 6)).toBe(true);
+    expect(openNicheShelves.every((mesh) => hasConsistentPlanTurns(meshPlanProfileMm(mesh)))).toBe(true);
+    expect(getMeshByBoardName(openNiche, "top_panel")?.userData.moduleEdgeThresholdAngleDeg).toBe(28);
     expect(realBoardOverlaps(chamfered)).toEqual([]);
     expect(truthfulBoardOverlaps(corner90Closed)).toEqual([]);
     expect(chamfered.userData.kitchenCornerRotationOffsetRad).toBe(Math.PI / 2);

@@ -7,6 +7,7 @@ const forbiddenImport = /from\s+["'][^"']*data\/(?:materials|hardware|pricing)(?
 const runtimeRoots = ["src/modules", "src/layout", "src/ui", "src/app", "src/lib/materials"];
 const sourceRoots = ["src", "scripts", "server"];
 const allowedSystemSeedCatalogFiles = new Set([
+  "scripts/arcigyModuleIconRenderer.ts",
   "scripts/testPortableMaterialLive.mjs",
   "scripts/testPricingContract.ts",
   "scripts/testModulePropertiesUi.mjs",

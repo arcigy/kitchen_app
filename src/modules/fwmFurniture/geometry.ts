@@ -3012,6 +3012,10 @@ function tagGroundTruthMesh(mesh: THREE.Mesh, primitive: ModuleGeometryPrimitive
   mesh.userData.sourceUniqueId = readGroundTruthString(primitive.params.sourceUniqueId);
   mesh.userData.sourceName = readGroundTruthString(primitive.params.sourceName);
   mesh.userData.sourceClass = readGroundTruthString(primitive.params.sourceClass);
+  // Imported joined solids can contain tiny non-planar triangulation seams. Keep
+  // real board corners visible while preventing those helper diagonals from
+  // appearing in the normal 3D module outline and in generated catalog icons.
+  mesh.userData.moduleEdgeThresholdAngleDeg = 28;
   mesh.userData.revitCategory = readGroundTruthString(primitive.params.revitCategory);
   if (Array.isArray(primitive.params.paramKeys)) mesh.userData.paramKeys = primitive.params.paramKeys;
   if (primitive.params.revitProperties && typeof primitive.params.revitProperties === "object" && !Array.isArray(primitive.params.revitProperties)) {
@@ -3134,6 +3138,24 @@ function readShelfGapValues(params: FwmFurnitureParams, count: number) {
   return values.filter((value) => Number.isFinite(value) && value > 0).slice(0, count);
 }
 
+function convexPlanHull(points: Array<{ x: number; z: number }>) {
+  if (points.length <= 3) return points;
+  const sorted = [...points].sort((left, right) => left.x - right.x || left.z - right.z);
+  const cross = (origin: { x: number; z: number }, a: { x: number; z: number }, b: { x: number; z: number }) =>
+    (a.x - origin.x) * (b.z - origin.z) - (a.z - origin.z) * (b.x - origin.x);
+  const buildHalf = (ordered: Array<{ x: number; z: number }>) => {
+    const half: Array<{ x: number; z: number }> = [];
+    for (const point of ordered) {
+      while (half.length >= 2 && cross(half[half.length - 2]!, half[half.length - 1]!, point) <= 0) half.pop();
+      half.push(point);
+    }
+    return half;
+  };
+  const lower = buildHalf(sorted);
+  const upper = buildHalf([...sorted].reverse());
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
 function createChamferedShelfFootprintMm(context: ChamferedGroundTruthParametricContext, insetMm: number) {
   const bottomPrimitive = BASE_CORNER_CHAMFERED_GROUND_TRUTH_PACKAGE.primitives.find(
     (primitive) => readGroundTruthString(primitive.params.boardName) === "bottom_panel"
@@ -3146,7 +3168,11 @@ function createChamferedShelfFootprintMm(context: ChamferedGroundTruthParametric
     const transformed = transformChamferedGroundTruthVertexMm(vector, bottomPrimitive!, context);
     byPoint.set(`${transformed.x.toFixed(3)}:${transformed.z.toFixed(3)}`, { x: transformed.x, z: transformed.z });
   }
-  const points = [...byPoint.values()];
+  // Revit exports a triangle soup, so first-occurrence vertex order is not a
+  // usable polygon boundary. Build the actual outer perimeter before creating
+  // the shelf; otherwise ShapeUtils can triangulate a self-crossing footprint
+  // and render fake diagonal boards/lines inside an open corner niche.
+  const points = convexPlanHull([...byPoint.values()]);
   if (points.length < 3) return null;
   const center = points.reduce((acc, point) => ({ x: acc.x + point.x / points.length, z: acc.z + point.z / points.length }), { x: 0, z: 0 });
   return points.map((point) => {

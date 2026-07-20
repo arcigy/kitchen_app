@@ -109,7 +109,11 @@ export function buildModuleEdgeGeometry(inst: LayoutInstance, flattenToPlan: boo
   inst.module.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || !mesh.visible) return;
-    const edgeGeom = new THREE.EdgesGeometry(mesh.geometry as THREE.BufferGeometry, 1);
+    const requestedThreshold = Number(mesh.userData.moduleEdgeThresholdAngleDeg);
+    const thresholdAngle = Number.isFinite(requestedThreshold)
+      ? Math.max(1, Math.min(89, requestedThreshold))
+      : 1;
+    const edgeGeom = new THREE.EdgesGeometry(mesh.geometry as THREE.BufferGeometry, thresholdAngle);
     const pos = edgeGeom.getAttribute("position");
     const toRoot = rootInv.clone().multiply(mesh.matrixWorld);
 
