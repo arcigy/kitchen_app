@@ -615,7 +615,7 @@ describe("selected props panels", () => {
     expect(ctx.setUnderlayOffZEl).toHaveBeenCalledWith(rows[5]!.control);
   });
 
-  it("replaces the technical module header with a compatible module selector and swaps immediately", () => {
+  it("renders compatible modules with the catalog cards and preview images, then swaps immediately", () => {
     installFakeDocument();
     const { props, rows, section } = makePropertiesPanelHarness();
     const inst = makeLayoutInstance();
@@ -648,16 +648,46 @@ describe("selected props panels", () => {
     mountModulePropsPanel(ctx as unknown as Parameters<typeof mountModulePropsPanel>[0], "module-1");
 
     expect(props.setTitle).toHaveBeenCalledWith("Modul");
-    expect(rows.map((row) => row.label)).toEqual(["Typ modulu"]);
-    expect(rows[0]!.control.value).toBe(currentPackage.module.modulePackageId);
-    expect(rows[0]!.control.children.map((child) => child.value)).toEqual(expect.arrayContaining([
+    expect(rows).toEqual([]);
+    const picker = section.children[0]!;
+    const trigger = picker.children[1]!;
+    const optionsGrid = picker.children[2]!;
+    expect(picker.className).toBe("module-type-picker");
+    expect(trigger.className).toBe("module-type-picker-trigger");
+    expect(trigger.dataset.moduleTypeSelector).toBe("true");
+    expect(trigger.children[0]?.className).toContain("module-catalog-card-icon");
+    expect((trigger.children[0]?.children[0] as unknown as { src?: string })?.src).toBe(
+      "/module-icons/furniture/v2/fwm_catalog_base_doors.png"
+    );
+    expect(optionsGrid.className).toBe("module-catalog-grid module-type-picker-options");
+    expect((optionsGrid as unknown as { hidden: boolean }).hidden).toBe(true);
+    trigger.click();
+    expect((optionsGrid as unknown as { hidden: boolean }).hidden).toBe(false);
+    expect(optionsGrid.children.map((child) => child.dataset.modulePackageId)).toEqual(expect.arrayContaining([
       currentPackage.module.modulePackageId,
       targetPackage.module.modulePackageId
     ]));
-    expect(rows[0]!.control.children.map((child) => child.value)).not.toContain(excludedCornerPackage.module.modulePackageId);
+    expect(optionsGrid.children.map((child) => child.dataset.modulePackageId)).not.toContain(
+      excludedCornerPackage.module.modulePackageId
+    );
+    for (const card of optionsGrid.children) {
+      expect(card.className).toContain("module-catalog-card");
+      expect(card.children[0]?.className).toBe("module-catalog-card-icon");
+      expect(card.children[1]?.className).toBe("module-catalog-card-label");
+    }
 
-    rows[0]!.control.value = targetPackage.module.modulePackageId;
-    rows[0]!.control.dispatch("change");
+    const targetCard = optionsGrid.children.find(
+      (child) => child.dataset.modulePackageId === targetPackage.module.modulePackageId
+    );
+    const currentCard = optionsGrid.children.find(
+      (child) => child.dataset.modulePackageId === currentPackage.module.modulePackageId
+    );
+    expect(targetCard).toBeDefined();
+    expect(currentCard?.className).toContain("module-type-picker-card-current");
+    expect((targetCard?.children[0]?.children[0] as unknown as { src?: string })?.src).toBe(
+      "/module-icons/furniture/v2/fwm_catalog_base_drawers.png"
+    );
+    targetCard!.click();
 
     expect(ctx.rebuildInstance).toHaveBeenCalledOnce();
     expect(ctx.rebuildInstance).toHaveBeenCalledWith(inst, expect.objectContaining({

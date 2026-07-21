@@ -4733,6 +4733,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     },
     getSelectedWorktopSegment: () => selectedWorktopSegment,
     refreshModuleCatalog: renderModuleCatalog,
+    renderModuleCatalogIconSvg: (modulePackage: FurnQuoteModulePackage) => moduleCatalogIconSvg(modulePackage),
     mountKitchenGroupProps,
     tryMountActiveTallSubmoduleProps: mountTallSubmoduleProps,
     tryMountActiveKitchenGroupProps() {
