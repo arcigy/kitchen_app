@@ -12,6 +12,9 @@ describe("CapRover static proxy contract", () => {
     ]);
 
     expect(captain).toContain("apk add --no-cache nginx");
+    expect(captain).toContain("RUN rm -rf /app/node_modules");
+    expect(captain).toContain("RUN npm ci --omit=dev");
+    expect(captain).toContain("RUN test -x /app/node_modules/.bin/tsx");
     expect(captain).toContain("COPY deploy/nginx.conf /etc/nginx/nginx.conf");
     expect(captain).toContain("COPY deploy/nginx-security-headers.conf /etc/nginx/arcigy-security-headers.conf");
     expect(captain).toContain('CMD [\\"/app/scripts/startCapRover.sh\\"]');
