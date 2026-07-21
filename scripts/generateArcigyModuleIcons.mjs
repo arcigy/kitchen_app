@@ -95,6 +95,9 @@ try {
   if (browserErrors.length > 0) throw new Error(`Module icon browser errors: ${browserErrors.join(" | ")}`);
 
   for (const icon of rendered) {
+    if (!icon.hasTransparentBackground) {
+      throw new Error(`${icon.id} does not have a transparent background.`);
+    }
     const encoded = icon.dataUrl.replace(/^data:image\/png;base64,/, "");
     const buffer = Buffer.from(encoded, "base64");
     const dimensions = pngDimensions(buffer);

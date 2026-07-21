@@ -56,11 +56,11 @@ describe("module catalog previews", () => {
     expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers", " /custom/preview.png ")))
       .toBe("/custom/preview.png");
     expect(resolveModuleCatalogPreviewImage(modulePackage("fwm_catalog_base_drawers")))
-      .toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
+      .toBe("/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png");
     expect(resolveModuleCatalogPreviewImage(modulePackage(
       "fwm_catalog_base_drawers",
       "/module-icons/furniture/fwm_catalog_base_drawers.png"
-    ))).toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
+    ))).toBe("/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png");
   });
 
   it("replaces a broken preview with the generated SVG fallback", () => {
@@ -74,7 +74,7 @@ describe("module catalog previews", () => {
     });
 
     const image = host.querySelector("img");
-    expect(image?.getAttribute("src")).toBe("/module-icons/furniture/v2/fwm_catalog_base_drawers.png");
+    expect(image?.getAttribute("src")).toBe("/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png");
     expect(image?.getAttribute("alt")).toBe("");
     expect(fallbackSvg).not.toHaveBeenCalled();
 
@@ -88,7 +88,7 @@ describe("module catalog previews", () => {
       "fwm_catalog_base_corner",
       "/module-icons/furniture/v2/fwm_catalog_base_corner.png",
       { modulePackageId: "client_delfi_base_corner_90_v1", variant: "corner_90" }
-    ))).toBe("/module-icons/furniture/v3/variants/fwm_catalog_base_corner__corner_90.png");
+    ))).toBe("/module-icons/furniture/v4/variants/fwm_catalog_base_corner__corner_90.png");
 
     expect(resolveModuleCatalogPreviewImage(modulePackage(
       "fwm_catalog_wall_cabinet",
@@ -100,7 +100,7 @@ describe("module catalog previews", () => {
       "wall_corner_90",
       "/module-icons/furniture/v2/fwm_catalog_wall_cabinet.png",
       { modulePackageId: "wall_corner_90", variant: "corner_90" }
-    ))).toBe("/module-icons/furniture/v3/variants/wall_corner_90.png");
+    ))).toBe("/module-icons/furniture/v4/variants/wall_corner_90.png");
   });
 
   it("renders the generated SVG immediately when no preview is available", () => {

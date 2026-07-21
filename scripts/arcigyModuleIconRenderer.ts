@@ -4,6 +4,7 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { getSystemSeedCatalog } from "../src/core/catalog/catalog-repository";
 import {
+  applyModuleParameterPreset,
   buildModulePackageGeometryFromPackage,
   createDefaultModulePackageParameters
 } from "../src/core/module-package/runtime/module-runtime-adapter";
@@ -14,7 +15,7 @@ import {
   type ArcigyModuleIconTarget
 } from "../src/modules/fwmFurniture/moduleIconRenderContract";
 
-type RenderedIcon = { id: string; outputPath: string; dataUrl: string };
+type RenderedIcon = { id: string; outputPath: string; dataUrl: string; hasTransparentBackground: boolean };
 
 declare global {
   interface Window {
@@ -100,10 +101,13 @@ function findPackage(target: ArcigyModuleIconTarget) {
 
 function buildTarget(target: ArcigyModuleIconTarget) {
   const modulePackage = findPackage(target);
-  const parameters = {
+  const baseParameters = {
     ...createDefaultModulePackageParameters(modulePackage),
     ...target.parameters
   };
+  const parameters = target.presetId
+    ? applyModuleParameterPreset({ modulePackage, parameters: baseParameters, presetId: target.presetId })
+    : baseParameters;
   return buildModulePackageGeometryFromPackage({
     modulePackage,
     parameters,
@@ -168,15 +172,15 @@ function disposeRoot(root: THREE.Object3D) {
 
 async function renderTarget(target: ArcigyModuleIconTarget): Promise<RenderedIcon> {
   const size = ARCIGY_MODULE_ICON_STYLE.outputSizePx;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setSize(size, size, false);
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setClearColor(ARCIGY_MODULE_ICON_STYLE.backgroundColor, 1);
+  renderer.setClearColor(0x000000, ARCIGY_MODULE_ICON_STYLE.backgroundAlpha);
   document.body.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(ARCIGY_MODULE_ICON_STYLE.backgroundColor);
+  scene.background = null;
   scene.add(new THREE.HemisphereLight(0xffffff, 0xc7c9cd, 2.25));
   const key = new THREE.DirectionalLight(0xffffff, 2.7);
   key.position.set(4, 7, 5);
@@ -191,11 +195,14 @@ async function renderTarget(target: ArcigyModuleIconTarget): Promise<RenderedIco
   frameCamera(camera, root, target);
   addConsistentBoardEdges(root, size);
   renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const corner = new Uint8Array(4);
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, corner);
   const dataUrl = renderer.domElement.toDataURL("image/png");
 
   disposeRoot(root);
   renderer.dispose();
-  return { id: target.id, outputPath: target.outputPath, dataUrl };
+  return { id: target.id, outputPath: target.outputPath, dataUrl, hasTransparentBackground: corner[3] === 0 };
 }
 
 window.renderArcigyModuleIcons = async (ids: string[] = []) => {

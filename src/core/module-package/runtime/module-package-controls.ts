@@ -4,6 +4,10 @@ import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/reg
 import { getModuleDescriptor } from "../../../modules/registry";
 import { t, translateEnumLabel, translateParamLabel } from "../../../i18n";
 import { applyModuleParameterPreset } from "./module-runtime-adapter";
+import {
+  createModuleParameterPresetPicker,
+  resolveMatchingModuleParameterPresetId
+} from "./moduleParameterPresetPicker";
 
 type ControlRecord = {
   key: string;
@@ -106,52 +110,27 @@ function withParameterPresetControl(
   args: ModuleControlsArgs,
   api: ModuleControlsApi
 ): ModuleControlsApi {
-  const row = document.createElement("label");
+  const row = document.createElement("div");
   row.className = "module-package-control";
   row.style.display = "grid";
-  row.style.gap = "4px";
+  row.style.gap = "8px";
   row.style.marginTop = "8px";
 
-  const label = document.createElement("span");
-  label.textContent = "Parameter preset";
-
-  const controlRow = document.createElement("div");
-  controlRow.style.display = "grid";
-  controlRow.style.gridTemplateColumns = "1fr auto";
-  controlRow.style.gap = "6px";
-  controlRow.style.alignItems = "center";
-
-  const input = document.createElement("select");
-  const refreshPresetOptions = (selectedPresetId = "") => {
-    const presets = modulePackage.parameterPresets?.presets ?? [];
-    input.replaceChildren();
-    input.disabled = presets.length === 0;
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = presets.length === 0 ? "No presets" : "-";
-    input.appendChild(empty);
-    for (const preset of presets) {
-      const item = document.createElement("option");
-      item.value = preset.presetId;
-      item.textContent = preset.label;
-      item.title = preset.note;
-      input.appendChild(item);
+  const presetPicker = createModuleParameterPresetPicker({
+    modulePackage,
+    selectedPresetId: resolveMatchingModuleParameterPresetId(modulePackage, params),
+    onSelect: (presetId) => {
+      Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId }));
+      args.onChange();
+      api.syncFromParams();
     }
-    input.value = selectedPresetId;
-  };
-  refreshPresetOptions();
+  });
 
   const createButton = document.createElement("button");
   createButton.type = "button";
-  createButton.textContent = "Create preset";
+  createButton.textContent = "Vytvoriť preset";
   createButton.disabled = !args.createParameterPreset;
-
-  input.addEventListener("change", () => {
-    if (!input.value) return;
-    Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId: input.value }));
-    args.onChange();
-    api.syncFromParams();
-  });
+  createButton.className = "module-parameter-preset-create";
 
   createButton.addEventListener("click", () => {
     if (!args.createParameterPreset) return;
@@ -165,18 +144,18 @@ function withParameterPresetControl(
         });
         if (!result) return;
         Object.assign(modulePackage, result.modulePackage);
-        refreshPresetOptions(result.presetId);
+        presetPicker.refresh(result.presetId);
       }
     });
   });
 
-  controlRow.append(input, createButton);
-  row.append(label, controlRow);
+  row.append(presetPicker.element, createButton);
   container.prepend(row);
 
   return {
     syncFromParams: () => {
       api.syncFromParams();
+      presetPicker.refresh(resolveMatchingModuleParameterPresetId(modulePackage, params));
     },
     isAutoFitEnabled: () => api.isAutoFitEnabled(),
     highlightParamKeys: (keys) => api.highlightParamKeys(keys),
