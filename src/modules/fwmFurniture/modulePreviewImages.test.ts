@@ -19,7 +19,7 @@ describe("FWM module preview images", () => {
   it("maps every approved catalog family to a shipped PNG asset", () => {
     for (const moduleType of previewedModuleTypes) {
       const publicUrl = getFwmModulePreviewImage(moduleType);
-      expect(publicUrl).toBe(`/module-icons/furniture/v2/${moduleType}.png`);
+      expect(publicUrl).toBe(`/module-icons/furniture/v4/types/${moduleType}.png`);
       expect(existsSync(resolve(process.cwd(), "public", publicUrl!.slice(1)))).toBe(true);
     }
   });
@@ -40,7 +40,7 @@ describe("FWM module preview images", () => {
 
     for (const [moduleType, variant, fileName] of cases) {
       const publicUrl = resolveFwmModulePreviewImage({ moduleType, variant });
-      expect(publicUrl).toBe(`/module-icons/furniture/v3/variants/${fileName}`);
+      expect(publicUrl).toBe(`/module-icons/furniture/v4/variants/${fileName}`);
       expect(existsSync(resolve(process.cwd(), "public", publicUrl!.slice(1)))).toBe(true);
     }
 
@@ -49,7 +49,7 @@ describe("FWM module preview images", () => {
       modulePackageId: "wall_corner_90",
       variant: "corner_90"
     });
-    expect(wallCornerUrl).toBe("/module-icons/furniture/v3/variants/wall_corner_90.png");
+    expect(wallCornerUrl).toBe("/module-icons/furniture/v4/variants/wall_corner_90.png");
     expect(existsSync(resolve(process.cwd(), "public", wallCornerUrl!.slice(1)))).toBe(true);
   });
 });

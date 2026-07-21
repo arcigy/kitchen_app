@@ -657,7 +657,7 @@ describe("selected props panels", () => {
     expect(trigger.dataset.moduleTypeSelector).toBe("true");
     expect(trigger.children[0]?.className).toContain("module-catalog-card-icon");
     expect((trigger.children[0]?.children[0] as unknown as { src?: string })?.src).toBe(
-      "/module-icons/furniture/v2/fwm_catalog_base_doors.png"
+      "/module-icons/furniture/v4/types/fwm_catalog_base_doors.png"
     );
     expect(optionsGrid.className).toBe("module-catalog-grid module-type-picker-options");
     expect((optionsGrid as unknown as { hidden: boolean }).hidden).toBe(true);
@@ -685,7 +685,7 @@ describe("selected props panels", () => {
     expect(targetCard).toBeDefined();
     expect(currentCard?.className).toContain("module-type-picker-card-current");
     expect((targetCard?.children[0]?.children[0] as unknown as { src?: string })?.src).toBe(
-      "/module-icons/furniture/v2/fwm_catalog_base_drawers.png"
+      "/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png"
     );
     targetCard!.click();
 

@@ -11116,6 +11116,10 @@ canvas.material-modify-picking {
   min-width: 0;
 }
 
+.module-parameter-preset-picker {
+  min-width: 0;
+}
+
 .module-type-picker-label {
   margin-bottom: 6px;
   color: #5f6b80;
@@ -11183,6 +11187,15 @@ canvas.material-modify-picking {
 
 .module-type-picker-options[hidden] {
   display: none;
+}
+
+.module-parameter-preset-options {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.module-parameter-preset-create {
+  min-height: 34px;
 }
 
 .module-type-picker-card-current {
