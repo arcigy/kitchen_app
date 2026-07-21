@@ -26,7 +26,7 @@ import { handleWorkerApiRequest } from "../src/server/workerApiRouter";
 import { assertWorkerRuntimeEnvironment } from "../src/server/workerRuntimeEnvironment";
 import { ClientCatalogBootstrapResponseCache } from "../src/server/clientCatalogBootstrapResponseCache";
 import { ClientModulePackagesResponseCache } from "../src/server/clientModulePackagesResponseCache";
-import { shouldServeSpaIndex, staticCacheControl } from "../src/server/staticAppRouting";
+import { shouldServeSpaIndex, streamStaticFile } from "../src/server/staticAppRouting";
 
 assertWorkerRuntimeEnvironment();
 const PROJECT_ROOT = process.cwd();
@@ -96,13 +96,7 @@ const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerRespons
 
   try {
     await access(requestedFile);
-    res.statusCode = 200;
-    res.setHeader("Content-Type", getStaticMimeType(requestedFile));
-    res.setHeader("Cache-Control", staticCacheControl(requestedFile));
-    if (req.method === "HEAD") return res.end(), true;
-    const body = await readFile(requestedFile);
-    const compressible = /^(text\/|application\/(?:json|javascript|xml)|image\/svg\+xml)/i.test(getStaticMimeType(requestedFile));
-    sendResponseBody(res, body, { compressible });
+    await streamStaticFile(req, res, requestedFile, getStaticMimeType(requestedFile));
     return true;
   } catch {
     if (!shouldServeSpaIndex(url.pathname)) {
@@ -114,11 +108,7 @@ const serveStaticApp = async (req: http.IncomingMessage, res: http.ServerRespons
       return true;
     }
     const indexPath = path.join(staticRoot, "index.html");
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    if (req.method === "HEAD") return res.end(), true;
-    sendResponseBody(res, await readFile(indexPath));
+    await streamStaticFile(req, res, indexPath, "text/html; charset=utf-8");
     return true;
   }
 };
