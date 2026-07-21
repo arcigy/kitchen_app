@@ -1,6 +1,21 @@
-const SHELL_CACHE = "arcigy-kitchen-shell-v1";
-const RUNTIME_CACHE = "arcigy-kitchen-runtime-v1";
+const SHELL_CACHE = "arcigy-kitchen-shell-v2";
+const RUNTIME_CACHE = "arcigy-kitchen-runtime-v2";
 const CORE_URLS = ["/", "/index.html", "/manifest.webmanifest", "/icons/app-icon-192.png", "/icons/app-icon-512.png"];
+
+function isPrivateRuntimeRequest(url) {
+  return url.pathname.startsWith("/api/") || url.pathname.startsWith("/storage/");
+}
+
+async function cacheResponse(cacheName, request, response) {
+  if (!response.ok) return;
+  try {
+    const cache = await caches.open(cacheName);
+    await cache.put(request, response.clone());
+  } catch {
+    // Cache Storage is optional. Quota, eviction, or an interrupted response
+    // must never reject the page request or create an unhandled promise.
+  }
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -32,10 +47,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(SHELL_CACHE).then((cache) => {
-            cache.put("/", clone);
-          });
+          event.waitUntil(cacheResponse(SHELL_CACHE, "/", response));
           return response;
         })
         .catch(async () => {
@@ -45,14 +57,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Authenticated API and project-storage responses must never be persisted in
+  // a browser cache shared by consecutive Arcigy users.
+  if (isPrivateRuntimeRequest(url)) return;
+
   event.respondWith(
     fetch(request)
       .then((response) => {
         if (!response.ok) return response;
-        const clone = response.clone();
-        caches.open(RUNTIME_CACHE).then((cache) => {
-          cache.put(request, clone);
-        });
+        event.waitUntil(cacheResponse(RUNTIME_CACHE, request, response));
         return response;
       })
       .catch(async () => {
