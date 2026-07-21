@@ -1,5 +1,5 @@
 import type { FurnQuoteModulePackage, ModuleParameterPreset } from "../module-package-types";
-import { renderModuleCatalogPreview } from "../../../layout/moduleCatalogPreview";
+import { renderCatalogPreviewImage, renderModuleCatalogPreview } from "../../../layout/moduleCatalogPreview";
 import { resolveFwmModulePresetPreviewImage } from "../../../modules/fwmFurniture/modulePresetPreviewImages";
 import { applyModuleParameterPreset } from "./module-runtime-adapter";
 
@@ -22,25 +22,19 @@ function appendPresetPreview(
     renderModuleCatalogPreview({
       host,
       modulePackage,
-      fallbackSvg: () => fallbackPreview(label)
+      fallbackSvg: () => fallbackPreview(label),
+      loading: "eager",
+      fetchPriority: "high"
     });
     return;
   }
-  const image = document.createElement("img");
-  image.className = "module-catalog-card-preview";
-  image.src = previewImage;
-  image.alt = "";
-  image.loading = "lazy";
-  image.decoding = "async";
-  image.draggable = false;
-  image.addEventListener("error", () => {
-    renderModuleCatalogPreview({
-      host,
-      modulePackage,
-      fallbackSvg: () => fallbackPreview(label)
-    });
-  }, { once: true });
-  host.replaceChildren(image);
+  renderCatalogPreviewImage({
+    host,
+    previewImage,
+    fallbackSvg: () => fallbackPreview(label),
+    loading: "eager",
+    fetchPriority: "high"
+  });
 }
 
 function valuesMatch(left: unknown, right: unknown): boolean {
@@ -85,6 +79,7 @@ export function createModuleParameterPresetPicker(args: {
   onSelect: (presetId: string) => void;
 }): ModuleParameterPresetPicker {
   let selectedPresetId = args.selectedPresetId ?? "";
+  let renderedPresetSignature = "";
   const host = document.createElement("div");
   host.className = "module-parameter-preset-picker";
   host.dataset.moduleParameterPresetPicker = "true";
@@ -128,8 +123,10 @@ export function createModuleParameterPresetPicker(args: {
   };
 
   const renderOptions = () => {
+    const presets = args.modulePackage.parameterPresets?.presets ?? [];
+    renderedPresetSignature = JSON.stringify(presets.map(({ presetId, label, note }) => ({ presetId, label, note })));
     optionsHost.replaceChildren();
-    for (const preset of args.modulePackage.parameterPresets?.presets ?? []) {
+    for (const preset of presets) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "module-catalog-card";
@@ -146,20 +143,30 @@ export function createModuleParameterPresetPicker(args: {
       optionLabel.textContent = preset.label;
       button.append(icon, optionLabel);
       button.addEventListener("click", () => {
-        selectedPresetId = preset.presetId;
         args.onSelect(preset.presetId);
-        renderTrigger();
-        renderOptions();
+        refresh(preset.presetId);
         closeOptions();
       });
       optionsHost.appendChild(button);
     }
   };
 
+  const syncOptionSelection = () => {
+    for (const button of optionsHost.querySelectorAll<HTMLButtonElement>("[data-parameter-preset-id]")) {
+      const isCurrent = button.dataset.parameterPresetId === selectedPresetId;
+      button.classList.toggle("module-type-picker-card-current", isCurrent);
+      button.setAttribute("aria-current", isCurrent ? "true" : "false");
+    }
+  };
+
   const refresh = (nextSelectedPresetId = "") => {
+    const selectionChanged = selectedPresetId !== nextSelectedPresetId;
     selectedPresetId = nextSelectedPresetId;
-    renderTrigger();
-    renderOptions();
+    if (selectionChanged || trigger.childElementCount === 0) renderTrigger();
+    const presets = args.modulePackage.parameterPresets?.presets ?? [];
+    const nextSignature = JSON.stringify(presets.map(({ presetId, label, note }) => ({ presetId, label, note })));
+    if (nextSignature !== renderedPresetSignature) renderOptions();
+    else syncOptionSelection();
   };
 
   trigger.addEventListener("click", () => {

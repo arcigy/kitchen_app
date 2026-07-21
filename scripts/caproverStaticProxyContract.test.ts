@@ -20,6 +20,10 @@ describe("CapRover static proxy contract", () => {
     expect(captain).toContain('CMD [\\"/app/scripts/startCapRover.sh\\"]');
     expect(nginx).toContain("location ^~ /assets/");
     expect(nginx).toContain("public, max-age=31536000, immutable");
+    const versionedModuleIcons = nginx.indexOf("location ~ ^/module-icons/furniture/v[0-9]+/");
+    const genericStaticFiles = nginx.indexOf("location ~* \\.[a-z0-9]+$");
+    expect(versionedModuleIcons).toBeGreaterThan(-1);
+    expect(genericStaticFiles).toBeGreaterThan(versionedModuleIcons);
     expect(nginx).toContain("location ~ ^/(?:api|storage)(?:/|$)");
     expect(nginx).toContain("proxy_pass http://arcigy_worker");
     expect(nginx).toContain("client_max_body_size 256m");
