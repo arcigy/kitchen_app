@@ -27,26 +27,61 @@ export function resolveModuleCatalogPreviewImage(modulePackage: FurnQuoteModuleP
   return declaredPreview || builtInPreview;
 }
 
-export function renderModuleCatalogPreview(args: {
+type CatalogPreviewLoading = "eager" | "lazy";
+type CatalogPreviewFetchPriority = "high" | "low" | "auto";
+
+export function renderCatalogPreviewImage(args: {
   host: HTMLElement;
-  modulePackage: FurnQuoteModulePackage;
+  previewImage?: string;
   fallbackSvg: () => string;
+  loading?: CatalogPreviewLoading;
+  fetchPriority?: CatalogPreviewFetchPriority;
 }): void {
-  const previewImage = resolveModuleCatalogPreviewImage(args.modulePackage);
-  if (!previewImage) {
+  args.host.classList.remove("module-catalog-preview-loading");
+  if (!args.previewImage) {
     args.host.innerHTML = args.fallbackSvg();
     return;
   }
 
   const image = document.createElement("img");
   image.className = "module-catalog-card-preview";
-  image.src = previewImage;
   image.alt = "";
-  image.loading = "lazy";
+  image.loading = args.loading ?? "lazy";
   image.decoding = "async";
   image.draggable = false;
+  image.setAttribute("fetchpriority", args.fetchPriority ?? "auto");
+
+  const ownsHost = () => image.parentElement === args.host;
+  const markLoaded = () => {
+    if (!ownsHost()) return;
+    args.host.classList.remove("module-catalog-preview-loading");
+    image.dataset.previewState = "loaded";
+  };
+  image.addEventListener("load", markLoaded, { once: true });
   image.addEventListener("error", () => {
+    if (!ownsHost()) return;
+    args.host.classList.remove("module-catalog-preview-loading");
     args.host.innerHTML = args.fallbackSvg();
   }, { once: true });
+
+  args.host.classList.add("module-catalog-preview-loading");
   args.host.replaceChildren(image);
+  image.src = args.previewImage;
+  if (image.complete && image.naturalWidth > 0) markLoaded();
+}
+
+export function renderModuleCatalogPreview(args: {
+  host: HTMLElement;
+  modulePackage: FurnQuoteModulePackage;
+  fallbackSvg: () => string;
+  loading?: CatalogPreviewLoading;
+  fetchPriority?: CatalogPreviewFetchPriority;
+}): void {
+  renderCatalogPreviewImage({
+    host: args.host,
+    previewImage: resolveModuleCatalogPreviewImage(args.modulePackage),
+    fallbackSvg: args.fallbackSvg,
+    loading: args.loading,
+    fetchPriority: args.fetchPriority
+  });
 }

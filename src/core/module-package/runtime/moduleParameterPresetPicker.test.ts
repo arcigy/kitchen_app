@@ -17,7 +17,7 @@ function drawerPackage() {
 }
 
 describe("module parameter preset picker", () => {
-  it("renders every preset as a lazy image card and applies the clicked option", () => {
+  it("eagerly warms every preset image and applies the clicked option", () => {
     const modulePackage = drawerPackage();
     const onSelect = vi.fn();
     const picker = createModuleParameterPresetPicker({ modulePackage, onSelect });
@@ -28,7 +28,8 @@ describe("module parameter preset picker", () => {
     expect(cards[0]?.querySelector("img")?.getAttribute("src")).toBe(
       "/module-icons/furniture/v4/presets/fwm_catalog_base_drawers__drawers_1_full_height.png"
     );
-    expect(cards.every((card) => card.querySelector<HTMLImageElement>("img")?.loading === "lazy")).toBe(true);
+    expect(cards.every((card) => card.querySelector<HTMLImageElement>("img")?.loading === "eager")).toBe(true);
+    expect(cards.every((card) => card.querySelector("img")?.getAttribute("fetchpriority") === "high")).toBe(true);
     expect(picker.element.querySelector<HTMLElement>(".module-parameter-preset-options")?.hidden).toBe(true);
     trigger.click();
     expect(picker.element.querySelector<HTMLElement>(".module-parameter-preset-options")?.hidden).toBe(false);
@@ -36,6 +37,20 @@ describe("module parameter preset picker", () => {
     expect(onSelect).toHaveBeenCalledWith("drawers_2_top_shallow");
     expect(trigger.textContent).toContain("2x zasuvka - horna mala");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps warmed image nodes when unchanged parameters refresh the picker", () => {
+    const modulePackage = drawerPackage();
+    const picker = createModuleParameterPresetPicker({ modulePackage, onSelect: vi.fn() });
+    const firstImage = picker.element.querySelector<HTMLImageElement>(
+      '[data-parameter-preset-id="drawers_1_full_height"] img'
+    );
+
+    picker.refresh("");
+
+    expect(picker.element.querySelector(
+      '[data-parameter-preset-id="drawers_1_full_height"] img'
+    )).toBe(firstImage);
   });
 
   it("recognizes the preset already represented by current module parameters", () => {

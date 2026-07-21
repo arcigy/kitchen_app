@@ -11051,6 +11051,26 @@ canvas.material-modify-picking {
   height: 100%;
   display: block;
   object-fit: contain;
+  opacity: 1;
+  transition: opacity 100ms ease;
+}
+
+.module-catalog-preview-loading {
+  overflow: hidden;
+  border-radius: 6px;
+  background: linear-gradient(110deg, #f3f5f9 25%, #e7ebf3 42%, #f3f5f9 59%);
+  background-size: 220% 100%;
+  animation: module-catalog-preview-loading 900ms linear infinite;
+}
+
+.module-catalog-preview-loading .module-catalog-card-preview {
+  opacity: 0;
+}
+
+@keyframes module-catalog-preview-loading {
+  to {
+    background-position-x: -220%;
+  }
 }
 
 .module-catalog-card-label {

@@ -18,7 +18,9 @@ function appendPreview(
   renderModuleCatalogPreview({
     host,
     modulePackage,
-    fallbackSvg: () => renderFallback?.(modulePackage) || fallbackPreview(label)
+    fallbackSvg: () => renderFallback?.(modulePackage) || fallbackPreview(label),
+    loading: "eager",
+    fetchPriority: "high"
   });
 }
 

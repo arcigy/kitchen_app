@@ -76,11 +76,31 @@ describe("module catalog previews", () => {
     const image = host.querySelector("img");
     expect(image?.getAttribute("src")).toBe("/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png");
     expect(image?.getAttribute("alt")).toBe("");
+    expect(host.classList.contains("module-catalog-preview-loading")).toBe(true);
     expect(fallbackSvg).not.toHaveBeenCalled();
+
+    image?.dispatchEvent(new Event("load"));
+    expect(host.classList.contains("module-catalog-preview-loading")).toBe(false);
+    expect(image?.dataset.previewState).toBe("loaded");
 
     image?.dispatchEvent(new Event("error"));
     expect(fallbackSvg).toHaveBeenCalledOnce();
     expect(host.querySelector("svg")?.dataset.fallback).toBe("true");
+  });
+
+  it("supports eager high-priority loading for compact pickers", () => {
+    const host = document.createElement("span");
+    renderModuleCatalogPreview({
+      host,
+      modulePackage: modulePackage("fwm_catalog_base_drawers"),
+      fallbackSvg: () => "fallback",
+      loading: "eager",
+      fetchPriority: "high"
+    });
+
+    const image = host.querySelector<HTMLImageElement>("img");
+    expect(image?.loading).toBe("eager");
+    expect(image?.getAttribute("fetchpriority")).toBe("high");
   });
 
   it("uses the exact DELFI variant preview instead of a generic stored family image", () => {
