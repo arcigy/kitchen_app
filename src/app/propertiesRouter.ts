@@ -120,6 +120,7 @@ type PropertiesRouterContext = {
     tryMountActiveTallSubmoduleProps?: () => boolean;
     getActiveTallEditorInstanceId?: () => string | null;
     tryMountActiveKitchenGroupProps: () => boolean;
+    renderModuleCatalogIconSvg?: (modulePackage: FurnQuoteModulePackage) => string;
   };
   wardrobeMode: null | {
     tryMountActiveWardrobeProps: () => boolean;
@@ -218,7 +219,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props: ctx.props, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault, rebuildFloor: ctx.rebuildFloor, updateSelectionHighlights: ctx.updateSelectionHighlights, commitHistory: ctx.commitHistory, S: ctx.S, enterFloorBoundaryEdit: ctx.enterFloorBoundaryEdit, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, floor);
   const mountSectionToolProps = () => mountSectionToolPropsPanel({ props: ctx.props, sectionDraw: ctx.sectionDraw, drawOrthoEnabled: ctx.drawOrthoEnabled });
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props: ctx.props, sections: ctx.sections, showNoProps: ctx.showNoProps, getSectionBasis, updateAllSectionVisuals: ctx.updateAllSectionVisuals, mountProps, commitHistory: ctx.commitHistory, S: ctx.S }, id);
-  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties }, id);
+  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, renderModuleCatalogIconSvg: ctx.kitchenMode?.renderModuleCatalogIconSvg, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties }, id);
   const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
   const mountWindowProps = () => mountWindowPropsPanel({
     props: ctx.props,

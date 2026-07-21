@@ -29,6 +29,7 @@ import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
 import { refreshSelectionHighlights } from "./selectionController";
 import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
 import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
+import { createModuleTypePicker } from "./moduleTypePicker";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -211,6 +212,7 @@ type ModulePropsContext = {
   clientCatalog: ClientCatalog;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+  renderModuleCatalogIconSvg?: (modulePackage: FurnQuoteModulePackage) => string;
   mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
 };
 
@@ -1067,44 +1069,40 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         modulePackages,
         catalog: ctx.clientCatalog
       });
-      const typeSelect = createSelectElement(
-        modulePackage.module.modulePackageId,
-        compatibleOptions.map((option) => ({ value: option.value, label: option.label }))
-      );
-      typeSelect.dataset.moduleTypeSelector = "true";
-      typeSelect.disabled = compatibleOptions.length <= 1;
-      props.row(s, "Typ modulu", typeSelect);
-      typeSelect.addEventListener("change", () => {
-        const target = compatibleOptions.find((option) => option.value === typeSelect.value);
-        if (!target || target.modulePackage.module.modulePackageId === modulePackage.module.modulePackageId) return;
-        const previousParams = structuredClone(inst.params);
-        inst.params = createReplacementModuleParams({
-          currentParams: previousParams,
-          currentPackage: modulePackage,
-          targetPackage: target.modulePackage,
-          catalog: ctx.clientCatalog
-        });
-        let accepted = false;
-        try {
-          accepted = rebuildInstance(inst, {
-            previousParams,
-            preserveBackAnchor: true,
-            sourceKey: "moduleType"
+      const typePicker = createModuleTypePicker({
+        currentPackageId: modulePackage.module.modulePackageId,
+        options: compatibleOptions,
+        renderFallback: ctx.renderModuleCatalogIconSvg,
+        onSelect: (target) => {
+          const previousParams = structuredClone(inst.params);
+          inst.params = createReplacementModuleParams({
+            currentParams: previousParams,
+            currentPackage: modulePackage,
+            targetPackage: target.modulePackage,
+            catalog: ctx.clientCatalog
           });
-        } catch {
-          const failure = document.createElement("div");
-          failure.className = "muted";
-          failure.textContent = "Modul sa nepodarilo zmeniť. Pôvodný modul zostal zachovaný.";
-          s.appendChild(failure);
+          let accepted = false;
+          try {
+            accepted = rebuildInstance(inst, {
+              previousParams,
+              preserveBackAnchor: true,
+              sourceKey: "moduleType"
+            });
+          } catch {
+            const failure = document.createElement("div");
+            failure.className = "muted";
+            failure.textContent = "Modul sa nepodarilo zmeniť. Pôvodný modul zostal zachovaný.";
+            s.appendChild(failure);
+          }
+          if (!accepted) {
+            inst.params = previousParams;
+            return;
+          }
+          commitHistory(S);
+          mountProps();
         }
-        if (!accepted) {
-          inst.params = previousParams;
-          typeSelect.value = modulePackage.module.modulePackageId;
-          return;
-        }
-        commitHistory(S);
-        mountProps();
       });
+      s.appendChild(typePicker);
     }
 
     const editorHost = document.createElement("div");
