@@ -9,9 +9,10 @@ describe("PWA service worker runtime cache contract", () => {
     expect(source).toContain('const SHELL_CACHE = "arcigy-kitchen-shell-v2"');
     expect(source).toContain('url.pathname.startsWith("/api/")');
     expect(source).toContain('url.pathname.startsWith("/storage/")');
-    expect(source).toContain("event.waitUntil(cacheResponse(");
+    expect(source).toContain("continueInBackground(event, cacheResponse(");
     expect(source).toContain("await cache.put(request, response.clone())");
     expect(source).toMatch(/async function cacheResponse[\s\S]*?catch \{/);
+    expect(source).toMatch(/function continueInBackground[\s\S]*?event\.waitUntil\(promise\)[\s\S]*?catch \{/);
   });
 
   it("ships the default avatar referenced by PostgreSQL-backed profiles", async () => {

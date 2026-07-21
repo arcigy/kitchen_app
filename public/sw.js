@@ -17,6 +17,15 @@ async function cacheResponse(cacheName, request, response) {
   }
 }
 
+function continueInBackground(event, promise) {
+  try {
+    event.waitUntil(promise);
+  } catch {
+    // A late cache extension can be rejected after the fetch event has already
+    // settled. The network response must still be returned to the application.
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -47,7 +56,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          event.waitUntil(cacheResponse(SHELL_CACHE, "/", response));
+          continueInBackground(event, cacheResponse(SHELL_CACHE, "/", response));
           return response;
         })
         .catch(async () => {
@@ -65,7 +74,7 @@ self.addEventListener("fetch", (event) => {
     fetch(request)
       .then((response) => {
         if (!response.ok) return response;
-        event.waitUntil(cacheResponse(RUNTIME_CACHE, request, response));
+        continueInBackground(event, cacheResponse(RUNTIME_CACHE, request, response));
         return response;
       })
       .catch(async () => {
