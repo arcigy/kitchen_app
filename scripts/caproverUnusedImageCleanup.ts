@@ -19,24 +19,26 @@ function fail(message: string): never {
   throw new Error(`CapRover unused-image cleanup refused: ${message}`);
 }
 
-function requireSuccessfulResponse(payload: unknown): UnknownRecord {
-  if (!isRecord(payload)) fail("API response is not an object.");
-  if (payload.status !== 100) fail("API response does not report success.");
+function unwrapSuccessfulResponse(payload: unknown): unknown {
+  if (isRecord(payload) && "status" in payload) {
+    if (payload.status !== 100) fail("API response does not report success.");
+    return payload.data;
+  }
   return payload;
 }
 
 export function createCapRoverUnusedImageDeletePayload(
   payload: unknown
 ): CapRoverUnusedImageDeletePayload {
-  const response = requireSuccessfulResponse(payload);
-  if (!isRecord(response.data) || !Array.isArray(response.data.unusedImages)) {
+  const response = unwrapSuccessfulResponse(payload);
+  if (!isRecord(response) || !Array.isArray(response.unusedImages)) {
     fail("API response has no unusedImages inventory.");
   }
-  if (response.data.unusedImages.length > MAX_DELETE_CANDIDATES) {
+  if (response.unusedImages.length > MAX_DELETE_CANDIDATES) {
     fail(`candidate count exceeds the safety limit of ${MAX_DELETE_CANDIDATES}.`);
   }
 
-  const imageIds = response.data.unusedImages.map((item, index) => {
+  const imageIds = response.unusedImages.map((item, index) => {
     if (!isRecord(item) || typeof item.id !== "string" || !FULL_IMAGE_ID.test(item.id)) {
       fail(`candidate ${index} does not contain a full Docker image ID.`);
     }
@@ -50,7 +52,8 @@ export function createCapRoverUnusedImageDeletePayload(
 }
 
 export function validateCapRoverUnusedImageDeleteResponse(payload: unknown): void {
-  requireSuccessfulResponse(payload);
+  const response = unwrapSuccessfulResponse(payload);
+  if (!isRecord(response)) fail("delete response is not an object.");
 }
 
 async function main(): Promise<void> {
