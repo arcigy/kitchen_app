@@ -1,6 +1,12 @@
 import * as THREE from "three";
 
-export type PbrMaterialId = "wood_veneer_oak_7760_1k" | "plaster_painted_7664_1k" | "wood_floor_ash_4186_1k";
+import {
+  PBR_TEXTURE_FILES,
+  type PbrMaterialId,
+  type PbrTextureFile
+} from "./pbrMaterialManifest";
+
+export type { PbrMaterialId } from "./pbrMaterialManifest";
 
 export type PbrMaterialRef = {
   id: PbrMaterialId;
@@ -73,7 +79,7 @@ function computeTintColor(fallbackColor: string, ref: PbrMaterialRef) {
   return new THREE.Color(1, 1, 1).lerp(tint, strength);
 }
 
-function urlFor(id: PbrMaterialId, file: "BaseColor.jpg" | "Normal.png" | "Roughness.jpg") {
+function urlFor(id: PbrMaterialId, file: PbrTextureFile) {
   return `/materials/${id}/${file}`;
 }
 
@@ -88,7 +94,7 @@ export function loadPbrTextureSet(
       loadTexture(url, resolve, () => resolve(null));
     });
 
-  return Promise.all([load(urlFor(id, "BaseColor.jpg")), load(urlFor(id, "Normal.png")), load(urlFor(id, "Roughness.jpg"))]).then(
+  return Promise.all(PBR_TEXTURE_FILES.map((file) => load(urlFor(id, file)))).then(
     ([baseColor, normal, roughness]) => baseColor && normal && roughness
       ? { baseColor, normal, roughness }
       : null

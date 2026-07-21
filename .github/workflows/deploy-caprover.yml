@@ -51,17 +51,7 @@ jobs:
 
       - name: Create deploy archive
         run: |
-          node - <<'NODE' > material-basecolor-files.txt
-          const fs = require("fs");
-          const source = [
-            fs.readFileSync("src/app/materialPbrOptions.ts", "utf8"),
-            fs.readFileSync("server/workerServer.ts", "utf8")
-          ].join("\n");
-          const paths = [...new Set([...source.matchAll(/assets\/materials\/[^"'`]+?\/maps\/basecolor\.jpg/g)].map((match) => match[0]))];
-          for (const filePath of paths) {
-            if (fs.existsSync(filePath)) console.log(filePath);
-          }
-          NODE
+          npx --no-install tsx scripts/listDeployMaterialAssets.ts > material-asset-files.txt
 
           tar \
             --exclude-vcs \
@@ -73,7 +63,7 @@ jobs:
             --exclude=./storage \
             --exclude='*.log' \
             --exclude=kitchenapp.tar \
-            --exclude=material-basecolor-files.txt \
+            --exclude=material-asset-files.txt \
             --exclude=./assets/materials \
             --exclude=./backend/materials/assets \
             --exclude=./HDRI \
@@ -83,7 +73,7 @@ jobs:
             --exclude=./public/materials \
             -cf kitchenapp.tar .
 
-          tar -rf kitchenapp.tar -T material-basecolor-files.txt
+          tar -rf kitchenapp.tar -T material-asset-files.txt
           ls -lh kitchenapp.tar
 
       - name: Validate isolated and durable CapRover target
