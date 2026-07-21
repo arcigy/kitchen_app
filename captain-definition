@@ -14,7 +14,11 @@
     "ENV KITCHEN_STATIC_ROOT=/app/dist",
     "ENV KITCHEN_APP_PROJECT_ROOT=/app",
     "COPY --from=build /app /app",
+    "RUN apk add --no-cache nginx",
+    "COPY deploy/nginx.conf /etc/nginx/nginx.conf",
+    "COPY deploy/nginx-security-headers.conf /etc/nginx/arcigy-security-headers.conf",
+    "RUN chmod +x /app/scripts/startCapRover.sh",
     "EXPOSE 80",
-    "CMD [\"sh\", \"-c\", \"BLENDER_WORKER_HOST=0.0.0.0 BLENDER_WORKER_PORT=${PORT:-80} npm run serve:caprover\"]"
+    "CMD [\"/app/scripts/startCapRover.sh\"]"
   ]
 }
