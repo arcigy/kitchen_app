@@ -118,10 +118,18 @@ describe("CapRover deployment preflight", () => {
   it("wires the preflight before deploy and fails on missing readiness evidence", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
     const preflight = workflow.indexOf("scripts/validateCapRoverDeployPreflight.ts");
+    const cleanup = workflow.indexOf("name: Reclaim safe CapRover image space");
     const deploy = workflow.indexOf("name: Deploy\n");
 
     expect(preflight).toBeGreaterThan(-1);
-    expect(deploy).toBeGreaterThan(preflight);
+    expect(cleanup).toBeGreaterThan(preflight);
+    expect(deploy).toBeGreaterThan(cleanup);
+    expect(workflow).toContain('/user/apps/appDefinitions/unusedImages');
+    expect(workflow).toContain('/user/apps/appDefinitions/deleteImages');
+    expect(workflow).toContain('-d \'{"mostRecentLimit":2}\'');
+    expect(workflow).toContain('scripts/caproverUnusedImageCleanup.ts plan');
+    expect(workflow).toContain('scripts/caproverUnusedImageCleanup.ts verify');
+    expect(workflow).not.toMatch(/docker\s+(?:system|volume)\s+prune/);
     expect(workflow).not.toContain("/user/apps/appDefinitions/register");
     expect(workflow).toContain("CAPROVER_APP_URL is required");
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
