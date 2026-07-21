@@ -20,6 +20,12 @@ describe("CapRover static proxy contract", () => {
     expect(nginx).toContain("location ~ ^/(?:api|storage)(?:/|$)");
     expect(nginx).toContain("proxy_pass http://arcigy_worker");
     expect(nginx).toContain("client_max_body_size 256m");
+    expect(nginx).toContain("sendfile off");
+    expect(nginx).toContain("gzip on");
+    expect(nginx).toContain("gzip_proxied any");
+    expect(nginx).toContain("proxy_set_header X-Forwarded-Proto $arcigy_forwarded_proto");
+    expect(nginx).toContain("proxy_set_header X-Forwarded-Host $arcigy_forwarded_host");
+    expect(nginx).toContain("location = /organization/default-user.png");
     expect(nginx).toContain("try_files $uri $uri/ /index.html");
     expect(nginx).toContain('return 404 "Static asset not found.\\n"');
     expect(securityHeaders).toContain("Content-Security-Policy");

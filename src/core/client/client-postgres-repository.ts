@@ -66,7 +66,7 @@ function rowToUser(row: OrganizationUserRow): OrganizationUser {
     position: row.position ?? "Team member",
     role: normalizeOrganizationRole(row.role),
     permissions: normalizePermissions(row.permissions),
-    photoUrl: row.photo_asset_id ?? "/organization/default-user.png",
+    photoUrl: row.photo_asset_id ?? "/organization/default-user.svg",
     isActive: row.is_active
   };
 }
