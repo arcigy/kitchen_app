@@ -19,7 +19,10 @@ describe("deploy material asset manifest", () => {
   });
 
   it("wires the validated manifest into the deploy archive after exclusions", async () => {
-    const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
+    const [workflow, dockerIgnore] = await Promise.all([
+      readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8"),
+      readFile(path.join(process.cwd(), ".dockerignore"), "utf-8")
+    ]);
     const manifest = workflow.indexOf("scripts/listDeployMaterialAssets.ts > material-asset-files.txt");
     const exclusion = workflow.indexOf("--exclude=./public/materials");
     const append = workflow.indexOf("tar -rf kitchenapp.tar -T material-asset-files.txt");
@@ -28,5 +31,6 @@ describe("deploy material asset manifest", () => {
     expect(exclusion).toBeGreaterThan(manifest);
     expect(append).toBeGreaterThan(exclusion);
     expect(workflow).not.toContain("material-basecolor-files.txt");
+    expect(dockerIgnore).not.toMatch(/^\/?public\/materials\/?$/m);
   });
 });
