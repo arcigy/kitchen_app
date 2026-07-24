@@ -21,10 +21,16 @@ import {
 } from "./kitchenMaterialSync";
 import {
   getKitchenModuleRole,
-  isKitchenModuleInEditLayer,
+  isKitchenModuleSelectableInEditLayer,
   resolveKitchenModulePlanEmphasis,
   type KitchenModuleEditLayer
 } from "./kitchenModuleRules";
+import {
+  applyKitchenPlanOutlineEmphasis,
+  captureKitchenPlanOutline,
+  restoreKitchenPlanOutline,
+  type KitchenPlanOutlineSnapshot,
+} from "./kitchenPlanPresentation";
 import {
   groupKitchenModulePackages,
   type KitchenCatalogRole,
@@ -426,11 +432,10 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
   let activeName = "";
   let activeModuleEditLayer: KitchenModuleEditLayer = "base";
-  const planOutlineSnapshots = new Map<THREE.LineBasicMaterial, {
-    color: THREE.Color;
-    opacity: number;
-    renderOrder: number;
-  }>();
+  const planOutlineSnapshots = new Map<
+    THREE.LineSegments,
+    KitchenPlanOutlineSnapshot
+  >();
   let snapshotName = "";
   let editingExistingGroupId: string | null = null;
   let activeTallEditorInstanceId: string | null = null;
@@ -1192,15 +1197,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const restoreKitchenPlanPresentation = () => {
-    for (const [material, snapshot] of planOutlineSnapshots) {
-      material.color.copy(snapshot.color);
-      material.opacity = snapshot.opacity;
-      material.needsUpdate = true;
-    }
-    for (const inst of args.S.instances) {
-      const material = inst.outline.material as THREE.LineBasicMaterial;
-      const snapshot = planOutlineSnapshots.get(material);
-      if (snapshot) inst.outline.renderOrder = snapshot.renderOrder;
+    for (const [outline, snapshot] of planOutlineSnapshots) {
+      restoreKitchenPlanOutline(outline, snapshot);
     }
     planOutlineSnapshots.clear();
   };
@@ -1220,29 +1218,26 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
 
     const invalidSelection = args.getSelectedModuleIds().some((id) => {
       const inst = args.findInstance(id);
-      return !inst || inst.kitchenGroupId !== groupId || !isKitchenModuleInEditLayer(inst.params as Record<string, unknown>, activeModuleEditLayer);
+      return !inst || inst.kitchenGroupId !== groupId || !isKitchenModuleSelectableInEditLayer(
+        inst.params as Record<string, unknown>,
+        activeModuleEditLayer
+      );
     });
     if (invalidSelection) args.setSelectedModule(null);
 
     for (const inst of args.S.instances) {
       if (inst.kitchenGroupId !== groupId) continue;
-      const material = inst.outline.material as THREE.LineBasicMaterial;
-      if (!planOutlineSnapshots.has(material)) {
-        planOutlineSnapshots.set(material, {
-          color: material.color.clone(),
-          opacity: material.opacity,
-          renderOrder: inst.outline.renderOrder
-        });
+      if (!planOutlineSnapshots.has(inst.outline)) {
+        planOutlineSnapshots.set(
+          inst.outline,
+          captureKitchenPlanOutline(inst.outline)
+        );
       }
       const emphasis = resolveKitchenModulePlanEmphasis(
         inst.params as Record<string, unknown>,
         activeModuleEditLayer
       );
-      if (material.color.getHex() !== emphasis.color) material.color.setHex(emphasis.color);
-      material.transparent = true;
-      material.opacity = emphasis.opacity;
-      material.needsUpdate = true;
-      inst.outline.renderOrder = emphasis.renderOrder;
+      applyKitchenPlanOutlineEmphasis(inst.outline, emphasis);
     }
   };
 
@@ -4698,7 +4693,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       if (inst.kitchenGroupId !== activeGroupId) return null;
       const tallHost = activeTallStackEditorInstance();
       if (tallHost) return tallHost.id === id ? id : null;
-      return isKitchenModuleInEditLayer(
+      return isKitchenModuleSelectableInEditLayer(
         inst.params as Record<string, unknown>,
         activeModuleEditLayer
       ) ? id : null;
