@@ -108,6 +108,19 @@ function moduleInstance(id: string, position: THREE.Vector3, kitchenGroupId: str
 }
 
 describe("transform move tool", () => {
+  it("initializes a programmatic rotation pivot only for an active rotate operation", () => {
+    const transformState = makeTransformState();
+    const controller = createTestTransformController({ transformState });
+
+    expect(controller.setRotatePivot(new THREE.Vector3(1, 0, 2))).toBe(false);
+    transformState.kind = "rotate";
+    transformState.step = "pickPivot";
+
+    expect(controller.setRotatePivot(new THREE.Vector3(1, 0, 2))).toBe(true);
+    expect(transformState.pivot?.toArray()).toEqual([1, 0, 2]);
+    expect(transformState.step).toBe("rotating");
+  });
+
   it("resets transform state for clear without replacing vector and map containers", () => {
     const transformState = makeTransformState();
     const lastValidDelta = transformState.lastValidDelta;

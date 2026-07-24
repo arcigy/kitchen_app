@@ -1,5 +1,4 @@
 import "./styles/base.css";
-import "./styles/chatbot.css";
 import "./styles/appBoot.css";
 import "./styles/authShell.css";
 import "./styles/projectManager.css";
@@ -7,6 +6,7 @@ import "./styles/auth.css";
 import "./styles/editorShell.css";
 import "./styles/classicEditorChrome.css";
 import "./style.css";
+import "./styles/chatbot.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
 import type { ClientContext } from "./core/client/client-context";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runAssistantTurn } from "./agent";
+import { runAssistantTurn, sanitizeAssistantToolCalls } from "./agent";
 import type { AssistantClientContext } from "./types";
 import type { ClientCatalog, ClientModuleDefinition, VendorProductVariant } from "../core/catalog/catalog-types";
 import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
@@ -91,6 +91,14 @@ function tenantCatalog(): Pick<ClientCatalog, "clientId" | "modules" | "vendorCa
 }
 
 describe("assistant agent fallback", () => {
+  it("drops unregistered and schema-invalid model tool calls", () => {
+    expect(sanitizeAssistantToolCalls([
+      { id: "unknown", toolId: "filesystem.delete", input: {} },
+      { id: "bad_move", toolId: "editor.moveSelection", input: { dxMm: 20 } },
+      { id: "good_move", toolId: "editor.moveSelection", input: { dxMm: 20, dzMm: 0 }, confirmed: true }
+    ])).toEqual([{ id: "good_move", toolId: "editor.moveSelection", input: { dxMm: 20, dzMm: 0 } }]);
+  });
+
   it("does not create a full-kitchen generation tool call", async () => {
     const response = await runAssistantTurn({
       message: "vytvor celu kuchynu podla zadania",
@@ -130,6 +138,53 @@ describe("assistant agent fallback", () => {
     expect(response.requiresConfirmation).toBe(false);
     expect(response.toolCalls).toEqual([]);
     expect(response.assistantMessage).toContain("Materialy");
+  });
+
+  it("uses a deterministic live read for module-count questions", async () => {
+    const response = await runAssistantTurn({
+      message: "Koľko modulov je v aktuálnej kuchyni?",
+      clientContext: baseContext,
+      ragChunks: []
+    });
+
+    expect(response.phase).toBe("plan");
+    expect(response.requiresConfirmation).toBe(false);
+    expect(response.toolCalls).toHaveLength(1);
+    expect(response.toolCalls[0]).toMatchObject({
+      toolId: "context.queryObjects",
+      input: { kinds: ["module"], limit: 500 }
+    });
+    expect(response.workflow?.successCriteria[0]).toContain("počet modulov");
+  });
+
+  it("reads the exact open-project name from live metadata instead of answering from RAG", async () => {
+    const response = await runAssistantTurn({
+      message: "Ako sa volá tento projekt?",
+      clientContext: baseContext,
+      ragChunks: [{
+        id: "unrelated_product_name",
+        source: "README.md",
+        title: "Product",
+        text: "The application product is called FurnQuote.",
+        tags: ["product"],
+        updatedAt: "2026-07-23T00:00:00.000Z"
+      }]
+    });
+
+    expect(response.phase).toBe("plan");
+    expect(response.toolCalls).toEqual([expect.objectContaining({
+      toolId: "project.getMetadata",
+      input: {}
+    })]);
+    expect(response.assistantMessage).not.toContain("FurnQuote");
+    expect(response.workflow?.successCriteria[0]).toContain("presný názov");
+    expect(response.debugTrace).toMatchObject({
+      schemaVersion: "arcigy-assistant-debug.v1",
+      rawReasoningPolicy: { rawChainOfThoughtAvailable: false }
+    });
+    expect(response.debugTrace?.events.some((event) =>
+      event.stage === "workflow_state" && event.actor.role === "workflow_controller"
+    )).toBe(true);
   });
 
   it("validates tool results on continue", async () => {

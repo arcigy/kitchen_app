@@ -4,6 +4,13 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { runAssistantTurn } from "../assistant/agent";
 import { reindexAssistantRag, searchAssistantRag } from "../assistant/rag";
 import type { AssistantTurnRequest } from "../assistant/types";
+import {
+  ASSISTANT_CAPABILITY_BOUNDARIES,
+  ASSISTANT_TOOL_DEFINITIONS,
+  assistantToolMetadataForOrchestrator
+} from "../assistant/toolRegistry";
+import { validateAssistantToolCall } from "../assistant/toolValidation";
+import { getAssistantModelAssignments } from "../assistant/openaiResponses";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -21,6 +28,8 @@ type AssistantEndpointDeps = {
 function isAssistantRoute(pathname: string): boolean {
   return pathname === "/api/assistant/turn" ||
     pathname === "/api/assistant/continue" ||
+    pathname === "/api/assistant/capabilities" ||
+    pathname === "/api/assistant/tool-authorization" ||
     pathname === "/api/assistant/rag/reindex";
 }
 
@@ -46,7 +55,14 @@ function parseAssistantTurnRequest(body: unknown): AssistantTurnRequest {
     message: record.message.slice(0, 8000),
     clientContext: record.clientContext as AssistantTurnRequest["clientContext"],
     conversation: Array.isArray(record.conversation) ? record.conversation as AssistantTurnRequest["conversation"] : [],
-    toolResults: Array.isArray(record.toolResults) ? record.toolResults as AssistantTurnRequest["toolResults"] : []
+    toolResults: Array.isArray(record.toolResults) ? record.toolResults as AssistantTurnRequest["toolResults"] : [],
+    workflow: record.workflow && typeof record.workflow === "object" && !Array.isArray(record.workflow)
+      ? record.workflow as AssistantTurnRequest["workflow"]
+      : null,
+    debugTraceId: typeof record.debugTraceId === "string" ? record.debugTraceId.slice(0, 120) : undefined,
+    debugCycle: typeof record.debugCycle === "number" && Number.isInteger(record.debugCycle)
+      ? Math.max(0, Math.min(20, record.debugCycle))
+      : undefined
   };
 }
 
@@ -59,6 +75,105 @@ export async function handleAssistantApi(
   if (!isAssistantRoute(url.pathname)) return false;
   const ctx = await deps.getContext(req.headers.cookie);
   const catalog = await deps.getCatalog(ctx);
+
+  if (req.method === "GET" && url.pathname === "/api/assistant/capabilities") {
+    deps.sendJson(res, 200, {
+      ok: true,
+      knowledgeVersion: "assistant-capabilities.v3",
+      tools: ASSISTANT_TOOL_DEFINITIONS,
+      orchestratorToolMetadata: assistantToolMetadataForOrchestrator(),
+      orchestration: {
+        stages: ["communicator", "orchestrator", "executor", "analyzer", "communicator"],
+        maxIterations: 5,
+        models: getAssistantModelAssignments()
+      },
+      boundaries: ASSISTANT_CAPABILITY_BOUNDARIES,
+      tenantAvailability: {
+        enabledModulePackageIds: catalog.modules.filter((item) => item.enabled).map((item) => item.modulePackageId).filter(Boolean),
+        vendorId: catalog.vendorCatalog?.vendorId ?? null
+      }
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/assistant/tool-authorization") {
+    const raw = await deps.readJsonBody(req);
+    const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+    const toolId = typeof body.toolId === "string" ? body.toolId : "";
+    const input = body.input && typeof body.input === "object" && !Array.isArray(body.input)
+      ? body.input as Record<string, unknown>
+      : {};
+    const validation = validateAssistantToolCall({ id: "server_authorization", toolId, input });
+    if (validation.errors.length > 0) {
+      deps.sendJson(res, 400, { authorized: false, error: validation.errors.join(" ") });
+      return true;
+    }
+    if (toolId === "catalog.insertModule") {
+      const modulePackageId = String(input.modulePackageId ?? "");
+      const authorized = catalog.modules.some((item) => item.enabled && item.modulePackageId === modulePackageId);
+      deps.sendJson(res, authorized ? 200 : 403, {
+        authorized,
+        error: authorized ? undefined : "Module package is not enabled for the authenticated tenant."
+      });
+      return true;
+    }
+    if (toolId === "kitchen.create") {
+      const modules = Array.isArray(input.modules)
+        ? input.modules.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+        : [];
+      const requestedPackageIds = modules.map((item) => String(item.modulePackageId ?? ""));
+      const packagesAuthorized = requestedPackageIds.every((modulePackageId) =>
+        !!modulePackageId && catalog.modules.some((item) => item.enabled && item.modulePackageId === modulePackageId)
+      );
+      const contextPatch = input.contextPatch && typeof input.contextPatch === "object" && !Array.isArray(input.contextPatch)
+        ? input.contextPatch as Record<string, unknown>
+        : {};
+      const worktop = input.worktop && typeof input.worktop === "object" && !Array.isArray(input.worktop)
+        ? input.worktop as Record<string, unknown>
+        : {};
+      const requestedMaterialIds = [
+        contextPatch.frontsMaterialId,
+        contextPatch.corpusMaterialId,
+        contextPatch.backMaterialId,
+        contextPatch.drawerBottomMaterialId,
+        contextPatch.worktopMaterialId,
+        worktop.materialId
+      ].filter((value): value is string => typeof value === "string" && value.length > 0);
+      const materialsAuthorized = requestedMaterialIds.every((materialId) =>
+        catalog.materials.some((material) => material.id === materialId && material.isActive !== false)
+      );
+      const handleComponentId = typeof contextPatch.handleComponentId === "string" ? contextPatch.handleComponentId : "";
+      const componentAuthorized = !handleComponentId || catalog.components.some((component) =>
+        component.id === handleComponentId && component.isActive !== false
+      );
+      const authorized = packagesAuthorized && materialsAuthorized && componentAuthorized;
+      deps.sendJson(res, authorized ? 200 : 403, {
+        authorized,
+        error: authorized ? undefined : "Kitchen intent references a module, material or component outside the authenticated tenant catalog."
+      });
+      return true;
+    }
+    if (toolId === "vendorCatalog.insertResolvedModule") {
+      const catalogKey = String(input.catalogKey ?? "");
+      const productTemplateId = String(input.productTemplateId ?? "");
+      const moduleType = String(input.moduleType ?? "");
+      const modulePackageId = String(input.modulePackageId ?? "");
+      const vendorMatch = catalog.vendorCatalog?.productVariants.some((item) =>
+        item.catalogKey === catalogKey && item.productTemplateId === productTemplateId
+      ) ?? false;
+      const moduleMatch = catalog.modules.some((item) =>
+        item.enabled && item.moduleType === moduleType && item.modulePackageId === modulePackageId
+      );
+      const authorized = vendorMatch && moduleMatch;
+      deps.sendJson(res, authorized ? 200 : 403, {
+        authorized,
+        error: authorized ? undefined : "Resolved vendor module is not available in the authenticated tenant catalog."
+      });
+      return true;
+    }
+    deps.sendJson(res, 400, { authorized: false, error: "This assistant tool does not use server catalog authorization." });
+    return true;
+  }
 
   if (req.method === "POST" && url.pathname === "/api/assistant/rag/reindex") {
     const index = await reindexAssistantRag(deps.projectRoot, ctx, catalog);

@@ -24,6 +24,8 @@
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
     "import:modpkg": "tsx scripts/importModpkg.ts",
     "test:pricing-contract": "tsx scripts/testPricingContract.ts",
+    "test:assistant-live": "node scripts/testAssistantCapabilitiesLive.mjs",
+    "test:assistant-project": "node scripts/testAssistantCapabilitiesPersistedProject.mjs",
     "test:pricing-ui": "node scripts/testPricingUi.mjs",
     "test:kitchen-context-live": "node scripts/testKitchenContextLive.mjs",
     "test:kitchen-performance": "node scripts/testKitchenPerformance.mjs",
