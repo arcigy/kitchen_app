@@ -3262,32 +3262,6 @@ body {
   transform: rotate(34deg);
 }
 
-.archux-view-cube-orbit span {
-  position: absolute;
-  color: rgba(42, 51, 68, 0.82);
-  font: 800 13px/1 Arial, sans-serif;
-}
-
-.archux-view-cube-orbit .orbit-n {
-  left: 23px;
-  top: -2px;
-}
-
-.archux-view-cube-orbit .orbit-e {
-  right: 9px;
-  top: 26px;
-}
-
-.archux-view-cube-orbit .orbit-s {
-  right: 31px;
-  bottom: -1px;
-}
-
-.archux-view-cube-orbit .orbit-w {
-  left: 7px;
-  bottom: 11px;
-}
-
 .archux-view-cube.is-floorplan .archux-view-cube-face {
   cursor: default;
 }
@@ -5505,61 +5479,13 @@ textarea {
 }
 
 
-/* Button-hover cursor handoff: the UI control becomes the pointer target. */
+/* Buttons keep the standard pointer without cursor capture or magnetic motion. */
 .archux-app button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
 .revit-chrome button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
 .viewer-downbar button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
 .archux-side-nav button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
 #properties button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit) {
-  cursor: none;
-  transform:
-    translate(var(--button-magnet-x, 0), var(--button-magnet-y, 0))
-    translateY(var(--button-hover-y, 0))
-    scale(calc(var(--button-hover-scale, 1) * var(--button-magnet-scale, 1)));
-  transition:
-    transform 90ms ease,
-    box-shadow 130ms ease,
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease,
-    opacity 120ms ease;
-  will-change: transform;
-}
-
-.archux-app button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):hover,
-.revit-chrome button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):hover,
-.viewer-downbar button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):hover,
-.archux-side-nav button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):hover,
-#properties button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):hover {
-  --button-hover-y: -1px;
-  --button-hover-scale: 1.025;
-}
-
-.archux-app button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):active,
-.revit-chrome button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):active,
-.viewer-downbar button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):active,
-.archux-side-nav button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):active,
-#properties button:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit):active {
-  --button-hover-y: 0;
-  --button-hover-scale: 0.985;
-}
-
-body.button-magnet-capturing,
-body.button-magnet-capturing * {
-  cursor: none !important;
-}
-
-.archux-app button.button-magnet-active:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
-.revit-chrome button.button-magnet-active:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
-.viewer-downbar button.button-magnet-active:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
-.archux-side-nav button.button-magnet-active:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit),
-#properties button.button-magnet-active:not(:disabled):not(.archux-view-cube-face):not(.archux-view-cube-roll):not(.archux-view-cube-jump):not(.archux-view-cube-hit) {
-  position: relative;
-  z-index: 5;
-  box-shadow:
-    0 0 0 9px rgba(102, 85, 255, 0.09),
-    0 10px 24px rgba(31, 37, 58, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  cursor: pointer;
 }
 
 .viewer-toolbar-button:not(:disabled):hover,
@@ -10203,6 +10129,50 @@ canvas.material-modify-picking {
   gap: 8px;
 }
 
+.coming-soon-dialog {
+  width: min(420px, calc(100vw - 32px));
+  gap: 12px;
+  padding: 24px;
+  border-color: #d8d4ff;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(31, 37, 58, 0.3);
+}
+
+.coming-soon-dialog__eyebrow {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #efedff;
+  color: #5847e8;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.coming-soon-dialog h2 {
+  color: #202333;
+  font-size: 20px;
+}
+
+.coming-soon-dialog p {
+  margin: 0 0 6px;
+  color: #62677a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.coming-soon-dialog__close {
+  min-width: 104px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #6655ff;
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
 .project-list-item {
   width: 100%;
   display: block;
@@ -11332,13 +11302,6 @@ canvas.material-modify-picking {
 .revit-tab:hover {
   background: rgba(245, 247, 255, 0.92);
   color: #5847e8;
-}
-
-.revit-tab.button-magnet-active:not(:disabled) {
-  box-shadow:
-    0 0 0 7px rgba(102, 85, 255, 0.06),
-    0 8px 18px rgba(31, 37, 58, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .topbar-rows {
