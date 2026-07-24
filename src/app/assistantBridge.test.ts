@@ -1,0 +1,230 @@
+import { describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
+import { createAssistantBridge } from "./assistantBridge";
+import { makeDefaultModuleParams } from "../model/cabinetTypes";
+
+describe("assistant bridge safety boundary", () => {
+  it("rejects confirmation-gated tools before calling editor owners", async () => {
+    const bridge = createAssistantBridge({} as never);
+    const result = await bridge.executeToolCall({
+      id: "delete_1",
+      toolId: "editor.deleteSelection",
+      input: {}
+    });
+    expect(result).toMatchObject({ ok: false, toolId: "editor.deleteSelection" });
+    expect(result.error).toContain("requires explicit user confirmation");
+  });
+
+  it("rejects malformed tool inputs before touching editor state", async () => {
+    const bridge = createAssistantBridge({} as never);
+    const result = await bridge.executeToolCall({
+      id: "move_1",
+      toolId: "editor.moveSelection",
+      input: { dxMm: 100 }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("input.dzMm is required");
+  });
+
+  it("rolls back earlier module patches when a later target fails", async () => {
+    const original = makeDefaultModuleParams("drawer_low");
+    const first = { id: "i1", params: structuredClone(original) };
+    const rebuildInstance = vi.fn(() => true);
+    const bridge = createAssistantBridge({
+      S: { mode: "build" },
+      instances: [first],
+      findInstance: (id: string) => id === first.id ? first : null,
+      rebuildInstance,
+      mountProps: vi.fn(),
+      updateLayoutPanel: vi.fn(),
+      updateSelectionHighlights: vi.fn()
+    } as never);
+
+    const result = await bridge.executeToolCall({
+      id: "patch_1",
+      toolId: "module.patchSelectedParams",
+      input: { instanceIds: ["i1", "missing"], patch: { widthMm: 800 } }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Module missing not found");
+    expect(first.params).toEqual(original);
+    expect(rebuildInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it("initializes the existing transform owner with the selected wall midpoint before rotating", async () => {
+    const setRotatePivot = vi.fn(() => true);
+    const wall = {
+      id: "w1",
+      params: { aMm: { x: 0, z: 1000 }, bMm: { x: 2000, z: 1000 } }
+    };
+    const applyRotateAngle = vi.fn(() => {
+      wall.params = { aMm: { x: 1000, z: 0 }, bMm: { x: 1000, z: 2000 } };
+    });
+    const bridge = createAssistantBridge({
+      S: {
+        selectedWallIds: new Set(["w1"]),
+        selectedInstanceIds: new Set(),
+        selectedInstanceId: null,
+        activeKitchenGroupId: null,
+        kitchenGroups: [],
+        customFurniture: [],
+        layoutTool: "select",
+        viewMode: "2d"
+      },
+      walls: [wall],
+      instances: [],
+      startTransformFromSelection: vi.fn(() => true),
+      setRotatePivot,
+      applyRotateAngle,
+      clearTransform: vi.fn(),
+      commitHistory: vi.fn(),
+      mountProps: vi.fn(),
+      updateLayoutPanel: vi.fn(),
+      updateSelectionHighlights: vi.fn(),
+      getSelectedKind: () => "wall",
+      getSelectedKitchenGroupId: () => null,
+      getActiveViewerTab: () => "floorplan",
+      getLayoutTool: () => "select",
+      getViewMode: () => "2d",
+      findInstance: () => null,
+      projectActions: { getState: () => ({ currentProject: null, lastSavedAt: null, saveRevision: 0 }) },
+      floors: [], columns: [], sections: [], windows: [], doors: [], kitchenWorktops: [], catalog: { materials: [], components: [], modules: [] }
+    } as never);
+
+    const result = await bridge.executeToolCall({
+      id: "rotate_1",
+      toolId: "editor.rotateSelection",
+      input: { angleDeg: 90 }
+    });
+
+    expect(setRotatePivot).toHaveBeenCalledOnce();
+    const pivot = (setRotatePivot.mock.calls as unknown as Array<[THREE.Vector3]>)[0]?.[0];
+    expect(pivot?.toArray()).toEqual([1, 0, 1]);
+    expect(applyRotateAngle).toHaveBeenCalledWith(Math.PI / 2);
+    expect(result.ok).toBe(true);
+  });
+
+  it("serves narrow GET tools from the live project without mutating it", async () => {
+    const root = new THREE.Group();
+    root.position.set(1.2, 0, 2.4);
+    const params = makeDefaultModuleParams("drawer_low");
+    const instance = { id: "module_1", params, root, kitchenGroupId: "group_1", kitchenPlacement: null };
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(3, 4, 5);
+    const bridge = createAssistantBridge({
+      S: {
+        selectedInstanceIds: new Set(["module_1"]),
+        selectedInstanceId: "module_1",
+        selectedWallIds: new Set(),
+        selectedKind: "module",
+        activeKitchenGroupId: "group_1",
+        kitchenGroups: [{ id: "group_1", name: "Main kitchen", instanceIds: ["module_1"], ctx: {} }],
+        customFurniture: [],
+        layoutTool: "select",
+        viewMode: "3d"
+      },
+      catalog: {
+        materials: [{
+          id: "mat.H15554",
+          materialCode: "H15554",
+          displayName: "Oak H15554",
+          name: "Oak H15554",
+          decor: "H15554",
+          manufacturer: "Demo",
+          supplierId: "supplier_1",
+          materialType: "board",
+          boardFamily: "body",
+          defaultThicknessMm: 18,
+          availableThicknessesMm: [18],
+          recommendedUse: "Corpus",
+          tags: ["oak"],
+          isActive: true
+        }],
+        components: [],
+        modules: [{
+          id: "drawer_catalog",
+          name: "Drawer cabinet",
+          description: "Base cabinet with drawers",
+          moduleType: "drawer_low",
+          modulePackageId: "drawer_low_v1",
+          category: "base",
+          defaultWidth: 600,
+          defaultHeight: 720,
+          defaultDepth: 560,
+          tags: ["drawer", "base"],
+          enabled: true
+        }]
+      },
+      instances: [instance],
+      walls: [], floors: [], columns: [], sections: [], windows: [], doors: [], kitchenWorktops: [],
+      modulePackages: [{
+        module: { modulePackageId: "drawer_low_v1", moduleType: "drawer_low", displayName: "Drawer cabinet" },
+        parameters: { parameters: [
+          { key: "width", label: "Width", type: "number", defaultValue: 600, min: 300, max: 1200, affects: "geometry" },
+          { key: "drawerSystemPreset", label: "Drawer system", type: "select", defaultValue: "standard", options: [{ label: "Standard", value: "standard" }, { label: "Premium", value: "premium" }], affects: "bom" }
+        ] },
+        placement: { allowedContexts: ["kitchen_wall"] },
+        constraints: { dimensionRules: { width: { min: 300, max: 1200 } } }
+      }],
+      findInstance: (id: string) => id === "module_1" ? instance : null,
+      getSelectedKind: () => "module",
+      getSelectedKitchenGroupId: () => "group_1",
+      getActiveViewerTab: () => "floorplan",
+      getLayoutTool: () => "select",
+      getViewMode: () => "3d",
+      getCamera: () => camera,
+      getControlsTarget: () => new THREE.Vector3(1, 0, 2),
+      getProjection: () => "perspective",
+      getRenderMode: () => "solid",
+      getViewerToolMode: () => "orbit",
+      projectActions: {
+        getState: () => ({
+          currentProject: { projectId: "project_1", activePhaseId: "phase_1" },
+          lastSavedAt: "2026-07-22T10:00:00.000Z",
+          saveRevision: 3,
+          editingSessionId: "session_1"
+        }),
+        inspectById: vi.fn(async () => ({
+          project: { projectId: "project_old", name: "Old kitchen", updatedAt: "2026-07-01T00:00:00.000Z" },
+          catalogSnapshot: { materials: [{ id: "mat.H15554", materialCode: "H15554", displayName: "Oak H15554" }] },
+          appState: {
+            kitchen: { groups: [{ id: "kg_old", ctx: { corpusMaterialId: "mat.H15554" } }] },
+            modules: [{ id: "old_m1", params: { corpusMaterialId: "mat.H15554" } }],
+            materialAssignments: {}
+          }
+        }))
+      }
+    } as never);
+
+    const selection = await bridge.executeToolCall({ id: "read_selection", toolId: "context.getSelection", input: {} });
+    const view = await bridge.executeToolCall({ id: "read_view", toolId: "context.getCurrentView", input: {} });
+    const query = await bridge.executeToolCall({ id: "query_modules", toolId: "context.queryObjects", input: { kinds: ["module"], kitchenGroupId: "group_1", text: "drawer" } });
+    const object = await bridge.executeToolCall({ id: "read_module", toolId: "context.getObject", input: { kind: "module", id: "module_1" } });
+    const project = await bridge.executeToolCall({ id: "read_project", toolId: "project.getMetadata", input: {} });
+    const schema = await bridge.executeToolCall({ id: "read_schema", toolId: "module.getParameterSchema", input: { instanceId: "module_1" } });
+    const presets = await bridge.executeToolCall({ id: "read_presets", toolId: "module.listPresets", input: { instanceId: "module_1" } });
+    const catalog = await bridge.executeToolCall({ id: "search_catalog", toolId: "catalog.searchModules", input: { query: "drawer", widthMm: 600 } });
+    const materials = await bridge.executeToolCall({ id: "search_materials", toolId: "catalog.searchMaterials", input: { query: "H15554" } });
+    const oldMaterial = await bridge.executeToolCall({ id: "old_material", toolId: "project.inspectMaterialUsage", input: { projectId: "project_old", query: "H15554" } });
+    const validation = await bridge.executeToolCall({ id: "validate", toolId: "validation.inspectProject", input: {} });
+
+    expect(selection).toMatchObject({ ok: true, callId: "read_selection", output: { selectedInstanceIds: ["module_1"] } });
+    expect(view).toMatchObject({ ok: true, callId: "read_view", output: { projection: "perspective", camera: { positionM: { x: 3, y: 4, z: 5 } } } });
+    expect(query).toMatchObject({ ok: true, output: { total: 1, objects: [{ id: "module_1", kind: "module" }] } });
+    expect(object).toMatchObject({ ok: true, output: { id: "module_1", kind: "module", positionMm: { x: 1200, y: 0, z: 2400 } } });
+    expect(project).toMatchObject({ ok: true, output: { projectId: "project_1", saveRevision: 3, editingSessionId: "session_1" } });
+    expect(schema).toMatchObject({
+      ok: true,
+      output: {
+        modulePackageId: "drawer_low_v1",
+        parameters: expect.arrayContaining([expect.objectContaining({ key: "width", min: 300, max: 1200 })])
+      }
+    });
+    expect(presets).toMatchObject({ ok: true, output: { presets: [{ parameterKey: "drawerSystemPreset", options: [{ value: "standard" }, { value: "premium" }] }] } });
+    expect(catalog).toMatchObject({ ok: true, output: { total: 1, modules: [{ modulePackageId: "drawer_low_v1" }] } });
+    expect(materials).toMatchObject({ ok: true, output: { total: 1, materials: [{ id: "mat.H15554", materialCode: "H15554" }] } });
+    expect(oldMaterial).toMatchObject({ ok: true, output: { materialIds: ["mat.H15554"], occurrenceCount: 2 } });
+    expect(validation.ok).toBe(true);
+  });
+});

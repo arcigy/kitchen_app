@@ -16,6 +16,56 @@ export type NavigationPointerNdc = {
   y: number;
 };
 
+export type SemanticFocusPerspective = "front" | "back" | "left" | "right" | "top" | "isometric";
+
+export function semanticFocusDirection(perspective: SemanticFocusPerspective) {
+  if (perspective === "front") return new THREE.Vector3(0, 0, 1);
+  if (perspective === "back") return new THREE.Vector3(0, 0, -1);
+  if (perspective === "left") return new THREE.Vector3(-1, 0, 0);
+  if (perspective === "right") return new THREE.Vector3(1, 0, 0);
+  if (perspective === "top") return new THREE.Vector3(0, 1, 0);
+  return new THREE.Vector3(1, 0.65, 1).normalize();
+}
+
+export function semanticPerspectiveFocusDistance(radius: number, fovDeg: number, padding = 1.2) {
+  const safeRadius = Math.max(0.08, Number.isFinite(radius) ? radius : 0.08);
+  const safeFov = THREE.MathUtils.clamp(Number.isFinite(fovDeg) ? fovDeg : 45, 1, 179);
+  const safePadding = THREE.MathUtils.clamp(Number.isFinite(padding) ? padding : 1.2, 0.5, 3);
+  return Math.max(
+    MIN_NAVIGATION_FOCUS_DISTANCE * 2,
+    safeRadius / Math.tan(THREE.MathUtils.degToRad(safeFov) / 2) * safePadding
+  );
+}
+
+export function setViewCubeCssRotationMatrix(
+  cameraQuaternion: THREE.Quaternion,
+  target: THREE.Matrix4
+) {
+  target.makeRotationFromQuaternion(cameraQuaternion).invert();
+
+  // Three.js uses +Y up, while CSS 3D uses +Y down. Conjugating the camera's
+  // inverse rotation by that axis flip preserves a proper rotation and keeps
+  // the cube aligned with the complete camera orientation, including roll.
+  const elements = target.elements;
+  elements[1] *= -1;
+  elements[4] *= -1;
+  elements[6] *= -1;
+  elements[9] *= -1;
+  return target;
+}
+
+export function viewCubeCssTransform(
+  cameraQuaternion: THREE.Quaternion,
+  target = new THREE.Matrix4()
+) {
+  const elements = setViewCubeCssRotationMatrix(cameraQuaternion, target).elements;
+  const values = elements.map((value) => {
+    if (Math.abs(value) < 1e-12) return "0";
+    return String(Number(value.toFixed(12)));
+  });
+  return `matrix3d(${values.join(",")})`;
+}
+
 export function normalizeNavigationWheelDelta(
   deltaY: number,
   deltaMode = 0,
@@ -147,11 +197,22 @@ export function orbitCameraAroundPivot(
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
   const currentElevation = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
   const requestedPitch = -Math.PI * 2 * deltaY / height * rotateSpeed;
-  const nextElevation = THREE.MathUtils.clamp(
-    currentElevation + requestedPitch,
-    -MAX_ORBIT_ELEVATION,
-    MAX_ORBIT_ELEVATION
-  );
+  let nextElevation = currentElevation;
+  if (currentElevation > MAX_ORBIT_ELEVATION) {
+    if (requestedPitch < 0) {
+      nextElevation = Math.max(MAX_ORBIT_ELEVATION, currentElevation + requestedPitch);
+    }
+  } else if (currentElevation < -MAX_ORBIT_ELEVATION) {
+    if (requestedPitch > 0) {
+      nextElevation = Math.min(-MAX_ORBIT_ELEVATION, currentElevation + requestedPitch);
+    }
+  } else {
+    nextElevation = THREE.MathUtils.clamp(
+      currentElevation + requestedPitch,
+      -MAX_ORBIT_ELEVATION,
+      MAX_ORBIT_ELEVATION
+    );
+  }
   const pitch = nextElevation - currentElevation;
   if (Math.abs(pitch) > 1e-12) {
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();

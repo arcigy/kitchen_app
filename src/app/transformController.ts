@@ -753,5 +753,15 @@ export function createTransformController(ctx: TransformControllerContext) {
     }
   };
 
-  return { clearTransform, startTransformFromSelection, restoreTransformStartState, translateWallsByAnchors, applyMoveDelta, rotatePointAround, rotateWallsByAnchors, applyRotateAngle };
+  const setRotatePivot = (pivot: THREE.Vector3) => {
+    if (ctx.transformState.kind !== "rotate" || ctx.transformState.step !== "pickPivot") return false;
+    ctx.transformState.pivot = pivot.clone();
+    ctx.transformState.step = "rotating";
+    ctx.transformState.typed = "";
+    ctx.transformState.lastValidAngle = 0;
+    ctx.transformState.startPointerAngle = 0;
+    return true;
+  };
+
+  return { clearTransform, startTransformFromSelection, restoreTransformStartState, translateWallsByAnchors, applyMoveDelta, rotatePointAround, rotateWallsByAnchors, setRotatePivot, applyRotateAngle };
 }

@@ -40,6 +40,7 @@ function createActions(state: ProjectRuntimeState, save: () => Promise<void>): P
     download: vi.fn(),
     loadCurrent: vi.fn(),
     list: vi.fn(),
+    inspectById: vi.fn(),
     loadById: vi.fn(),
     importFile: vi.fn()
   };

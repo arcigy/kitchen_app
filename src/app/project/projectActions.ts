@@ -16,6 +16,7 @@ export type ProjectActions = {
   download: () => Promise<void>;
   loadCurrent: () => Promise<ProjectSaveFile>;
   list: () => Promise<ProjectMetadata[]>;
+  inspectById: (projectId: string) => Promise<ProjectSaveFile>;
   loadById: (projectId: string) => Promise<ProjectSaveFile>;
   importFile: (file: File) => Promise<ProjectSaveFile>;
 };
@@ -77,6 +78,7 @@ export function createProjectActions(args: {
       return save;
     },
     list: () => listProjects(),
+    inspectById: (projectId) => loadProject(projectId),
     async loadById(projectId) {
       const save = await loadProject(projectId);
       args.restoreSave(save);

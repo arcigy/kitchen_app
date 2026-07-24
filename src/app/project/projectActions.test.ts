@@ -3,7 +3,7 @@ import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-m
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { createProjectActions } from "./projectActions";
-import { createProject, saveProject } from "./projectApi";
+import { createProject, loadProject, saveProject } from "./projectApi";
 
 vi.mock("./projectApi", () => ({
   createProject: vi.fn(),
@@ -98,5 +98,26 @@ describe("project actions", () => {
 
     expect(actions.getState().editingSessionId).toMatch(/^edit_[a-z0-9]+_[0-9a-f-]{36}$/);
     expect(actions.getState().editingSessionId).not.toBe(initialSessionId);
+  });
+
+  it("inspects another tenant project without replacing the open project", async () => {
+    const inspected = saveWithRevision(4);
+    vi.mocked(loadProject).mockResolvedValue(inspected);
+    const restoreSave = vi.fn();
+    const actions = createProjectActions({
+      buildAppState: () => appState,
+      restoreSave,
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+    const initialSession = actions.getState().editingSessionId;
+
+    await expect(actions.inspectById("project_previous")).resolves.toBe(inspected);
+
+    expect(loadProject).toHaveBeenCalledWith("project_previous");
+    expect(restoreSave).not.toHaveBeenCalled();
+    expect(actions.getState().currentProject).toBe(project);
+    expect(actions.getState().saveRevision).toBe(7);
+    expect(actions.getState().editingSessionId).toBe(initialSession);
   });
 });

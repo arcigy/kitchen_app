@@ -264,7 +264,7 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
     setOrganizationUsers,
     setProjectLabel: (labelText: string) => { project.textContent = labelText; },
     getTab: (id: string) => tabMap.get(id) ?? null,
-    getQuickAction: (actionId: string) => quick.querySelector<HTMLButtonElement>(`button[data-quick-action="${actionId}"]`)
+    getQuickAction: (actionId: string) => quick.querySelector<HTMLButtonElement>(`button[data-quick-action="${actionId}"]`),
+    getShareButton: () => shareButton
   };
 }
-

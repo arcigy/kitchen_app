@@ -32,14 +32,22 @@ export function isKitchenModuleInEditLayer(
   return getKitchenModuleRole(params) === layer;
 }
 
+export function isKitchenModuleSelectableInEditLayer(
+  params: Record<string, unknown> | null | undefined,
+  layer: KitchenModuleEditLayer
+) {
+  const role = getKitchenModuleRole(params);
+  return role === "tall" || role === layer;
+}
+
 export function resolveKitchenModulePlanEmphasis(
   params: Record<string, unknown> | null | undefined,
   layer: KitchenModuleEditLayer
 ): KitchenModulePlanEmphasis {
   const active = isKitchenModuleInEditLayer(params, layer);
   return active
-    ? { active: true, color: 0x263247, opacity: 1, renderOrder: 60 }
-    : { active: false, color: 0xaab3c2, opacity: 0.14, renderOrder: 54 };
+    ? { active: true, color: 0x111111, opacity: 1, renderOrder: 60 }
+    : { active: false, color: 0xb7bdc7, opacity: 1, renderOrder: 54 };
 }
 
 function isTruthyCornerShape(value: unknown) {

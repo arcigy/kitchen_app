@@ -4,6 +4,7 @@ import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 import type { AppState, LayoutInstance } from "../layout/appState";
 import { buildProjectMaterialUsageSummary } from "../layout/bom/materialUsageSummary";
 import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materialsPhasePanel";
+import { showComingSoonDialog } from "../ui/comingSoonDialog";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
@@ -271,8 +272,8 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     else if (id === "schedules") openSchedules();
     else if (id === "materials") openMaterials();
     else if (id === "margins") openMargins();
-    else if (id === "documents") openPlaceholder("Documents", "Dokumenty budu samostatny priestor pre zmluvy, poznamky a projektove subory.");
-    else if (id === "settings") openPlaceholder("Settings", "Nastavenia organizacie, projektu a workspace budu napojene neskor.");
+    else if (id === "documents") showComingSoonDialog("Dokumenty");
+    else if (id === "settings") showComingSoonDialog("Nastavenia");
   };
 
   for (const button of navButtons) {
@@ -350,6 +351,7 @@ function renderSheetCard(sheet: SheetRecord): HTMLElement {
     <span>${sheet.type}</span>
     <small>${sheet.source} · ${sheet.status}</small>
   `;
+  card.addEventListener("click", () => showComingSoonDialog(sheet.name));
   return card;
 }
 

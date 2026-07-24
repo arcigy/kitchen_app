@@ -112,6 +112,7 @@ import { getModuleDescriptors } from "./modules/registry";
 import type { SsgiPipeline } from "./rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
+import { showComingSoonDialog } from "./ui/comingSoonDialog";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
 import {
   cloneFloorSegments,
@@ -277,9 +278,9 @@ import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
 import { createNavigationFocusProvider } from "./app/navigationFocus";
 import { createRecentActivityController } from "./app/recentActivityController";
-import { setupMagneticButtons } from "./app/magneticButtons";
 import { createViewerToolModeController } from "./app/viewerToolModeController";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
+import { authorizeAssistantToolCall } from "./assistant/toolAuthorizationClient";
 import { organizationUserName } from "./core/client/organization-users";
 import {
   buildModulePackageGeometryFromPackage,
@@ -291,7 +292,6 @@ import type { ParamHighlightControls } from "./app/paramHighlightControls";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
-  setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
   let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
@@ -870,6 +870,7 @@ export function startApp(initialArgs: AppArgs) {
   const applyMoveDelta = (...args: Parameters<ReturnType<typeof createTransformController>["applyMoveDelta"]>) => createTransformControllerResult.applyMoveDelta(...args);
   const rotatePointAround = (...args: Parameters<ReturnType<typeof createTransformController>["rotatePointAround"]>) => createTransformControllerResult.rotatePointAround(...args);
   const rotateWallsByAnchors = (...args: Parameters<ReturnType<typeof createTransformController>["rotateWallsByAnchors"]>) => createTransformControllerResult.rotateWallsByAnchors(...args);
+  const setRotatePivot = (...args: Parameters<ReturnType<typeof createTransformController>["setRotatePivot"]>) => createTransformControllerResult.setRotatePivot(...args);
   const applyRotateAngle = (...args: Parameters<ReturnType<typeof createTransformController>["applyRotateAngle"]>) => createTransformControllerResult.applyRotateAngle(...args);
 
   const alignState = {
@@ -2836,7 +2837,9 @@ export function startApp(initialArgs: AppArgs) {
   let selectionController!: ReturnType<typeof createSelectionController>;
   function setInstanceSelected(id: string | null) { return selectionController.setInstanceSelected(id); }
   function setSelectedKitchenGroup(groupId: string | null) { return selectionController.setSelectedKitchenGroup(groupId); }
-  function setSelectedModule(id: string | null) { return selectionController.setSelectedModule(id); }
+  function setSelectedModule(...args: Parameters<ReturnType<typeof createSelectionController>["setSelectedModule"]>) {
+    return selectionController.setSelectedModule(...args);
+  }
   function setSelectedWindow() { return selectionController.setSelectedWindow(); }
   function setSelectedDoor() { return selectionController.setSelectedDoor(); }
   function setSelectedUnderlay() { return selectionController.setSelectedUnderlay(); }
@@ -3481,7 +3484,7 @@ export function startApp(initialArgs: AppArgs) {
     void projectMenuActions.saveProject();
   });
   tb.getQuickAction("print")?.addEventListener("click", () => {
-    void projectMenuActions.saveProject();
+    showComingSoonDialog("Tlač projektu");
   });
   tb.getQuickAction("open")?.addEventListener("click", () => {
     projectMenuActions.openProjectManager();
@@ -3494,7 +3497,9 @@ export function startApp(initialArgs: AppArgs) {
     if (customFurnitureMode?.redoActiveEdit()) return;
     redo(S, helpers);
   });
-
+  tb.getQuickAction("cloud")?.addEventListener("click", () => showComingSoonDialog("Cloud synchronizácia"));
+  tb.getShareButton().addEventListener("click", () => showComingSoonDialog("Zdieľanie projektu"));
+  tb.getTab("file")?.addEventListener("click", () => showComingSoonDialog("Súbor"));
   const buildSelectionController = createBuildSelectionController({
     S,
     scene,
@@ -4410,10 +4415,24 @@ export function startApp(initialArgs: AppArgs) {
     catalog: clientCatalog,
     instances,
     walls,
+    floors,
+    columns,
+    sections,
+    windows,
+    doors,
     kitchenWorktops,
+    modulePackages,
     projectActions,
     layoutRoot,
     createInstance,
+    deleteInstance,
+    createKitchenWorktop,
+    removeKitchenWorktop,
+    rebuildKitchenWorktop,
+    rebuildKitchenGroupLayout,
+    getKitchenGuideSegmentInfo,
+    getKitchenCornerPlacementInfo,
+    getKitchenRunDimensionSources,
     inferKitchenPlacementBinding,
     applyKitchenPlacementBinding,
     findInstance,
@@ -4425,10 +4444,40 @@ export function startApp(initialArgs: AppArgs) {
     getSelectedKitchenGroupId: () => selectedKitchenGroupId,
     setSelectedKitchenGroup,
     setSelectedModule,
+    enterKitchenGroup: (groupId, moduleId) => kitchenMode?.enterExisting(groupId, moduleId),
+    setSelectedWall,
+    setSelectedFloor,
+    setSelectedColumn,
+    setSelectedSection,
+    clearSelection,
+    deleteSelected,
+    duplicateSelected,
+    startTransformFromSelection,
+    applyMoveDelta,
+    setRotatePivot,
+    applyRotateAngle,
+    clearTransform,
+    undo: () => undo(S, helpers),
+    redo: () => redo(S, helpers),
+    addWall,
+    createFloor,
+    createColumn,
+    createSection: createSectionInstance,
+    getProjectMarginSettings: () => projectMarginSettings,
+    authorizeToolCall: authorizeAssistantToolCall,
     commitHistory: () => commitHistory(S),
     getActiveViewerTab: () => activeViewerTab,
     getLayoutTool: () => layoutTool,
-    getViewMode: () => viewMode
+    getViewMode: () => viewMode,
+    getCamera: cam,
+    getControlsTarget: () => {
+      const target = (ctl() as { target?: THREE.Vector3 } | null | undefined)?.target;
+      return target instanceof THREE.Vector3 ? target : null;
+    },
+    getProjection: get3dProjection,
+    getRenderMode: () => renderMode,
+    getViewerToolMode,
+    focusSelectionView: (perspective, padding) => viewNavigation.focusSelection(perspective, padding)
   });
 
   const frameRendererContext = {

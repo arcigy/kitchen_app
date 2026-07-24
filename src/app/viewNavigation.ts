@@ -7,7 +7,11 @@ import {
   normalizeNavigationWheelDelta,
   orbitCameraAroundPivot,
   panCameraInViewPlane,
-  pointerNdcFromClient
+  pointerNdcFromClient,
+  semanticFocusDirection,
+  semanticPerspectiveFocusDistance,
+  type SemanticFocusPerspective,
+  viewCubeCssTransform
 } from "./viewNavigationMath";
 
 export type NavigationViewMode = "3d" | "2d";
@@ -91,6 +95,18 @@ export function resolveNavigationPointerControls(
   };
 }
 
+export function resolveViewCubePresentation(
+  state: Pick<NavigationState, "viewMode" | "activeViewerTab">,
+  cameraQuaternion: THREE.Quaternion,
+  target = new THREE.Matrix4()
+) {
+  const isFloorplan = state.viewMode === "2d" && state.activeViewerTab === "floorplan";
+  return {
+    isFloorplan,
+    transform: isFloorplan ? "none" : viewCubeCssTransform(cameraQuaternion, target)
+  };
+}
+
 type CreateViewNavigationArgs = {
   viewerEl: HTMLElement;
   canvasEl: HTMLCanvasElement;
@@ -120,9 +136,22 @@ export function isNavigationKeyboardCode(code: string) {
   return NAV_KEY_CODES.has(code);
 }
 
+export function shouldHandleNavigationKeyboardEvent(args: {
+  code: string;
+  defaultPrevented: boolean;
+  typingTarget: boolean;
+  acceptsNavigationFocus: boolean;
+}) {
+  return !args.defaultPrevented &&
+    isNavigationKeyboardCode(args.code) &&
+    !args.typingTarget &&
+    args.acceptsNavigationFocus;
+}
+
 const DEFAULT_3D_TARGET = new THREE.Vector3(0, 0.9, 0);
 const DEFAULT_3D_DIRECTION = new THREE.Vector3(1, 0.65, 1).normalize();
 type ViewCubeFace = "top" | "bottom" | "front" | "back" | "right" | "left";
+export type { SemanticFocusPerspective } from "./viewNavigationMath";
 
 const VIEW_CUBE_DIRECTIONS: Record<ViewCubeFace, THREE.Vector3> = {
   top: new THREE.Vector3(0, 1, 0),
@@ -140,15 +169,6 @@ const VIEW_CUBE_UP: Record<ViewCubeFace, THREE.Vector3> = {
   back: new THREE.Vector3(0, 1, 0),
   right: new THREE.Vector3(0, 1, 0),
   left: new THREE.Vector3(0, 1, 0)
-};
-
-const VIEW_CUBE_EXACT_TRANSFORMS: Record<ViewCubeFace, string> = {
-  top: "rotateX(-58deg) rotateY(-40deg)",
-  bottom: "rotateX(58deg) rotateY(-40deg)",
-  front: "rotateX(-36deg) rotateY(-40deg)",
-  back: "rotateX(-36deg) rotateY(140deg)",
-  right: "rotateX(-36deg) rotateY(-130deg)",
-  left: "rotateX(-36deg) rotateY(50deg)"
 };
 
 const isViewCubeFace = (value: string | undefined): value is ViewCubeFace =>
@@ -169,7 +189,6 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const viewCubeEl = args.viewerEl.querySelector<HTMLElement>(".archux-view-cube");
   const viewCubeShell = args.viewerEl.querySelector<HTMLElement>(".archux-view-cube-shell");
   let lastViewCubeTransform = "";
-  let lastViewCubeYaw: number | null = null;
   const detailViewPanOffset = new THREE.Vector3();
   const viewerFocusState = {
     hover: false,
@@ -198,6 +217,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const tmpVecB = new THREE.Vector3();
   const tmpVecC = new THREE.Vector3();
   const tmpSphere = new THREE.Sphere();
+  const tmpViewCubeMatrix = new THREE.Matrix4();
 
   const getControls = () => args.getControls();
   const getPerspectiveCamera = () => {
@@ -255,14 +275,13 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const syncViewCube = () => {
     if (!viewCubeShell) return;
     const state = args.getState();
-    const is3dView = state.viewMode === "3d";
+    const presentation = resolveViewCubePresentation(state, args.getCamera().quaternion, tmpViewCubeMatrix);
     viewCubeEl?.classList.remove("is-hidden");
-    viewCubeEl?.classList.toggle("is-floorplan", !is3dView);
-    if (!is3dView) {
+    viewCubeEl?.classList.toggle("is-floorplan", presentation.isFloorplan);
+    if (presentation.isFloorplan) {
       viewCubeEl?.classList.remove("is-exact-face");
       if (viewCubeEl) delete viewCubeEl.dataset.activeFace;
-      lastViewCubeYaw = null;
-      const transform = "none";
+      const transform = presentation.transform;
       if (transform !== lastViewCubeTransform) {
         viewCubeShell.style.transform = transform;
         lastViewCubeTransform = transform;
@@ -282,16 +301,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
       if (exactFace) viewCubeEl.dataset.activeFace = exactFace;
       else delete viewCubeEl.dataset.activeFace;
     }
-    let yaw = THREE.MathUtils.radToDeg(Math.atan2(offset.x, offset.z));
-    const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(offset.y, -1, 1)));
-
-    if (lastViewCubeYaw !== null) {
-      while (yaw - lastViewCubeYaw > 180) yaw -= 360;
-      while (yaw - lastViewCubeYaw < -180) yaw += 360;
-    }
-    lastViewCubeYaw = yaw;
-
-    const transform = exactFace ? VIEW_CUBE_EXACT_TRANSFORMS[exactFace] : `rotateX(${-pitch}deg) rotateY(${-yaw}deg)`;
+    const transform = presentation.transform;
     if (transform === lastViewCubeTransform) return;
     viewCubeShell.style.transform = transform;
     lastViewCubeTransform = transform;
@@ -595,6 +605,38 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     syncViewCube();
   };
 
+  const focusSelection = (perspective: SemanticFocusPerspective, padding = 1.2) => {
+    const bounds = args.focusProvider.getSelectionBounds();
+    if (!bounds || bounds.isEmpty()) return false;
+    if (args.getState().viewMode !== "3d") args.activate3dView?.();
+    const camera = get3dCamera();
+    if (!camera) return false;
+    const controls = getControls();
+    bounds.getBoundingSphere(tmpSphere);
+    const radius = Math.max(tmpSphere.radius, 0.08);
+    const safePadding = THREE.MathUtils.clamp(Number.isFinite(padding) ? padding : 1.2, 0.5, 3);
+    const direction = semanticFocusDirection(perspective);
+    const distance = camera instanceof THREE.PerspectiveCamera
+      ? semanticPerspectiveFocusDistance(radius, camera.fov, safePadding)
+      : Math.max(radius * 2 * safePadding, 0.2);
+
+    controls.target.copy(tmpSphere.center);
+    camera.position.copy(tmpSphere.center).addScaledVector(direction, distance);
+    camera.up.copy(perspective === "top" ? VIEW_CUBE_UP.top : new THREE.Vector3(0, 1, 0));
+    camera.lookAt(tmpSphere.center);
+    if (camera instanceof THREE.OrthographicCamera) {
+      const baseHeight = Math.max(0.001, camera.top - camera.bottom);
+      camera.zoom = THREE.MathUtils.clamp(baseHeight / Math.max(0.001, radius * 2 * safePadding), 1e-6, 1e6);
+      camera.updateProjectionMatrix();
+    }
+    navigationFocusDistance = distance;
+    navigationSceneRadius = Math.max(navigationSceneRadius, radius);
+    stabilize3dCamera();
+    controls.update();
+    syncViewCube();
+    return true;
+  };
+
   const resetView = () => {
     const state = args.getState();
     detailViewPanOffset.set(0, 0, 0);
@@ -615,10 +657,12 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   };
 
   const onKeyDown = (ev: KeyboardEvent) => {
-    if (ev.defaultPrevented) return;
-    if (!isNavigationKeyboardCode(ev.code)) return;
-    if (args.isTypingTarget(ev.target) && ev.code !== "Space") return;
-    if (!shouldAcceptKeyboardNav()) return;
+    if (!shouldHandleNavigationKeyboardEvent({
+      code: ev.code,
+      defaultPrevented: ev.defaultPrevented,
+      typingTarget: args.isTypingTarget(ev.target),
+      acceptsNavigationFocus: shouldAcceptKeyboardNav()
+    })) return;
     navKeys.add(ev.code);
     if (ev.code === "Space") ev.preventDefault();
   };
@@ -826,6 +870,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     handlePointerMove,
     handlePointerUp,
     update,
-    resetView
+    resetView,
+    focusSelection
   };
 }
