@@ -1,6 +1,6 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
-import { hasTrustedRuntimeBuilder } from "./runtime/module-runtime-adapter";
+import { hasTrustedRuntimeBuilder, resolveTrustedRuntimeBuilder } from "./runtime/module-runtime-adapter";
 import {
   CURRENT_MODULE_PACKAGE_VERSION,
   MODULE_PACKAGE_FORMAT,
@@ -187,8 +187,15 @@ function validateGeometry(modulePackage: FurnQuoteModulePackage, errors: string[
     errors.push("geometry.mode must be trusted-runtime or declarative");
     return;
   }
-  if (geometry.mode === "trusted-runtime" && !hasTrustedRuntimeBuilder(geometry.runtimeBuilderKey)) {
-    errors.push(`trusted runtime builder does not exist: ${geometry.runtimeBuilderKey}`);
+  if (geometry.mode === "trusted-runtime") {
+    const builder = resolveTrustedRuntimeBuilder(geometry.runtimeBuilderKey);
+    if (!builder) {
+      errors.push(`trusted runtime builder does not exist: ${geometry.runtimeBuilderKey}`);
+    } else if (modulePackage.module.moduleType !== builder.moduleType) {
+      errors.push(
+        `moduleType ${modulePackage.module.moduleType} does not match trusted runtime builder type ${builder.moduleType}`
+      );
+    }
   }
   if (geometry.mode === "declarative" && !Array.isArray(geometry.primitives)) {
     errors.push("declarative geometry must define primitives");

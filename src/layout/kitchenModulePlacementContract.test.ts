@@ -25,7 +25,8 @@ describe("kitchen module placement contract", () => {
       DELFI_RELEVANT_FWM_TYPES.includes(modulePackage.module.moduleType)
     );
 
-    expect(packages.map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([...DELFI_RELEVANT_FWM_TYPES].sort());
+    expect([...new Set(packages.map((modulePackage) => modulePackage.module.moduleType))].sort())
+      .toEqual([...DELFI_RELEVANT_FWM_TYPES].sort());
 
     const issues = packages.flatMap((modulePackage) => [
       ...auditKitchenModulePlacementContract(modulePackage).map((issue) => ({ moduleType: modulePackage.module.moduleType, ...issue })),

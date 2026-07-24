@@ -615,13 +615,13 @@ describe("FWM furniture module packages", () => {
     }
   });
 
-  it("declares the DELFI upper 90 corner as a neutral non-catalog package", () => {
+  it("declares the DELFI upper 90 corner with a neutral package id and its registered wall-cabinet runtime type", () => {
     const catalog = getSystemSeedCatalog();
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.modulePackageId === "wall_corner_90");
     expect(modulePackage).toBeTruthy();
     expect(() => validateFurnQuoteModulePackage(modulePackage!)).not.toThrow();
-    expect(modulePackage!.module.moduleType).toBe("wall_corner_90");
-    expect(modulePackage!.module.moduleType.startsWith("fwm_catalog_")).toBe(false);
+    expect(modulePackage!.module.modulePackageId).toBe("wall_corner_90");
+    expect(modulePackage!.module.moduleType).toBe("fwm_catalog_wall_cabinet");
     expect(modulePackage!.module.displayName).toBe("Horna rohova skrinka 90");
     expect(modulePackage!.ui.previewImage).toBe("/module-icons/furniture/v4/variants/wall_corner_90.png");
     expect(modulePackage!.geometry.mode).toBe("trusted-runtime");
@@ -636,7 +636,7 @@ describe("FWM furniture module packages", () => {
 
     const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
     expect(defaults.modulePackageId).toBe("wall_corner_90");
-    expect(defaults.moduleType).toBe("wall_corner_90");
+    expect(defaults.moduleType).toBe("fwm_catalog_wall_cabinet");
     expect(defaults.type).toBe("fwm_catalog_wall_cabinet");
     expect(defaults.variant).toBe("corner_90");
     expect(defaults.width).toBe(600);
@@ -705,7 +705,9 @@ describe("FWM furniture module packages", () => {
       "cutoutDepthMm"
     ];
 
-    const catalogPackages = extendedFurnitureModulePackages.filter((entry) => entry.module.moduleType.startsWith("fwm_catalog_"));
+    const catalogPackages = extendedFurnitureModulePackages.filter((entry) =>
+      entry.module.moduleType.startsWith("fwm_catalog_") && entry.module.modulePackageId !== "wall_corner_90"
+    );
     expect(catalogPackages).toHaveLength(18);
     for (const modulePackage of catalogPackages) {
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
@@ -955,7 +957,8 @@ describe("FWM furniture module packages", () => {
       delfiActiveRuntimeModuleTypes.includes(modulePackage.module.moduleType as typeof delfiActiveRuntimeModuleTypes[number])
     );
 
-    expect(packages.map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([...delfiActiveRuntimeModuleTypes].sort());
+    expect([...new Set(packages.map((modulePackage) => modulePackage.module.moduleType))].sort())
+      .toEqual([...delfiActiveRuntimeModuleTypes].sort());
 
     for (const modulePackage of packages) {
       const params = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;

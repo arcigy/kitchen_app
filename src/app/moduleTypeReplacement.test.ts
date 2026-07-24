@@ -7,9 +7,11 @@ import type { ModuleParams } from "../model/cabinetTypes";
 import { extendedFurnitureModulePackages } from "../system/module-packages/extendedFurniture";
 import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
 
-function modulePackage(moduleType: string) {
-  const found = extendedFurnitureModulePackages.find((candidate) => candidate.module.moduleType === moduleType);
-  if (!found) throw new Error(`Missing test module package: ${moduleType}`);
+function modulePackage(moduleTypeOrPackageId: string) {
+  const found = extendedFurnitureModulePackages.find((candidate) =>
+    candidate.module.moduleType === moduleTypeOrPackageId || candidate.module.modulePackageId === moduleTypeOrPackageId
+  );
+  if (!found) throw new Error(`Missing test module package: ${moduleTypeOrPackageId}`);
   return found;
 }
 

@@ -5,19 +5,41 @@ import { computeModulePackageHash } from "./module-package-file";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
 import type { FurnQuoteModulePackage } from "./module-package-types";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
+import {
+  normalizePersistedSystemModulePackage,
+  normalizedSystemTemplateForStoredIdentity
+} from "./module-package-persistence-compatibility";
 import type { ModulePackageRepository, SaveModulePackageOptions } from "./module-package-repository";
 import { systemModulePackageTemplates } from "../../system/module-packages";
 
 type PackageRow = {
   package: unknown;
+  source: string;
 };
 
 type PackageRevisionRow = {
   module_package_id: string;
+  module_type: string;
   package_hash: string;
   package_version: string;
+  source: string;
   updated_at: Date | string;
 };
+
+function validatePersistedPackage(row: PackageRow): FurnQuoteModulePackage {
+  return validateFurnQuoteModulePackage(
+    normalizePersistedSystemModulePackage({ package: row.package, source: row.source }) as FurnQuoteModulePackage
+  );
+}
+
+function revisionPackageHash(row: PackageRevisionRow): string {
+  const normalized = normalizedSystemTemplateForStoredIdentity({
+    modulePackageId: row.module_package_id,
+    moduleType: row.module_type,
+    source: row.source
+  });
+  return normalized ? computeModulePackageHash(normalized) : row.package_hash;
+}
 
 export function createPostgresModulePackageRepository(args: {
   connectionString: string;
@@ -82,10 +104,10 @@ export function createPostgresModulePackageRepository(args: {
   async function listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]> {
     return withSchemaClient(args.connectionString, args.schema, async (client) => {
       const result = await client.query<PackageRow>(
-        "SELECT package FROM arcigy_module_packages WHERE client_id = $1 ORDER BY module_type, module_package_id",
+        "SELECT package, source FROM arcigy_module_packages WHERE client_id = $1 ORDER BY module_type, module_package_id",
         [ctx.clientId]
       );
-      return result.rows.map((row) => validateFurnQuoteModulePackage(row.package as FurnQuoteModulePackage));
+      return result.rows.map(validatePersistedPackage);
     });
   }
 
@@ -95,10 +117,10 @@ export function createPostgresModulePackageRepository(args: {
       await ensureSystemPackages(ctx);
       return withSchemaClient(args.connectionString, args.schema, async (client) => {
         const result = await client.query<PackageRow>(
-          "SELECT package FROM arcigy_module_packages WHERE client_id = $1 AND module_package_id = $2",
+          "SELECT package, source FROM arcigy_module_packages WHERE client_id = $1 AND module_package_id = $2",
           [ctx.clientId, modulePackageId]
         );
-        return result.rows[0] ? validateFurnQuoteModulePackage(result.rows[0].package as FurnQuoteModulePackage) : null;
+        return result.rows[0] ? validatePersistedPackage(result.rows[0]) : null;
       });
     },
     async listPackages(ctx) {
@@ -109,7 +131,7 @@ export function createPostgresModulePackageRepository(args: {
       return withSchemaClient(args.connectionString, args.schema, async (client) => {
         const result = await client.query<PackageRevisionRow>(
           `
-            SELECT module_package_id, package_hash, package_version, updated_at
+            SELECT module_package_id, module_type, package_hash, package_version, source, updated_at
             FROM arcigy_module_packages
             WHERE client_id = $1
             ORDER BY module_package_id
@@ -118,7 +140,7 @@ export function createPostgresModulePackageRepository(args: {
         );
         const revisionSource = result.rows.map((row) => [
           row.module_package_id,
-          row.package_hash,
+          revisionPackageHash(row),
           row.package_version,
           new Date(row.updated_at).toISOString()
         ].join("\u0000")).join("\n");
