@@ -203,6 +203,9 @@ describe("FurnQuote module package validation", () => {
       geometry: { mode: "trusted-runtime", runtimeBuilderKey: "missing.v1" }
     }))).toThrow("trusted runtime builder");
     expect(() => validateFurnQuoteModulePackage(makePackage({
+      module: { ...makePackage().module, moduleType: "package_alias_instead_of_runtime_type" }
+    }))).toThrow("does not match trusted runtime builder type drawer_low");
+    expect(() => validateFurnQuoteModulePackage(makePackage({
       assets: { files: [{ assetId: "bad", fileName: "../bad.png", mimeType: "image/png" }] }
     }))).toThrow("unsafe path segment");
     expect(() => validateFurnQuoteModulePackage({

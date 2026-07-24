@@ -1911,7 +1911,7 @@ function createWallCorner90ModulePackage(): FurnQuoteModulePackage {
   modulePackage.module = {
     ...modulePackage.module,
     modulePackageId: WALL_CORNER_90_PACKAGE_ID,
-    moduleType: WALL_CORNER_90_PACKAGE_ID,
+    moduleType: WALL_CORNER_90_RUNTIME_TYPE,
     familyName: displayName,
     displayName,
     description,
