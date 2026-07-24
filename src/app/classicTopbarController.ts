@@ -2,6 +2,7 @@ import type { AppState } from "../layout/appState";
 import type { HistoryHelpers } from "../layout/historyManager";
 import type { AppArgs } from "./bootstrap";
 import type { createTopbar } from "../ui/createTopbar";
+import { showComingSoonDialog } from "../ui/comingSoonDialog";
 import type { AppInstallState } from "../pwa/installController";
 import type { StartTransformOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -267,7 +268,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     addButton(tools, { title: "Window", label: "Window", iconSvg: ctx.I_WINDOW, onClick: () => runToolbarWindowCommand(ctx) });
     addButton(tools, { title: "Column", label: "Column", iconSvg: ctx.I_COLUMN, onClick: () => runToolbarColumnCommand(ctx) });
     addButton(tools, { title: "Floor", label: "Floor", iconSvg: ctx.I_FLOOR, onClick: () => runToolbarFloorCommand(ctx) });
-    addButton(tools, { title: "Stair", label: "Stair", iconSvg: ctx.I_STAIR });
+    addButton(tools, { title: "Stair", label: "Stair", iconSvg: ctx.I_STAIR, onClick: () => showComingSoonDialog("Schodisko") });
   };
 
   const addKitchenTab = (row: HTMLElement) => {
@@ -285,7 +286,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
       (modulePackage.module.tags ?? []).includes("living")
     );
     if (modules.length === 0) {
-      addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL });
+      addButton(tools, { title: "Living Wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL, onClick: () => showComingSoonDialog("Obývačková stena") });
       return;
     }
     for (const modulePackage of modules) addModuleButton(tools, modulePackage, ctx.I_LIVING_WALL);

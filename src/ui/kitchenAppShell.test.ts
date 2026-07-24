@@ -6,6 +6,16 @@ import { describe, expect, it } from "vitest";
 import { renderKitchenAppShell } from "./kitchenAppShell";
 
 describe("kitchen app bottom bar", () => {
+  it("keeps the view cube orbit without compass letters", () => {
+    const root = document.createElement("div");
+
+    renderKitchenAppShell(root);
+
+    expect(root.querySelector(".archux-view-cube-orbit")).not.toBeNull();
+    expect(root.querySelectorAll(".archux-view-cube-orbit span")).toHaveLength(0);
+    expect(root.querySelector(".orbit-n, .orbit-e, .orbit-s, .orbit-w")).toBeNull();
+  });
+
   it("keeps the normal project overview and reserves a separate Margins footer", () => {
     const root = document.createElement("div");
 

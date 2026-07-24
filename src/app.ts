@@ -112,6 +112,7 @@ import { getModuleDescriptors } from "./modules/registry";
 import type { SsgiPipeline } from "./rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
+import { showComingSoonDialog } from "./ui/comingSoonDialog";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
 import {
   cloneFloorSegments,
@@ -277,7 +278,6 @@ import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
 import { createNavigationFocusProvider } from "./app/navigationFocus";
 import { createRecentActivityController } from "./app/recentActivityController";
-import { setupMagneticButtons } from "./app/magneticButtons";
 import { createViewerToolModeController } from "./app/viewerToolModeController";
 import { getEnabledModulePackageDefinitions } from "./core/catalog/module-catalog";
 import { organizationUserName } from "./core/client/organization-users";
@@ -291,7 +291,6 @@ import type { ParamHighlightControls } from "./app/paramHighlightControls";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
-  setupMagneticButtons();
   const clientCatalog = args.clientCatalog;
   const modulePackages = args.modulePackages;
   let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
@@ -3481,7 +3480,7 @@ export function startApp(initialArgs: AppArgs) {
     void projectMenuActions.saveProject();
   });
   tb.getQuickAction("print")?.addEventListener("click", () => {
-    void projectMenuActions.saveProject();
+    showComingSoonDialog("Tlač projektu");
   });
   tb.getQuickAction("open")?.addEventListener("click", () => {
     projectMenuActions.openProjectManager();
@@ -3494,6 +3493,9 @@ export function startApp(initialArgs: AppArgs) {
     if (customFurnitureMode?.redoActiveEdit()) return;
     redo(S, helpers);
   });
+  tb.getQuickAction("cloud")?.addEventListener("click", () => showComingSoonDialog("Cloud synchronizácia"));
+  tb.getShareButton().addEventListener("click", () => showComingSoonDialog("Zdieľanie projektu"));
+  tb.getTab("file")?.addEventListener("click", () => showComingSoonDialog("Súbor"));
 
   const buildSelectionController = createBuildSelectionController({
     S,

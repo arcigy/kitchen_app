@@ -127,12 +127,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
           <button class="archux-view-cube-roll roll-right" type="button" data-view-rotate="cw" aria-label="Rotate view right">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 7.2a6.5 6.5 0 1 0 1.6 6.6" /><path d="M15.4 3.8v3.6H19" /></svg>
           </button>
-          <div class="archux-view-cube-orbit" aria-hidden="true">
-            <span class="orbit-n">N</span>
-            <span class="orbit-e">E</span>
-            <span class="orbit-s">S</span>
-            <span class="orbit-w">W</span>
-          </div>
+          <div class="archux-view-cube-orbit" aria-hidden="true"></div>
           <div class="archux-view-cube-shell-shadow" aria-hidden="true"></div>
           <div class="archux-view-cube-shell">
             <button class="archux-view-cube-face face-front" type="button" data-view-target="front">FRONT</button>

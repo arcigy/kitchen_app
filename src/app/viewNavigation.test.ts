@@ -5,14 +5,16 @@ import {
   resolveNavigationFocusCenter,
   resolveNavigationGesture,
   resolveNavigationPointerControls,
-  resolveNavigationViewerToolMode
+  resolveNavigationViewerToolMode,
+  resolveViewCubePresentation
 } from "./viewNavigation";
 import {
   applyOrthographicWheelZoom,
   applyPerspectiveWheelZoom,
   navigationWheelScale,
   orbitCameraAroundPivot,
-  panCameraInViewPlane
+  panCameraInViewPlane,
+  setViewCubeCssRotationMatrix
 } from "./viewNavigationMath";
 
 describe("viewNavigation pointer controls", () => {
@@ -76,6 +78,43 @@ describe("viewNavigation pointer controls", () => {
   });
 });
 
+describe("view cube presentation", () => {
+  it("keeps floorplan flat but follows every standard elevation camera", () => {
+    const floorplanCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+    floorplanCamera.position.set(0, 10, 0);
+    floorplanCamera.up.set(0, 0, -1);
+    floorplanCamera.lookAt(0, 0, 0);
+
+    const northCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+    northCamera.position.set(0, 1, 10);
+    northCamera.lookAt(0, 1, 0);
+
+    const eastCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+    eastCamera.position.set(10, 1, 0);
+    eastCamera.lookAt(0, 1, 0);
+
+    const floorplan = resolveViewCubePresentation(
+      { viewMode: "2d", activeViewerTab: "floorplan" },
+      floorplanCamera.quaternion
+    );
+    const north = resolveViewCubePresentation(
+      { viewMode: "2d", activeViewerTab: "elevation:north" },
+      northCamera.quaternion
+    );
+    const east = resolveViewCubePresentation(
+      { viewMode: "2d", activeViewerTab: "elevation:east" },
+      eastCamera.quaternion
+    );
+
+    expect(floorplan).toEqual({ isFloorplan: true, transform: "none" });
+    expect(north.isFloorplan).toBe(false);
+    expect(east.isFloorplan).toBe(false);
+    expect(north.transform).toMatch(/^matrix3d\(/);
+    expect(east.transform).toMatch(/^matrix3d\(/);
+    expect(north.transform).not.toBe(east.transform);
+  });
+});
+
 describe("viewNavigation camera math", () => {
   it("uses a fine wheel step instead of a jumpy zoom increment", () => {
     const oneNotchZoomInScale = navigationWheelScale(-120);
@@ -134,6 +173,34 @@ describe("viewNavigation camera math", () => {
     expect(after.x).toBeCloseTo(before.x, 5);
     expect(after.y).toBeCloseTo(before.y, 5);
     expect(camera.position.distanceTo(pivot)).toBeCloseTo(new THREE.Vector3(4, 3, 5).distanceTo(pivot), 6);
+  });
+
+  it("keeps the view cube synchronized through a half orbit from the top view", () => {
+    const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
+    const pivot = new THREE.Vector3(0, 0, 0);
+    camera.position.set(0, 8, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(pivot);
+    camera.updateMatrixWorld(true);
+
+    const cssMatrix = new THREE.Matrix4();
+    const initialRight = new THREE.Vector3(1, 0, 0)
+      .applyMatrix4(setViewCubeCssRotationMatrix(camera.quaternion, cssMatrix))
+      .normalize();
+    let previousRight = initialRight.clone();
+    const steps = 36;
+
+    for (let index = 0; index < steps; index += 1) {
+      orbitCameraAroundPivot(camera, pivot, -800 / (2 * steps), 0, 800, 1);
+      const currentRight = new THREE.Vector3(1, 0, 0)
+        .applyMatrix4(setViewCubeCssRotationMatrix(camera.quaternion, cssMatrix))
+        .normalize();
+      expect(previousRight.angleTo(currentRight)).toBeLessThan(THREE.MathUtils.degToRad(5.1));
+      previousRight = currentRight;
+    }
+
+    expect(camera.position.distanceTo(new THREE.Vector3(0, 8, 0))).toBeLessThan(1e-8);
+    expect(previousRight.dot(initialRight)).toBeLessThan(-0.999);
   });
 
   it("keeps the point below the cursor fixed during axonometric zoom", () => {

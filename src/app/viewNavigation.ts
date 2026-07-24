@@ -7,7 +7,8 @@ import {
   normalizeNavigationWheelDelta,
   orbitCameraAroundPivot,
   panCameraInViewPlane,
-  pointerNdcFromClient
+  pointerNdcFromClient,
+  viewCubeCssTransform
 } from "./viewNavigationMath";
 
 export type NavigationViewMode = "3d" | "2d";
@@ -91,6 +92,18 @@ export function resolveNavigationPointerControls(
   };
 }
 
+export function resolveViewCubePresentation(
+  state: Pick<NavigationState, "viewMode" | "activeViewerTab">,
+  cameraQuaternion: THREE.Quaternion,
+  target = new THREE.Matrix4()
+) {
+  const isFloorplan = state.viewMode === "2d" && state.activeViewerTab === "floorplan";
+  return {
+    isFloorplan,
+    transform: isFloorplan ? "none" : viewCubeCssTransform(cameraQuaternion, target)
+  };
+}
+
 type CreateViewNavigationArgs = {
   viewerEl: HTMLElement;
   canvasEl: HTMLCanvasElement;
@@ -142,15 +155,6 @@ const VIEW_CUBE_UP: Record<ViewCubeFace, THREE.Vector3> = {
   left: new THREE.Vector3(0, 1, 0)
 };
 
-const VIEW_CUBE_EXACT_TRANSFORMS: Record<ViewCubeFace, string> = {
-  top: "rotateX(-58deg) rotateY(-40deg)",
-  bottom: "rotateX(58deg) rotateY(-40deg)",
-  front: "rotateX(-36deg) rotateY(-40deg)",
-  back: "rotateX(-36deg) rotateY(140deg)",
-  right: "rotateX(-36deg) rotateY(-130deg)",
-  left: "rotateX(-36deg) rotateY(50deg)"
-};
-
 const isViewCubeFace = (value: string | undefined): value is ViewCubeFace =>
   value === "top" ||
   value === "bottom" ||
@@ -169,7 +173,6 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const viewCubeEl = args.viewerEl.querySelector<HTMLElement>(".archux-view-cube");
   const viewCubeShell = args.viewerEl.querySelector<HTMLElement>(".archux-view-cube-shell");
   let lastViewCubeTransform = "";
-  let lastViewCubeYaw: number | null = null;
   const detailViewPanOffset = new THREE.Vector3();
   const viewerFocusState = {
     hover: false,
@@ -198,6 +201,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const tmpVecB = new THREE.Vector3();
   const tmpVecC = new THREE.Vector3();
   const tmpSphere = new THREE.Sphere();
+  const tmpViewCubeMatrix = new THREE.Matrix4();
 
   const getControls = () => args.getControls();
   const getPerspectiveCamera = () => {
@@ -255,14 +259,13 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   const syncViewCube = () => {
     if (!viewCubeShell) return;
     const state = args.getState();
-    const is3dView = state.viewMode === "3d";
+    const presentation = resolveViewCubePresentation(state, args.getCamera().quaternion, tmpViewCubeMatrix);
     viewCubeEl?.classList.remove("is-hidden");
-    viewCubeEl?.classList.toggle("is-floorplan", !is3dView);
-    if (!is3dView) {
+    viewCubeEl?.classList.toggle("is-floorplan", presentation.isFloorplan);
+    if (presentation.isFloorplan) {
       viewCubeEl?.classList.remove("is-exact-face");
       if (viewCubeEl) delete viewCubeEl.dataset.activeFace;
-      lastViewCubeYaw = null;
-      const transform = "none";
+      const transform = presentation.transform;
       if (transform !== lastViewCubeTransform) {
         viewCubeShell.style.transform = transform;
         lastViewCubeTransform = transform;
@@ -282,16 +285,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
       if (exactFace) viewCubeEl.dataset.activeFace = exactFace;
       else delete viewCubeEl.dataset.activeFace;
     }
-    let yaw = THREE.MathUtils.radToDeg(Math.atan2(offset.x, offset.z));
-    const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(offset.y, -1, 1)));
-
-    if (lastViewCubeYaw !== null) {
-      while (yaw - lastViewCubeYaw > 180) yaw -= 360;
-      while (yaw - lastViewCubeYaw < -180) yaw += 360;
-    }
-    lastViewCubeYaw = yaw;
-
-    const transform = exactFace ? VIEW_CUBE_EXACT_TRANSFORMS[exactFace] : `rotateX(${-pitch}deg) rotateY(${-yaw}deg)`;
+    const transform = presentation.transform;
     if (transform === lastViewCubeTransform) return;
     viewCubeShell.style.transform = transform;
     lastViewCubeTransform = transform;
