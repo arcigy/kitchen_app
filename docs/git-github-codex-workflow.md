@@ -693,6 +693,14 @@ mazať outputs/exports bez explicitného pokynu
 
 Codex môže navrhnúť príkazy, ale nesmie ich vykonať, ak používateľ výslovne nepovie, že má.
 
+### Aktívna výnimka zakladateľa: okamžitá online viditeľnosť
+
+Zakladateľ výslovne požaduje, aby každá samostatná a overená zmena bola po
+testoch hneď commitnutá a pushnutá na svoju pracovnú branch. Táto výnimka
+platí pre commit a push pracovnej branche; neplatí pre priamy push do `main`
+ani `develop`, pre neoverené zmeny, cudzie rozpracované súbory, secrety alebo
+klientske dáta.
+
 ### Codex pred prácou
 
 Codex má najprv zistiť stav:
