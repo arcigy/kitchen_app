@@ -112,6 +112,7 @@ function projectMaterialApplyFailure(error: unknown): {
 export type SupplierSyncMaterialInput = {
   materialAssignmentId: string;
   assignmentCategory?: MaterialAssignmentCategory;
+  assignmentVariantKey?: string;
   targetLabel?: string;
   targetScope?: "general" | "module" | "addition";
   query: string;
@@ -289,6 +290,7 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         sessionId,
         materialAssignmentId: material.materialAssignmentId,
         ...(material.assignmentCategory ? { assignmentCategory: material.assignmentCategory } : {}),
+        ...(material.assignmentVariantKey ? { assignmentVariantKey: material.assignmentVariantKey } : {}),
         ...(material.targetLabel ? { targetLabel: material.targetLabel } : {}),
         ...(material.targetScope ? { targetScope: material.targetScope } : {}),
         query: material.query,

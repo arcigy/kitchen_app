@@ -1,6 +1,6 @@
 import type { ComponentDefinition, MaterialDefinition, PriceList, PricingUnit } from "../catalog/catalog-types";
 
-export const PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION = 1 as const;
+export const PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION = 2 as const;
 
 export type MaterialAssignmentCategory =
   | "corpus"
@@ -35,6 +35,8 @@ export type ProjectMaterialAssignment = {
   assignmentId: string;
   category: MaterialAssignmentCategory;
   kind: "material" | "component";
+  /** Optional stable discriminator inside one category, such as drawer-front height. */
+  variantKey?: string;
   materialId?: string;
   componentId?: string;
   edgeFrontId?: string;
@@ -90,6 +92,7 @@ export type ProjectMaterialScopeKind = "module" | "addition";
 export type ProjectMaterialScopeItem = {
   id: string;
   category: MaterialAssignmentCategory;
+  variantKey?: string;
   label: string;
   description: string;
   quantity: number;

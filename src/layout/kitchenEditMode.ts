@@ -67,11 +67,6 @@ import {
 import { resolveKitchenEditTopbarAction } from "./kitchenModuleEditorFlow";
 import { chooseTallVerticalSnapCandidate } from "./tallStackMoveSnap";
 import {
-  FWM_DRAWER_SYSTEM_BRAND_OPTIONS,
-  listFwmDrawerSystemPresetsForBrand,
-  resolveFwmDrawerSystemPresetForFrontHeight,
-} from "../modules/fwmFurniture/drawerSystemPresets";
-import {
   createDimensionEditInput,
   parseDimensionMillimeters,
   showDimensionInputAtPointer,
@@ -4216,73 +4211,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       args.props.row(section, "Otvaranie", openingSelect);
     }
 
-    if (
-      selections.some(
-        (item) =>
-          String(inst.params[`tallSlot${item.slotIndex}Type`] ?? item.kind) ===
-          "drawer",
-      )
-    ) {
-      const brandSelect = document.createElement("select");
-      for (const brand of FWM_DRAWER_SYSTEM_BRAND_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = brand.value;
-        option.textContent = brand.label;
-        brandSelect.appendChild(option);
-      }
-      brandSelect.value = String(
-        inst.params.drawerSystemBrand ??
-          inst.params.drawerSystem ??
-          "merivobox",
-      );
-      brandSelect.addEventListener("change", () => {
-        commitTallSubmoduleParam("drawerSystemBrand", brandSelect.value);
-      });
-      args.props.row(
-        section,
-        translateParamLabel("drawerSystemBrand"),
-        brandSelect,
-      );
-
-      const sizeSelect = document.createElement("select");
-      const sizeValueForSlot = (item: TallSubmoduleSelection) =>
-        String(inst.params[`tallSlot${item.slotIndex}DrawerSystemSize`] ?? "");
-      const sizeValues = selections.map(sizeValueForSlot);
-      const firstSizeValue = sizeValues[0] ?? "";
-      const mixedSize = sizeValues.some((value) => value !== firstSizeValue);
-      const derivedSizeForPrimarySlot =
-        resolveFwmDrawerSystemPresetForFrontHeight(
-          brandSelect.value,
-          Number(
-            inst.params[`tallSlot${selection.slotIndex}HeightMm`] ??
-              currentSlotHeight,
-          ),
-        ).size;
-      const autoOption = document.createElement("option");
-      autoOption.value = "";
-      autoOption.textContent = mixedSize
-        ? "rozdielne"
-        : `Auto (${derivedSizeForPrimarySlot})`;
-      sizeSelect.appendChild(autoOption);
-      for (const preset of listFwmDrawerSystemPresetsForBrand(
-        brandSelect.value,
-      )) {
-        const option = document.createElement("option");
-        option.value = preset.size;
-        option.textContent = preset.label;
-        sizeSelect.appendChild(option);
-      }
-      sizeSelect.value = mixedSize ? "" : firstSizeValue;
-      sizeSelect.title = mixedSize ? "rozdielne" : "";
-      sizeSelect.addEventListener("change", () => {
-        commitTallSubmoduleParams(
-          selections.map((item) => ({
-            key: `tallSlot${item.slotIndex}DrawerSystemSize`,
-            value: sizeSelect.value,
-          })),
-        );
-      });
-      args.props.row(section, "Drawer size", sizeSelect);
+    if (selections.some((item) => String(inst.params[`tallSlot${item.slotIndex}Type`] ?? item.kind) === "drawer")) {
       args.props.row(
         section,
         "Drawer front height",

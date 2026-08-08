@@ -208,6 +208,7 @@ async function projectMaterialInputs(
       return [{
         materialAssignmentId: materialAssignmentId ?? assignment.assignmentId,
         assignmentCategory: assignment.category,
+        ...(assignment.variantKey ? { assignmentVariantKey: assignment.variantKey } : {}),
         ...(targetLabel ? { targetLabel } : {}),
         ...(targetScope ? { targetScope } : {}),
         query: assignment.category,
@@ -224,6 +225,7 @@ async function projectMaterialInputs(
     return [{
       materialAssignmentId: materialAssignmentId ?? assignment.assignmentId,
       assignmentCategory: assignment.category,
+      ...(assignment.variantKey ? { assignmentVariantKey: assignment.variantKey } : {}),
       ...(targetLabel ? { targetLabel } : {}),
       ...(targetScope ? { targetScope } : {}),
       query,

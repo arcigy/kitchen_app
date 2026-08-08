@@ -12,7 +12,6 @@ import { mapFwmCatalogCornerToCornerShelfLowerParams } from "./catalogCornerAdap
 import baseCornerChamferedGroundTruth from "./data/baseCornerChamferedGroundTruth.compact.json";
 import { getFwmAssemblyContext, getFwmFurnitureSpec, getFwmRoomCategory, getFwmSystemFamily, type FwmFurnitureSpec } from "./definitions";
 import { resolveBackPanelDepthLayout, resolveDrawerDepthLayout } from "./depthLayout";
-import { resolveFwmDrawerSystemPreset, resolveFwmDrawerSystemPresetForFrontHeight } from "./drawerSystemPresets";
 import { normalizeFwmFurnitureParams, type FwmFurnitureParams } from "./types";
 
 const MM = 0.001;
@@ -59,20 +58,6 @@ type FwmMaterialCache = {
   materials: Map<string, THREE.Material>;
 };
 
-function drawerSystemSizeOverride(value: unknown) {
-  const size = typeof value === "string" ? value.trim().toUpperCase() : "";
-  return size === "M" || size === "D" || size === "E" || size === "F" ? size : null;
-}
-
-function resolveDrawerPresetForIndex(params: FwmFurnitureParams, frontHeightMm: number, drawerIndex: number, slotIndex?: number) {
-  const slotOverride = slotIndex ? drawerSystemSizeOverride(params[`tallSlot${slotIndex}DrawerSystemSize`]) : null;
-  const drawerOverride = drawerSystemSizeOverride(params[`drawer${drawerIndex}SystemSize`]);
-  const override = slotOverride ?? drawerOverride;
-  return override
-    ? resolveFwmDrawerSystemPreset(params.drawerSystemBrand ?? params.drawerSystem, override)
-    : resolveFwmDrawerSystemPresetForFrontHeight(params.drawerSystemBrand ?? params.drawerSystem, frontHeightMm);
-}
-
 function num(params: Record<string, unknown>, key: string, fallback: number) {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -85,10 +70,6 @@ function bool(params: Record<string, unknown>, key: string, fallback: boolean) {
 
 function rec(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function usesCatalogMetalDrawerSystem(params: Pick<FwmFurnitureParams, "type"> | FwmFurnitureParams) {
-  return params.type === "fwm_catalog_base_drawers" || params.type === BASE_BOTTLE_PULLOUT_MODULE_TYPE;
 }
 
 function canonicalFwmMaterialGroup(value: unknown): string {
@@ -302,7 +283,7 @@ function makeUniformPreviewMaterial(material: THREE.Material) {
 function resolveComponentForParam(
   params: Record<string, unknown>,
   catalog: ClientCatalog,
-  key: "legComponentId" | "clipComponentId" | "runnerComponentId" | "handleComponentId" | "hingeComponentId",
+  key: "legComponentId" | "clipComponentId" | "handleComponentId" | "hingeComponentId",
   componentType: ComponentType
 ) {
   const cache = materialCacheFor(params, catalog);
@@ -461,9 +442,7 @@ function inferMaterialGroup(name: string): string {
 function markDrawerSubmodulePart(mesh: THREE.Mesh, args: {
   submoduleKind: "drawer" | "cutlery_inner_drawer";
   drawerIndex: number;
-  drawerSystemLabel?: string;
-  drawerSystemBrand?: string;
-  drawerSystemSize?: string;
+  drawerFrontHeightMm?: number;
   materialGroup?: string;
   materialSlotId?: string;
   drawerMotionRole?: "moving" | "fixed_corpus";
@@ -471,9 +450,7 @@ function markDrawerSubmodulePart(mesh: THREE.Mesh, args: {
   mesh.userData.submoduleKind = args.submoduleKind;
   mesh.userData.parentDrawerIndex = args.drawerIndex;
   if (args.drawerMotionRole) mesh.userData.drawerMotionRole = args.drawerMotionRole;
-  if (args.drawerSystemLabel) mesh.userData.drawerSystem = args.drawerSystemLabel;
-  if (args.drawerSystemBrand) mesh.userData.drawerSystemBrand = args.drawerSystemBrand;
-  if (args.drawerSystemSize) mesh.userData.drawerSystemSize = args.drawerSystemSize;
+  if (args.drawerFrontHeightMm) mesh.userData.drawerFrontHeightMm = args.drawerFrontHeightMm;
   if (args.materialGroup) mesh.userData.materialGroup = args.materialGroup;
   if (args.materialSlotId) mesh.userData.materialSlotId = args.materialSlotId;
   const dimensions = mesh.userData.dimensionsMm as { width: number; height: number; depth: number } | undefined;
@@ -490,28 +467,24 @@ function addCutleryInnerDrawerSubmodule(
     frontHeightMm: number;
     boxDepthMm: number;
     cabinetInnerWidthMm: number;
-    bottomCenterY: number;
-    runnerComponent: ComponentDefinition | undefined;
-    drawerSystemMaterial: THREE.Material;
   }
 ) {
   const enabled = bool(params, "hasCutleryInnerDrawer", false);
   if (!enabled) return;
   const targetIndex = Math.round(num(params, "drawerCount", 0));
   if (args.index !== targetIndex) return;
-  const drawerPreset = resolveDrawerPresetForIndex(params, args.frontHeightMm, args.index);
-  if (drawerPreset.size !== "M") return;
 
   const drawerBottomMat = makeMaterial(params, catalog, "drawer_bottom");
   const frontMat = makeMaterial(params, catalog, "front");
+  const hardware = makeMaterial(params, catalog, "hardware");
   const frontT = num(params, "frontThicknessMm", 18);
   const innerFrontDepth = Math.max(12, Math.min(frontT, 22));
   const innerFrontHeight = Math.max(44, Math.min(72, args.frontHeightMm - 70));
   const innerBottomThickness = Math.max(8, Math.min(num(params, "boardThickness", 18), 18));
-  const innerWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.cutleryInsertWidthDeductionMm);
-  const innerDepth = Math.max(100, Math.min(args.boxDepthMm - 40, drawerPreset.systemDepthMm - drawerPreset.cutleryInsertDepthDeductionMm));
-  const innerFrontWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.innerDrawerFrontDeductionMm);
-  const crossRailWidth = Math.max(60, args.cabinetInnerWidthMm - drawerPreset.innerDrawerCrossRailDeductionMm);
+  const innerWidth = Math.max(60, args.cabinetInnerWidthMm - 24);
+  const innerDepth = Math.max(100, args.boxDepthMm - 48);
+  const innerFrontWidth = innerWidth;
+  const crossRailWidth = innerWidth;
   const frontMaxY = args.frontHeightMm * 0.5;
   const innerFrontCenterY = frontMaxY - 10 - innerFrontHeight * 0.5;
   const innerBottomCenterY = innerFrontCenterY - innerFrontHeight * 0.5 + innerBottomThickness * 0.5 + 14;
@@ -527,12 +500,6 @@ function addCutleryInnerDrawerSubmodule(
     "cutleryInnerDrawerDepthMm",
     "cutleryInnerDrawerFrontWidthMm",
     "cutleryInnerDrawerCrossRailWidthMm",
-    "cutleryInsertWidthDeductionMm",
-    "cutleryInsertDepthDeductionMm",
-    "innerDrawerFrontDeductionMm",
-    "innerDrawerCrossRailDeductionMm",
-    "drawerSystemBrand",
-    "drawerSystemSizes",
     "drawerFrontHeightsMm",
     "width",
     "depth"
@@ -540,9 +507,7 @@ function addCutleryInnerDrawerSubmodule(
   const submoduleMeta = {
     submoduleKind: "cutlery_inner_drawer" as const,
     drawerIndex: args.index,
-    drawerSystemLabel: drawerPreset.label,
-    drawerSystemBrand: drawerPreset.brand,
-    drawerSystemSize: drawerPreset.size
+    drawerFrontHeightMm: args.frontHeightMm
   };
 
   const innerFront = addBox(
@@ -575,57 +540,17 @@ function addCutleryInnerDrawerSubmodule(
   );
   markDrawerSubmodulePart(crossRail, { ...submoduleMeta, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
 
-  const baseBackHeight = resolveFwmDrawerSystemPreset(drawerPreset.brand, "M").backHeightDeductionMm;
-  const sideRailHeight = Math.max(32.688, 32.688 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5);
-  const sideTopFlangeHeight = 7.873;
-  const outerRunnerHeight = 13.362;
-  const sideX = Math.max(30, innerWidth * 0.5 + 2.5);
-  const outerRunnerX = Math.max(40, innerWidth * 0.5 + 5.5);
-  const innerFrontMinY = innerFrontCenterY - innerFrontHeight * 0.5;
-  const sideRailCenterY = innerFrontMinY + 28 + sideRailHeight * 0.5;
-  const sideTopFlangeCenterY = innerFrontMinY + 81.439 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5;
-  const outerRunnerLowerCenterY = innerFrontMinY + 34.681;
-  const outerRunnerUpperCenterY = innerFrontMinY + 56.211;
-
   for (const side of [-1, 1] as const) {
     const systemSide = side < 0 ? "left" : "right";
-    const sideRail = addBox(
+    const runner = addBox(
       group,
-      `${args.prefix}cutlery_inner_drawer_system_${systemSide}_${args.index}`,
-      { width: 5, height: sideRailHeight, depth: innerDepth },
-      { x: side * sideX, y: sideRailCenterY, z: innerBottomCenterZ },
-      args.drawerSystemMaterial,
+      `${args.prefix}cutlery_inner_drawer_runner_${systemSide}_${args.index}`,
+      { width: 6, height: 18, depth: innerDepth },
+      { x: side * (innerWidth * 0.5 + 6), y: innerBottomCenterY + 10, z: innerBottomCenterZ },
+      hardware,
       paramKeys
     );
-    markComponent(sideRail, args.runnerComponent, "runnerComponentId");
-    markDrawerSubmodulePart(sideRail, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
-    sideRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-
-    const topFlange = addBox(
-      group,
-      `${args.prefix}cutlery_inner_drawer_system_${systemSide}_top_flange_${args.index}`,
-      { width: 5, height: sideTopFlangeHeight, depth: innerDepth },
-      { x: side * sideX, y: sideTopFlangeCenterY, z: innerBottomCenterZ },
-      args.drawerSystemMaterial,
-      paramKeys
-    );
-    markComponent(topFlange, args.runnerComponent, "runnerComponentId");
-    markDrawerSubmodulePart(topFlange, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
-    topFlange.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-
-    for (const [runnerKey, yCenter] of [["outer_lower", outerRunnerLowerCenterY], ["outer_upper", outerRunnerUpperCenterY]] as const) {
-      const outerRunner = addBox(
-        group,
-        `${args.prefix}cutlery_inner_drawer_system_${systemSide}_${runnerKey}_${args.index}`,
-        { width: 5, height: outerRunnerHeight, depth: Math.max(80, innerDepth - 16) },
-        { x: side * outerRunnerX, y: yCenter, z: innerBottomCenterZ - 8 },
-        args.drawerSystemMaterial,
-        paramKeys
-      );
-      markComponent(outerRunner, args.runnerComponent, "runnerComponentId");
-      markDrawerSubmodulePart(outerRunner, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
-      outerRunner.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-    }
+    markDrawerSubmodulePart(runner, { ...submoduleMeta, materialGroup: "hardware", materialSlotId: "hardware" });
   }
 }
 
@@ -646,137 +571,46 @@ function addDrawerSubmodule(
   const body = makeMaterial(params, catalog, "body");
   const drawerBottomMat = makeMaterial(params, catalog, "drawer_bottom");
   const hardware = makeMaterial(params, catalog, "hardware");
-  const runnerComponent = resolveComponentForParam(params, catalog, "runnerComponentId", "runner");
-  const drawerSystemMat = makeComponentMaterial(params, catalog, runnerComponent, hardware);
-  const drawerPreset = resolveDrawerPresetForIndex(params, args.frontHeightMm, args.index);
   const drawerSystemParamKeys = [
     "drawerCount",
-    "drawerSystemBrand",
-    "drawerSystemSize",
-    "drawerSystemSizes",
-    "drawerSystemLabels",
-    "drawerSystemMinFrontHeightsMm",
-    "drawerSystem",
-    "drawerSystemDepthMm",
-    "drawerBottomWidthDeductionMm",
-    "drawerBackWidthDeductionMm",
-    "drawerBackHeightDeductionMm",
-    "drawerSystemBackHeightsMm",
     "drawerFrontHeightsMm",
-    "runnerComponentId",
     "hasCutleryInnerDrawer",
     "width",
     "depth"
   ];
-  const usesMetalDrawerSystem = usesCatalogMetalDrawerSystem(params);
   const boxThickness = Math.max(10, Math.min(16, num(params, "boardThickness", 18) - 2));
-  const bottomThickness = usesMetalDrawerSystem ? num(params, "boardThickness", 18) : Math.max(6, num(params, "drawerBottomThickness", 8));
+  const bottomThickness = Math.max(6, num(params, "drawerBottomThickness", 8));
   const outerWidth = Math.max(90, args.widthMm - 48);
-  const sideHeight = Math.max(70, Math.min(180, args.frontHeightMm - 28));
+  const sideHeight = Math.max(55, Math.min(160, args.frontHeightMm - 48));
   const cabinetInnerWidth = Math.max(60, num(params, "width", args.widthMm + 4) - num(params, "boardThickness", 18) * 2);
-  const innerWidth = usesMetalDrawerSystem ? Math.max(60, cabinetInnerWidth - drawerPreset.bottomWidthDeductionMm) : Math.max(60, outerWidth - boxThickness * 2);
-  const backRailWidth = usesMetalDrawerSystem ? Math.max(60, cabinetInnerWidth - drawerPreset.backWidthDeductionMm) : innerWidth;
-  const boxDepth = usesMetalDrawerSystem ? Math.max(160, drawerPreset.systemDepthMm - 4) : Math.max(160, args.drawerDepthMm);
-  const bottomDepth = Math.max(100, boxDepth - boxThickness);
-  const bottomCenterZ = usesMetalDrawerSystem
-    ? args.drawerCenterZMm + (boxDepth - bottomDepth) * 0.5
-    : args.drawerCenterZMm - boxThickness * 0.5;
-  const localBottomCenterY = -args.frontHeightMm * 0.5 + (usesMetalDrawerSystem ? 27 : 22);
+  const innerWidth = Math.max(60, outerWidth - boxThickness * 2);
+  const boxDepth = Math.max(160, args.drawerDepthMm);
+  const bottomDepth = Math.max(100, boxDepth - boxThickness * 2);
+  const drawerCenterZMm = args.drawerCenterZMm + 12;
+  const bottomCenterZ = drawerCenterZMm;
+  const localBottomCenterY = -args.frontHeightMm * 0.5 + 22;
   const bodyCenterY = localBottomCenterY + (sideHeight - bottomThickness) * 0.5;
-  const innerFrontZ = args.drawerCenterZMm + boxDepth * 0.5 - boxThickness * 0.5;
-  const innerBackZ = args.drawerCenterZMm - boxDepth * 0.5 + boxThickness * 0.5;
+  const innerFrontZ = drawerCenterZMm + boxDepth * 0.5 - boxThickness * 0.5;
+  const innerBackZ = drawerCenterZMm - boxDepth * 0.5 + boxThickness * 0.5;
   const runnerHeight = Math.max(32, sideHeight - 20);
   const runnerInsetX = outerWidth * 0.5 + 8;
   const fixedRunnerOpenOffset = Math.max(0, args.fixedRunnerOpenOffsetMm ?? 0);
 
-  if (usesMetalDrawerSystem) {
-    const sideX = Math.max(30, innerWidth * 0.5 + 2.5);
-    const outerRunnerX = Math.max(40, outerWidth * 0.5 + 5.5);
-    const sideCenterZ = args.drawerCenterZMm;
-    const runnerCenterZ = args.drawerCenterZMm - 8;
-    const frontMinY = -args.frontHeightMm * 0.5;
-    const baseBackHeight = resolveFwmDrawerSystemPreset(drawerPreset.brand, "M").backHeightDeductionMm;
-    const sideRailHeight = Math.max(32.688, 32.688 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5);
-    const sideTopFlangeHeight = 7.873;
-    const outerRunnerHeight = 13.362;
-    const sideRailCenterY = frontMinY + 28 + sideRailHeight * 0.5;
-    const sideTopFlangeCenterY = frontMinY + 81.439 + Math.max(0, drawerPreset.backHeightDeductionMm - baseBackHeight) * 0.5;
-    const outerRunnerLowerCenterY = frontMinY + 34.681;
-    const outerRunnerUpperCenterY = frontMinY + 56.211;
-    for (const side of [-1, 1] as const) {
-      const systemSide = side < 0 ? "left" : "right";
-      const sideRail = addBox(
-        group,
-        `${args.prefix}drawer_system_${systemSide}_${args.index}`,
-        { width: 5, height: sideRailHeight, depth: boxDepth },
-        { x: side * sideX, y: sideRailCenterY, z: sideCenterZ },
-        drawerSystemMat,
-        drawerSystemParamKeys
-      );
-      markComponent(sideRail, runnerComponent, "runnerComponentId");
-      markDrawerSubmodulePart(sideRail, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, drawerMotionRole: "moving" });
-      sideRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-      const topFlange = addBox(
-        group,
-        `${args.prefix}drawer_system_${systemSide}_top_flange_${args.index}`,
-        { width: 5, height: sideTopFlangeHeight, depth: boxDepth },
-        { x: side * sideX, y: sideTopFlangeCenterY, z: sideCenterZ },
-        drawerSystemMat,
-        drawerSystemParamKeys
-      );
-      markComponent(topFlange, runnerComponent, "runnerComponentId");
-      markDrawerSubmodulePart(topFlange, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, drawerMotionRole: "moving" });
-      topFlange.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-      for (const [runnerKey, yCenter] of [["outer_lower", outerRunnerLowerCenterY], ["outer_upper", outerRunnerUpperCenterY]] as const) {
-        const outerRunner = addBox(
-          group,
-          `${args.prefix}drawer_system_${systemSide}_${runnerKey}_${args.index}`,
-          { width: 5, height: outerRunnerHeight, depth: Math.max(100, boxDepth - 16) },
-          { x: side * outerRunnerX, y: yCenter, z: runnerCenterZ - fixedRunnerOpenOffset },
-          drawerSystemMat,
-          drawerSystemParamKeys
-        );
-        markComponent(outerRunner, runnerComponent, "runnerComponentId");
-        markDrawerSubmodulePart(outerRunner, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, drawerMotionRole: "fixed_corpus" });
-        outerRunner.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-      }
-    }
-    const backRail = addBox(
-      group,
-      `${args.prefix}drawer_system_back_rail_${args.index}`,
-      { width: backRailWidth, height: drawerPreset.backHeightDeductionMm, depth: 18 },
-      { x: 0, y: frontMinY + 18 + drawerPreset.backHeightDeductionMm * 0.5, z: args.drawerCenterZMm - boxDepth * 0.5 + 7 },
-      drawerBottomMat,
-      [...drawerSystemParamKeys, "drawerBottomMaterialId"]
-    );
-    backRail.userData.materialGroup = "drawer_bottom";
-    backRail.userData.materialSlotId = "drawer_bottom";
-    backRail.userData.boardName = backRail.userData.boardName ?? `${args.prefix}drawer_system_back_rail_${args.index}`;
-    backRail.userData.partName = backRail.userData.partName ?? backRail.userData.boardName;
-    markDrawerSubmodulePart(backRail, { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom", drawerMotionRole: "moving" });
-    backRail.userData.drawerSystemMinFrontHeightMm = drawerPreset.minFrontHeightMm;
-  } else {
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_left_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: -outerWidth * 0.5 + boxThickness * 0.5, y: bodyCenterY, z: args.drawerCenterZMm }, body, ["drawerCount", "width", "depth"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerMotionRole: "moving" });
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_right_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: outerWidth * 0.5 - boxThickness * 0.5, y: bodyCenterY, z: args.drawerCenterZMm }, body, ["drawerCount", "width", "depth"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerMotionRole: "moving" });
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_back_${args.index}`, { width: innerWidth, height: sideHeight, depth: boxThickness }, { x: 0, y: bodyCenterY, z: innerBackZ }, body, ["drawerCount", "depth", "backThickness"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerMotionRole: "moving" });
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_front_inner_${args.index}`, { width: innerWidth, height: Math.max(48, sideHeight - 18), depth: boxThickness }, { x: 0, y: bodyCenterY + 6, z: innerFrontZ }, body, ["drawerCount", "frontThicknessMm"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerMotionRole: "moving" });
-  }
-  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_bottom_${args.index}`, { width: innerWidth, height: bottomThickness, depth: bottomDepth }, { x: 0, y: localBottomCenterY, z: bottomCenterZ }, drawerBottomMat, ["drawerCount", "drawerBottomMaterialId", "depth", "backThickness", "drawerBackGapMm", "frontThicknessMm"]), { submoduleKind: "drawer", drawerIndex: args.index, drawerSystemLabel: drawerPreset.label, drawerSystemBrand: drawerPreset.brand, drawerSystemSize: drawerPreset.size, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom", drawerMotionRole: "moving" });
-  if (!usesMetalDrawerSystem) {
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_left_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: -runnerInsetX, y: bodyCenterY, z: args.drawerCenterZMm - fixedRunnerOpenOffset }, hardware, ["drawerCount", "runnerComponentId"]), { submoduleKind: "drawer", drawerIndex: args.index, materialGroup: "hardware", materialSlotId: "hardware", drawerMotionRole: "fixed_corpus" });
-    markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_right_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: runnerInsetX, y: bodyCenterY, z: args.drawerCenterZMm - fixedRunnerOpenOffset }, hardware, ["drawerCount", "runnerComponentId"]), { submoduleKind: "drawer", drawerIndex: args.index, materialGroup: "hardware", materialSlotId: "hardware", drawerMotionRole: "fixed_corpus" });
-  } else {
-    addCutleryInnerDrawerSubmodule(group, params, catalog, {
-      prefix: args.prefix,
-      index: args.index,
-      frontHeightMm: args.frontHeightMm,
-      boxDepthMm: boxDepth,
-      cabinetInnerWidthMm: cabinetInnerWidth,
-      bottomCenterY: localBottomCenterY,
-      runnerComponent,
-      drawerSystemMaterial: drawerSystemMat
-    });
-  }
+  const drawerMeta = { submoduleKind: "drawer" as const, drawerIndex: args.index, drawerFrontHeightMm: args.frontHeightMm, drawerMotionRole: "moving" as const };
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_left_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: -outerWidth * 0.5 + boxThickness * 0.5, y: bodyCenterY, z: drawerCenterZMm }, body, ["drawerCount", "drawerFrontHeightsMm", "width", "depth"]), drawerMeta);
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_right_side_${args.index}`, { width: boxThickness, height: sideHeight, depth: boxDepth }, { x: outerWidth * 0.5 - boxThickness * 0.5, y: bodyCenterY, z: drawerCenterZMm }, body, ["drawerCount", "drawerFrontHeightsMm", "width", "depth"]), drawerMeta);
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_back_${args.index}`, { width: innerWidth, height: sideHeight, depth: boxThickness }, { x: 0, y: bodyCenterY, z: innerBackZ }, body, ["drawerCount", "drawerFrontHeightsMm", "depth", "backThickness"]), drawerMeta);
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_front_inner_${args.index}`, { width: innerWidth, height: Math.max(48, sideHeight - 18), depth: boxThickness }, { x: 0, y: bodyCenterY + 6, z: innerFrontZ }, body, ["drawerCount", "drawerFrontHeightsMm", "frontThicknessMm"]), drawerMeta);
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_bottom_${args.index}`, { width: innerWidth, height: bottomThickness, depth: bottomDepth }, { x: 0, y: localBottomCenterY, z: bottomCenterZ }, drawerBottomMat, [...drawerSystemParamKeys, "drawerBottomMaterialId"]), { ...drawerMeta, materialGroup: "drawer_bottom", materialSlotId: "drawer_bottom" });
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_left_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: -runnerInsetX, y: bodyCenterY, z: drawerCenterZMm - fixedRunnerOpenOffset }, hardware, drawerSystemParamKeys), { submoduleKind: "drawer", drawerIndex: args.index, drawerFrontHeightMm: args.frontHeightMm, materialGroup: "hardware", materialSlotId: "hardware", drawerMotionRole: "fixed_corpus" });
+  markDrawerSubmodulePart(addBox(group, `${args.prefix}drawer_runner_right_${args.index}`, { width: 8, height: runnerHeight, depth: boxDepth }, { x: runnerInsetX, y: bodyCenterY, z: drawerCenterZMm - fixedRunnerOpenOffset }, hardware, drawerSystemParamKeys), { submoduleKind: "drawer", drawerIndex: args.index, drawerFrontHeightMm: args.frontHeightMm, materialGroup: "hardware", materialSlotId: "hardware", drawerMotionRole: "fixed_corpus" });
+  addCutleryInnerDrawerSubmodule(group, params, catalog, {
+    prefix: args.prefix,
+    index: args.index,
+    frontHeightMm: args.frontHeightMm,
+    boxDepthMm: boxDepth,
+    cabinetInnerWidthMm: cabinetInnerWidth
+  });
 }
 
 function addSwingDoorLeaf(
@@ -3869,8 +3703,7 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
       requestedSum > 0
         ? rawHeights.map((entry) => Math.max(40, (entry / requestedSum) * availableHeight))
         : Array.from({ length: drawerCount }, () => Math.max(40, availableHeight / drawerCount));
-    const usesRevitDrawerFrontStack = usesCatalogMetalDrawerSystem(params) && !mixedWithDoors;
-    let y = usesRevitDrawerFrontStack ? plinth + gap * 3 : plinth + gap;
+    let y = plinth + gap;
     for (let index = 0; index < drawerCount; index += 1) {
       const drawerH = drawerHeights[index] ?? Math.max(40, availableHeight / drawerCount);
       y += drawerH / 2;
@@ -3881,25 +3714,19 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
       drawerGroup.position.set(0, y * MM, (z + openOffset) * MM);
       group.add(drawerGroup);
       addBox(drawerGroup, `${prefix}drawer_front_${index + 1}`, { width: width - sideGap * 2, height: drawerH, depth: frontT }, { x: 0, y: 0, z: 0 }, frontMat, ["drawerCount", "drawerFrontHeightsMm", "frontThicknessMm", "frontGap", "handleComponentId", "opened"]);
-      const drawerPreset = resolveDrawerPresetForIndex(params, drawerH, index + 1);
-      const metalDrawerDepth = Math.max(160, drawerPreset.systemDepthMm - 4);
-      const drawerCenterWorldZ = zOffset + (usesCatalogMetalDrawerSystem(params)
-        ? -depth / 2 + metalDrawerDepth / 2 + 35
-        : drawerDepth.centerZ) - drawerDepthShiftMm;
+      const drawerCenterWorldZ = zOffset + drawerDepth.centerZ - drawerDepthShiftMm;
       addDrawerSubmodule(drawerGroup, params, catalog, {
         prefix,
         index: index + 1,
         widthMm: width - sideGap * 2,
         frontHeightMm: drawerH,
         drawerCenterZMm: drawerCenterWorldZ - z,
-        drawerDepthMm: usesCatalogMetalDrawerSystem(params) ? metalDrawerDepth : drawerDepth.depthMm,
+        drawerDepthMm: drawerDepth.depthMm,
         fixedRunnerOpenOffsetMm: openOffset
       });
-      const handleZ = usesCatalogMetalDrawerSystem(params)
-        ? frontT / 2 + 0.789 + 6
-        : frontT / 2 + num(params, "handleProjectionMm", 28) / 2;
+      const handleZ = frontT / 2 + num(params, "handleProjectionMm", 28) / 2;
       addCylinder(drawerGroup, `${prefix}drawer_handle_${index + 1}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: drawerH * 0.28, z: handleZ }, hardware, "x");
-      y += drawerH / 2 + (usesRevitDrawerFrontStack ? 0 : gap);
+      y += drawerH / 2 + gap;
     }
     if (!mixedWithDoors) return;
 
@@ -4023,9 +3850,9 @@ function buildCatalogBaseBottlePullout(group: THREE.Group, params: FwmFurnitureP
   handle.userData.submoduleKind = "bottle_pullout";
   handle.userData.selectableSubmoduleId = "bottle_pullout";
 
-  const drawerPreset = resolveDrawerPresetForIndex(params, frontAreaHeight / 2, 1);
-  const metalDrawerDepth = Math.max(160, drawerPreset.systemDepthMm - 4);
-  const drawerCenterWorldZ = -depth / 2 + metalDrawerDepth / 2 + 35;
+  const neutralDrawerDepth = resolveDrawerDepthLayout(depth, num(params, "backThickness", 8), num(params, "drawerBackGapMm", 10));
+  const metalDrawerDepth = neutralDrawerDepth.depthMm;
+  const drawerCenterWorldZ = neutralDrawerDepth.centerZ;
   const drawerCenterLocalZ = drawerCenterWorldZ - frontZ;
   const tierHeights = readTwoTierBottlePulloutHeights(params, frontAreaHeight, Math.max(24, frontGap));
   let cursorY = plinth + frontGap;
@@ -4189,24 +4016,14 @@ function addTallDrawerSlot(
   drawerGroup.position.set(0, (frontBottomY + frontHeight / 2) * MM, frontWorldZ * MM);
   group.add(drawerGroup);
   addBox(drawerGroup, `tower_drawer_front_${drawerIndex}`, { width: width - sideGap * 2, height: frontHeight, depth: frontT }, { x: 0, y: 0, z: 0 }, makeMaterial(params, catalog, "front"), ["tallStackMode", `tallSlot${slotIndex}Type`, `tallSlot${slotIndex}HeightMm`, `tallSlot${slotIndex}OffsetMm`, "frontMaterialId"]);
-  const drawerPreset = resolveDrawerPresetForIndex(params, frontHeight, drawerIndex, slotIndex);
-  const backLayout = resolveBackPanelDepthLayout(depth, num(params, "backThickness", 8));
-  const drawerBackGap = Math.max(0, num(params, "drawerBackGapMm", 10));
-  const drawerRearFaceZ = Math.min(depth / 2 - 1, backLayout.innerFaceZ + drawerBackGap);
-  const drawerDepth = Math.min(Math.max(160, drawerPreset.systemDepthMm - 4), Math.max(160, depth / 2 - drawerRearFaceZ - 1));
-  const drawerCenterWorldZ = drawerRearFaceZ + drawerDepth / 2;
-  const slotDrawerSystemSize = drawerSystemSizeOverride(params[`tallSlot${slotIndex}DrawerSystemSize`]) ?? "";
-  addDrawerSubmodule(drawerGroup, {
-    ...params,
-    type: "fwm_catalog_base_drawers",
-    [`drawer${drawerIndex}SystemSize`]: slotDrawerSystemSize
-  } as FwmFurnitureParams, catalog, {
+  const neutralDrawerDepth = resolveDrawerDepthLayout(depth, num(params, "backThickness", 8), num(params, "drawerBackGapMm", 10));
+  addDrawerSubmodule(drawerGroup, params, catalog, {
     prefix: "tower_",
     index: drawerIndex,
     widthMm: width - sideGap * 2,
     frontHeightMm: frontHeight,
-    drawerCenterZMm: drawerCenterWorldZ - frontWorldZ,
-    drawerDepthMm: drawerDepth
+    drawerCenterZMm: neutralDrawerDepth.centerZ - frontWorldZ,
+    drawerDepthMm: neutralDrawerDepth.depthMm
   });
   addCylinder(drawerGroup, `tower_drawer_handle_${drawerIndex}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: Math.max(18, frontHeight * 0.26), z: frontT / 2 + num(params, "handleProjectionMm", 28) / 2 }, makeMaterial(params, catalog, "hardware"), "x");
   markTallSelectableSubmodule(drawerGroup, {

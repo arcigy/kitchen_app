@@ -101,7 +101,7 @@ function createMaterialAssignments(
     capturedAt: assignmentTimestamp,
   });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
     revision: 3,
     updatedAt: assignmentTimestamp,

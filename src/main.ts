@@ -16,8 +16,10 @@ import type { ProjectSaveFile } from "./core/project-save/project-save-types";
 import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./app/clientJourneyTelemetry";
 import { sampleBrowserRuntimeMemory, startBrowserRuntimeTelemetry } from "./app/browserRuntimeTelemetry";
 import { installStaleAssetRecovery } from "./app/staleAssetRecovery";
+import { installIconTooltips } from "./ui/iconTooltips";
 
 installStaleAssetRecovery();
+installIconTooltips();
 
 const app = document.getElementById("app");
 

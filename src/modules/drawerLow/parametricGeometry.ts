@@ -346,18 +346,17 @@ export function buildDrawerLowParametric(
   const drawerBottomPreview = resolveBoardPreview("drawer_1_bottom", params as Record<string, unknown>, materialsSnapshot, fallbackDrawerPreview, catalogContext);
   const handleComponentId = catalogContext?.resolveComponentId(params.handleComponentId as string | undefined, "handle", "handle") ?? null;
   const legComponentId = catalogContext?.resolveComponentId(params.legComponentId as string | undefined, "leg") ?? null;
-  const runnerComponentId = catalogContext?.resolveComponentId(params.runnerComponentId as string | undefined, "runner", "drawerSystem") ?? null;
   const handlePreview = resolveComponentPreview(handleComponentId, fallbackHardwarePreview, catalogContext, "handle");
   const legPreview = resolveComponentPreview(legComponentId, {
     colorHex: "#1e232b",
     roughness: 0.45,
     metalness: 0.55
   }, catalogContext, "leg");
-  const runnerPreview = resolveComponentPreview(runnerComponentId, {
+  const runnerPreview = {
     colorHex: "#9ca3ad",
     roughness: 0.3,
     metalness: 0.82
-  }, catalogContext, "runner");
+  };
   const clipPreview = resolveComponentPreview(params.clipComponentId as string | undefined, {
     colorHex: "#1e232b",
     roughness: 0.45,

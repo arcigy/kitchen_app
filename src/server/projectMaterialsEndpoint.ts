@@ -20,7 +20,9 @@ import type {
   ProjectMaterialScopeItem,
   ProjectMaterialsView
 } from "../core/project-materials/project-material-types";
+import { PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION } from "../core/project-materials/project-material-types";
 import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
+import { synchronizeRunnerHeightAssignments } from "../core/project-materials/runner-height-assignments";
 import { createProjectService } from "../core/project/project-service";
 import {
   ProjectMaterialRevisionConflictError,
@@ -71,9 +73,10 @@ function bodyRecord(value: unknown): Record<string, unknown> {
 
 function normalizeState(save: ProjectSaveFile, catalog: ClientCatalog, now = new Date().toISOString()): ProjectMaterialAssignmentsState {
   const state = save.appState.materialAssignments;
-  return state.initialized
+  const normalized = state.initialized
     ? normalizeAutoProjectMaterialAssignments(state, catalog, now)
     : createDefaultProjectMaterialAssignments(catalog, now);
+  return synchronizeRunnerHeightAssignments(normalized, resolveProjectMaterialScopes(save, catalog), now);
 }
 
 async function loadNormalizedProjectState(
@@ -186,6 +189,7 @@ function authoritativeAssignment(
     return {
       assignmentId: requested.assignmentId,
       category: requested.category,
+      ...(requested.variantKey ? { variantKey: requested.variantKey } : {}),
       kind: "material",
       materialId: material.id,
       ...(edgeFront ? { edgeFrontId: edgeFront.id } : {}),
@@ -213,6 +217,7 @@ function authoritativeAssignment(
   return {
     assignmentId: requested.assignmentId,
     category: requested.category,
+    ...(requested.variantKey ? { variantKey: requested.variantKey } : {}),
     kind: "component",
     componentId: component.id,
     customValues: structuredClone(requested.customValues),
@@ -239,7 +244,7 @@ function updatedState(
   const assignments = current.assignments.filter((item) => item.assignmentId !== nextAssignment.assignmentId);
   assignments.push(nextAssignment);
   const state: ProjectMaterialAssignmentsState = {
-    schemaVersion: 1,
+    schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
     initialized: true,
     revision: current.revision + 1,
     assignments,
@@ -253,7 +258,7 @@ const MATERIAL_CATEGORIES = new Set<MaterialAssignmentCategory>(
   MATERIAL_ASSIGNMENT_CATEGORIES.map((definition) => definition.category)
 );
 
-type ProjectMaterialCopyTarget = Pick<ProjectMaterialScopeItem, "id" | "category"> & { scopeId: string };
+type ProjectMaterialCopyTarget = Pick<ProjectMaterialScopeItem, "id" | "category" | "variantKey"> & { scopeId: string };
 
 function copyTarget(value: unknown): ProjectMaterialCopyTarget {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -263,10 +268,11 @@ function copyTarget(value: unknown): ProjectMaterialCopyTarget {
   const scopeId = typeof target.scopeId === "string" ? target.scopeId.trim() : "";
   const id = typeof target.itemId === "string" ? target.itemId.trim() : "";
   const category = target.category;
+  const variantKey = typeof target.variantKey === "string" ? target.variantKey.trim() : undefined;
   if (!scopeId || !id || typeof category !== "string" || !MATERIAL_CATEGORIES.has(category as MaterialAssignmentCategory)) {
     throw new ProjectMaterialUpdateError("Material copy target is invalid.", 400, "INVALID_MATERIAL_COPY_REQUEST");
   }
-  return { scopeId, id, category: category as MaterialAssignmentCategory };
+  return { scopeId, id, category: category as MaterialAssignmentCategory, ...(variantKey ? { variantKey } : {}) };
 }
 
 function validateCopyCompatibility(
@@ -331,7 +337,7 @@ function copiedState(
   const existing = current.assignments.find((assignment) => assignment.assignmentId === copied.assignmentId);
   if (copiedAssignmentIsUnchanged(existing, copied)) return { state: current, changed: false };
   const state: ProjectMaterialAssignmentsState = {
-    schemaVersion: 1,
+    schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
     initialized: true,
     revision: current.revision + 1,
     assignments: [...current.assignments.filter((assignment) => assignment.assignmentId !== copied.assignmentId), copied],
@@ -396,7 +402,7 @@ export async function handleProjectMaterialsApi(
     }
     if (!copyOperation) {
       const structuralCandidate: ProjectMaterialAssignmentsState = {
-        schemaVersion: 1,
+        schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
         initialized: true,
         revision: current.revision,
         assignments: [assignment as ProjectMaterialAssignment]

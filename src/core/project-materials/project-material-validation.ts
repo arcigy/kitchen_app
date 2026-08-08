@@ -4,6 +4,7 @@ import type {
   ProjectMaterialAssignment,
   ProjectMaterialAssignmentsState
 } from "./project-material-types";
+import { PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION } from "./project-material-types";
 
 const MATERIAL_ASSIGNMENT_CATEGORIES = new Set<MaterialAssignmentCategory>([
   "corpus",
@@ -91,6 +92,7 @@ function validateAssignment(value: unknown, path: string): asserts value is Proj
     throw new Error(`${path}.category is unsupported.`);
   }
   if (value.kind !== "material" && value.kind !== "component") throw new Error(`${path}.kind is unsupported.`);
+  optionalId(value.variantKey, `${path}.variantKey`);
   if (value.source !== "auto" && value.source !== "user") throw new Error(`${path}.source is unsupported.`);
 
   const materialId = optionalId(value.materialId, `${path}.materialId`);
@@ -123,7 +125,7 @@ export function validateProjectMaterialAssignmentsState(
   path = "project material assignments"
 ): asserts value is ProjectMaterialAssignmentsState {
   if (!isObject(value)) throw new Error(`${path} must be an object.`);
-  if (value.schemaVersion !== 1) throw new Error(`${path}.schemaVersion is unsupported.`);
+  if (value.schemaVersion !== PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION) throw new Error(`${path}.schemaVersion is unsupported.`);
   if (typeof value.initialized !== "boolean") throw new Error(`${path}.initialized must be a boolean.`);
   if (
     !Number.isSafeInteger(value.revision) ||

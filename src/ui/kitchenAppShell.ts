@@ -1,45 +1,45 @@
-const navItems = [
+import { actionIconMarkup, type ActionIconId } from "./actionIcons";
+
+const navItems: Array<{ id: string; label: string; iconId: ActionIconId }> = [
   {
     id: "design",
     label: "Design",
-    viewBox: "0 0 24 24",
-    icon: `<path d="M12 3.6 19.2 7.7v8.4L12 20.4l-7.2-4.3V7.7L12 3.6Z" /><path d="M12 12v8.4" /><path d="m4.8 7.9 7.2 4.1 7.2-4.1" /><path d="m12 3.6 7.2 4.1" />`
+    iconId: "design"
   },
   {
     id: "sheets",
     label: "Sheets",
-    imgSrc: "/cad-icons/sheets.svg"
+    iconId: "sheets"
   },
   {
     id: "documents",
     label: "Documents",
-    imgSrc: "/cad-icons/documents.svg"
+    iconId: "documents"
   },
   {
     id: "visualisation",
     label: "Visualisation",
-    imgSrc: "/cad-icons/visualisation.svg"
+    iconId: "visualisation"
   },
   {
     id: "schedules",
     label: "Schedules",
-    viewBox: "0 0 24 24",
-    icon: `<path d="M5.3 5.5h13.4v13.3H5.3V5.5Z" /><path d="M5.3 9.1h13.4" /><path d="M8.3 3.9v3.1" /><path d="M15.7 3.9v3.1" /><path d="M8.4 12.1h2.2" /><path d="M13.4 12.1h2.2" /><path d="M8.4 15.4h2.2" /><path d="M13.4 15.4h2.2" />`
+    iconId: "schedules"
   },
   {
     id: "margins",
     label: "Marže",
-    imgSrc: "/cad-icons/quantities.svg"
+    iconId: "margins"
   },
   {
     id: "materials",
     label: "Materials",
-    imgSrc: "/cad-icons/material.svg"
+    iconId: "materials"
   },
   {
     id: "settings",
     label: "Settings",
-    imgSrc: "/cad-icons/nastavenia.svg"
+    iconId: "settings"
   }
 ];
 
@@ -54,11 +54,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
           .map(
             (item, index) => `
               <button class="archux-side-nav-item${index === 0 ? " active" : ""}" type="button" data-workspace-nav="${item.id}">
-                ${
-                  "imgSrc" in item
-                    ? `<img class="archux-side-icon-img" src="${item.imgSrc}" alt="" aria-hidden="true" />`
-                    : `<svg class="archux-side-icon${"filled" in item && item.filled ? " filled" : ""}" viewBox="${item.viewBox}" aria-hidden="true">${item.icon}</svg>`
-                }
+                ${actionIconMarkup(item.iconId, "archux-side-icon")}
                 <span>${item.label}</span>
               </button>
             `

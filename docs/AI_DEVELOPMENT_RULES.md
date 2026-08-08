@@ -42,6 +42,8 @@ If a change needs more than a small wiring edit, create or update a focused file
 | Module UI controls | `src/modules/[module]/controls.ts` |
 | Shared material/pricing data | `src/data/` |
 
+For every new icon-bearing UI action, also follow `docs/ui-icon-contract.md`.
+
 ## Before adding code
 
 1. Identify the feature area from the table above.

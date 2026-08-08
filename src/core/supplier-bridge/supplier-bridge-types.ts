@@ -67,6 +67,8 @@ export type SupplierSyncItem = {
   materialAssignmentId: string;
   /** Authoritative base category for scoped targets; never infer it from an opaque item ID. */
   assignmentCategory?: import("../project-materials/project-material-types").MaterialAssignmentCategory;
+  /** Optional discriminator within a category, for example drawer front height. */
+  assignmentVariantKey?: string;
   targetLabel?: string;
   targetScope?: "general" | "module" | "addition";
   query: string;

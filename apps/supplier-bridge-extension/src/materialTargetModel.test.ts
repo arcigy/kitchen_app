@@ -5,7 +5,7 @@ import { extensionMaterialTargetGroups, extensionMaterialTargets } from "./mater
 
 const view: ProjectMaterialsView = {
   assignments: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
     revision: 3,
     assignments: [{

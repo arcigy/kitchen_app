@@ -24,6 +24,8 @@ export type MaterialUsageItem = {
   displayName: string;
   detail: string;
   usageRole?: string;
+  variantKey?: string;
+  variantLabel?: string;
   quantity: number;
   pieces: number;
   unit: MaterialUsageUnit;
@@ -100,6 +102,7 @@ function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem
     return [{
       id: item.id,
       category,
+      ...(item.variantKey ? { variantKey: item.variantKey } : {}),
       label: item.description || item.name || item.id,
       description: item.dimensionsMm
         ? `${Math.round(item.dimensionsMm.length)} × ${Math.round(item.dimensionsMm.width)} × ${Math.round(item.dimensionsMm.thickness)} mm`
@@ -239,7 +242,7 @@ function addBomItem(
   const displayName = item.material?.displayName ?? item.component?.displayName ?? item.description ?? item.name ?? item.id;
   const detail = itemDetail(item, config.unit);
   const usageRole = usageRoleFor(item);
-  const key = `${catalogId ?? `missing:${item.id}`}:${detail}:${usageRole}`;
+  const key = `${catalogId ?? `missing:${item.variantKey ?? item.id}`}:${detail}:${usageRole}:${item.variantKey ?? "default"}`;
   const groupBuckets = buckets.get(groupId) ?? new Map<string, MaterialUsageItem>();
   const existing = groupBuckets.get(key);
 
@@ -249,7 +252,17 @@ function addBomItem(
     existing.quantity += quantity;
     existing.pieces += pieces;
   } else {
-    groupBuckets.set(key, { catalogId, displayName, detail, usageRole, quantity, pieces, unit: config.unit });
+    groupBuckets.set(key, {
+      catalogId,
+      displayName,
+      detail,
+      usageRole,
+      ...(item.variantKey ? { variantKey: item.variantKey } : {}),
+      ...(item.variantLabel ? { variantLabel: item.variantLabel } : {}),
+      quantity,
+      pieces,
+      unit: config.unit
+    });
   }
   buckets.set(groupId, groupBuckets);
 }

@@ -13,15 +13,11 @@ import {
 import { createModuleRuntimeCatalogContext } from "../runtime/runtimeCatalog";
 import { mapFwmCatalogCornerToCornerShelfLowerParams } from "./catalogCornerAdapter";
 import { resolveDrawerDepthLayout } from "./depthLayout";
-import { resolveFwmDrawerSystemPreset } from "./drawerSystemPresets";
 import { getFwmFurnitureSpec } from "./definitions";
 import { normalizeFwmFurnitureParams, type FwmFurnitureParams } from "./types";
+import { groupDrawerFrontHeights, parseDrawerFrontHeights } from "../drawers/drawerHeightContract";
 
 const BASE_BOTTLE_PULLOUT_MODULE_TYPE = "base_bottle_pullout";
-
-function usesCatalogMetalDrawerSystem(moduleType: string) {
-  return moduleType === "fwm_catalog_base_drawers" || moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE;
-}
 
 function num(params: Record<string, unknown>, key: string, fallback: number) {
   const value = params[key];
@@ -65,14 +61,13 @@ function componentRef(component: ComponentDefinition | undefined | null): Portab
 
 function configuredComponentId(
   params: FwmFurnitureParams,
-  key: "handleComponentId" | "hingeComponentId" | "runnerComponentId" | "legComponentId" | "clipComponentId"
+  key: "handleComponentId" | "hingeComponentId" | "legComponentId" | "clipComponentId"
 ): string | undefined {
   const assignments = rec(params.componentAssignments);
   const explicit = typeof params[key] === "string" && params[key] ? params[key] as string : undefined;
   if (explicit) return explicit;
   const assignmentKey = key === "handleComponentId" ? "handle" :
-    key === "hingeComponentId" ? "hinge" :
-    key === "runnerComponentId" ? "runner" : key;
+    key === "hingeComponentId" ? "hinge" : key;
   const assigned = assignments[assignmentKey];
   return typeof assigned === "string" && assigned ? assigned : undefined;
 }
@@ -80,7 +75,7 @@ function configuredComponentId(
 function componentUsage(
   catalog: ClientCatalog,
   params: FwmFurnitureParams,
-  key: "handleComponentId" | "hingeComponentId" | "runnerComponentId" | "legComponentId" | "clipComponentId",
+  key: "handleComponentId" | "hingeComponentId" | "legComponentId" | "clipComponentId",
   componentType: ComponentType
 ): { component: PortableComponentRef | null; configuredId: string | undefined; componentType: ComponentType } {
   return {
@@ -120,7 +115,7 @@ function resolveMaterial(catalog: ClientCatalog, params: FwmFurnitureParams, slo
   );
 }
 
-function resolveComponent(catalog: ClientCatalog, params: FwmFurnitureParams, key: "handleComponentId" | "hingeComponentId" | "runnerComponentId" | "legComponentId" | "clipComponentId") {
+function resolveComponent(catalog: ClientCatalog, params: FwmFurnitureParams, key: "handleComponentId" | "hingeComponentId" | "legComponentId" | "clipComponentId") {
   const assignments = rec(params.componentAssignments);
   const context = createModuleRuntimeCatalogContext(catalog);
   const explicit = typeof params[key] === "string" && params[key] ? params[key] as string : assignments[key] as string | undefined;
@@ -139,7 +134,6 @@ function resolveComponent(catalog: ClientCatalog, params: FwmFurnitureParams, ke
       "hinge"
     );
   }
-  if (key === "runnerComponentId") return context.resolveComponent(explicit ?? assignments.runner as string | undefined, "runner", "drawerSystem");
   if (key === "legComponentId") return resolve("leg");
   return resolve("plinth_clip");
 }
@@ -398,6 +392,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   const innerW = Math.max(1, width - 2 * boardT);
   const innerH = Math.max(1, cabinetH - 2 * boardT);
   const drawerCount = Math.round(num(p, "drawerCount", spec.drawers ?? 0));
+  const drawerFrontHeights = parseDrawerFrontHeights(p.drawerFrontHeightsMm);
   const doorCount = Math.round(num(p, "doorCount", spec.doors ?? 0));
   const shelfCount = Math.round(num(p, "shelfCount", spec.shelves ?? 0));
 
@@ -597,21 +592,14 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
       const frontH = Math.max(80, (height - plinth) / drawerCount);
       const drawerDepth = resolveDrawerDepthLayout(carcassDepth, backT, num(p, "drawerBackGapMm", 10)).depthMm;
       const drawerBoxThickness = Math.max(10, Math.min(16, boardT - 2));
-      const drawerPreset = resolveFwmDrawerSystemPreset(p.drawerSystemBrand ?? p.drawerSystem, p.drawerSystemSize);
-      const drawerBottomLength = usesCatalogMetalDrawerSystem(spec.moduleType)
-        ? Math.max(100, drawerPreset.systemDepthMm - drawerPreset.bottomDepthDeductionMm)
-        : Math.max(100, drawerDepth - drawerBoxThickness);
-      const drawerBottomWidth = usesCatalogMetalDrawerSystem(spec.moduleType)
-        ? Math.max(60, width - boardT * 2 - drawerPreset.bottomWidthDeductionMm)
-        : Math.max(60, width - boardT * 2 - 70);
+      const drawerBottomLength = Math.max(100, drawerDepth - drawerBoxThickness * 2);
+      const drawerBottomWidth = Math.max(60, width - boardT * 2 - 70);
       if (spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE) {
         items.push(boardItem({ id: "bottle-pullout-front", category: "front", description: "Bottle pull-out shared front", quantity: 1, length: width - 4, width: Math.max(80, height - plinth - 4), thickness: frontT, material: frontRef, slot: "front" }));
       } else {
         items.push(boardItem({ id: "drawer-fronts", category: "front", description: "Drawer fronts", quantity: drawerCount, length: width - 4, width: frontH - 2, thickness: frontT, material: frontRef, slot: "front" }));
       }
-      if (!usesCatalogMetalDrawerSystem(spec.moduleType)) {
-        items.push(boardItem({ id: "drawer-boxes", category: "drawer_box", description: "Drawer box boards", quantity: drawerCount * 4, length: drawerDepth, width: 120, thickness: boardT, material: bodyRef, slot: "carcass" }));
-      }
+      items.push(boardItem({ id: "drawer-boxes", category: "drawer_box", description: "Drawer box boards", quantity: drawerCount * 4, length: drawerDepth, width: 120, thickness: boardT, material: bodyRef, slot: "carcass" }));
       items.push(boardItem({ id: "drawer-bottoms", category: "drawer_bottom", description: "Drawer bottom boards", quantity: drawerCount, length: drawerBottomLength, width: drawerBottomWidth, thickness: num(p, "drawerBottomThickness", drawerBottomMaterial?.defaultThicknessMm ?? 8), material: drawerBottomRef ?? bodyRef, slot: "drawer_bottom" }));
       if (
         spec.moduleType === "fwm_catalog_base_drawers" &&
@@ -624,7 +612,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
             category: "front",
             description: "Cutlery inner drawer front",
             quantity: 1,
-            length: num(p, "cutleryInnerDrawerFrontWidthMm", Math.max(60, innerW - num(p, "innerDrawerFrontDeductionMm", 126))),
+            length: Math.max(60, innerW - 24),
             width: 64,
             thickness: frontT,
             material: frontRef,
@@ -635,8 +623,8 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
             category: "drawer_bottom",
             description: "Cutlery inner drawer bottom",
             quantity: 1,
-            length: num(p, "cutleryInnerDrawerDepthMm", Math.max(100, drawerBottomLength - 40)),
-            width: num(p, "cutleryInnerDrawerWidthMm", Math.max(60, innerW - num(p, "cutleryInsertWidthDeductionMm", 0))),
+            length: Math.max(100, drawerBottomLength - 40),
+            width: Math.max(60, innerW - 24),
             thickness: num(p, "drawerBottomThickness", drawerBottomMaterial?.defaultThicknessMm ?? 8),
             material: drawerBottomRef ?? bodyRef,
             slot: "drawer_bottom"
@@ -646,7 +634,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
             category: "drawer_bottom",
             description: "Cutlery inner drawer cross rail",
             quantity: 1,
-            length: num(p, "cutleryInnerDrawerCrossRailWidthMm", Math.max(60, innerW - num(p, "innerDrawerCrossRailDeductionMm", 111))),
+            length: Math.max(60, innerW - 24),
             width: 36,
             thickness: boardT,
             material: drawerBottomRef ?? bodyRef,
@@ -671,7 +659,6 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   const hardware = [
     hardwareItem("handles", "Visible handles", Math.max(0, spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE ? (drawerCount > 0 ? 1 : 0) : drawerCount + doorCount), componentUsage(catalog, p, "handleComponentId", "handle")),
     hardwareItem("hinges", "Door hinges", Math.max(0, doorCount * 2), componentUsage(catalog, p, "hingeComponentId", "hinge")),
-    hardwareItem("runners", "Drawer runner pairs", Math.max(0, drawerCount), componentUsage(catalog, p, "runnerComponentId", "runner")),
     ...(plinth > 0
       ? [
           hardwareItem("adjustable-legs", "Adjustable cabinet legs", legAndClipCounts(width, carcassDepth, plinthSetback, boardT).legs, componentUsage(catalog, p, "legComponentId", "leg")),
@@ -684,6 +671,33 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
         ]
       : [])
   ].filter((item): item is PortableQuoteBomItem => !!item);
+  if (drawerCount > 0) {
+    const heights = drawerFrontHeights.length === drawerCount
+      ? drawerFrontHeights
+      : Array.from({ length: drawerCount }, () => Math.max(1, (height - plinth) / drawerCount));
+    for (const bucket of groupDrawerFrontHeights(heights)) {
+      hardware.push({
+        id: `runners-${bucket.variantKey}`,
+        itemType: "hardware",
+        category: "runner",
+        name: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+        description: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+        pricingBasis: "piece",
+        pricingUnit: "pcs",
+        quantity: bucket.count,
+        pricingQuantity: bucket.count,
+        materialGroup: "runner",
+        component: null,
+        catalogRef: null,
+        pricingLookup: null,
+        pricingGroup: "hardware",
+        pricingQuantityBase: bucket.count,
+        variantKey: bucket.variantKey,
+        variantLabel: bucket.variantLabel,
+        notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela cez Materiály alebo Supplier Bridge."]
+      });
+    }
+  }
   items.push(...hardware);
 
   const pricingCatalog = createPricingCatalog(catalog);
