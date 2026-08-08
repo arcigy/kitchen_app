@@ -9,7 +9,6 @@ import {
 export function runnerHeightAssignmentId(variantKey: string): string {
   return `material-assignment:runner:${variantKey}`;
 }
-
 export function synchronizeRunnerHeightAssignments(
   state: ProjectMaterialAssignmentsState,
   scopes: readonly ProjectMaterialScope[],
@@ -51,4 +50,3 @@ export function synchronizeRunnerHeightAssignments(
     assignments
   };
 }
-

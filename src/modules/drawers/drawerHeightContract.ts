@@ -11,7 +11,6 @@ function finitePositive(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-
 export function parseDrawerFrontHeights(value: unknown): number[] {
   const source = Array.isArray(value)
     ? value
@@ -53,4 +52,3 @@ export function groupDrawerFrontHeights(value: unknown): DrawerFrontHeightBucket
   }
   return [...buckets.values()].sort((left, right) => right.frontHeightMm - left.frontHeightMm);
 }
-
