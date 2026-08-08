@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from "vitest";
 import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { createDefaultProjectMaterialAssignments } from "../core/project-materials/project-material-business";
+import type { ProjectMaterialsView } from "../core/project-materials/project-material-types";
 import { FakeElement } from "./testUtils/propertiesPanelHarness";
 import { createMaterialsPhaseController } from "./materialsPhaseController";
 
@@ -239,5 +242,52 @@ describe("materials phase controller", () => {
     expect(controller.getView().scopes).toEqual([
       expect.objectContaining({ id: "module:live" })
     ]);
+  });
+
+  it("replaces a previously loaded Materials view with a skeleton until the refreshed server view arrives", async () => {
+    const catalog = testCatalog();
+    const initial = createDefaultProjectMaterialAssignments(catalog, NOW);
+    const stale = structuredClone(initial);
+    const current = structuredClone(initial);
+    let resolveCurrent!: (value: ProjectMaterialsView) => void;
+    const currentLoad = new Promise<ProjectMaterialsView>((resolve) => { resolveCurrent = resolve; });
+    const remoteView = (assignments: typeof initial, warningTitle: string): ProjectMaterialsView => ({
+      assignments,
+      quantities: [],
+      warnings: [{
+        id: warningTitle,
+        severity: "warning",
+        title: warningTitle,
+        description: "Authoritative server state"
+      }],
+      priceSource: {
+        priceListId: catalog.priceList.id,
+        name: catalog.priceList.name,
+        currency: catalog.priceList.currency,
+        source: catalog.meta.source,
+        lastSynchronizedAt: null
+      }
+    });
+    const container = document.createElement("section");
+    const controller = createMaterialsPhaseController({
+      container,
+      catalog,
+      getProjectId: () => "project_1",
+      getQuantities: () => [],
+      initialAssignments: initial,
+      api: { loadProjectMaterials: vi.fn().mockResolvedValueOnce(remoteView(stale, "Old material warning")).mockReturnValueOnce(currentLoad) }
+    });
+
+    await controller.open();
+    expect(container.textContent).toContain("Old material warning");
+    await controller.close();
+
+    const opening = controller.open();
+    expect(container.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Old material warning");
+    resolveCurrent(remoteView(current, "Current material warning"));
+    await opening;
+
+    expect(container.textContent).toContain("Current material warning");
   });
 });
