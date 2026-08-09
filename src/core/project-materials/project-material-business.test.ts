@@ -47,7 +47,8 @@ describe("project material business rules", () => {
       "fastener",
       "other_component"
     ]);
-    expect(state.assignments).toHaveLength(MATERIAL_ASSIGNMENT_CATEGORIES.length);
+    expect(state.assignments).toHaveLength(MATERIAL_ASSIGNMENT_CATEGORIES.length - 1);
+    expect(state.assignments.some((item) => item.category === "runner")).toBe(false);
     const corpus = state.assignments.find((item) => item.category === "corpus")!;
     expect(corpus.materialId).toBe(catalog.kitchenDefaults.carcassMaterialId);
     expect(corpus.snapshots.material?.definition.id).toBe(corpus.materialId);
@@ -83,7 +84,7 @@ describe("project material business rules", () => {
 
     const warnings = validateProjectMaterialAssignments(state, catalog);
 
-    expect(warnings.map((item) => item.id)).toContain("duplicate:corpus");
+    expect(warnings.map((item) => item.id)).toContain("duplicate:corpus:default");
     expect(warnings.map((item) => item.id)).toContain(`inactive-material:${corpus.assignmentId}`);
     expect(warnings.map((item) => item.id)).toContain(`unsupported-thickness:${corpus.assignmentId}`);
     expect(corpus.snapshots.material).toEqual(originalSnapshot);
@@ -195,7 +196,7 @@ describe("project material business rules", () => {
 
     const normalized = normalizeAutoProjectMaterialAssignments(state, catalog, NOW);
 
-    expect(normalized.assignments).toHaveLength(MATERIAL_ASSIGNMENT_CATEGORIES.length);
+    expect(normalized.assignments).toHaveLength(MATERIAL_ASSIGNMENT_CATEGORIES.length - 1);
     expect(normalized.assignments.find((assignment) => assignment.category === "fastener")).toMatchObject({
       assignmentId: "material-assignment:fastener",
       category: "fastener",
