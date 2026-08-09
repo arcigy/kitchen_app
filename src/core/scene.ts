@@ -21,11 +21,18 @@ type SceneWithEnvironmentIntensity = THREE.Scene & {
   backgroundIntensity?: number;
 };
 
+export const SCENE_RENDERER_OPTIONS = {
+  antialias: true,
+  // Feedback reports capture this exact canvas after a rendered frame. WebGL normally
+  // discards its drawing buffer, which can turn a valid PNG into a blank image.
+  preserveDrawingBuffer: true
+} as const;
+
 export function createScene(container: HTMLElement) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3f3f3);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer(SCENE_RENDERER_OPTIONS);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.physicallyCorrectLights = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -846,4 +853,3 @@ export function createScene(container: HTMLElement) {
     })
   };
 }
-

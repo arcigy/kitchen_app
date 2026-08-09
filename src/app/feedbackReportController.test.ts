@@ -30,6 +30,23 @@ afterEach(() => {
 });
 
 describe("feedback report controller", () => {
+  it("captures the editor before the feedback form can cover it", () => {
+    const trigger = document.createElement("button");
+    const canvas = document.createElement("canvas");
+    Object.defineProperties(canvas, { width: { value: 20 }, height: { value: 10 } });
+    const toDataUrl = vi.spyOn(canvas, "toDataURL").mockImplementation(() => {
+      expect(document.querySelector(".feedback-report-overlay")).toBeNull();
+      return "data:image/png;base64,cG5n";
+    });
+    document.body.append(trigger, canvas);
+
+    createFeedbackReportController({ trigger, canvas, buildProjectSnapshot: () => ({}), getDiagnostics: () => ({}) }).mount();
+    trigger.click();
+
+    expect(toDataUrl).toHaveBeenCalledOnce();
+    expect(document.querySelector(".feedback-report-overlay")).not.toBeNull();
+  });
+
   it("replaces Share with a report action and shows the required form and canvas preview", () => {
     const { trigger } = setup();
     expect(trigger.textContent).toBe("Nahlásiť problém");
