@@ -1,8 +1,11 @@
+import html2canvas from "html2canvas";
+
 export type FeedbackKind = "bug" | "feature_request" | "improvement" | "question" | "other";
 
 type FeedbackReportControllerContext = {
   trigger: HTMLButtonElement;
-  canvas: HTMLCanvasElement;
+  /** Captures only the visible Arcigy browser viewport, never the OS screen. */
+  captureViewport?: () => Promise<string | null>;
   buildProjectSnapshot: () => unknown;
   getDiagnostics: () => Record<string, unknown>;
 };
@@ -21,9 +24,26 @@ function submissionId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `feedback_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }
 
-function currentCanvasImage(canvas: HTMLCanvasElement): string | null {
+export async function captureArcigyViewport(): Promise<string | null> {
   try {
-    return canvas.width > 0 && canvas.height > 0 ? canvas.toDataURL("image/png") : null;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    if (viewportWidth <= 0 || viewportHeight <= 0) return null;
+    const image = await html2canvas(document.body, {
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      height: viewportHeight,
+      logging: false,
+      scale: 1,
+      scrollX: -window.scrollX,
+      scrollY: -window.scrollY,
+      useCORS: true,
+      width: viewportWidth,
+      windowHeight: viewportHeight,
+      windowWidth: viewportWidth,
+      onclone: (clonedDocument) => clonedDocument.querySelectorAll(".feedback-report-overlay").forEach((overlay) => overlay.remove())
+    });
+    return image.width > 0 && image.height > 0 ? image.toDataURL("image/png") : null;
   } catch {
     return null;
   }
@@ -60,8 +80,16 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     if (recentRuntimeErrors.length > 10) recentRuntimeErrors.shift();
   };
 
-  const open = () => {
-    const screenshotDataUrl = currentCanvasImage(ctx.canvas);
+  const open = async () => {
+    ctx.trigger.disabled = true;
+    let screenshotDataUrl: string | null = null;
+    try {
+      screenshotDataUrl = await (ctx.captureViewport ?? captureArcigyViewport)();
+    } catch {
+      screenshotDataUrl = null;
+    } finally {
+      ctx.trigger.disabled = false;
+    }
     const overlay = document.createElement("div");
     overlay.className = "feedback-report-overlay";
     overlay.setAttribute("role", "presentation");
@@ -74,7 +102,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
           <label>Stručný názov problému<input name="title" maxlength="180" required></label>
           <label>Presný opis<textarea name="description" maxlength="8000" required></textarea></label>
           <label>Doplňujúci komentár<textarea name="comment" maxlength="4000"></textarea></label>
-          ${screenshotDataUrl ? `<img class="feedback-report-preview" alt="Náhľad pripojeného screenshotu" src="${screenshotDataUrl}">` : "<p>Screenshot editora nie je v tomto okamihu dostupný. Report sa neodošle bez neho.</p>"}
+          ${screenshotDataUrl ? `<img class="feedback-report-preview" alt="Náhľad pripojeného screenshotu celej aplikácie" src="${screenshotDataUrl}">` : "<p>Screenshot celej viditeľnej Arcigy aplikácie nie je v tomto okamihu dostupný. Report sa neodošle bez neho.</p>"}
           <label class="feedback-report-consent"><input type="checkbox" name="consent" required> Rozumiem, že môj projekt a technické údaje budú pripojené k Odoo úlohe.</label>
         </form>
         <footer><span data-feedback-status aria-live="polite"></span><button type="button" data-feedback-close>Zrušiť</button><button type="submit" form="feedback-report-form">Odoslať do podpory</button></footer>
@@ -90,7 +118,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
       event.preventDefault();
       if (!form.reportValidity()) return;
       if (!screenshotDataUrl) {
-        status.textContent = "Screenshot editora nie je dostupný. Skúste report odoslať po načítaní projektu.";
+        status.textContent = "Screenshot celej viditeľnej Arcigy aplikácie nie je dostupný. Skúste report odoslať po načítaní projektu.";
         return;
       }
       const data = new FormData(form);
