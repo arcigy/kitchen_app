@@ -7,6 +7,8 @@ Scope: whole repository.
 - Before any GitHub, push, pull, merge, branch, PR, or release operation, read and follow `docs/git-github-codex-workflow.md`.
 - Do not create or switch branches unless the user explicitly asks.
 - Never push directly to `main` unless the user explicitly approves a tested release.
+- For a completed Kitchen App change whose required automated checks pass, automatically publish its branch through a PR to `develop`; the founder tests the result online on `develop`.
+- Never push directly to `develop`; use the protected PR workflow and merge only after its required checks pass.
 - Keep refactor commits small and reversible.
 - Do not stage or commit `dist/` build output during refactor work.
 - Never commit secrets, `.env` values, API keys, tokens, or private customer data.
