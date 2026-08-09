@@ -64,6 +64,7 @@
   },
   "dependencies": {
     "fflate": "^0.8.2",
+    "html2canvas": "^1.4.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
     "pg": "^8.21.0",

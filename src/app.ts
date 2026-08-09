@@ -3538,7 +3538,6 @@ export function startApp(initialArgs: AppArgs) {
   tb.getQuickAction("cloud")?.addEventListener("click", () => showComingSoonDialog("Cloud synchronizácia"));
   createFeedbackReportController({
     trigger: tb.getShareButton(),
-    canvas: renderer.domElement,
     buildProjectSnapshot: () => ({
       project: projectActions.getState().currentProject,
       saveRevision: projectActions.getState().saveRevision,
