@@ -210,7 +210,7 @@ export function parseBridgeRuntimeRequest(value: unknown): BridgeRuntimeRequest 
   }
   if (input.type === "CAPTURE_EXACT_SUPPLIER_PRODUCT") {
     if (!safeText(input.requestedProductId, 160)) return null;
-    if (!["board", "worktop", "edge_band", "hinge", "drawer_system", "hardware", "component", "unknown"].includes(String(input.expectedProductType))) return null;
+    if (!["board", "worktop", "edge_band", "hinge", "drawer_system", "handle", "lift_up", "leg", "fastener", "lighting", "hardware", "component", "unknown"].includes(String(input.expectedProductType))) return null;
     if (input.expectedManufacturer !== null && typeof input.expectedManufacturer !== "string") return null;
     if (input.expectedThicknessMm !== null && (typeof input.expectedThicknessMm !== "number" || !Number.isFinite(input.expectedThicknessMm))) return null;
     return {
@@ -223,7 +223,7 @@ export function parseBridgeRuntimeRequest(value: unknown): BridgeRuntimeRequest 
     };
   }
   if (input.type === "CAPTURE_CURRENT_SUPPLIER_PRODUCT") {
-    if (!["board", "worktop", "edge_band", "hinge", "drawer_system", "hardware", "component", "unknown"].includes(String(input.expectedProductType))) return null;
+    if (!["board", "worktop", "edge_band", "hinge", "drawer_system", "handle", "lift_up", "leg", "fastener", "lighting", "hardware", "component", "unknown"].includes(String(input.expectedProductType))) return null;
     if (input.expectedManufacturer !== null && typeof input.expectedManufacturer !== "string") return null;
     if (input.expectedThicknessMm !== null && (typeof input.expectedThicknessMm !== "number" || !Number.isFinite(input.expectedThicknessMm))) return null;
     return {

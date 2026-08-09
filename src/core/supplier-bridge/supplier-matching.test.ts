@@ -67,4 +67,78 @@ describe("supplier matching", () => {
     expect(result.conflicts.map((conflict) => conflict.code)).toEqual(["PRODUCT_TYPE_MISMATCH", "THICKNESS_MISMATCH"]);
     expect(result.autoConfirmEligible).toBe(false);
   });
+
+  it("allows a generic StrongMax hardware capture for a drawer runner without applying board thickness rules", () => {
+    const result = evaluateSupplierCandidateMatch({
+      item: {
+        ...item,
+        assignmentCategory: "runner",
+        expectedProductType: "drawer_system",
+        expectedThicknessMm: 18
+      },
+      candidate: {
+        supplierProductCode: "STRONGMAX-18-H80",
+        normalizedProduct: {
+          displayName: "StrongMax 18 zásuvka H80",
+          manufacturer: "Démos",
+          decorCode: null,
+          surfaceCode: null,
+          productType: "other",
+          thicknessMm: 18,
+          widthMm: null,
+          lengthMm: null,
+          availability: "available"
+        }
+      }
+    });
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it.each([
+    ["handle", "handle"],
+    ["hinge", "hinge"],
+    ["lift_up", "lift_up"],
+    ["leg", "leg"],
+    ["fastener", "fastener"]
+  ] as const)("allows generic supplier hardware for %s", (assignmentCategory, expectedProductType) => {
+    const result = evaluateSupplierCandidateMatch({
+      item: { ...item, assignmentCategory, expectedProductType, expectedThicknessMm: 18 },
+      candidate: {
+        supplierProductCode: `${assignmentCategory}-1`,
+        normalizedProduct: {
+          displayName: assignmentCategory,
+          manufacturer: null,
+          decorCode: null,
+          surfaceCode: null,
+          productType: "hardware",
+          thicknessMm: 18,
+          widthMm: null,
+          lengthMm: null,
+          availability: "available"
+        }
+      }
+    });
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it("keeps a board candidate blocked for a runner", () => {
+    const result = evaluateSupplierCandidateMatch({
+      item: { ...item, assignmentCategory: "runner", expectedProductType: "drawer_system", expectedThicknessMm: null },
+      candidate: {
+        supplierProductCode: "BOARD-18",
+        normalizedProduct: {
+          displayName: "Board",
+          manufacturer: null,
+          decorCode: null,
+          surfaceCode: null,
+          productType: "board",
+          thicknessMm: 18,
+          widthMm: null,
+          lengthMm: null,
+          availability: "available"
+        }
+      }
+    });
+    expect(result.conflicts.map((conflict) => conflict.code)).toEqual(["PRODUCT_TYPE_MISMATCH"]);
+  });
 });

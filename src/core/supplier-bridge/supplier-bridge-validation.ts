@@ -17,7 +17,7 @@ const PRICE_BASES = new Set<SupplierPriceBasis>([
 const VAT_MODES = new Set<SupplierVatMode>(["included", "excluded", "unknown"]);
 const PAGE_TYPES = new Set<SupplierSourcePageType>(["login", "search_results", "product", "cart", "diagnostic", "unknown"]);
 const REAL_SUPPLIER_IDS = new Set<SupplierId>(["demos", "schachermayer", "hranipex", "jaf_holz"]);
-const EXPECTED_PRODUCT_TYPES = new Set<SupplierExpectedProductType>(["board", "worktop", "edge_band", "hinge", "drawer_system", "hardware", "component", "unknown"]);
+const EXPECTED_PRODUCT_TYPES = new Set<SupplierExpectedProductType>(["board", "worktop", "edge_band", "hinge", "drawer_system", "handle", "lift_up", "leg", "fastener", "lighting", "hardware", "component", "unknown"]);
 
 export class SupplierBridgeValidationError extends Error {}
 

@@ -11,12 +11,17 @@ const target: ExtensionMaterialTarget = {
   id: "material-assignment:corpus",
   category: "corpus",
   label: "Korpus",
+  description: "",
+  quantity: null,
+  unit: null,
+  expectedThicknessMm: 18,
   groupId: "general",
   group: "Celý projekt",
   scope: "general",
   assigned: false,
   assignedText: "Nepriradené",
   assignedProductCode: null,
+  assignedPrice: null,
   inherited: false
 };
 
@@ -105,6 +110,39 @@ describe("standalone extension assignment flow", () => {
       input.projectId,
       "demos",
       expect.anything()
+    );
+  });
+
+  it("sends a runner target without a board-thickness expectation", async () => {
+    const { deps } = fixtures();
+    await runExtensionAssignment({
+      ...input,
+      target: { ...target, id: "material-assignment:runner:front-height:80", category: "runner", expectedThicknessMm: null }
+    }, deps);
+
+    expect(deps.createSession).toHaveBeenCalledWith(
+      input.baseUrl,
+      input.accessToken,
+      input.projectId,
+      input.supplierId,
+      expect.objectContaining({ expectedProductType: "drawer_system", expectedThicknessMm: undefined })
+    );
+  });
+
+  it("uses the project thickness rather than the captured product thickness for boards", async () => {
+    const { deps } = fixtures();
+    await runExtensionAssignment({
+      ...input,
+      target: { ...target, expectedThicknessMm: 19 },
+      candidate: { ...candidate, normalizedProduct: { ...candidate.normalizedProduct, thicknessMm: 18 } }
+    }, deps);
+
+    expect(deps.createSession).toHaveBeenCalledWith(
+      input.baseUrl,
+      input.accessToken,
+      input.projectId,
+      input.supplierId,
+      expect.objectContaining({ expectedThicknessMm: 19 })
     );
   });
 });

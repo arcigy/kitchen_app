@@ -141,7 +141,7 @@ async function main() {
   await app.addInitScript(() => localStorage.removeItem("arcigy.kitchen.autostartWorkspace"));
   const warmUrl = new URL(appUrl);
   warmUrl.searchParams.set("workspace", "1");
-  await app.goto(warmUrl.toString(), { waitUntil: "domcontentloaded" });
+  await app.goto(warmUrl.toString(), { waitUntil: "commit", timeout: 120_000 });
   try { await app.waitForFunction(() => Boolean(window.__kitchenDebug), undefined, { timeout: 120_000 }); }
   catch { await app.reload({ waitUntil: "domcontentloaded" }); await app.waitForFunction(() => Boolean(window.__kitchenDebug), undefined, { timeout: 120_000 }); }
   result.consoleErrors.length = 0;

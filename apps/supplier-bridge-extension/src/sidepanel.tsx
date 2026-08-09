@@ -174,21 +174,24 @@ function App(): React.JSX.Element {
       setCapture(response.capture);
       setMessage("Produkt načítaný. Teraz vyberte, kam ho chcete priradiť.");
       setLastDebug({ stage: "capture", supplierId: response.capture.supplierId, productCode: response.capture.candidates[0]?.supplierProductCode });
+      return response.capture.candidates[0] ?? null;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Produkt sa nepodarilo načítať.");
       setLastDebug({ stage: "capture", error: cause instanceof Error ? cause.message : String(cause) });
+      return null;
     } finally { setBusy(null); }
   };
 
   const assign = async (target: ExtensionMaterialTarget) => {
     if (!account || !selectedCandidate || !selectedProject || assigningRef.current) return;
-    if (target.assignedProductCode === selectedCandidate.supplierProductCode) {
+    const candidate = selectedCandidate;
+    if (target.assignedProductCode === candidate.supplierProductCode) {
       setError(null);
       setMessage(`${target.assignedText} je už priradený k tejto časti.`);
       return;
     }
     assigningRef.current = true;
-    const context = { account, candidate: selectedCandidate, project: selectedProject, supplierId: supplierId as SupplierId };
+    const context = { account, candidate, project: selectedProject, supplierId: supplierId as SupplierId };
     setBusy(target.id); setError(null); setMessage(null);
     const startedAt = new Date().toISOString();
     try {
@@ -250,7 +253,7 @@ function App(): React.JSX.Element {
       data-material-target={target.id}
       data-target-assigned={target.assigned ? "true" : "false"}
       data-target-source={target.inherited ? "general" : "direct"}
-      disabled={busy !== null || account?.role === "viewer" || sameProduct}
+      disabled={busy !== null || account?.role === "viewer" || !selectedCandidate || sameProduct}
       onClick={() => void assign(target)}
     >
       <span className="target__heading">
@@ -260,7 +263,12 @@ function App(): React.JSX.Element {
       <span className={target.assigned ? "target__material" : "target__empty"}>
         {busy === target.id ? "Ukladám…" : target.assignedText}
       </span>
+      {(target.description || target.quantity != null) && <small className="target__details">
+        {[target.description, target.quantity != null && target.unit ? `${target.quantity} ${target.unit}` : null].filter(Boolean).join(" · ")}
+      </small>}
+      {target.assignedPrice && <small className="target__price">{target.assignedPrice}</small>}
       {target.inherited && <small>Z celého projektu; môžete nastaviť vlastný materiál pre túto časť.</small>}
+      {!selectedCandidate && <small>Najprv načítajte otvorený produkt dodávateľa.</small>}
       {sameProduct && <small>Aktuálny produkt je už na tejto časti.</small>}
     </button>;
   };
@@ -307,7 +315,7 @@ function App(): React.JSX.Element {
       <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>Otvoriť dodávateľa</button><button type="button" className="button button--primary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? "Načítavam…" : "Načítať otvorený produkt"}</button></div>
       {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span></div>}
     </section>
-    {selectedCandidate && <section className="card">
+    <section className="card">
       <div className="eyebrow">3. Kam materiál priradiť?</div>
       <nav className="scope-tabs">{(["general", "module", "addition"] as const).map((value) => <button type="button" key={value} className={scope === value ? "active" : ""} disabled={busy !== null} onClick={() => setScope(value)}>{value === "general" ? "Celý projekt" : value === "module" ? "Moduly" : "Doplnky"}</button>)}</nav>
       {scope === "general"
@@ -324,7 +332,7 @@ function App(): React.JSX.Element {
         })}</div>}
       {scopedTargets.length === 0 && <p className="muted target-empty">V tomto projekte nie sú dostupné žiadne ciele.</p>}
       {account.role === "viewer" && <p className="notice notice--error">Máte rolu iba na čítanie. Materiály nemožno meniť.</p>}
-    </section>}
+    </section>
     {message && <p className="notice notice--success" role="status">{message}</p>}
     {error && <p className="notice notice--error" role="alert">{error}</p>}
     <button type="button" className="button button--ghost" onClick={() => void copyDebug()}>Kopírovať diagnostiku</button>

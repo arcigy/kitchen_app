@@ -1,4 +1,5 @@
 import type { ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
+import type { MaterialDefinition } from "../core/catalog/catalog-types";
 import type { SupplierSyncItem } from "../core/supplier-bridge/supplier-bridge-types";
 import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
 import { ProjectMaterialRevisionConflictError } from "../core/project/project-repository";
@@ -6,6 +7,11 @@ import { createProjectService } from "../core/project/project-service";
 import type { SupplierConfirmationApplyInput } from "../core/supplier-bridge/supplier-bridge-service";
 import type { SupplierPriceBasis } from "../core/supplier-bridge/supplier-bridge-types";
 import { createServerProjectRepository } from "./projectRepository";
+
+function supplierComponentType(category: ProjectMaterialAssignment["category"]): "runner" | "handle" | "hinge" | "lift_up" | "leg" | "fastener" | "lighting" {
+  if (category === "runner" || category === "handle" || category === "hinge" || category === "lift_up" || category === "leg" || category === "lighting") return category;
+  return "fastener";
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -19,6 +25,49 @@ function priceBasisMatches(pricingUnit: string, priceBasis: SupplierPriceBasis):
     || (pricingUnit === "pcs" && (priceBasis === "piece" || priceBasis === "pair" || priceBasis === "set"));
 }
 
+function supplierMaterialDefinition(current: ProjectMaterialAssignment, input: SupplierConfirmationApplyInput, supplierId: string, supplierProductCode: string): MaterialDefinition {
+  const edge = current.category === "edge_front" || current.category === "edge_other";
+  const candidateThickness = input.candidate.normalizedProduct.thicknessMm;
+  const defaultThicknessMm = candidateThickness ?? current.thicknessMm ?? (edge ? 1 : 18);
+  const boardFamily = current.category === "front" ? "front"
+    : current.category === "back" ? "back"
+      : current.category === "drawer_bottom" ? "drawer_bottom"
+        : current.category === "worktop" ? "worktop"
+          : "body";
+  return {
+    id: `supplier-${edge ? "edge" : "material"}:${supplierId}:${supplierProductCode}`,
+    entityType: "material",
+    supplierId,
+    materialCode: input.candidate.normalizedProduct.decorCode ?? supplierProductCode,
+    manufacturer: input.candidate.normalizedProduct.manufacturer ?? undefined,
+    materialType: edge ? "edge" : "board",
+    name: input.candidate.normalizedProduct.displayName,
+    displayName: input.candidate.normalizedProduct.displayName,
+    category: current.category,
+    baseMaterial: edge ? "abs" : "dtd",
+    decor: input.candidate.normalizedProduct.decorCode ?? "",
+    color: "",
+    finish: input.candidate.normalizedProduct.surfaceCode ?? "",
+    pricingBasis: edge || current.category === "plinth" ? "linear_length" : "sheet_area",
+    pricingUnit: edge || current.category === "plinth" ? "lm" : "m2",
+    availableThicknessesMm: [defaultThicknessMm],
+    defaultThicknessMm,
+    isActive: true,
+    tags: ["supplier-bridge", edge ? "edge" : "material"],
+    preview: { colorHex: "#777777", roughness: 0.5, metalness: 0 },
+    ...(edge ? { edgeFamily: current.category === "edge_front" ? "front" as const : "body" as const } : { boardFamily }),
+    supplierSource: { supplier: supplierId, supplierProductId: supplierProductCode },
+    metadata: {
+      supplierProductCode,
+      supplierProductType: input.candidate.normalizedProduct.productType,
+      supplierThicknessMm: candidateThickness,
+      supplierWidthMm: input.candidate.normalizedProduct.widthMm,
+      supplierLengthMm: input.candidate.normalizedProduct.lengthMm,
+      ...(candidateThickness == null ? { supplierThicknessUnverified: true } : {})
+    }
+  };
+}
+
 export function updatedSupplierAssignment(current: ProjectMaterialAssignment, input: SupplierConfirmationApplyInput, now: string): ProjectMaterialAssignment {
   const supplierBridge = record(record(current.customValues).supplierBridge);
   if (supplierBridge.sessionId === input.session.id && supplierBridge.candidateId === input.candidate.id) return current;
@@ -27,8 +76,9 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
   const snapshots = structuredClone(current.snapshots);
   const price = input.priceObservation;
 
-  if (current.kind === "component" && current.category === "runner" && !snapshots.component) {
-    const componentId = `supplier-runner:${supplierId}:${supplierProductCode}`;
+  if (current.kind === "component" && !snapshots.component) {
+    const componentType = supplierComponentType(current.category);
+    const componentId = `supplier-${componentType}:${supplierId}:${supplierProductCode}`;
     snapshots.component = {
       definition: {
         id: componentId,
@@ -36,11 +86,11 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
         supplierId,
         componentCode: supplierProductCode,
         manufacturer: input.candidate.normalizedProduct.manufacturer ?? undefined,
-        componentType: "runner",
-        geometryId: "neutral-drawer-runner",
+        componentType,
+        geometryId: `neutral-${componentType}`,
         name: input.candidate.normalizedProduct.displayName,
         displayName: input.candidate.normalizedProduct.displayName,
-        category: "drawer_runner",
+        category: componentType,
         brand: input.candidate.normalizedProduct.manufacturer ?? "",
         series: "",
         variant: current.variantKey ?? "",
@@ -49,11 +99,22 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
         pricingUnit: "pcs",
         defaultQuantity: 1,
         isActive: true,
-        tags: ["supplier-bridge", "drawer-runner"],
+        tags: ["supplier-bridge", componentType],
         preview: { colorHex: "#777777", roughness: 0.5, metalness: 0.7 },
         supplierSource: { supplier: supplierId, supplierProductId: supplierProductCode },
         metadata: { supplierProductCode, supplierProductType: input.candidate.normalizedProduct.productType }
       },
+      unitPrice: null,
+      currency: price?.currency ?? "EUR",
+      priceListId: null,
+      capturedAt: now
+    };
+  }
+
+  if (current.kind === "material" && !snapshots.material) {
+    const definition = supplierMaterialDefinition(current, input, supplierId, supplierProductCode);
+    snapshots.material = {
+      definition,
       unitPrice: null,
       currency: price?.currency ?? "EUR",
       priceListId: null,
@@ -114,8 +175,11 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
 
   return {
     ...current,
-    ...(current.kind === "component" && current.category === "runner" && snapshots.component
+    ...(current.kind === "component" && snapshots.component
       ? { componentId: snapshots.component.definition.id }
+      : {}),
+    ...(current.kind === "material" && snapshots.material
+      ? { materialId: snapshots.material.definition.id }
       : {}),
     ...(current.kind === "material" && (input.mapping?.thicknessMm ?? input.candidate.normalizedProduct.thicknessMm) != null
       ? { thicknessMm: input.mapping?.thicknessMm ?? input.candidate.normalizedProduct.thicknessMm ?? undefined }
