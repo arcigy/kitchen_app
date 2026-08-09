@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { reportEditorToolEntryStatus } from "./editorToolEntryController";
-import type { WallId, WallInstance, WindowInstance, WindowParams } from "./localTypes";
+import type { DoorInstance, WallId, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 import { getWindowMaterialOption } from "./windowMaterials";
+import { validateOpeningPlacement } from "./openingPlacementValidation";
 
 type WallDefinition = {
   plane: THREE.Plane;
@@ -39,6 +40,7 @@ type WindowControlsControllerContext = {
   wallDefs: Record<WallId, WallDefinition>;
   walls: WallInstance[];
   windowEditorHost: HTMLElement;
+  doors: DoorInstance[];
   windows: WindowInstance[];
   windowInst: WindowInstance | null;
 };
@@ -887,10 +889,8 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     lastPreviewPointMm = null;
   }
 
-  function isPlacementPointValid(lengthMm: number, centerMm: number, widthMm: number) {
-    if (widthMm >= lengthMm) return true;
-    return centerMm >= widthMm / 2 && centerMm <= lengthMm - widthMm / 2;
-  }
+  const validatePlacementPoint = (wallId: string, lengthMm: number, centerMm: number, widthMm: number) =>
+    validateOpeningPlacement({ wallId, lengthMm, centerMm, widthMm, existingOpenings: [...ctx.doors, ...ctx.windows] });
 
   function centerOnWallMm(wall: WallInstance, pointMm: { x: number; z: number }) {
     const ax = wall.params.aMm.x;
@@ -925,7 +925,7 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     const draft = getPlacementDraft();
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
     const widthMm = Math.max(1, Math.round(draft.widthMm));
-    const valid = isPlacementPointValid(lengthMm, centerMm, widthMm);
+    const valid = validatePlacementPoint(wall.id, lengthMm, centerMm, widthMm).valid;
     const center = basis.centerA.clone().addScaledVector(basis.dir, centerMm / 1000);
     placementPreview.position.set(center.x, 0, center.z);
     placementPreview.rotation.set(0, -Math.atan2(basis.dir.z, basis.dir.x), 0);
@@ -957,8 +957,13 @@ export function createWindowControlsController(ctx: WindowControlsControllerCont
     const draft = getPlacementDraft();
     const widthMm = Math.max(1, Math.round(draft.widthMm));
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
-    if (!isPlacementPointValid(lengthMm, centerMm, widthMm)) {
-      ctx.setUnderlayStatus("Window: okno sa neda vlozit do hrany steny. Klikni dalej od konca.");
+    const validation = validatePlacementPoint(wall.id, lengthMm, centerMm, widthMm);
+    if (!validation.valid) {
+      ctx.setUnderlayStatus(
+        validation.reason === "overlap"
+          ? "Window: otvor sa prekryva s dverami alebo oknom na tejto stene."
+          : "Window: okno sa neda vlozit do hrany steny. Klikni dalej od konca."
+      );
       return false;
     }
 
