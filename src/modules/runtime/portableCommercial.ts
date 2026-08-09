@@ -56,6 +56,10 @@ export type PortableQuoteBomItem = {
   sourcePartIds?: string[];
   notes?: string[];
   validationErrors?: string[];
+  /** Stable demand discriminator, for example `front-height:400` for drawer runners. */
+  variantKey?: string;
+  /** User-facing label for the demand discriminator. */
+  variantLabel?: string;
   pricingGroup?: "boards" | "edge_bands" | "hardware";
   pricingQuantityBase?: number | null;
   unitPrice?: number | null;

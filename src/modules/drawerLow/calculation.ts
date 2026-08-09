@@ -19,6 +19,7 @@ import {
   round
 } from "../runtime/parametricCommercialBom";
 import { normalizeDrawerLowParams, type DrawerLowParams } from "./types";
+import { groupDrawerFrontHeights } from "../drawers/drawerHeightContract";
 
 function arrayNumbers(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((entry): entry is number => typeof entry === "number" && Number.isFinite(entry)) : [];
@@ -93,10 +94,31 @@ export function calculateBOM(params: DrawerLowParams, ctx: KitchenContext, catal
 
   const hardware = [
     hardwareItem("handles", "Drawer handles", source.handleType === "none" ? 0 : drawerCount, componentRef(resolveComponent(catalog, source, "handleComponentId"))),
-    hardwareItem("drawer-runners", "Drawer runner pairs", drawerCount, componentRef(resolveComponent(catalog, source, "runnerComponentId"))),
     hardwareItem("adjustable-legs", "Adjustable legs", plinthHeight > 0 ? 4 : 0, componentRef(resolveComponent(catalog, source, "legComponentId"))),
     hardwareItem("plinth-clips", "Plinth clips", plinthHeight > 0 ? 2 : 0, componentRef(resolveComponent(catalog, source, "clipComponentId")))
   ].filter((item): item is PortableQuoteBomItem => Boolean(item));
+  for (const bucket of groupDrawerFrontHeights(frontHeights)) {
+    hardware.push({
+      id: `drawer-runners-${bucket.variantKey}`,
+      itemType: "hardware",
+      category: "runner",
+      name: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+      description: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+      pricingBasis: "piece",
+      pricingUnit: "pcs",
+      quantity: bucket.count,
+      pricingQuantity: bucket.count,
+      materialGroup: "runner",
+      component: null,
+      catalogRef: null,
+      pricingLookup: null,
+      pricingGroup: "hardware",
+      pricingQuantityBase: bucket.count,
+      variantKey: bucket.variantKey,
+      variantLabel: bucket.variantLabel,
+      notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela cez Materiály alebo Supplier Bridge."]
+    });
+  }
   items.push(...hardware);
 
   const quoteBom: PortableQuoteBomPayload = {

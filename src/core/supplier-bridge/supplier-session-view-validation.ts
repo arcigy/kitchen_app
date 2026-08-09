@@ -32,6 +32,7 @@ function parseItem(value: unknown): SupplierSyncItem | null {
   if (!input || !["pending", "needs_confirmation", "confirmed", "skipped", "failed"].includes(String(input.status))) return null;
   for (const key of ["id", "sessionId", "materialAssignmentId", "query", "createdAt", "updatedAt"] as const) if (!boundedString(input[key])) return null;
   if (input.assignmentCategory !== undefined && !assignmentCategories.has(String(input.assignmentCategory))) return null;
+  if (input.assignmentVariantKey !== undefined && !boundedString(input.assignmentVariantKey)) return null;
   if (input.targetLabel !== undefined && !boundedString(input.targetLabel)) return null;
   if (input.targetScope !== undefined && !["general", "module", "addition"].includes(String(input.targetScope))) return null;
   for (const key of ["expectedManufacturer", "expectedDecorCode", "expectedSurfaceCode", "expectedProductType", "selectedCandidateId", "errorCode"] as const) if (!nullableString(input[key])) return null;

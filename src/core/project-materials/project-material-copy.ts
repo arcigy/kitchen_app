@@ -109,7 +109,7 @@ export function resolveProjectMaterialCopyCandidate(
 export function copyProjectMaterialAssignmentToScope(
   source: ProjectMaterialAssignment,
   scopeId: string,
-  item: Pick<ProjectMaterialScopeItem, "id" | "category">,
+  item: Pick<ProjectMaterialScopeItem, "id" | "category" | "variantKey">,
   updatedAt: string
 ): ProjectMaterialAssignment {
   const copied = structuredClone(source);
@@ -117,6 +117,7 @@ export function copyProjectMaterialAssignmentToScope(
     ...copied,
     assignmentId: projectMaterialScopeAssignmentId(scopeId, item),
     category: item.category,
+    ...(item.variantKey ? { variantKey: item.variantKey } : {}),
     source: "user",
     updatedAt
   };

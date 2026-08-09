@@ -60,6 +60,13 @@ function bridgeAssignment(assignment: ProjectMaterialAssignment | undefined): {
   };
 }
 
+function assignmentLabel(assignment: ProjectMaterialAssignment): string {
+  const categoryLabel = materialCategoryLabels[assignment.category];
+  if (assignment.category !== "runner" || !assignment.variantKey) return categoryLabel;
+  const height = assignment.variantKey.match(/^front-height:(\d+)$/)?.[1];
+  return height ? `${categoryLabel} · Čelo ${height} mm` : categoryLabel;
+}
+
 export function extensionMaterialTargets(view: ProjectMaterialsView | null): ExtensionMaterialTarget[] {
   if (!view) return [];
   const assignments = view.assignments.assignments;
@@ -69,7 +76,7 @@ export function extensionMaterialTargets(view: ProjectMaterialsView | null): Ext
     return {
       id: assignment.assignmentId,
       category: assignment.category,
-      label: materialCategoryLabels[assignment.category],
+      label: assignmentLabel(assignment),
       groupId: "general",
       group: "Celý projekt",
       scope: "general",

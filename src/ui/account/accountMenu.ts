@@ -1,6 +1,8 @@
 import type { OrganizationUser } from "../../core/client/client-types";
 import { findOrganizationUser, organizationUserEmail, organizationUserInitial } from "../../core/client/organization-users";
 import { logoutClient } from "../../app/logoutClient";
+import { actionIconMarkup } from "../actionIcons";
+import { bindIconTooltip } from "../iconTooltips";
 
 type AccountMenuArgs = {
   mount: HTMLElement;
@@ -21,13 +23,13 @@ type AccountMenuItemArgs = {
 };
 
 const icons = {
-  theme: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16"/></svg>`,
-  settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14"/><path d="M18 5v14"/><path d="M6 9h.1"/><path d="M18 15h.1"/><path d="M12 5v14"/><path d="M12 11h.1"/></svg>`,
-  desktop: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12"/><path d="m8 12 4 4 4-4"/><path d="M5 20h14"/></svg>`,
-  community: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M19 10v4"/><path d="M21 12h-4"/></svg>`,
-  add: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
-  logout: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M13 5h6v14h-6"/></svg>`,
-  edit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4"/><path d="M4 20l1.4-5.3L16.7 3.4a2 2 0 0 1 2.9 2.9L8.3 17.6z"/></svg>`
+  theme: actionIconMarkup("theme"),
+  settings: actionIconMarkup("settings"),
+  desktop: actionIconMarkup("desktop"),
+  community: actionIconMarkup("community"),
+  add: actionIconMarkup("addAccount"),
+  logout: actionIconMarkup("logout"),
+  edit: actionIconMarkup("profileEdit")
 };
 
 export function createAccountMenu(args: AccountMenuArgs): void {
@@ -169,6 +171,9 @@ function menuItem(args: AccountMenuItemArgs): HTMLButtonElement {
     button.appendChild(chevron);
   }
   if (args.onClick) button.addEventListener("click", () => void args.onClick?.());
+  const chevron = button.querySelector<HTMLElement>(".account-menu-chevron");
+  if (chevron) chevron.innerHTML = actionIconMarkup("chevronRight");
+  bindIconTooltip(button, { title: args.label, description: `Use this menu action to ${args.label.toLocaleLowerCase()}.` });
   return button;
 }
 

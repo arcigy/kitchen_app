@@ -706,6 +706,14 @@ branch, vytvoriť a po zelenom CI mergnúť PR do `develop`. Codex musí predtý
 skontrolovať diff a nesmie obísť ochranu vetiev. Mimo tohto toku môže príkazy
 iba navrhnúť, pokiaľ Founder výslovne nepovie inak.
 
+### Aktívna výnimka zakladateľa: okamžitá online viditeľnosť
+
+Zakladateľ výslovne požaduje, aby každá samostatná a overená zmena bola po
+testoch hneď commitnutá a pushnutá na svoju pracovnú branch. Táto výnimka
+platí pre commit a push pracovnej branche; neplatí pre priamy push do `main`
+ani `develop`, pre neoverené zmeny, cudzie rozpracované súbory, secrety alebo
+klientske dáta.
+
 ### Codex pred prácou
 
 Codex má najprv zistiť stav:

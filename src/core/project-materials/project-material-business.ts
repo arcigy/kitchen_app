@@ -31,7 +31,7 @@ type MaterialDefaultKey = keyof Pick<
 
 type ComponentDefaultKey = keyof Pick<
   KitchenDefaults,
-  "defaultHandleComponentId" | "defaultHingeComponentId" | "defaultDrawerSystemComponentId"
+  "defaultHandleComponentId" | "defaultHingeComponentId"
 >;
 
 export type MaterialAssignmentCategoryDefinition = {
@@ -185,8 +185,7 @@ export const MATERIAL_ASSIGNMENT_CATEGORIES = [
     quantityUnit: "pcs",
     alwaysVisible: true,
     requiredByDefault: false,
-    componentTypes: ["runner"],
-    defaultCatalogKey: "defaultDrawerSystemComponentId"
+    componentTypes: ["runner"]
   },
   {
     category: "lift_up",
@@ -362,7 +361,9 @@ export function createDefaultProjectMaterialAssignments(
     schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
     initialized: true,
     revision: 0,
-    assignments: MATERIAL_ASSIGNMENT_CATEGORIES.map((definition) => assignmentForCategory(catalog, definition, now, overrides)),
+    assignments: MATERIAL_ASSIGNMENT_CATEGORIES
+      .filter((definition) => definition.category !== "runner")
+      .map((definition) => assignmentForCategory(catalog, definition, now, overrides)),
     updatedAt: now
   };
 }
@@ -391,7 +392,7 @@ export function normalizeAutoProjectMaterialAssignments(
     return structuredClone(valid && usesCurrentDefault ? assignment : currentDefault ?? assignment);
   });
   const presentCategories = new Set(assignments.map((assignment) => assignment.category));
-  for (const definition of MATERIAL_ASSIGNMENT_CATEGORIES) {
+  for (const definition of MATERIAL_ASSIGNMENT_CATEGORIES.filter((entry) => entry.category !== "runner")) {
     if (presentCategories.has(definition.category)) continue;
     const fallback = defaultByCategory.get(definition.category);
     if (fallback) assignments.push(structuredClone(fallback));
@@ -404,25 +405,29 @@ export function validateProjectMaterialAssignments(
   catalog: ClientCatalog
 ): ProjectMaterialWarning[] {
   const warnings: ProjectMaterialWarning[] = [];
-  const byCategory = new Map<MaterialAssignmentCategory, ProjectMaterialAssignment[]>();
+  const byCategory = new Map<string, ProjectMaterialAssignment[]>();
 
   for (const assignment of state.assignments.filter(isGeneralMaterialAssignment)) {
-    const matches = byCategory.get(assignment.category) ?? [];
+    const key = `${assignment.category}:${assignment.variantKey ?? "default"}`;
+    const matches = byCategory.get(key) ?? [];
     matches.push(assignment);
-    byCategory.set(assignment.category, matches);
+    byCategory.set(key, matches);
   }
 
   for (const definition of MATERIAL_ASSIGNMENT_CATEGORIES) {
-    const assignments = byCategory.get(definition.category) ?? [];
-    if (assignments.length > 1) {
+    const categoryGroups = [...byCategory.entries()].filter(([key]) => key.startsWith(`${definition.category}:`));
+    for (const [key, duplicateAssignments] of categoryGroups) {
+      if (duplicateAssignments.length <= 1) continue;
       warnings.push(warning(
-        `duplicate:${definition.category}`,
+        `duplicate:${key}`,
         "error",
         "Duplicitné priradenie",
-        `Kategória ${definition.label} má viac než jedno priradenie.`,
+        `Kategória ${definition.label} má viac než jedno priradenie pre rovnaký variant.`,
         definition.category
       ));
     }
+
+    const assignments = categoryGroups.flatMap(([, values]) => values);
 
     const assignment = assignments.find((item) => item.assignmentId === `material-assignment:${definition.category}`) ?? assignments[0];
     if (!assignment) {

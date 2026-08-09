@@ -14,7 +14,6 @@ import {
   getFwmSystemFamily,
   type FwmFurnitureSpec
 } from "../../modules/fwmFurniture/definitions";
-import { FWM_DRAWER_SYSTEM_BRAND_OPTIONS } from "../../modules/fwmFurniture/drawerSystemPresets";
 import { getFwmModulePreviewImage } from "../../modules/fwmFurniture/modulePreviewImages";
 import { createModuleInternalEditingDefinition } from "../../layout/moduleInternalEditing";
 
@@ -597,30 +596,6 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
         next.min = 1;
         next.max = 5;
       }
-      if (next.key === "drawerSystem") next.defaultValue = "merivobox";
-      if (next.key === "drawerSystemBrand") {
-        next.defaultValue = "merivobox";
-        next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
-      }
-      if (next.key === "drawerSystemSize") {
-        next.defaultValue = "M";
-        next.options = [
-          { label: "M - derived low drawer", value: "M" },
-          { label: "D - derived high drawer", value: "D" },
-          { label: "E - derived MERIVOBOX high", value: "E" },
-          { label: "F - derived LEGRABOX high", value: "F" }
-        ];
-      }
-      if (isIndexedDrawerSystemSizeParameter(next.key)) {
-        next.defaultValue = "";
-        next.options = [
-          { label: "Auto", value: "" },
-          { label: "M", value: "M" },
-          { label: "D", value: "D" },
-          { label: "E", value: "E" },
-          { label: "F", value: "F" }
-        ];
-      }
       if (next.key === "drawerFrontHeightsMm") next.defaultValue = "";
       if (next.key === "depth") next.defaultValue = 530;
       if (next.key === "height") next.defaultValue = 722;
@@ -648,28 +623,7 @@ function applyParameterSurfacePolicy(spec: FwmFurnitureSpec, parameters: ModuleP
       }
       if (next.key === "doorCount" || next.key === "shelfCount") next.defaultValue = 0;
       if (next.key === "openingMode") next.defaultValue = "drawer";
-      if (next.key === "drawerSystem" || next.key === "drawerSystemBrand") {
-        next.defaultValue = "merivobox";
-        if (next.key === "drawerSystemBrand") {
-          next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
-        }
-      }
-      if (next.key === "drawerSystemSize") next.defaultValue = "M";
-      if (next.key === "drawerSystemSizes") next.defaultValue = "M,M";
-      if (next.key === "drawerSystemLabels") next.defaultValue = "MERIVOBOX M,MERIVOBOX M";
-      if (next.key === "drawerSystemMinFrontHeightsMm") next.defaultValue = "136,136";
-      if (next.key === "drawerSystemBackHeightsMm") next.defaultValue = "83,83";
       if (next.key === "drawerFrontHeightsMm") next.defaultValue = "";
-      if (next.key === "drawer1SystemSize" || next.key === "drawer2SystemSize") {
-        next.defaultValue = "M";
-        next.options = [
-          { label: "Auto", value: "" },
-          { label: "M", value: "M" },
-          { label: "D", value: "D" },
-          { label: "E", value: "E" },
-          { label: "F", value: "F" }
-        ];
-      }
       if (next.key === "hasCutleryInnerDrawer") next.defaultValue = false;
       if (next.key === "handleType") next.defaultValue = "bar";
       if (next.key === "handleLengthMm") next.defaultValue = 120;
@@ -985,22 +939,6 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
     numberParam("cutoutDepthMm", "Cutout depth", 0, 0, 1600, "geometry", "geometry", 1),
     numberParam("powerW", "Power", 0, 0, 5000, "components", "bom", 1),
     numberParam("drawerCount", "Drawer count", spec.drawers ?? 0, 0, 12, "components", "geometry"),
-    selectParam("drawerSystemBrand", "Drawer brand", "merivobox", FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => option.value), "components", "geometry", false),
-    selectParam("drawerSystemSize", "Derived first drawer size", "M", ["M", "D", "E", "F"], "components", "geometry", false),
-    stringParam("drawerSystemSizes", "Derived drawer sizes", "M,M,M", "components", "geometry", false),
-    stringParam("drawerSystemLabels", "Derived drawer systems", "MERIVOBOX M,MERIVOBOX M,MERIVOBOX M", "components", "geometry", false),
-    stringParam("drawerSystemMinFrontHeightsMm", "Drawer system min front heights", "136,136,136", "components", "geometry", false),
-    selectParam("drawerSystem", "Drawer system", "merivobox", FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => option.value), "components", "geometry", false),
-    numberParam("drawerSystemDepthMm", "Drawer system depth", 500, 0, 1200, "components", "geometry"),
-    numberParam("drawerBottomDepthDeductionMm", "Drawer bottom depth deduction", 26, -200, 400, "components", "bom"),
-    numberParam("drawerBottomWidthDeductionMm", "Drawer bottom width deduction", 51, -200, 400, "components", "bom"),
-    numberParam("drawerBackWidthDeductionMm", "Drawer back width deduction", 51, -200, 400, "components", "bom"),
-    numberParam("drawerBackHeightDeductionMm", "Drawer back height deduction", 83, 0, 400, "components", "geometry"),
-    stringParam("drawerSystemBackHeightsMm", "Drawer system back heights", "83,83,83", "components", "geometry", false),
-    numberParam("cutleryInsertWidthDeductionMm", "Cutlery insert width deduction", -3, -200, 400, "components", "bom"),
-    numberParam("cutleryInsertDepthDeductionMm", "Cutlery insert depth deduction", 0, -200, 400, "components", "bom"),
-    numberParam("innerDrawerFrontDeductionMm", "Inner drawer front deduction", 126, -200, 400, "components", "bom"),
-    numberParam("innerDrawerCrossRailDeductionMm", "Inner drawer cross rail deduction", 111, -200, 400, "components", "bom"),
     booleanParam("hasCutleryInnerDrawer", "Cutlery inner drawer", false, "components", "geometry"),
     booleanParam("cutleryInnerDrawerAllowed", "Cutlery inner drawer allowed", false, "components", "geometry"),
     stringParam("cutleryInnerDrawerStatus", "Cutlery inner drawer status", "disabled", "components", "geometry", false),
@@ -1009,35 +947,12 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
     numberParam("cutleryInnerDrawerDepthMm", "Cutlery inner drawer depth", 0, 0, 1200, "components", "geometry"),
     numberParam("cutleryInnerDrawerFrontWidthMm", "Cutlery inner drawer front width", 0, 0, 1600, "components", "geometry"),
     numberParam("cutleryInnerDrawerCrossRailWidthMm", "Cutlery inner drawer cross rail width", 0, 0, 1600, "components", "geometry"),
-    numberParam("drawerSystemPricePerSet", "Drawer system price per set", 669, 0, 100000, "pricing", "pricing"),
-    numberParam("drawerSystemPriceWithMargin", "Drawer system price with margin", 1338, 0, 100000, "pricing", "pricing"),
-    stringParam("drawerSystemCodeLabel", "Drawer system code label", "kod merivo M", "components", "bom", false),
     stringParam("drawerFrontHeightsMm", "Drawer front heights", "", "components", "geometry", false),
     numberParam("drawer1FrontHeightMm", "Drawer 1 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("drawer2FrontHeightMm", "Drawer 2 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("drawer3FrontHeightMm", "Drawer 3 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("drawer4FrontHeightMm", "Drawer 4 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("drawer5FrontHeightMm", "Drawer 5 front height", 40, 40, 1200, "components", "geometry", 1),
-    selectParam("drawer1SystemSize", "Drawer 1 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
-    selectParam("drawer2SystemSize", "Drawer 2 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
-    selectParam("drawer3SystemSize", "Drawer 3 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
-    selectParam("drawer4SystemSize", "Drawer 4 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
-    selectParam("drawer5SystemSize", "Drawer 5 system size", "", ["", "M", "D", "E", "F"], "components", "geometry", false),
-    stringParam("drawer1SystemLabel", "Drawer 1 system", "", "components", "geometry", false),
-    stringParam("drawer2SystemLabel", "Drawer 2 system", "", "components", "geometry", false),
-    stringParam("drawer3SystemLabel", "Drawer 3 system", "", "components", "geometry", false),
-    stringParam("drawer4SystemLabel", "Drawer 4 system", "", "components", "geometry", false),
-    stringParam("drawer5SystemLabel", "Drawer 5 system", "", "components", "geometry", false),
-    numberParam("drawer1SystemMinFrontHeightMm", "Drawer 1 system min front", 0, 0, 1200, "components", "geometry", 1),
-    numberParam("drawer2SystemMinFrontHeightMm", "Drawer 2 system min front", 0, 0, 1200, "components", "geometry", 1),
-    numberParam("drawer3SystemMinFrontHeightMm", "Drawer 3 system min front", 0, 0, 1200, "components", "geometry", 1),
-    numberParam("drawer4SystemMinFrontHeightMm", "Drawer 4 system min front", 0, 0, 1200, "components", "geometry", 1),
-    numberParam("drawer5SystemMinFrontHeightMm", "Drawer 5 system min front", 0, 0, 1200, "components", "geometry", 1),
-    numberParam("drawer1SystemBackHeightMm", "Drawer 1 system back height", 0, 0, 400, "components", "geometry", 1),
-    numberParam("drawer2SystemBackHeightMm", "Drawer 2 system back height", 0, 0, 400, "components", "geometry", 1),
-    numberParam("drawer3SystemBackHeightMm", "Drawer 3 system back height", 0, 0, 400, "components", "geometry", 1),
-    numberParam("drawer4SystemBackHeightMm", "Drawer 4 system back height", 0, 0, 400, "components", "geometry", 1),
-    numberParam("drawer5SystemBackHeightMm", "Drawer 5 system back height", 0, 0, 400, "components", "geometry", 1),
     numberParam("doorCount", "Door count", spec.doors ?? 0, 0, 12, "components", "geometry"),
     numberParam("shelfCount", "Shelf count", spec.shelves ?? 0, 0, 16, "components", "geometry"),
     stringParam("shelfGaps", "Shelf gaps", "", "components", "geometry", false),
@@ -1051,7 +966,6 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
           return [
             selectParam(`tallSlot${slotIndex}Type`, `Slot ${slotIndex} type`, defaults.type, ["empty", "drawer", "shelf", "oven", "sink", "microwave", "door"], "tall_stack", "geometry"),
             numberParam(`tallSlot${slotIndex}HeightMm`, `Slot ${slotIndex} height`, defaults.height, 0, 1400, "tall_stack", "geometry", 1),
-            selectParam(`tallSlot${slotIndex}DrawerSystemSize`, `Slot ${slotIndex} drawer system size`, "", ["", "M", "D", "E", "F"], "tall_stack", "geometry", false),
             numberParam(`tallSlot${slotIndex}DoorLeafCount`, `Slot ${slotIndex} door leaves`, 1, 1, 2, "tall_stack", "geometry", 1),
             selectParam(`tallSlot${slotIndex}DoorOpeningMode`, `Slot ${slotIndex} door opening`, "hinged", ["hinged", "lift_up"], "tall_stack", "geometry"),
             numberParam(`tallSlot${slotIndex}OffsetMm`, `Slot ${slotIndex} vertical offset`, 0, -3000, 3000, "tall_stack", "geometry", 1)
@@ -1180,15 +1094,6 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
     {
       key: "hingeComponentId",
       label: "Hinge",
-      type: "component",
-      required: false,
-      defaultValue: "",
-      group: "components",
-      affects: "bom"
-    },
-    {
-      key: "runnerComponentId",
-      label: "Runner",
       type: "component",
       required: false,
       defaultValue: "",
@@ -1789,25 +1694,6 @@ function createBaseBottlePulloutModulePackage(): FurnQuoteModulePackage {
           next.min = 2;
           next.max = 2;
         }
-        if (next.key === "drawerSystemBrand") {
-          next.defaultValue = "merivobox";
-          next.options = FWM_DRAWER_SYSTEM_BRAND_OPTIONS.map((option) => ({ label: option.label, value: option.value }));
-        }
-        if (next.key === "drawerSystem" || next.key === "drawerSystemSize") next.defaultValue = next.key === "drawerSystem" ? "merivobox" : "M";
-        if (next.key === "drawerSystemSizes") next.defaultValue = "M,M";
-        if (next.key === "drawerSystemLabels") next.defaultValue = "MERIVOBOX M,MERIVOBOX M";
-        if (next.key === "drawerSystemMinFrontHeightsMm") next.defaultValue = "136,136";
-        if (next.key === "drawerSystemBackHeightsMm") next.defaultValue = "83,83";
-        if (next.key === "drawer1SystemSize" || next.key === "drawer2SystemSize") {
-          next.defaultValue = "M";
-          next.options = [
-            { label: "Auto", value: "" },
-            { label: "M", value: "M" },
-            { label: "D", value: "D" },
-            { label: "E", value: "E" },
-            { label: "F", value: "F" }
-          ];
-        }
         if (next.key === "openingMode") next.defaultValue = "drawer";
         if (next.key === "requiresWorktop") next.defaultValue = true;
         if (next.key === "hasWorktop") next.defaultValue = false;
@@ -1824,7 +1710,6 @@ function createBaseBottlePulloutModulePackage(): FurnQuoteModulePackage {
         const definition = modulePackage.parameters.parameters.find((parameter) => parameter.key === parameterKey);
         const controlType =
           parameterKey.endsWith("MaterialId") ? "materialPicker" :
-          /^drawer[1-5]SystemSize$/.test(parameterKey) || parameterKey === "drawerSystemBrand" ? "select" :
           parameterKey === "opened" ? "checkbox" :
           "number";
         return {

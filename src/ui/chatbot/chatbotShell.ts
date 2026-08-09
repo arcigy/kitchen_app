@@ -7,6 +7,8 @@ import type {
   AssistantWorkflowState
 } from "../../assistant/types";
 import { assistantMarkdownToSafeHtml } from "./assistantMarkdown";
+import { actionIconMarkup, type ActionIconId } from "../actionIcons";
+import { bindIconTooltip } from "../iconTooltips";
 import {
   appendAssistantDebugEvent,
   appendServerDebugTrace,
@@ -116,21 +118,29 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
       <form class="chatbot-composer">
         <textarea placeholder="Pýtajte sa na čokoľvek..." rows="1" aria-label="Assistant message"></textarea>
         <div class="chatbot-composer-actions">
-          <button type="button" aria-label="Add attachment">+</button>
+          <button type="button" data-chatbot-attachment aria-label="Add attachment">+</button>
           <span></span>
-          <button type="button" aria-label="Preview context">
+          <button type="button" data-chatbot-preview-context aria-label="Preview context">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z"/><circle cx="12" cy="12" r="2.4"/></svg>
           </button>
-          <button type="button" aria-label="Voice">
+          <button type="button" data-chatbot-voice aria-label="Voice">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v9"/><path d="M8 9v2a4 4 0 0 0 8 0V9"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
           </button>
-          <button type="submit" class="chatbot-send" aria-label="Send message">
+          <button type="submit" class="chatbot-send" data-chatbot-send aria-label="Send message">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M7 10l5-5 5 5"/></svg>
           </button>
         </div>
       </form>
     </footer>
   `;
+
+  setChatbotActionIcon(shell, "[data-chatbot-copy-debug]", "debug");
+  setChatbotActionIcon(shell, "[data-chatbot-menu]", "menu");
+  setChatbotActionIcon(shell, "[data-chatbot-close]", "close");
+  setChatbotActionIcon(shell, "[data-chatbot-attachment]", "attachment");
+  setChatbotActionIcon(shell, "[data-chatbot-preview-context]", "previewContext");
+  setChatbotActionIcon(shell, "[data-chatbot-voice]", "voice");
+  setChatbotActionIcon(shell, "[data-chatbot-send]", "send");
 
   const menuButton = shell.querySelector<HTMLButtonElement>("[data-chatbot-menu]");
   const menuPanel = shell.querySelector<HTMLElement>("[data-chatbot-menu-panel]");
@@ -159,6 +169,13 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
   bindAssistantChat(shell);
   document.addEventListener("click", closeMenu);
   return shell;
+}
+
+function setChatbotActionIcon(shell: HTMLElement, selector: string, iconId: ActionIconId): void {
+  const button = shell.querySelector<HTMLButtonElement>(selector);
+  if (!button) return;
+  button.innerHTML = actionIconMarkup(iconId);
+  bindIconTooltip(button);
 }
 
 type ChatbotState = {

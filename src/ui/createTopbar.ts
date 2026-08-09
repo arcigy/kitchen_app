@@ -1,5 +1,7 @@
 import type { OrganizationUser } from "../core/client/client-types";
 import { createAccountMenu } from "./account/accountMenu";
+import { actionIconMarkup } from "./actionIcons";
+import { bindIconTooltip } from "./iconTooltips";
 
 type ToolButtonArgs = {
   title: string;
@@ -62,46 +64,15 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
   const quick = document.createElement("div");
   quick.className = "revit-quick-actions";
   quick.innerHTML = `
-    <button type="button" title="Open" aria-label="Open" data-quick-action="open">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3.5 7.5h6.2l1.9 2.2h8.9l-2.2 8.2H4.8L3.5 7.5Z" />
-        <path d="M4.6 7.5V5.2h5.7l1.8 2.3" />
-      </svg>
-    </button>
-    <button type="button" title="Print" aria-label="Print" data-quick-action="print">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7.2 8V4.8h9.6V8" />
-        <path d="M7 16.2H5.2a1.5 1.5 0 0 1-1.5-1.5v-5a1.5 1.5 0 0 1 1.5-1.5h13.6a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H17" />
-        <path d="M7 13.2h10v6H7z" />
-        <path d="M16.8 11.1h.1" />
-      </svg>
-    </button>
-    <button type="button" title="Save" aria-label="Save" data-quick-action="save">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5.5 4.5h11.2l2.8 2.8v14.2h-15v-17Z" />
-        <path d="M8 4.5v6h8v-6" />
-        <path d="M8 21.5v-6h8v6" />
-      </svg>
-    </button>
+    <button type="button" aria-label="Open" data-quick-action="open">${actionIconMarkup("open")}</button>
+    <button type="button" aria-label="Print" data-quick-action="print">${actionIconMarkup("print")}</button>
+    <button type="button" aria-label="Save" data-quick-action="save">${actionIconMarkup("save")}</button>
     <i></i>
-    <button type="button" title="Undo" aria-label="Undo" data-quick-action="undo">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9.2 7.4 5.4 11l3.8 3.6" />
-        <path d="M5.8 11h8.3a5.4 5.4 0 0 1 5.4 5.4" />
-      </svg>
-    </button>
-    <button type="button" title="Redo" aria-label="Redo" data-quick-action="redo">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m14.8 7.4 3.8 3.6-3.8 3.6" />
-        <path d="M18.2 11H9.9a5.4 5.4 0 0 0-5.4 5.4" />
-      </svg>
-    </button>
-    <button type="button" title="Cloud" aria-label="Cloud" data-quick-action="cloud">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7.5 18.2h10.2a4 4 0 0 0 .4-8 5.7 5.7 0 0 0-10.8-1.7A4.8 4.8 0 0 0 7.5 18.2Z" />
-      </svg>
-    </button>
+    <button type="button" aria-label="Undo" data-quick-action="undo">${actionIconMarkup("undo")}</button>
+    <button type="button" aria-label="Redo" data-quick-action="redo">${actionIconMarkup("redo")}</button>
+    <button type="button" aria-label="Cloud status" data-quick-action="cloud">${actionIconMarkup("cloud")}</button>
   `;
+  quick.querySelectorAll<HTMLButtonElement>("button").forEach((button) => bindIconTooltip(button));
   titlebar.appendChild(quick);
 
   const title = document.createElement("div");
@@ -213,13 +184,13 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = ["tool-btn", args.label ? "has-label" : "", args.variant ?? ""].filter(Boolean).join(" ");
-    btn.title = args.title;
     btn.setAttribute("aria-label", args.title);
 
     const icon = document.createElement("div");
     icon.className = "tool-icon";
     icon.innerHTML = args.iconSvg;
     btn.appendChild(icon);
+    bindIconTooltip(btn, { title: args.title });
 
     if (args.label) {
       const label = document.createElement("div");

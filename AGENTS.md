@@ -13,6 +13,15 @@ Scope: whole repository.
 - Do not stage or commit `dist/` build output during refactor work.
 - Never commit secrets, `.env` values, API keys, tokens, or private customer data.
 
+### Founder delivery override
+
+The founder explicitly wants every verified, scoped change visible remotely.
+After the relevant tests pass, Codex must commit and push the current working
+branch without waiting for a separate "tested locally" message. This override
+applies to feature and fix branches only: never push directly to `main` or
+`develop`, never include unrelated dirty files, and never commit secrets or
+customer data. Report the branch, commit, and push in the handoff.
+
 ## Product Rules
 
 - Preserve existing kitchen layout, pricing, BOM, export, render, and module behavior.

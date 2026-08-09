@@ -16,7 +16,7 @@ function record(value: unknown): Record<string, unknown> {
 function priceBasisMatches(pricingUnit: string, priceBasis: SupplierPriceBasis): boolean {
   return (pricingUnit === "m2" && priceBasis === "m2")
     || (pricingUnit === "lm" && priceBasis === "linear_meter")
-    || (pricingUnit === "pcs" && priceBasis === "piece");
+    || (pricingUnit === "pcs" && (priceBasis === "piece" || priceBasis === "pair" || priceBasis === "set"));
 }
 
 export function updatedSupplierAssignment(current: ProjectMaterialAssignment, input: SupplierConfirmationApplyInput, now: string): ProjectMaterialAssignment {
@@ -26,6 +26,40 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
   const supplierProductCode = input.item.exactLookup?.supplierProductId ?? input.candidate.supplierProductCode;
   const snapshots = structuredClone(current.snapshots);
   const price = input.priceObservation;
+
+  if (current.kind === "component" && current.category === "runner" && !snapshots.component) {
+    const componentId = `supplier-runner:${supplierId}:${supplierProductCode}`;
+    snapshots.component = {
+      definition: {
+        id: componentId,
+        entityType: "component",
+        supplierId,
+        componentCode: supplierProductCode,
+        manufacturer: input.candidate.normalizedProduct.manufacturer ?? undefined,
+        componentType: "runner",
+        geometryId: "neutral-drawer-runner",
+        name: input.candidate.normalizedProduct.displayName,
+        displayName: input.candidate.normalizedProduct.displayName,
+        category: "drawer_runner",
+        brand: input.candidate.normalizedProduct.manufacturer ?? "",
+        series: "",
+        variant: current.variantKey ?? "",
+        color: "",
+        pricingBasis: "piece",
+        pricingUnit: "pcs",
+        defaultQuantity: 1,
+        isActive: true,
+        tags: ["supplier-bridge", "drawer-runner"],
+        preview: { colorHex: "#777777", roughness: 0.5, metalness: 0.7 },
+        supplierSource: { supplier: supplierId, supplierProductId: supplierProductCode },
+        metadata: { supplierProductCode, supplierProductType: input.candidate.normalizedProduct.productType }
+      },
+      unitPrice: null,
+      currency: price?.currency ?? "EUR",
+      priceListId: null,
+      capturedAt: now
+    };
+  }
 
   if (current.kind === "material" && snapshots.material) {
     const snapshot = snapshots.material;
@@ -80,6 +114,9 @@ export function updatedSupplierAssignment(current: ProjectMaterialAssignment, in
 
   return {
     ...current,
+    ...(current.kind === "component" && current.category === "runner" && snapshots.component
+      ? { componentId: snapshots.component.definition.id }
+      : {}),
     ...(current.kind === "material" && (input.mapping?.thicknessMm ?? input.candidate.normalizedProduct.thicknessMm) != null
       ? { thicknessMm: input.mapping?.thicknessMm ?? input.candidate.normalizedProduct.thicknessMm ?? undefined }
       : {}),
@@ -119,9 +156,12 @@ export function baseAssignmentForSupplierTarget(
   assignments: readonly ProjectMaterialAssignment[],
   item: SupplierSyncItem
 ): ProjectMaterialAssignment | null {
-  const general = assignments.filter((assignment) => assignment.assignmentId === `material-assignment:${assignment.category}`);
+  const general = assignments.filter((assignment) => assignment.assignmentId.startsWith(`material-assignment:${assignment.category}`));
   if (item.assignmentCategory) {
-    return general.find((assignment) => assignment.category === item.assignmentCategory) ?? null;
+    return general.find((assignment) =>
+      assignment.category === item.assignmentCategory &&
+      (item.assignmentVariantKey === undefined || assignment.variantKey === item.assignmentVariantKey)
+    ) ?? null;
   }
   const matches = general.filter((assignment) => item.materialAssignmentId.includes(`:${assignment.category}:`));
   if (matches.length === 1) return matches[0]!;

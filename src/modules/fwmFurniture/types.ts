@@ -7,12 +7,6 @@ import {
   getFwmSystemFamily,
   type FwmFurnitureModuleType
 } from "./definitions";
-import {
-  DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
-  DEFAULT_FWM_DRAWER_SYSTEM_SIZE,
-  resolveFwmDrawerSystemPreset,
-  resolveFwmDrawerSystemPresetForFrontHeight
-} from "./drawerSystemPresets";
 
 const MAX_INDEXED_DRAWER_PARAMS = 5;
 const MAX_TALL_STACK_SLOTS = 12;
@@ -68,11 +62,6 @@ function resolveDrawerFrontHeights(params: Record<string, PortableJsonValue>, dr
   return requestedSum > 0
     ? rawHeights.map((entry) => Math.max(40, (entry / requestedSum) * availableHeight))
     : Array.from({ length: drawerCount }, () => Math.max(40, availableHeight / drawerCount));
-}
-
-function drawerSystemSizeOverride(value: unknown) {
-  const size = typeof value === "string" ? value.trim().toUpperCase() : "";
-  return size === "M" || size === "D" || size === "E" || size === "F" ? size : null;
 }
 
 function nearestStep(value: number, step: number) {
@@ -167,22 +156,6 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     height: spec.height,
     depth: spec.depth,
     drawerCount: spec.drawers ?? 0,
-    drawerSystem: DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
-    drawerSystemBrand: DEFAULT_FWM_DRAWER_SYSTEM_BRAND,
-    drawerSystemSize: DEFAULT_FWM_DRAWER_SYSTEM_SIZE,
-    drawerSystemSizes: "M,M,M",
-    drawerSystemLabels: "MERIVOBOX M,MERIVOBOX M,MERIVOBOX M",
-    drawerSystemMinFrontHeightsMm: "136,136,136",
-    drawerSystemDepthMm: 500,
-    drawerBottomDepthDeductionMm: 26,
-    drawerBottomWidthDeductionMm: 51,
-    drawerBackWidthDeductionMm: 51,
-    drawerBackHeightDeductionMm: 83,
-    drawerSystemBackHeightsMm: "83,83,83",
-    cutleryInsertWidthDeductionMm: -3,
-    cutleryInsertDepthDeductionMm: 0,
-    innerDrawerFrontDeductionMm: 126,
-    innerDrawerCrossRailDeductionMm: 111,
     hasCutleryInnerDrawer: false,
     cutleryInnerDrawerAllowed: false,
     cutleryInnerDrawerStatus: "disabled",
@@ -191,25 +164,12 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     cutleryInnerDrawerDepthMm: 0,
     cutleryInnerDrawerFrontWidthMm: 0,
     cutleryInnerDrawerCrossRailWidthMm: 0,
-    drawerSystemPricePerSet: 669,
-    drawerSystemPriceWithMargin: 1338,
-    drawerSystemCodeLabel: "kod merivo M",
     drawerFrontHeightsMm: "",
     drawer1FrontHeightMm: 40,
     drawer2FrontHeightMm: 40,
     drawer3FrontHeightMm: 40,
     drawer4FrontHeightMm: 40,
     drawer5FrontHeightMm: 40,
-    drawer1SystemSize: "",
-    drawer2SystemSize: "",
-    drawer3SystemSize: "",
-    drawer4SystemSize: "",
-    drawer5SystemSize: "",
-    drawer1SystemLabel: "",
-    drawer2SystemLabel: "",
-    drawer3SystemLabel: "",
-    drawer4SystemLabel: "",
-    drawer5SystemLabel: "",
     doorCount: spec.doors ?? 0,
     shelfCount: spec.shelves ?? 0,
     shelfGaps: "",
@@ -288,7 +248,6 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     worktopMaterialId: "",
     handleComponentId: "",
     hingeComponentId: "",
-    runnerComponentId: "",
     legComponentId: spec.hasPlinth ? "cmp.leg.adjustable.100.black" : "",
     clipComponentId: spec.hasPlinth ? "cmp.clip.plinth.standard" : ""
   } as FwmFurnitureParams);
@@ -412,64 +371,43 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
   next.drawerCount = count(next.drawerCount, spec.drawers ?? 0, 12);
   next.drawerFrontHeightsMm = typeof next.drawerFrontHeightsMm === "string" ? next.drawerFrontHeightsMm.trim() : "";
   const drawerHeights = resolveDrawerFrontHeights(next, next.drawerCount as number);
-  const drawerPresets = drawerHeights.map((height, index) => {
-    const override = drawerSystemSizeOverride(next[`drawer${index + 1}SystemSize`]);
-    return override
-      ? resolveFwmDrawerSystemPreset(next.drawerSystemBrand ?? next.drawerSystem, override)
-      : resolveFwmDrawerSystemPresetForFrontHeight(next.drawerSystemBrand ?? next.drawerSystem, height);
-  });
-  const drawerPreset = drawerPresets[0] ?? resolveFwmDrawerSystemPreset(next.drawerSystemBrand ?? next.drawerSystem, next.drawerSystemSize);
-  next.drawerSystem = drawerPreset.brand;
-  next.drawerSystemBrand = drawerPreset.brand;
-  next.drawerSystemSize = drawerPreset.size;
-  next.drawerSystemSizes = drawerPresets.map((presetValue) => presetValue.size).join(",");
-  next.drawerSystemLabels = drawerPresets.map((presetValue) => presetValue.label).join(",");
-  next.drawerSystemMinFrontHeightsMm = drawerPresets.map((presetValue) => String(presetValue.minFrontHeightMm)).join(",");
-  next.drawerSystemDepthMm = drawerPreset.systemDepthMm;
-  next.drawerBottomDepthDeductionMm = drawerPreset.bottomDepthDeductionMm;
-  next.drawerBottomWidthDeductionMm = drawerPreset.bottomWidthDeductionMm;
-  next.drawerBackWidthDeductionMm = drawerPreset.backWidthDeductionMm;
-  next.drawerBackHeightDeductionMm = drawerPreset.backHeightDeductionMm;
-  next.drawerSystemBackHeightsMm = drawerPresets.map((presetValue) => String(presetValue.backHeightDeductionMm)).join(",");
-  next.cutleryInsertWidthDeductionMm = drawerPreset.cutleryInsertWidthDeductionMm;
-  next.cutleryInsertDepthDeductionMm = drawerPreset.cutleryInsertDepthDeductionMm;
-  next.innerDrawerFrontDeductionMm = drawerPreset.innerDrawerFrontDeductionMm;
-  next.innerDrawerCrossRailDeductionMm = drawerPreset.innerDrawerCrossRailDeductionMm;
-  next.drawerSystemPricePerSet = drawerPreset.pricePerSet;
-  next.drawerSystemPriceWithMargin = drawerPreset.priceWithMargin;
-  next.drawerSystemCodeLabel = drawerPreset.codeLabel;
   for (let index = 0; index < MAX_INDEXED_DRAWER_PARAMS; index += 1) {
     const drawerIndex = index + 1;
-    const activePreset = drawerPresets[index];
-    const sizeOverride = drawerSystemSizeOverride(next[`drawer${drawerIndex}SystemSize`]);
-    next[`drawer${drawerIndex}FrontHeightMm`] = activePreset ? Math.round((drawerHeights[index] ?? 0) * 1000) / 1000 : 0;
-    next[`drawer${drawerIndex}SystemSize`] = activePreset ? sizeOverride ?? "" : "";
-    next[`drawer${drawerIndex}SystemLabel`] = activePreset?.label ?? "";
-    next[`drawer${drawerIndex}SystemMinFrontHeightMm`] = activePreset?.minFrontHeightMm ?? 0;
-    next[`drawer${drawerIndex}SystemBackHeightMm`] = activePreset?.backHeightDeductionMm ?? 0;
+    next[`drawer${drawerIndex}FrontHeightMm`] = drawerHeights[index] ? Math.round(drawerHeights[index] * 1000) / 1000 : 0;
   }
   const topDrawerIndex = next.drawerCount as number;
-  const topDrawerPreset = topDrawerIndex > 0 ? drawerPresets[topDrawerIndex - 1] : null;
   const supportsCutleryInnerDrawer = spec.moduleType === "fwm_catalog_base_drawers";
-  const cutleryAllowed = supportsCutleryInnerDrawer && topDrawerPreset?.size === "M";
+  const cutleryAllowed = supportsCutleryInnerDrawer && topDrawerIndex > 0;
   const cabinetInnerWidth = Math.max(60, num(next.width, spec.width) - num(next.boardThickness, 18) * 2);
-  const cutleryDepthDeduction = topDrawerPreset?.cutleryInsertDepthDeductionMm ?? 0;
-  const cutleryBaseDepth = topDrawerPreset ? topDrawerPreset.systemDepthMm - cutleryDepthDeduction : 0;
+  const drawerDepth = Math.max(100, num(next.depth, spec.depth) - num(next.backThickness, 8) - 58);
   next.hasCutleryInnerDrawer = supportsCutleryInnerDrawer ? bool(next.hasCutleryInnerDrawer, false) : false;
   next.cutleryInnerDrawerAllowed = cutleryAllowed;
   next.cutleryInnerDrawerStatus = !next.hasCutleryInnerDrawer
     ? "disabled"
     : cutleryAllowed
-      ? "enabled"
-      : "disabled_top_drawer_not_medium";
+    ? "enabled"
+      : "disabled_no_drawer";
   next.cutleryInnerDrawerTargetIndex = cutleryAllowed ? topDrawerIndex : 0;
-  next.cutleryInnerDrawerWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.cutleryInsertWidthDeductionMm ?? 0)) * 1000) / 1000 : 0;
-  next.cutleryInnerDrawerDepthMm = cutleryAllowed && topDrawerPreset
-    ? Math.round(Math.max(100, Math.min(topDrawerPreset.systemDepthMm - 44, cutleryBaseDepth)) * 1000) / 1000
-    : 0;
-  next.cutleryInnerDrawerFrontWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.innerDrawerFrontDeductionMm ?? 0)) * 1000) / 1000 : 0;
-  next.cutleryInnerDrawerCrossRailWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - (topDrawerPreset?.innerDrawerCrossRailDeductionMm ?? 0)) * 1000) / 1000 : 0;
+  next.cutleryInnerDrawerWidthMm = cutleryAllowed ? Math.round(Math.max(60, cabinetInnerWidth - 24) * 1000) / 1000 : 0;
+  next.cutleryInnerDrawerDepthMm = cutleryAllowed ? Math.round(Math.max(100, drawerDepth - 48) * 1000) / 1000 : 0;
+  next.cutleryInnerDrawerFrontWidthMm = next.cutleryInnerDrawerWidthMm;
+  next.cutleryInnerDrawerCrossRailWidthMm = next.cutleryInnerDrawerWidthMm;
   next.drawerFrontHeightsMm = drawerHeights.map((height) => String(Math.round(height * 1000) / 1000)).join(",");
+  const legacyDrawerKeys = [
+    "drawerSystem", "drawerSystemBrand", "drawerSystemSize", "drawerSystemSizes", "drawerSystemLabels",
+    "drawerSystemMinFrontHeightsMm", "drawerSystemDepthMm", "drawerBottomDepthDeductionMm",
+    "drawerBottomWidthDeductionMm", "drawerBackWidthDeductionMm", "drawerBackHeightDeductionMm",
+    "drawerSystemBackHeightsMm", "cutleryInsertWidthDeductionMm", "cutleryInsertDepthDeductionMm",
+    "innerDrawerFrontDeductionMm", "innerDrawerCrossRailDeductionMm", "drawerSystemPricePerSet",
+    "drawerSystemPriceWithMargin", "drawerSystemCodeLabel", "runnerComponentId"
+  ];
+  for (const key of legacyDrawerKeys) delete next[key];
+  for (let index = 1; index <= MAX_INDEXED_DRAWER_PARAMS; index += 1) {
+    delete next[`drawer${index}SystemSize`];
+    delete next[`drawer${index}SystemLabel`];
+    delete next[`drawer${index}SystemMinFrontHeightMm`];
+    delete next[`drawer${index}SystemBackHeightMm`];
+  }
   next.doorCount = count(next.doorCount, spec.doors ?? 0, 12);
   next.shelfCount = count(next.shelfCount, spec.shelves ?? 0, 16);
   if (spec.moduleType === "fwm_catalog_tall_cabinet") {
@@ -480,14 +418,13 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
       const fallback = DEFAULT_TALL_STACK_SLOTS[index] ?? { type: "empty", height: 0 };
       const typeKey = `tallSlot${slotIndex}Type`;
       const heightKey = `tallSlot${slotIndex}HeightMm`;
-      const drawerSystemSizeKey = `tallSlot${slotIndex}DrawerSystemSize`;
       const doorLeafCountKey = `tallSlot${slotIndex}DoorLeafCount`;
       const doorOpeningModeKey = `tallSlot${slotIndex}DoorOpeningMode`;
       const offsetKey = `tallSlot${slotIndex}OffsetMm`;
       const slotType = text(next[typeKey], fallback.type);
       next[typeKey] = TALL_STACK_SLOT_TYPES.includes(slotType as (typeof TALL_STACK_SLOT_TYPES)[number]) ? slotType : fallback.type;
       next[heightKey] = clamp(Math.round(num(next[heightKey], fallback.height)), 0, 1400);
-      next[drawerSystemSizeKey] = drawerSystemSizeOverride(next[drawerSystemSizeKey]) ?? "";
+      delete next[`tallSlot${slotIndex}DrawerSystemSize`];
       next[doorLeafCountKey] = count(next[doorLeafCountKey], 1, 2);
       next[doorLeafCountKey] = Math.max(1, Math.min(2, next[doorLeafCountKey] as number));
       next[doorOpeningModeKey] = ["hinged", "lift_up"].includes(text(next[doorOpeningModeKey], "hinged")) ? text(next[doorOpeningModeKey], "hinged") : "hinged";
@@ -516,7 +453,6 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
   next.reserveModule = bool(next.reserveModule, spec.reserve ?? false);
   next.handleComponentId = typeof next.handleComponentId === "string" ? next.handleComponentId.trim() : "";
   next.hingeComponentId = typeof next.hingeComponentId === "string" ? next.hingeComponentId.trim() : "";
-  next.runnerComponentId = typeof next.runnerComponentId === "string" ? next.runnerComponentId.trim() : "";
   next.legComponentId = spec.hasPlinth ? text(next.legComponentId, "cmp.leg.adjustable.100.black") : "";
   next.clipComponentId = spec.hasPlinth ? text(next.clipComponentId, "cmp.clip.plinth.standard") : "";
 

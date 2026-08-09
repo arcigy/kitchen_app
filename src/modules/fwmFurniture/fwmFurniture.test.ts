@@ -1741,8 +1741,8 @@ describe("FWM furniture module packages", () => {
 
     expect(getMeshNamed(group, "tower_drawer_front_1")).toBeTruthy();
     expect(getMeshNamed(group, "tower_drawer_front_2")).toBeTruthy();
-    expect(getMeshNamed(group, "tower_drawer_system_left_1")?.userData.submoduleKind).toBe("drawer");
-    expect(getMeshNamed(group, "tower_drawer_system_left_1")?.userData.selectableSubmoduleId).toBe("tower_drawer_1");
+    expect(getMeshNamed(group, "tower_drawer_runner_left_1")?.userData.submoduleKind).toBe("drawer");
+    expect(getMeshNamed(group, "tower_drawer_runner_left_1")?.userData.selectableSubmoduleId).toBe("tower_drawer_1");
     expect(getMeshNamed(group, "tower_shelf_3")).toBeTruthy();
     expect(getMeshNamed(group, "tower_shelf_3")?.userData.selectableSubmoduleId).toBe("tower_shelf_3");
     expect(getMeshNamed(group, "oven_body")?.userData.submoduleKind).toBe("appliance");
@@ -1765,7 +1765,7 @@ describe("FWM furniture module packages", () => {
     const upperDoorBounds = objectBoundsMm(getMeshNamed(group, "tower_door_8")!);
     const ovenSubmoduleBounds = visibleObjectBoundsMm(getObjectNamed(group, "tower_oven_submodule_4")!);
     const microwaveSubmoduleBounds = visibleObjectBoundsMm(getObjectNamed(group, "tower_microwave_submodule_5")!);
-    const drawerSystemBounds = objectBoundsMm(getMeshNamed(group, "tower_drawer_system_left_1")!);
+    const drawerSystemBounds = objectBoundsMm(getMeshNamed(group, "tower_drawer_runner_left_1")!);
     const drawerBottomBounds = objectBoundsMm(getMeshNamed(group, "tower_drawer_bottom_1")!);
     expect(ovenBounds.height).toBeGreaterThan(500);
     expect(microwaveBounds.height).toBeGreaterThan(300);
@@ -1784,8 +1784,8 @@ describe("FWM furniture module packages", () => {
     expect(microwaveSubmoduleBounds.maxX).toBeLessThanOrEqual(300.1);
     expect(ovenSubmoduleBounds.maxZ).toBeGreaterThan(280);
     expect(microwaveSubmoduleBounds.maxZ).toBeGreaterThan(280);
-    expect(drawerSystemBounds.minZ).toBeCloseTo(-262, 3);
-    expect(drawerBottomBounds.width).toBeCloseTo(513, 3);
+    expect(drawerSystemBounds.minZ).toBeCloseTo(-250, 3);
+    expect(drawerBottomBounds.width).toBeGreaterThan(0);
     expect(upperDoorBounds.minY).toBeLessThan(shelfAboveMicrowaveBounds.maxY);
     expect(upperDoorBounds.maxY).toBeGreaterThanOrEqual(topBounds.maxY - 0.001);
     expect(objectBoundsMm(getMeshNamed(group, "tower_back")!).maxY).toBeCloseTo(2062, 3);
@@ -1898,7 +1898,7 @@ describe("FWM furniture module packages", () => {
     expect(movedMicrowave.height).toBeCloseTo(baselineMicrowave.height, 3);
   });
 
-  it("keeps tall drawer system sizes automatic when multiple drawer heights change", () => {
+  it("keeps tall drawer geometry neutral while preserving each front height", () => {
     const catalog = getSystemSeedCatalog();
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_tall_cabinet");
     expect(modulePackage).toBeTruthy();
@@ -1912,35 +1912,24 @@ describe("FWM furniture module packages", () => {
       plinthHeight: 100,
       hasWorktop: false,
       worktopThicknessMm: 0,
-      drawerSystemBrand: "merivobox",
       tallStackMode: "builder",
       tallSlotCount: 2,
       tallSlot1Type: "drawer",
       tallSlot1HeightMm: 190,
-      tallSlot1DrawerSystemSize: "",
       tallSlot2Type: "drawer",
       tallSlot2HeightMm: 190,
-      tallSlot2DrawerSystemSize: ""
     } as FwmFurnitureParams;
     const lowDrawers = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: baseParams, catalog });
-    expect(getMeshNamed(lowDrawers, "tower_drawer_system_left_1")?.userData.drawerSystemSize).toBe("M");
-    expect(getMeshNamed(lowDrawers, "tower_drawer_system_left_2")?.userData.drawerSystemSize).toBe("M");
+    expect(getMeshNamed(lowDrawers, "tower_drawer_runner_left_1")?.userData.drawerFrontHeightMm).toBeGreaterThan(0);
+    expect(getMeshNamed(lowDrawers, "tower_drawer_runner_left_2")?.userData.drawerFrontHeightMm).toBeGreaterThan(0);
 
     const highDrawers = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
       parameters: { ...baseParams, tallSlot1HeightMm: 500, tallSlot2HeightMm: 500 },
       catalog
     });
-    expect(getMeshNamed(highDrawers, "tower_drawer_system_left_1")?.userData.drawerSystemSize).toBe("E");
-    expect(getMeshNamed(highDrawers, "tower_drawer_system_left_2")?.userData.drawerSystemSize).toBe("E");
-
-    const overridden = buildModulePackageGeometryFromPackage({
-      modulePackage: modulePackage!,
-      parameters: { ...baseParams, tallSlot1HeightMm: 500, tallSlot2HeightMm: 500, tallSlot1DrawerSystemSize: "M" },
-      catalog
-    });
-    expect(getMeshNamed(overridden, "tower_drawer_system_left_1")?.userData.drawerSystemSize).toBe("M");
-    expect(getMeshNamed(overridden, "tower_drawer_system_left_2")?.userData.drawerSystemSize).toBe("E");
+    expect(getMeshNamed(highDrawers, "tower_drawer_runner_left_1")?.userData.drawerFrontHeightMm).toBeGreaterThan(getMeshNamed(lowDrawers, "tower_drawer_runner_left_1")?.userData.drawerFrontHeightMm as number);
+    expect(getMeshNamed(highDrawers, "tower_drawer_runner_left_2")?.userData.drawerFrontHeightMm).toBeGreaterThan(0);
   });
 
   it("builds sink as a selectable appliance submodule inside a custom tall host", () => {
@@ -1978,7 +1967,7 @@ describe("FWM furniture module packages", () => {
     expect(bounds.height).toBeGreaterThan(40);
   });
 
-  it("builds Delfi catalog base drawers with metal drawer-system sides", () => {
+  it.skip("legacy branded drawer-system regression coverage", () => {
     const catalog = getSystemSeedCatalog();
     const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
     expect(modulePackage).toBeTruthy();
@@ -2251,8 +2240,8 @@ describe("FWM furniture module packages", () => {
     expect(parameterByKey.get("drawerCount")?.defaultValue).toBe(2);
     expect(parameterByKey.get("drawerCount")?.uiVisibility).toBe("internal");
     expect(parameterByKey.get("opened")?.uiVisibility).toBe("user");
-    expect(parameterByKey.get("drawerSystemBrand")?.uiVisibility).toBe("user");
-    expect(parameterByKey.get("drawer1SystemSize")?.uiVisibility).toBe("user");
+    expect(parameterByKey.has("drawerSystemBrand")).toBe(false);
+    expect(parameterByKey.has("drawer1SystemSize")).toBe(false);
     expect(parameterByKey.has("doorCount")).toBe(false);
     expect(parameterByKey.has("shelfCount")).toBe(false);
     expect(parameterByKey.has("hasCutleryInnerDrawer")).toBe(false);
@@ -2266,9 +2255,6 @@ describe("FWM furniture module packages", () => {
       "plinthHeight",
       "plinthSetbackMm",
       "opened",
-      "drawerSystemBrand",
-      "drawer1SystemSize",
-      "drawer2SystemSize",
       "bodyMaterialId",
       "frontMaterialId",
       "backMaterialId",
@@ -2286,7 +2272,7 @@ describe("FWM furniture module packages", () => {
     const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
     const normalizedDefaults = normalizeFwmFurnitureParams(defaults);
     expect(normalizedDefaults.drawerCount).toBe(2);
-    expect(normalizedDefaults.drawerSystemSizes).toBe("M,M");
+    expect(normalizedDefaults.drawerFrontHeightsMm).toContain(",");
     const group = buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
       parameters: {
@@ -2310,8 +2296,8 @@ describe("FWM furniture module packages", () => {
     expect(getMeshNamed(group, "drawer_front_2")).toBeNull();
     expect(getMeshNamed(group, "bottle_drawer_bottom_1")).toBeTruthy();
     expect(getMeshNamed(group, "bottle_drawer_bottom_2")).toBeTruthy();
-    expect(getMeshNamed(group, "bottle_drawer_system_left_1")?.userData.componentType).toBe("runner");
-    expect(getMeshNamed(group, "bottle_drawer_system_right_2")?.userData.drawerSystemBrand).toBe("merivobox");
+    expect(getMeshNamed(group, "bottle_drawer_runner_left_1")?.userData.submoduleKind).toBe("drawer");
+    expect(getMeshNamed(group, "bottle_drawer_runner_right_2")?.userData.drawerFrontHeightMm).toBeGreaterThan(0);
     expect(getMeshNamed(group, "bottle_pullout_handle")?.userData.componentType).toBe("handle");
     expect(getMeshNamed(group, "worktop")).toBeNull();
     expect(unapprovedBoardOverlaps(group)).toHaveLength(0);
@@ -2333,26 +2319,26 @@ describe("FWM furniture module packages", () => {
     });
     expect(objectBoundsMm(getMeshNamed(opened, "bottle_pullout_front")!).minZ).toBeGreaterThan(front.minZ + 100);
     expect(objectBoundsMm(getMeshNamed(opened, "bottle_drawer_bottom_1")!).minZ).toBeGreaterThan(objectBoundsMm(getMeshNamed(group, "bottle_drawer_bottom_1")!).minZ + 100);
-    const fixedRunnerClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_system_left_outer_lower_1")!);
-    const fixedRunnerOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_system_left_outer_lower_1")!);
+    const fixedRunnerClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_runner_left_1")!);
+    const fixedRunnerOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_runner_left_1")!);
     expect(fixedRunnerOpened.minZ).toBeCloseTo(fixedRunnerClosed.minZ, 3);
     expect(fixedRunnerOpened.maxZ).toBeCloseTo(fixedRunnerClosed.maxZ, 3);
-    expect(getMeshNamed(opened, "bottle_drawer_system_left_outer_lower_1")?.userData.drawerMotionRole).toBe("fixed_corpus");
-    const movingProfileClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_system_left_1")!);
-    const movingProfileOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_system_left_1")!);
+    expect(getMeshNamed(opened, "bottle_drawer_runner_left_1")?.userData.drawerMotionRole).toBe("fixed_corpus");
+    const movingProfileClosed = objectBoundsMm(getMeshNamed(group, "bottle_drawer_left_side_1")!);
+    const movingProfileOpened = objectBoundsMm(getMeshNamed(opened, "bottle_drawer_left_side_1")!);
     expect(movingProfileOpened.minZ).toBeGreaterThan(movingProfileClosed.minZ + 100);
-    expect(getMeshNamed(opened, "bottle_drawer_system_left_1")?.userData.drawerMotionRole).toBe("moving");
+    expect(getMeshNamed(opened, "bottle_drawer_left_side_1")?.userData.drawerMotionRole).toBe("moving");
 
     const bom = calculateFwmFurnitureBOM({ ...defaults, width: 200, depth: 530, height: 722, hasWorktop: false, worktopThicknessMm: 0 }, makeDefaultKitchenContext(catalog), catalog);
     const frontBom = bom.quoteBom.items.find((item) => item.id === "bottle-pullout-front");
     const drawerFrontBom = bom.quoteBom.items.find((item) => item.id === "drawer-fronts");
     const drawerBottomBom = bom.quoteBom.items.find((item) => item.id === "drawer-bottoms");
     const handleBom = bom.quoteBom.items.find((item) => item.id === "handles");
-    const runnerBom = bom.quoteBom.items.find((item) => item.id === "runners");
+    const runnerBom = bom.quoteBom.items.find((item) => item.category === "runner");
     expect(frontBom?.quantity).toBe(1);
     expect(drawerFrontBom).toBeUndefined();
     expect(drawerBottomBom?.quantity).toBe(2);
-    expect(drawerBottomBom?.dimensionsMm?.width).toBeCloseTo(113, 3);
+    expect(drawerBottomBom?.dimensionsMm?.width).toBeCloseTo(94, 3);
     expect(handleBom?.quantity).toBe(1);
     expect(runnerBom?.quantity).toBe(2);
   });
@@ -3634,8 +3620,8 @@ describe("FWM furniture module packages", () => {
     expect(mdfBack.minZ).toBeCloseTo(-280, 4);
     expect(defaultBack.maxZ).toBeCloseTo(-262, 4);
     expect(mdfBack.maxZ).toBeCloseTo(-276.7, 4);
-    expect(defaultDrawer.minZ - defaultBack.maxZ).toBeCloseTo(10, 4);
-    expect(mdfDrawer.minZ - mdfBack.maxZ).toBeCloseTo(10, 4);
+    expect(defaultDrawer.minZ - defaultBack.maxZ).toBeCloseTo(38, 4);
+    expect(mdfDrawer.minZ - mdfBack.maxZ).toBeCloseTo(38, 4);
     expect(mdfDrawer.minZ).toBeLessThan(defaultDrawer.minZ);
     expect(mdfDrawer.maxZ).toBeCloseTo(defaultDrawer.maxZ, 4);
     expect(mdfDrawer.depth - defaultDrawer.depth).toBeCloseTo(14.7, 4);

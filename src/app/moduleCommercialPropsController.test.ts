@@ -59,7 +59,7 @@ function assignment(id: string, name: string, assignmentId = `material-assignmen
 
 function materialsView(assignments: ProjectMaterialAssignment[], revision = 3): ProjectMaterialsView {
   return {
-    assignments: { schemaVersion: 1, initialized: true, revision, assignments },
+    assignments: { schemaVersion: 2, initialized: true, revision, assignments },
     quantities: [],
     warnings: [],
     priceSource: { priceListId: "price-list", name: "Cenník", currency: "EUR", source: "tenant", lastSynchronizedAt: null },

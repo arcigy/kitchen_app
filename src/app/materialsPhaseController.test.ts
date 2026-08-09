@@ -171,7 +171,7 @@ describe("materials phase controller", () => {
 
   it("replaces an uninitialized migrated state with current catalog defaults", () => {
     const catalog = testCatalog();
-    const empty = { schemaVersion: 1 as const, initialized: false, revision: 0, assignments: [] };
+    const empty = { schemaVersion: 2 as const, initialized: false, revision: 0, assignments: [] };
     const controller = createMaterialsPhaseController({
       container: new MaterialsHost() as unknown as HTMLElement,
       catalog,
