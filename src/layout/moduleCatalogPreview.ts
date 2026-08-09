@@ -3,6 +3,7 @@ import {
   getFwmModulePreviewImage,
   resolveFwmModulePreviewImage
 } from "../modules/fwmFurniture/modulePreviewImages";
+import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 
 function defaultModuleVariant(modulePackage: FurnQuoteModulePackage): unknown {
   return modulePackage.parameters.parameters.find((parameter) => parameter.key === "variant")?.defaultValue;
@@ -37,7 +38,6 @@ export function renderCatalogPreviewImage(args: {
   loading?: CatalogPreviewLoading;
   fetchPriority?: CatalogPreviewFetchPriority;
 }): void {
-  args.host.classList.remove("module-catalog-preview-loading");
   if (!args.previewImage) {
     args.host.innerHTML = args.fallbackSvg();
     return;
@@ -51,20 +51,23 @@ export function renderCatalogPreviewImage(args: {
   image.draggable = false;
   image.setAttribute("fetchpriority", args.fetchPriority ?? "auto");
 
+  const loadingSkeleton = mountLoadingSkeleton(args.host, {
+    variant: "icon",
+    label: "Načítavam ikonu modulu"
+  });
   const ownsHost = () => image.parentElement === args.host;
   const markLoaded = () => {
     if (!ownsHost()) return;
-    args.host.classList.remove("module-catalog-preview-loading");
+    loadingSkeleton.clear();
     image.dataset.previewState = "loaded";
   };
   image.addEventListener("load", markLoaded, { once: true });
   image.addEventListener("error", () => {
     if (!ownsHost()) return;
-    args.host.classList.remove("module-catalog-preview-loading");
+    loadingSkeleton.clear();
     args.host.innerHTML = args.fallbackSvg();
   }, { once: true });
 
-  args.host.classList.add("module-catalog-preview-loading");
   args.host.replaceChildren(image);
   image.src = args.previewImage;
   if (image.complete && image.naturalWidth > 0) markLoaded();

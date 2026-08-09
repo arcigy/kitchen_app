@@ -76,11 +76,11 @@ describe("module catalog previews", () => {
     const image = host.querySelector("img");
     expect(image?.getAttribute("src")).toBe("/module-icons/furniture/v4/types/fwm_catalog_base_drawers.png");
     expect(image?.getAttribute("alt")).toBe("");
-    expect(host.classList.contains("module-catalog-preview-loading")).toBe(true);
+    expect(host.dataset.loadingSkeleton).toBe("icon");
     expect(fallbackSvg).not.toHaveBeenCalled();
 
     image?.dispatchEvent(new Event("load"));
-    expect(host.classList.contains("module-catalog-preview-loading")).toBe(false);
+    expect(host.dataset.loadingSkeleton).toBeUndefined();
     expect(image?.dataset.previewState).toBe("loaded");
 
     image?.dispatchEvent(new Event("error"));

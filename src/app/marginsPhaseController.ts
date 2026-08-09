@@ -21,6 +21,7 @@ import {
   type ProjectMarginLaborCommitRequest,
   type ProjectMarginsPanelHandle
 } from "../ui/marginsPhasePanel";
+import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 
 export type MarginsPhaseControllerApi = {
   loadProjectMargins: (projectId: string, signal?: AbortSignal) => Promise<ProjectMarginsView>;
@@ -239,13 +240,15 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       const projectId = args.getProjectId();
       if (!projectId) throw new Error("Nie je otvorený žiadny projekt.");
 
-      if (panel) {
-        panel.setInputsDisabled(true);
-        panel.setGlobalError(null);
-        panel.setLoading(true);
-      } else {
-        args.container.innerHTML = `<div class="margins-phase"><p class="margins-phase__status" data-margin-status role="status" aria-live="polite">Načítavam marže projektu…</p></div>`;
-      }
+      panel?.destroy();
+      panel = null;
+      const loading = mountLoadingSkeleton(args.container, {
+        variant: "phase",
+        label: "Načítavam marže projektu"
+      });
+      const footerLoading = args.footerContainer
+        ? mountLoadingSkeleton(args.footerContainer, { variant: "phase", label: "Načítavam súhrn marží" })
+        : null;
 
       const abort = new AbortController();
       loadAbort = abort;
@@ -254,6 +257,8 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
         if (!active || loadAbort !== abort) return view ?? loaded;
         remoteLoaded = true;
         view = structuredClone(loaded);
+        loading.clear();
+        footerLoading?.clear();
         const activePanel = ensurePanel(view);
         activePanel.update(view);
         activePanel.setInputsDisabled(!view.editable);
@@ -262,9 +267,14 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       } catch (error) {
         if (!isAbortError(error) && active && loadAbort === abort) {
           remoteLoaded = false;
-          panel?.setLoading(false);
-          panel?.setInputsDisabled(true);
-          panel?.setGlobalError(`Serverové marže sa nepodarilo načítať. Úpravy sú zablokované, aby sa ceny nerozišli so serverom. ${errorMessage(error, "")}`.trim());
+          loading.clear();
+          footerLoading?.clear();
+          const errorPanel = document.createElement("p");
+          errorPanel.className = "margins-phase__status margins-phase__status--error";
+          errorPanel.dataset.marginError = "";
+          errorPanel.setAttribute("role", "alert");
+          errorPanel.textContent = `Project margins could not be loaded safely. Editing is blocked. ${errorMessage(error, "")}`.trim();
+          args.container.replaceChildren(errorPanel);
         }
         throw error;
       } finally {

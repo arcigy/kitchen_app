@@ -673,7 +673,7 @@ describe("selected props panels", () => {
     for (const card of optionsGrid.children) {
       expect(card.className).toContain("module-catalog-card");
       expect(card.children[0]?.className).toContain("module-catalog-card-icon");
-      expect(card.children[0]?.className).toContain("module-catalog-preview-loading");
+      expect(card.children[0]?.dataset.loadingSkeleton).toBe("icon");
       expect(card.children[1]?.className).toBe("module-catalog-card-label");
     }
 

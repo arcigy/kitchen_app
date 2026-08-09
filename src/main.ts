@@ -1,5 +1,6 @@
 import "./styles/base.css";
 import "./styles/appBoot.css";
+import "./styles/loadingSkeleton.css";
 import "./styles/authShell.css";
 import "./styles/projectManager.css";
 import "./styles/auth.css";
@@ -16,6 +17,7 @@ import type { ProjectSaveFile } from "./core/project-save/project-save-types";
 import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./app/clientJourneyTelemetry";
 import { sampleBrowserRuntimeMemory, startBrowserRuntimeTelemetry } from "./app/browserRuntimeTelemetry";
 import { installStaleAssetRecovery } from "./app/staleAssetRecovery";
+import { mountLoadingSkeleton, type LoadingSkeletonHandle } from "./ui/loadingSkeleton";
 
 installStaleAssetRecovery();
 
@@ -26,14 +28,14 @@ if (!app) {
 }
 
 const appRoot = app;
-let bootProgress = 0;
-let bootTarget = 8;
-let bootTimer = 0;
+let bootSkeleton: LoadingSkeletonHandle | null = null;
+let workspaceSkeleton: LoadingSkeletonHandle | null = null;
 
-renderBootLoading("Kontrolujem prihlasenie", 8);
+renderBootLoading("Kontrolujem prihlásenie");
 void start().catch((error: unknown) => {
   console.error("Failed to start app", error);
-  window.clearInterval(bootTimer);
+  bootSkeleton?.clear();
+  workspaceSkeleton?.clear();
   const message = error instanceof Error ? error.message : String(error);
   appRoot.innerHTML = `
     <div style="padding:16px;font-family:sans-serif;color:#111">
@@ -56,100 +58,29 @@ function escapeHtml(value: string): string {
   });
 }
 
-function renderBootLoading(status: string, target: number): void {
-  bootTarget = target;
+function renderBootLoading(status: string): void {
+  bootSkeleton?.clear();
   appRoot.className = "app-boot-shell";
-  appRoot.innerHTML = `
-    <main class="app-boot" aria-live="polite" aria-busy="true">
-      <div class="app-boot-visual" aria-hidden="true">
-        <div class="app-boot-grid"></div>
-        <div class="app-boot-orbit">
-          <span></span>
-          <span></span>
-          <span></span>
-          <div class="app-boot-mark">A</div>
-        </div>
-        <div class="app-boot-scan"></div>
-      </div>
-      <div class="app-boot-copy">
-        <span class="app-boot-kicker">Pripravujem pracovisko</span>
-        <strong>Arcigy Kitchen</strong>
-        <span data-boot-status>${status}</span>
-      </div>
-      <div class="app-boot-progress">
-        <div class="app-boot-progress-head">
-          <span>Nacitavam</span>
-          <div class="app-boot-percent" data-boot-percent>0%</div>
-        </div>
-        <div class="app-boot-bar"><i data-boot-bar style="width: 0%"></i></div>
-      </div>
-      <div class="app-boot-steps">
-        <span data-boot-step="8"><b></b>Auth</span>
-        <span data-boot-step="38"><b></b>Catalog</span>
-        <span data-boot-step="58"><b></b>Modules</span>
-        <span data-boot-step="82"><b></b>3D</span>
-      </div>
-    </main>
-  `;
-  syncBootProgress();
-  startBootProgress();
+  bootSkeleton = mountLoadingSkeleton(appRoot, { variant: "screen", label: status });
 }
 
-function syncBootProgress(): void {
-  const percent = Math.max(0, Math.min(100, Math.round(bootProgress)));
-  const percentEl = appRoot.querySelector<HTMLElement>("[data-boot-percent]");
-  const barEl = appRoot.querySelector<HTMLElement>("[data-boot-bar]");
-  if (percentEl) percentEl.textContent = `${percent}%`;
-  if (barEl) barEl.style.width = `${percent}%`;
-  appRoot.querySelectorAll<HTMLElement>("[data-boot-step]").forEach((step) => {
-    const threshold = Number(step.dataset.bootStep ?? 0);
-    step.classList.toggle("active", percent >= Math.max(0, threshold - 8));
-    step.classList.toggle("done", percent >= threshold);
-  });
-}
-
-function startBootProgress(): void {
-  window.clearInterval(bootTimer);
-  bootTimer = window.setInterval(() => {
-    if (bootProgress >= bootTarget) return;
-    bootProgress = Math.min(bootTarget, bootProgress + Math.max(0.35, (bootTarget - bootProgress) * 0.08));
-    syncBootProgress();
-  }, 70);
-}
-
-function setBootStatus(status: string, target = bootTarget): void {
-  const statusEl = appRoot.querySelector<HTMLElement>("[data-boot-status]");
-  if (statusEl) statusEl.textContent = status;
-  bootTarget = Math.max(bootTarget, Math.min(96, target));
-  if (bootProgress < bootTarget - 16) {
-    bootProgress = Math.max(bootProgress, bootTarget - 16);
-  }
-  syncBootProgress();
+function setBootStatus(status: string): void {
+  bootSkeleton?.setStatus(status);
 }
 
 function finishBootLoading(): void {
-  bootTarget = 100;
-  bootProgress = 100;
-  syncBootProgress();
-  window.clearInterval(bootTimer);
-  bootTimer = 0;
+  bootSkeleton?.clear();
+  bootSkeleton = null;
 }
 
-function mountViewerStartupState(viewer: HTMLElement): HTMLElement {
-  const status = document.createElement("div");
-  status.className = "viewer-startup";
-  status.innerHTML = `
-    <div class="viewer-startup-mark" aria-hidden="true">
-      <span></span>
-      <span></span>
-    </div>
-    <div>
-      <strong>Pripravujem 3D</strong>
-      <p>Nacitavam modelovanie a nastroje</p>
-    </div>
-  `;
-  viewer.appendChild(status);
-  return status;
+function showWorkspaceLoading(status: string): void {
+  workspaceSkeleton?.clear();
+  workspaceSkeleton = mountLoadingSkeleton(appRoot, { variant: "workspace", label: status, mode: "overlay" });
+}
+
+function finishWorkspaceLoading(): void {
+  workspaceSkeleton?.clear();
+  workspaceSkeleton = null;
 }
 
 function shouldAutoStartWorkspace(): boolean {
@@ -166,7 +97,7 @@ function openProjectManager(): void {
 
 async function start(): Promise<void> {
   if (new URLSearchParams(window.location.search).get("chatbot") === "1") {
-    window.clearInterval(bootTimer);
+    finishBootLoading();
     renderChatbotOnly(appRoot);
     return;
   }
@@ -177,10 +108,10 @@ async function start(): Promise<void> {
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
   startBrowserRuntimeTelemetry();
-  setBootStatus("Prihlasenie potvrdene", 22);
+  setBootStatus("Prihlásenie potvrdené");
 
   if (window.location.pathname === "/material-proof") {
-    setBootStatus("Spustam material proof", 78);
+    setBootStatus("Spúšťam material proof");
     const { startMaterialProofMode } = await import("./app/materialProofMode");
     finishBootLoading();
     await startMaterialProofMode(appRoot);
@@ -198,8 +129,8 @@ async function start(): Promise<void> {
       organizationUsers: clientProfile.organization.users,
       currentUserId: clientContext.userId,
       currentUserRole: clientContext.role,
-      onSelect: (selection) => {
-        void launchWorkspace({
+      onSelect: async (selection) => {
+        await launchWorkspace({
           clientContext,
           clientProfile,
           initialProject: selection.kind === "created" ? selection.project : null,
@@ -241,51 +172,54 @@ async function launchWorkspace(args: LaunchWorkspaceArgs): Promise<void> {
 }
 
 async function launchWorkspaceInner(args: LaunchWorkspaceArgs): Promise<"local" | "network" | "persistent_cache" | "session_cache"> {
-  setBootStatus("Zobrazujem pracovisko", 88);
+  setBootStatus("Načítavam pracovisko");
+  showWorkspaceLoading("Načítavam projekt");
   const appDataPromise = import("./app/catalogLoader").then(({ loadClientAppDataForApp }) => loadClientAppDataForApp(args.clientContext.clientId));
   const appModulePromise = import("./app");
   const i18nPromise = import("./i18n");
   const installPromise = import("./pwa/installController");
 
-  finishBootLoading();
-  appRoot.className = "";
-  renderKitchenAppShell(appRoot);
-  createChatbotDock({ appRoot });
+  try {
+    const [appData, { startApp }, { initDomI18n }, { initializeInstallableApp }] = await Promise.all([
+      appDataPromise,
+      appModulePromise,
+      i18nPromise,
+      installPromise
+    ]);
 
-  const viewer = document.getElementById("viewer");
-  const ribbon = document.getElementById("ribbon");
-  const properties = document.getElementById("properties");
+    finishWorkspaceLoading();
+    finishBootLoading();
+    appRoot.className = "";
+    renderKitchenAppShell(appRoot);
+    createChatbotDock({ appRoot });
 
-  if (!viewer || !ribbon || !properties) {
-    throw new Error("Missing required DOM elements (viewer/ribbon/properties).");
+    const viewer = document.getElementById("viewer");
+    const ribbon = document.getElementById("ribbon");
+    const properties = document.getElementById("properties");
+
+    if (!viewer || !ribbon || !properties) {
+      throw new Error("Missing required DOM elements (viewer/ribbon/properties).");
+    }
+
+    initDomI18n(document.body);
+    initializeInstallableApp();
+    const { clientCatalog, modulePackages } = appData;
+    startApp({
+      viewerEl: viewer,
+      ribbonEl: ribbon,
+      propertiesEl: properties,
+      clientContext: args.clientContext,
+      clientCatalog,
+      modulePackages,
+      clientProfile: args.clientProfile,
+      initialProject: args.initialProject,
+      initialProjectSave: args.initialProjectSave,
+      openProjectManager
+    });
+    const { getClientAppDataLoadSource } = await import("./app/catalogLoader");
+    return getClientAppDataLoadSource(appData) ?? "network";
+  } catch (error) {
+    finishWorkspaceLoading();
+    throw error;
   }
-
-  const viewerStartup = mountViewerStartupState(viewer);
-  const [appData, { startApp }, { initDomI18n }, { initializeInstallableApp }] = await Promise.all([
-    appDataPromise,
-    appModulePromise,
-    i18nPromise,
-    installPromise
-  ]);
-
-  initDomI18n(document.body);
-  initializeInstallableApp();
-  viewerStartup.remove();
-
-  const { clientCatalog, modulePackages } = appData;
-
-  startApp({
-    viewerEl: viewer,
-    ribbonEl: ribbon,
-    propertiesEl: properties,
-    clientContext: args.clientContext,
-    clientCatalog,
-    modulePackages,
-    clientProfile: args.clientProfile,
-    initialProject: args.initialProject,
-    initialProjectSave: args.initialProjectSave,
-    openProjectManager
-  });
-  const { getClientAppDataLoadSource } = await import("./app/catalogLoader");
-  return getClientAppDataLoadSource(appData) ?? "network";
 }

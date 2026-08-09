@@ -203,6 +203,30 @@ describe("createWorkspaceNavigationController", () => {
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
   });
 
+  it("shows the Materials skeleton synchronously while the authoritative reload is pending", async () => {
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new WorkspaceFakeElement()
+    });
+    let resolveOpen!: (value: { warnings: [] }) => void;
+    const opening = new Promise<{ warnings: [] }>((resolve) => { resolveOpen = resolve; });
+    const materialsPhase = materialsPhaseHarness();
+    const controller = createWorkspaceNavigationController({
+      root: new WorkspaceFakeElement() as unknown as HTMLElement,
+      S: emptyAppState(),
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase,
+      materialsController: { open: vi.fn(() => opening), close: vi.fn(async () => undefined) } as never,
+      setDesignTopbar: vi.fn(),
+      setVisualisationTopbar: vi.fn()
+    });
+
+    controller.openMaterials();
+    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain('data-loading-skeleton="phase"');
+    resolveOpen({ warnings: [] });
+    await vi.waitFor(() => expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).dataset.loadingSkeleton).toBeUndefined());
+  });
+
   it("opens the real Margins phase from workspace navigation and closes it when returning to design", async () => {
     vi.stubGlobal("document", {
       addEventListener: vi.fn(),

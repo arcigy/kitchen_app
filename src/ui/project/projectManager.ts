@@ -4,6 +4,7 @@ import type { ClientRole, OrganizationUser } from "../../core/client/client-type
 import { findOrganizationUser, organizationUserInitial, organizationUserName } from "../../core/client/organization-users";
 import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
+import { mountLoadingSkeleton } from "../loadingSkeleton";
 import {
   createProject,
   deleteProject,
@@ -28,7 +29,7 @@ type ProjectManagerArgs = {
   organizationUsers: OrganizationUser[];
   currentUserId: string;
   currentUserRole: ClientRole;
-  onSelect: (selection: ProjectManagerSelection) => void;
+  onSelect: (selection: ProjectManagerSelection) => void | Promise<void>;
 };
 
 export function createProjectVersionActionButton(label: string): HTMLButtonElement {
@@ -135,48 +136,8 @@ function setStatus(root: HTMLElement, message: string, tone: "muted" | "error" =
   status.dataset.tone = tone;
 }
 
-function setProgress(root: HTMLElement, percent: number | null): void {
-  const progress = root.querySelector<HTMLElement>("[data-project-manager-progress]");
-  const bar = root.querySelector<HTMLElement>("[data-project-manager-progress-bar]");
-  if (!progress || !bar) return;
-  if (percent === null) {
-    progress.hidden = true;
-    progress.setAttribute("aria-valuenow", "0");
-    bar.style.width = "0%";
-    return;
-  }
-  const value = Math.max(0, Math.min(100, Math.round(percent)));
-  progress.hidden = false;
-  progress.setAttribute("aria-valuenow", String(value));
-  bar.style.width = `${value}%`;
-}
-
-function beginProjectLoadProgress(root: HTMLElement, label: string) {
-  let percent = 8;
-  let timer: number | null = null;
-  const render = () => {
-    setProgress(root, percent);
-    setStatus(root, `${label} ${percent}%`);
-  };
-  render();
-  timer = window.setInterval(() => {
-    const step = percent < 45 ? 7 : percent < 75 ? 4 : percent < 92 ? 2 : 0;
-    percent = Math.min(94, percent + step);
-    render();
-  }, 260);
-  return {
-    done() {
-      if (timer !== null) window.clearInterval(timer);
-      percent = 100;
-      setProgress(root, 100);
-      setStatus(root, `${label} 100%`);
-    },
-    fail(message: string) {
-      if (timer !== null) window.clearInterval(timer);
-      setProgress(root, null);
-      setStatus(root, message, "error");
-    }
-  };
+function beginProjectLoading(root: HTMLElement, label: string) {
+  return mountLoadingSkeleton(root, { variant: "screen", label, mode: "overlay" });
 }
 
 function editedAgo(value: string): string {
@@ -454,12 +415,13 @@ function renderProjects(
     const loadCard = async () => {
       const buttons = card.querySelectorAll<HTMLButtonElement>("button");
       buttons.forEach((item) => { item.disabled = true; });
-      const progress = beginProjectLoadProgress(root, "Nacitavam projekt");
+      const loading = beginProjectLoading(root, "Načítavam projekt");
       try {
         await onLoad(project.projectId);
-        progress.done();
+        loading.clear();
       } catch (error) {
-        progress.fail(error instanceof Error ? error.message : String(error));
+        loading.clear();
+        setStatus(root, error instanceof Error ? error.message : String(error), "error");
         buttons.forEach((item) => { item.disabled = false; });
       }
     };
@@ -537,9 +499,6 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
         </div>
         <div class="project-manager-load-state">
           <p class="project-manager-status" data-project-manager-status data-tone="muted">Vyber existujuci projekt alebo vytvor novy.</p>
-          <div class="project-manager-progress" data-project-manager-progress role="progressbar" aria-label="Nacitavanie projektu" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
-            <span data-project-manager-progress-bar></span>
-          </div>
         </div>
       </section>
 
@@ -587,13 +546,18 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
 
   const loadProjects = async () => {
     setStatus(args.root, "Nacitavam zoznam projektov...");
+    const list = args.root.querySelector<HTMLElement>("[data-project-manager-list]");
+    const loading = list ? mountLoadingSkeleton(list, { variant: "project-list", label: "Načítavam zoznam projektov" }) : null;
     try {
-      renderProjects(args.root, await listProjects(), args.organizationUsers, async (projectId) => {
+      const projects = await listProjects();
+      loading?.clear();
+      renderProjects(args.root, projects, args.organizationUsers, async (projectId) => {
         const save = await loadProject(projectId);
-        args.onSelect({ kind: "loaded", save });
+        await args.onSelect({ kind: "loaded", save });
       }, args.currentUserRole === "owner" || args.currentUserRole === "admin", loadProjects);
       setStatus(args.root, "Project manager pripraveny.");
     } catch (error) {
+      loading?.clear();
       renderProjects(args.root, [], args.organizationUsers, async () => undefined, false);
       setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
     }
@@ -606,19 +570,28 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       setStatus(args.root, "Vypln nazov, adresu a kontakt.", "error");
       return;
     }
-    setStatus(args.root, "Vytvaram projekt...");
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
     if (submit) submit.disabled = true;
+    const loading = beginProjectLoading(args.root, "Vytváram projekt");
     try {
-      args.onSelect({ kind: "created", project: await createProject(input) });
+      await args.onSelect({ kind: "created", project: await createProject(input) });
+      loading.clear();
     } catch (error) {
+      loading.clear();
       setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
       if (submit) submit.disabled = false;
     }
   });
 
-  args.root.querySelector<HTMLButtonElement>("[data-project-manager-blank]")?.addEventListener("click", () => {
-    args.onSelect({ kind: "blank" });
+  args.root.querySelector<HTMLButtonElement>("[data-project-manager-blank]")?.addEventListener("click", async () => {
+    const loading = beginProjectLoading(args.root, "Otváram prázdne pracovisko");
+    try {
+      await args.onSelect({ kind: "blank" });
+      loading.clear();
+    } catch (error) {
+      loading.clear();
+      setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
+    }
   });
   args.root.querySelector<HTMLButtonElement>("[data-project-manager-new]")?.addEventListener("click", () => {
     const panel = args.root.querySelector<HTMLElement>("[data-project-manager-create-panel]");
@@ -626,13 +599,14 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   });
   args.root.querySelector<HTMLButtonElement>("[data-project-manager-import]")?.addEventListener("click", () => {
     openFilePicker(async (file) => {
-      const progress = beginProjectLoadProgress(args.root, "Importujem projekt");
+      const loading = beginProjectLoading(args.root, "Importujem projekt");
       try {
         const save = await importProjectFile(file);
-        progress.done();
-        args.onSelect({ kind: "loaded", save });
+        await args.onSelect({ kind: "loaded", save });
+        loading.clear();
       } catch (error) {
-        progress.fail(error instanceof Error ? error.message : String(error));
+        loading.clear();
+        setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
       }
     });
   });
