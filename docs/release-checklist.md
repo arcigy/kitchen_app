@@ -1,6 +1,6 @@
 # Release checklist
 
-Use this checklist before promoting `staging` to `main`.
+Use this checklist before promoting tested `develop` to `main`.
 
 ## Automated checks
 
@@ -53,5 +53,5 @@ Use this checklist before promoting `staging` to `main`.
 - [ ] Rollback path is clear.
 - [ ] Database migration, durable storage, backup/restore, and disk headroom are compatible with the release.
 - [ ] SLO impact and current error-budget state permit the release.
-- [ ] Manual QA was confirmed on `staging`.
-- [ ] `staging` is ready to merge into `main`.
+- [ ] Manual QA was confirmed on online `develop`.
+- [ ] `develop` is ready to promote through a release PR into `main`.
