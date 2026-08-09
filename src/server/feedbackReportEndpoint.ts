@@ -41,6 +41,21 @@ function text(value: unknown, name: string, max: number, required = true): strin
 
 function jsonBytes(value: unknown): number { return Buffer.byteLength(JSON.stringify(value), "utf8"); }
 
+function pngData(value: unknown): string {
+  const screenshot = text(value, "screenshotDataUrl", Math.ceil(MAX_SCREENSHOT_BYTES * 4 / 3));
+  const prefix = "data:image/png;base64,";
+  if (!screenshot.startsWith(prefix)) throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  const encoded = screenshot.slice(prefix.length);
+  if (!encoded || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
+    throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  }
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.byteLength > MAX_SCREENSHOT_BYTES || bytes.subarray(0, 8).compare(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) !== 0) {
+    throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  }
+  return encoded;
+}
+
 function config(env: NodeJS.ProcessEnv) {
   const baseUrl = env.ARCIGY_ODOO_URL?.trim();
   const apiKey = env.ARCIGY_ODOO_API_KEY?.trim();
@@ -87,7 +102,7 @@ async function deliver(
     state.taskId = task;
   }
   const attachments = [
-    { key: "screenshot.png", name: "screenshot.png", data: report.screenshot.slice("data:image/png;base64,".length), mimetype: "image/png" },
+    { key: "screenshot.png", name: "screenshot.png", data: report.screenshot, mimetype: "image/png" },
     { key: "project-snapshot.json", name: "project-snapshot.json", data: Buffer.from(JSON.stringify(report.projectSnapshot, null, 2)).toString("base64"), mimetype: "application/json" },
     { key: "diagnostics.json", name: "diagnostics.json", data: Buffer.from(JSON.stringify({ ...report.diagnostics, reporter: { userId: report.reporter.userId, clientId: report.reporter.clientId } }, null, 2)).toString("base64"), mimetype: "application/json" }
   ];
@@ -111,8 +126,7 @@ export async function handleFeedbackReportApi(req: http.IncomingMessage, res: ht
     const title = text(body.title, "title", 180);
     const description = text(body.description, "description", 8_000);
     const comment = text(body.comment ?? "", "comment", 4_000, false);
-    const screenshot = text(body.screenshotDataUrl, "screenshotDataUrl", Math.ceil(MAX_SCREENSHOT_BYTES * 4 / 3));
-    if (!screenshot.startsWith("data:image/png;base64,") || Buffer.byteLength(screenshot, "utf8") > MAX_SCREENSHOT_BYTES * 4 / 3) throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+    const screenshot = pngData(body.screenshotDataUrl);
     if (jsonBytes(body.projectSnapshot) > MAX_SNAPSHOT_BYTES || jsonBytes(body.diagnostics) > MAX_SNAPSHOT_BYTES) throw new FeedbackReportError("Projektový snapshot je príliš veľký na bezpečné odoslanie.");
     const diagnostics = object(body.diagnostics);
     const settings = config(deps.env ?? process.env);

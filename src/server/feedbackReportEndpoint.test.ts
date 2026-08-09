@@ -17,7 +17,7 @@ function report(submissionId = "report-1") {
     description: "Po kliknutí sa nič nestane.",
     comment: "",
     consent: true,
-    screenshotDataUrl: "data:image/png;base64,cG5n",
+    screenshotDataUrl: "data:image/png;base64,iVBORw0KGgo=",
     projectSnapshot: { projectId: "project-a", objects: [] },
     diagnostics: { viewport: { width: 1440, height: 900 } }
   };
@@ -80,5 +80,18 @@ describe("feedback report endpoint", () => {
       { getContext: vi.fn(async () => context), readJsonBody: vi.fn(async () => invalid), sendJson, env }
     );
     expect(sendJson).toHaveBeenCalledWith(expect.anything(), 400, expect.objectContaining({ ok: false }));
+  });
+
+  it("rejects a malformed or non-PNG screenshot before contacting Odoo", async () => {
+    const sendJson = vi.fn();
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    await handleFeedbackReportApi(
+      { method: "POST", headers: { "idempotency-key": "report-1" } } as never,
+      {} as never,
+      new URL("http://localhost/api/feedback-reports"),
+      { getContext: vi.fn(async () => context), readJsonBody: vi.fn(async () => ({ ...report(), screenshotDataUrl: "data:image/png;base64,not-a-png" })), sendJson, fetch: fetchImpl, env }
+    );
+    expect(sendJson).toHaveBeenCalledWith(expect.anything(), 400, expect.objectContaining({ ok: false }));
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

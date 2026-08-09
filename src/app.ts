@@ -3539,21 +3539,26 @@ export function startApp(initialArgs: AppArgs) {
   createFeedbackReportController({
     trigger: tb.getShareButton(),
     canvas: renderer.domElement,
-    buildProjectSnapshot: () => ({
+    buildProjectSnapshot: () => JSON.parse(JSON.stringify({
       project: projectActions.getState().currentProject,
       saveRevision: projectActions.getState().saveRevision,
       appState: buildProjectAppState({ commitDraft: false, syncActivity: false })
-    }),
-    getDiagnostics: () => ({
+    })),
+    getDiagnostics: () => {
+      const projectState = projectActions.getState();
+      const project = projectState.currentProject;
+      return {
       capturedAt: new Date().toISOString(),
       appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
+      project: project ? { projectId: project.projectId, name: project.name, saveRevision: projectState.saveRevision } : null,
       viewMode,
       activeViewerTab,
       layoutTool,
       selection: { selectedKind, selectedInstanceId, selectedWallId, selectedFloorId, selectedColumnId, selectedSectionId },
       viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
       browser: navigator.userAgent
-    })
+      };
+    }
   }).mount();
   tb.getTab("file")?.addEventListener("click", () => showComingSoonDialog("Súbor"));
   const buildSelectionController = createBuildSelectionController({
