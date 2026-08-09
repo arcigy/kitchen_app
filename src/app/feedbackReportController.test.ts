@@ -79,6 +79,7 @@ describe("feedback report controller", () => {
     const { trigger } = await setup();
     expect(trigger.textContent).toBe("Nahlásiť problém");
     expect(document.querySelector(".feedback-report-dialog")).not.toBeNull();
+    expect(document.querySelector(".feedback-report-dialog")?.textContent).toContain("screenshot celej viditeľnej Arcigy aplikácie");
     expect(document.querySelectorAll("option")).toHaveLength(5);
     expect(document.querySelector<HTMLImageElement>(".feedback-report-preview")?.src).toContain(PNG);
     expect(document.querySelector<HTMLInputElement>("input[name='consent']")?.required).toBe(true);
