@@ -2997,6 +2997,7 @@ export function startApp(initialArgs: AppArgs) {
     wallDefs,
     walls,
     windowEditorHost,
+    doors,
     windows,
     get windowInst() { return windowInst; },
     set windowInst(next: WindowInstance | null) { windowInst = next; }
@@ -3029,6 +3030,7 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayStatus,
     walls,
     doors,
+    windows,
     get doorInst() { return doorInst; },
     set doorInst(next: DoorInstance | null) { doorInst = next; }
   });
