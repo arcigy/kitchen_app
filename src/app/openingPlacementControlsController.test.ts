@@ -55,6 +55,7 @@ function createWindowContext(overrides: Partial<WindowControlsContext> = {}): Wi
     walls: [wall],
     windowEditorHost: { innerHTML: "" } as HTMLElement,
     windows: [],
+    doors: [],
     windowInst: null,
     ...overrides
   };
@@ -80,12 +81,33 @@ function createDoorContext(overrides: Partial<DoorControlsContext> = {}): DoorCo
     setUnderlayStatus: vi.fn(),
     walls: [wall],
     doors: [],
+    windows: [],
     doorInst: null,
     ...overrides
   };
 }
 
 describe("opening placement controls", () => {
+  it("marks a window preview invalid when it overlaps a door or fills its host wall", () => {
+    const placedDoor = {
+      id: "door-1",
+      params: {
+        wall: "back",
+        wallId: "wall-1",
+        centerMm: 1500,
+        widthMm: 900
+      }
+    } as DoorInstance;
+    const ctx = createWindowContext({ doors: [placedDoor] });
+    const controller = createWindowControlsController(ctx);
+
+    controller.addOrSelectWindow();
+
+    expect(controller.updateWindowPlacementPreview("wall-1", { x: 1500, z: 0 })).toBe(false);
+    controller.updateWindowPlacementParams({ widthMm: 3000 });
+    expect(controller.updateWindowPlacementPreview("wall-1", { x: 1500, z: 0 })).toBe(false);
+  });
+
   it("keeps current window placement entry and cancel status refresh behavior", () => {
     const ctx = createWindowContext();
     const controller = createWindowControlsController(ctx);
