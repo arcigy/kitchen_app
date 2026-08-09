@@ -32,6 +32,7 @@ import {
   type ProjectSupplierId,
   type SupplierBridgePanelState
 } from "../ui/materialsPhasePanel";
+import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 
 export type MaterialsPhaseControllerApi = {
   loadProjectMaterials: (projectId: string, signal?: AbortSignal) => Promise<ProjectMaterialsView>;
@@ -201,35 +202,42 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     async open(): Promise<ProjectMaterialsView> {
       active = true;
       abortRequests();
-      renderLocalView();
-      const activePanel = ensurePanel();
       const projectId = args.getProjectId?.() ?? null;
       if (!projectId) {
         remoteLoaded = false;
+        renderLocalView();
+        const activePanel = ensurePanel();
         activePanel.setInputsDisabled(false);
         activePanel.setGlobalError(null);
         return view;
       }
 
+      panel?.destroy();
+      panel = null;
+      const loading = mountLoadingSkeleton(args.container, {
+        variant: "phase",
+        label: "Načítavam materiály projektu"
+      });
       const abort = new AbortController();
       loadAbort = abort;
-      activePanel.setInputsDisabled(true);
-      activePanel.setLoading(true);
       try {
         const remoteView = await api.loadProjectMaterials(projectId, abort.signal);
         if (!active || loadAbort !== abort) return view;
         remoteLoaded = true;
         assignments = initialAssignments(remoteView.assignments, args.catalog, now());
         view = viewFromRemote(assignments, remoteView, args);
+        loading.clear();
+        const activePanel = ensurePanel();
         activePanel.update(view);
         activePanel.setInputsDisabled(false);
         notifyViewChanged();
       } catch (error) {
         if (!isAbortError(error) && active && loadAbort === abort) {
           remoteLoaded = false;
-          activePanel.setLoading(false);
-          activePanel.setInputsDisabled(true);
-          activePanel.setGlobalError(`Serverové priradenia sa nepodarilo načítať. Úpravy sú zablokované, aby sa lokálny stav nerozišiel so serverom. ${errorMessage(error, "")}`.trim());
+          loading.clear();
+          view = { ...view, warnings: [] };
+          args.container.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(`Project materials could not be loaded safely. Editing is blocked. ${errorMessage(error, "")}`.trim())}</p>`;
+          notifyViewChanged();
         }
       } finally {
         if (loadAbort === abort) loadAbort = null;
@@ -411,4 +419,14 @@ function isAbortError(error: unknown): boolean {
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[character] ?? character);
 }

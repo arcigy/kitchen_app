@@ -1,0 +1,95 @@
+.arcigy-loading-skeleton-host--icon {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: linear-gradient(110deg, #f3f5f9 25%, #e7ebf3 42%, #f3f5f9 59%);
+  background-size: 220% 100%;
+  animation: arcigySkeletonShimmer 900ms linear infinite;
+}
+
+.arcigy-loading-skeleton-host--icon .module-catalog-card-preview {
+  opacity: 0;
+}
+
+.arcigy-loading-skeleton {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  color: transparent;
+}
+
+.arcigy-loading-skeleton--screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  min-height: 100vh;
+  padding: 18px;
+  background: #f7f8fb;
+}
+
+.arcigy-loading-skeleton--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  min-height: 100%;
+}
+
+.arcigy-loading-skeleton__topbar,
+.arcigy-loading-skeleton__sidebar,
+.arcigy-loading-skeleton__canvas,
+.arcigy-loading-skeleton__properties,
+.arcigy-loading-skeleton__line,
+.arcigy-loading-skeleton__cards i {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(110deg, #eef1f6 25%, #e2e7ef 42%, #eef1f6 59%);
+  background-size: 220% 100%;
+  animation: arcigySkeletonShimmer 1.05s linear infinite;
+}
+
+.arcigy-loading-skeleton__topbar { height: 54px; }
+
+.arcigy-loading-skeleton__body {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 280px;
+  gap: 14px;
+  min-height: calc(100vh - 90px);
+}
+
+.arcigy-loading-skeleton__sidebar,
+.arcigy-loading-skeleton__properties { min-height: 100%; }
+
+.arcigy-loading-skeleton__canvas { min-height: 54vh; }
+
+.arcigy-loading-skeleton__line { width: 100%; height: 14px; }
+.arcigy-loading-skeleton__line--title { width: min(260px, 68%); height: 24px; }
+.arcigy-loading-skeleton__line--short { width: min(160px, 45%); }
+
+.arcigy-loading-skeleton__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.arcigy-loading-skeleton__cards i { min-height: 108px; }
+
+@keyframes arcigySkeletonShimmer {
+  to { background-position-x: -220%; }
+}
+
+@media (max-width: 800px) {
+  .arcigy-loading-skeleton--screen { padding: 12px; }
+  .arcigy-loading-skeleton__body { grid-template-columns: 62px minmax(0, 1fr); }
+  .arcigy-loading-skeleton__properties { display: none; }
+  .arcigy-loading-skeleton__cards { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arcigy-loading-skeleton-host--icon,
+  .arcigy-loading-skeleton__topbar,
+  .arcigy-loading-skeleton__sidebar,
+  .arcigy-loading-skeleton__canvas,
+  .arcigy-loading-skeleton__properties,
+  .arcigy-loading-skeleton__line,
+  .arcigy-loading-skeleton__cards i { animation: none; }
+}

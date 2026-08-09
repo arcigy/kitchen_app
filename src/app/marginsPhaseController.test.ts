@@ -158,6 +158,34 @@ describe("margins phase controller", () => {
     await controller.close();
   });
 
+  it("replaces a previously loaded Margins view with a skeleton until the refreshed server view arrives", async () => {
+    const container = document.createElement("section");
+    const footer = document.createElement("footer");
+    document.body.append(container, footer);
+    let resolveCurrent!: (value: ProjectMarginsView) => void;
+    const currentLoad = new Promise<ProjectMarginsView>((resolve) => { resolveCurrent = resolve; });
+    const controller = createMarginsPhaseController({
+      container,
+      footerContainer: footer,
+      getProjectId: () => "project-1",
+      api: { loadProjectMargins: vi.fn().mockResolvedValueOnce(view(1)).mockReturnValueOnce(currentLoad) }
+    });
+
+    await controller.open();
+    expect(container.querySelector("[data-margin-group]")).not.toBeNull();
+    await controller.close();
+
+    const opening = controller.open();
+    expect(container.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
+    expect(footer.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
+    expect(container.querySelector("[data-margin-group]")).toBeNull();
+    resolveCurrent(view(2));
+    await opening;
+
+    expect(controller.getView()).toMatchObject({ revision: 2 });
+    expect(container.querySelector("[data-margin-group]")).not.toBeNull();
+  });
+
   it("reloads the authoritative state after a revision conflict", async () => {
     const loadProjectMargins = vi.fn()
       .mockResolvedValueOnce(view(3))

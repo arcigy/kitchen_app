@@ -5,6 +5,7 @@ import type { AppState, LayoutInstance } from "../layout/appState";
 import { buildProjectMaterialUsageSummary } from "../layout/bom/materialUsageSummary";
 import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materialsPhasePanel";
 import { showComingSoonDialog } from "../ui/comingSoonDialog";
+import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
@@ -188,14 +189,25 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.materialsPhase.warningsEl.hidden = false;
     materialsPhaseActive = true;
     if (args.materialsController) {
-      args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning-empty">Načítavam varovania…</p>`;
+      const materialsLoading = mountLoadingSkeleton(args.materialsPhase.hostEl, {
+        variant: "phase",
+        label: "Načítavam materiály projektu"
+      });
+      const warningsLoading = mountLoadingSkeleton(args.materialsPhase.warningListEl, {
+        variant: "phase",
+        label: "Načítavam varovania materiálov"
+      });
       void args.materialsController.open()
         .then((view) => {
           if (!materialsPhaseActive) return;
+          materialsLoading.clear();
+          warningsLoading.clear();
           args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(view.warnings);
         })
         .catch((error: unknown) => {
           if (!materialsPhaseActive) return;
+          materialsLoading.clear();
+          warningsLoading.clear();
           const message = error instanceof Error ? error.message : "Materiály sa nepodarilo načítať.";
           args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">Materiály sa nedajú bezpečne otvoriť, pretože projekt sa nepodarilo uložiť. ${escapeHtml(message)}</p>`;
           args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning">${escapeHtml(message)}</p>`;
@@ -227,10 +239,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.marginsPhase.hostEl.hidden = false;
     args.marginsPhase.footerEl.hidden = false;
     marginsPhaseActive = true;
+    const marginsLoading = mountLoadingSkeleton(args.marginsPhase.hostEl, {
+      variant: "phase",
+      label: "Načítavam marže projektu"
+    });
+    const footerLoading = mountLoadingSkeleton(args.marginsPhase.footerEl, {
+      variant: "phase",
+      label: "Načítavam súhrn marží"
+    });
     const opening = args.marginsController.open();
     marginsOpenPromise = opening;
     void opening.catch((error: unknown) => {
       if (!marginsPhaseActive || !args.marginsPhase) return;
+      marginsLoading.clear();
+      footerLoading.clear();
       const message = error instanceof Error ? error.message : "Marže sa nepodarilo načítať.";
       args.marginsPhase.hostEl.innerHTML = `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">Marže sa nedajú bezpečne otvoriť. ${escapeHtml(message)}</p>`;
     }).finally(() => {
