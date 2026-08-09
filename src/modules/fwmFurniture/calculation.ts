@@ -15,7 +15,12 @@ import { mapFwmCatalogCornerToCornerShelfLowerParams } from "./catalogCornerAdap
 import { resolveDrawerDepthLayout } from "./depthLayout";
 import { getFwmFurnitureSpec } from "./definitions";
 import { normalizeFwmFurnitureParams, type FwmFurnitureParams } from "./types";
-import { groupDrawerFrontHeights, parseDrawerFrontHeights } from "../drawers/drawerHeightContract";
+import {
+  drawerRunnerVariantKey,
+  drawerRunnerVariantLabel,
+  groupDrawerFrontHeights,
+  parseDrawerFrontHeights
+} from "../drawers/drawerHeightContract";
 
 const BASE_BOTTLE_PULLOUT_MODULE_TYPE = "base_bottle_pullout";
 
@@ -676,12 +681,14 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
       ? drawerFrontHeights
       : Array.from({ length: drawerCount }, () => Math.max(1, (height - plinth) / drawerCount));
     for (const bucket of groupDrawerFrontHeights(heights)) {
+      const variantKey = drawerRunnerVariantKey(bucket.frontHeightMm, boardT);
+      const variantLabel = drawerRunnerVariantLabel(bucket.frontHeightMm, boardT);
       hardware.push({
-        id: `runners-${bucket.variantKey}`,
+        id: `runners-${variantKey}`,
         itemType: "hardware",
         category: "runner",
-        name: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
-        description: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+        name: `Zásuvkové výsuvy · ${variantLabel}`,
+        description: `Zásuvkové výsuvy · ${variantLabel}`,
         pricingBasis: "piece",
         pricingUnit: "pcs",
         quantity: bucket.count,
@@ -692,9 +699,9 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
         pricingLookup: null,
         pricingGroup: "hardware",
         pricingQuantityBase: bucket.count,
-        variantKey: bucket.variantKey,
-        variantLabel: bucket.variantLabel,
-        notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela cez Materiály alebo Supplier Bridge."]
+        variantKey,
+        variantLabel,
+        notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela a hrúbky korpusu cez Materiály alebo Supplier Bridge."]
       });
     }
   }

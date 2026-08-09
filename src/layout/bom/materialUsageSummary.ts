@@ -6,6 +6,7 @@ import type { KitchenGroup, KitchenWorktopInstance, LayoutInstance } from "../ap
 import type { PortableQuoteBomItem, PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { calculateModuleBOM } from "./calculateBOM";
 import { buildProjectPricingViews } from "./projectPricing";
+import { projectMaterialCategoryForBomItem } from "./projectMaterialCategory";
 
 export type MaterialUsageGroupId =
   | "corpus"
@@ -62,16 +63,7 @@ export type ProjectMaterialUsageInput = {
 };
 
 function scopeCategory(item: PortableQuoteBomItem): MaterialAssignmentCategory | null {
-  if (item.itemType === "edge_band") return String(item.materialGroup).toLowerCase().includes("front") ? "edge_front" : "edge_other";
-  if (item.itemType === "hardware") {
-    const type = item.component?.componentType;
-    if (type === "handle" || type === "hinge" || type === "runner" || type === "lift_up" || type === "leg") return type;
-    return type === "fastener" || type === "plinth_clip" || type === "shelf_support" || type === "hanging_bracket" ? "fastener" : "other_component";
-  }
-  const group = String(item.materialGroup ?? item.material?.boardFamily ?? "").toLowerCase();
-  if (["corpus", "carcass", "body", "shelf"].includes(group)) return "corpus";
-  if (group === "front" || group === "worktop" || group === "plinth" || group === "back" || group === "drawer_bottom") return group;
-  return null;
+  return projectMaterialCategoryForBomItem(item);
 }
 
 function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem[] {
@@ -99,14 +91,15 @@ function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem
       unit = "m2";
     }
     if (quantity == null) return [];
+    const runnerVariantLabel = category === "runner" ? item.variantLabel : undefined;
     return [{
       id: item.id,
       category,
       ...(item.variantKey ? { variantKey: item.variantKey } : {}),
-      label: item.description || item.name || item.id,
-      description: item.dimensionsMm
+      label: category === "runner" ? "Zásuvkové výsuvy" : item.description || item.name || item.id,
+      description: runnerVariantLabel ?? (item.dimensionsMm
         ? `${Math.round(item.dimensionsMm.length)} × ${Math.round(item.dimensionsMm.width)} × ${Math.round(item.dimensionsMm.thickness)} mm`
-        : item.component?.componentType ?? item.materialGroup ?? "Komponent",
+        : item.component?.componentType ?? item.materialGroup ?? "Komponent"),
       quantity: Math.round(quantity * 10_000) / 10_000,
       unit,
       pieces
