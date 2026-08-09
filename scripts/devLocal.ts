@@ -7,7 +7,7 @@ const nodeBin = process.execPath;
 const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
 const viteCli = path.join(process.cwd(), "node_modules", "vite", "bin", "vite.js");
 const host = "127.0.0.1";
-const vitePort = 5180;
+const vitePort = Number(process.env.KITCHEN_UI_PORT || 5180);
 const workerPort = Number(process.env.BLENDER_WORKER_PORT || 5191);
 
 async function assertPortAvailable(port: number, label: string) {

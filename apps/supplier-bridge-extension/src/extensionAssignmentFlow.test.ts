@@ -5,6 +5,8 @@ import type { CapturedSupplierCandidate } from "./messages";
 import type { ExtensionMaterialTarget } from "./materialTargetModel";
 import { runExtensionAssignment } from "./extensionAssignmentFlow";
 
+vi.stubGlobal("__SUPPLIER_BRIDGE_DEBUG__", true);
+
 const target: ExtensionMaterialTarget = {
   id: "material-assignment:corpus",
   category: "corpus",
@@ -90,5 +92,19 @@ describe("standalone extension assignment flow", () => {
 
     expect(result).toEqual({ sessionId: "session-1", materials: null, refreshError: refreshFailure });
     expect(deps.confirmCandidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the verified backend supplier only for the debug simulator fixture", async () => {
+    const { deps } = fixtures();
+
+    await runExtensionAssignment({ ...input, supplierId: "mock-supplier" }, deps);
+
+    expect(deps.createSession).toHaveBeenCalledWith(
+      input.baseUrl,
+      input.accessToken,
+      input.projectId,
+      "demos",
+      expect.anything()
+    );
   });
 });

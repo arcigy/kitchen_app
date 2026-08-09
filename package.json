@@ -19,7 +19,7 @@
     "test": "vitest run",
     "test:supplier-bridge": "vitest run src/core/supplier-bridge apps/supplier-bridge-extension/src",
     "test:supplier-bridge:integration": "vitest run src/server/workerServer.test.ts --testNamePattern=\"supplier bridge\"",
-    "test:supplier-bridge:e2e": "node scripts/testSupplierBridgeE2E.mjs",
+    "test:supplier-bridge:e2e": "npm run build:debug && node scripts/testSupplierBridgeE2E.mjs",
     "preview": "vite preview",
     "blender:from-json": "tsx scripts/blender/fromJson.ts",
     "import:modpkg": "tsx scripts/importModpkg.ts",

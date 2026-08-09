@@ -56,7 +56,10 @@ export async function runExtensionAssignment(
   input: ExtensionAssignmentInput,
   deps: AssignmentDependencies = dependencies
 ): Promise<ExtensionAssignmentResult> {
-  const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, input.supplierId, {
+  const supplierIdForBackend = __SUPPLIER_BRIDGE_DEBUG__ && input.supplierId === "mock-supplier"
+    ? "demos"
+    : input.supplierId;
+  const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, supplierIdForBackend, {
     requestId: `extension-${deps.randomId()}`,
     materialAssignmentId: input.target.id,
     supplierProductId: input.candidate.supplierProductCode,

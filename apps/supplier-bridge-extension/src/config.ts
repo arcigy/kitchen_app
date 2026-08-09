@@ -15,6 +15,13 @@ export const supplierPortals = {
 export type ConfiguredSupplierId = keyof typeof supplierPortals;
 
 export function configuredSupplierPortal(supplierId: string) {
+  if (supplierId === "mock-supplier" && supplierBridgeBuild.debug && supplierBridgeBuild.supplierSimulatorOrigins.length > 0) {
+    return {
+      label: "Supplier simulator",
+      startUrl: supplierBridgeBuild.supplierSimulatorOrigins[0]!,
+      origins: supplierBridgeBuild.supplierSimulatorOrigins
+    };
+  }
   return supplierId in supplierPortals ? supplierPortals[supplierId as ConfiguredSupplierId] : null;
 }
 
@@ -31,13 +38,20 @@ export function backendBaseUrlForArcigyOrigin(origin: string): string {
   if (__SUPPLIER_BRIDGE_DEBUG__) {
     if (origin === "http://127.0.0.1:5180") return "http://127.0.0.1:5191";
     if (origin === "http://localhost:5180") return "http://localhost:5191";
+    if (origin === "http://127.0.0.1:5184") return "http://127.0.0.1:5194";
+    if (origin === "http://localhost:5184") return "http://localhost:5194";
   }
   return origin;
 }
 
-export function supplierSimulatorSearchUrl(query: string): string | null {
+export function supplierSimulatorSearchUrl(query: string, arcigyOrigin?: string): string | null {
   if (!__SUPPLIER_BRIDGE_DEBUG__) return null;
-  const origin = supplierBridgeBuild.supplierSimulatorOrigins[0];
+  const origin = arcigyOrigin === "http://127.0.0.1:5184"
+    ? "http://127.0.0.1:5195"
+    : arcigyOrigin === "http://localhost:5184"
+      ? "http://localhost:5195"
+      : supplierBridgeBuild.supplierSimulatorOrigins[0];
+  if (!supplierBridgeBuild.supplierSimulatorOrigins.includes(origin)) return null;
   if (!origin) return null;
   const url = new URL("/search", origin);
   url.searchParams.set("query", query);
