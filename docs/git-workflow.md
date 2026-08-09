@@ -1,111 +1,73 @@
 # Git workflow
 
-This repository uses a protected branch workflow so unstable refactors and fixes do not reach production by accident.
+This repository uses a protected `develop` workflow. The objective is simple:
+every completed, verified feature becomes available for founder testing on the
+online `develop` environment without risking `main` or another active task.
 
-## Branches
+## Branches and responsibilities
 
-### `main`
+| Branch | Purpose | Who tests it |
+| --- | --- | --- |
+| `main` | Production only. Never receive a direct push. | Founder approves a release after online `develop` QA. |
+| `develop` | Shared, CI-verified integration branch. | Founder tests finished work online here. |
+| `feature/*`, `fix/*` | One isolated implementation task. | Codex implements, tests, commits, pushes and opens a PR. |
+| `release/*` | Optional stabilization-only release preparation. | Founder approves promotion to `main`. |
 
-- Production branch.
-- Must always represent the latest stable production-ready version.
-- Do not commit directly to `main`.
-- Production deploys should run only from `main`.
+An active Codex chat should normally display its own `feature/*` or `fix/*`
+branch. That is intentional. A Git branch cannot safely be checked out as
+`develop` in every concurrent worktree; the online test target is always the
+single shared `develop` branch.
 
-### `staging`
+## Autonomous feature delivery
 
-- Test branch for changes before production.
-- Feature branches are merged here first.
-- Manual QA and release checklist verification happen here.
-- After staging is verified, `staging` is merged into `main`.
+When the founder asks Codex to implement a feature or correction, this whole
+flow is automatic. The founder does **not** need to separately ask for commit,
+push, PR, merge, or deploy to `develop`.
 
-### `feature/*`
+1. Inspect `git status`, fetch `origin`, and start one branch from current
+   `origin/develop`.
+2. Implement the smallest compatible scope and add focused regression tests.
+3. Run required checks: at least `npm run typecheck`, `npm test`, and
+   `npm run build`; also run UI/browser checks when the change affects UI or
+   editor behavior.
+4. Re-check the diff and ensure it has no generated `dist/`, secrets,
+   customer data, or unrelated worktree changes.
+5. Commit the scoped change, push its branch, and open a PR to `develop`.
+6. Wait for required CI. If CI is green and no review blocker exists, merge the
+   PR through GitHub into `develop`.
+7. Fast-forward the canonical `develop` checkout and report the exact online
+   test scenario to the founder.
 
-- Isolated branch for one fix, refactor, or feature.
-- Keep each branch small and focused.
-- Open Pull Requests from `feature/*` into `staging`.
-- Do not merge directly from `feature/*` into `main`.
+If `develop` changed while the task was open, Codex first integrates current
+`origin/develop`, resolves conflicts deliberately, and repeats the affected
+checks before opening or merging the PR.
 
-## Start a new fix
+## Founder test loop
 
-```bash
-git checkout staging
-git pull origin staging
-git checkout -b feature/nazov-opravy
-```
+After a PR is merged, the founder tests the online `develop` environment and
+responds with one of:
 
-Make the change, then run the relevant checks:
+- `Otestované, funguje.` The feature remains in `develop`.
+- `Na develope nefunguje: [repro, expected, actual].` Codex opens a new
+  `fix/*` branch and repeats the autonomous delivery flow.
+- `Develop je ako celok otestovaný. Priprav release do main.` Codex prepares a
+  release PR; `main` is changed only after explicit founder approval.
 
-```bash
-npm run typecheck --if-present
-npm run lint --if-present
-npm run test --if-present
-npm run build
-```
+## Worktree safety
 
-Commit and push:
-
-```bash
-git add .
-git commit -m "Fix: short description"
-git push -u origin feature/nazov-opravy
-```
-
-Then open a Pull Request:
-
-```text
-feature/nazov-opravy -> staging
-```
-
-## Merge into staging
-
-Before merging into `staging`:
-
-- CI must pass.
-- The change must be reviewed.
-- The affected workflow must be manually tested.
-- The release checklist should be updated if the workflow changed.
-
-After merge:
-
-```bash
-git checkout staging
-git pull origin staging
-npm run build
-```
-
-Run manual QA using `docs/release-checklist.md`.
-
-## Promote staging to production
-
-Only after staging is verified:
-
-```bash
-git checkout main
-git pull origin main
-git merge --no-ff staging
-npm run build
-git push origin main
-```
-
-Production deploy should run from `main`.
+- One active task per worktree and one scoped branch per task.
+- Before any branch switch, inspect `git status`.
+- Preserve unfinished work with a WIP commit on its own branch or a named
+  stash. Never use `reset --hard`, `clean -fd`, or a forced checkout to switch
+  contexts.
+- Never merge untested WIP branches merely to make a branch label say
+  `develop`.
 
 ## Never do this
 
-- Do not commit directly to `main`.
-- Do not force push shared branches.
-- Do not delete branches unless the work is already merged and confirmed.
-- Do not merge untested code into `main`.
-- Do not commit `.env`, secrets, API keys, or private customer data.
-- Do not mix large refactors with bug fixes in one branch.
-- Do not bypass failing CI without writing down the reason.
-- Do not deploy from `feature/*` to production.
-
-## Deployment recommendation
-
-Hosting is not configured in this repository yet.
-
-Recommended mapping:
-
-- Production deploy: `main`
-- Staging deploy: `staging`
-- Preview deploys: `feature/*`, if the hosting provider supports previews
+- Push directly to `main` or `develop`.
+- Force-push a shared branch.
+- Merge failing CI, bypass a review blocker, or mix unrelated work in one PR.
+- Commit `.env`, API keys, tokens, customer projects, exports, or generated
+  `dist/` output.
+- Promote `develop` to `main` without the founder's explicit online approval.

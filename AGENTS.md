@@ -5,7 +5,7 @@ Scope: whole repository.
 ## Git Safety
 
 - Before any GitHub, push, pull, merge, branch, PR, or release operation, read and follow `docs/git-github-codex-workflow.md`.
-- Do not create or switch branches unless the user explicitly asks.
+- When the user asks to implement a scoped feature or fix, creating and switching to one dedicated feature/fix branch from current `origin/develop` is already authorized. Do not create or switch unrelated branches.
 - Never push directly to `main` unless the user explicitly approves a tested release.
 - For a completed Kitchen App change whose required automated checks pass, automatically publish its branch through a PR to `develop`; the founder tests the result online on `develop`.
 - Never push directly to `develop`; use the protected PR workflow and merge only after its required checks pass.
@@ -16,11 +16,27 @@ Scope: whole repository.
 ### Founder delivery override
 
 The founder explicitly wants every verified, scoped change visible remotely.
-After the relevant tests pass, Codex must commit and push the current working
-branch without waiting for a separate "tested locally" message. This override
-applies to feature and fix branches only: never push directly to `main` or
-`develop`, never include unrelated dirty files, and never commit secrets or
-customer data. Report the branch, commit, and push in the handoff.
+After the relevant tests pass, Codex must autonomously complete the full
+feature/fix delivery flow without waiting for separate messages such as
+"commit it", "push it", or "merge it":
+
+1. fetch `origin/develop` and integrate it into the scoped branch if needed;
+2. re-run the checks affected by that integration;
+3. commit only the reviewed scope, never `dist/`, secrets, or customer data;
+4. push the feature/fix branch and open a PR to `develop`;
+5. wait for required CI; if it is green and there are no unresolved review
+   blockers, merge the PR through the protected PR workflow into `develop`;
+6. update the canonical `develop` checkout and report the online `develop`
+   test path to the founder.
+
+The founder tests completed work online on `develop`. A feature/fix branch is
+therefore the expected active-chat branch; do not try to force every worktree
+or chat onto `develop`. Never push directly to `main` or `develop`, never
+include unrelated dirty files, and never commit secrets or customer data.
+
+Only these steps still require explicit founder approval: a production/main
+release, live customer-data mutation or migration, destructive cleanup, and
+any unresolved CI or review exception.
 
 ## Product Rules
 
