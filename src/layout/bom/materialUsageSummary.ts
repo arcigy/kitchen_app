@@ -2,6 +2,7 @@ import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { MaterialAssignmentCategory, ProjectMaterialScope, ProjectMaterialScopeItem } from "../../core/project-materials/project-material-types";
 import type { KitchenContext } from "../kitchenContext";
 import type { CustomFurnitureInstance } from "../customFurnitureTypes";
+import type { LedStripGroup } from "../ledStripTypes";
 import type { KitchenGroup, KitchenWorktopInstance, LayoutInstance } from "../appState";
 import type { PortableQuoteBomItem, PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { calculateModuleBOM } from "./calculateBOM";
@@ -16,7 +17,8 @@ export type MaterialUsageGroupId =
   | "back"
   | "drawer_bottom"
   | "edge"
-  | "hardware";
+  | "hardware"
+  | "lighting";
 
 export type MaterialUsageUnit = "m2" | "lm" | "pcs";
 
@@ -57,6 +59,7 @@ export type ProjectMaterialUsageInput = {
   instances: readonly LayoutInstance[];
   worktops: readonly KitchenWorktopInstance[];
   customFurniture: readonly CustomFurnitureInstance[];
+  ledStripGroups?: readonly LedStripGroup[];
   kitchenContext: KitchenContext;
   kitchenGroups: readonly KitchenGroup[];
   catalog: ClientCatalog;
@@ -123,7 +126,7 @@ export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): Pr
       // The summary warning path reports malformed modules without hiding valid module scopes.
     }
   }
-  for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog)) {
+  for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog, [...(input.ledStripGroups ?? [])])) {
     scopes.push({ id: `addition:${addition.instanceId}`, kind: "addition", label: addition.label, items: scopeItems(addition.result.quoteBom) });
   }
   return scopes;
@@ -139,7 +142,8 @@ const GROUPS: readonly GroupConfig[] = [
   { id: "back", label: "Chrbát", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "drawer_bottom", label: "Dná zásuviek", unit: "m2", itemLabel: "doska", alwaysVisible: false },
   { id: "edge", label: "Hrany", unit: "lm", itemLabel: "hrana", alwaysVisible: true },
-  { id: "hardware", label: "Úchytky a kovanie", unit: "pcs", itemLabel: "ks", alwaysVisible: true }
+  { id: "hardware", label: "Úchytky a kovanie", unit: "pcs", itemLabel: "ks", alwaysVisible: true },
+  { id: "lighting", label: "LED pásiky", unit: "m2", itemLabel: "m2", alwaysVisible: true }
 ];
 
 const GROUP_BY_ID = new Map(GROUPS.map((group) => [group.id, group]));
@@ -161,7 +165,7 @@ export function buildProjectMaterialUsageSummary(input: ProjectMaterialUsageInpu
   }
 
   try {
-    const supportingEntries = buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog);
+    const supportingEntries = buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog, [...(input.ledStripGroups ?? [])]);
     for (const entry of supportingEntries) quoteBoms.push({ source: entry.instanceId, quoteBom: entry.result.quoteBom });
   } catch (error) {
     warnings.push(`Pracovné dosky alebo vlastný nábytok: materiály sa nepodarilo vypočítať (${errorMessage(error)}).`);
@@ -194,7 +198,7 @@ export function summarizeMaterialUsage(
     } satisfies MaterialUsageGroup;
   });
 
-  const boardGroups = groups.filter((group) => group.unit === "m2");
+  const boardGroups = groups.filter((group) => group.unit === "m2" && group.id !== "lighting");
   const edgeGroup = groups.find((group) => group.id === "edge");
   const hardwareGroup = groups.find((group) => group.id === "hardware");
 
@@ -261,6 +265,7 @@ function addBomItem(
 }
 
 function materialUsageGroupFor(item: PortableQuoteBomItem): MaterialUsageGroupId | null {
+  if (item.itemType === "lighting") return "lighting";
   if (item.itemType === "edge_band") return "edge";
   if (item.itemType === "hardware") return "hardware";
 
@@ -294,6 +299,7 @@ function usageQuantity(item: PortableQuoteBomItem, group: GroupConfig): number |
 }
 
 function usageRoleFor(item: PortableQuoteBomItem): string {
+  if (item.itemType === "lighting") return "lighting";
   if (item.itemType === "hardware") return item.component?.componentType ?? item.materialGroup ?? item.category ?? "other_component";
   if (item.itemType === "edge_band") return item.material?.edgeFamily ?? item.materialGroup ?? "other";
   return item.materialGroup ?? item.material?.boardFamily ?? item.category;

@@ -137,6 +137,7 @@ type ClassicTopbarControllerContext = {
   redo: (S: AppState, helpers: HistoryHelpers) => void;
   setToolAlign: () => void;
   setToolDimension: () => void;
+  setToolLed: () => void;
   setToolMeasure: () => void;
   setToolSection: () => void;
   setToolSelect: () => void;
@@ -283,6 +284,8 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   const addKitchenTab = (row: HTMLElement) => {
     ctx.kitchenMode?.mountModuleCatalog(document.getElementById("moduleCatalog"));
     ctx.kitchenMode?.mountTopbar(row);
+    const led = ctx.tb.addGroup("LED", { row });
+    addButton(led, { title: "LED pásik", label: "LED pásik", iconSvg: ctx.I_MATERIAL_EDIT, onClick: ctx.setToolLed });
     const auto = ctx.tb.addGroup("Auto", { row });
     addButton(auto, { title: "Fit selected module into gap", label: "Fit gap", iconSvg: ctx.I_FIT_GAP, onClick: ctx.fitSelectedKitchenModuleToGap });
   };

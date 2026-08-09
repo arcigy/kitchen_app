@@ -259,6 +259,7 @@ import { createDetailViewController } from "./app/detailViewController";
 import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
+import { createLedStripDrawController } from "./app/ledStripDrawController";
 import { createKitchenWorktopDrawSnapResolver } from "./app/pointerKitchenWorktopDrawClickHelpers";
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 import { createEditHudController } from "./app/editHudController";
@@ -387,7 +388,7 @@ export function startApp(initialArgs: AppArgs) {
   const setViewerPanActive = (active: boolean) => viewerToolModeController?.setPanActive(active);
   const cancelViewerToolMode = () => viewerToolModeController?.cancel();
 
-  type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+  type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewController!: ReturnType<typeof createDetailViewController>;
@@ -719,6 +720,7 @@ export function startApp(initialArgs: AppArgs) {
     instances: S.instances,
     worktops: S.kitchenWorktops,
     customFurniture: S.customFurniture,
+    ledStripGroups: S.ledStripGroups,
     kitchenContext: S.kitchenCtx,
     kitchenGroups: S.kitchenGroups,
     catalog: clientCatalog
@@ -1393,7 +1395,7 @@ export function startApp(initialArgs: AppArgs) {
     updateSelectionHighlights,
     wallDraw,
     get wallTypedHud() { return wallTypedHud; },
-    get layoutTool() { return layoutTool; }, set layoutTool(next: LayoutTool) { layoutTool = next; },
+    get layoutTool() { return layoutTool as Exclude<LayoutTool, "led">; }, set layoutTool(next: Exclude<LayoutTool, "led">) { layoutTool = next; },
     get measurePlanSnap() { return measurePlanSnapController.measurePlanSnap; }, set measurePlanSnap(next: PlanSnapResult | null) { measurePlanSnapController.measurePlanSnap = next; },
     get mode() { return mode; },
     get selectedFloorId() { return selectedFloorId; }, set selectedFloorId(next: string | null) { selectedFloorId = next; },
@@ -2201,6 +2203,20 @@ export function startApp(initialArgs: AppArgs) {
     recordActivity: (label) => recentActivityController.record(label)
   });
   const mountProps = () => propertiesRouter.mountProps();
+  const ledStripDrawController = createLedStripDrawController({
+    S,
+    layoutRoot,
+    commitHistory: () => commitHistory(S),
+    mountProps,
+    setStatus: setUnderlayStatus
+  });
+  const setToolLed = () => {
+    cancelViewerToolMode();
+    ensureLayoutMode();
+    clearWallDrawState();
+    layoutTool = "led";
+    ledStripDrawController.startCustom();
+  };
 
 
 
@@ -2246,6 +2262,10 @@ export function startApp(initialArgs: AppArgs) {
     restoreColumns: restoreColumnsFromSnapshot,
     restoreSections: restoreSectionsFromSnapshot,
     restoreWorktops: restoreKitchenWorktopsFromSnapshot,
+    restoreLedStripGroups: (groups, ledStripCounter) => {
+      S.ledStripGroups.splice(0, S.ledStripGroups.length, ...groups);
+      S.ledStripCounter = ledStripCounter ?? S.ledStripCounter;
+    },
     restoreWardrobe: (state) => wardrobeMode?.restoreSaveState(state),
     clearToolHud,
     mountProps,
@@ -2640,6 +2660,7 @@ export function startApp(initialArgs: AppArgs) {
     redo,
     setToolAlign,
     setToolDimension,
+    setToolLed,
     setToolMeasure,
     setToolSection,
     setToolSelect,
@@ -2885,7 +2906,7 @@ export function startApp(initialArgs: AppArgs) {
     updateSelectionHighlights,
     walls,
     get kitchenMode() { return kitchenMode; },
-    get layoutTool() { return layoutTool; }, set layoutTool(next: LayoutTool) { layoutTool = next; },
+    get layoutTool() { return layoutTool as Exclude<LayoutTool, "led">; }, set layoutTool(next: Exclude<LayoutTool, "led">) { layoutTool = next; },
     get selectedColumnId() { return selectedColumnId; }, set selectedColumnId(next: string | null) { selectedColumnId = next; },
     mountProps: () => mountProps(),
     get selectedFloorId() { return selectedFloorId; }, set selectedFloorId(next: string | null) { selectedFloorId = next; },
@@ -3788,7 +3809,7 @@ export function startApp(initialArgs: AppArgs) {
     isWindowPlacementActive,
     isTypingTarget,
     kitchenWorktopDraw,
-    get layoutTool() { return layoutTool; }, set layoutTool(next) { layoutTool = next; },
+    get layoutTool() { return layoutTool as Exclude<LayoutTool, "led">; }, set layoutTool(next) { layoutTool = next; },
     marquee,
     measureState,
     mirrorKitchenWorktopDraw,
@@ -3846,6 +3867,7 @@ export function startApp(initialArgs: AppArgs) {
 
   installPointerInputHandlers({
     S,
+    ledStripDrawController,
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addFloorEditSegment,
     addMeasurement,

@@ -17,7 +17,7 @@ function nullableString(value: unknown): value is string | null { return value =
 function finite(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 const assignmentCategories = new Set([
   "corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "edge_front", "edge_other",
-  "handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component"
+  "handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component", "lighting"
 ]);
 
 function parseSession(value: unknown): SupplierSyncSession | null {

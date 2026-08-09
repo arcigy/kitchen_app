@@ -17,7 +17,8 @@ export type MaterialAssignmentCategory =
   | "lift_up"
   | "leg"
   | "fastener"
-  | "other_component";
+  | "other_component"
+  | "lighting";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };

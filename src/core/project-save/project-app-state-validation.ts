@@ -55,6 +55,44 @@ function validateWalls(walls: Record<string, unknown>[]): Map<string, { lengthMm
   return out;
 }
 
+function validateLedStripGroups(groups: Record<string, unknown>[]): void {
+  const groupIds = requireUniqueIds(groups, "ledStripGroups");
+  for (const group of groups) {
+    const id = idOf(group)!;
+    const params = paramsOf(group, "LED strip group");
+    const mode = typeof params.mode === "string" ? params.mode : "";
+    if (!new Set(["custom", "underUpper", "plinthJoint", "shelfJoint"]).has(mode)) {
+      throw new Error(`Project save LED strip group ${id} has unsupported mode.`);
+    }
+    numberAt(params.heightMm, `LED strip group ${id}.params.heightMm`);
+    numberAt(params.offsetMm, `LED strip group ${id}.params.offsetMm`);
+    if (params.profileWidthMm != null && numberAt(params.profileWidthMm, `LED strip group ${id}.params.profileWidthMm`) <= 0) {
+      throw new Error(`Project save LED strip group ${id} profile width must be positive.`);
+    }
+    const runs = asArray(group.runs);
+    if (mode === "custom" && runs.length !== 1) throw new Error(`Project save custom LED strip group ${id} must have one run.`);
+    const runIds = requireUniqueIds(runs, `LED strip group ${id} runs`);
+    if (runIds.size !== runs.length) throw new Error(`Project save LED strip group ${id} contains duplicate runs.`);
+    for (const run of runs) {
+      const points = Array.isArray(run.points) ? run.points.filter(isObject) : [];
+      if (points.length < 2) throw new Error(`Project save LED strip run ${idOf(run) ?? "?"} needs two points.`);
+      let previous: { x: number; y: number; z: number } | null = null;
+      for (const [index, point] of points.entries()) {
+        const current = {
+          x: numberAt(point.x, `LED strip run ${idOf(run) ?? "?"}.points[${index}].x`),
+          y: numberAt(point.y, `LED strip run ${idOf(run) ?? "?"}.points[${index}].y`),
+          z: numberAt(point.z, `LED strip run ${idOf(run) ?? "?"}.points[${index}].z`)
+        };
+        if (previous && Math.hypot(current.x - previous.x, current.y - previous.y, current.z - previous.z) < 0.01) {
+          throw new Error(`Project save LED strip run ${idOf(run) ?? "?"} has zero-length segment.`);
+        }
+        previous = current;
+      }
+    }
+  }
+  if (groupIds.size !== groups.length) throw new Error("Project save LED strip groups contains duplicate id.");
+}
+
 function validateOpenings(
   openings: Record<string, unknown>[],
   label: "window" | "door",
@@ -98,6 +136,7 @@ export function validateProjectAppState(appState: unknown): void {
   const sections = asArray(snapshot.sections);
   const worktops = asArray(snapshot.worktops);
   const customFurniture = asArray(snapshot.customFurniture);
+  const ledStripGroups = asArray(snapshot.ledStripGroups);
   const instances = asArray(snapshot.instances);
   const modules = asArray(appState.modules);
 
@@ -107,6 +146,7 @@ export function validateProjectAppState(appState: unknown): void {
   requireUniqueIds(sections, "sections");
   const worktopIds = requireUniqueIds(worktops, "worktops");
   requireUniqueIds(customFurniture, "customFurniture");
+  validateLedStripGroups(ledStripGroups);
   const instanceIds = requireUniqueIds(instances, "instances");
   const wallInfo = validateWalls(walls);
   validateOpenings(windows, "window", wallInfo);

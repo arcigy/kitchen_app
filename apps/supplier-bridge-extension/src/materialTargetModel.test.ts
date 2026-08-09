@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MaterialDefinition } from "../../../src/core/catalog/catalog-types";
 import type { ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
-import { extensionMaterialTargetGroups, extensionMaterialTargets } from "./materialTargetModel";
+import { extensionMaterialTargetGroups, extensionMaterialTargets, materialCategoryLabels } from "./materialTargetModel";
 
 const view: ProjectMaterialsView = {
   assignments: {
@@ -61,6 +61,10 @@ const view: ProjectMaterialsView = {
 };
 
 describe("extension material target model", () => {
+  it("labels lighting assignments for the supplier bridge", () => {
+    expect(materialCategoryLabels.lighting).toBe("Osvetlenie");
+  });
+
   it("keeps same-named modules in separate collapsible groups", () => {
     const groups = extensionMaterialTargetGroups(extensionMaterialTargets(view), "module");
     expect(groups).toHaveLength(2);

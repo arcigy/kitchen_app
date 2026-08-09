@@ -3,6 +3,7 @@ import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { getModuleDescriptor } from "../../modules/registry";
 import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
+import type { LedStripGroup } from "../ledStripTypes";
 import type { KitchenContext } from "../kitchenContext";
 import type { CustomFurnitureInstance } from "../customFurnitureTypes";
 import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
@@ -10,6 +11,7 @@ import { createCustomFurnitureBOM } from "./customFurniturePricing";
 import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
 import { buildProjectQuoteSummary, type ProjectQuoteSettingsInput } from "./projectQuote";
+import { createLedStripBOM } from "./ledStripPricing";
 
 export type WorktopFormulaView = {
   shapeKey: "I" | "L" | "U" | "custom";
@@ -22,7 +24,7 @@ export type WorktopFormulaView = {
 
 export type ProjectPricingView = {
   instanceId: string;
-  kind: "module" | "worktop" | "customFurniture";
+  kind: "module" | "worktop" | "customFurniture" | "ledStrip";
   label: string;
   result: BOMResult;
   worktopFormula?: WorktopFormulaView;
@@ -177,7 +179,8 @@ export function buildProjectPricingViews(
   worktops: KitchenWorktopInstance[],
   customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
-  catalog: ClientCatalog
+  catalog: ClientCatalog,
+  ledStripGroups: LedStripGroup[] = []
 ): ProjectPricingView[] {
   const counts = new Map<string, number>();
 
@@ -208,7 +211,14 @@ export function buildProjectPricingViews(
     result: createCustomFurnitureBOM(furniture, catalog)
   }));
 
-  return [...moduleViews, ...worktopViews, ...customFurnitureViews];
+  const ledStripViews = ledStripGroups.map((group) => ({
+    instanceId: group.id,
+    kind: "ledStrip" as const,
+    label: group.params.name,
+    result: createLedStripBOM(group, catalog)
+  }));
+
+  return [...moduleViews, ...worktopViews, ...customFurnitureViews, ...ledStripViews];
 }
 
 export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: ProjectQuoteSettingsInput) {

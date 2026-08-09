@@ -30,6 +30,7 @@ function normalizedGroup(item: PortableQuoteBomItem): string {
 export function projectMaterialCategoryForBomItem(
   item: PortableQuoteBomItem
 ): MaterialAssignmentCategory | null {
+  if (item.itemType === "lighting") return "lighting";
   if (item.itemType === "edge_band") {
     const family = String(item.material?.edgeFamily ?? item.materialGroup ?? item.category ?? "")
       .trim()

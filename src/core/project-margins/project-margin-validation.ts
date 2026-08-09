@@ -27,7 +27,8 @@ const MATERIAL_CATEGORIES: readonly MaterialAssignmentCategory[] = [
   "lift_up",
   "leg",
   "fastener",
-  "other_component"
+  "other_component",
+  "lighting"
 ];
 const PROJECT_MARGIN_CATEGORIES = new Set<ProjectMarginCategory>([...MATERIAL_CATEGORIES, "labor"]);
 

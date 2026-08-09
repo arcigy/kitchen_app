@@ -87,6 +87,7 @@ import {
 import { handleSectionDrawPointClick, updateSectionDrawPointerMoveHover } from "./pointerSectionDrawClickHelpers";
 import { handleKitchenWorktopDrawPointClick, updateKitchenWorktopDrawPointerMoveHover } from "./pointerKitchenWorktopDrawClickHelpers";
 import { handleWallDrawEndClick, handleWallDrawStartClick, updateActiveWallDrawPointerMoveHover, updateWallToolPointerMoveHover } from "./pointerWallDrawClickHelpers";
+import type { createLedStripDrawController } from "./ledStripDrawController";
 import type { SelectionHighlightTarget } from "./layoutVisuals";
 import {
   finishWallEditHudDragPointerUp,
@@ -365,6 +366,7 @@ type PointerInputHandlersDataContext = {
     previewRoot: unknown;
   };
   layoutRoot: THREE.Object3D;
+  ledStripDrawController?: ReturnType<typeof createLedStripDrawController>;
   layoutTool: LayoutTool;
   marquee: MarqueeState;
   marqueeEl: HTMLElement;
@@ -2022,6 +2024,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         return;
       }
 
+      if (ctx.layoutTool === "led") {
+        if (ev.button !== 0 || ctx.viewMode !== "2d" || !ctx.ledStripDrawController) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
+        const rect2 = ctx.renderer.domElement.getBoundingClientRect();
+        const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
+        ctx.ledStripDrawController.point(snapped.kind === "none" ? hitPoint : snapped.point);
+        return;
+      }
+
       if (ctx.layoutTool === "wall") {
         if (ev.button !== 0) return;
         // Place wall by 2 clicks on ground (XZ).
@@ -2642,6 +2654,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
         updateTypedHud: (typedMm, point) => updatePointerTypedHud(ctx.wallTypedHud, typedMm, point)
       });
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.layoutTool === "led" && ctx.ledStripDrawController?.state.active && ctx.viewMode === "2d") {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      if (!hitPoint) return;
+      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam());
+      ctx.ledStripDrawController.updatePreview(snapped.kind === "none" ? hitPoint : snapped.point);
       return;
     }
 
