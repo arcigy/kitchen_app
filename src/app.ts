@@ -197,6 +197,7 @@ import { createMarginsPhaseController } from "./app/marginsPhaseController";
 import { createModuleCommercialPropsController } from "./app/moduleCommercialPropsController";
 import { createSupplierBridgeWebController } from "./app/supplierBridgeWebController";
 import { createProjectAutosaveController } from "./app/project/projectAutosave";
+import { createFeedbackReportController } from "./app/feedbackReportController";
 import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
@@ -3214,9 +3215,9 @@ export function startApp(initialArgs: AppArgs) {
     marqueeEl.style.display = "none";
     wallTypedHud.style.display = "none";
   };
-  const buildProjectAppState = (): ProjectSaveFile["appState"] => {
-    customFurnitureMode?.commitActiveDraft();
-    recentActivityController.syncFromHistory();
+  const buildProjectAppState = (options: { commitDraft?: boolean; syncActivity?: boolean } = {}): ProjectSaveFile["appState"] => {
+    if (options.commitDraft ?? true) customFurnitureMode?.commitActiveDraft();
+    if (options.syncActivity ?? true) recentActivityController.syncFromHistory();
     const camera = cam();
     const controls = ctl() as { target?: unknown } | null | undefined;
     const target = controls?.target;
@@ -3535,7 +3536,25 @@ export function startApp(initialArgs: AppArgs) {
     redo(S, helpers);
   });
   tb.getQuickAction("cloud")?.addEventListener("click", () => showComingSoonDialog("Cloud synchronizácia"));
-  tb.getShareButton().addEventListener("click", () => showComingSoonDialog("Zdieľanie projektu"));
+  createFeedbackReportController({
+    trigger: tb.getShareButton(),
+    canvas: renderer.domElement,
+    buildProjectSnapshot: () => ({
+      project: projectActions.getState().currentProject,
+      saveRevision: projectActions.getState().saveRevision,
+      appState: buildProjectAppState({ commitDraft: false, syncActivity: false })
+    }),
+    getDiagnostics: () => ({
+      capturedAt: new Date().toISOString(),
+      appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
+      viewMode,
+      activeViewerTab,
+      layoutTool,
+      selection: { selectedKind, selectedInstanceId, selectedWallId, selectedFloorId, selectedColumnId, selectedSectionId },
+      viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
+      browser: navigator.userAgent
+    })
+  }).mount();
   tb.getTab("file")?.addEventListener("click", () => showComingSoonDialog("Súbor"));
   const buildSelectionController = createBuildSelectionController({
     S,

@@ -11,7 +11,7 @@ describe("coming-soon frontend bindings", () => {
 
     expect(source).toContain('showComingSoonDialog("Tlač projektu")');
     expect(source).toContain('showComingSoonDialog("Cloud synchronizácia")');
-    expect(source).toContain('showComingSoonDialog("Zdieľanie projektu")');
+    expect(source).toContain('createFeedbackReportController({');
     expect(source).toContain('showComingSoonDialog("Súbor")');
     expect(topbarShellSource).toContain("getShareButton: () => shareButton");
   });
