@@ -39,6 +39,23 @@ describe("HTTP request budget", () => {
     expect(decision).toMatchObject({ allowed: true, operation: "catalog" });
   });
 
+  it("limits feedback reports to ten per tenant each hour", () => {
+    const budget = createHttpRequestBudget();
+    for (let index = 0; index < 10; index += 1) {
+      const decision = budget.acquire(request("feedback_tenant"), new URL("http://local/api/feedback-reports"));
+      expect(decision).toMatchObject({ allowed: true, operation: "feedback-report" });
+      if (decision.allowed) {
+        const res = response();
+        decision.registerRelease(res);
+        res.emit("finish");
+      }
+    }
+    expect(budget.acquire(request("feedback_tenant"), new URL("http://local/api/feedback-reports"))).toMatchObject({
+      allowed: false,
+      operation: "feedback-report"
+    });
+  });
+
   it("does not budget unrelated application routes", () => {
     const budget = createHttpRequestBudget({ policies: [policy] });
     expect(budget.acquire(request(), new URL("http://local/api/projects")).allowed).toBe(true);

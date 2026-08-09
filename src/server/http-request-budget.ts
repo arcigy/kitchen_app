@@ -29,6 +29,7 @@ export const DEFAULT_HTTP_REQUEST_BUDGET_POLICIES: readonly HttpRequestBudgetPol
   { operation: "project-save", method: "POST", pathname: /^\/api\/projects\/[^/]+\/save$/, maxRequests: 600, windowMs: MINUTE_MS, maxConcurrent: 16 },
   { operation: "assistant", method: "POST", pathname: /^\/api\/assistant\/(turn|continue|rag\/reindex)$/, maxRequests: 120, windowMs: MINUTE_MS, maxConcurrent: 8 },
   { operation: "blender-export", method: "POST", pathname: /^\/api\/blender\/export$/, maxRequests: 30, windowMs: MINUTE_MS, maxConcurrent: 2 },
+  { operation: "feedback-report", method: "POST", pathname: /^\/api\/feedback-reports$/, maxRequests: 10, windowMs: 60 * MINUTE_MS, maxConcurrent: 2 },
   { operation: "demos-external", method: "GET", pathname: /^\/api\/demos\/(material-lookup|material-image)$/, maxRequests: 300, windowMs: MINUTE_MS, maxConcurrent: 16 }
 ];
 

@@ -14,6 +14,7 @@ import { handleProjectApi } from "./projectEndpoint";
 import { handleProjectMaterialsApi } from "./projectMaterialsEndpoint";
 import { handleProjectMarginsApi } from "./projectMarginsEndpoint";
 import { handleSupplierBridgeApi } from "./supplierBridgeEndpoint";
+import { handleFeedbackReportApi } from "./feedbackReportEndpoint";
 import type { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
 import type { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
 
@@ -139,6 +140,12 @@ export async function handleWorkerApiRequest(
       sendJson: context.sendJson
     })
   ) return;
+
+  if (await handleFeedbackReportApi(req, res, url, {
+    getContext: context.getClientContext,
+    readJsonBody: context.readJsonBody,
+    sendJson: context.sendJson
+  })) return;
 
   if (
     await handleProjectApi(req, res, url, {

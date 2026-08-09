@@ -5,6 +5,7 @@ const MEBIBYTE = 1024 * 1024;
 const DEFAULT_JSON_BODY_MB = 64;
 const PROJECT_IMPORT_OVERHEAD_MB = 16;
 const CLIENT_METRICS_BODY_MAX_BYTES = 8 * 1024;
+const FEEDBACK_REPORT_BODY_MAX_BYTES = 32 * MEBIBYTE;
 
 function positiveMbEnv(name: string): number | null {
   const parsed = Number(process.env[name]);
@@ -21,6 +22,7 @@ export class RequestBodyTooLargeError extends Error {
 export function getJsonBodyLimitBytes(req: Pick<http.IncomingMessage, "url">): number {
   const pathname = String(req.url ?? "").split("?", 1)[0];
   if (pathname === "/api/client-metrics") return CLIENT_METRICS_BODY_MAX_BYTES;
+  if (pathname === "/api/feedback-reports") return FEEDBACK_REPORT_BODY_MAX_BYTES;
   if (pathname === "/api/projects/import") {
     const configured = positiveMbEnv("HTTP_PROJECT_IMPORT_BODY_MAX_MB");
     if (configured) return Math.ceil(configured * MEBIBYTE);
