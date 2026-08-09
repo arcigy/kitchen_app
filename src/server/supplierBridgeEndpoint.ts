@@ -181,6 +181,28 @@ async function projectMaterialInputs(
     const definition = assignment.kind === "material"
       ? assignment.snapshots.material?.definition
       : assignment.snapshots.component?.definition;
+    // The extension deliberately allows selecting a supplier product for an
+    // unassigned project target. Such a target has no catalog snapshot yet,
+    // but the exact product code supplied by the extension is enough to start
+    // a session; the confirmation flow creates the supplier snapshot.
+    if (!definition && lookup) {
+      return [{
+        materialAssignmentId: materialAssignmentId ?? assignment.assignmentId,
+        assignmentCategory: assignment.category,
+        ...(assignment.variantKey ? { assignmentVariantKey: assignment.variantKey } : {}),
+        ...(targetLabel ? { targetLabel } : {}),
+        ...(targetScope ? { targetScope } : {}),
+        query: lookup.supplierProductId,
+        expectedManufacturer: lookup.expectedManufacturer ?? null,
+        expectedDecorCode: null,
+        expectedSurfaceCode: null,
+        expectedProductType: lookup.expectedProductType ?? manualTargetProductType(assignment.category),
+        expectedThicknessMm: lookup.expectedThicknessMm
+          ?? (assignment.kind === "material" ? assignment.thicknessMm : null)
+          ?? null,
+        exactLookup: { requestId: lookup.requestId, supplierId: lookup.supplierId, supplierProductId: lookup.supplierProductId }
+      }];
+    }
     if (!definition) return [];
     const metadata = definition.metadata && typeof definition.metadata === "object" && !Array.isArray(definition.metadata)
       ? definition.metadata

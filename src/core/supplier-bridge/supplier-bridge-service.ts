@@ -472,7 +472,11 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         throw new SupplierBridgeServiceError("Found supplier product ID does not exactly match the requested ID.", 422);
       }
       if (item.status === "confirmed" && item.selectedCandidateId === candidateId) return createSupplierSyncSessionView(authorized.aggregate);
-      if (candidate.conflicts.length > 0) {
+      // An extension target carries an exact supplier product ID selected by
+      // the user. Supplier pages often omit or misclassify thickness/type, so
+      // those metadata conflicts must not prevent that explicit assignment.
+      // The code equality check above remains the hard guard.
+      if (candidate.conflicts.length > 0 && !item.exactLookup) {
         throw new SupplierBridgeServiceError("Candidate has a hard product type or thickness conflict and cannot be confirmed.", 422);
       }
       const confirmedAt = now().toISOString();
