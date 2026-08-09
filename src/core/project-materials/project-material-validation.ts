@@ -21,7 +21,8 @@ const MATERIAL_ASSIGNMENT_CATEGORIES = new Set<MaterialAssignmentCategory>([
   "lift_up",
   "leg",
   "fastener",
-  "other_component"
+  "other_component",
+  "lighting"
 ]);
 
 function isObject(value: unknown): value is Record<string, unknown> {

@@ -32,7 +32,7 @@ export const materialCategoryLabels: Record<ProjectMaterialAssignment["category"
   corpus: "Korpus", front: "Fronty", worktop: "Pracovná doska", plinth: "Sokel", back: "Chrbát",
   drawer_bottom: "Dná zásuviek", edge_front: "Hrany frontov", edge_other: "Hrany korpusu",
   handle: "Úchytky", hinge: "Pánty", runner: "Zásuvkové výsuvy", lift_up: "Výklopy",
-  leg: "Nožičky", fastener: "Spojovací materiál", other_component: "Ostatné komponenty"
+  leg: "Nožičky", fastener: "Spojovací materiál", lighting: "Osvetlenie", other_component: "Ostatné komponenty"
 };
 
 function bridgeAssignment(assignment: ProjectMaterialAssignment | undefined): {

@@ -2,7 +2,7 @@ import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
 import type { TransformClearOptions, TransformState } from "./transformStateTypes";
 
-export type EditorLayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+export type EditorLayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
 
 export type EditorToolEntryContext = {
   S: AppState;

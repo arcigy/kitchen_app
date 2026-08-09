@@ -27,7 +27,7 @@ export type PortablePricingLookup = {
 
 export type PortableQuoteBomItem = {
   id: string;
-  itemType: "board" | "edge_band" | "hardware";
+  itemType: "board" | "edge_band" | "hardware" | "lighting";
   category: string;
   name: string;
   description: string;
@@ -977,7 +977,8 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     if (
       (nextItem.itemType === "board" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2")) ||
       (nextItem.itemType === "edge_band" && (nextItem.pricingBasis !== "linear_length" || nextItem.pricingUnit !== "lm")) ||
-      (nextItem.itemType === "hardware" && (nextItem.pricingBasis !== "piece" || nextItem.pricingUnit !== "pcs"))
+      (nextItem.itemType === "hardware" && (nextItem.pricingBasis !== "piece" || nextItem.pricingUnit !== "pcs")) ||
+      (nextItem.itemType === "lighting" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2"))
     ) {
       itemErrors.push(`Item ${nextItem.id} has inconsistent pricing basis or unit.`);
     }

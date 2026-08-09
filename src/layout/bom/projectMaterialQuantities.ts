@@ -19,7 +19,8 @@ const CATEGORY_UNITS: ReadonlyArray<[MaterialAssignmentCategory, ProjectMaterial
   ["lift_up", "pcs"],
   ["leg", "pcs"],
   ["fastener", "pcs"],
-  ["other_component", "pcs"]
+  ["other_component", "pcs"],
+  ["lighting", "m2"]
 ];
 
 const HARDWARE_CATEGORIES = new Set<MaterialAssignmentCategory>([
@@ -43,7 +44,7 @@ export function projectMaterialQuantitiesFromUsageSummary(summary: ProjectMateri
   );
 
   for (const group of summary.groups) {
-    if (["corpus", "front", "worktop", "plinth", "back", "drawer_bottom"].includes(group.id)) {
+    if (["corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "lighting"].includes(group.id)) {
       addQuantity(quantities, group.id as MaterialAssignmentCategory, group.quantity, group.pieces);
       continue;
     }

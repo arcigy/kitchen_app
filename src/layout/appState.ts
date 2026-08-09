@@ -6,9 +6,10 @@ import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
 import type { CustomFurnitureInstance, CustomFurnitureParams } from "./customFurnitureTypes";
 import type { WardrobeEditSaveState } from "./wardrobeEditMode";
+import type { LedStripGroup } from "./ledStripTypes";
 
 export type AppMode = "build" | "layout";
-export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+export type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 export type WallId = "back" | "left" | "right";
@@ -94,6 +95,9 @@ export type LayoutSnapshot = {
   alignLocks?: AlignLock[];
   customFurnitureCounter?: number;
   customFurniture?: Array<{ id: string; params: CustomFurnitureParams }>;
+  /** Optional for backwards compatibility with project files saved before LED strips existed. */
+  ledStripCounter?: number;
+  ledStripGroups?: LedStripGroup[];
   wardrobe?: WardrobeEditSaveState | null;
   instanceCounter: number;
   instances: Array<{
@@ -292,6 +296,8 @@ export interface AppState {
   worktopCounter: number;
   customFurniture: CustomFurnitureInstance[];
   customFurnitureCounter: number;
+  ledStripGroups: LedStripGroup[];
+  ledStripCounter: number;
   wardrobeHistory: { getSaveState: () => WardrobeEditSaveState | null } | null;
 
   // Layout instances
@@ -386,6 +392,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     worktopCounter: 1,
     customFurniture: [],
     customFurnitureCounter: 1,
+    ledStripGroups: [],
+    ledStripCounter: 1,
     wardrobeHistory: null,
 
     instances: [],
