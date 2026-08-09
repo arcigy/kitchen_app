@@ -267,6 +267,43 @@ describe("supplier bridge service integration", () => {
     expect(applyConfirmedCandidate).toHaveBeenCalledWith(expect.objectContaining({ item: expect.objectContaining({ assignmentCategory: "runner" }) }));
   });
 
+  it("confirms an explicitly selected supplier product even when its parsed board metadata conflicts", async () => {
+    const repository = createInMemorySupplierBridgeRepository();
+    const applyConfirmedCandidate = vi.fn(async () => undefined);
+    const service = createSupplierBridgeService({ repository, applyConfirmedCandidate, now: () => new Date("2026-08-09T20:00:00.000Z") });
+    const created = await service.createSession(ctx, "project-a", "demos", [{
+      ...materials[0],
+      exactLookup: { requestId: "extension-corpus", supplierId: "demos", supplierProductId: "540119" }
+    }]);
+    const attached = await service.attachSession(created.view.session.id, created.bridgeToken);
+    const itemId = attached.view.currentItem!.id;
+    const submitted = await service.submitCandidate(created.view.session.id, attached.accessToken, {
+      submissionId: "capture-540119",
+      syncItemId: itemId,
+      supplierProductCode: "540119",
+      normalizedProduct: {
+        displayName: "DĂ©mos board selected by user",
+        manufacturer: null,
+        decorCode: null,
+        surfaceCode: null,
+        productType: "other",
+        thicknessMm: 16,
+        widthMm: null,
+        lengthMm: null,
+        availability: "available"
+      },
+      sourcePageType: "product",
+      sourcePath: "/product/540119",
+      observedAt: "2026-08-09T20:00:00.000Z",
+      price: null
+    });
+
+    expect(submitted.candidate.conflicts).toHaveLength(2);
+    await expect(service.confirmCandidate(created.view.session.id, attached.accessToken, itemId, submitted.candidate.id))
+      .resolves.toMatchObject({ counts: { completed: 1 } });
+    expect(applyConfirmedCandidate).toHaveBeenCalledOnce();
+  });
+
   it("confirms an exact supplier ID without requiring board decor mapping fields", async () => {
     const repository = createInMemorySupplierBridgeRepository();
     const applyConfirmedCandidate = vi.fn(async () => undefined);
