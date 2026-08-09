@@ -9,6 +9,7 @@ import {
 } from "./api";
 import type { CapturedSupplierCandidate } from "./messages";
 import type { ExtensionMaterialTarget } from "./materialTargetModel";
+import { supplierExpectedProductTypeForMaterialCategory } from "../../../src/core/supplier-bridge/supplier-target-contract";
 
 export type ExtensionAssignmentInput = {
   baseUrl: string;
@@ -43,26 +44,20 @@ const dependencies: AssignmentDependencies = {
   randomId: () => crypto.randomUUID()
 };
 
-function expectedProductType(category: ExtensionMaterialTarget["category"]): "board" | "worktop" | "edge_band" | "hinge" | "drawer_system" | "hardware" {
-  if (category === "worktop") return "worktop";
-  if (category === "edge_front" || category === "edge_other") return "edge_band";
-  if (category === "hinge") return "hinge";
-  if (category === "runner") return "drawer_system";
-  if (["corpus", "front", "plinth", "back", "drawer_bottom"].includes(category)) return "board";
-  return "hardware";
-}
-
 export async function runExtensionAssignment(
   input: ExtensionAssignmentInput,
   deps: AssignmentDependencies = dependencies
 ): Promise<ExtensionAssignmentResult> {
-  const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, input.supplierId, {
+  const supplierIdForBackend = __SUPPLIER_BRIDGE_DEBUG__ && input.supplierId === "mock-supplier"
+    ? "demos"
+    : input.supplierId;
+  const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, supplierIdForBackend, {
     requestId: `extension-${deps.randomId()}`,
     materialAssignmentId: input.target.id,
     supplierProductId: input.candidate.supplierProductCode,
-    expectedProductType: expectedProductType(input.target.category),
+    expectedProductType: supplierExpectedProductTypeForMaterialCategory(input.target.category),
     expectedManufacturer: input.candidate.normalizedProduct.manufacturer ?? undefined,
-    expectedThicknessMm: input.candidate.normalizedProduct.thicknessMm ?? undefined
+    expectedThicknessMm: input.target.expectedThicknessMm ?? undefined
   });
   const attachment = await deps.attachSession(input.baseUrl, creation.view.session.id, creation.bridgeToken);
   const item = attachment.view.items[0];

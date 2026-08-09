@@ -8,7 +8,7 @@ export type SupplierAdapter = {
   supportsUrl(url: URL): boolean;
   detectPage(document: Document, url: URL): SupplierSourcePageType;
   extractCurrentPage(document: Document, url: URL): Promise<SupplierPageCapture>;
-  buildSearchUrl?(query: string): string | null;
+  buildSearchUrl?(query: string, arcigyOrigin?: string): string | null;
 };
 
 export function adapterSupports(adapter: SupplierAdapter, capability: SupplierCapability): boolean {

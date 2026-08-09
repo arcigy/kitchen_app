@@ -14,7 +14,7 @@ export type SupplierPriceBasis = "piece" | "sheet" | "m2" | "linear_meter" | "pa
 export type SupplierVatMode = "included" | "excluded" | "unknown";
 export type SupplierProductAvailability = "available" | "unavailable" | "unknown";
 export type SupplierId = "demos" | "schachermayer" | "hranipex" | "jaf_holz" | "mock-supplier";
-export type SupplierExpectedProductType = "board" | "worktop" | "edge_band" | "hinge" | "drawer_system" | "hardware" | "component" | "unknown";
+export type SupplierExpectedProductType = "board" | "worktop" | "edge_band" | "hinge" | "drawer_system" | "handle" | "lift_up" | "leg" | "fastener" | "lighting" | "hardware" | "component" | "unknown";
 export type SupplierLookupStatus =
   | "created"
   | "waiting_for_extension"

@@ -117,7 +117,7 @@ export const mockSupplierAdapter: SupplierAdapter = {
       errorCode: candidates.length > 0 ? null : "PRODUCT_DATA_INCOMPLETE"
     };
   },
-  buildSearchUrl(query) {
-    return supplierSimulatorSearchUrl(query);
+  buildSearchUrl(query, arcigyOrigin) {
+    return supplierSimulatorSearchUrl(query, arcigyOrigin);
   }
 };

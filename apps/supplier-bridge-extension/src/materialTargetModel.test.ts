@@ -113,4 +113,40 @@ describe("extension material target model", () => {
     const general = extensionMaterialTargets(view).find((target) => target.id === "material-assignment:front");
     expect(general).toMatchObject({ assigned: false, assignedText: "Nepriradené" });
   });
+
+  it("distinguishes runner variants and exposes their aggregated quantity", () => {
+    const runnerView = structuredClone(view);
+    runnerView.assignments.assignments.push(
+      {
+        assignmentId: "material-assignment:runner:front-height:80:corpus-thickness:18",
+        category: "runner",
+        variantKey: "front-height:80:corpus-thickness:18",
+        kind: "component",
+        customValues: { runnerVariantLabel: "Čelo 80 mm · Korpus 18 mm" },
+        source: "auto",
+        snapshots: {},
+        updatedAt: "2026-07-18T17:55:20.000Z"
+      },
+      {
+        assignmentId: "material-assignment:runner:front-height:144:corpus-thickness:18",
+        category: "runner",
+        variantKey: "front-height:144:corpus-thickness:18",
+        kind: "component",
+        customValues: { runnerVariantLabel: "Čelo 144 mm · Korpus 18 mm" },
+        source: "auto",
+        snapshots: {},
+        updatedAt: "2026-07-18T17:55:20.000Z"
+      }
+    );
+    runnerView.scopes![0]!.items.push(
+      { id: "runner-80", category: "runner", variantKey: "front-height:80:corpus-thickness:18", label: "Zásuvkové výsuvy", description: "Čelo 80 mm · Korpus 18 mm", quantity: 1, unit: "pcs", pieces: 1 },
+      { id: "runner-144", category: "runner", variantKey: "front-height:144:corpus-thickness:18", label: "Zásuvkové výsuvy", description: "Čelo 144 mm · Korpus 18 mm", quantity: 2, unit: "pcs", pieces: 2 }
+    );
+
+    const runners = extensionMaterialTargets(runnerView).filter((target) => target.category === "runner" && target.scope === "general");
+    expect(runners).toMatchObject([
+      { label: "Zásuvkové výsuvy · Čelo 80 mm · Korpus 18 mm", description: "Čelo 80 mm · Korpus 18 mm", quantity: 1, unit: "pcs" },
+      { label: "Zásuvkové výsuvy · Čelo 144 mm · Korpus 18 mm", description: "Čelo 144 mm · Korpus 18 mm", quantity: 2, unit: "pcs" }
+    ]);
+  });
 });

@@ -4,6 +4,7 @@ import type {
   SupplierProductCandidate,
   SupplierSyncItem
 } from "./supplier-bridge-types";
+import { supplierProductTypeIsCompatible, supplierTargetUsesThicknessConflict } from "./supplier-target-contract";
 
 export type SupplierMatchResult = {
   evidence: SupplierMatchEvidence[];
@@ -56,8 +57,13 @@ export function evaluateSupplierCandidateMatch(args: {
   const manufacturerMatch = exactTextMatch(item.expectedManufacturer, product.manufacturer);
   const decorMatch = exactTextMatch(item.expectedDecorCode, product.decorCode);
   const surfaceMatch = exactTextMatch(item.expectedSurfaceCode, product.surfaceCode);
-  const productTypeMatch = exactTextMatch(item.expectedProductType, product.productType);
-  const thicknessMatch = item.expectedThicknessMm != null && product.thicknessMm != null
+  const productTypeMatch = supplierProductTypeIsCompatible({
+    category: item.assignmentCategory,
+    expected: item.expectedProductType,
+    observed: product.productType
+  });
+  const thicknessRelevant = supplierTargetUsesThicknessConflict(item.assignmentCategory, item.expectedProductType);
+  const thicknessMatch = thicknessRelevant && item.expectedThicknessMm != null && product.thicknessMm != null
     ? Math.abs(item.expectedThicknessMm - product.thicknessMm) <= 0.5
     : false;
   const exactSupplierProductCode = exactTextMatch(args.expectedSupplierProductCode ?? null, candidate.supplierProductCode);
@@ -81,7 +87,7 @@ export function evaluateSupplierCandidateMatch(args: {
       explanation: "Product type mismatch is a hard conflict."
     });
   }
-  if (item.expectedThicknessMm != null && product.thicknessMm != null && !thicknessMatch) {
+  if (thicknessRelevant && item.expectedThicknessMm != null && product.thicknessMm != null && !thicknessMatch) {
     conflicts.push({
       code: "THICKNESS_MISMATCH",
       field: "thickness",

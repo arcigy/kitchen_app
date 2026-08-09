@@ -35,7 +35,7 @@ export function unitFromText(raw: string): string | null {
   return raw.match(/\/?\s*(m²|m2|bm|m|ks|kus|pár|par|set|sada|bal(?:ení)?)(?:\b|$)/i)?.[1] ?? null;
 }
 
-export function productTypeOrOther(expected: "board" | "worktop" | "edge_band" | "hinge" | "drawer_system" | "hardware" | "component" | "unknown", fallback: "board" | "worktop" | "edge_band" | "hinge" | "drawer_system" | "hardware" | "component" | "other") {
+export function productTypeOrOther(expected: import("../../../../src/core/supplier-bridge/supplier-bridge-types").SupplierExpectedProductType, fallback: Exclude<import("../../../../src/core/supplier-bridge/supplier-bridge-types").SupplierExpectedProductType, "unknown"> | "other") {
   return expected === "unknown" ? fallback : expected;
 }
 

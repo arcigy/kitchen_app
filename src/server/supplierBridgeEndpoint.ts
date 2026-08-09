@@ -25,6 +25,7 @@ import {
 } from "../core/project-materials/project-material-assignment-resolution";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import { SupplierBridgePersistenceError } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
+import { supplierExpectedProductTypeForMaterialCategory } from "../core/supplier-bridge/supplier-target-contract";
 
 type SupplierBridgeEndpointDeps = {
   projectRoot: string;
@@ -114,12 +115,7 @@ function materialText(metadata: Record<string, unknown>, key: string): string | 
 }
 
 function manualTargetProductType(category: MaterialAssignmentCategory): string {
-  if (category === "worktop") return "worktop";
-  if (category === "edge_front" || category === "edge_other") return "edge_band";
-  if (category === "hinge") return "hinge";
-  if (category === "runner") return "drawer_system";
-  if (["corpus", "front", "plinth", "back", "drawer_bottom"].includes(category)) return "board";
-  return "hardware";
+  return supplierExpectedProductTypeForMaterialCategory(category);
 }
 
 function currentAssignmentText(assignment: ProjectMaterialAssignment): string {

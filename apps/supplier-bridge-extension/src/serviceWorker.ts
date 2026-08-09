@@ -9,7 +9,7 @@ import {
   SupplierBridgeApiError
 } from "./api";
 import { mockSupplierAdapter } from "./adapters/mockSupplierAdapter";
-import { backendBaseUrlForArcigyOrigin, configuredSupplierPortal, supplierPortals } from "./config";
+import { backendBaseUrlForArcigyOrigin, configuredSupplierPortal, isSupplierSimulatorOrigin, supplierPortals } from "./config";
 import { exactAdapterForSupplier } from "./suppliers/registry";
 import { bridgeLog } from "./logger";
 import {
@@ -191,7 +191,7 @@ async function openSupplier(): Promise<BridgeRuntimeResponse> {
     if (!item) return { ok: false, errorCode: "NO_PENDING_ITEM", message: "There is no pending material item." };
     if (!__SUPPLIER_BRIDGE_DEBUG__) return { ok: false, errorCode: "REAL_FIXTURES_REQUIRED", message: "A verified exact supplier lookup is required." };
     supplierId = "mock-supplier";
-    const simulatorUrl = mockSupplierAdapter.buildSearchUrl?.(item.query);
+    const simulatorUrl = mockSupplierAdapter.buildSearchUrl?.(item.query, progress.arcigyOrigin);
     if (!simulatorUrl) return { ok: false, errorCode: "SEARCH_URL_UNAVAILABLE", message: "Supplier simulator URL is unavailable." };
     const supplierUrl = new URL(simulatorUrl);
     if (item.expectedManufacturer) supplierUrl.searchParams.set("manufacturer", item.expectedManufacturer);
@@ -323,16 +323,19 @@ async function captureActiveSupplierProduct(): Promise<BridgeRuntimeResponse> {
   try { origin = new URL(tab.url).origin; } catch {
     return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Aktívna karta nie je podporovaný dodávateľ." };
   }
-  const supplier = Object.entries(supplierPortals).find(([, portal]) => (portal.origins as readonly string[]).includes(origin));
-  if (!supplier) return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Aktívna karta nie je podporovaný dodávateľ." };
+  const supportedSupplierTab = isSupplierSimulatorOrigin(origin)
+    || Object.values(supplierPortals).some((portal) => (portal.origins as readonly string[]).includes(origin));
+  if (!supportedSupplierTab) return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Aktívna karta nie je podporovaný dodávateľ." };
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["supplier-content.js"] });
-  const raw = await chrome.tabs.sendMessage(tab.id, {
-    channel: BRIDGE_CHANNEL,
-    type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT",
-    expectedProductType: "unknown",
-    expectedManufacturer: null,
-    expectedThicknessMm: null
-  });
+  const raw = await chrome.tabs.sendMessage(tab.id, isSupplierSimulatorOrigin(origin)
+    ? { channel: BRIDGE_CHANNEL, type: "CAPTURE_SUPPLIER_PAGE" }
+    : {
+        channel: BRIDGE_CHANNEL,
+        type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT",
+        expectedProductType: "unknown",
+        expectedManufacturer: null,
+        expectedThicknessMm: null
+      });
   const response = parseBridgeRuntimeResponse(raw);
   const capture = response?.ok ? parseSupplierPageCapture(response.capture) : null;
   if (!capture || capture.pageType !== "product" || capture.candidates.length !== 1) {

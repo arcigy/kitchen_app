@@ -224,6 +224,49 @@ describe("supplier bridge service integration", () => {
     expect(applyConfirmedCandidate).toHaveBeenCalledWith(expect.objectContaining({ mapping: null, candidate: expect.objectContaining({ supplierProductCode: "142391" }) }));
   });
 
+  it("confirms StrongMax H80 for a runner even when the supplier reports generic hardware and 18 mm", async () => {
+    const repository = createInMemorySupplierBridgeRepository();
+    const applyConfirmedCandidate = vi.fn(async () => undefined);
+    const service = createSupplierBridgeService({ repository, applyConfirmedCandidate, now: () => new Date("2026-08-09T20:00:00.000Z") });
+    const created = await service.createSession(ctx, "project-a", "demos", [{
+      materialAssignmentId: "material-assignment:runner:front-height:80:corpus-thickness:18",
+      assignmentCategory: "runner",
+      assignmentVariantKey: "front-height:80:corpus-thickness:18",
+      query: "runner",
+      expectedManufacturer: null,
+      expectedDecorCode: null,
+      expectedSurfaceCode: null,
+      expectedProductType: "drawer_system",
+      expectedThicknessMm: null
+    }]);
+    const attached = await service.attachSession(created.view.session.id, created.bridgeToken);
+    const itemId = attached.view.currentItem!.id;
+    const submitted = await service.submitCandidate(created.view.session.id, attached.accessToken, {
+      submissionId: "strongmax-h80",
+      syncItemId: itemId,
+      supplierProductCode: "STRONGMAX-18-H80",
+      normalizedProduct: {
+        displayName: "StrongMax 18 zásuvka H80",
+        manufacturer: "Démos",
+        decorCode: null,
+        surfaceCode: null,
+        productType: "other",
+        thicknessMm: 18,
+        widthMm: null,
+        lengthMm: null,
+        availability: "available"
+      },
+      sourcePageType: "product",
+      sourcePath: "/product/strongmax-h80",
+      observedAt: "2026-08-09T20:00:00.000Z",
+      price: null
+    });
+
+    await expect(service.confirmCandidate(created.view.session.id, attached.accessToken, itemId, submitted.candidate.id))
+      .resolves.toMatchObject({ counts: { completed: 1 } });
+    expect(applyConfirmedCandidate).toHaveBeenCalledWith(expect.objectContaining({ item: expect.objectContaining({ assignmentCategory: "runner" }) }));
+  });
+
   it("confirms an exact supplier ID without requiring board decor mapping fields", async () => {
     const repository = createInMemorySupplierBridgeRepository();
     const applyConfirmedCandidate = vi.fn(async () => undefined);

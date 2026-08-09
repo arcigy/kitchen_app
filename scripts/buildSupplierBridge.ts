@@ -13,12 +13,14 @@ const mode = process.argv.includes("--mode") ? process.argv[process.argv.indexOf
 if (mode !== "debug" && mode !== "production") throw new Error("Use --mode debug or --mode production.");
 const buildMode: BuildMode = mode;
 const debug = buildMode === "debug";
-const version = "0.3.1";
+const version = "0.3.8";
 const releaseOrigins = supplierBridgeReleaseOrigins();
+const debugArcigyOrigins = ["http://127.0.0.1:5180", "http://localhost:5180", "http://127.0.0.1:5184", "http://localhost:5184"];
+const debugSimulatorOrigins = ["http://127.0.0.1:5192", "http://localhost:5192", "http://127.0.0.1:5195", "http://localhost:5195"];
 const arcigyOrigins = debug
-  ? ["http://127.0.0.1:5180", "http://localhost:5180", ...releaseOrigins]
+  ? [...debugArcigyOrigins, ...releaseOrigins]
   : releaseOrigins;
-const simulatorOrigins = debug ? ["http://127.0.0.1:5192", "http://localhost:5192"] : [];
+const simulatorOrigins = debug ? debugSimulatorOrigins : [];
 const outDir = path.join(extensionRoot, `dist-${buildMode}`);
 
 const define = {
@@ -84,13 +86,12 @@ const manifest = {
     : ["storage", "sidePanel", "tabs", "scripting"],
   host_permissions: debug
     ? [
-        "http://127.0.0.1:5180/*",
-        "http://localhost:5180/*",
+        ...arcigyOrigins.map((origin) => `${origin}/*`),
+        ...simulatorOrigins.map((origin) => `${origin}/*`),
         "http://127.0.0.1:5191/*",
         "http://localhost:5191/*",
-        "http://127.0.0.1:5192/*",
-        "http://localhost:5192/*",
-        ...releaseOrigins.map((origin) => `${origin}/*`)
+        "http://127.0.0.1:5194/*",
+        "http://localhost:5194/*"
       ]
     : releaseOrigins.map((origin) => `${origin}/*`),
   optional_host_permissions: [
@@ -102,13 +103,13 @@ const manifest = {
   content_scripts: [
     {
       matches: debug
-        ? ["http://127.0.0.1:5180/*", "http://localhost:5180/*", ...releaseOrigins.map((origin) => `${origin}/*`)]
+        ? arcigyOrigins.map((origin) => `${origin}/*`)
         : releaseOrigins.map((origin) => `${origin}/*`),
       js: ["arcigy-content.js"],
       run_at: "document_start"
     },
     ...(debug ? [{
-      matches: ["http://127.0.0.1:5192/*", "http://localhost:5192/*"],
+      matches: simulatorOrigins.map((origin) => `${origin}/*`),
       js: ["supplier-content.js"],
       run_at: "document_idle"
     }] : [])
