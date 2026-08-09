@@ -188,6 +188,33 @@ describe("materials phase panel", () => {
     expect(html).toContain("Čelo 180 mm · Korpus 19 mm · 1 ks");
   });
 
+  it("shows the count for each runner variant in general settings", () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-08-09T12:00:00.000Z");
+    state.assignments.push({
+      assignmentId: "material-assignment:runner:front-height:166:corpus-thickness:18",
+      category: "runner",
+      variantKey: "front-height:166:corpus-thickness:18",
+      kind: "component",
+      customValues: { runnerVariantLabel: "Čelo 166 mm · Korpus 18 mm" },
+      source: "auto",
+      snapshots: {},
+      updatedAt: "2026-08-09T12:00:00.000Z"
+    });
+    const view = createProjectMaterialsView(state, [], catalog);
+    view.scopes = [{
+      id: "module:drawer-1",
+      kind: "module",
+      label: "Skrinka so zásuvkami",
+      items: [{ id: "runner-166", category: "runner", variantKey: "front-height:166:corpus-thickness:18", label: "Zásuvkové výsuvy", description: "Čelo 166 mm · Korpus 18 mm", quantity: 2, unit: "pcs", pieces: 2 }]
+    }];
+
+    const html = renderProjectMaterialsPanel(view);
+
+    expect(html).toContain("Čelo 166 mm · Korpus 18 mm");
+    expect(html).toContain("<small>Počet</small><strong>2 ks</strong>");
+  });
+
   it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");

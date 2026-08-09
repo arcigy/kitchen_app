@@ -437,12 +437,31 @@ function renderAssignmentSelection(
     ? `<span><small>Rozmer hrany</small><strong>${edgeWidth == null ? "—" : formatNumber(edgeWidth)} × ${edgeThickness == null ? "—" : formatNumber(edgeThickness)} mm</strong></span>`
     : "";
   const runnerVariantLabel = definition.category === "runner" ? assignmentRunnerVariantLabel(assignment) : null;
+  const runnerVariantQuantity = definition.category === "runner" && assignment?.variantKey
+    ? quantityForVariant(view, definition.category, assignment.variantKey)
+    : null;
   return `<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}">
     <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : "Vyberte produkt na stránke dodávateľa"}</small></div>
     ${definition.kind === "material" ? `<span><small>Hrúbka</small><strong>${thickness == null ? "—" : `${formatNumber(thickness)} mm`}</strong></span>` : ""}
     ${edgeVariant}
+    ${runnerVariantQuantity ? `<span><small>Počet</small><strong>${formatQuantity(runnerVariantQuantity.quantity, runnerVariantQuantity.unit)}</strong></span>` : ""}
     <span><small>Cena</small><strong>${escapeHtml(price)}</strong></span>
   </div>`;
+}
+
+function quantityForVariant(
+  view: ProjectMaterialsView,
+  category: MaterialAssignmentCategory,
+  variantKey: string
+): { quantity: number; unit: string } | null {
+  const matching = (view.scopes ?? [])
+    .flatMap((scope) => scope.items)
+    .filter((item) => item.category === category && item.variantKey === variantKey);
+  if (matching.length === 0) return null;
+  return {
+    quantity: matching.reduce((total, item) => total + (Number.isFinite(item.quantity) ? item.quantity : 0), 0),
+    unit: matching[0]!.unit
+  };
 }
 
 function assignmentRunnerVariantLabel(assignment: ProjectMaterialAssignment | undefined): string | null {
