@@ -96,7 +96,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     overlay.innerHTML = `
       <section class="feedback-report-dialog" role="dialog" aria-modal="true" aria-labelledby="feedback-report-title">
         <header><h2 id="feedback-report-title">Nahlásiť problém</h2><button type="button" data-feedback-close aria-label="Zavrieť">×</button></header>
-        <p>Spolu s popisom sa pripojí screenshot editora, aktuálny snapshot projektu a technická diagnostika.</p>
+        <p>Spolu s popisom sa pripojí screenshot celej viditeľnej Arcigy aplikácie, aktuálny snapshot projektu a technická diagnostika.</p>
         <form id="feedback-report-form" novalidate>
           <label>Typ<select name="kind">${FEEDBACK_KINDS.map((kind) => `<option value="${kind.value}">${kind.label}</option>`).join("")}</select></label>
           <label>Stručný názov problému<input name="title" maxlength="180" required></label>
