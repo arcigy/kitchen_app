@@ -19,7 +19,7 @@ import {
   round
 } from "../runtime/parametricCommercialBom";
 import { normalizeDrawerLowParams, type DrawerLowParams } from "./types";
-import { groupDrawerFrontHeights } from "../drawers/drawerHeightContract";
+import { drawerRunnerVariantKey, drawerRunnerVariantLabel, groupDrawerFrontHeights } from "../drawers/drawerHeightContract";
 
 function arrayNumbers(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((entry): entry is number => typeof entry === "number" && Number.isFinite(entry)) : [];
@@ -98,12 +98,14 @@ export function calculateBOM(params: DrawerLowParams, ctx: KitchenContext, catal
     hardwareItem("plinth-clips", "Plinth clips", plinthHeight > 0 ? 2 : 0, componentRef(resolveComponent(catalog, source, "clipComponentId")))
   ].filter((item): item is PortableQuoteBomItem => Boolean(item));
   for (const bucket of groupDrawerFrontHeights(frontHeights)) {
+    const variantKey = drawerRunnerVariantKey(bucket.frontHeightMm, boardT);
+    const variantLabel = drawerRunnerVariantLabel(bucket.frontHeightMm, boardT);
     hardware.push({
-      id: `drawer-runners-${bucket.variantKey}`,
+      id: `drawer-runners-${variantKey}`,
       itemType: "hardware",
       category: "runner",
-      name: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
-      description: `Zásuvkové výsuvy · ${bucket.variantLabel}`,
+      name: `Zásuvkové výsuvy · ${variantLabel}`,
+      description: `Zásuvkové výsuvy · ${variantLabel}`,
       pricingBasis: "piece",
       pricingUnit: "pcs",
       quantity: bucket.count,
@@ -114,9 +116,9 @@ export function calculateBOM(params: DrawerLowParams, ctx: KitchenContext, catal
       pricingLookup: null,
       pricingGroup: "hardware",
       pricingQuantityBase: bucket.count,
-      variantKey: bucket.variantKey,
-      variantLabel: bucket.variantLabel,
-      notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela cez Materiály alebo Supplier Bridge."]
+      variantKey,
+      variantLabel,
+      notes: ["Konkrétny výsuv sa priraďuje podľa výšky čela a hrúbky korpusu cez Materiály alebo Supplier Bridge."]
     });
   }
   items.push(...hardware);

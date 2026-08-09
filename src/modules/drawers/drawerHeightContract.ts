@@ -1,4 +1,5 @@
 export const DRAWER_FRONT_HEIGHT_VARIANT_PREFIX = "front-height:";
+const DRAWER_CORPUS_THICKNESS_VARIANT_SEGMENT = ":corpus-thickness:";
 
 export type DrawerFrontHeightBucket = {
   frontHeightMm: number;
@@ -29,12 +30,36 @@ export function drawerFrontHeightVariantKey(frontHeightMm: number): string {
 
 export function drawerFrontHeightFromVariantKey(variantKey: string | undefined): number | null {
   if (!variantKey?.startsWith(DRAWER_FRONT_HEIGHT_VARIANT_PREFIX)) return null;
-  const parsed = Number(variantKey.slice(DRAWER_FRONT_HEIGHT_VARIANT_PREFIX.length));
+  const heightPart = variantKey
+    .slice(DRAWER_FRONT_HEIGHT_VARIANT_PREFIX.length)
+    .split(DRAWER_CORPUS_THICKNESS_VARIANT_SEGMENT, 1)[0];
+  const parsed = Number(heightPart);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 export function drawerFrontHeightVariantLabel(frontHeightMm: number): string {
   return `Čelo ${Math.max(1, Math.round(frontHeightMm))} mm`;
+}
+
+/**
+ * A runner is selected by its front height and the corpus thickness it must fit.
+ * Keeping both values in the key prevents the Supplier Bridge from reusing one
+ * runner assignment for visually identical drawers from different corpuses.
+ */
+export function drawerRunnerVariantKey(frontHeightMm: number, corpusThicknessMm: number): string {
+  return `${drawerFrontHeightVariantKey(frontHeightMm)}${DRAWER_CORPUS_THICKNESS_VARIANT_SEGMENT}${Math.max(1, Math.round(corpusThicknessMm))}`;
+}
+
+export function drawerCorpusThicknessFromVariantKey(variantKey: string | undefined): number | null {
+  if (!variantKey?.startsWith(DRAWER_FRONT_HEIGHT_VARIANT_PREFIX)) return null;
+  const separatorIndex = variantKey.indexOf(DRAWER_CORPUS_THICKNESS_VARIANT_SEGMENT);
+  if (separatorIndex < 0) return null;
+  const parsed = Number(variantKey.slice(separatorIndex + DRAWER_CORPUS_THICKNESS_VARIANT_SEGMENT.length));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function drawerRunnerVariantLabel(frontHeightMm: number, corpusThicknessMm: number): string {
+  return `${drawerFrontHeightVariantLabel(frontHeightMm)} · Korpus ${Math.max(1, Math.round(corpusThicknessMm))} mm`;
 }
 
 export function groupDrawerFrontHeights(value: unknown): DrawerFrontHeightBucket[] {

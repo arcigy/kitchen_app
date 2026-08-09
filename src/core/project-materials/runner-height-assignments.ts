@@ -1,4 +1,8 @@
-import { drawerFrontHeightFromVariantKey } from "../../modules/drawers/drawerHeightContract";
+import {
+  drawerCorpusThicknessFromVariantKey,
+  drawerFrontHeightFromVariantKey,
+  drawerRunnerVariantLabel
+} from "../../modules/drawers/drawerHeightContract";
 import {
   PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
   type ProjectMaterialAssignment,
@@ -32,12 +36,19 @@ export function synchronizeRunnerHeightAssignments(
   for (const variantKey of [...demanded].sort()) {
     if (existing.has(variantKey)) continue;
     const frontHeightMm = drawerFrontHeightFromVariantKey(variantKey)!;
+    const corpusThicknessMm = drawerCorpusThicknessFromVariantKey(variantKey);
     assignments.push({
       assignmentId: runnerHeightAssignmentId(variantKey),
       category: "runner",
       variantKey,
       kind: "component",
-      customValues: { drawerFrontHeightMm: frontHeightMm },
+      customValues: {
+        drawerFrontHeightMm: frontHeightMm,
+        ...(corpusThicknessMm == null ? {} : {
+          drawerCorpusThicknessMm: corpusThicknessMm,
+          runnerVariantLabel: drawerRunnerVariantLabel(frontHeightMm, corpusThicknessMm)
+        })
+      },
       source: "auto",
       snapshots: {},
       updatedAt: now

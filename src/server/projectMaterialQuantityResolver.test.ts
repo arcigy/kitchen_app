@@ -127,6 +127,27 @@ describe("server project material quantity resolver", () => {
     expect(scopes.find((scope) => scope.id === "module:module_scope_1")?.items.length).toBeGreaterThan(0);
   });
 
+  it("keeps drawer runner scope rows explicit about front height and corpus thickness", () => {
+    const params = {
+      ...makeDefaultDrawerLowParams(),
+      drawerCount: 2,
+      drawerFrontHeights: [180, 260],
+      autoFit: false,
+      boardThickness: 19
+    };
+    const savedModule = { id: "module_drawer_runner_scope", type: params.type, params, kitchenGroupId: null };
+    const scope = resolveProjectMaterialScopes(createSave({ modules: [savedModule], snapshotInstances: [savedModule] }), catalog)
+      .find((entry) => entry.id === "module:module_drawer_runner_scope");
+    const runners = scope?.items.filter((item) => item.category === "runner") ?? [];
+
+    expect(runners).toHaveLength(2);
+    expect(runners.map((item) => item.description)).toEqual(expect.arrayContaining([
+      "Čelo 180 mm · Korpus 19 mm"
+    ]));
+    expect(runners.every((item) => item.description.includes("Korpus 19 mm"))).toBe(true);
+    expect(new Set(runners.map((item) => item.variantKey)).size).toBe(2);
+  });
+
   it("returns BOM calculation failures as typed project warnings", () => {
     const invalidModule = {
       id: "module_unknown",

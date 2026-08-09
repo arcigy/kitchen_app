@@ -355,10 +355,13 @@ function renderScopeSettings(
   const selected = scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0];
   if (!selected) return `<section class="materials-scope-empty"><strong>${kind === "module" ? "V layoute zatiaľ nie je modul." : "V projekte zatiaľ nie sú additions."}</strong><p>Po vložení položky sa tu zobrazia jej dosky a komponenty.</p></section>`;
   const categories = [...new Set(selected.items.map((item) => item.category))];
+  const categoryLabel = (category: MaterialAssignmentCategory) => category === "runner"
+    ? "Zásuvky"
+    : MATERIAL_ASSIGNMENT_CATEGORIES.find((definition) => definition.category === category)?.label ?? category;
   return `<section class="materials-scope-settings" aria-label="${escapeHtml(selected.label)}">
     <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Dosky a komponenty dedia materiál z General settings.</p></div>
     <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-material-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
-    <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(MATERIAL_ASSIGNMENT_CATEGORIES.find((definition) => definition.category === category)?.label ?? category)}</h3>${selected.items.filter((item) => item.category === category).map((item) => {
+    <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(categoryLabel(category))}</h3>${category === "runner" ? "<p>Výsuvy sú rozdelené podľa výšky čela a hrúbky korpusu.</p>" : ""}${selected.items.filter((item) => item.category === category).map((item) => {
       const effective = resolveEffectiveProjectMaterialAssignment(view.assignments.assignments, selected.id, item);
       return renderScopeItem(item, effective.assignment, effective.source, displayCurrency);
     }).join("")}</section>`).join("")}</div>
@@ -433,12 +436,26 @@ function renderAssignmentSelection(
   const edgeVariant = (definition.category === "edge_front" || definition.category === "edge_other") && (edgeWidth != null || edgeThickness != null)
     ? `<span><small>Rozmer hrany</small><strong>${edgeWidth == null ? "—" : formatNumber(edgeWidth)} × ${edgeThickness == null ? "—" : formatNumber(edgeThickness)} mm</strong></span>`
     : "";
+  const runnerVariantLabel = definition.category === "runner" ? assignmentRunnerVariantLabel(assignment) : null;
   return `<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}">
-    <div>${index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : "Vyberte produkt na stránke dodávateľa"}</small></div>
+    <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : "Vyberte produkt na stránke dodávateľa"}</small></div>
     ${definition.kind === "material" ? `<span><small>Hrúbka</small><strong>${thickness == null ? "—" : `${formatNumber(thickness)} mm`}</strong></span>` : ""}
     ${edgeVariant}
     <span><small>Cena</small><strong>${escapeHtml(price)}</strong></span>
   </div>`;
+}
+
+function assignmentRunnerVariantLabel(assignment: ProjectMaterialAssignment | undefined): string | null {
+  const values = assignment?.customValues;
+  if (!values) return null;
+  const configured = values.runnerVariantLabel;
+  if (typeof configured === "string" && configured.trim()) return configured;
+  const height = values.drawerFrontHeightMm;
+  const thickness = values.drawerCorpusThicknessMm;
+  if (typeof height !== "number" || !Number.isFinite(height)) return null;
+  return typeof thickness === "number" && Number.isFinite(thickness)
+    ? `Čelo ${Math.round(height)} mm · Korpus ${Math.round(thickness)} mm`
+    : `Čelo ${Math.round(height)} mm`;
 }
 
 function supplierAssignmentDetails(assignment: ProjectMaterialAssignment | null | undefined): { label: string; productCode: string } | null {

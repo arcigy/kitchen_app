@@ -144,6 +144,50 @@ describe("materials phase panel", () => {
     expect(html).toContain("241,93 CZK / m²");
   });
 
+  it("renders drawer runners as one drawer group split by front height and corpus thickness", () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, "2026-08-09T12:00:00.000Z");
+    state.assignments.push(
+      {
+        assignmentId: "material-assignment:runner:front-height:180:corpus-thickness:18",
+        category: "runner",
+        variantKey: "front-height:180:corpus-thickness:18",
+        kind: "component",
+        customValues: { drawerFrontHeightMm: 180, drawerCorpusThicknessMm: 18, runnerVariantLabel: "Čelo 180 mm · Korpus 18 mm" },
+        source: "auto",
+        snapshots: {},
+        updatedAt: "2026-08-09T12:00:00.000Z"
+      },
+      {
+        assignmentId: "material-assignment:runner:front-height:180:corpus-thickness:19",
+        category: "runner",
+        variantKey: "front-height:180:corpus-thickness:19",
+        kind: "component",
+        customValues: { drawerFrontHeightMm: 180, drawerCorpusThicknessMm: 19, runnerVariantLabel: "Čelo 180 mm · Korpus 19 mm" },
+        source: "auto",
+        snapshots: {},
+        updatedAt: "2026-08-09T12:00:00.000Z"
+      }
+    );
+    const view = createProjectMaterialsView(state, [], catalog);
+    view.scopes = [{
+      id: "module:drawer-1",
+      kind: "module",
+      label: "Skrinka so zásuvkami",
+      items: [
+        { id: "runner-18", category: "runner", variantKey: "front-height:180:corpus-thickness:18", label: "Zásuvkové výsuvy", description: "Čelo 180 mm · Korpus 18 mm", quantity: 1, unit: "pcs", pieces: 1 },
+        { id: "runner-19", category: "runner", variantKey: "front-height:180:corpus-thickness:19", label: "Zásuvkové výsuvy", description: "Čelo 180 mm · Korpus 19 mm", quantity: 1, unit: "pcs", pieces: 1 }
+      ]
+    }];
+
+    const html = renderProjectMaterialsPanel(view, { activeSettingsTab: "modules", selectedScopeId: "module:drawer-1" });
+
+    expect(html).toContain("<h3>Zásuvky</h3>");
+    expect(html).toContain("Výsuvy sú rozdelené podľa výšky čela a hrúbky korpusu.");
+    expect(html).toContain("Čelo 180 mm · Korpus 18 mm · 1 ks");
+    expect(html).toContain("Čelo 180 mm · Korpus 19 mm · 1 ks");
+  });
+
   it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");

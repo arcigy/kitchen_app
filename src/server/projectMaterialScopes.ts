@@ -47,13 +47,15 @@ function itemsFor(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem[]
     if (!category) return [];
     const amount = quantityFor(item, category);
     if (!amount) return [];
+    const runnerVariantLabel = category === "runner" ? item.variantLabel : undefined;
     return [{
       id: item.id,
       category,
-      label: item.description || item.name || item.id,
-      description: item.dimensionsMm
+      ...(item.variantKey ? { variantKey: item.variantKey } : {}),
+      label: category === "runner" ? "Zásuvkové výsuvy" : item.description || item.name || item.id,
+      description: runnerVariantLabel ?? (item.dimensionsMm
         ? `${Math.round(item.dimensionsMm.length)} × ${Math.round(item.dimensionsMm.width)} × ${Math.round(item.dimensionsMm.thickness)} mm`
-        : item.component?.componentType ?? item.materialGroup ?? "Komponent",
+        : item.component?.componentType ?? item.materialGroup ?? "Komponent"),
       quantity: Math.round(amount.quantity * 10_000) / 10_000,
       unit: amount.unit,
       pieces: finite(item.quantity) ?? 1

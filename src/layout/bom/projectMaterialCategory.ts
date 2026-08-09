@@ -38,7 +38,9 @@ export function projectMaterialCategoryForBomItem(
   }
 
   if (item.itemType === "hardware") {
-    const componentType = item.component?.componentType;
+    // Generated hardware has no component until Supplier Bridge assigns one.
+    // The BOM category remains authoritative during that intermediate state.
+    const componentType = item.component?.componentType ?? item.category ?? item.materialGroup;
     if (componentType && DIRECT_HARDWARE_CATEGORIES.has(componentType as MaterialAssignmentCategory)) {
       return componentType as MaterialAssignmentCategory;
     }
