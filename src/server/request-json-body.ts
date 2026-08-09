@@ -5,7 +5,7 @@ const MEBIBYTE = 1024 * 1024;
 const DEFAULT_JSON_BODY_MB = 64;
 const PROJECT_IMPORT_OVERHEAD_MB = 16;
 const CLIENT_METRICS_BODY_MAX_BYTES = 8 * 1024;
-const FEEDBACK_REPORT_BODY_MAX_BYTES = 32 * MEBIBYTE;
+const FEEDBACK_REPORT_BODY_MAX_BYTES = 56 * MEBIBYTE;
 
 function positiveMbEnv(name: string): number | null {
   const parsed = Number(process.env[name]);
