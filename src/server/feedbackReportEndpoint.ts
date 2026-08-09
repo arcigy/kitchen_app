@@ -70,6 +70,25 @@ async function odooCall(fetchImpl: typeof fetch, settings: ReturnType<typeof con
   return await response.json() as unknown;
 }
 
+async function odooCreate(
+  fetchImpl: typeof fetch,
+  settings: ReturnType<typeof config>,
+  model: string,
+  values: Record<string, unknown>,
+  invalidResultMessage: string
+): Promise<number> {
+  const createdIds = await odooCall(fetchImpl, settings, model, "create", { vals_list: [values] });
+  if (
+    !Array.isArray(createdIds)
+    || createdIds.length !== 1
+    || !Number.isInteger(createdIds[0])
+    || createdIds[0] <= 0
+  ) {
+    throw new FeedbackReportError(invalidResultMessage, 502);
+  }
+  return createdIds[0];
+}
+
 async function deliver(
   state: DeliveryState,
   fetchImpl: typeof fetch,
@@ -77,14 +96,12 @@ async function deliver(
   report: { submissionId: string; kind: string; title: string; description: string; comment: string; screenshot: string; projectSnapshot: unknown; diagnostics: Record<string, unknown>; reporter: ClientContext }
 ): Promise<void> {
   if (!state.taskId) {
-    const task = await odooCall(fetchImpl, settings, "project.task", "create", { vals: {
+    state.taskId = await odooCreate(fetchImpl, settings, "project.task", {
       name: `[Arcigy ${report.kind}] ${report.title}`,
       project_id: settings.projectId,
       description: ["Arcigy feedback report", `submission=${report.submissionId}`, `type=${report.kind}`, "", report.description, report.comment ? `\nComment:\n${report.comment}` : ""].join("\n"),
       ...(settings.tagIdByKind[report.kind] ? { tag_ids: [[6, 0, [settings.tagIdByKind[report.kind]]]] } : {})
-    } });
-    if (typeof task !== "number") throw new FeedbackReportError("Odoo nevytvorilo úlohu.", 502);
-    state.taskId = task;
+    }, "Odoo nevytvorilo úlohu.");
   }
   const attachments = [
     { key: "screenshot.png", name: "screenshot.png", data: report.screenshot.slice("data:image/png;base64,".length), mimetype: "image/png" },
@@ -93,7 +110,13 @@ async function deliver(
   ];
   for (const attachment of attachments) {
     if (state.completed.has(attachment.key)) continue;
-    await odooCall(fetchImpl, settings, "ir.attachment", "create", { vals: { name: attachment.name, datas: attachment.data, mimetype: attachment.mimetype, res_model: "project.task", res_id: state.taskId } });
+    await odooCreate(fetchImpl, settings, "ir.attachment", {
+      name: attachment.name,
+      datas: attachment.data,
+      mimetype: attachment.mimetype,
+      res_model: "project.task",
+      res_id: state.taskId
+    }, "Odoo nevytvorilo prílohu.");
     state.completed.add(attachment.key);
   }
 }
