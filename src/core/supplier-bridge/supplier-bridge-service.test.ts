@@ -446,4 +446,36 @@ describe("supplier bridge service integration", () => {
     await expect(repository.findLatestPriceObservation({ tenantId: "tenant-a", supplierId: "demos", supplierProductCode: "000-BOARD" }))
       .resolves.toMatchObject({ id: firstObservationId, observedAt: "2026-07-10T08:00:00.000Z", lastVerifiedAt: "2026-07-10T08:10:00.000Z" });
   });
+
+  it("continues an explicit assignment when refreshing an unchanged price timestamp fails", async () => {
+    const repository = createInMemorySupplierBridgeRepository();
+    const originalTouch = repository.touchPriceObservation;
+    const service = createSupplierBridgeService({ repository, applyConfirmedCandidate: async () => undefined, now: () => new Date("2026-08-09T20:00:00.000Z") });
+    const exactMaterial = [{
+      ...materials[0],
+      exactLookup: { requestId: "price-touch-1", supplierId: "demos" as const, supplierProductId: "540119" }
+    }];
+    const capture = (syncItemId: string, submissionId: string) => ({
+      submissionId,
+      syncItemId,
+      supplierProductCode: "540119",
+      normalizedProduct: { displayName: "DĂ©mos board", manufacturer: null, decorCode: null, surfaceCode: null, productType: "other", thicknessMm: 16, widthMm: null, lengthMm: null, availability: "available" as const },
+      sourcePageType: "product" as const,
+      sourcePath: "/product/540119",
+      observedAt: "2026-08-09T20:00:00.000Z",
+      price: { supplierAccountId: null, amount: 100, currency: "CZK", priceBasis: "piece" as const, vatMode: "excluded" as const, minimumQuantity: null, packageQuantity: null, rawPriceText: "100 CZK", rawUnitText: "ks", normalizedAmount: 100, normalizedPriceBasis: "piece" as const, normalizationCalculation: null, normalizationConfidence: 1, observedAt: "2026-08-09T20:00:00.000Z" }
+    });
+    const first = await service.createSession(ctx, "project-a", "demos", exactMaterial);
+    const firstAttachment = await service.attachSession(first.view.session.id, first.bridgeToken);
+    await service.submitCandidate(first.view.session.id, firstAttachment.accessToken, capture(firstAttachment.view.currentItem!.id, "price-touch-capture-1"));
+    repository.touchPriceObservation = async () => { throw new Error("database unavailable"); };
+
+    const second = await service.createSession(ctx, "project-a", "demos", [{ ...exactMaterial[0]!, exactLookup: { ...exactMaterial[0]!.exactLookup, requestId: "price-touch-2" } }]);
+    const secondAttachment = await service.attachSession(second.view.session.id, second.bridgeToken);
+    const submitted = await service.submitCandidate(second.view.session.id, secondAttachment.accessToken, capture(secondAttachment.view.currentItem!.id, "price-touch-capture-2"));
+
+    await expect(service.confirmCandidate(second.view.session.id, secondAttachment.accessToken, secondAttachment.view.currentItem!.id, submitted.candidate.id))
+      .resolves.toMatchObject({ counts: { completed: 1 } });
+    repository.touchPriceObservation = originalTouch;
+  });
 });

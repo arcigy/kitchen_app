@@ -422,14 +422,32 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         supplierProductCode: submission.supplierProductCode
       }) : null;
       const unchangedPrice = !!(submission.price && previousPrice && samePriceObservation(previousPrice, submission.price));
-      const priceObservation: SupplierPriceObservation | null = submission.price
-        ? unchangedPrice
-          ? await deps.repository.touchPriceObservation({
+      let priceObservation: SupplierPriceObservation | null = null;
+      let persistPriceObservation = false;
+      if (submission.price) {
+        if (unchangedPrice) {
+          try {
+            priceObservation = await deps.repository.touchPriceObservation({
               tenantId: authorized.payload.tenantId,
               observationId: previousPrice!.id,
               lastVerifiedAt: submission.observedAt
-            })
-          : {
+            });
+          } catch (error) {
+            // Reusing a verified price must not prevent the user's assignment.
+            // Confirmation can still use the existing observation and the next
+            // successful capture will refresh its verification timestamp.
+            priceObservation = previousPrice;
+            logSupplierBridge("warn", {
+              event: "price_observation_touch_failed",
+              sessionId,
+              syncItemId: item.id,
+              errorCode: error && typeof error === "object" && "bridgeStage" in error && typeof error.bridgeStage === "string"
+                ? `SUPPLIER_BRIDGE_DB_${error.bridgeStage}`
+                : "PRICE_TOUCH_FAILED"
+            });
+          }
+        } else {
+          priceObservation = {
             id: `supplier-price-${randomUUID()}`,
             syncItemId: item.id,
             candidateId: draftCandidate.id,
@@ -438,15 +456,17 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
             supplierProductCode: submission.supplierProductCode,
             lastVerifiedAt: submission.observedAt,
             ...structuredClone(submission.price)
-          }
-        : null;
+          };
+          persistPriceObservation = true;
+        }
+      }
       const result = await deps.repository.submitCandidate({
         tenantId: authorized.payload.tenantId,
         sessionId,
         submissionId: submission.submissionId,
         candidate: draftCandidate,
         priceObservation,
-        persistPriceObservation: !unchangedPrice
+        persistPriceObservation
       });
       const aggregate = requireSession(await deps.repository.getSession(authorized.payload.tenantId, sessionId));
       if (result.priceObservation && !aggregate.priceObservations.some((observation) => observation.id === result.priceObservation!.id)) {
