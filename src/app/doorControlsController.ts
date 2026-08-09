@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { reportEditorToolEntryStatus } from "./editorToolEntryController";
-import type { DoorInstance, DoorParams, WallInstance } from "./localTypes";
+import type { DoorInstance, DoorParams, WallInstance, WindowInstance } from "./localTypes";
 import { getDoorMaterialOption } from "./doorMaterials";
+import { validateOpeningPlacement } from "./openingPlacementValidation";
 
 type DoorControlsControllerContext = {
   clampDoorParams: (params: DoorParams) => DoorParams;
@@ -21,6 +22,7 @@ type DoorControlsControllerContext = {
   setUnderlayStatus: (status: string) => void;
   walls: WallInstance[];
   doors: DoorInstance[];
+  windows: WindowInstance[];
   doorInst: DoorInstance | null;
 };
 
@@ -499,8 +501,8 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
 
   const isFloorplanActive = () => ctx.getViewMode() === "2d" && ctx.getActiveViewerTab() === "floorplan";
 
-  const isPlacementPointValid = (lengthMm: number, centerMm: number, widthMm: number) =>
-    widthMm < lengthMm && centerMm >= widthMm / 2 && centerMm <= lengthMm - widthMm / 2;
+  const validatePlacementPoint = (wallId: string, lengthMm: number, centerMm: number, widthMm: number) =>
+    validateOpeningPlacement({ wallId, lengthMm, centerMm, widthMm, existingOpenings: [...ctx.doors, ...ctx.windows] });
 
   const buildDoorFrame = (inst: DoorInstance, wallThicknessM: number, planZCenter: number) => {
     resetGroup(inst.frame);
@@ -771,7 +773,7 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const draft = getPlacementDraft();
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
     const widthMm = Math.max(1, Math.round(draft.widthMm));
-    const valid = isPlacementPointValid(lengthMm, centerMm, widthMm);
+    const valid = validatePlacementPoint(wall.id, lengthMm, centerMm, widthMm).valid;
     const panelThicknessM = Math.max(0.006, draft.panelThicknessMm / 1000);
     const wallCenterOffsetM = getDoorWallCenterOffset(draft, basis.thicknessM, panelThicknessM);
     const center = basis.centerA.clone().addScaledVector(basis.dir, centerMm / 1000);
@@ -837,8 +839,13 @@ export function createDoorControlsController(ctx: DoorControlsControllerContext)
     const draft = getPlacementDraft();
     const widthMm = Math.max(1, Math.round(draft.widthMm));
     const { centerMm, lengthMm } = centerOnWallMm(wall, pointMm);
-    if (!isPlacementPointValid(lengthMm, centerMm, widthMm)) {
-      ctx.setUnderlayStatus("Door: dvere sa nedaju vlozit do hrany steny. Klikni dalej od konca.");
+    const validation = validatePlacementPoint(wall.id, lengthMm, centerMm, widthMm);
+    if (!validation.valid) {
+      ctx.setUnderlayStatus(
+        validation.reason === "overlap"
+          ? "Door: otvor sa prekryva s dverami alebo oknom na tejto stene."
+          : "Door: dvere sa nedaju vlozit do hrany steny. Klikni dalej od konca."
+      );
       return false;
     }
 
