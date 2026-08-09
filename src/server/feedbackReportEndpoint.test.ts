@@ -41,7 +41,7 @@ describe("feedback report endpoint", () => {
     const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       requests.push({ url: String(url), body: JSON.parse(String(init?.body)) as Record<string, unknown> });
-      return new Response(JSON.stringify(requests.length === 1 ? 777 : 1000 + requests.length), { status: 200 });
+      return new Response(JSON.stringify([requests.length === 1 ? 777 : 1000 + requests.length]), { status: 200 });
     }) as unknown as typeof fetch;
     const result = await send(report(), fetchImpl);
 
@@ -49,8 +49,10 @@ describe("feedback report endpoint", () => {
     expect(result.sendJson).toHaveBeenCalledWith(expect.anything(), 201, expect.objectContaining({ ok: true, taskId: 777, replayed: false }));
     expect(requests).toHaveLength(4);
     expect(requests[0].url).toContain("/json/2/project.task/create");
-    expect(requests.slice(1).map((request) => (request.body.vals as { name: string }).name)).toEqual(["screenshot.png", "project-snapshot.json", "diagnostics.json"]);
-    const diagnostics = JSON.parse(Buffer.from((requests[3].body.vals as { datas: string }).datas, "base64").toString("utf8"));
+    expect(requests[0].body).toEqual(expect.objectContaining({ vals_list: [expect.objectContaining({ project_id: 42 })] }));
+    const attachmentValues = requests.slice(1).map((request) => (request.body.vals_list as Array<{ name: string; datas: string }>)[0]);
+    expect(attachmentValues.map((values) => values.name)).toEqual(["screenshot.png", "project-snapshot.json", "diagnostics.json"]);
+    const diagnostics = JSON.parse(Buffer.from(attachmentValues[2].datas, "base64").toString("utf8"));
     expect(diagnostics.reporter).toEqual({ userId: "user-a", clientId: "tenant-a" });
   });
 
@@ -59,7 +61,7 @@ describe("feedback report endpoint", () => {
     const fetchImpl = vi.fn(async () => {
       call += 1;
       if (call === 3) return new Response("failure", { status: 500 });
-      return new Response(JSON.stringify(call === 1 ? 777 : call), { status: 200 });
+      return new Response(JSON.stringify([call === 1 ? 777 : call]), { status: 200 });
     }) as unknown as typeof fetch;
 
     const first = await send(report(), fetchImpl);
@@ -68,6 +70,19 @@ describe("feedback report endpoint", () => {
     expect(first.sendJson).toHaveBeenCalledWith(expect.anything(), 502, expect.anything());
     expect(retry.sendJson).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({ ok: true, taskId: 777, replayed: true }));
     expect(fetchImpl).toHaveBeenCalledTimes(5);
+  });
+
+  it("rejects an invalid Odoo 19 create result before reporting success", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(777), { status: 200 })) as unknown as typeof fetch;
+
+    const result = await send(report(), fetchImpl);
+
+    expect(result.sendJson).toHaveBeenCalledWith(
+      expect.anything(),
+      502,
+      expect.objectContaining({ ok: false, error: "Odoo nevytvorilo úlohu." })
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("requires a matching idempotency key and a screenshot", async () => {
