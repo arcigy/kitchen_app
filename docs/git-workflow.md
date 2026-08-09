@@ -42,6 +42,20 @@ If `develop` changed while the task was open, Codex first integrates current
 `origin/develop`, resolves conflicts deliberately, and repeats the affected
 checks before opening or merging the PR.
 
+## CI speed without lowering release safety
+
+Every PR waits for the required `fast-verify` job: dependency installation,
+secret scan, typecheck, lint, full unit suite, production build, dependency
+policy, and CodeQL. The slower restore drill and full browser/UI regression
+run automatically after every `develop` update, nightly, before a release, or
+on a PR labelled `full-regression`.
+
+Codex must add that label before merging a PR which changes editor interaction,
+project save/load or import/export, authentication, tenant access, pricing,
+database/storage, deployment, or another recovery-critical path. It can be
+requested manually for any PR. This keeps ordinary changes fast while ensuring
+that high-risk changes still have the full gate before merge.
+
 ## Founder test loop
 
 After a PR is merged, the founder tests the online `develop` environment and
