@@ -28,6 +28,11 @@ export type CopyProjectMaterialAssignmentRequest = {
   };
 };
 
+export type RemoveProjectMaterialAssignmentRequest = {
+  revision: number;
+  assignmentId: string;
+};
+
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   let data: unknown = {};
@@ -106,6 +111,24 @@ export async function copyProjectMaterialAssignment(
         sourceAssignmentId: request.sourceAssignmentId,
         target: request.target
       }
+    }),
+    signal
+  });
+  return unwrapProjectMaterialsView(await readJson(response));
+}
+
+export async function removeProjectMaterialAssignment(
+  projectId: string,
+  request: RemoveProjectMaterialAssignmentRequest,
+  signal?: AbortSignal
+): Promise<ProjectMaterialsView> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/materials`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      revision: request.revision,
+      operation: { type: "remove_assignment", assignmentId: request.assignmentId }
     }),
     signal
   });

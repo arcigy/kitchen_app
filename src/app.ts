@@ -217,6 +217,7 @@ import { DEFAULT_WALL_TYPE_ID } from "./app/wallTypes";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
+import { createEditorContextMenuController, resolveActiveContextCommand } from "./app/editorContextMenuController";
 import { installKeyboardInputHandlers } from "./app/keyboardInputHandlers";
 import { createTransformController } from "./app/transformController";
 import { createViewModeController } from "./app/viewModeController";
@@ -278,6 +279,7 @@ import { createDemosLivePreviewColorController } from "./app/demosLivePreviewCol
 import { createCameraPlacementController } from "./app/cameraPlacementController";
 import { createViewDisplayController } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
+import { getAppContextMenuController } from "./ui/contextMenu";
 import { createNavigationFocusProvider } from "./app/navigationFocus";
 import { createRecentActivityController } from "./app/recentActivityController";
 import { createViewerToolModeController } from "./app/viewerToolModeController";
@@ -1915,6 +1917,7 @@ export function startApp(initialArgs: AppArgs) {
     return floorBoundaryController.enterFloorBoundaryEdit(floorId);
   };
   const discardFloorBoundaryEdit = () => floorBoundaryController.discardFloorBoundaryEdit();
+  const finishFloorBoundaryEdit = () => floorBoundaryController.finishFloorBoundaryEdit();
   const addFloorEditSegment = (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => floorBoundaryController.addFloorEditSegment(a, b);
 
   floorBoundaryController = createFloorBoundaryController({
@@ -3492,6 +3495,11 @@ export function startApp(initialArgs: AppArgs) {
       ensureLayoutMode();
       setClassicTopbarTab("visualisation");
     },
+    selectModuleById: (instanceId) => {
+      ensureLayoutMode();
+      selectInstanceById(instanceId);
+      mountProps();
+    },
     setDesignTopbar: () => {
       ensureLayoutMode();
       setClassicTopbarTab("architecture");
@@ -3646,13 +3654,6 @@ export function startApp(initialArgs: AppArgs) {
     photo?.setSize(w, h);
   });
   ro.observe(args.viewerEl);
-
-  // Prevent browser context menu so right-drag marquee works.
-  renderer.domElement.addEventListener("contextmenu", (ev) => {
-    if (mode === "layout" && viewMode === "2d" && layoutTool === "select") {
-      ev.preventDefault();
-    }
-  });
 
   // Quick edit dimension value (double click)
   renderer.domElement.addEventListener("dblclick", (ev) => {
@@ -3883,7 +3884,7 @@ export function startApp(initialArgs: AppArgs) {
     windowDragState
   });
 
-  installPointerInputHandlers({
+  const pointerInputHandlers = installPointerInputHandlers({
     S,
     ledStripDrawController,
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
@@ -4105,6 +4106,64 @@ export function startApp(initialArgs: AppArgs) {
     worldToFloorPoint,
     worldToScreen
   });
+
+  const editorContextMenuController = createEditorContextMenuController({
+    canvas: renderer.domElement,
+    menu: getAppContextMenuController(),
+    getState: () => ({
+      mode,
+      viewMode,
+      layoutTool,
+      selectionKind: selectedKind,
+      selectionCount: selectedInstanceIds.size + selectedWallIds.size || (selectedKind ? 1 : 0),
+      hasHiddenObjects: visibilityController.hasHiddenObjects(),
+      selectedHasHidden: visibilityController.selectedHasHidden(),
+      activeCommand: resolveActiveContextCommand({
+        layoutTool,
+        transformKind: transformState.kind,
+        transformMoveSnapDisabled: transformState.moveSnapDisabled,
+        floorBoundaryActive: floorEdit.active,
+        placementActive: placement.active,
+        columnPlacementActive: isColumnPlacementActive(),
+        windowPlacementActive: isWindowPlacementActive(),
+        doorPlacementActive: isDoorPlacementActive(),
+        kitchenWorktopActive: kitchenWorktopDraw.active,
+        orthoEnabled: drawOrthoEnabled,
+        cancelTransform: () => clearTransform(),
+        cancelFloorBoundary: discardFloorBoundaryEdit,
+        finishFloorBoundary: finishFloorBoundaryEdit,
+        cancelPlacement: () => cancelPlacement(S, placementHelpers),
+        cancelColumnPlacement: () => { cancelColumnPlacement(); },
+        cancelWindowPlacement: () => { cancelWindowPlacement(); },
+        cancelDoorPlacement: () => { cancelDoorPlacement(); },
+        cancelKitchenWorktop: () => cancelKitchenWorktopDraw(),
+        cancelLayoutTool: setToolSelect,
+        toggleMoveSnap: () => { transformState.moveSnapDisabled = !transformState.moveSnapDisabled; },
+        toggleOrtho: toggleDrawOrthoMode
+      })
+    }),
+    resolveCanvasTarget: pointerInputHandlers.resolveContextTarget,
+    openProperties: mountProps,
+    openViewProperties: mountActiveViewProps,
+    moveSelection: () => startTransformFromSelection("move", { sticky: true, toggle: true }),
+    rotateSelection: () => startTransformFromSelection("rotate"),
+    duplicateSelection: duplicateSelected,
+    deleteSelection: deleteSelected,
+    editFloorBoundary: () => enterFloorBoundaryEdit(selectedFloorId ?? undefined),
+    openUnderlayProperties: openUnderlayPanel,
+    hideSelection: () => { visibilityController.hideSelected(); },
+    unhideSelection: () => { visibilityController.unhideSelected(); },
+    isolateSelection: () => { visibilityController.isolateSelected(); },
+    unhideAll: () => { visibilityController.unhideAll(); },
+    undo: () => undo(S, helpers),
+    redo: () => redo(S, helpers),
+    resetView: () => resetViewBtn?.click(),
+    saveProject: () => projectMenuActions.saveProject()
+  });
+  const appContextMenuRoot = document.getElementById("app");
+  if (appContextMenuRoot) {
+    getAppContextMenuController().register(appContextMenuRoot, () => editorContextMenuController.resolveGlobalItems());
+  }
 
   createViewModeControllerResult = createViewModeController({
     S,

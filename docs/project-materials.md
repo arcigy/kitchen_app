@@ -16,7 +16,7 @@ The stable categories are corpus, front, worktop, plinth, back, drawer bottom, f
 ## API
 
 - `GET /api/projects/:id/materials` returns only the project assignments, quantities, typed warnings and price-list metadata.
-- `PUT /api/projects/:id/materials` atomically validates and replaces one category assignment. The request includes the last assignment revision; a stale revision returns `409`.
+- `PUT /api/projects/:id/materials` atomically validates and replaces one category assignment. It also supports revision-safe `copy_assignment` for a live module/addition target and `remove_assignment` for an existing scoped override. General settings assignments cannot be removed. The request includes the last assignment revision; a stale revision returns `409`.
 - `POST /api/projects/:id/materials/validate` validates a draft without changing the project.
 - `GET /api/projects/:id/warnings` returns the same assignment validator output.
 - `GET /api/materials/by-code/:code` and `GET /api/components/by-code/:code` are tenant-scoped exact lookups.

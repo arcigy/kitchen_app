@@ -1,5 +1,7 @@
 # Universal Editor Contract
 
+Context-menu input follows the same command and selection owners described here; see `docs/context-menu-contract.md` for the target-selection, availability and accessibility rules.
+
 This document is the ground truth for editor behavior that must work consistently across the application.
 
 It does not describe the current implementation as complete. It defines the target contract for every editable thing in the editor: walls, wall segments, lines, floor boundaries, floor vertices, modules, worktops, custom furniture boards, doors, windows, dimensions, section lines, and generated helper visuals.

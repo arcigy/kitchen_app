@@ -314,6 +314,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     clearFloorBoundaryGroup,
     discardFloorBoundaryEdit,
     enterFloorBoundaryEdit,
+    finishFloorBoundaryEdit,
     floorOrthoPoint,
     moveFloorEditSegment,
     moveFloorEditVertex,
