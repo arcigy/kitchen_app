@@ -5,6 +5,7 @@ import { findOrganizationUser, organizationUserInitial, organizationUserName } f
 import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
 import { mountLoadingSkeleton } from "../loadingSkeleton";
+import { getAppContextMenuController } from "../contextMenu";
 import {
   createProject,
   deleteProject,
@@ -293,6 +294,10 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
       });
       const actions = document.createElement("div");
       actions.append(preview, restore);
+      getAppContextMenuController().register(item, () => [
+        { id: "project-version-preview", label: "Preview version", execute: () => preview.click() },
+        { id: "project-version-restore", label: "Restore version", execute: () => restore.click() }
+      ]);
       item.appendChild(actions);
       list.appendChild(item);
     }
@@ -304,7 +309,7 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
   }
 }
 
-function projectCard(
+export function projectCard(
   project: ProjectMetadata,
   users: readonly OrganizationUser[],
   onLoad: () => void,
@@ -389,6 +394,15 @@ function projectCard(
     });
     menu.hidden = !menu.hidden;
   });
+  getAppContextMenuController().register(card, () => [
+    { id: "project-open", label: "Open project", iconId: "open", execute: onLoad },
+    { id: "project-export", label: "Export project", iconId: "exportJson", execute: onDownload },
+    { id: "project-versions", label: "View saved versions", execute: onVersions },
+    ...(onDelete ? [
+      { type: "separator" as const, id: "project-delete-separator" },
+      { id: "project-delete", label: "Delete project", iconId: "delete" as const, danger: true, execute: onDelete }
+    ] : [])
+  ]);
   card.append(button, menuButton, menu);
   return card;
 }

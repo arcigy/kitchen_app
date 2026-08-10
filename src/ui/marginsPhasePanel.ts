@@ -7,6 +7,7 @@ import {
   PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX,
   PROJECT_MARGIN_PERCENT_MAX
 } from "../core/project-margins/project-margin-validation";
+import { getAppContextMenuController, type ContextMenuItem } from "./contextMenu";
 
 export type { ProjectMarginsView } from "../layout/bom/projectMargins";
 
@@ -150,6 +151,63 @@ export function mountProjectMarginsPanel(
     track(pending);
   };
 
+  const contextMenuItems = (target: HTMLElement): ContextMenuItem[] => {
+    const itemElement = target.closest<HTMLElement>("[data-margin-item-id]");
+    if (itemElement) {
+      const itemId = itemElement.dataset.marginItemId;
+      if (!itemId) return [];
+      const items: ContextMenuItem[] = [{
+        id: "margin-item-edit",
+        label: "Edit item margin",
+        execute: () => queryPanel<HTMLInputElement>(`[data-margin-item-input="${cssEscape(itemId)}"]`)?.focus()
+      }];
+      if (itemElement.dataset.marginSource === "override") {
+        items.push({
+          id: "margin-item-reset",
+          label: "Use group margin",
+          iconId: "resetDefaults",
+          disabledReason: inputsDisabled || !view.editable ? "Margin editing is not available for this project." : undefined,
+          execute: () => runCommit(`item:${itemId}`, () => actions.onResetItem(itemId))
+        });
+      }
+      return items;
+    }
+    const groupElement = target.closest<HTMLElement>("[data-margin-group]");
+    const groupId = groupElement?.dataset.marginGroup;
+    if (groupId) {
+      const group = view.groups.find((candidate) => candidate.category === groupId);
+      const items: ContextMenuItem[] = [{
+        id: "margin-group-edit",
+        label: "Edit group margin",
+        execute: () => queryPanel<HTMLInputElement>(`[data-margin-group-input="${cssEscape(groupId)}"]`)?.focus()
+      }, {
+        id: "margin-group-apply",
+        label: "Apply to entire group",
+        disabledReason: inputsDisabled || !view.editable ? "Margin editing is not available for this project." : undefined,
+        execute: () => queryPanel<HTMLButtonElement>(`[data-margin-group-apply-all="${cssEscape(groupId)}"]`)?.click()
+      }];
+      if (group && (view.settings.groupMargins[group.category] !== undefined || group.overrideCount > 0)) {
+        items.push({
+          id: "margin-group-reset",
+          label: "Reset group margin",
+          iconId: "resetDefaults",
+          disabledReason: inputsDisabled || !view.editable ? "Margin editing is not available for this project." : undefined,
+          execute: () => runCommit(`group:${groupId}`, () => actions.onResetGroup(groupId))
+        });
+      }
+      return items;
+    }
+    if (target.closest(".margins-project-control")) {
+      const isLabor = !!target.closest("[data-margin-additional-labor-input], [data-margin-additional-labor-save]");
+      return [{
+        id: isLabor ? "margin-labor-edit" : "margin-default-edit",
+        label: isLabor ? "Edit additional labor" : "Edit project default margin",
+        execute: () => queryPanel<HTMLInputElement>(isLabor ? "[data-margin-additional-labor-input]" : "[data-margin-default-input]")?.focus()
+      }];
+    }
+    return [];
+  };
+
   const onClick = (event: MouseEvent) => {
     const element = event.target instanceof Element ? event.target : null;
 
@@ -276,6 +334,12 @@ export function mountProjectMarginsPanel(
   footerContainer?.addEventListener("click", onClick);
   footerContainer?.addEventListener("focusout", onFocusOut);
   footerContainer?.addEventListener("keydown", onKeyDown);
+  const unregisterContainerContextMenu = typeof document !== "undefined" && typeof HTMLElement !== "undefined" && container instanceof HTMLElement
+    ? getAppContextMenuController().register(container, (request) => contextMenuItems(request.target))
+    : () => {};
+  const unregisterFooterContextMenu = footerContainer && typeof HTMLElement !== "undefined" && footerContainer instanceof HTMLElement
+    ? getAppContextMenuController().register(footerContainer, (request) => contextMenuItems(request.target))
+    : () => {};
   render();
 
   return {
@@ -307,6 +371,8 @@ export function mountProjectMarginsPanel(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      unregisterContainerContextMenu();
+      unregisterFooterContextMenu();
       container.removeEventListener("click", onClick);
       container.removeEventListener("focusout", onFocusOut);
       container.removeEventListener("keydown", onKeyDown);

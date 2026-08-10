@@ -42,6 +42,7 @@ import {
 } from "./pinoVendorKitchenCatalog";
 import { getModuleCatalogCardPresentation } from "./moduleCatalogCardPresentation";
 import { renderModuleCatalogPreview } from "./moduleCatalogPreview";
+import { registerModuleCatalogContextMenu } from "../ui/moduleCatalogContextMenu";
 import { createAxonometricLineSvgFromObject } from "./moduleAxonometricIcon";
 import { t, translateParamLabel } from "../i18n";
 import type { EditorPropsApi, EditorTopbarApi } from "../app/editorModeApis";
@@ -382,6 +383,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   const prewarmedModuleTypes = new Set<string>();
   const moduleCatalogIconSvgCache = new Map<string, string>();
   let moduleCatalogHost: HTMLElement | null = null;
+  let unregisterModuleCatalogContextMenu: (() => void) | null = null;
   let moduleCatalogSearch = "";
   let tallDimensionOverlayEl: HTMLDivElement | null = null;
   let tallDimensionInputEl: HTMLInputElement | null = null;
@@ -1064,6 +1066,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const mountModuleCatalog = (host: HTMLElement | null) => {
+    unregisterModuleCatalogContextMenu?.();
+    unregisterModuleCatalogContextMenu = null;
     if (!host) {
       moduleCatalogHost?.replaceChildren();
       moduleCatalogHost?.setAttribute("hidden", "");
@@ -1074,6 +1078,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       return;
     }
     moduleCatalogHost = host;
+    unregisterModuleCatalogContextMenu = registerModuleCatalogContextMenu(host);
     document.getElementById("main")?.classList.add("archux-has-module-catalog");
     renderModuleCatalog();
   };

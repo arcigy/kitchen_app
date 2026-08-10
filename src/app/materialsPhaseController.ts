@@ -19,10 +19,17 @@ import type {
 import {
   loadProjectMaterials,
   lookupProjectMaterialCatalogItem,
+  copyProjectMaterialAssignment,
+  removeProjectMaterialAssignment,
   updateProjectMaterialAssignment,
   type ProjectMaterialCatalogLookup,
   type UpdateProjectMaterialAssignmentRequest
 } from "./projectMaterialsApi";
+import { copyProjectMaterialAssignmentToScope } from "../core/project-materials/project-material-copy";
+import {
+  generalProjectMaterialAssignment,
+  projectMaterialScopeAssignmentId
+} from "../core/project-materials/project-material-assignment-resolution";
 import {
   mountProjectMaterialsPanel,
   EMPTY_SUPPLIER_BRIDGE_PANEL_STATE,
@@ -46,6 +53,8 @@ export type MaterialsPhaseControllerApi = {
     id: string,
     signal?: AbortSignal
   ) => Promise<ProjectMaterialCatalogLookup | null>;
+  copyProjectMaterialAssignment: typeof copyProjectMaterialAssignment;
+  removeProjectMaterialAssignment: typeof removeProjectMaterialAssignment;
 };
 
 export type MaterialsPhaseControllerArgs = {
@@ -66,7 +75,9 @@ export type MaterialsPhaseControllerArgs = {
 const DEFAULT_API: MaterialsPhaseControllerApi = {
   loadProjectMaterials,
   updateProjectMaterialAssignment,
-  lookupCatalogItem: lookupProjectMaterialCatalogItem
+  lookupCatalogItem: lookupProjectMaterialCatalogItem,
+  copyProjectMaterialAssignment,
+  removeProjectMaterialAssignment
 };
 
 export function createMaterialsPhaseController(args: MaterialsPhaseControllerArgs) {
@@ -89,6 +100,9 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       onOpenSupplier: args.onOpenSupplier,
       onCancelSupplierBridge: args.onCancelSupplierBridge,
       onSplitEdge: splitEdge,
+      onResetCategory: resetCategory,
+      onCopyGeneralToScope: copyGeneralToScope,
+      onRemoveScopeOverride: removeScopeOverride,
       displayCurrency: args.displayCurrency
     });
     panel.updateSupplierBridge(supplierBridgeState);
@@ -198,6 +212,78 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     renderLocalView();
   }
 
+  const applyRemoteView = (remoteView: ProjectMaterialsView, changedAt: string) => {
+    assignments = initialAssignments(remoteView.assignments, args.catalog, changedAt);
+    view = viewFromRemote(assignments, remoteView, args);
+    panel?.update(view);
+    notifyViewChanged();
+  };
+
+  async function resetCategory(category: MaterialAssignmentCategory): Promise<void> {
+    const changedAt = now();
+    const defaults = createDefaultProjectMaterialAssignments(args.catalog, changedAt);
+    const defaultAssignment = generalProjectMaterialAssignment(defaults.assignments, category);
+    if (!defaultAssignment) throw new Error("Tenant default for this material category is not available.");
+    const nextAssignment = { ...structuredClone(defaultAssignment), source: "user" as const, updatedAt: changedAt };
+    const projectId = args.getProjectId?.() ?? null;
+    if (projectId) {
+      if (!remoteLoaded) throw new Error("Reload Materials before changing an assignment.");
+      applyRemoteView(await api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: nextAssignment }), changedAt);
+      return;
+    }
+    assignments = replaceAssignment(assignments, nextAssignment, changedAt);
+    renderLocalView();
+  }
+
+  async function copyGeneralToScope(scopeId: string, itemId: string, category: MaterialAssignmentCategory): Promise<void> {
+    const scope = (view.scopes ?? []).find((candidate) => candidate.id === scopeId);
+    const item = scope?.items.find((candidate) => candidate.id === itemId && candidate.category === category);
+    if (!scope || !item) throw new Error("The selected module or addition item no longer exists.");
+    const source = generalProjectMaterialAssignment(assignments.assignments, category, item.variantKey);
+    if (!source) throw new Error("No compatible General settings assignment exists for this item.");
+    const changedAt = now();
+    const projectId = args.getProjectId?.() ?? null;
+    if (projectId) {
+      if (!remoteLoaded) throw new Error("Reload Materials before creating an override.");
+      applyRemoteView(await api.copyProjectMaterialAssignment(projectId, {
+        revision: assignments.revision,
+        sourceAssignmentId: source.assignmentId,
+        target: { scopeId, itemId, category }
+      }), changedAt);
+      return;
+    }
+    const copied = copyProjectMaterialAssignmentToScope(source, scopeId, item, changedAt);
+    assignments = {
+      ...assignments,
+      revision: assignments.revision + 1,
+      assignments: [...assignments.assignments.filter((candidate) => candidate.assignmentId !== copied.assignmentId), copied],
+      updatedAt: changedAt
+    };
+    renderLocalView();
+  }
+
+  async function removeScopeOverride(scopeId: string, itemId: string, category: MaterialAssignmentCategory): Promise<void> {
+    const scope = (view.scopes ?? []).find((candidate) => candidate.id === scopeId);
+    const item = scope?.items.find((candidate) => candidate.id === itemId && candidate.category === category);
+    if (!scope || !item) throw new Error("The selected module or addition item no longer exists.");
+    const assignmentId = projectMaterialScopeAssignmentId(scopeId, item);
+    if (!assignments.assignments.some((candidate) => candidate.assignmentId === assignmentId)) return;
+    const changedAt = now();
+    const projectId = args.getProjectId?.() ?? null;
+    if (projectId) {
+      if (!remoteLoaded) throw new Error("Reload Materials before removing an override.");
+      applyRemoteView(await api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }), changedAt);
+      return;
+    }
+    assignments = {
+      ...assignments,
+      revision: assignments.revision + 1,
+      assignments: assignments.assignments.filter((candidate) => candidate.assignmentId !== assignmentId),
+      updatedAt: changedAt
+    };
+    renderLocalView();
+  }
+
   return {
     async open(): Promise<ProjectMaterialsView> {
       active = true;
@@ -280,7 +366,10 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       renderLocalView();
       return view;
     },
-    commitId
+    commitId,
+    resetCategory,
+    copyGeneralToScope,
+    removeScopeOverride
   };
 }
 

@@ -237,4 +237,41 @@ describe("project margins phase panel", () => {
     expect(actions.onResetItem).toHaveBeenCalledWith(projectMarginTargetId(target));
     handle.destroy();
   });
+
+  it("offers real group and item margin actions on right click while inputs keep the native menu", async () => {
+    const host = document.createElement("section");
+    document.body.append(host);
+    const actions = {
+      onCommitDefault: vi.fn(async () => ({ ok: true })),
+      onCommitAdditionalLabor: vi.fn(async () => ({ ok: true })),
+      onApplyGroup: vi.fn(async () => ({ ok: true })),
+      onResetGroup: vi.fn(async () => ({ ok: true })),
+      onCommitItem: vi.fn(async () => ({ ok: true })),
+      onResetItem: vi.fn(async () => ({ ok: true }))
+    };
+    const handle = mountProjectMarginsPanel(host, marginsView(), actions);
+    handle.setInputsDisabled(false);
+
+    const group = host.querySelector<HTMLElement>('[data-margin-group="corpus"]')!;
+    const groupEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    group.dispatchEvent(groupEvent);
+    expect(groupEvent.defaultPrevented).toBe(true);
+    expect(document.querySelector("[data-context-menu-action='margin-group-apply']")).not.toBeNull();
+    document.querySelector<HTMLButtonElement>("[data-context-menu-action='margin-group-reset']")?.click();
+    await handle.flushPending();
+    expect(actions.onResetGroup).toHaveBeenCalledWith("corpus");
+
+    const input = host.querySelector<HTMLInputElement>('[data-margin-group-input="corpus"]')!;
+    const inputEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    input.dispatchEvent(inputEvent);
+    expect(inputEvent.defaultPrevented).toBe(false);
+
+    host.querySelector<HTMLButtonElement>('[data-margin-settings-tab="modules"]')!.click();
+    const item = host.querySelector<HTMLElement>(`[data-margin-item-id="${projectMarginTargetId(target)}"]`)!;
+    item.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    document.querySelector<HTMLButtonElement>("[data-context-menu-action='margin-item-reset']")?.click();
+    await handle.flushPending();
+    expect(actions.onResetItem).toHaveBeenCalledWith(projectMarginTargetId(target));
+    handle.destroy();
+  });
 });

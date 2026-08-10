@@ -12,6 +12,7 @@ import {
   normalizeAutoProjectMaterialAssignments
 } from "../core/project-materials/project-material-business";
 import { copyProjectMaterialAssignmentToScope } from "../core/project-materials/project-material-copy";
+import { isScopedProjectMaterialAssignment } from "../core/project-materials/project-material-assignment-resolution";
 import type {
   CatalogItemSnapshot,
   MaterialAssignmentCategory,
@@ -347,6 +348,33 @@ function copiedState(
   return { state, changed: true };
 }
 
+export function removeScopedProjectMaterialAssignmentState(
+  current: ProjectMaterialAssignmentsState,
+  operation: Record<string, unknown>,
+  expectedRevision: unknown,
+  now: string
+): { state: ProjectMaterialAssignmentsState; changed: boolean } {
+  if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || current.revision !== expectedRevision) {
+    throw new ProjectMaterialUpdateError("Material assignments changed in another session. Reload and try again.", 409, "PROJECT_MATERIAL_REVISION_CONFLICT");
+  }
+  const assignmentId = typeof operation.assignmentId === "string" ? operation.assignmentId.trim() : "";
+  const assignment = current.assignments.find((candidate) => candidate.assignmentId === assignmentId);
+  if (!assignmentId || !assignment) {
+    throw new ProjectMaterialUpdateError("Material assignment was not found in this project.", 422, "MATERIAL_ASSIGNMENT_NOT_FOUND");
+  }
+  if (!isScopedProjectMaterialAssignment(assignment)) {
+    throw new ProjectMaterialUpdateError("Only a module or addition override can be removed.", 422, "GENERAL_MATERIAL_ASSIGNMENT_REQUIRED");
+  }
+  const state: ProjectMaterialAssignmentsState = {
+    ...current,
+    revision: current.revision + 1,
+    assignments: current.assignments.filter((candidate) => candidate.assignmentId !== assignmentId),
+    updatedAt: now
+  };
+  validateProjectMaterialAssignmentsState(state);
+  return { state, changed: true };
+}
+
 export async function handleProjectMaterialsApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -396,11 +424,15 @@ export async function handleProjectMaterialsApi(
       && (operation as Record<string, unknown>).type === "copy_assignment"
       ? operation as Record<string, unknown>
       : null;
-    if (!copyOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
-      deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: "assignment or copy_assignment operation is required." });
+    const removeOperation = operation && typeof operation === "object" && !Array.isArray(operation)
+      && (operation as Record<string, unknown>).type === "remove_assignment"
+      ? operation as Record<string, unknown>
+      : null;
+    if (!copyOperation && !removeOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
+      deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: "assignment, copy_assignment, or remove_assignment operation is required." });
       return true;
     }
-    if (!copyOperation) {
+    if (!copyOperation && !removeOperation) {
       const structuralCandidate: ProjectMaterialAssignmentsState = {
         schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
         initialized: true,
@@ -415,9 +447,12 @@ export async function handleProjectMaterialsApi(
       }
     }
     try {
+      const now = new Date().toISOString();
       const result = copyOperation
-        ? copiedState(current, save, catalog, copyOperation, revision, new Date().toISOString())
-        : { state: updatedState(current, assignment as ProjectMaterialAssignment, revision, catalog, new Date().toISOString()), changed: true };
+        ? copiedState(current, save, catalog, copyOperation, revision, now)
+        : removeOperation
+          ? removeScopedProjectMaterialAssignmentState(current, removeOperation, revision, now)
+          : { state: updatedState(current, assignment as ProjectMaterialAssignment, revision, catalog, now), changed: true };
       if (!result.changed) {
         deps.sendJson(res, 200, { ok: true, view: projectMaterialsView(save, current, catalog) });
         return true;

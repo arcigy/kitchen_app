@@ -9,6 +9,7 @@ import {
   copyProjectMaterialAssignment,
   loadProjectMaterials,
   lookupProjectMaterialCatalogItem,
+  removeProjectMaterialAssignment,
   updateProjectMaterialAssignment
 } from "./projectMaterialsApi";
 
@@ -106,6 +107,32 @@ describe("project materials API", () => {
         type: "copy_assignment",
         sourceAssignmentId: state.assignments[0]!.assignmentId,
         target: { scopeId: "module:m1", itemId: "left-side", category: "corpus" }
+      }
+    });
+  });
+
+  it("removes one scoped override through a revision-safe operation", async () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, NOW);
+    const view = createProjectMaterialsView(state, [], catalog);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ view }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await removeProjectMaterialAssignment("project remove", {
+      revision: 7,
+      assignmentId: "material-assignment:module:m1:front:door"
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/projects/project%20remove/materials");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({
+      revision: 7,
+      operation: {
+        type: "remove_assignment",
+        assignmentId: "material-assignment:module:m1:front:door"
       }
     });
   });

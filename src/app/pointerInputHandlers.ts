@@ -22,6 +22,7 @@ import type { TechnicalDimensionRecord } from "./technicalDimensions";
 import type { PointerTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
 import { continueMoveAfterObjectSelection } from "./moveToolSelectionFlow";
 import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
+import type { CanvasContextTarget } from "./editorContextMenuController";
 import {
   finishTrimNoChange,
   finishTrimSuccess,
@@ -1560,6 +1561,166 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     });
   };
 
+  const currentCanvasContextTarget = (): CanvasContextTarget | null => {
+    if (!ctx.selectedKind) return null;
+    if (ctx.selectedKind === "module") return { kind: "module", id: ctx.selectedInstanceId };
+    if (ctx.selectedKind === "kitchenGroup") return { kind: "kitchenGroup", id: ctx.selectedKitchenGroupId };
+    if (ctx.selectedKind === "wall") return { kind: "wall", id: ctx.selectedWallId };
+    if (ctx.selectedKind === "floor") return { kind: "floor", id: ctx.selectedFloorId };
+    if (ctx.selectedKind === "column") return { kind: "column", id: ctx.selectedColumnId };
+    if (ctx.selectedKind === "section") return { kind: "section", id: ctx.selectedSectionId };
+    if (ctx.selectedKind === "window") return { kind: "window", id: ctx.windowInst?.id ?? null };
+    if (ctx.selectedKind === "door") return { kind: "door", id: ctx.doorInst?.id ?? null };
+    return { kind: "underlay", id: "main" };
+  };
+
+  const contextPointerEvent = (ev: MouseEvent): PointerEvent => ev as PointerEvent;
+
+  const selectCanvasContextTarget = (target: CanvasContextTarget, ev: MouseEvent, pointMm?: { x: number; z: number }) => {
+    if (target.kind === "module" && target.id) {
+      if (!ctx.selectedInstanceIds.has(target.id)) ctx.beginModuleSelection(target.id, contextPointerEvent(ev));
+      return currentCanvasContextTarget() ?? target;
+    }
+    if (target.kind === "kitchenGroup") return currentCanvasContextTarget() ?? target;
+    if (target.kind === "wall" && target.id) {
+      if (!ctx.selectedWallIds.has(target.id)) ctx.setSelectedWall(target.id);
+    } else if (target.kind === "floor" && target.id) {
+      if (!(ctx.selectedKind === "floor" && ctx.selectedFloorId === target.id)) ctx.setSelectedFloor(target.id);
+    } else if (target.kind === "column" && target.id) {
+      if (!(ctx.selectedKind === "column" && ctx.selectedColumnId === target.id)) ctx.setSelectedColumn(target.id);
+    } else if (target.kind === "section" && target.id) {
+      if (!(ctx.selectedKind === "section" && ctx.selectedSectionId === target.id)) ctx.setSelectedSection(target.id);
+    } else if (target.kind === "window" && target.id) {
+      if (!(ctx.selectedKind === "window" && ctx.windowInst?.id === target.id)) {
+        const picked = ctx.windows.find((item) => item.id === target.id) ?? null;
+        if (picked) {
+          ctx.windowInst = picked;
+          ctx.setSelectedWindow();
+        }
+      }
+    } else if (target.kind === "door" && target.id) {
+      if (!(ctx.selectedKind === "door" && ctx.doorInst?.id === target.id)) {
+        const picked = ctx.doors.find((item) => item.id === target.id) ?? null;
+        if (picked) {
+          ctx.doorInst = picked;
+          ctx.setSelectedDoor();
+        }
+      }
+    } else if (target.kind === "underlay") {
+      if (ctx.selectedKind !== "underlay") ctx.setSelectedUnderlay();
+    }
+    return currentCanvasContextTarget() ?? target;
+  };
+
+  const resolveFloorplanContextTarget = (ev: MouseEvent, rect: DOMRect): CanvasContextTarget | null => {
+    const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    if (!hitPoint) return null;
+    const pMm = ctx.toMmPoint(hitPoint);
+    const mouse = pointerClientPointInRect(ev, rect);
+    const pickedWindow = pickFloorplanWindow(pMm, mouse, rect);
+    if (pickedWindow) return selectCanvasContextTarget({ kind: "window", id: pickedWindow.id }, ev);
+    const pickedDoor = pickFloorplanDoor(pMm, mouse, rect);
+    if (pickedDoor) return selectCanvasContextTarget({ kind: "door", id: pickedDoor.id }, ev);
+
+    const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
+    const sectionId = ctx.getSectionIdFromObject(sectionHit);
+    if (sectionId) return selectCanvasContextTarget({ kind: "section", id: sectionId }, ev);
+    const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+    const columnId = ctx.getColumnIdFromObject(columnHit);
+    if (columnId) return selectCanvasContextTarget({ kind: "column", id: columnId }, ev);
+
+    const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+    const directModuleId = ctx.getInstanceIdFromObject(moduleHit);
+    const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const rawModuleId = directModuleId ?? fallbackModuleId;
+    const moduleId = rawModuleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(rawModuleId) : rawModuleId;
+    if (moduleId && isPickableKey(`module:${moduleId}`)) return selectCanvasContextTarget({ kind: "module", id: moduleId }, ev);
+
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+    if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, contextPointerEvent(ev), pMm)) return currentCanvasContextTarget();
+
+    const floorId = pickFloorplanFloorBoundary({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      floors: ctx.floors,
+      floorPointToWorld: ctx.floorPointToWorld,
+      isFloorPickable: (id) => isPickableKey(`floor:${id}`),
+      mouse,
+      rect,
+      snapPx: 12,
+      worldToScreen: ctx.worldToScreen
+    });
+    if (floorId) return selectCanvasContextTarget({ kind: "floor", id: floorId }, ev);
+
+    const wallPick = resolveFloorplanWallPick({
+      axisSnapPx: 10,
+      cam: ctx.cam(),
+      isWallPickable: (id) => isPickableKey(`wall:${id}`),
+      mouse,
+      pMm,
+      pointInPolygonXZ: ctx.pointInPolygonXZ,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      wallSolvedOutlines: ctx.wallSolvedOutlines,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
+    const wallId = wallPick.polygonWallId ?? wallPick.axisWallId;
+    if (wallId) return selectCanvasContextTarget({ kind: "wall", id: wallId }, ev);
+    if (ctx.underlayMesh.visible && hasLoadedUnderlay() && isPickableKey("underlay:main") && ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0]) {
+      return selectCanvasContextTarget({ kind: "underlay", id: "main" }, ev);
+    }
+    return null;
+  };
+
+  const resolve3dContextTarget = (ev: MouseEvent): CanvasContextTarget | null => {
+    const picks: THREE.Object3D[] = ctx.getAllInstanceGeometryMeshes();
+    const windowPicks = ctx.windows.map((item) => item.pick);
+    const doorPicks = ctx.doors.map((item) => item.pick);
+    picks.push(...windowPicks, ...doorPicks, ...ctx.getColumnPickMeshes());
+    for (const wall of ctx.walls) picks.push(wall.mesh);
+    for (const floor of ctx.floors) picks.push(floor.mesh, floor.outline);
+    const hits = ctx.raycaster.intersectObjects(pickableObjects(picks), false);
+    const windowHit = ctx.raycaster.intersectObjects(pickableObjects(windowPicks), false)[0] ?? null;
+    const doorHit = ctx.raycaster.intersectObjects(pickableObjects(doorPicks), false)[0] ?? null;
+    const openingHit = doorHit && windowHit ? (doorHit.distance <= windowHit.distance ? doorHit : windowHit) : doorHit ?? windowHit;
+    const firstHit = openingHit && (!hits[0] || openingHit.distance <= hits[0].distance + 0.25) ? openingHit : hits[0];
+    const first = firstHit?.object as THREE.Mesh | undefined;
+    if (first) {
+      const kind = (first.userData?.kind as string | undefined) ?? "module";
+      if (kind === "window") {
+        const item = findWindowFromObject(first);
+        if (item) return selectCanvasContextTarget({ kind: "window", id: item.id }, ev);
+      }
+      if (kind === "door") {
+        const item = findDoorFromObject(first);
+        if (item) return selectCanvasContextTarget({ kind: "door", id: item.id }, ev);
+      }
+      const moduleId = ctx.getInstanceIdFromObject(first);
+      const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
+      if (selectableModuleId) return selectCanvasContextTarget({ kind: "module", id: selectableModuleId }, ev);
+      const columnId = ctx.getColumnIdFromObject(first);
+      if (columnId) return selectCanvasContextTarget({ kind: "column", id: columnId }, ev);
+      const floorId = (first.userData?.floorId as string | undefined) ?? null;
+      if (floorId) return selectCanvasContextTarget({ kind: "floor", id: floorId }, ev);
+      const wallId = (first.userData?.wallId as string | undefined) ?? null;
+      if (wallId) return selectCanvasContextTarget({ kind: "wall", id: wallId }, ev);
+    }
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit);
+    if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, contextPointerEvent(ev))) return currentCanvasContextTarget();
+    return null;
+  };
+
+  const resolveContextTarget = (ev: MouseEvent | KeyboardEvent): CanvasContextTarget | null => {
+    if (!(ev instanceof MouseEvent) || ctx.mode !== "layout" || ctx.layoutTool !== "select") return currentCanvasContextTarget();
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    updateRaycasterFromPointer(ev, rect);
+    if (ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan") return resolveFloorplanContextTarget(ev, rect);
+    return resolve3dContextTarget(ev);
+  };
+
   ctx.renderer.domElement.addEventListener("dblclick", (ev) => {
     if (ctx.mode !== "layout" || ctx.layoutTool !== "select") return;
     const target = resolveKitchenGroupTargetFromPointer(ev);
@@ -2966,4 +3127,6 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.updateLayoutPanel();
     }
   });
+
+  return { resolveContextTarget };
 }

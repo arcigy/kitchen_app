@@ -7,6 +7,7 @@ import { mountProjectMaterialsPanel, renderMaterialWarnings } from "../ui/materi
 import { showComingSoonDialog } from "../ui/comingSoonDialog";
 import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
+import { getAppContextMenuController, type ContextMenuItem } from "../ui/contextMenu";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
 
@@ -36,6 +37,7 @@ type WorkspaceNavigationControllerArgs = {
   };
   setVisualisationTopbar: () => void;
   setDesignTopbar: () => void;
+  selectModuleById?: (instanceId: string) => void;
 };
 
 type SheetRecord = {
@@ -169,6 +171,35 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       else if (tab === "views") content.appendChild(renderViewSchedule(args.S));
       else content.appendChild(renderModuleSchedule(args.S));
     };
+    if (typeof window !== "undefined" && typeof HTMLElement !== "undefined" && body instanceof HTMLElement) getAppContextMenuController().register(body, (request) => {
+      const row = request.target.closest<HTMLTableRowElement>("tbody tr");
+      if (!row) return [];
+      const instanceId = row.dataset.scheduleInstanceId;
+      const items: ContextMenuItem[] = [];
+      if (instanceId && args.selectModuleById) {
+        items.push({
+          id: "schedule-open-source",
+          label: "Open source module",
+          iconId: "open",
+          execute: async () => {
+            await handleNav("design");
+            args.selectModuleById?.(instanceId);
+          }
+        });
+      }
+      items.push({
+        id: "schedule-copy-row",
+        label: "Copy row",
+        iconId: "copyExport",
+        execute: () => copyScheduleRow(row)
+      });
+      items.push({ type: "separator", id: "schedule-phase-separator" });
+      items.push(
+        { id: "schedule-open-materials", label: "Open Materials", iconId: "materials", execute: () => handleNav("materials") },
+        { id: "schedule-open-margins", label: "Open Margins", iconId: "margins", execute: () => handleNav("margins") }
+      );
+      return items;
+    });
     tabButtons.forEach((button) => {
       button.addEventListener("click", () => {
         tabButtons.forEach((item) => item.classList.toggle("active", item === button));
@@ -401,6 +432,7 @@ function renderModuleSchedule(S: AppState): HTMLElement {
       <td>${Math.round(instance.root.position.x * 1000)} / ${Math.round(instance.root.position.z * 1000)} mm</td>
       <td>${materialIdForModule(instance) ?? "-"}</td>
     `;
+    row.dataset.scheduleInstanceId = instance.id;
     row.addEventListener("click", () => renderModuleDetail(detail, instance));
     row.addEventListener("keydown", (event) => {
       if (event.key === "Enter") renderModuleDetail(detail, instance);
@@ -490,6 +522,23 @@ function scheduleTable(headers: string[], rows: string[][]): HTMLElement {
     </table>
   `;
   return wrap;
+}
+
+async function copyScheduleRow(row: HTMLTableRowElement): Promise<void> {
+  const text = Array.from(row.cells, (cell) => cell.textContent?.trim() ?? "").join("\t");
+  if (!text) return;
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }
 
 function boardRowsForInstance(instance: LayoutInstance) {

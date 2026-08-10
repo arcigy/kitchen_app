@@ -17,6 +17,7 @@ import {
   isPriceCurrency,
   type PriceCurrency
 } from "../core/pricing/currency";
+import { getAppContextMenuController, type ContextMenuItem } from "./contextMenu";
 
 export type ProjectSupplierId = string;
 
@@ -39,6 +40,9 @@ export type ProjectMaterialsPanelActions = {
   onOpenSupplier?: (supplierId: ProjectSupplierId) => Promise<void>;
   onCancelSupplierBridge?: () => Promise<void>;
   onSplitEdge?: (category: "edge_front" | "edge_other") => Promise<void>;
+  onResetCategory?: (category: MaterialAssignmentCategory) => Promise<void>;
+  onCopyGeneralToScope?: (scopeId: string, itemId: string, category: MaterialAssignmentCategory) => Promise<void>;
+  onRemoveScopeOverride?: (scopeId: string, itemId: string, category: MaterialAssignmentCategory) => Promise<void>;
   displayCurrency?: PriceCurrency;
 };
 
@@ -117,6 +121,64 @@ export function mountProjectMaterialsPanel(
       displayCurrency: actions.displayCurrency
     });
   };
+  const focusCategoryCard = (category: MaterialAssignmentCategory) => {
+    const group = container.querySelector<HTMLElement>(`[data-material-assignment-category="${category}"]`);
+    if (!group) return;
+    group.tabIndex = -1;
+    group.focus();
+    group.scrollIntoView?.({ block: "center" });
+  };
+  const openGeneralCategory = (category: MaterialAssignmentCategory) => {
+    activeSettingsTab = "general";
+    render();
+    queueMicrotask(() => focusCategoryCard(category));
+  };
+  const contextMenuItems = (target: HTMLElement): ContextMenuItem[] => {
+    const scopeItem = target.closest<HTMLElement>("[data-material-scope-item]");
+    if (scopeItem) {
+      const scopeId = scopeItem.dataset.materialScopeId;
+      const itemId = scopeItem.dataset.materialScopeItem;
+      const category = scopeItem.dataset.materialScopeCategory as MaterialAssignmentCategory | undefined;
+      if (!scopeId || !itemId || !category) return [];
+      const items: ContextMenuItem[] = [
+        { id: "material-general-properties", label: "Open General assignment", iconId: "materialEdit", execute: () => openGeneralCategory(category) }
+      ];
+      if (actions.onCopyGeneralToScope) {
+        items.push({ id: "material-create-override", label: "Create own assignment from General", execute: () => actions.onCopyGeneralToScope!(scopeId, itemId, category) });
+      }
+      if (scopeItem.dataset.materialAssignmentSource === "override" && actions.onRemoveScopeOverride) {
+        items.push({ type: "separator", id: "material-scope-reset-separator" });
+        items.push({ id: "material-remove-override", label: "Use General assignment", iconId: "resetDefaults", execute: () => actions.onRemoveScopeOverride!(scopeId, itemId, category) });
+      }
+      return items;
+    }
+    const group = target.closest<HTMLElement>("[data-material-assignment-category]");
+    const category = group?.dataset.materialAssignmentCategory as MaterialAssignmentCategory | undefined;
+    if (!category) return [];
+    const items: ContextMenuItem[] = [
+      { id: "material-properties", label: "Material properties and usage", iconId: "materialEdit", execute: () => focusCategoryCard(category) }
+    ];
+    if (actions.onOpenSupplier && supplierBridge.suppliers.length > 0) {
+      items.push({
+        type: "submenu",
+        id: "material-open-supplier",
+        label: "Open supplier",
+        items: supplierBridge.suppliers.map((supplier) => ({
+          id: `material-open-supplier-${supplier.supplierId}`,
+          label: supplier.displayName,
+          execute: () => actions.onOpenSupplier!(supplier.supplierId)
+        }))
+      });
+    }
+    if (actions.onResetCategory) {
+      items.push({ type: "separator", id: "material-reset-separator" });
+      items.push({ id: "material-reset-default", label: "Reset to tenant default", iconId: "resetDefaults", execute: () => actions.onResetCategory!(category) });
+    }
+    return items;
+  };
+  const unregisterContextMenu = typeof document !== "undefined" && typeof HTMLElement !== "undefined" && container instanceof HTMLElement
+    ? getAppContextMenuController().register(container, (request) => contextMenuItems(request.target))
+    : () => {};
 
   const commitInput = async (inputElement: HTMLInputElement) => {
     const category = inputElement.dataset.materialCategory as MaterialAssignmentCategory | undefined;
@@ -259,6 +321,7 @@ export function mountProjectMaterialsPanel(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      unregisterContextMenu();
       container.removeEventListener("focusout", onFocusOut);
       container.removeEventListener("keydown", onKeyDown);
       container.removeEventListener("click", onClick);
@@ -358,17 +421,18 @@ function renderScopeSettings(
   const categoryLabel = (category: MaterialAssignmentCategory) => category === "runner"
     ? "Zásuvky"
     : MATERIAL_ASSIGNMENT_CATEGORIES.find((definition) => definition.category === category)?.label ?? category;
-  return `<section class="materials-scope-settings" aria-label="${escapeHtml(selected.label)}">
+  return `<section class="materials-scope-settings" aria-label="${escapeHtml(selected.label)}" data-material-scope-id="${escapeHtml(selected.id)}">
     <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Dosky a komponenty dedia materiál z General settings.</p></div>
     <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-material-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
     <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(categoryLabel(category))}</h3>${category === "runner" ? "<p>Výsuvy sú rozdelené podľa výšky čela a hrúbky korpusu.</p>" : ""}${selected.items.filter((item) => item.category === category).map((item) => {
       const effective = resolveEffectiveProjectMaterialAssignment(view.assignments.assignments, selected.id, item);
-      return renderScopeItem(item, effective.assignment, effective.source, displayCurrency);
+      return renderScopeItem(selected.id, item, effective.assignment, effective.source, displayCurrency);
     }).join("")}</section>`).join("")}</div>
   </section>`;
 }
 
 function renderScopeItem(
+  scopeId: string,
   item: NonNullable<ProjectMaterialsView["scopes"]>[number]["items"][number],
   assignment: ProjectMaterialAssignment | null,
   source: "override" | "general" | null,
@@ -378,7 +442,7 @@ function renderScopeItem(
   const snapshot = assignmentSnapshot(assignment);
   const sourceLabel = source === "override" ? "Vlastné priradenie" : source === "general" ? "Zdedené z General settings" : "Nepriradené";
   const product = supplier ? `${escapeHtml(snapshot?.definition.displayName ?? "Produkt")} · ${escapeHtml(supplier.productCode)}` : snapshot?.definition.displayName ? escapeHtml(snapshot.definition.displayName) : "Nepriradené";
-  return `<article class="materials-scope-item" data-material-scope-item="${escapeHtml(item.id)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(item.quantity, item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}</small><strong>${snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit, displayCurrency) : "Nepriradené"}</strong></div></article>`;
+  return `<article class="materials-scope-item" data-material-scope-id="${escapeHtml(scopeId)}" data-material-scope-item="${escapeHtml(item.id)}" data-material-scope-category="${escapeHtml(item.category)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(item.quantity, item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}</small><strong>${snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit, displayCurrency) : "Nepriradené"}</strong></div></article>`;
 }
 
 function renderSupplierBridge(state: SupplierBridgePanelState): string {

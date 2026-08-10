@@ -1,0 +1,120 @@
+.arcigy-context-menu {
+  position: fixed;
+  z-index: 10020;
+  min-width: 226px;
+  max-width: min(340px, calc(100vw - 12px));
+  padding: 4px;
+  color: var(--text, #2b2b2b);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #c9c9c9);
+  border-radius: 5px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.2);
+  font: 12px/1.25 "Segoe UI", sans-serif;
+}
+
+.arcigy-context-menu--submenu {
+  position: absolute;
+  z-index: 1;
+}
+
+.arcigy-context-menu--submenu[hidden] {
+  display: none;
+}
+
+.arcigy-context-menu__submenu-wrap {
+  position: relative;
+}
+
+.arcigy-context-menu__item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px 4px 4px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.arcigy-context-menu__item:hover,
+.arcigy-context-menu__item:focus-visible {
+  outline: none;
+  background: var(--accent-soft, #dcecfb);
+}
+
+.arcigy-context-menu__item.is-danger {
+  color: var(--danger, #b84c3a);
+}
+
+.arcigy-context-menu__item.is-checked .arcigy-context-menu__icon:empty::before {
+  content: "✓";
+  font-weight: 700;
+}
+
+.arcigy-context-menu__item:disabled {
+  color: var(--muted, #666);
+  opacity: 0.58;
+}
+
+.arcigy-context-menu__item.is-busy .arcigy-context-menu__icon::after {
+  content: "";
+  display: block;
+  width: 11px;
+  height: 11px;
+  margin: auto;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: arcigy-context-menu-spin 0.7s linear infinite;
+}
+
+.arcigy-context-menu__item.is-busy .arcigy-action-icon {
+  display: none;
+}
+
+.arcigy-context-menu__icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.arcigy-context-menu__icon .arcigy-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.arcigy-context-menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcigy-context-menu__shortcut,
+.arcigy-context-menu__submenu-arrow {
+  margin-left: 24px;
+  color: var(--muted, #666);
+  white-space: nowrap;
+}
+
+.arcigy-context-menu__submenu-arrow {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.arcigy-context-menu__separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-2, #d8d8d8);
+}
+
+@keyframes arcigy-context-menu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
