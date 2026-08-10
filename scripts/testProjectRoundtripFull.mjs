@@ -48,19 +48,13 @@ async function clickButtonByText(page, text) {
 }
 
 async function clickButtonByTexts(page, texts) {
-  await page.waitForFunction((wanted) =>
-    [...document.querySelectorAll("button")].some((item) => wanted.includes((item.textContent || "").trim())),
-  texts, { timeout: 10000 });
-  for (const text of texts) {
-    const clicked = await page.evaluate((wanted) => {
-      const button = [...document.querySelectorAll("button")].find((item) => (item.textContent || "").trim() === wanted);
-      if (!button) return false;
-      button.click();
-      return true;
-    }, text);
-    if (clicked) return;
-  }
-  throw new Error(`Button not found: ${texts.join(" / ")}`);
+  await page.waitForFunction((wanted) => {
+    const button = [...document.querySelectorAll("button")]
+      .find((item) => wanted.includes((item.textContent || "").trim()));
+    if (!button) return false;
+    button.click();
+    return true;
+  }, texts, { timeout: 10000 });
 }
 
 async function planPointToViewport(page, pointMm) {
