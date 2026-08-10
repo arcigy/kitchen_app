@@ -17,6 +17,16 @@ import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 import { getKitchenModuleRole } from "./kitchenModuleRules";
 import type { ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 
+const historyRevisions = new WeakMap<AppState, number>();
+
+function bumpHistoryRevision(S: AppState): void {
+  historyRevisions.set(S, (historyRevisions.get(S) ?? 0) + 1);
+}
+
+export function getLayoutHistoryRevision(S: AppState): number {
+  return historyRevisions.get(S) ?? 0;
+}
+
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
   setSelectedFloor?: (id: string | null) => void;
@@ -310,6 +320,7 @@ export const commitHistory = (S: AppState) => {
   if (S.history.past.length > S.history.max) S.history.past.splice(0, S.history.past.length - S.history.max);
   S.history.current = next;
   S.history.future = [];
+  bumpHistoryRevision(S);
   updateUndoRedoUi(S);
 };
 
@@ -320,6 +331,7 @@ export const undo = (S: AppState, helpers: HistoryHelpers) => {
   S.history.future.push(S.history.current);
   S.history.current = prev;
   restoreLayoutSnapshot(S, helpers, prev);
+  bumpHistoryRevision(S);
   updateUndoRedoUi(S);
 };
 
@@ -330,5 +342,6 @@ export const redo = (S: AppState, helpers: HistoryHelpers) => {
   S.history.past.push(S.history.current);
   S.history.current = next;
   restoreLayoutSnapshot(S, helpers, next);
+  bumpHistoryRevision(S);
   updateUndoRedoUi(S);
 };

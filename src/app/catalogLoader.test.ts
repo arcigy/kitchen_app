@@ -154,10 +154,10 @@ describe("catalogLoader PINO tenant loading", () => {
     const data = await loadClientAppDataForApp("client_pino_nobilia_vkh_2026");
 
     expect(data.clientCatalog.clientId).toBe("client_pino_nobilia_vkh_2026");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   }, 15_000);
 
-  it("uses a fresh same-tenant cache without starting another full catalog download", async () => {
+  it("uses a same-tenant cache only as an explicitly unverified offline fallback", async () => {
     const catalog = {
       clientId: "client_pino_nobilia_vkh_2026",
       ...createSystemCatalogSeed()
@@ -177,8 +177,55 @@ describe("catalogLoader PINO tenant loading", () => {
     const data = await loadClientAppDataForApp(catalog.clientId);
 
     expect(data.clientCatalog.clientId).toBe(catalog.clientId);
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(getClientAppDataLoadSource(data)).toBe("unverified_session_cache");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/app-data/revision");
+  });
+
+  it("prefers an authoritative catalog download when the revision endpoint is unavailable", async () => {
+    const clientId = "client_revision_unavailable";
+    const staleCatalog = { clientId, ...createSystemCatalogSeed(), marker: "stale" };
+    const currentCatalog = { clientId, ...createSystemCatalogSeed(), marker: "current" };
+    window.sessionStorage.setItem(
+      "arcigy.kitchen.clientAppData.v1",
+      JSON.stringify({
+        clientId,
+        clientCatalog: staleCatalog,
+        modulePackages: systemModulePackageTemplates.slice(0, 1),
+        cachedAt: Date.now()
+      })
+    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/app-data/revision")) return { ok: false, status: 503, json: async () => ({}) } as Response;
+      if (url.endsWith("/api/catalog/bootstrap")) return createResponse({ catalog: currentCatalog });
+      if (url.endsWith("/api/modules")) return createResponse({ modules: systemModulePackageTemplates.slice(0, 1) });
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const data = await loadClientAppDataForApp(clientId);
+
+    expect((data.clientCatalog as typeof currentCatalog).marker).toBe("current");
+    expect(getClientAppDataLoadSource(data)).toBe("network");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/catalog/bootstrap"))).toBe(true);
+  });
+
+  it("never exposes cached tenant pricing after an authorization failure", async () => {
+    const clientId = "client_auth_expired";
+    const catalog = { clientId, ...createSystemCatalogSeed() };
+    window.sessionStorage.setItem(
+      "arcigy.kitchen.clientAppData.v1",
+      JSON.stringify({
+        clientId,
+        clientCatalog: catalog,
+        modulePackages: systemModulePackageTemplates.slice(0, 1),
+        cachedAt: Date.now()
+      })
+    );
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }) as Response));
+
+    await expect(loadClientAppDataForApp(clientId)).rejects.toThrow("HTTP 401");
   });
 
   it("reuses the project-manager prefetch when the workspace opens", async () => {
@@ -203,7 +250,7 @@ describe("catalogLoader PINO tenant loading", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     releaseCatalog!(createResponse({ catalog }));
     await expect(opened).resolves.toMatchObject({ clientCatalog: { clientId: catalog.clientId } });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("compresses app data that exceeds the sessionStorage quota and restores it without another fetch", async () => {

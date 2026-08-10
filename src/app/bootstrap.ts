@@ -5,6 +5,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { ProjectMetadata } from "../core/project/project-types";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
+import type { ProjectRecoveryEnvelopeV1, ProjectRecoveryScope } from "./project/projectRecoveryTypes";
 import { createButtonElement, createCheckboxElement, createHtmlButtonElement } from "./propsPanelElements";
 
 export type AppArgs = {
@@ -17,6 +18,9 @@ export type AppArgs = {
   clientProfile?: ClientProfile | undefined;
   initialProject?: ProjectMetadata | null;
   initialProjectSave?: ProjectSaveFile | null;
+  initialRecovery?: ProjectRecoveryEnvelopeV1 | null;
+  recoveryScope?: ProjectRecoveryScope;
+  recoveryNotice?: string | null;
   openProjectManager?: () => void;
   formEl?: HTMLElement;
   errorsEl?: HTMLElement;

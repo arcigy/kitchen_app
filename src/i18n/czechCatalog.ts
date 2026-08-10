@@ -1,5 +1,8 @@
 /** Czech system copy keyed by the canonical English source text. */
 export const CZECH_SYSTEM_TEXT: Readonly<Record<string, string>> = {
+  "Local recovery draft – server will be verified on open": "Místní koncept obnovení – server se ověří při otevření.",
+  "Local recovery data are not shown without a valid sign-in.": "Místní data obnovení se bez platného přihlášení nezobrazují.",
+  "Server is unavailable. Marked local recovery projects are shown.": "Server není dostupný. Zobrazují se označené místní projekty obnovení.",
   Open: "Otevřít",
   Print: "Tisknout",
   "Cloud status": "Stav cloudu",

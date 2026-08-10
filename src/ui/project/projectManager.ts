@@ -16,17 +16,21 @@ import {
   listProjects,
   loadProject,
   loadProjectVersion,
+  ProjectApiError,
   restoreProjectVersion,
   type CreateProjectRequest
 } from "../../app/project/projectApi";
+import { createProjectRecoveryStore } from "../../app/project/projectRecoveryStore";
 
 export type ProjectManagerSelection =
   | { kind: "blank" }
   | { kind: "created"; project: ProjectMetadata }
-  | { kind: "loaded"; save: ProjectSaveFile };
+  | { kind: "loaded"; save: ProjectSaveFile }
+  | { kind: "recovery"; projectId: string; workspaceId: string };
 
 type ProjectManagerArgs = {
   root: HTMLElement;
+  clientId: string;
   clientName: string;
   organizationUsers: OrganizationUser[];
   currentUserId: string;
@@ -324,10 +328,12 @@ export function projectCard(
   onLoad: () => void,
   onDownload: () => void,
   onVersions: () => void,
-  onDelete?: () => void
+  onDelete?: () => void,
+  cachedRecovery = false
 ): HTMLElement {
   const card = document.createElement("article");
   card.className = "project-manager-project-card";
+  card.classList.toggle("project-manager-project-card--cached", cachedRecovery);
   const button = document.createElement("button");
   button.type = "button";
   button.className = "project-manager-project";
@@ -356,6 +362,12 @@ export function projectCard(
   const date = document.createElement("small");
   date.textContent = editedAgo(project.updatedAt);
   copy.append(title, date, renderActor(users, project.createdByUserId, t("Created by")), renderActor(users, project.updatedByUserId, t("Saved by")));
+  if (cachedRecovery) {
+    const cached = document.createElement("small");
+    cached.className = "project-manager-project-cached";
+    cached.textContent = t("Local recovery draft – server will be verified on open");
+    copy.appendChild(cached);
+  }
   footer.append(icon, copy);
   button.append(preview, footer);
   button.addEventListener("click", onLoad);
@@ -422,7 +434,9 @@ function renderProjects(
   users: readonly OrganizationUser[],
   onLoad: (projectId: string) => Promise<void>,
   canDeleteProjects: boolean,
-  onRefresh?: () => Promise<void>
+  onRefresh?: () => Promise<void>,
+  recoveryWorkspaceIds: ReadonlyMap<string, string> = new Map(),
+  recoveryIdentity?: { clientId: string; userId: string }
 ): void {
   const list = root.querySelector<HTMLElement>("[data-project-manager-list]");
   if (!list) return;
@@ -467,6 +481,9 @@ function renderProjects(
       setStatus(root, message("Deleting project \"{project}\"…", { project: project.name }));
       try {
         await deleteProject(project.projectId);
+        if (recoveryIdentity) {
+          await createProjectRecoveryStore().clearProject(recoveryIdentity.clientId, recoveryIdentity.userId, project.projectId);
+        }
         if (onRefresh) await onRefresh();
         setStatus(root, t("Project deleted."));
       } catch (error) {
@@ -475,13 +492,14 @@ function renderProjects(
         throw error;
       }
     };
+    const cachedRecovery = recoveryWorkspaceIds.has(project.projectId);
     const card = projectCard(project, users, loadCard, downloadCard, () => {
       void openVersionsDialog(root, project, users, async () => {
         if (onRefresh) await onRefresh();
       });
     }, canDeleteProjects ? () => {
       root.appendChild(createProjectDeleteDialog(project.name, deleteCard));
-    } : undefined);
+    } : undefined, cachedRecovery);
     list.appendChild(card);
   }
 }
@@ -577,12 +595,34 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       renderProjects(args.root, projects, args.organizationUsers, async (projectId) => {
         const save = await loadProject(projectId);
         await args.onSelect({ kind: "loaded", save });
-      }, args.currentUserRole === "owner" || args.currentUserRole === "admin", loadProjects);
+      }, args.currentUserRole === "owner" || args.currentUserRole === "admin", loadProjects, new Map(), {
+        clientId: args.clientId,
+        userId: args.currentUserId
+      });
       setStatus(args.root, t("Project manager is ready."));
     } catch (error) {
       loading?.clear();
-      renderProjects(args.root, [], args.organizationUsers, async () => undefined, false);
-      setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
+      const canUseLocalRecovery = error instanceof TypeError || (error instanceof ProjectApiError && error.status >= 500);
+      if (!canUseLocalRecovery) {
+        if (list) list.innerHTML = `<p class="project-manager-empty">${t("Local recovery data are not shown without a valid sign-in.")}</p>`;
+        setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
+        return;
+      }
+      const ownRecoverable = await createProjectRecoveryStore()
+        .listRecoverableProjects(args.clientId, args.currentUserId)
+        .catch(() => []);
+      const workspaceIds = new Map(ownRecoverable.map((item) => [item.project.projectId, item.scope.workspaceId]));
+      renderProjects(args.root, ownRecoverable.map((item) => item.project), args.organizationUsers, async (projectId) => {
+        const workspaceId = workspaceIds.get(projectId);
+        if (workspaceId) await args.onSelect({ kind: "recovery", projectId, workspaceId });
+      }, false, undefined, workspaceIds, { clientId: args.clientId, userId: args.currentUserId });
+      setStatus(
+        args.root,
+        ownRecoverable.length > 0
+          ? t("Server is unavailable. Marked local recovery projects are shown.")
+          : error instanceof Error ? error.message : String(error),
+        "error"
+      );
     }
   };
 

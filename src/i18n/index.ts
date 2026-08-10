@@ -37,6 +37,9 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  "Local recovery draft – server will be verified on open": "Lokálny obnovovací koncept – server sa overí pri otvorení.",
+  "Local recovery data are not shown without a valid sign-in.": "Lokálne obnovovacie dáta sa bez platného prihlásenia nezobrazujú.",
+  "Server is unavailable. Marked local recovery projects are shown.": "Server nie je dostupný. Zobrazujú sa označené lokálne obnovovacie projekty.",
   Open: "Otvoriť",
   Print: "Tlačiť",
   "Cloud status": "Stav cloudu",

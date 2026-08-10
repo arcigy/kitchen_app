@@ -32,23 +32,39 @@ const SOURCE_GLOBS = [
 ];
 
 const poolCache = new Map<string, Pool>();
-const transientCacheByClient = new Map<string, AssistantRagIndex>();
+const transientCacheByScope = new Map<string, AssistantRagIndex>();
 
-function getTransientIndex(clientId: string): AssistantRagIndex | null {
-  const index = transientCacheByClient.get(clientId);
+type AssistantRagCatalog = Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults"> & {
+  meta?: Pick<ClientCatalog["meta"], "catalogVersion" | "updatedAt">;
+};
+
+export function assistantRagCatalogRevisionKey(clientId: string, catalog?: AssistantRagCatalog): string {
+  return JSON.stringify([
+    clientId,
+    catalog?.meta?.catalogVersion ?? null,
+    catalog?.meta?.updatedAt ?? null,
+    catalog?.vendorCatalog?.extractionMeta.importedAt ?? null,
+    catalog?.modules.length ?? null
+  ]);
+}
+
+function getTransientIndex(clientId: string, catalog?: AssistantRagCatalog): AssistantRagIndex | null {
+  const key = assistantRagCatalogRevisionKey(clientId, catalog);
+  const index = transientCacheByScope.get(key);
   if (!index) return null;
-  transientCacheByClient.delete(clientId);
-  transientCacheByClient.set(clientId, index);
+  transientCacheByScope.delete(key);
+  transientCacheByScope.set(key, index);
   return index;
 }
 
-function setTransientIndex(clientId: string, index: AssistantRagIndex): void {
-  transientCacheByClient.delete(clientId);
-  transientCacheByClient.set(clientId, index);
-  while (transientCacheByClient.size > MAX_TRANSIENT_TENANT_INDEXES) {
-    const oldestClientId = transientCacheByClient.keys().next().value as string | undefined;
+function setTransientIndex(clientId: string, index: AssistantRagIndex, catalog?: AssistantRagCatalog): void {
+  const key = assistantRagCatalogRevisionKey(clientId, catalog);
+  transientCacheByScope.delete(key);
+  transientCacheByScope.set(key, index);
+  while (transientCacheByScope.size > MAX_TRANSIENT_TENANT_INDEXES) {
+    const oldestClientId = transientCacheByScope.keys().next().value as string | undefined;
     if (!oldestClientId) break;
-    transientCacheByClient.delete(oldestClientId);
+    transientCacheByScope.delete(oldestClientId);
   }
 }
 
@@ -185,7 +201,7 @@ function chunkText(source: string, raw: string, updatedAt: string): AssistantRag
 
 export async function buildAssistantRagIndex(
   projectRoot: string,
-  catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">
+  catalog?: AssistantRagCatalog
 ): Promise<AssistantRagIndex> {
   const updatedAt = new Date().toISOString();
   const files = (await Promise.all(SOURCE_GLOBS.map((source) => listFiles(projectRoot, source)))).flat();
@@ -202,10 +218,10 @@ export async function buildAssistantRagIndex(
 export async function reindexAssistantRag(
   projectRoot: string,
   ctx: ClientContext,
-  catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">
+  catalog?: AssistantRagCatalog
 ): Promise<AssistantRagIndex> {
   const index = await buildAssistantRagIndex(projectRoot, catalog);
-  setTransientIndex(ctx.clientId, index);
+  setTransientIndex(ctx.clientId, index, catalog);
   const config = resolveDatabaseConfig();
   if (!config) return index;
   const pool = getPool(config.connectionString, config.schema);
@@ -267,30 +283,34 @@ function scoreChunk(queryTokens: string[], chunk: AssistantRagChunk): number {
   return score;
 }
 
+export function replaceAssistantRagTenantChunks(
+  baseIndex: AssistantRagIndex,
+  tenantChunks: AssistantRagChunk[]
+): AssistantRagIndex {
+  const currentChunks = new Map(
+    baseIndex.chunks
+      .filter((chunk) => !chunk.source.startsWith("tenant-catalog/"))
+      .map((chunk) => [chunk.id, chunk] as const)
+  );
+  for (const chunk of tenantChunks) currentChunks.set(chunk.id, chunk);
+  return { persisted: baseIndex.persisted, chunks: [...currentChunks.values()] };
+}
+
 export async function searchAssistantRag(args: {
   projectRoot: string;
   ctx: ClientContext;
   query: string;
   limit?: number;
-  catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">;
+  catalog?: AssistantRagCatalog;
 }): Promise<AssistantRagChunk[]> {
   const config = resolveDatabaseConfig();
   const persisted = config ? await loadPersistedIndex(args.ctx, config).catch(() => null) : null;
   const baseIndex = persisted
-    ?? getTransientIndex(args.ctx.clientId)
+    ?? getTransientIndex(args.ctx.clientId, args.catalog)
     ?? await buildAssistantRagIndex(args.projectRoot, args.catalog);
   const tenantChunks = args.catalog ? buildPinoCatalogAssistantRagChunks(args.catalog) : [];
-  const seenChunkIds = new Set(baseIndex.chunks.map((chunk) => chunk.id));
-  const index = tenantChunks.length === 0
-    ? baseIndex
-    : {
-        persisted: baseIndex.persisted,
-        chunks: [
-          ...baseIndex.chunks,
-          ...tenantChunks.filter((chunk) => !seenChunkIds.has(chunk.id))
-        ]
-      };
-  setTransientIndex(args.ctx.clientId, index);
+  const index = replaceAssistantRagTenantChunks(baseIndex, tenantChunks);
+  setTransientIndex(args.ctx.clientId, index, args.catalog);
   const queryTokens = normalizePinoSearchText(args.query).split(/[^a-z0-9]+/iu).filter(Boolean);
   return [...index.chunks]
     .map((chunk) => ({ chunk, score: scoreChunk(queryTokens, chunk) }))
