@@ -90,6 +90,16 @@ export type ProjectMaterialPriceSource = {
 
 export type ProjectMaterialScopeKind = "module" | "addition";
 
+/**
+ * Stable domain target for a material demand.  It deliberately describes
+ * source state, never a Three.js object, so the same assignment can be
+ * replayed after save/load and during an undo/redo rebuild.
+ */
+export type ProjectMaterialLayoutTarget =
+  | { kind: "module-board"; instanceId: string; materialSlotId: string; sourcePartIds?: string[] }
+  | { kind: "worktop"; worktopId: string }
+  | { kind: "custom-furniture-board"; furnitureId: string; boardId: string };
+
 export type ProjectMaterialScopeItem = {
   id: string;
   category: MaterialAssignmentCategory;
@@ -99,6 +109,8 @@ export type ProjectMaterialScopeItem = {
   quantity: number;
   unit: PricingUnit;
   pieces: number;
+  /** Absent for hardware, edges and legacy/unknown BOM items. */
+  layoutTarget?: ProjectMaterialLayoutTarget;
 };
 
 export type ProjectMaterialScope = {

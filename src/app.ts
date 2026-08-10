@@ -268,6 +268,7 @@ import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
+import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
@@ -719,6 +720,7 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const S: AppState = makeAppState(params);
+  S.projectMaterialAssignments = structuredClone(projectMaterialAssignments);
   const buildMaterialsUsageSummary = () => buildProjectMaterialUsageSummary({
     instances: S.instances,
     worktops: S.kitchenWorktops,
@@ -2271,6 +2273,12 @@ export function startApp(initialArgs: AppArgs) {
       S.ledStripCounter = ledStripCounter ?? S.ledStripCounter;
     },
     restoreWardrobe: (state) => wardrobeMode?.restoreSaveState(state),
+    restoreProjectMaterialAssignments: (state) => {
+      if (!state) return;
+      projectMaterialAssignments = cloneJson(state);
+      S.projectMaterialAssignments = cloneJson(state);
+      materialsPhaseController?.restoreSaveState(state);
+    },
     clearToolHud,
     mountProps,
     setSelectedSection,
@@ -3305,6 +3313,7 @@ export function startApp(initialArgs: AppArgs) {
     resetProjectInteractionStateForLoad();
     marginsPhaseController?.destroy();
     projectMaterialAssignments = cloneJson(save.appState.materialAssignments);
+    S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
     projectMarginSettings = normalizeProjectMarginSettingsState(save.appState.quoteSettings);
     const layout = save.appState.layout as {
       snapshot?: unknown;
@@ -3327,6 +3336,7 @@ export function startApp(initialArgs: AppArgs) {
     }
     S.activeKitchenGroupId = kitchen?.activeKitchenGroupId ?? null;
     if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
+    S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
     materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
     if (!layout?.snapshot) throw new Error("Project save is missing layout snapshot.");
     restoreLayoutSnapshot(S, helpers, layout.snapshot as Parameters<typeof restoreLayoutSnapshot>[2]);
@@ -3395,6 +3405,29 @@ export function startApp(initialArgs: AppArgs) {
     initialProjectSave: args.initialProjectSave
   });
   if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
+  S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+  const applyCommittedProjectMaterialAssignments = (assignments: ProjectMaterialAssignmentsState) => {
+    const result = syncProjectMaterialAssignmentsToLayout({
+      catalog: clientCatalog,
+      instances: S.instances,
+      worktops: S.kitchenWorktops,
+      customFurniture: S.customFurniture,
+      rebuildModule: (instance) => rebuildInstance(instance, { preserveBackAnchor: true }),
+      rebuildWorktop: rebuildKitchenWorktop,
+      rebuildCustomFurniture: (furniture) => customFurnitureMode?.rebuildFurniture(furniture)
+    }, assignments, buildProjectMaterialScopes({
+      instances: S.instances,
+      worktops: S.kitchenWorktops,
+      customFurniture: S.customFurniture,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups,
+      catalog: clientCatalog
+    }));
+    if (result.moduleIds.length || result.worktopIds.length || result.customFurnitureIds.length) {
+      updateLayoutPanel();
+      commitHistory(S);
+    }
+  };
   const materialWarningListEl = document.querySelector<HTMLElement>("[data-material-warning-list]")!;
   materialsPhaseController = createMaterialsPhaseController({
     container: document.getElementById("materialsPhase")!,
@@ -3415,14 +3448,23 @@ export function startApp(initialArgs: AppArgs) {
     onCancelSupplierBridge: async () => supplierBridgeController?.cancel(),
     onViewChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
+      S.projectMaterialAssignments = cloneJson(view.assignments);
       materialWarningListEl.innerHTML = renderMaterialWarnings(view.warnings);
+    },
+    onAssignmentsCommitted: (assignments) => {
+      projectMaterialAssignments = cloneJson(assignments);
+      S.projectMaterialAssignments = cloneJson(assignments);
+      applyCommittedProjectMaterialAssignments(assignments);
     }
   });
   supplierBridgeController = createSupplierBridgeWebController({
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     getProjectLabel: () => projectActions.getState().currentProject?.name ?? null,
     onStateChanged: (state) => materialsPhaseController?.setSupplierBridgeState(state),
-    onProjectMaterialsChanged: async () => { await materialsPhaseController?.open(); }
+    onProjectMaterialsChanged: async () => {
+      const view = await materialsPhaseController?.open();
+      if (view) applyCommittedProjectMaterialAssignments(view.assignments);
+    }
   });
   marginsPhaseController = createMarginsPhaseController({
     container: document.getElementById("marginsPhase")!,
@@ -3447,6 +3489,12 @@ export function startApp(initialArgs: AppArgs) {
     },
     onMaterialsChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
+      S.projectMaterialAssignments = cloneJson(view.assignments);
+    },
+    onMaterialsCommitted: (view) => {
+      projectMaterialAssignments = cloneJson(view.assignments);
+      S.projectMaterialAssignments = cloneJson(view.assignments);
+      applyCommittedProjectMaterialAssignments(view.assignments);
     },
     onMarginsChanged: (view) => {
       projectMarginSettings = cloneJson(view.settings);

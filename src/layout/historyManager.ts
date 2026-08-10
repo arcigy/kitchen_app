@@ -15,6 +15,7 @@ import { cloneLedStripGroup, type LedStripGroup } from "./ledStripTypes";
 import type { CustomFurnitureSnapshotItem } from "./customFurnitureTypes";
 import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 import { getKitchenModuleRole } from "./kitchenModuleRules";
+import type { ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 
 export interface HistoryHelpers {
   setSelectedWall: (id: string | null) => void;
@@ -38,6 +39,7 @@ export interface HistoryHelpers {
   restoreCustomFurniture?: (items: CustomFurnitureSnapshotItem[], customFurnitureCounter?: number) => void;
   restoreLedStripGroups?: (groups: LedStripGroup[], ledStripCounter?: number) => void;
   restoreWardrobe?: (state: WardrobeEditSaveState | null | undefined) => void;
+  restoreProjectMaterialAssignments?: (state: ProjectMaterialAssignmentsState | undefined) => void;
   clearToolHud: () => void;
   mountProps: () => void;
   updateLayoutPanel: () => void;
@@ -95,7 +97,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const ledStrips = (s.ledStripGroups ?? []).map((group) => JSON.stringify(group)).join("|");
   const wardrobe = s.wardrobe ? JSON.stringify(s.wardrobe) : "";
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${mods}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${stableJson(s.materialAssignments ?? null)}::${mods}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -161,6 +163,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   helpers.restoreCustomFurniture?.(snap.customFurniture ?? [], snap.customFurnitureCounter);
   helpers.restoreLedStripGroups?.((snap.ledStripGroups ?? []).map(cloneLedStripGroup), snap.ledStripCounter);
   helpers.restoreWardrobe?.(snap.wardrobe ?? null);
+  helpers.restoreProjectMaterialAssignments?.(snap.materialAssignments);
 
   // Clear modules
   for (const inst of S.instances.splice(0, S.instances.length)) {
@@ -236,6 +239,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
   const copySectionParams = (p: SectionParams) => JSON.parse(JSON.stringify(p)) as SectionParams;
   const copyColumnParams = (p: ColumnParams) => JSON.parse(JSON.stringify(p)) as ColumnParams;
   return {
+    materialAssignments: structuredClone(S.projectMaterialAssignments),
     wallCounter: S.wallCounter,
     walls: S.walls.map((w) => ({ id: w.id, params: copyParams(w.params) })),
     floorCounter: S.floorCounter,

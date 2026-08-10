@@ -45,6 +45,7 @@ export type ModuleCommercialPropsControllerArgs = {
   getModuleScope: (instanceId: string) => ProjectMaterialScope | null;
   ensureProjectSaved?: () => Promise<void>;
   onMaterialsChanged?: (view: ProjectMaterialsView) => void;
+  onMaterialsCommitted?: (view: ProjectMaterialsView) => void;
   onMarginsChanged?: (view: ProjectMarginsView) => void;
   copyText?: (text: string) => Promise<void>;
   api?: Partial<ModuleCommercialPropsApi>;
@@ -378,6 +379,7 @@ export function createModuleCommercialPropsController(
           state.materials = updated;
           state.scope = moduleScope(updated, args.getModuleScope(instanceId), instanceId);
           args.onMaterialsChanged?.(updated);
+          args.onMaterialsCommitted?.(updated);
           try {
             state.margins = await api.loadMargins(projectId);
             args.onMarginsChanged?.(state.margins);

@@ -7,6 +7,7 @@ import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "
 import type { CustomFurnitureInstance, CustomFurnitureParams } from "./customFurnitureTypes";
 import type { WardrobeEditSaveState } from "./wardrobeEditMode";
 import type { LedStripGroup } from "./ledStripTypes";
+import { createEmptyProjectMaterialAssignmentsState, type ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 
 export type AppMode = "build" | "layout";
 export type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
@@ -81,6 +82,8 @@ export type ColumnInstance = {
 };
 
 export type LayoutSnapshot = {
+  /** Optional so snapshots created before project material assignments remain readable. */
+  materialAssignments?: ProjectMaterialAssignmentsState;
   wallCounter: number;
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
@@ -299,6 +302,7 @@ export interface AppState {
   ledStripGroups: LedStripGroup[];
   ledStripCounter: number;
   wardrobeHistory: { getSaveState: () => WardrobeEditSaveState | null } | null;
+  projectMaterialAssignments: ProjectMaterialAssignmentsState;
 
   // Layout instances
   instances: LayoutInstance[];
@@ -395,6 +399,7 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     ledStripGroups: [],
     ledStripCounter: 1,
     wardrobeHistory: null,
+    projectMaterialAssignments: createEmptyProjectMaterialAssignmentsState(),
 
     instances: [],
     instanceCounter: 1,
