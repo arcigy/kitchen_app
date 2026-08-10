@@ -134,7 +134,7 @@ function App(): React.JSX.Element {
       })
       .finally(() => { if (!cancelled) setBusy(null); });
     return () => { cancelled = true; };
-  }, [account, expireAccount, projectId]);
+  }, [account, copy, expireAccount, projectId]);
 
   const login = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy("login"); setError(null); setMessage(null);
