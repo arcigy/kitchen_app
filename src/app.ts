@@ -167,7 +167,7 @@ import { createKitchenEditMode } from "./layout/kitchenEditMode";
 import { createWardrobeEditMode } from "./layout/wardrobeEditMode";
 import {
   updateUndoRedoUi,
-  snapshotSignature,
+  getLayoutHistoryRevision,
   commitHistory,
   undo,
   redo,
@@ -196,7 +196,11 @@ import { createMaterialsPhaseController } from "./app/materialsPhaseController";
 import { createMarginsPhaseController } from "./app/marginsPhaseController";
 import { createModuleCommercialPropsController } from "./app/moduleCommercialPropsController";
 import { createSupplierBridgeWebController } from "./app/supplierBridgeWebController";
-import { createProjectAutosaveController } from "./app/project/projectAutosave";
+import { createProjectPersistenceController, type ProjectPersistenceController } from "./app/project/projectPersistenceController";
+import { createProjectRecoveryLease, type ProjectRecoveryLease } from "./app/project/projectRecoveryLease";
+import { createProjectRecoveryStore, writeLastWorkspacePointer } from "./app/project/projectRecoveryStore";
+import { createProjectStateCodec, type RecoveryContributor } from "./app/project/projectStateCodec";
+import type { ProjectInteractionCheckpoint, ProjectRecoveryScope } from "./app/project/projectRecoveryTypes";
 import { createFeedbackReportController } from "./app/feedbackReportController";
 import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
@@ -294,6 +298,7 @@ import {
 import { createModulePackageControls, findModulePackageForParams } from "./core/module-package/runtime/module-package-controls";
 import type { CustomFurnitureInstance } from "./layout/customFurnitureTypes";
 import type { ParamHighlightControls } from "./app/paramHighlightControls";
+import { showToast } from "./ui/toast";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
@@ -1601,7 +1606,7 @@ export function startApp(initialArgs: AppArgs) {
     setActiveViewerTab: (next) => { activeViewerTab = next; }
   });
 
-  const { photoSamples, photoStatus } = createRenderControls({
+  const renderControls = createRenderControls({
     layoutUi,
     enableSsgi: ENABLE_SSGI,
     enablePhoto: ENABLE_PHOTO,
@@ -1634,6 +1639,7 @@ export function startApp(initialArgs: AppArgs) {
     },
     downloadViewportPng
   });
+  const { photoSamples, photoStatus } = renderControls;
 
   const partPanel = createPartPanel(partsBuildHost, {
     onSelect: (name) => selectByName(name),
@@ -3226,19 +3232,21 @@ export function startApp(initialArgs: AppArgs) {
     marqueeEl.style.display = "none";
     wallTypedHud.style.display = "none";
   };
-  const buildProjectAppState = (options: { commitDraft?: boolean; syncActivity?: boolean } = {}): ProjectSaveFile["appState"] => {
+  const buildProjectAppState = (options: { commitDraft?: boolean; syncActivity?: boolean; includePreview?: boolean } = {}): ProjectSaveFile["appState"] => {
     if (options.commitDraft ?? true) customFurnitureMode?.commitActiveDraft();
     if (options.syncActivity ?? true) recentActivityController.syncFromHistory();
     const camera = cam();
     const controls = ctl() as { target?: unknown } | null | undefined;
     const target = controls?.target;
-    const projectPreview = captureProjectPreview({
-      renderer,
-      scene,
-      camera,
-      target: target instanceof THREE.Vector3 ? target : undefined,
-      viewMode
-    });
+    const projectPreview = (options.includePreview ?? true)
+      ? captureProjectPreview({
+          renderer,
+          scene,
+          camera,
+          target: target instanceof THREE.Vector3 ? target : undefined,
+          viewMode
+        })
+      : undefined;
     return {
       layout: {
         snapshot: captureLayoutSnapshot(S),
@@ -3275,6 +3283,7 @@ export function startApp(initialArgs: AppArgs) {
         mode,
         viewMode,
         renderMode,
+        displayMode: viewDisplay.getMode(),
         hdri: getHdriSettings(),
         daylightIntensity: getDaylightIntensity(),
         shadowAlgorithm: getShadowAlgorithm()
@@ -3309,21 +3318,47 @@ export function startApp(initialArgs: AppArgs) {
     };
   };
 
-  const restoreProjectSave = (save: ProjectSaveFile) => {
+  const restoreProjectAppState = async (
+    appState: ProjectSaveFile["appState"],
+    restoreOptions: { recovery: boolean; historyTail: unknown[] }
+  ) => {
     resetProjectInteractionStateForLoad();
     marginsPhaseController?.destroy();
-    projectMaterialAssignments = cloneJson(save.appState.materialAssignments);
+    projectMaterialAssignments = cloneJson(appState.materialAssignments);
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
-    projectMarginSettings = normalizeProjectMarginSettingsState(save.appState.quoteSettings);
-    const layout = save.appState.layout as {
+    projectMarginSettings = normalizeProjectMarginSettingsState(appState.quoteSettings);
+    const layout = appState.layout as {
       snapshot?: unknown;
       windows?: Array<{ id: string; params: WindowParams }>;
       doors?: Array<{ id: string; params: DoorParams }>;
       counters?: { windowCounter?: number; doorCounter?: number };
     } | null;
-    const kitchen = save.appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null } | null;
-    const editor = save.appState.editor as { visibility?: unknown; dimensions?: unknown; wardrobe?: unknown } | null | undefined;
-    const savedCamera = save.appState.camera as { placedCameras?: unknown } | null | undefined;
+    const kitchen = appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null } | null;
+    const editor = appState.editor as { layoutTool?: unknown; activeViewerTab?: unknown; visibility?: unknown; dimensions?: unknown; wardrobe?: unknown } | null | undefined;
+    const savedScene = appState.scene as {
+      mode?: unknown;
+      viewMode?: unknown;
+      renderMode?: unknown;
+      displayMode?: unknown;
+      hdri?: unknown;
+      daylightIntensity?: unknown;
+      shadowAlgorithm?: unknown;
+    } | null | undefined;
+    const savedCamera = appState.camera as {
+      position?: unknown;
+      target?: unknown;
+      placedCameras?: unknown;
+    } | null | undefined;
+    const savedSelections = appState.selections as {
+      selectedKind?: unknown;
+      selectedInstanceId?: unknown;
+      selectedWallId?: unknown;
+      selectedFloorId?: unknown;
+      selectedColumnId?: unknown;
+      selectedSectionId?: unknown;
+      selectedWallIds?: unknown;
+      selectedInstanceIds?: unknown;
+    } | null | undefined;
     if (kitchen?.context) S.kitchenCtx = resolveContext(kitchen.context as typeof S.kitchenCtx);
     S.kitchenGroups.splice(0, S.kitchenGroups.length);
     for (const group of kitchen?.groups ?? []) {
@@ -3377,32 +3412,349 @@ export function startApp(initialArgs: AppArgs) {
     syncRestoredCounters();
     rebuildWallPlanMesh();
     S.history.current = captureLayoutSnapshot(S);
-    S.history.past = [];
+    S.history.past = restoreOptions.recovery
+      ? restoreOptions.historyTail
+          .filter((item): item is LayoutSnapshot => {
+            if (!item || typeof item !== "object") return false;
+            const snapshot = item as Partial<LayoutSnapshot>;
+            return Array.isArray(snapshot.walls) && Array.isArray(snapshot.instances) && !!snapshot.selected;
+          })
+          .slice(-12)
+          .map((item) => cloneJson(item))
+      : [];
     S.history.future = [];
     updateUndoRedoUi(S);
+    const isVector = (value: unknown): value is { x: number; y: number; z: number } => {
+      if (!value || typeof value !== "object") return false;
+      const vector = value as { x?: unknown; y?: unknown; z?: unknown };
+      return [vector.x, vector.y, vector.z].every((item) => typeof item === "number" && Number.isFinite(item));
+    };
+    if (savedScene?.viewMode === "2d" || savedScene?.viewMode === "3d") {
+      const tab = typeof editor?.activeViewerTab === "string"
+        ? editor.activeViewerTab
+        : savedScene.viewMode === "2d" ? "floorplan" : "3d";
+      refreshViewerTabs();
+      activateViewerTab(tab);
+    }
+    if (savedScene?.displayMode === "solid" || savedScene?.displayMode === "realistic" || savedScene?.displayMode === "wireframe") {
+      setViewerDisplayMode(savedScene.displayMode);
+    }
+    const savedRenderMode = savedScene?.renderMode === "realtime"
+      || savedScene?.renderMode === "realtime_ssgi"
+      || savedScene?.renderMode === "photo_pathtrace"
+      ? savedScene.renderMode
+      : undefined;
+    const savedDaylight = typeof savedScene?.daylightIntensity === "number" && Number.isFinite(savedScene.daylightIntensity)
+      ? savedScene.daylightIntensity
+      : undefined;
+    const savedShadow = savedScene?.shadowAlgorithm === "pcfsoft" || savedScene?.shadowAlgorithm === "vsm"
+      ? savedScene.shadowAlgorithm
+      : undefined;
+    await renderControls.restoreState({
+      renderMode: savedRenderMode,
+      daylightIntensity: savedDaylight,
+      shadowAlgorithm: savedShadow,
+      hdri: savedScene?.hdri
+    });
+    const camera = cam();
+    const controls = ctl();
+    if (isVector(savedCamera?.position)) camera.position.set(savedCamera.position.x, savedCamera.position.y, savedCamera.position.z);
+    if (isVector(savedCamera?.target)) controls.target.set(savedCamera.target.x, savedCamera.target.y, savedCamera.target.z);
+    camera.lookAt(controls.target);
+    if ("updateProjectionMatrix" in camera && typeof camera.updateProjectionMatrix === "function") {
+      camera.updateProjectionMatrix();
+    }
+    controls.update();
+
+    const tool = editor?.layoutTool;
+    if (tool === "wall") setToolWall();
+    else if (tool === "align") setToolAlign();
+    else if (tool === "trim") setToolTrim();
+    else if (tool === "measure") setToolMeasure();
+    else if (tool === "section") setToolSection();
+    else if (tool === "dimension") setToolDimension();
+    else setToolSelect();
+
+    selectedWallIds.clear();
+    selectedInstanceIds.clear();
+    const validWallIds = new Set(walls.map((item) => item.id));
+    const validInstanceIds = new Set(instances.map((item) => item.id));
+    const validSelectedWallIds = Array.isArray(savedSelections?.selectedWallIds)
+      ? savedSelections.selectedWallIds.filter((id): id is string => typeof id === "string" && validWallIds.has(id))
+      : [];
+    const validSelectedInstanceIds = Array.isArray(savedSelections?.selectedInstanceIds)
+      ? savedSelections.selectedInstanceIds.filter((id): id is string => typeof id === "string" && validInstanceIds.has(id))
+      : [];
+    const validId = (value: unknown, ids: ReadonlySet<string>) => typeof value === "string" && ids.has(value) ? value : null;
+    const nextWallId = validId(savedSelections?.selectedWallId, validWallIds);
+    const nextInstanceId = validId(savedSelections?.selectedInstanceId, validInstanceIds);
+    const nextFloorId = validId(savedSelections?.selectedFloorId, new Set(floors.map((item) => item.id)));
+    const nextColumnId = validId(savedSelections?.selectedColumnId, new Set(columns.map((item) => item.id)));
+    const nextSectionId = validId(savedSelections?.selectedSectionId, new Set(sections.map((item) => item.id)));
+    if (savedSelections?.selectedKind === "wall" && nextWallId) setSelectedWall(nextWallId);
+    else if (savedSelections?.selectedKind === "module" && nextInstanceId) setSelectedModule(nextInstanceId);
+    else if (savedSelections?.selectedKind === "floor" && nextFloorId) setSelectedFloor(nextFloorId);
+    else if (savedSelections?.selectedKind === "column" && nextColumnId) setSelectedColumn(nextColumnId);
+    else if (savedSelections?.selectedKind === "section" && nextSectionId) setSelectedSection(nextSectionId);
+    else {
+      selectedKind = null;
+      syncSelectionState();
+      updateSelectionHighlights();
+    }
+    if (savedSelections?.selectedKind === "wall") {
+      selectedWallIds.clear();
+      validSelectedWallIds.forEach((id) => selectedWallIds.add(id));
+      if (nextWallId) selectedWallIds.add(nextWallId);
+    } else if (savedSelections?.selectedKind === "module") {
+      selectedInstanceIds.clear();
+      validSelectedInstanceIds.forEach((id) => selectedInstanceIds.add(id));
+      if (nextInstanceId) selectedInstanceIds.add(nextInstanceId);
+    }
+    updateSelectionHighlights();
+    if (savedScene?.mode === "build" || savedScene?.mode === "layout") setMode(savedScene.mode);
+    // Restore the saved activity log after view/tool restoration, because
+    // those UI setters intentionally record user actions during normal use.
+    recentActivityController.restoreSaveState(appState.recentActivity);
     mountProps();
     updateLayoutPanel();
-    recentActivityController.restoreSaveState(save.appState.recentActivity);
+  };
+
+  const pointPayload = (point: { x: number; y?: number; z: number } | null) => point
+    ? { x: point.x, y: point.y ?? 0, z: point.z }
+    : null;
+  const parsePointPayload = (value: unknown): THREE.Vector3 | null => {
+    if (!value || typeof value !== "object") return null;
+    const point = value as { x?: unknown; y?: unknown; z?: unknown };
+    if (typeof point.x !== "number" || typeof point.z !== "number" || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return null;
+    const y = typeof point.y === "number" && Number.isFinite(point.y) ? point.y : 0;
+    return new THREE.Vector3(point.x, y, point.z);
+  };
+  const interactionContributor: RecoveryContributor<ProjectInteractionCheckpoint | null> = {
+    capture() {
+      const capturedAt = new Date().toISOString();
+      if (wallDraw.active && wallDraw.a) {
+        return {
+          kind: "wall-draw",
+          capturedAt,
+          payload: {
+            a: pointPayload(wallDraw.a),
+            chainStart: pointPayload(wallDraw.chainStart),
+            segments: wallDraw.segments,
+            typedMm: wallDraw.typedMm
+          }
+        };
+      }
+      if (kitchenWorktopDraw.active && kitchenWorktopDraw.points.length > 0) {
+        return {
+          kind: "worktop-draw",
+          capturedAt,
+          payload: {
+            points: kitchenWorktopDraw.points.map((point) => ({ x: point.x, z: point.z })),
+            justification: kitchenWorktopDraw.justification,
+            mirrored: kitchenWorktopDraw.mirrored,
+            typedMm: kitchenWorktopDraw.typedMm
+          }
+        };
+      }
+      if (sectionDraw.active && sectionDraw.a) {
+        return {
+          kind: "section-draw",
+          capturedAt,
+          payload: { a: pointPayload(sectionDraw.a), mirrored: sectionDraw.mirrored, axisLocked: sectionDraw.axisLocked }
+        };
+      }
+      if (floorEdit.active && floorEdit.floorId) {
+        return {
+          kind: "floor-edit",
+          capturedAt,
+          payload: {
+            floorId: floorEdit.floorId,
+            segments: cloneFloorSegments(floorEdit.segments),
+            tool: floorEdit.tool,
+            ortho: floorEdit.ortho,
+            first: floorEdit.first ? { ...floorEdit.first } : null
+          }
+        };
+      }
+      if (transformState.kind) {
+        return {
+          kind: "transform",
+          capturedAt,
+          payload: {
+            kind: transformState.kind,
+            step: transformState.step,
+            typed: transformState.typed,
+            selectedWallIds: [...transformState.selectedWallIds],
+            selectedInstanceIds: [...transformState.selectedInstanceIds],
+            lastValidDelta: pointPayload(transformState.lastValidDelta),
+            lastValidAngle: transformState.lastValidAngle
+          }
+        };
+      }
+      if (customFurnitureMode?.isCursorToolActive()) {
+        return { kind: "custom-furniture", capturedAt, payload: { resumable: false } };
+      }
+      return null;
+    },
+    validate(value): value is ProjectInteractionCheckpoint | null {
+      if (value === null) return true;
+      if (!value || typeof value !== "object") return false;
+      const candidate = value as Record<string, unknown>;
+      return typeof candidate.capturedAt === "string" && Number.isFinite(Date.parse(candidate.capturedAt)) && [
+        "none", "wall-draw", "worktop-draw", "section-draw", "floor-edit", "transform", "custom-furniture"
+      ].includes(String(candidate.kind));
+    },
+    restore(value) {
+      if (!value) return;
+      const payload = value.payload && typeof value.payload === "object" ? value.payload as Record<string, unknown> : {};
+      if (value.kind === "wall-draw") {
+        const a = parsePointPayload(payload.a);
+        if (!a) return;
+        setToolWall();
+        wallDraw.active = true;
+        wallDraw.a = a;
+        wallDraw.chainStart = parsePointPayload(payload.chainStart);
+        wallDraw.segments = typeof payload.segments === "number" && Number.isSafeInteger(payload.segments) ? Math.max(0, payload.segments) : 0;
+        wallDraw.typedMm = typeof payload.typedMm === "string" ? payload.typedMm : "";
+        wallDraw.preview = makeWallPreviewMesh(a, a, wallDefault.thicknessMm);
+        layoutRoot.add(wallDraw.preview);
+        setUnderlayStatus("Stena: obnovený posledný potvrdený bod. Pokračuj druhým bodom.");
+        return;
+      }
+      if (value.kind === "worktop-draw" && S.kitchenEditMode) {
+        const points = Array.isArray(payload.points)
+          ? payload.points.map(parsePointPayload).filter((point): point is THREE.Vector3 => !!point).map((point) => ({ x: point.x, z: point.z }))
+          : [];
+        if (points.length === 0) return;
+        startKitchenWorktopDraw();
+        kitchenWorktopDraw.points = points;
+        kitchenWorktopDraw.typedMm = typeof payload.typedMm === "string" ? payload.typedMm : "";
+        kitchenWorktopDraw.mirrored = payload.mirrored === true;
+        if (payload.justification === "back" || payload.justification === "center" || payload.justification === "front") {
+          kitchenWorktopDraw.justification = payload.justification;
+        }
+        scheduleKitchenWorktopPreviewUpdate();
+        return;
+      }
+      if (value.kind === "section-draw") {
+        const a = parsePointPayload(payload.a);
+        if (!a) return;
+        setToolSection();
+        sectionDraw.active = true;
+        sectionDraw.a = { x: a.x, z: a.z };
+        sectionDraw.hoverPoint = { x: a.x, z: a.z };
+        sectionDraw.mirrored = payload.mirrored === true;
+        sectionDraw.axisLocked = payload.axisLocked === true;
+        updateSectionDrawPreview();
+        return;
+      }
+      if (value.kind === "floor-edit" && typeof payload.floorId === "string" && floors.some((floor) => floor.id === payload.floorId)) {
+        enterFloorBoundaryEdit(payload.floorId);
+        if (Array.isArray(payload.segments)) {
+          const segments: FloorBoundarySegment[] = [];
+          for (const item of payload.segments) {
+            if (!item || typeof item !== "object") continue;
+            const candidate = item as { a?: unknown; b?: unknown };
+            const a = parsePointPayload(candidate.a);
+            const b = parsePointPayload(candidate.b);
+            if (a && b) segments.push({ a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } });
+          }
+          floorEdit.segments = cloneFloorSegments(segments);
+        }
+        floorEdit.ortho = payload.ortho !== false;
+        if (payload.tool === "line" || payload.tool === "rectangle" || payload.tool === "circle" || payload.tool === "pickLines") floorEdit.tool = payload.tool;
+        const first = parsePointPayload(payload.first);
+        floorEdit.first = first ? { x: first.x, z: first.z } : null;
+        renderFloorBoundaryEdit();
+        return;
+      }
+      if (value.kind === "transform") {
+        setToolSelect();
+        setUnderlayStatus("Rozpracovaný posun bol obnovený v poslednej platnej polohe. Spusti Move/Rotate znova pre pokračovanie.");
+        return;
+      }
+      if (value.kind === "custom-furniture") {
+        setToolSelect();
+        setUnderlayStatus("Rozpracovaný custom objekt bol obnovený v poslednom bezpečnom stave. Aktivuj jeho nástroj pre pokračovanie.");
+      }
+    },
+    clear() {
+      clearWallDrawState();
+      cancelKitchenWorktopDraw({ silent: true });
+      cancelSectionDraw({ silent: true });
+      if (floorEdit.active) discardFloorBoundaryEdit();
+      clearTransform({ restore: false, status: null });
+    }
+  };
+  const projectStateCodec = createProjectStateCodec({
+    captureAppState: (options) => buildProjectAppState(options),
+    restoreAppState: restoreProjectAppState,
+    interaction: interactionContributor,
+    captureHistoryTail: () => S.history.past.slice(-12).map((snapshot) => cloneJson(snapshot))
+  });
+  const restoreProjectSave = (save: ProjectSaveFile) => {
+    return projectStateCodec.restoreServer(save.appState);
+  };
+
+  let activeRecoveryScope: ProjectRecoveryScope = args.recoveryScope ?? {
+    clientId: args.clientContext.clientId,
+    userId: args.clientContext.userId,
+    workspaceId: args.initialProjectSave?.projectId
+      ? `project:${args.initialProjectSave.projectId}`
+      : args.initialProject?.projectId
+        ? `project:${args.initialProject.projectId}`
+        : `blank:${crypto.randomUUID()}`,
+    projectId: args.initialProjectSave?.projectId ?? args.initialProject?.projectId ?? null
+  };
+  const recoveryStore = createProjectRecoveryStore();
+  let activeRecoveryLease: ProjectRecoveryLease = createProjectRecoveryLease({ scope: activeRecoveryScope });
+  let projectPersistence: ProjectPersistenceController | null = null;
+
+  const switchProjectRecoveryScope = (projectId: string, clearPreviousBlank: boolean) => {
+    const previousScope = activeRecoveryScope;
+    const nextScope: ProjectRecoveryScope = {
+      clientId: args.clientContext.clientId,
+      userId: args.clientContext.userId,
+      workspaceId: `project:${projectId}`,
+      projectId
+    };
+    const nextLease = createProjectRecoveryLease({ scope: nextScope });
+    activeRecoveryScope = nextScope;
+    activeRecoveryLease = nextLease;
+    void projectPersistence?.switchScope(nextScope, nextLease, { saveInitialState: clearPreviousBlank })
+      .then(async () => {
+        if (clearPreviousBlank && previousScope.projectId === null) await recoveryStore.deleteActive(previousScope);
+      })
+      .catch((error: unknown) => {
+        showToast(`Recovery pri prepnutí projektu zlyhalo: ${error instanceof Error ? error.message : String(error)}`, "error");
+      });
   };
 
   const projectActions = createProjectActions({
-    buildAppState: buildProjectAppState,
+    buildAppState: (options) => options?.background
+      ? buildProjectAppState({ commitDraft: false, syncActivity: false, includePreview: false })
+      : projectStateCodec.captureServer(),
     buildBomSnapshot: () => ({
       materialQuantities: buildProjectMaterialQuantities(),
       generatedAt: new Date().toISOString()
     }),
     restoreSave: restoreProjectSave,
+    beforeProjectReplace: () => projectPersistence?.flushLocal(),
     onProjectChanged: (project, status) => {
       if (status === "Project created.") {
         projectMarginSettings = createDefaultProjectMarginSettingsState();
         marginsPhaseController?.destroy();
+      }
+      if (project && (status === "Project created." || status === "Loaded." || status === "Imported.")) {
+        switchProjectRecoveryScope(project.projectId, status === "Project created.");
       }
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
       void supplierBridgeController?.syncProjectContext().catch(() => undefined);
     },
     initialProject: args.initialProject,
-    initialProjectSave: args.initialProjectSave
+    initialProjectSave: args.initialProjectSave,
+    initialSaveRevision: args.initialRecovery?.baseServerRevision
   });
   if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
   S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
@@ -3553,27 +3905,115 @@ export function startApp(initialArgs: AppArgs) {
       setClassicTopbarTab("architecture");
     }
   });
+  let secondaryWriterOverlay: HTMLElement | null = null;
+  const setSecondaryWriterUi = (primary: boolean) => {
+    document.body.classList.toggle("project-secondary-writer", !primary);
+    if (primary) {
+      secondaryWriterOverlay?.remove();
+      secondaryWriterOverlay = null;
+      return;
+    }
+    if (secondaryWriterOverlay) return;
+    const overlay = document.createElement("section");
+    overlay.className = "project-secondary-writer-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Projekt je otvorený v inom tabe");
+    const card = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = "Projekt je otvorený v inom tabe";
+    const copy = document.createElement("p");
+    copy.textContent = "Tento tab je chránený proti súbežným zmenám. Ak chceš upravovať tu, vedome prevezmi zápis.";
+    const takeOver = document.createElement("button");
+    takeOver.type = "button";
+    takeOver.textContent = "Prevziať úpravy v tomto tabe";
+    takeOver.addEventListener("click", () => {
+      if (!projectPersistence?.takeOver()) showToast("Prevzatie zápisu zlyhalo. Skús to znovu.", "error");
+    });
+    card.append(title, copy, takeOver);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    secondaryWriterOverlay = overlay;
+    takeOver.focus();
+    showToast("Projekt je otvorený aj v inom tabe. Tento tab je do prevzatia iba na čítanie.", "info");
+  };
+  const preventSecondaryWriterKeyboard = (event: KeyboardEvent) => {
+    if (projectPersistence?.isPrimaryWriter() !== false) return;
+    if (secondaryWriterOverlay?.contains(event.target as Node)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  window.addEventListener("keydown", preventSecondaryWriterKeyboard, true);
+
+  const persistence = createProjectPersistenceController({
+    actions: projectActions,
+    codec: projectStateCodec,
+    store: recoveryStore,
+    lease: activeRecoveryLease,
+    scope: activeRecoveryScope,
+    getWorkspace: () => ({
+      kind: projectActions.getState().currentProject ? "project" : "blank",
+      project: projectActions.getState().currentProject
+    }),
+    writeWorkspacePointer: writeLastWorkspacePointer,
+    appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
+    saveInitialState: Boolean(args.initialRecovery || (args.initialProject && !args.initialProjectSave)),
+    initialSequence: args.initialRecovery?.sequence,
+    initialCreatedAt: args.initialRecovery?.createdAt,
+    getObservedToken: () => {
+      const camera = cam();
+      const target = ctl().target;
+      const rounded = (value: number) => Math.round(value * 1000);
+      return JSON.stringify([
+        getLayoutHistoryRevision(S),
+        mode,
+        viewMode,
+        renderMode,
+        viewDisplay.getMode(),
+        activeViewerTab,
+        layoutTool,
+        selectedKind,
+        selectedInstanceId,
+        selectedWallId,
+        selectedFloorId,
+        selectedColumnId,
+        selectedSectionId,
+        [...selectedWallIds].sort(),
+        [...selectedInstanceIds].sort(),
+        rounded(camera.position.x), rounded(camera.position.y), rounded(camera.position.z),
+        rounded(target.x), rounded(target.y), rounded(target.z),
+        projectMaterialAssignments.revision,
+        projectMarginSettings.revision,
+        visibilityController.getSaveState(),
+        technicalDimensions.getSaveState(),
+        wardrobeMode?.getSaveState() ?? null,
+        interactionContributor.capture()
+      ]);
+    },
+    onConflict: (error) => {
+      showToast(`Projekt sa na serveri zmenil (revízia ${error.currentRevision ?? "?"}). Lokálny draft je uložený ako recovery kópia.`, "error");
+    },
+    onLocalError: (error) => {
+      showToast(`Lokálne recovery uloženie zlyhalo: ${error instanceof Error ? error.message : String(error)}`, "error");
+    },
+    onSaveError: (error) => {
+      showToast(`Automatické uloženie na server zlyhalo: ${error instanceof Error ? error.message : String(error)}`, "error");
+    },
+    onWriterStateChanged: setSecondaryWriterUi
+  });
+  projectPersistence = persistence;
   const projectMenuActions = createProjectMenuActions(projectActions, {
     openProjectManager: args.openProjectManager,
     currentUserName: organizationUserName(args.clientProfile?.organization.users ?? [], args.clientContext.userId),
     formatSavedMessage: (save, fallback) =>
-      `${fallback} Ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
+      `${fallback} Ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`,
+    onLeave: async (choice) => {
+      await persistence.stop({ flush: choice === "save" });
+    },
+    onDiscard: async () => {
+      await recoveryStore.deleteActive(activeRecoveryScope);
+    }
   });
-  createProjectAutosaveController({
-    actions: projectActions,
-    getChangeToken: () =>
-      JSON.stringify({
-        layout: S.history.current ? snapshotSignature(S.history.current) : "",
-        cameras: cameraPlacementController.getSaveState(),
-        visibility: visibilityController.getSaveState(),
-        dimensions: technicalDimensions.getSaveState(),
-        wardrobe: wardrobeMode?.getSaveState() ?? null,
-        materialAssignments: materialsPhaseController?.getSaveState() ?? projectMaterialAssignments,
-        marginSettings: projectMarginSettings
-      }),
-    formatSavedMessage: (save) =>
-      `Autosave ulozil: ${organizationUserName(args.clientProfile?.organization.users ?? [], save.project.updatedByUserId)}.`
-  }).start();
   tb.getQuickAction("save")?.addEventListener("click", () => {
     void projectMenuActions.saveProject();
   });
@@ -3597,7 +4037,7 @@ export function startApp(initialArgs: AppArgs) {
     buildProjectSnapshot: () => ({
       project: projectActions.getState().currentProject,
       saveRevision: projectActions.getState().saveRevision,
-      appState: buildProjectAppState({ commitDraft: false, syncActivity: false })
+      appState: buildProjectAppState({ commitDraft: false, syncActivity: false, includePreview: false })
     }),
     getDiagnostics: () => ({
       capturedAt: new Date().toISOString(),
@@ -4295,14 +4735,33 @@ export function startApp(initialArgs: AppArgs) {
   history.future = [];
   updateUndoRedoUi(S);
 
-  if (args.initialProjectSave) {
-    restoreProjectSave(args.initialProjectSave);
+  let initialRestore: Promise<void> = Promise.resolve();
+  if (args.initialRecovery) {
+    initialRestore = projectStateCodec.restoreRecovery({
+      appState: args.initialRecovery.appState,
+      interaction: args.initialRecovery.interaction,
+      historyTail: args.initialRecovery.historyTail
+    });
+    const project = args.initialProjectSave?.project ?? args.initialRecovery.workspace.project;
+    if (project) {
+      tb.setProjectLabel(project.name);
+      projectHeader.render(project, "Recovery draft loaded.");
+    }
+  } else if (args.initialProjectSave) {
+    initialRestore = projectStateCodec.restoreServer(args.initialProjectSave.appState);
     tb.setProjectLabel(args.initialProjectSave.project.name);
     projectHeader.render(args.initialProjectSave.project, "Loaded.");
   } else if (args.initialProject) {
     tb.setProjectLabel(args.initialProject.name);
     projectHeader.render(args.initialProject, "Project ready.");
   }
+  void initialRestore.then(() => {
+    persistence.start();
+    if (args.recoveryNotice) showToast(args.recoveryNotice, "info");
+  }).catch((error: unknown) => {
+    showToast(`Recovery draft sa nepodarilo bezpečne obnoviť: ${error instanceof Error ? error.message : String(error)}`, "error");
+    persistence.start();
+  });
 
   let createWallEditHudUpdaterResult!: ReturnType<typeof createWallEditHudUpdater>;
   function updateWallEditHud(...args: Parameters<ReturnType<typeof createWallEditHudUpdater>["updateWallEditHud"]>) { return createWallEditHudUpdaterResult.updateWallEditHud(...args); }

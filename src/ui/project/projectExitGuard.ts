@@ -57,7 +57,11 @@ function openExitDialog(): Promise<ExitChoice> {
 export function createProjectExitGuard(
   actions: ProjectActions,
   openProjectManager: () => void,
-  options: { formatSavedMessage?: (save: ProjectSaveFile, fallback: string) => string } = {}
+  options: {
+    formatSavedMessage?: (save: ProjectSaveFile, fallback: string) => string;
+    onDiscard?: () => void | Promise<void>;
+    onLeave?: (choice: Exclude<ExitChoice, "cancel">) => void | Promise<void>;
+  } = {}
 ) {
   let saveInProgress = false;
 
@@ -93,6 +97,8 @@ export function createProjectExitGuard(
       const saved = await saveWithLock("Projekt je ulozeny. Zatvaram workspace.");
       if (!saved) return;
     }
+    await options.onLeave?.(choice);
+    if (choice === "discard") await options.onDiscard?.();
     openProjectManager();
   };
 

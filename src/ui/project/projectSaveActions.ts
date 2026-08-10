@@ -4,6 +4,7 @@ import { openCreateProjectDialog } from "./createProjectDialog";
 import { openProjectFilePicker, openProjectListDialog } from "./projectLoadDialog";
 import { createProjectExitGuard } from "./projectExitGuard";
 import { showToast } from "../toast";
+import { clearLastWorkspacePointer } from "../../app/project/projectRecoveryStore";
 
 export type ProjectMenuActions = {
   newProject: () => void;
@@ -20,6 +21,8 @@ export function createProjectMenuActions(
     openProjectManager?: () => void;
     formatSavedMessage?: (save: ProjectSaveFile, fallback: string) => string;
     currentUserName?: string;
+    onDiscard?: () => void | Promise<void>;
+    onLeave?: (choice: "save" | "discard") => void | Promise<void>;
   } = {}
 ): ProjectMenuActions {
   const openManager = () => {
@@ -28,11 +31,16 @@ export function createProjectMenuActions(
       return;
     }
     window.localStorage.removeItem("arcigy.kitchen.autostartWorkspace");
+    clearLastWorkspacePointer();
     const url = new URL(window.location.href);
     url.searchParams.delete("workspace");
     window.location.href = `${url.pathname}${url.search}${url.hash}`;
   };
-  const exitGuard = createProjectExitGuard(actions, openManager, { formatSavedMessage: options.formatSavedMessage });
+  const exitGuard = createProjectExitGuard(actions, openManager, {
+    formatSavedMessage: options.formatSavedMessage,
+    onDiscard: options.onDiscard,
+    onLeave: options.onLeave
+  });
   const withToast = async (task: Promise<unknown>, success: string) => {
     try {
       await task;

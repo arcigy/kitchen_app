@@ -1,24 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-materials/project-material-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
-import { createProject, deleteProject, importProjectFile, restoreProjectVersion, saveProject } from "./projectApi";
+import {
+  createProject,
+  deleteProject,
+  importProjectFile,
+  ProjectApiError,
+  restoreProjectVersion,
+  saveProject
+} from "./projectApi";
+
+const appState = {
+  layout: {},
+  kitchen: {},
+  modules: [],
+  materialAssignments: createEmptyProjectMaterialAssignmentsState(),
+  scene: {}
+} satisfies ProjectSaveFile["appState"];
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("project API", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
   it("persists the BOM-derived material quantity snapshot with the current app state", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ save: {} }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const appState: ProjectSaveFile["appState"] = {
-      layout: {},
-      kitchen: {},
-      modules: [],
-      materialAssignments: createEmptyProjectMaterialAssignmentsState(),
-      scene: {}
-    };
     const bomSnapshot = {
       materialQuantities: [{ category: "corpus", quantity: 2.5, unit: "m2" }]
     };
@@ -75,5 +83,36 @@ describe("project API", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("Not found", { status: 404 })));
 
     await expect(deleteProject("missing_project")).rejects.toThrow("Not found");
+  });
+
+  it("preserves structured revision-conflict details for recovery policy", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ok: false,
+      error: "Project changed since it was loaded.",
+      code: "PROJECT_SAVE_REVISION_CONFLICT",
+      expectedRevision: 4,
+      currentRevision: 5,
+      requestId: "request_1"
+    }), { status: 409, headers: { "Content-Type": "application/json" } })));
+
+    const error = await saveProject("project_1", appState, "edit_1", undefined, 4).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ProjectApiError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: "PROJECT_SAVE_REVISION_CONFLICT",
+      expectedRevision: 4,
+      currentRevision: 5,
+      requestId: "request_1"
+    });
+  });
+
+  it("keeps non-JSON authorization failures structured instead of treating them as offline", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Unauthorized", { status: 401 })));
+
+    const error = await saveProject("project_1", appState, "edit_1", undefined, 4).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ProjectApiError);
+    expect(error).toMatchObject({ status: 401, code: "PROJECT_REQUEST_FAILED" });
   });
 });

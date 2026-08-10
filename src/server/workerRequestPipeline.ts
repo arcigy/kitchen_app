@@ -19,7 +19,7 @@ import { registerMutationAudit } from "./http-mutation-audit";
 import { registerRequestObservability } from "./http-request-observability";
 import { shouldRejectRequestOrigin } from "./http-request-origin";
 import { registerResponseCompression, sendResponseBody } from "./http-response-compression";
-import { getServerErrorStatus, publicServerErrorMessage } from "./server-error-response";
+import { getServerErrorStatus, publicServerErrorDetails, publicServerErrorMessage } from "./server-error-response";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -136,7 +136,7 @@ export function createWorkerRequestHandler(context: WorkerRequestPipelineContext
       (context.logError ?? console.error)(
         `[worker] requestId=${requestId} ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${error instanceof Error ? error.message : String(error)}`
       );
-      return context.sendJson(res, status, { ok: false, error: message, requestId });
+      return context.sendJson(res, status, { ok: false, error: message, requestId, ...publicServerErrorDetails(error) });
     }
   };
 }

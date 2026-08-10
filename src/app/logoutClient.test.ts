@@ -30,4 +30,20 @@ describe("logoutClient", () => {
     expect(removeLocal).toHaveBeenCalledWith("arcigy.kitchen.autostartWorkspace");
     expect(assign).toHaveBeenCalledWith("/");
   });
+
+  it("clears browser recovery even when the logout request is offline", async () => {
+    const removeLocal = vi.fn();
+    const assign = vi.fn();
+    vi.stubGlobal("window", {
+      sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+      localStorage: { getItem: () => null, setItem: vi.fn(), removeItem: removeLocal },
+      location: { assign }
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+
+    await expect(logoutClient()).rejects.toThrow("offline");
+
+    expect(removeLocal).toHaveBeenCalledWith("arcigy.kitchen.lastWorkspace.v1");
+    expect(assign).toHaveBeenCalledWith("/");
+  });
 });

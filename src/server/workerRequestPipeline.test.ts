@@ -10,6 +10,7 @@ import { createHttpRequestBudget } from "./http-request-budget";
 import { createHttpRequestMetrics } from "./http-request-metrics";
 import { readJsonRequestBody } from "./request-json-body";
 import { createWorkerRequestHandler } from "./workerRequestPipeline";
+import { ProjectSaveRevisionConflictError } from "../core/project/project-write-consistency";
 
 const servers: http.Server[] = [];
 
@@ -114,6 +115,23 @@ describe("shared worker request pipeline", () => {
     expect(await failed.json()).toMatchObject({
       ok: false,
       error: "Internal server error.",
+      requestId: expect.any(String)
+    });
+  });
+
+  it("returns structured 409 details through the shared error pipeline", async () => {
+    const harness = await createHarness({
+      application: async () => { throw new ProjectSaveRevisionConflictError(4, 5); }
+    });
+
+    const response = await harness.request("/api/projects/project_1/save", { method: "POST" });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "PROJECT_SAVE_REVISION_CONFLICT",
+      expectedRevision: 4,
+      currentRevision: 5,
       requestId: expect.any(String)
     });
   });

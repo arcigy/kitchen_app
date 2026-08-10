@@ -106,4 +106,42 @@ describe("render controls", () => {
       backgroundIntensity: 1
     });
   });
+
+  it("falls back to neutral lighting when a saved HDRI asset is unavailable", async () => {
+    installFakeDocument();
+    const setHdri = vi.fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValueOnce(undefined);
+    const controls = createRenderControls({
+      layoutUi: new FakeElement() as FakeElement & HTMLElement,
+      enableSsgi: false,
+      enablePhoto: false,
+      getRenderMode: () => "realtime",
+      setRenderMode: vi.fn(),
+      setDaylightIntensity: vi.fn(),
+      getShadowAlgorithm: () => "pcfsoft",
+      setShadowAlgorithm: vi.fn(),
+      setHdri,
+      disposeSsgi: vi.fn(),
+      disposePhoto: vi.fn(),
+      resetPhoto: vi.fn(),
+      downloadViewportPng: vi.fn()
+    });
+
+    await expect(controls.restoreState({
+      hdri: { id: "/assets/studio.exr", background: true, envIntensity: 0.4, backgroundIntensity: 1 }
+    })).resolves.toBeUndefined();
+    expect(setHdri).toHaveBeenNthCalledWith(1, {
+      id: "/assets/studio.exr",
+      background: true,
+      envIntensity: 0.4,
+      backgroundIntensity: 1
+    });
+    expect(setHdri).toHaveBeenNthCalledWith(2, {
+      id: null,
+      background: false,
+      envIntensity: 0.4,
+      backgroundIntensity: 1
+    });
+  });
 });

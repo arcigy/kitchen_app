@@ -62,8 +62,9 @@ describe("project actions", () => {
   it("continues from the loaded save revision while starting a fresh editing session", async () => {
     const initialProjectSave = saveWithRevision(7);
     vi.mocked(saveProject).mockResolvedValue(saveWithRevision(8));
+    const buildAppState = vi.fn(() => appState);
     const actions = createProjectActions({
-      buildAppState: () => appState,
+      buildAppState,
       restoreSave: vi.fn(),
       onProjectChanged: vi.fn(),
       initialProjectSave
@@ -73,8 +74,9 @@ describe("project actions", () => {
     expect(actions.getState().saveRevision).toBe(7);
     expect(actions.getState().editingSessionId).toMatch(/^edit_/);
 
-    await actions.save();
+    await actions.save({ background: true });
 
+    expect(buildAppState).toHaveBeenCalledWith({ background: true });
     expect(saveProject).toHaveBeenCalledWith(
       project.projectId,
       appState,
@@ -83,6 +85,54 @@ describe("project actions", () => {
       7
     );
     expect(actions.getState().saveRevision).toBe(8);
+  });
+
+  it("coalesces concurrent saves into one revision-checked server write", async () => {
+    let release: ((save: ProjectSaveFile) => void) | undefined;
+    vi.mocked(saveProject).mockImplementation(() => new Promise((resolve) => {
+      release = resolve;
+    }));
+    const buildAppState = vi.fn(() => appState);
+    const actions = createProjectActions({
+      buildAppState,
+      restoreSave: vi.fn(),
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+
+    const first = actions.save();
+    const second = actions.save();
+    expect(saveProject).toHaveBeenCalledOnce();
+    expect(buildAppState).toHaveBeenCalledOnce();
+
+    release!(saveWithRevision(8));
+    await expect(Promise.all([first, second])).resolves.toEqual([saveWithRevision(8), saveWithRevision(8)]);
+    expect(actions.getState().saveRevision).toBe(8);
+  });
+
+  it("queues one full foreground save behind an in-flight background snapshot", async () => {
+    let release: ((save: ProjectSaveFile) => void) | undefined;
+    vi.mocked(saveProject)
+      .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+      .mockResolvedValueOnce(saveWithRevision(9));
+    const buildAppState = vi.fn(() => appState);
+    const actions = createProjectActions({
+      buildAppState,
+      restoreSave: vi.fn(),
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+
+    const background = actions.save({ background: true });
+    const foreground = actions.save();
+    expect(saveProject).toHaveBeenCalledOnce();
+    release!(saveWithRevision(8));
+
+    await expect(background).resolves.toEqual(saveWithRevision(8));
+    await expect(foreground).resolves.toEqual(saveWithRevision(9));
+    expect(saveProject).toHaveBeenCalledTimes(2);
+    expect(buildAppState.mock.calls).toEqual([[{ background: true }], [undefined]]);
+    expect(actions.getState().saveRevision).toBe(9);
   });
 
   it("rotates an opaque editing session when a project is created", async () => {
@@ -119,5 +169,76 @@ describe("project actions", () => {
     expect(actions.getState().currentProject).toBe(project);
     expect(actions.getState().saveRevision).toBe(7);
     expect(actions.getState().editingSessionId).toBe(initialSession);
+  });
+
+  it("flushes recovery before replacing the current workspace", async () => {
+    let release: (() => void) | undefined;
+    const beforeProjectReplace = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    vi.mocked(loadProject).mockResolvedValue(saveWithRevision(9));
+    const actions = createProjectActions({
+      buildAppState: () => appState,
+      restoreSave: vi.fn(),
+      beforeProjectReplace,
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+
+    const loading = actions.loadById("project_2");
+    expect(beforeProjectReplace).toHaveBeenCalledOnce();
+    expect(loadProject).not.toHaveBeenCalled();
+    release!();
+    await loading;
+    expect(loadProject).toHaveBeenCalledWith("project_2");
+  });
+
+  it("waits for an in-flight save before loading another project", async () => {
+    let releaseSave: ((save: ProjectSaveFile) => void) | undefined;
+    vi.mocked(saveProject).mockImplementation(() => new Promise((resolve) => { releaseSave = resolve; }));
+    vi.mocked(loadProject).mockResolvedValue({ ...saveWithRevision(1), project: { ...project, projectId: "project_2" } });
+    const actions = createProjectActions({
+      buildAppState: () => appState,
+      restoreSave: vi.fn(),
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+
+    const saving = actions.save({ background: true });
+    const loading = actions.loadById("project_2");
+    expect(loadProject).not.toHaveBeenCalled();
+
+    releaseSave!(saveWithRevision(8));
+    await saving;
+    await loading;
+    expect(loadProject).toHaveBeenCalledWith("project_2");
+    expect(actions.getState().currentProject?.projectId).toBe("project_2");
+  });
+
+  it("waits for a queued foreground follow-up before replacing the project", async () => {
+    let releaseBackground: ((save: ProjectSaveFile) => void) | undefined;
+    let releaseForeground: ((save: ProjectSaveFile) => void) | undefined;
+    vi.mocked(saveProject)
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseBackground = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseForeground = resolve; }));
+    vi.mocked(loadProject).mockResolvedValue({ ...saveWithRevision(1), project: { ...project, projectId: "project_2" } });
+    const actions = createProjectActions({
+      buildAppState: () => appState,
+      restoreSave: vi.fn(),
+      onProjectChanged: vi.fn(),
+      initialProjectSave: saveWithRevision(7)
+    });
+
+    const background = actions.save({ background: true });
+    const foreground = actions.save();
+    const loading = actions.loadById("project_2");
+    releaseBackground!(saveWithRevision(8));
+    await background;
+    await vi.waitFor(() => expect(saveProject).toHaveBeenCalledTimes(2));
+    expect(loadProject).not.toHaveBeenCalled();
+
+    releaseForeground!(saveWithRevision(9));
+    await foreground;
+    await loading;
+    expect(loadProject).toHaveBeenCalledWith("project_2");
+    expect(actions.getState().currentProject?.projectId).toBe("project_2");
   });
 });
