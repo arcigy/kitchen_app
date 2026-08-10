@@ -1,9 +1,9 @@
 import { PDFDocument } from "pdf-lib";
 import {
   convertPriceCurrency,
-  priceCurrencyLocale,
   type PriceCurrency
 } from "../../core/pricing/currency";
+import { getCurrentLanguage, localeForLanguage, t } from "../../i18n";
 import type { ProjectPricingView } from "./projectPricing";
 import {
   aggregateProjectBoards,
@@ -26,15 +26,19 @@ type RenderPage = {
 };
 
 function formatNumber(value: number, digits = 3) {
-  return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: digits }).format(value);
+  return new Intl.NumberFormat(localeForLanguage(getCurrentLanguage()), { maximumFractionDigits: digits }).format(value);
 }
 
 function formatCurrency(value: number, currency: PriceCurrency) {
-  return new Intl.NumberFormat(priceCurrencyLocale(currency), {
+  return new Intl.NumberFormat(localeForLanguage(getCurrentLanguage()), {
     style: "currency",
     currency,
     maximumFractionDigits: 2
   }).format(convertPriceCurrency(value, "EUR", currency));
+}
+
+function message(key: string, values: Record<string, string | number> = {}) {
+  return t(key).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
 }
 
 function createCanvasPage(pageNumber: number): RenderPage {
@@ -43,7 +47,7 @@ function createCanvasPage(pageNumber: number): RenderPage {
   canvas.height = PAGE_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    throw new Error("Canvas 2D context is not available.");
+    throw new Error(t("Canvas 2D context is not available."));
   }
 
   const gradient = ctx.createLinearGradient(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
@@ -59,12 +63,12 @@ function createCanvasPage(pageNumber: number): RenderPage {
 
   ctx.fillStyle = "#fdfaf5";
   ctx.font = "600 22px 'Segoe UI', Arial, sans-serif";
-  ctx.fillText(`Arcigy kitchen offer`, PAGE_MARGIN, 72);
+  ctx.fillText(t("Arcigy kitchen offer"), PAGE_MARGIN, 72);
   ctx.font = "400 16px 'Segoe UI', Arial, sans-serif";
-  ctx.fillText(`Generated ${new Date().toLocaleDateString("sk-SK")}`, PAGE_MARGIN, 104);
+  ctx.fillText(`${t("Generated")} ${new Date().toLocaleDateString(localeForLanguage(getCurrentLanguage()))}`, PAGE_MARGIN, 104);
 
   ctx.textAlign = "right";
-  ctx.fillText(`Page ${pageNumber}`, PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 20);
+  ctx.fillText(`${t("Page")} ${pageNumber}`, PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 20);
   ctx.textAlign = "left";
 
   return {
@@ -169,10 +173,10 @@ function drawSummaryCards(pages: RenderPage[], summary: ProjectQuoteSummary, cur
   const cardWidth = (CONTENT_WIDTH - 20) / 2;
   const cardHeight = 96;
   const cards: Array<[string, string]> = [
-    ["Material", formatCurrency(summary.materialCost, currency)],
-    ["Praca spolu", formatCurrency(summary.laborCostTotal, currency)],
-    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, currency)}`],
-    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice, currency)]
+    [t("Material"), formatCurrency(summary.materialCost, currency)],
+    [t("Total labor"), formatCurrency(summary.laborCostTotal, currency)],
+    [t("Combined margin"), `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, currency)}`],
+    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency)]
   ];
 
   cards.forEach(([label, value], index) => {
@@ -220,7 +224,7 @@ function drawAggregateBullets(
 ) {
   drawSectionTitle(pages, title);
   if (rows.length === 0) {
-    drawParagraph(pages, "V tomto navrhu nie su ziadne polozky pre tuto sekciu.");
+    drawParagraph(pages, t("This design has no items for this section."));
     return;
   }
 
@@ -246,7 +250,7 @@ function drawTable(
 ) {
   drawSectionTitle(pages, title);
   if (rows.length === 0) {
-    drawParagraph(pages, "Zatial nie su k dispozicii ziadne riadky.");
+    drawParagraph(pages, t("No rows are available yet."));
     return;
   }
 
@@ -318,55 +322,55 @@ export async function exportMarketingOfferPdf(
 
   drawSectionTitle(
     pages,
-    "Cenova ponuka kuchyne",
-    "Prehladne spracovana ponuka z aktualneho navrhu, s rovnakou cenovou logikou ako v BOM appke aj v Create Sheet exporte."
+    t("Kitchen price quotation"),
+    t("A clearly prepared quotation from the current design, using the same pricing logic as the BOM and Create Sheet export.")
   );
   drawParagraph(
     pages,
-    "Ponuka je postavena na presne nacenenych doskovych materialoch, hranach a katalogovych komponentoch. Vysledok zahrna material, pracu, pripadnu dodatocnu projektovu pracu a marzu."
+    t("The quotation is based on accurately priced board materials, edges and catalogue components. The result includes material, labor, any additional project work and margin.")
   );
   drawParagraph(
     pages,
-    "Vybrane povrchy a kovania su orientovane na premium dojem, cisty detail, dobru odolnost v kazdodennom pouzivani a konzistentny vizual napriec celou zostavou."
+    t("Selected finishes and fittings focus on a premium impression, clean detail, everyday durability and a consistent appearance across the whole composition.")
   );
   drawSummaryCards(pages, summary, currency);
 
-  drawSectionTitle(pages, "Prehlad kalkulacie");
+  drawSectionTitle(pages, t("Pricing summary"));
   drawKeyValueList(pages, [
-    ["Dosky", formatCurrency(summary.boardsCost, currency)],
-    ["Olepovanie", formatCurrency(summary.edgesCost, currency)],
-    ["Komponenty", formatCurrency(summary.hardwareCost, currency)],
-    ["Modulova praca", formatCurrency(summary.moduleLaborCost, currency)],
-    ["Dodatocna praca projektu", formatCurrency(summary.additionalLaborCost, currency)],
-    ["Medzisucet pred marzou", formatCurrency(summary.subtotalBeforeMargin, currency)],
-    ["Kombinovana marza", `${formatNumber(summary.marginPercent, 2)} %`],
-    ["Finalna cenova ponuka", formatCurrency(summary.finalPrice, currency)]
+    [t("Boards"), formatCurrency(summary.boardsCost, currency)],
+    [t("Edge banding"), formatCurrency(summary.edgesCost, currency)],
+    [t("Components"), formatCurrency(summary.hardwareCost, currency)],
+    [t("Module labor"), formatCurrency(summary.moduleLaborCost, currency)],
+    [t("Additional project labor"), formatCurrency(summary.additionalLaborCost, currency)],
+    [t("Subtotal before margin"), formatCurrency(summary.subtotalBeforeMargin, currency)],
+    [t("Combined margin"), `${formatNumber(summary.marginPercent, 2)} %`],
+    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency)]
   ]);
 
   drawAggregateBullets(
     pages,
-    "Pouzite materialy",
+    t("Used materials"),
     boards,
     (row) =>
-      `${formatNumber(row.quantity)} m2 netto, ${formatNumber(row.pricedQuantity ?? row.quantity)} m2 fakturovane, ${formatCurrency(row.unitPrice, currency)} / m2, spolu ${formatCurrency(row.cost, currency)}.`
+      message("{quantity} m² net, {pricedQuantity} m² billed, {unitPrice} / m², total {cost}.", { quantity: formatNumber(row.quantity), pricedQuantity: formatNumber(row.pricedQuantity ?? row.quantity), unitPrice: formatCurrency(row.unitPrice, currency), cost: formatCurrency(row.cost, currency) })
   );
   drawAggregateBullets(
     pages,
-    "Hrany a dokoncovacie prvky",
+    t("Edges and finishing elements"),
     edges,
-    (row) => `${formatNumber(row.quantity)} lm, ${formatCurrency(row.unitPrice, currency)} / lm, spolu ${formatCurrency(row.cost, currency)}.`
+    (row) => message("{quantity} lm, {unitPrice} / lm, total {cost}.", { quantity: formatNumber(row.quantity), unitPrice: formatCurrency(row.unitPrice, currency), cost: formatCurrency(row.cost, currency) })
   );
   drawAggregateBullets(
     pages,
-    "Katalogove komponenty",
+    t("Catalogue components"),
     components,
-    (row) => `${formatNumber(row.quantity)} ks, ${formatCurrency(row.unitPrice, currency)} / ks, spolu ${formatCurrency(row.cost, currency)}.`
+    (row) => message("{quantity} pcs, {unitPrice} / pc, total {cost}.", { quantity: formatNumber(row.quantity), unitPrice: formatCurrency(row.unitPrice, currency), cost: formatCurrency(row.cost, currency) })
   );
 
   drawTable(
     pages,
-    "Modulovy prehlad",
-    ["Modul", "Dosky", "Hrany", "Komponenty", "Praca", "Celkom"],
+    t("Module overview"),
+    [t("Module"), t("Boards"), t("Edges"), t("Components"), t("Labor"), t("Total")],
     entries.map((entry) => [
       entry.label,
       formatCurrency(entry.result.pricing.groups.boards.cost, currency),
@@ -378,10 +382,10 @@ export async function exportMarketingOfferPdf(
     [340, 150, 150, 150, 130, 160]
   );
 
-  drawSectionTitle(pages, "Poznamka k ponuke");
+  drawSectionTitle(pages, t("Quotation note"));
   drawParagraph(
     pages,
-    "Tento PDF vystup je marketingovo upravena cenova ponuka z aktualneho navrhu. Finalna cena v nom sa zhoduje s vysledkom Create Sheet a s BOM panelom v appke."
+    t("This PDF output is a marketing-formatted quotation from the current design. Its final price matches the Create Sheet result and the BOM panel in the application.")
   );
 
   const pdf = await PDFDocument.create();
@@ -399,5 +403,5 @@ export async function exportMarketingOfferPdf(
 
   const bytes = await pdf.save();
   const date = new Date().toISOString().slice(0, 10);
-  downloadPdf(bytes, `cenova-ponuka-${date}.pdf`);
+  downloadPdf(bytes, `${t("kitchen-quotation").replace(/\s+/g, "-").toLowerCase()}-${date}.pdf`);
 }

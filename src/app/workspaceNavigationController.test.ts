@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { AppState } from "../layout/appState";
 import { FakeElement } from "./testUtils/propertiesPanelHarness";
 import { createWorkspaceNavigationController } from "./workspaceNavigationController";
+import { setCurrentLanguage } from "../i18n";
 
 class WorkspaceFakeElement extends FakeElement {
   private selectors = new Map<string, WorkspaceFakeElement>();
@@ -59,6 +60,18 @@ function emptyAppState() {
 }
 
 describe("createWorkspaceNavigationController", () => {
+  beforeEach(() => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value)
+      },
+      dispatchEvent: vi.fn()
+    });
+    setCurrentLanguage("en");
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -147,7 +160,7 @@ describe("createWorkspaceNavigationController", () => {
     expect(tabs.children.map((button) => button.textContent)).toEqual([
       "Module schedule",
       "Material boards",
-      "Opaskovanie",
+      "Edge banding",
       "Components",
       "Views"
     ]);

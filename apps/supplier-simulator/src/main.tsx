@@ -8,6 +8,7 @@ const scenarios = [
   "gross-price", "delayed-price-rendering", "spa-navigation", "selector-missing", "product-unavailable", "backend-timeout"
 ] as const;
 type Scenario = typeof scenarios[number];
+type SimulatorLanguage = "sk" | "cs" | "en";
 
 type ProductData = {
   id: string; code: string; name: string; manufacturer: string; decor: string; surface: string; productType: string;
@@ -15,6 +16,13 @@ type ProductData = {
 };
 
 function query(): URLSearchParams { return new URLSearchParams(window.location.search); }
+function languageFromUrl(): SimulatorLanguage {
+  const value = query().get("lang");
+  return value === "cs" || value === "en" ? value : "sk";
+}
+function copy(language: SimulatorLanguage, sk: string, cs: string, en: string): string {
+  return language === "cs" ? cs : language === "en" ? en : sk;
+}
 function scenarioFromUrl(): Scenario {
   const value = query().get("scenario");
   return scenarios.includes(value as Scenario) ? value as Scenario : "exact-single-result";
@@ -55,7 +63,7 @@ function priced(product: ProductData, scenario: Scenario): ProductData {
   return product;
 }
 
-function Product({ data, delayed = false, brokenSelector = false }: { data: ProductData; delayed?: boolean; brokenSelector?: boolean }): React.JSX.Element {
+function Product({ data, language, delayed = false, brokenSelector = false }: { data: ProductData; language: SimulatorLanguage; delayed?: boolean; brokenSelector?: boolean }): React.JSX.Element {
   const [showPrice, setShowPrice] = useState(!delayed);
   useEffect(() => { if (!delayed) return; const timer = window.setTimeout(() => setShowPrice(true), 850); return () => window.clearTimeout(timer); }, [delayed]);
   const attrs = brokenSelector ? {} : { "data-supplier-product": "true" };
@@ -67,17 +75,17 @@ function Product({ data, delayed = false, brokenSelector = false }: { data: Prod
     <div className="board" aria-hidden="true"><span>{data.decor}</span></div>
     <div className="product__body"><div className="brand">{data.manufacturer}</div><h2 data-diagnostic-product-name>{data.name}</h2>
       <p className="code" data-diagnostic-product-code>{data.code}</p><p>{data.productType} · {data.thickness} mm · {data.width} × {data.length} mm</p>
-      <p data-diagnostic-availability className={data.available ? "available" : "unavailable"}>{data.available ? "Skladom" : "Nedostupné"}</p>
-      {showPrice && data.price ? <div className="price"><strong data-supplier-price data-diagnostic-price>{data.price}</strong><span data-supplier-unit data-diagnostic-unit>{data.unit}</span></div> : <div className="price price--loading">{delayed && !showPrice ? "Načítavam cenu…" : "Cena na vyžiadanie"}</div>}
-      <button onClick={() => navigate(`/product/${data.id}${window.location.search}`)}>Detail produktu</button>
+      <p data-diagnostic-availability className={data.available ? "available" : "unavailable"}>{data.available ? copy(language, "Skladom", "Skladem", "Available") : copy(language, "Nedostupné", "Nedostupné", "Unavailable")}</p>
+      {showPrice && data.price ? <div className="price"><strong data-supplier-price data-diagnostic-price>{data.price}</strong><span data-supplier-unit data-diagnostic-unit>{data.unit}</span></div> : <div className="price price--loading">{delayed && !showPrice ? copy(language, "Načítavam cenu…", "Načítám cenu…", "Loading price…") : copy(language, "Cena na vyžiadanie", "Cena na vyžádání", "Price on request")}</div>}
+      <button onClick={() => navigate(`/product/${data.id}${window.location.search}`)}>{copy(language, "Detail produktu", "Detail produktu", "Product details")}</button>
     </div>
   </article>;
 }
 
-function DebugPanel({ scenario }: { scenario: Scenario }): React.JSX.Element {
-  return <aside className="debug"><strong>Simulator scenario</strong><select value={scenario} onChange={(event) => {
+function DebugPanel({ scenario, language }: { scenario: Scenario; language: SimulatorLanguage }): React.JSX.Element {
+  return <aside className="debug"><strong>{copy(language, "Scenár simulátora", "Scénář simulátoru", "Simulator scenario")}</strong><select value={scenario} onChange={(event) => {
     const params = query(); params.set("scenario", event.target.value); navigate(`${path()}?${params.toString()}`);
-  }}>{scenarios.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select><small>Fiktívne dáta · iba lokálny debug</small></aside>;
+  }}>{scenarios.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select><small>{copy(language, "Fiktívne dáta · iba lokálny debug", "Fiktivní data · pouze lokální ladění", "Fictional data · local debug only")}</small></aside>;
 }
 
 function App(): React.JSX.Element {
@@ -85,18 +93,20 @@ function App(): React.JSX.Element {
   useEffect(() => { const update = () => setLocationKey(`${path()}${window.location.search}`); window.addEventListener("popstate", update); return () => window.removeEventListener("popstate", update); }, []);
   void locationKey;
   const scenario = scenarioFromUrl();
+  const language = languageFromUrl();
   const currentPath = path();
   const base = priced(fixture(), scenario);
   const products = scenario === "multiple-results" ? [base, priced(fixture(1), scenario), priced(fixture(2), scenario)] : [base];
   const expired = scenario === "expired-session" || currentPath === "/login";
-  return <><header><a onClick={() => navigate(`/search${window.location.search}`)}>FICTA SUPPLY</a><nav><button onClick={() => navigate(`/search${window.location.search}`)}>Hľadať</button><button onClick={() => navigate(`/cart${window.location.search}`)}>Košík</button></nav></header><DebugPanel scenario={scenario}/><main>
-    {expired ? <section className="login"><h1>Prihlásenie vypršalo</h1><p>Simulovaná supplier session vyžaduje nové prihlásenie.</p><button onClick={() => { const params = query(); params.set("scenario", "logged-in-session"); navigate(`/search?${params.toString()}`); }}>Simulovať prihlásenie</button></section>
-      : scenario === "backend-timeout" ? <section className="state"><div className="spinner"/><h1>Dodávateľ neodpovedá</h1><p>Simulovaný backend timeout. Stránka neposkytne produktové dáta.</p></section>
-      : currentPath === "/cart" ? <section><h1>Košík</h1><Product data={base}/></section>
-      : currentPath.startsWith("/product/") ? <section><h1>Detail produktu</h1><Product data={base} delayed={scenario === "delayed-price-rendering"} brokenSelector={scenario === "selector-missing"}/></section>
-      : <section><div className="search"><input readOnly value={query().get("query") ?? ""}/><button>Hľadať</button></div><h1>Výsledky vyhľadávania</h1>
-        {scenario === "no-result" ? <div className="state"><h2>Žiadny výsledok</h2><p>Skúste upraviť vyhľadávanie.</p></div> : products.map((product) => <Product key={product.id} data={product} delayed={scenario === "delayed-price-rendering"} brokenSelector={scenario === "selector-missing"}/>)}</section>}
-  </main><footer>Supplier Simulator 0.1 · no real supplier data</footer></>;
+  useEffect(() => { document.documentElement.lang = language === "cs" ? "cs-CZ" : language === "en" ? "en-GB" : "sk-SK"; }, [language]);
+  return <><header><a onClick={() => navigate(`/search${window.location.search}`)}>FICTA SUPPLY</a><nav><button onClick={() => navigate(`/search${window.location.search}`)}>{copy(language, "Hľadať", "Hledat", "Search")}</button><button onClick={() => navigate(`/cart${window.location.search}`)}>{copy(language, "Košík", "Košík", "Basket")}</button></nav></header><DebugPanel scenario={scenario} language={language}/><main>
+    {expired ? <section className="login"><h1>{copy(language, "Prihlásenie vypršalo", "Přihlášení vypršelo", "Sign-in expired")}</h1><p>{copy(language, "Simulovaná relácia dodávateľa vyžaduje nové prihlásenie.", "Simulovaná relace dodavatele vyžaduje nové přihlášení.", "The simulated supplier session requires a new sign-in.")}</p><button onClick={() => { const params = query(); params.set("scenario", "logged-in-session"); navigate(`/search?${params.toString()}`); }}>{copy(language, "Simulovať prihlásenie", "Simulovat přihlášení", "Simulate sign-in")}</button></section>
+      : scenario === "backend-timeout" ? <section className="state"><div className="spinner"/><h1>{copy(language, "Dodávateľ neodpovedá", "Dodavatel neodpovídá", "Supplier is not responding")}</h1><p>{copy(language, "Simulovaný časový limit backendu. Stránka neposkytne produktové údaje.", "Simulovaný časový limit backendu. Stránka neposkytne produktové údaje.", "Simulated backend timeout. The page will not provide product data.")}</p></section>
+      : currentPath === "/cart" ? <section><h1>{copy(language, "Košík", "Košík", "Basket")}</h1><Product data={base} language={language}/></section>
+      : currentPath.startsWith("/product/") ? <section><h1>{copy(language, "Detail produktu", "Detail produktu", "Product details")}</h1><Product data={base} language={language} delayed={scenario === "delayed-price-rendering"} brokenSelector={scenario === "selector-missing"}/></section>
+      : <section><div className="search"><input readOnly value={query().get("query") ?? ""}/><button>{copy(language, "Hľadať", "Hledat", "Search")}</button></div><h1>{copy(language, "Výsledky vyhľadávania", "Výsledky vyhledávání", "Search results")}</h1>
+        {scenario === "no-result" ? <div className="state"><h2>{copy(language, "Žiadny výsledok", "Žádný výsledek", "No results")}</h2><p>{copy(language, "Skúste upraviť vyhľadávanie.", "Zkuste upravit vyhledávání.", "Try adjusting the search.")}</p></div> : products.map((product) => <Product key={product.id} data={product} language={language} delayed={scenario === "delayed-price-rendering"} brokenSelector={scenario === "selector-missing"}/>)}</section>}
+  </main><footer>{copy(language, "Supplier Simulator 0.1 · bez reálnych údajov dodávateľa", "Supplier Simulator 0.1 · bez skutečných údajů dodavatele", "Supplier Simulator 0.1 · no real supplier data")}</footer></>;
 }
 
 document.body.dataset.supplierAccountId = "sim-account-local";

@@ -157,8 +157,24 @@ async function clickButtonByText(page, text) {
   assert(clicked, `Button not found: ${text}`);
 }
 
+async function clickButtonByTexts(page, texts) {
+  await page.waitForFunction((wanted) =>
+    [...document.querySelectorAll("button")].some((item) => wanted.includes((item.textContent || "").trim())),
+  texts, { timeout: 10000 });
+  for (const text of texts) {
+    const clicked = await page.evaluate((wanted) => {
+      const button = [...document.querySelectorAll("button")].find((item) => (item.textContent || "").trim() === wanted);
+      if (!button) return false;
+      button.click();
+      return true;
+    }, text);
+    if (clicked) return;
+  }
+  throw new Error(`Button not found: ${texts.join(" / ")}`);
+}
+
 async function openProjectManagerFromWorkspace(page) {
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.locator("button[data-quick-action='open']").click();
   const saveExit = page.locator("[data-project-exit='save']");
   if (await saveExit.isVisible({ timeout: 1000 }).catch(() => false)) {
     await saveExit.click();
@@ -175,6 +191,7 @@ async function main() {
   });
 
   try {
+    await page.addInitScript(() => localStorage.setItem("kitchen.app.language", "sk"));
     await login(page.context());
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     await openProjectCreateForm(page);
@@ -241,11 +258,14 @@ async function main() {
       });
     });
 
-    await clickButtonByText(page, "Dvere");
+    // Kitchen scenario rendering replaces the ribbon asynchronously. Wait for
+    // its architecture tab rather than assuming a machine-dependent delay.
+    await clickButtonByTexts(page, ["Architektúra", "Architektura", "Architecture"]);
+    await clickButtonByTexts(page, ["Dvere", "Dveře", "Door"]);
     const doorPoint = await planPointToViewport(page, { x: -500, z: -800 });
     await page.mouse.click(doorPoint.x, doorPoint.y);
     await page.waitForTimeout(400);
-    await clickButtonByText(page, "Okno");
+    await clickButtonByTexts(page, ["Okno", "Window"]);
     const windowPoint = await planPointToViewport(page, { x: 500, z: -800 });
     await page.mouse.click(windowPoint.x, windowPoint.y);
     await page.waitForTimeout(700);

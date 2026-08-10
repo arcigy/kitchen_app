@@ -2,9 +2,9 @@ import {
   convertPriceCurrency,
   EUR_TO_CZK_RATE,
   isPriceCurrency,
-  priceCurrencyLocale,
   type PriceCurrency
 } from "../core/pricing/currency";
+import { formatLocalizedCurrency } from "../i18n";
 
 export type PriceDisplayCurrency = PriceCurrency;
 
@@ -42,11 +42,7 @@ export function czkToEur(valueCzk: number): number {
 }
 
 export function formatDisplayCurrency(valueEur: number, currency: PriceDisplayCurrency): string {
-  return new Intl.NumberFormat(priceCurrencyLocale(currency), {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2
-  }).format(eurToDisplayCurrency(valueEur, currency));
+  return formatLocalizedCurrency(eurToDisplayCurrency(valueEur, currency), currency, { maximumFractionDigits: 2 });
 }
 
 export function formatCzk(valueCzk: number | null): string {

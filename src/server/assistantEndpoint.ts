@@ -11,6 +11,7 @@ import {
 } from "../assistant/toolRegistry";
 import { validateAssistantToolCall } from "../assistant/toolValidation";
 import { getAssistantModelAssignments } from "../assistant/openaiResponses";
+import { localeForLanguage, normalizeLanguage } from "../i18n";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -53,6 +54,9 @@ function parseAssistantTurnRequest(body: unknown): AssistantTurnRequest {
   }
   return {
     message: record.message.slice(0, 8000),
+    locale: typeof record.locale === "string" && ["sk-SK", "cs-CZ", "en-GB"].includes(record.locale)
+      ? record.locale as "sk-SK" | "cs-CZ" | "en-GB"
+      : localeForLanguage(normalizeLanguage(undefined)),
     clientContext: record.clientContext as AssistantTurnRequest["clientContext"],
     conversation: Array.isArray(record.conversation) ? record.conversation as AssistantTurnRequest["conversation"] : [],
     toolResults: Array.isArray(record.toolResults) ? record.toolResults as AssistantTurnRequest["toolResults"] : [],

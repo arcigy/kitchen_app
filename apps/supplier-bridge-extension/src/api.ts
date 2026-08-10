@@ -12,6 +12,10 @@ import type { ProjectMetadata } from "../../../src/core/project/project-types";
 import type { ClientSupplierPortal } from "../../../src/core/supplier-configuration/supplier-configuration-types";
 import { parseSupplierSyncSessionView } from "./sessionViewValidation";
 
+export type ExtensionClientProfile = {
+  defaults: { language: "sk" | "cs" | "en" };
+};
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -132,6 +136,17 @@ export async function loadExtensionSession(baseUrl: string, accessToken: string)
   const session = authSession(body?.session);
   if (!session) throw new Error("Arcigy session is invalid.");
   return session;
+}
+
+export async function loadExtensionClientProfile(baseUrl: string, accessToken: string): Promise<ExtensionClientProfile> {
+  const body = record(await requestJson(`${baseUrl}/api/client/profile`, { method: "GET", headers: authorized(accessToken) }));
+  const profile = record(body?.profile);
+  const defaults = record(profile?.defaults);
+  const language = defaults?.language;
+  if (!profile || !defaults || (language !== "sk" && language !== "cs" && language !== "en")) {
+    throw new Error("Client profile language is invalid.");
+  }
+  return { defaults: { language } };
 }
 
 export async function logoutExtension(baseUrl: string, accessToken: string): Promise<void> {

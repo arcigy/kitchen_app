@@ -2,6 +2,7 @@ import type { OrganizationUser } from "../core/client/client-types";
 import { createAccountMenu } from "./account/accountMenu";
 import { actionIconMarkup } from "./actionIcons";
 import { bindIconTooltip } from "./iconTooltips";
+import { t } from "../i18n";
 
 type ToolButtonArgs = {
   title: string;
@@ -64,13 +65,13 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
   const quick = document.createElement("div");
   quick.className = "revit-quick-actions";
   quick.innerHTML = `
-    <button type="button" aria-label="Open" data-quick-action="open">${actionIconMarkup("open")}</button>
-    <button type="button" aria-label="Print" data-quick-action="print">${actionIconMarkup("print")}</button>
-    <button type="button" aria-label="Save" data-quick-action="save">${actionIconMarkup("save")}</button>
+    <button type="button" aria-label="${t("Open")}" data-quick-action="open">${actionIconMarkup("open")}</button>
+    <button type="button" aria-label="${t("Print")}" data-quick-action="print">${actionIconMarkup("print")}</button>
+    <button type="button" aria-label="${t("Save")}" data-quick-action="save">${actionIconMarkup("save")}</button>
     <i></i>
-    <button type="button" aria-label="Undo" data-quick-action="undo">${actionIconMarkup("undo")}</button>
-    <button type="button" aria-label="Redo" data-quick-action="redo">${actionIconMarkup("redo")}</button>
-    <button type="button" aria-label="Cloud status" data-quick-action="cloud">${actionIconMarkup("cloud")}</button>
+    <button type="button" aria-label="${t("Undo")}" data-quick-action="undo">${actionIconMarkup("undo")}</button>
+    <button type="button" aria-label="${t("Redo")}" data-quick-action="redo">${actionIconMarkup("redo")}</button>
+    <button type="button" aria-label="${t("Cloud status")}" data-quick-action="cloud">${actionIconMarkup("cloud")}</button>
   `;
   quick.querySelectorAll<HTMLButtonElement>("button").forEach((button) => bindIconTooltip(button));
   titlebar.appendChild(quick);
@@ -93,7 +94,7 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
 
   const shareButton = document.createElement("button");
   shareButton.type = "button";
-  shareButton.textContent = "Share";
+  shareButton.textContent = t("Share");
   account.appendChild(shareButton);
 
   const tabs = document.createElement("div");
@@ -205,22 +206,22 @@ export function createTopbar(container: HTMLElement, args: TopbarArgs = {}) {
   };
 
   setChrome({
-    title: "Arcigy Kitchen",
-    projectLabel: "Workspace",
+    title: t("Arcigy Kitchen"),
+    projectLabel: t("Workspace"),
     tabs: [
-      { id: "architecture", label: "Architecture", active: true },
-      { id: "structure", label: "Structure" },
-      { id: "systems", label: "Systems" },
-      { id: "insert", label: "Insert" },
-      { id: "annotate", label: "Annotate" },
-      { id: "analyze", label: "Analyze" },
-      { id: "massing", label: "Massing & Site" },
-      { id: "collaborate", label: "Collaborate" },
-      { id: "view", label: "View" },
-      { id: "manage", label: "Manage" },
-      { id: "kitchen", label: "Kitchen" },
-      { id: "livingWall", label: "Living Wall" },
-      { id: "visualisation", label: "Visualisation" }
+      { id: "architecture", label: t("Architecture"), active: true },
+      { id: "structure", label: t("Structure") },
+      { id: "systems", label: t("Systems") },
+      { id: "insert", label: t("Insert") },
+      { id: "annotate", label: t("Annotate") },
+      { id: "analyze", label: t("Analyze") },
+      { id: "massing", label: t("Massing & Site") },
+      { id: "collaborate", label: t("Collaborate") },
+      { id: "view", label: t("View") },
+      { id: "manage", label: t("Manage") },
+      { id: "kitchen", label: t("Kitchen") },
+      { id: "livingWall", label: t("Living Wall") },
+      { id: "visualisation", label: t("Visualisation") }
     ]
   });
   setOrganizationUsers(args.organizationUsers ?? []);

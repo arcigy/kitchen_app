@@ -35,7 +35,7 @@ type FileMenuActions = {
   exportBlenderPreview: () => void | Promise<void>;
   exportPng: () => void | Promise<void>;
   copyJson: () => void | Promise<void>;
-  onLanguageChange?: (language: AppLanguage) => void;
+  onLanguageChange?: (language: AppLanguage) => void | Promise<void>;
 };
 
 export function attachFileMenu(anchor: HTMLElement, actions: FileMenuActions) {
@@ -123,7 +123,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
               checked: currentLanguage === "en",
               onSelect: () => {
                 setCurrentLanguage("en");
-                actions.onLanguageChange?.("en");
+                void Promise.resolve(actions.onLanguageChange?.("en")).catch(() => undefined);
               }
             },
             {
@@ -131,7 +131,15 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
               checked: currentLanguage === "sk",
               onSelect: () => {
                 setCurrentLanguage("sk");
-                actions.onLanguageChange?.("sk");
+                void Promise.resolve(actions.onLanguageChange?.("sk")).catch(() => undefined);
+              }
+            },
+            {
+              label: t("Czech"),
+              checked: currentLanguage === "cs",
+              onSelect: () => {
+                setCurrentLanguage("cs");
+                void Promise.resolve(actions.onLanguageChange?.("cs")).catch(() => undefined);
               }
             }
           ]

@@ -1,4 +1,5 @@
 import type { AuthenticatedClientSession } from "../core/client/client-types";
+import { getCurrentLanguage, setCurrentLanguage, t } from "../i18n";
 import { createButtonElement, createInputElement } from "./propsPanelElements";
 
 type AuthApiResponse = {
@@ -12,9 +13,9 @@ type LoginResult =
   | { ok: false; message: string };
 
 export function resolveLoginFailureMessage(status: number | null): string {
-  if (status === null) return "Prihlasovaci server nie je dostupny. Spusti lokalne prostredie cez npm run dev.";
-  if (status === 401 || status === 429) return "Nespravne prihlasovacie udaje.";
-  return "Prihlasenie zlyhalo na serveri. Skus to znovu alebo restartuj lokalne prostredie.";
+  if (status === null) return t("The sign-in server is unavailable. Start the local environment with npm run dev.");
+  if (status === 401 || status === 429) return t("Incorrect sign-in details.");
+  return t("Sign-in failed on the server. Try again or restart the local environment.");
 }
 
 function isClientSession(value: unknown): value is AuthenticatedClientSession {
@@ -69,6 +70,7 @@ async function readServerSession(): Promise<AuthenticatedClientSession | null> {
 }
 
 async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSession> {
+  setCurrentLanguage(getCurrentLanguage());
   root.innerHTML = "";
   root.className = "auth-shell";
 
@@ -83,7 +85,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       <span>A</span>
       <div>
         <strong>Arcigy Kitchen</strong>
-        <small>Project workspace</small>
+        <small>${t("Project workspace")}</small>
       </div>
     </div>
     <div class="auth-preview-window">
@@ -101,8 +103,8 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       </div>
     </div>
     <div class="auth-visual-meta">
-      <strong>Arcigy organizacia</strong>
-      <span>Projekty, verzie a aktivita su viazane na konkretneho clena timu.</span>
+      <strong>${t("Arcigy organisation")}</strong>
+      <span>${t("Projects, versions and activity are linked to a specific team member.")}</span>
     </div>
   `;
 
@@ -112,25 +114,25 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   const heading = document.createElement("div");
   heading.className = "auth-heading";
   heading.innerHTML = `
-    <span>Prihlasenie</span>
-    <h1>Vitaj spat</h1>
-    <p>Vyber svoj profil a pokracuj do pracoviska Arcigy.</p>
+    <span>${t("Sign in")}</span>
+    <h1>${t("Welcome back")}</h1>
+    <p>${t("Choose your profile and continue to the Arcigy workspace.")}</p>
   `;
 
   const profiles = document.createElement("div");
   profiles.className = "auth-profiles";
   profiles.innerHTML = `
-    <button type="button" class="auth-profile-card is-active" data-auth-user="branislav" aria-label="Vybrat Branislav">
+    <button type="button" class="auth-profile-card is-active" data-auth-user="branislav" aria-label="${t("Select Branislav")}">
       <img src="/organization/branislav.png" alt="" />
-      <span><strong>Branislav</strong><small>Projektovy architekt</small></span>
+      <span><strong>Branislav</strong><small>${t("Project architect")}</small></span>
     </button>
-    <button type="button" class="auth-profile-card" data-auth-user="andrej" aria-label="Vybrat Andrej">
+    <button type="button" class="auth-profile-card" data-auth-user="andrej" aria-label="${t("Select Andrej")}">
       <img src="/organization/andrej.png" alt="" />
-      <span><strong>Andrej</strong><small>Technicky tvorca</small></span>
+      <span><strong>Andrej</strong><small>${t("Technical creator")}</small></span>
     </button>
-    <button type="button" class="auth-profile-card" data-auth-user="pino_nobilia" aria-label="Vybrat PINO Nobilia">
+    <button type="button" class="auth-profile-card" data-auth-user="pino_nobilia" aria-label="${t("Select PINO Nobilia")}">
       <img src="/organization/pino-nobilia.png" alt="" />
-      <span><strong>PINO</strong><small>Tenant katalog VKH 2026</small></span>
+      <span><strong>PINO</strong><small>${t("Tenant catalogue VKH 2026")}</small></span>
     </button>
   `;
 
@@ -139,7 +141,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const usernameLabel = document.createElement("label");
   const usernameText = document.createElement("span");
-  usernameText.textContent = "Pouzivatel";
+  usernameText.textContent = t("User");
   const usernameInput = createInputElement("text", "branislav", {
     autocomplete: "username",
     name: "username",
@@ -149,11 +151,11 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const passwordLabel = document.createElement("label");
   const passwordText = document.createElement("span");
-  passwordText.textContent = "Heslo";
+  passwordText.textContent = t("Password");
   const passwordInput = createInputElement("password", "", {
     autocomplete: "current-password",
     name: "password",
-    placeholder: "Zadaj heslo",
+    placeholder: t("Enter password"),
     required: true
   });
   passwordLabel.append(passwordText, passwordInput);
@@ -162,11 +164,11 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   error.className = "auth-error";
   error.setAttribute("role", "alert");
 
-  const submit = createButtonElement("Prihlasit do workspace", { type: "submit" });
+  const submit = createButtonElement(t("Sign in to workspace"), { type: "submit" });
 
   const hint = document.createElement("p");
   hint.className = "auth-hint";
-  hint.innerHTML = `<strong>Dostupne ucty</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span><span>pino_nobilia / tenant heslo</span>`;
+  hint.innerHTML = `<strong>${t("Available accounts")}</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span><span>pino_nobilia / ${t("tenant password")}</span>`;
 
   form.append(usernameLabel, passwordLabel, hint, error, submit);
   content.append(heading, profiles, form);

@@ -8,8 +8,8 @@ describe("resolveLoginFailureMessage", () => {
   });
 
   it("keeps invalid credential errors generic", () => {
-    expect(resolveLoginFailureMessage(401)).toBe("Nespravne prihlasovacie udaje.");
-    expect(resolveLoginFailureMessage(429)).toBe("Nespravne prihlasovacie udaje.");
+    expect(resolveLoginFailureMessage(401)).toBe("Nesprávne prihlasovacie údaje.");
+    expect(resolveLoginFailureMessage(429)).toBe("Nesprávne prihlasovacie údaje.");
   });
 
   it("separates server failures from credential failures", () => {
@@ -50,13 +50,13 @@ describe("requireClientSession login form", () => {
 
     const passwordInput = form.children[1]!.children[1]!;
     expect(passwordInput.type).toBe("password");
-    expect(passwordInput.placeholder).toBe("Zadaj heslo");
+    expect(passwordInput.placeholder).toBe("Zadajte heslo");
     expect(passwordInput.name).toBe("password");
     expect(passwordInput.autocomplete).toBe("current-password");
     expect(passwordInput.required).toBe(true);
 
     const submit = form.children[4]!;
     expect(submit.type).toBe("submit");
-    expect(submit.textContent).toBe("Prihlasit do workspace");
+    expect(submit.textContent).toBe("Prihlásiť sa do pracoviska");
   });
 });
