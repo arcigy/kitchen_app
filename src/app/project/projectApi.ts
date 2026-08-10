@@ -2,18 +2,50 @@ import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { toSafeProjectFileName } from "../../core/project-save/project-save-file";
 
+export type ProjectApiErrorCode =
+  | "PROJECT_SAVE_REVISION_CONFLICT"
+  | "PROJECT_IDEMPOTENCY_CONFLICT"
+  | "PROJECT_REQUEST_FAILED";
+
+export class ProjectApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: ProjectApiErrorCode,
+    readonly currentRevision?: number,
+    readonly expectedRevision?: number,
+    readonly requestId?: string
+  ) {
+    super(message);
+    this.name = "ProjectApiError";
+  }
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
   let data: T;
   try {
     data = text ? JSON.parse(text) as T : ({} as T);
   } catch {
-    if (!response.ok) throw new Error(text.trim() || `HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new ProjectApiError(text.trim() || `HTTP ${response.status}`, response.status, "PROJECT_REQUEST_FAILED");
+    }
     throw new Error("Server returned an invalid response.");
   }
   if (!response.ok) {
-    const error = data && typeof data === "object" && "error" in data ? String((data as { error?: unknown }).error) : `HTTP ${response.status}`;
-    throw new Error(error);
+    const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    const error = typeof record.error === "string" ? record.error : `HTTP ${response.status}`;
+    const code = record.code === "PROJECT_SAVE_REVISION_CONFLICT" || record.code === "PROJECT_IDEMPOTENCY_CONFLICT"
+      ? record.code
+      : "PROJECT_REQUEST_FAILED";
+    throw new ProjectApiError(
+      error,
+      response.status,
+      code,
+      typeof record.currentRevision === "number" ? record.currentRevision : undefined,
+      typeof record.expectedRevision === "number" ? record.expectedRevision : undefined,
+      typeof record.requestId === "string" ? record.requestId : undefined
+    );
   }
   return data;
 }

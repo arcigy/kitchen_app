@@ -30,6 +30,47 @@ type TextureLoad = (
 const loader = new THREE.TextureLoader();
 const textureCache = new Map<string, Promise<LoadedSet | null>>();
 const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+export const PBR_TEXTURE_CACHE_LIMIT = 16;
+export const PBR_MATERIAL_CACHE_LIMIT = 256;
+const cacheMetrics = {
+  materialHits: 0,
+  materialMisses: 0,
+  materialEvictions: 0,
+  textureHits: 0,
+  textureMisses: 0,
+  textureEvictions: 0
+};
+
+function touchEntry<K, V>(cache: Map<K, V>, key: K, value: V): void {
+  cache.delete(key);
+  cache.set(key, value);
+}
+
+function trimTextureCache(): void {
+  while (textureCache.size > PBR_TEXTURE_CACHE_LIMIT) {
+    const oldestKey = textureCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    const evicted = textureCache.get(oldestKey);
+    textureCache.delete(oldestKey);
+    cacheMetrics.textureEvictions += 1;
+    void evicted?.then((set) => {
+      set?.baseColor.dispose();
+      set?.normal.dispose();
+      set?.roughness.dispose();
+    });
+  }
+}
+
+function trimMaterialCache(): void {
+  while (materialCache.size > PBR_MATERIAL_CACHE_LIMIT) {
+    const oldestKey = materialCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    // Do not dispose here: an evicted material may still be assigned to a live
+    // mesh. Removing the strong cache reference bounds the cache safely.
+    materialCache.delete(oldestKey);
+    cacheMetrics.materialEvictions += 1;
+  }
+}
 
 const MATERIAL_META: Record<PbrMaterialId, { worldSizeM: number }> = {
   // Source: Poliigon "Wood Veneer Oak 7760" (user-provided): 2.5m x 2.5m
@@ -94,11 +135,13 @@ export function loadPbrTextureSet(
       loadTexture(url, resolve, () => resolve(null));
     });
 
-  return Promise.all(PBR_TEXTURE_FILES.map((file) => load(urlFor(id, file)))).then(
-    ([baseColor, normal, roughness]) => baseColor && normal && roughness
-      ? { baseColor, normal, roughness }
-      : null
-  );
+  return Promise.all(PBR_TEXTURE_FILES.map((file) => load(urlFor(id, file)))).then(([baseColor, normal, roughness]) => {
+    if (baseColor && normal && roughness) return { baseColor, normal, roughness };
+    baseColor?.dispose();
+    normal?.dispose();
+    roughness?.dispose();
+    return null;
+  });
 }
 
 export async function recoverPbrTextureSet(load: () => Promise<LoadedSet | null>): Promise<LoadedSet | null> {
@@ -107,6 +150,38 @@ export async function recoverPbrTextureSet(load: () => Promise<LoadedSet | null>
   } catch {
     return null;
   }
+}
+
+export function getCachedPbrTextureSet(
+  id: PbrMaterialId,
+  load: () => Promise<LoadedSet | null> = () => loadPbrTextureSet(id)
+): Promise<LoadedSet | null> {
+  const existing = textureCache.get(id);
+  if (existing) {
+    cacheMetrics.textureHits += 1;
+    touchEntry(textureCache, id, existing);
+    return existing;
+  }
+  cacheMetrics.textureMisses += 1;
+  const pending = recoverPbrTextureSet(load);
+  textureCache.set(id, pending);
+  trimTextureCache();
+  void pending.then((set) => {
+    if (!set && textureCache.get(id) === pending) textureCache.delete(id);
+  });
+  return pending;
+}
+
+export function getPbrCacheStats() {
+  return { materials: materialCache.size, textures: textureCache.size, ...cacheMetrics };
+}
+
+export function clearPbrCachesForTests(): void {
+  textureCache.clear();
+  materialCache.clear();
+  Object.keys(cacheMetrics).forEach((key) => {
+    cacheMetrics[key as keyof typeof cacheMetrics] = 0;
+  });
 }
 
 export function getPbrWoodMaterial(params: { fallbackColor: string; ref: PbrMaterialRef }): THREE.MeshStandardMaterial {
@@ -125,7 +200,12 @@ export function getPbrMaterial(params: {
   const ei = typeof params.envMapIntensity === "number" ? Math.round(params.envMapIntensity * 1000) / 1000 : 1;
   const k = `${keyOf(params.ref)}:${repeat ? `${Math.round(repeat.x * 1000) / 1000},${Math.round(repeat.y * 1000) / 1000}` : "1,1"}:${ns}:${ei}`;
   const existing = materialCache.get(k);
-  if (existing) return existing;
+  if (existing) {
+    cacheMetrics.materialHits += 1;
+    touchEntry(materialCache, k, existing);
+    return existing;
+  }
+  cacheMetrics.materialMisses += 1;
 
   const mat = new THREE.MeshStandardMaterial({
     color: computeTintColor(params.fallbackColor, params.ref),
@@ -134,20 +214,18 @@ export function getPbrMaterial(params: {
   });
 
   if (Number.isFinite(ns)) mat.normalScale.setScalar(Math.max(0, ns));
-  if (Number.isFinite(ei)) (mat as any).envMapIntensity = Math.max(0, ei);
+  if (Number.isFinite(ei)) mat.envMapIntensity = Math.max(0, ei);
 
   materialCache.set(k, mat);
+  trimMaterialCache();
 
-  const setPromise =
-    textureCache.get(params.ref.id) ??
-    (() => {
-      const p = recoverPbrTextureSet(() => loadPbrTextureSet(params.ref.id));
-      textureCache.set(params.ref.id, p);
-      return p;
-    })();
+  const setPromise = getCachedPbrTextureSet(params.ref.id);
 
   void setPromise.then((set) => {
-    if (!set) return;
+    if (!set) {
+      if (materialCache.get(k) === mat) materialCache.delete(k);
+      return;
+    }
     const rot = params.ref.rotationDeg ?? 0;
 
     const baseColor = cloneForUse(set.baseColor);

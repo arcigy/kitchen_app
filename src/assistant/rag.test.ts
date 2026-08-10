@@ -7,9 +7,11 @@ import type { ClientContext } from "../core/client/client-context";
 import type { ClientCatalog, ClientModuleDefinition, VendorProductVariant } from "../core/catalog/catalog-types";
 import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
 import {
+  assistantRagCatalogRevisionKey,
   buildAssistantRagIndex,
   reindexAssistantRag,
   replaceAssistantRagIndex,
+  replaceAssistantRagTenantChunks,
   searchAssistantRag,
   type AssistantRagIndex
 } from "./rag";
@@ -151,6 +153,59 @@ describe.sequential("assistant RAG", () => {
       limit: 3
     });
     expect(results.some((chunk) => chunk.source.startsWith("tenant-catalog/"))).toBe(true);
+  });
+
+  it("keys transient tenant indexes by catalog revision and replaces stale tenant chunks", async () => {
+    const revisionCtx = context("client_rag_revisioned");
+    const firstCatalog = {
+      ...tenantCatalog(),
+      clientId: revisionCtx.clientId,
+      vendorCatalog: {
+        ...tenantCatalog().vendorCatalog!,
+        productVariants: [variant({
+          productTemplateName: "obsoleteuniquetoken cabinet",
+          notes: ["obsoleteuniquetoken"]
+        })]
+      },
+      meta: { catalogVersion: 1, updatedAt: "2026-08-01T00:00:00.000Z" }
+    };
+    const secondCatalog = {
+      ...firstCatalog,
+      vendorCatalog: {
+        ...firstCatalog.vendorCatalog,
+        productVariants: [variant({
+          productTemplateName: "currentuniquetoken cabinet",
+          notes: ["currentuniquetoken"]
+        })]
+      },
+      meta: { catalogVersion: 2, updatedAt: "2026-08-02T00:00:00.000Z" }
+    };
+
+    expect(assistantRagCatalogRevisionKey(revisionCtx.clientId, firstCatalog))
+      .not.toBe(assistantRagCatalogRevisionKey(revisionCtx.clientId, secondCatalog));
+    const staleTenantChunk = {
+      id: "tenant_chunk",
+      source: "tenant-catalog/module.json",
+      title: "Old",
+      text: "obsoleteuniquetoken",
+      tags: ["catalog"],
+      updatedAt: "2026-08-01T00:00:00.000Z"
+    };
+    const currentTenantChunk = { ...staleTenantChunk, title: "Current", text: "currentuniquetoken" };
+    const replaced = replaceAssistantRagTenantChunks({
+      persisted: false,
+      chunks: [
+        { ...staleTenantChunk },
+        { ...staleTenantChunk, id: "removed_chunk", text: "removeduniquetoken" },
+        { ...staleTenantChunk, id: "docs_chunk", source: "docs/base.md", text: "keepdocs" }
+      ]
+    }, [currentTenantChunk]);
+
+    expect(replaced.chunks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "tenant_chunk", text: "currentuniquetoken" }),
+      expect.objectContaining({ id: "docs_chunk", text: "keepdocs" })
+    ]));
+    expect(replaced.chunks.some((chunk) => chunk.id === "removed_chunk")).toBe(false);
   });
 
   it("never reuses another tenant's transient index during database fallback", async () => {

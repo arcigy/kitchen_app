@@ -58,3 +58,17 @@ export function publicServerErrorMessage(error: unknown, status: number): string
   if (status >= 500) return INTERNAL_SERVER_ERROR_MESSAGE;
   return error instanceof Error ? error.message : String(error);
 }
+
+export function publicServerErrorDetails(error: unknown): Record<string, unknown> {
+  if (error instanceof ProjectSaveRevisionConflictError) {
+    return {
+      code: "PROJECT_SAVE_REVISION_CONFLICT",
+      expectedRevision: error.expectedRevision,
+      currentRevision: error.actualRevision
+    };
+  }
+  if (error instanceof ProjectIdempotencyConflictError) {
+    return { code: "PROJECT_IDEMPOTENCY_CONFLICT" };
+  }
+  return {};
+}

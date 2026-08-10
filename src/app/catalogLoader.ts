@@ -31,12 +31,25 @@ const APP_DATA_PERSISTENT_CACHE_STORE = "tenant-app-data";
 const APP_DATA_REVISION_TIMEOUT_MS = 5_000;
 const CLIENT_APP_DATA_BOOTSTRAP_VERSION = "catalog-bootstrap-v1";
 
+class ClientAppDataHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ClientAppDataHttpError";
+  }
+}
+
 type ClientAppData = {
   clientCatalog: ClientCatalog;
   modulePackages: FurnQuoteModulePackage[];
 };
 
-export type ClientAppDataLoadSource = "local" | "network" | "persistent_cache" | "session_cache";
+export type ClientAppDataLoadSource =
+  | "local"
+  | "network"
+  | "persistent_cache"
+  | "session_cache"
+  | "unverified_persistent_cache"
+  | "unverified_session_cache";
 
 type CachedClientAppData = ClientAppData & {
   clientId: string;
@@ -113,7 +126,7 @@ export async function loadClientCatalogForApp(expectedClientId?: string): Promis
   }
   if (!response.ok) {
     if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
-    throw new Error(`Failed to load client catalog: HTTP ${response.status}`);
+    throw new ClientAppDataHttpError(`Failed to load client catalog: HTTP ${response.status}`, response.status);
   }
 
   let body: unknown;
@@ -151,7 +164,7 @@ export async function loadClientModulePackagesForApp(expectedClientId?: string):
   }
   if (!response.ok) {
     if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
-    throw new Error(`Failed to load client module packages: HTTP ${response.status}`);
+    throw new ClientAppDataHttpError(`Failed to load client module packages: HTTP ${response.status}`, response.status);
   }
 
   let body: unknown;
@@ -266,7 +279,7 @@ async function loadClientAppDataRevision(expectedClientId: string): Promise<Load
       headers: { Accept: "application/json" },
       signal: controller.signal
     });
-    if (!response.ok) throw new Error(`Failed to load client app data revision: HTTP ${response.status}`);
+    if (!response.ok) throw new ClientAppDataHttpError(`Failed to load client app data revision: HTTP ${response.status}`, response.status);
     const body = await response.json() as unknown;
     const revision = body && typeof body === "object" ? (body as { revision?: unknown }).revision : undefined;
     if (!isClientAppDataRevision(revision) || revision.clientId !== expectedClientId) {
@@ -376,7 +389,7 @@ function openPersistentClientAppDataCache(): Promise<IDBDatabase | null> {
   });
 }
 
-async function readPersistentClientAppDataCache(expectedClientId: string, expectedRevision: string): Promise<ClientAppData | null> {
+async function readPersistentClientAppDataCache(expectedClientId: string, expectedRevision?: string): Promise<ClientAppData | null> {
   const database = await openPersistentClientAppDataCache();
   if (!database) return null;
   try {
@@ -393,7 +406,7 @@ async function readPersistentClientAppDataCache(expectedClientId: string, expect
       }
     });
     if (!isPersistentCachedClientAppData(cached)) return null;
-    if (cached.clientId !== expectedClientId || cached.revision !== expectedRevision) return null;
+    if (cached.clientId !== expectedClientId || (expectedRevision && cached.revision !== expectedRevision)) return null;
     if (Date.now() - cached.cachedAt > APP_DATA_PERSISTENT_CACHE_MAX_AGE_MS) return null;
     const serialized = cached.encoding === "gzip-base64"
       ? await decompressCachePayload(cached.payload)
@@ -530,7 +543,7 @@ function scheduleClientAppDataCacheWriteAfterRevisionValidation(
   expectedClientId: string | undefined,
   initialRevision: LoadedClientAppDataRevision | null
 ): void {
-  if (!expectedClientId || !initialRevision) {
+  if (!expectedClientId) {
     scheduleClientAppDataCacheWrite(data, generation);
     return;
   }
@@ -540,7 +553,9 @@ function scheduleClientAppDataCacheWriteAfterRevisionValidation(
       scheduleClientAppDataCacheWrite(
         data,
         generation,
-        finalRevision.key === initialRevision.key ? initialRevision.key : undefined
+        initialRevision
+          ? finalRevision.key === initialRevision.key ? initialRevision.key : undefined
+          : finalRevision.key
       );
     })
     .catch(() => {
@@ -577,17 +592,18 @@ export function loadClientAppDataForApp(expectedClientId?: string): Promise<Clie
   const generation = ++clientAppDataCacheGeneration;
   const promise = (async () => {
     try {
-      const initialRevision = expectedClientId && !localFallback
+      const revisionRequired = !!expectedClientId && !localFallback;
+      const initialRevision = revisionRequired
         ? await loadClientAppDataRevision(expectedClientId).catch(() => null)
         : null;
-      const cached = await readClientAppDataCache(expectedClientId, initialRevision?.key);
-      if (cached) {
-        clientAppDataLoadSources.set(cached, "session_cache");
-        report("session_cache", "success");
-        return cached;
-      }
-      if (expectedClientId && initialRevision) {
-        const persistent = await readPersistentClientAppDataCache(expectedClientId, initialRevision.key);
+      if (initialRevision) {
+        const cached = await readClientAppDataCache(expectedClientId, initialRevision.key);
+        if (cached) {
+          clientAppDataLoadSources.set(cached, "session_cache");
+          report("session_cache", "success");
+          return cached;
+        }
+        const persistent = await readPersistentClientAppDataCache(expectedClientId!, initialRevision.key);
         if (persistent) {
           clientAppDataLoadSources.set(persistent, "persistent_cache");
           scheduleClientAppDataCacheWrite(persistent, generation, initialRevision.key);
@@ -595,7 +611,28 @@ export function loadClientAppDataForApp(expectedClientId?: string): Promise<Clie
           return persistent;
         }
       }
-      const data = await fetchClientAppData(expectedClientId);
+      let data: ClientAppData;
+      try {
+        data = await fetchClientAppData(expectedClientId);
+      } catch (networkError) {
+        if (!revisionRequired || initialRevision) throw networkError;
+        const canUseUnverifiedCache = networkError instanceof TypeError
+          || (networkError instanceof ClientAppDataHttpError && networkError.status >= 500);
+        if (!canUseUnverifiedCache) throw networkError;
+        const sessionFallback = await readClientAppDataCache(expectedClientId);
+        if (sessionFallback) {
+          clientAppDataLoadSources.set(sessionFallback, "unverified_session_cache");
+          report("unverified_session_cache", "success");
+          return sessionFallback;
+        }
+        const persistentFallback = await readPersistentClientAppDataCache(expectedClientId!);
+        if (persistentFallback) {
+          clientAppDataLoadSources.set(persistentFallback, "unverified_persistent_cache");
+          report("unverified_persistent_cache", "success");
+          return persistentFallback;
+        }
+        throw networkError;
+      }
       scheduleClientAppDataCacheWriteAfterRevisionValidation(
         data,
         generation,

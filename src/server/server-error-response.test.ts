@@ -4,9 +4,11 @@ import {
   INTERNAL_SERVER_ERROR_MESSAGE,
   databaseUnavailableStatus,
   getServerErrorStatus,
+  publicServerErrorDetails,
   publicServerErrorMessage
 } from "./server-error-response";
 import { RequestBodyTooLargeError } from "./request-json-body";
+import { ProjectSaveRevisionConflictError } from "../core/project/project-write-consistency";
 
 describe("server database error responses", () => {
   it("maps connection failures to a retryable sanitized response", () => {
@@ -25,6 +27,14 @@ describe("server database error responses", () => {
     expect(publicServerErrorMessage(new Error("password=secret host=private-db"), 500)).toBe(
       INTERNAL_SERVER_ERROR_MESSAGE
     );
+  });
+
+  it("publishes machine-readable project revision conflicts", () => {
+    expect(publicServerErrorDetails(new ProjectSaveRevisionConflictError(4, 5))).toEqual({
+      code: "PROJECT_SAVE_REVISION_CONFLICT",
+      expectedRevision: 4,
+      currentRevision: 5
+    });
   });
 
   it.each([

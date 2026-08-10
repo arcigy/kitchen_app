@@ -11,7 +11,7 @@ type RenderControlsContext = {
   setDaylightIntensity: (value: number) => void;
   getShadowAlgorithm: () => string;
   setShadowAlgorithm: (value: "pcfsoft" | "vsm") => void;
-  setHdri: (settings: { id: string | null; background: boolean; envIntensity: number; backgroundIntensity: number }) => void;
+  setHdri: (settings: { id: string | null; background: boolean; envIntensity: number; backgroundIntensity: number }) => void | Promise<void>;
   disposeSsgi: () => void;
   disposePhoto: () => void;
   resetPhoto: () => void;
@@ -73,15 +73,18 @@ export function createRenderControls(ctx: RenderControlsContext) {
   photoWrap.style.paddingLeft = "168px";
   photoWrap.style.marginTop = "-6px";
 
-  renderModeSel.addEventListener("change", () => {
-    const v = renderModeSel.value as RenderMode;
-    const nextMode = v === "realtime_ssgi" || v === "photo_pathtrace" ? v : "realtime";
+  const applyRenderMode = (nextMode: RenderMode) => {
     ctx.setRenderMode(nextMode);
 
     if (nextMode !== "realtime_ssgi") ctx.disposeSsgi();
     if (nextMode !== "photo_pathtrace") ctx.disposePhoto();
 
     photoWrap.style.display = isPhotoRenderMode(nextMode) ? "" : "none";
+  };
+  renderModeSel.addEventListener("change", () => {
+    const v = renderModeSel.value as RenderMode;
+    const nextMode = v === "realtime_ssgi" || v === "photo_pathtrace" ? v : "realtime";
+    applyRenderMode(nextMode);
   });
   sunRow("Render mode", renderModeSel);
   sunHost.appendChild(photoWrap);
@@ -142,5 +145,48 @@ export function createRenderControls(ctx: RenderControlsContext) {
 
   ctx.layoutUi.appendChild(sunHost);
 
-  return { photoSamples, photoStatus };
+  return {
+    photoSamples,
+    photoStatus,
+    async restoreState(state: {
+      renderMode?: RenderMode;
+      daylightIntensity?: number;
+      shadowAlgorithm?: "pcfsoft" | "vsm";
+      hdri?: unknown;
+    }) {
+      if (state.renderMode) {
+        renderModeSel.value = state.renderMode;
+        applyRenderMode(state.renderMode);
+      }
+      if (typeof state.daylightIntensity === "number" && Number.isFinite(state.daylightIntensity)) {
+        day.value = String(state.daylightIntensity);
+        ctx.setDaylightIntensity(state.daylightIntensity);
+      }
+      if (state.shadowAlgorithm) {
+        shadowSel.value = state.shadowAlgorithm;
+        ctx.setShadowAlgorithm(state.shadowAlgorithm);
+      }
+      if (state.hdri && typeof state.hdri === "object") {
+        const value = state.hdri as { id?: unknown; background?: unknown; envIntensity?: unknown; backgroundIntensity?: unknown };
+        const id = typeof value.id === "string" ? value.id : null;
+        const background = value.background === true;
+        const envIntensity = typeof value.envIntensity === "number" && Number.isFinite(value.envIntensity) ? Math.max(0, value.envIntensity) : 0.15;
+        const backgroundIntensity = typeof value.backgroundIntensity === "number" && Number.isFinite(value.backgroundIntensity)
+          ? Math.max(0, value.backgroundIntensity)
+          : 1;
+        hdriSel.value = id ?? "";
+        hdriBg.checked = background;
+        hdriIntensity.value = String(envIntensity);
+        try {
+          await ctx.setHdri({ id, background, envIntensity, backgroundIntensity });
+        } catch {
+          // A missing decorative environment must not abort restoration of
+          // authoritative project geometry and editor state.
+          hdriSel.value = "";
+          hdriBg.checked = false;
+          await ctx.setHdri({ id: null, background: false, envIntensity, backgroundIntensity });
+        }
+      }
+    }
+  };
 }

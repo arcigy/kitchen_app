@@ -6,20 +6,28 @@ export type BrowserJourneyMetric = {
     | "blank_network"
     | "blank_persistent_cache"
     | "blank_session_cache"
+    | "blank_unverified_persistent_cache"
+    | "blank_unverified_session_cache"
     | "created"
     | "created_local"
     | "created_network"
     | "created_persistent_cache"
     | "created_session_cache"
+    | "created_unverified_persistent_cache"
+    | "created_unverified_session_cache"
     | "loaded"
     | "loaded_local"
     | "loaded_network"
     | "loaded_persistent_cache"
     | "loaded_session_cache"
+    | "loaded_unverified_persistent_cache"
+    | "loaded_unverified_session_cache"
     | "local"
     | "network"
     | "persistent_cache"
-    | "session_cache";
+    | "session_cache"
+    | "unverified_persistent_cache"
+    | "unverified_session_cache";
   outcome: "failure" | "success";
   durationMs: number;
 };
