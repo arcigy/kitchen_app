@@ -69,7 +69,7 @@ function scopeCategory(item: PortableQuoteBomItem): MaterialAssignmentCategory |
   return projectMaterialCategoryForBomItem(item);
 }
 
-function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem[] {
+function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): ProjectMaterialScopeItem[] {
   return quoteBom.items.flatMap((item) => {
     const category = scopeCategory(item);
     if (!category) return [];
@@ -95,6 +95,14 @@ function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem
     }
     if (quantity == null) return [];
     const runnerVariantLabel = category === "runner" ? item.variantLabel : undefined;
+    const moduleId = scopeId.startsWith("module:") ? scopeId.slice("module:".length) : null;
+    const additionId = scopeId.startsWith("addition:") ? scopeId.slice("addition:".length) : null;
+    const layoutTarget = item.itemType !== "board" ? undefined
+      : moduleId && item.materialSlotId ? { kind: "module-board" as const, instanceId: moduleId, materialSlotId: item.materialSlotId, sourcePartIds: item.sourcePartIds }
+      : item.id.startsWith("worktop-board-") && item.sourcePartIds?.[0] ? { kind: "worktop" as const, worktopId: item.sourcePartIds[0] }
+      : item.id.startsWith("custom-board-") && additionId && item.sourcePartIds?.[0]
+        ? { kind: "custom-furniture-board" as const, furnitureId: additionId, boardId: item.sourcePartIds[0] }
+        : undefined;
     return [{
       id: item.id,
       category,
@@ -105,7 +113,8 @@ function scopeItems(quoteBom: PortableQuoteBomPayload): ProjectMaterialScopeItem
         : item.component?.componentType ?? item.materialGroup ?? "Komponent"),
       quantity: Math.round(quantity * 10_000) / 10_000,
       unit,
-      pieces
+      pieces,
+      ...(layoutTarget ? { layoutTarget } : {})
     } satisfies ProjectMaterialScopeItem];
   });
 }
@@ -121,13 +130,15 @@ export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): Pr
     const context = input.kitchenGroups.find((group) => group.id === instance.kitchenGroupId)?.ctx ?? input.kitchenContext;
     try {
       const quoteBom = calculateModuleBOM(instance, context, input.catalog).quoteBom;
-      scopes.push({ id: `module:${instance.id}`, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom) });
+      const scopeId = `module:${instance.id}`;
+      scopes.push({ id: scopeId, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom, scopeId) });
     } catch {
       // The summary warning path reports malformed modules without hiding valid module scopes.
     }
   }
   for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog, [...(input.ledStripGroups ?? [])])) {
-    scopes.push({ id: `addition:${addition.instanceId}`, kind: "addition", label: addition.label, items: scopeItems(addition.result.quoteBom) });
+    const scopeId = `addition:${addition.instanceId}`;
+    scopes.push({ id: scopeId, kind: "addition", label: addition.label, items: scopeItems(addition.result.quoteBom, scopeId) });
   }
   return scopes;
 }

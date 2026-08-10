@@ -65,6 +65,8 @@ export type MaterialsPhaseControllerArgs = {
   getScopes?: () => readonly ProjectMaterialScope[];
   initialAssignments?: ProjectMaterialAssignmentsState;
   onViewChanged?: (view: ProjectMaterialsView) => void;
+  /** Fired only after a user/server mutation, never while merely loading legacy project state. */
+  onAssignmentsCommitted?: (assignments: ProjectMaterialAssignmentsState) => void;
   onOpenSupplier?: (supplierId: ProjectSupplierId) => Promise<void>;
   onCancelSupplierBridge?: () => Promise<void>;
   api?: Partial<MaterialsPhaseControllerApi>;
@@ -92,6 +94,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   let supplierBridgeState = { ...EMPTY_SUPPLIER_BRIDGE_PANEL_STATE };
   const commitAborts = new Map<MaterialAssignmentCategory, AbortController>();
   const notifyViewChanged = () => args.onViewChanged?.(structuredClone(view));
+  const notifyAssignmentsCommitted = () => args.onAssignmentsCommitted?.(structuredClone(assignments));
 
   const ensurePanel = () => {
     if (panel) return panel;
@@ -175,6 +178,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
         view = viewFromRemote(assignments, remoteView, args);
         panel?.update(view);
         notifyViewChanged();
+        notifyAssignmentsCommitted();
         return { ok: true };
       } catch (error) {
         if (isAbortError(error)) return { ok: false, error: "Uloženie bolo zrušené." };
@@ -186,6 +190,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
 
     assignments = replaceAssignment(assignments, nextAssignment, changedAt);
     renderLocalView();
+    notifyAssignmentsCommitted();
     return { ok: true };
   };
 
@@ -206,10 +211,12 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       view = viewFromRemote(assignments, remoteView, args);
       panel?.update(view);
       notifyViewChanged();
+      notifyAssignmentsCommitted();
       return;
     }
     assignments = { ...assignments, revision: assignments.revision + 1, assignments: [...assignments.assignments, nextAssignment], updatedAt: nowValue };
     renderLocalView();
+    notifyAssignmentsCommitted();
   }
 
   const applyRemoteView = (remoteView: ProjectMaterialsView, changedAt: string) => {
@@ -217,6 +224,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     view = viewFromRemote(assignments, remoteView, args);
     panel?.update(view);
     notifyViewChanged();
+    notifyAssignmentsCommitted();
   };
 
   async function resetCategory(category: MaterialAssignmentCategory): Promise<void> {
@@ -233,6 +241,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     }
     assignments = replaceAssignment(assignments, nextAssignment, changedAt);
     renderLocalView();
+    notifyAssignmentsCommitted();
   }
 
   async function copyGeneralToScope(scopeId: string, itemId: string, category: MaterialAssignmentCategory): Promise<void> {
@@ -260,6 +269,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       updatedAt: changedAt
     };
     renderLocalView();
+    notifyAssignmentsCommitted();
   }
 
   async function removeScopeOverride(scopeId: string, itemId: string, category: MaterialAssignmentCategory): Promise<void> {
@@ -282,6 +292,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       updatedAt: changedAt
     };
     renderLocalView();
+    notifyAssignmentsCommitted();
   }
 
   return {
