@@ -58,6 +58,11 @@ function readSettings(value: unknown): OrganizationSettings {
   return value && typeof value === "object" ? value as OrganizationSettings : {};
 }
 
+function normalizeDefaults(defaults: ClientProfile["defaults"] | undefined): ClientProfile["defaults"] | undefined {
+  if (!defaults) return defaults;
+  return { ...defaults, language: (defaults.language as string) === "cz" ? "cs" : defaults.language };
+}
+
 function rowToUser(row: OrganizationUserRow): OrganizationUser {
   return {
     id: row.user_id,
@@ -130,7 +135,7 @@ export async function loadPostgresClientProfile(args: {
         roles: settings.roles ?? seeded?.organization.roles ?? arcigyOrganizationProfile.roles,
         users: usersResult.rows.map(rowToUser)
       },
-      defaults: settings.defaults ?? seeded?.defaults ?? {
+      defaults: normalizeDefaults(settings.defaults) ?? seeded?.defaults ?? {
         currency: "EUR",
         language: "sk",
         vatRate: 20
@@ -141,4 +146,36 @@ export async function loadPostgresClientProfile(args: {
     assertValidClientProfile(profile);
     return profile;
   });
+}
+
+export async function updatePostgresClientLanguage(args: {
+  connectionString: string;
+  schema: string;
+  clientId: string;
+  language: ClientProfile["defaults"]["language"];
+}): Promise<ClientProfile | null> {
+  const updated = await withSchemaClient(args.connectionString, args.schema, async (client) => {
+    const result = await client.query(
+      `
+        UPDATE arcigy_organizations
+        SET settings = jsonb_set(
+              COALESCE(settings, '{}'::jsonb),
+              '{defaults}',
+              CASE
+                WHEN jsonb_typeof(settings->'defaults') = 'object'
+                  THEN (settings->'defaults') || jsonb_build_object('language', $2::text)
+                ELSE jsonb_build_object('language', $2::text)
+              END,
+              true
+            ),
+            updated_at = NOW()
+        WHERE organization_id = $1
+        RETURNING organization_id
+      `,
+      [args.clientId, args.language]
+    );
+    return result.rowCount === 1;
+  });
+  if (!updated) return null;
+  return loadPostgresClientProfile(args);
 }

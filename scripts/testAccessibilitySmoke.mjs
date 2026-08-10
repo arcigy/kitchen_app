@@ -101,7 +101,7 @@ async function auditSurface(page, surface) {
     };
   });
 
-  assert(result.lang === "sk", `${surface}: expected Slovak as the primary document language`, result);
+  assert(result.lang === "sk-SK", `${surface}: expected Slovak BCP 47 document language`, result);
   assert(result.title, `${surface}: document title is missing`, result);
   assert(result.mainLandmarkCount === 1, `${surface}: expected exactly one visible main landmark`, result);
   assert(result.duplicateIds.length === 0, `${surface}: duplicate IDs found`, result);

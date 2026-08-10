@@ -14,6 +14,7 @@ import {
   getAssistantToolDefinition,
   highestAssistantRiskLevel
 } from "./toolRegistry";
+import { assistantCopy } from "./assistantLocale";
 import { validateAssistantToolCall } from "./toolValidation";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { fetchExternalText } from "../server/external-http";
@@ -93,29 +94,29 @@ function buildDeterministicReadWorkflow(input: AgentInput): {
   if (/(kolko|pocet|spocitaj).{0,24}modul/u.test(message)) {
     toolId = "context.queryObjects";
     toolInput = { kinds: ["module"], limit: 500 };
-    goal = "Zistiť presný počet modulov v otvorenom projekte.";
-    stepLabel = "Prečítať moduly z otvoreného projektu a spočítať ich.";
-    successCriteria = ["Odpoveď obsahuje počet modulov z čerstvého live kontextu."];
+    goal = assistantCopy(input.locale, "Zistiť presný počet modulov v otvorenom projekte.", "Zjistit přesný počet modulů v otevřeném projektu.", "Find the exact number of modules in the open project.");
+    stepLabel = assistantCopy(input.locale, "Prečítať moduly z otvoreného projektu a spočítať ich.", "Načíst moduly z otevřeného projektu a spočítat je.", "Read and count modules in the open project.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď obsahuje počet modulov z čerstvého live kontextu.", "Odpověď obsahuje počet modulů z aktuálního živého kontextu.", "The response contains the module count from current live context.")];
   } else if (/^(ako.{0,12}vola|aky.{0,12}(je )?nazov|co.{0,12}(je )?nazov|povedz.{0,12}nazov).{0,30}projekt|^nazov.{0,12}projekt/u.test(message)) {
     toolId = "project.getMetadata";
-    goal = "Zistiť presný názov otvoreného projektu.";
-    stepLabel = "Prečítať názov z aktuálnych projektových metadát.";
-    successCriteria = ["Odpoveď obsahuje presný názov aktuálne otvoreného projektu."];
+    goal = assistantCopy(input.locale, "Zistiť presný názov otvoreného projektu.", "Zjistit přesný název otevřeného projektu.", "Find the exact name of the open project.");
+    stepLabel = assistantCopy(input.locale, "Prečítať názov z aktuálnych projektových metadát.", "Načíst název z aktuálních metadat projektu.", "Read the name from the current project metadata.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď obsahuje presný názov aktuálne otvoreného projektu.", "Odpověď obsahuje přesný název aktuálně otevřeného projektu.", "The response contains the exact name of the currently open project.")];
   } else if (/(aktualn|sucasn|teraj).{0,20}(pohlad|view)|ak[yae].{0,12}(pohlad|view)/u.test(message)) {
     toolId = "context.getCurrentView";
-    goal = "Zistiť aktuálny pohľad a stav kamery.";
-    stepLabel = "Prečítať aktuálny pohľad, projekciu a režim zobrazenia.";
-    successCriteria = ["Odpoveď obsahuje aktuálny pohľad, projekciu a režim zobrazenia."];
+    goal = assistantCopy(input.locale, "Zistiť aktuálny pohľad a stav kamery.", "Zjistit aktuální pohled a stav kamery.", "Find the current view and camera state.");
+    stepLabel = assistantCopy(input.locale, "Prečítať aktuálny pohľad, projekciu a režim zobrazenia.", "Načíst aktuální pohled, projekci a režim zobrazení.", "Read the current view, projection and display mode.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď obsahuje aktuálny pohľad, projekciu a režim zobrazenia.", "Odpověď obsahuje aktuální pohled, projekci a režim zobrazení.", "The response contains the current view, projection and display mode.")];
   } else if (/(co|ktore|aky|aktualn).{0,24}(oznacen|vybran|vyber)|oznacen.{0,12}(objekt|modul)/u.test(message)) {
     toolId = "context.getSelection";
-    goal = "Zistiť aktuálny výber v editore.";
-    stepLabel = "Prečítať označené objekty a ich aktuálne parametre.";
-    successCriteria = ["Odpoveď vychádza z čerstvého výberu a jeho parametrov."];
+    goal = assistantCopy(input.locale, "Zistiť aktuálny výber v editore.", "Zjistit aktuální výběr v editoru.", "Find the current selection in the editor.");
+    stepLabel = assistantCopy(input.locale, "Prečítať označené objekty a ich aktuálne parametre.", "Načíst označené objekty a jejich aktuální parametry.", "Read selected objects and their current parameters.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď vychádza z čerstvého výberu a jeho parametrov.", "Odpověď vychází z aktuálního výběru a jeho parametrů.", "The response is based on the current selection and its parameters.")];
   } else if (/(skontroluj|over|valid).{0,30}(projekt|kuchyn)|problemy.{0,20}(projekt|kuchyn)/u.test(message)) {
     toolId = "validation.inspectProject";
-    goal = "Skontrolovať otvorený projekt a nájsť chyby.";
-    stepLabel = "Spustiť nezávislú kontrolu väzieb a parametrov projektu.";
-    successCriteria = ["Odpoveď obsahuje výsledok nezávislej validácie projektu."];
+    goal = assistantCopy(input.locale, "Skontrolovať otvorený projekt a nájsť chyby.", "Zkontrolovat otevřený projekt a najít chyby.", "Inspect the open project and find issues.");
+    stepLabel = assistantCopy(input.locale, "Spustiť nezávislú kontrolu väzieb a parametrov projektu.", "Spustit nezávislou kontrolu vazeb a parametrů projektu.", "Run an independent validation of project links and parameters.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď obsahuje výsledok nezávislej validácie projektu.", "Odpověď obsahuje výsledek nezávislé validace projektu.", "The response contains the result of independent project validation.")];
   }
 
   if (!toolId) return null;
@@ -167,7 +168,7 @@ function buildFallbackPlan(input: AgentInput): { message: string; plan: Assistan
     const ids = selectedModuleIds(input);
     if (ids.length === 0) {
       return {
-        message: "Na úpravu modulu najprv označ konkrétny modul. Potom viem bezpečne meniť jeho parametre cez existujúci rebuild systém.",
+        message: assistantCopy(input.locale, "Na úpravu modulu najprv označ konkrétny modul. Potom viem bezpečne meniť jeho parametre cez existujúci rebuild systém.", "Pro úpravu modulu nejprve označte konkrétní modul. Potom lze jeho parametry bezpečně změnit přes existující systém přestavby.", "To edit a module, first select a specific module. Its parameters can then be changed safely through the existing rebuild system."),
         plan: null,
         calls: [],
         confirm: false
@@ -180,7 +181,7 @@ function buildFallbackPlan(input: AgentInput): { message: string; plan: Assistan
     if (drawerCount) patch.drawerCount = Number(drawerCount);
     if (Object.keys(patch).length === 0) {
       return {
-        message: "Rozumiem, že chceš upraviť označený modul, ale neviem z textu bezpečne vyčítať konkrétny parameter. Napíš napríklad `šírka 800` alebo `šuplíky 3`.",
+        message: assistantCopy(input.locale, "Rozumiem, že chceš upraviť označený modul, ale neviem z textu bezpečne vyčítať konkrétny parameter. Napíš napríklad `šírka 800` alebo `šuplíky 3`.", "Rozumím, že chcete upravit označený modul, ale z textu nelze bezpečně určit konkrétní parametr. Napište například `šířka 800` nebo `zásuvky 3`.", "I understand that you want to edit the selected module, but I cannot safely determine a specific parameter from the text. Try `width 800` or `drawers 3`."),
         plan: null,
         calls: [],
         confirm: false
@@ -258,8 +259,8 @@ function buildFallbackPlan(input: AgentInput): { message: string; plan: Assistan
     : "";
   return {
     message: sourceText
-      ? `Podľa znalostnej bázy:\n${sourceText}`
-      : "Toto zatiaľ neviem bezpečne potvrdiť zo znalostnej bázy. Skús sa opýtať konkrétnejšie alebo označ objekt v editore.",
+      ? `${assistantCopy(input.locale, "Podľa znalostnej bázy:", "Podle znalostní báze:", "According to the knowledge base:")}\n${sourceText}`
+      : assistantCopy(input.locale, "Toto zatiaľ neviem bezpečne potvrdiť zo znalostnej bázy. Skús sa opýtať konkrétnejšie alebo označ objekt v editore.", "Toto zatím nelze bezpečně potvrdit ze znalostní báze. Zeptejte se konkrétněji nebo označte objekt v editoru.", "I cannot safely confirm this from the knowledge base yet. Ask more specifically or select an object in the editor."),
     plan: null,
     calls: [],
     confirm: false
@@ -269,7 +270,7 @@ function buildFallbackPlan(input: AgentInput): { message: string; plan: Assistan
 function buildPrompt(input: AgentInput): string {
   const rag = input.ragChunks.map((chunk) => `[${chunk.source}] ${chunk.title}\n${chunk.text}`).join("\n\n---\n\n");
   return [
-    "Si Arcigy Kitchen agent. Odpovedaj stručne po slovensky a používaj čistý CommonMark Markdown bez HTML.",
+    `You are Arcigy Kitchen agent. Reply in ${input.locale === "cs-CZ" ? "professional Czech" : input.locale === "en-GB" ? "professional British English" : "professional Slovak"} and use clean CommonMark Markdown without HTML.`,
     "Nesmieš tvrdiť fakty o appke bez RAG alebo live context dôkazu.",
     "Ak odpoveď vyžaduje aktuálne dáta alebo zmenu v editore, musíš vrátiť aspoň jeden platný tool call.",
     "Nikdy nepíš, že niečo práve robíš, počítaš, kontroluješ alebo vykonávaš, ak si nevrátil tool call, ktorý to reálne vykoná.",
@@ -302,15 +303,17 @@ async function callGeminiJson(input: AgentInput): Promise<Partial<AssistantTurnR
   return JSON.parse(jsonText) as Partial<AssistantTurnResponse>;
 }
 
-function validateFromToolResults(results: AssistantToolResult[] | undefined): AssistantValidationReport | null {
+function validateFromToolResults(results: AssistantToolResult[] | undefined, locale: AgentInput["locale"]): AssistantValidationReport | null {
   if (!results || results.length === 0) return null;
   const failed = results.filter((result) => !result.ok);
   return {
     confidence: failed.length === 0 ? 0.86 : 0.38,
     done: failed.length === 0,
-    summary: failed.length === 0 ? "Nástroje prebehli úspešne." : `Zlyhalo ${failed.length} krokov.`,
+    summary: failed.length === 0
+      ? assistantCopy(locale, "Nástroje prebehli úspešne.", "Nástroje proběhly úspěšně.", "The tools completed successfully.")
+      : assistantCopy(locale, `Zlyhalo ${failed.length} krokov.`, `Selhaly ${failed.length} kroky.`, `${failed.length} steps failed.`),
     missingChecks: failed.map((result) => result.error ?? `${result.toolId} failed`),
-    nextAction: failed.length === 0 ? undefined : "Skontrolovať vstupy a zopakovať len zlyhaný krok."
+    nextAction: failed.length === 0 ? undefined : assistantCopy(locale, "Skontrolovať vstupy a zopakovať len zlyhaný krok.", "Zkontrolujte vstupy a zopakujte pouze neúspěšný krok.", "Check the inputs and repeat only the failed step.")
   };
 }
 
@@ -368,8 +371,10 @@ async function runAssistantTurnInternal(
   input: AgentInput,
   debug: AssistantDebugRecorder
 ): Promise<AssistantTurnResponse> {
+  const assistantLocale = input.locale ?? "sk-SK";
   const ragSources = input.ragChunks.slice(0, 4).map((chunk) => ({ source: chunk.source, title: chunk.title }));
   const orchestrationInput = {
+    locale: assistantLocale,
     message: input.message,
     clientContext: input.clientContext,
     conversation: input.conversation,
@@ -393,7 +398,7 @@ async function runAssistantTurnInternal(
         const authoritative = enforceAuthoritativePlan(workflowToPlan(nextWorkflow), remainingCalls);
         return {
           ok: true,
-          assistantMessage: "Doterajšie kroky prešli kontrolou. Pokračujem ďalšími závislými krokmi workflowu.",
+          assistantMessage: assistantCopy(assistantLocale, "Doterajšie kroky prešli kontrolou. Pokračujem ďalšími závislými krokmi workflowu.", "Dosavadní kroky prošly kontrolou. Pokračuji dalšími závislými kroky workflowu.", "The completed steps passed verification. Continuing with the next dependent workflow steps."),
           plan: authoritative.plan,
           toolCalls: remainingCalls,
           validation: analysis.validation,
@@ -405,17 +410,18 @@ async function runAssistantTurnInternal(
         };
       }
       if (hasRemainingWorkflowSteps(workflow)) {
-        const failedWorkflow = { ...workflow, status: "failed" as const, lastError: "Workflow obsahuje nevykonateľnú alebo cyklickú závislosť." };
+        const dependencyError = assistantCopy(assistantLocale, "Workflow obsahuje nevykonateľnú alebo cyklickú závislosť.", "Workflow obsahuje neproveditelnou nebo cyklickou závislost.", "The workflow contains an unexecutable or cyclic dependency.");
+        const failedWorkflow = { ...workflow, status: "failed" as const, lastError: dependencyError };
         return {
           ok: true,
-          assistantMessage: "Workflow sa zastavil: zostávajúce kroky nemajú splnené závislosti.",
+          assistantMessage: assistantCopy(assistantLocale, "Workflow sa zastavil: zostávajúce kroky nemajú splnené závislosti.", "Workflow se zastavil: zbývající kroky nemají splněné závislosti.", "The workflow stopped because remaining steps have unmet dependencies."),
           plan: workflowToPlan(failedWorkflow),
           toolCalls: [],
           validation: {
             ...analysis.validation,
             done: false,
-            summary: "Workflow obsahuje nevykonateľnú alebo cyklickú závislosť.",
-            missingChecks: [...analysis.validation.missingChecks, "Skontrolovať dependsOn väzby workflowu."],
+            summary: dependencyError,
+            missingChecks: [...analysis.validation.missingChecks, assistantCopy(assistantLocale, "Skontrolovať väzby dependsOn workflowu.", "Zkontrolovat vazby dependsOn workflowu.", "Check the workflow's dependsOn links.")],
             nextAction: "replan"
           },
           requiresConfirmation: false,
@@ -431,12 +437,13 @@ async function runAssistantTurnInternal(
         return result.ok && definition && definition.operation !== "write";
       });
       const finalMessage = hasOnlyReadEvidence
-        ? formatVerifiedAssistantResult({
+          ? formatVerifiedAssistantResult({
             workflow: completeWorkflow,
             validation: analysis.validation,
             toolResults: input.toolResults
           })
-        : await composeFinalAssistantMessage({
+          : await composeFinalAssistantMessage({
+            locale: assistantLocale,
             message: input.message,
             workflow: completeWorkflow,
             validation: analysis.validation,
@@ -460,6 +467,7 @@ async function runAssistantTurnInternal(
     if (workflow.iteration >= workflow.maxIterations) {
       const failedWorkflow = { ...workflow, status: "failed" as const, lastError: analysis.validation.repairInstruction ?? analysis.validation.summary };
       const finalMessage = await composeFinalAssistantMessage({
+        locale: assistantLocale,
         message: input.message,
         workflow: failedWorkflow,
         validation: analysis.validation,
@@ -584,7 +592,7 @@ async function runAssistantTurnInternal(
     classification = await classifyAssistantTask(orchestrationInput);
   } catch (error) {
     openAiFailure = openAiAssistantFailureMessage(error) ??
-      "OpenAI API sa nepodarilo použiť. Požiadavku môžeš bezpečne zopakovať.";
+      assistantCopy(assistantLocale, "OpenAI API sa nepodarilo použiť. Požiadavku môžete bezpečne zopakovať.", "Rozhraní OpenAI API se nepodařilo použít. Požadavek můžete bezpečně zopakovat.", "The OpenAI API could not be used. You can safely retry the request.");
     classification = null;
   }
   if (classification?.mode === "clarify") {
@@ -621,7 +629,7 @@ async function runAssistantTurnInternal(
       planned = await planAssistantWorkflow(orchestrationInput, classification);
     } catch (error) {
       openAiFailure = openAiAssistantFailureMessage(error) ??
-        "OpenAI API sa nepodarilo použiť. Požiadavku môžeš bezpečne zopakovať.";
+        assistantCopy(assistantLocale, "OpenAI API sa nepodarilo použiť. Požiadavku môžete bezpečne zopakovať.", "Rozhraní OpenAI API se nepodařilo použít. Požadavek můžete bezpečně zopakovat.", "The OpenAI API could not be used. You can safely retry the request.");
     }
     if (planned) {
       const authoritative = enforceAuthoritativePlan(workflowToPlan(planned.workflow), planned.toolCalls);
@@ -640,7 +648,7 @@ async function runAssistantTurnInternal(
     }
   }
 
-  const validation = validateFromToolResults(input.toolResults);
+  const validation = validateFromToolResults(input.toolResults, input.locale);
   if (validation) {
     return {
       ok: true,

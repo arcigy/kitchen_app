@@ -31,7 +31,7 @@ export type ClientProfile = {
 
   defaults: {
     currency: "EUR" | "CZK";
-    language: "sk" | "cz" | "en";
+    language: "sk" | "cs" | "en";
     vatRate?: number;
   };
 

@@ -22,8 +22,8 @@ describe("coming-soon frontend bindings", () => {
 
     expect(topbarSource).toContain('showComingSoonDialog("Schodisko")');
     expect(topbarSource).toContain('showComingSoonDialog("Obývačková stena")');
-    expect(workspaceSource).toContain('showComingSoonDialog("Dokumenty")');
-    expect(workspaceSource).toContain('showComingSoonDialog("Nastavenia")');
+    expect(workspaceSource).toContain('showComingSoonDialog(t("Documents"))');
+    expect(workspaceSource).toContain('showComingSoonDialog(t("Settings"))');
     expect(workspaceSource).toContain("showComingSoonDialog(sheet.name)");
   });
 });

@@ -205,6 +205,7 @@ import { createFeedbackReportController } from "./app/feedbackReportController";
 import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
 import { createRenderControls, type RenderMode } from "./app/renderControls";
+import { createCompanyLanguageController } from "./app/companyLanguageController";
 import { renderAppFrame } from "./app/frameRenderer";
 import { createModulePlacementHelpers, type AdjacentModuleInfo, type ModulePlacementSnapOptions } from "./app/modulePlacementHelpers";
 import {
@@ -4109,6 +4110,9 @@ export function startApp(initialArgs: AppArgs) {
     rebuildInstance(inst);
   });
 
+  const companyLanguageController = createCompanyLanguageController({
+    initialLanguage: args.clientProfile?.defaults.language ?? "sk"
+  });
   exportActions = createExportActions({
     appArgs: args,
     clientContext: args.clientContext,
@@ -4130,7 +4134,7 @@ export function startApp(initialArgs: AppArgs) {
     getWebsiteShowcaseKitchenGroups: () => S.kitchenGroups,
     buildWebsiteShowcaseModule: buildModuleFromParams,
     projectMenuActions,
-    onLanguageChange: () => window.location.reload()
+    onLanguageChange: (language) => companyLanguageController.changeLanguage(language)
   });
 
   const ro = new ResizeObserver(() => {

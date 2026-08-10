@@ -76,6 +76,16 @@ describe("request origin protection", () => {
     expect(shouldRejectRequestOrigin(localProxyRequest, "/api/projects", { NODE_ENV: "production" })).toBe(true);
   });
 
+  it("allows the configured isolated Vite port only outside production", () => {
+    const localProxyRequest = request({
+      origin: "http://127.0.0.1:5181",
+      host: "127.0.0.1:5192",
+      cookie: sessionCookie
+    });
+    expect(shouldRejectRequestOrigin(localProxyRequest, "/api/projects", { KITCHEN_UI_PORT: "5181" })).toBe(false);
+    expect(shouldRejectRequestOrigin(localProxyRequest, "/api/projects", { NODE_ENV: "production", KITCHEN_UI_PORT: "5181" })).toBe(true);
+  });
+
   it("does not apply to safe methods", () => {
     expect(shouldRejectRequestOrigin(request({ method: "GET", origin: "https://evil.example", cookie: sessionCookie }), "/api/projects", {})).toBe(false);
   });

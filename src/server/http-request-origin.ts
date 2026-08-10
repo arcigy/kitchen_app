@@ -24,8 +24,12 @@ function requestOrigin(req: http.IncomingMessage): string | null {
 function configuredOrigins(env: NodeJS.ProcessEnv): Set<string> {
   const origins = new Set<string>();
   if (env.NODE_ENV !== "production") {
-    origins.add("http://127.0.0.1:5180");
-    origins.add("http://localhost:5180");
+    // `dev:local` supports an isolated Vite port so concurrent worktrees do
+    // not share a browser session. Keep the explicit local-only allowlist in
+    // sync with that port without widening production origin policy.
+    const vitePort = env.KITCHEN_UI_PORT || "5180";
+    origins.add(`http://127.0.0.1:${vitePort}`);
+    origins.add(`http://localhost:${vitePort}`);
   }
   for (const value of (env.ARCIGY_TRUSTED_ORIGINS ?? "").split(",")) {
     const trimmed = value.trim();

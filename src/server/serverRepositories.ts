@@ -6,9 +6,10 @@ import { createUserService, type UserService } from "../core/auth/user-service";
 import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
 import { createPostgresClientCatalogRepository } from "../core/catalog/catalog-postgres-repository";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
-import { loadPostgresClientProfile } from "../core/client/client-postgres-repository";
+import { loadPostgresClientProfile, updatePostgresClientLanguage } from "../core/client/client-postgres-repository";
 import { getSeededClientProfile } from "../core/client/client-repository";
 import type { ClientProfile } from "../core/client/client-types";
+import { normalizeLanguage } from "../i18n";
 import { getDatabaseUrl, resolveDatabaseConfig } from "../core/database/database-config";
 import { createFileModulePackageRepository, type ModulePackageRepository } from "../core/module-package/module-package-repository";
 import { createPostgresModulePackageRepository } from "../core/module-package/module-package-postgres-repository";
@@ -78,5 +79,22 @@ export async function loadServerClientProfile(clientId: string): Promise<ClientP
       clientId
     });
   }
-  return getSeededClientProfile(clientId);
+  const profile = getSeededClientProfile(clientId);
+  if (!profile) return null;
+  const language = inMemoryClientLanguage.get(clientId);
+  return language ? { ...profile, defaults: { ...profile.defaults, language } } : profile;
+}
+
+// Local/file development has no organization settings row. Keep the same
+// tenant-wide contract for the lifetime of that server without mutating seeds.
+const inMemoryClientLanguage = new Map<string, ClientProfile["defaults"]["language"]>();
+
+export async function updateServerClientLanguage(clientId: string, language: ClientProfile["defaults"]["language"]): Promise<ClientProfile | null> {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  if (!databaseConfig) {
+    if (!getSeededClientProfile(clientId)) return null;
+    inMemoryClientLanguage.set(clientId, normalizeLanguage(language));
+    return loadServerClientProfile(clientId);
+  }
+  return updatePostgresClientLanguage({ connectionString: databaseConfig.connectionString, schema: databaseConfig.schema, clientId, language });
 }

@@ -8,6 +8,7 @@ import { showComingSoonDialog } from "../ui/comingSoonDialog";
 import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 import { getAppContextMenuController, type ContextMenuItem } from "../ui/contextMenu";
+import { t } from "../i18n";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
 
@@ -109,7 +110,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
             <strong>${title}</strong>
             <span>${subtitle}</span>
           </div>
-          <button type="button" data-workspace-close aria-label="Close">×</button>
+          <button type="button" data-workspace-close aria-label="${t("Close")}">×</button>
         </header>
       </section>
     `;
@@ -126,11 +127,11 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     body.className = "workspace-sheets";
     const actions = document.createElement("div");
     actions.className = "workspace-panel-actions";
-    const importButton = createButtonElement("Import PDF");
+    const importButton = createButtonElement(t("Import PDF"));
     importButton.className = "workspace-primary";
     importButton.dataset.importSheet = "";
     const helpText = document.createElement("span");
-    helpText.textContent = "Vykresy sluzia ako podklad. Neskor sem bude system automaticky vkladat exportovane vykresy.";
+    helpText.textContent = t("Drawings serve as an underlay. The system will add exported drawings here automatically later.");
     actions.append(importButton, helpText);
     const grid = document.createElement("div");
     grid.className = "workspace-sheet-grid";
@@ -142,7 +143,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     };
     importButton.addEventListener("click", () => importPdfSheet(sheets, render));
     render();
-    openOverlay("Sheets", "Vyber vykresu alebo PDF podkladu pre layout.", body);
+    openOverlay(t("Sheets"), t("Choose a drawing or PDF underlay for the layout."), body);
   };
 
   const openSchedules = () => {
@@ -150,13 +151,13 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     body.className = "workspace-schedules";
     const tabs = document.createElement("nav");
     tabs.className = "workspace-schedule-tabs";
-    tabs.setAttribute("aria-label", "Schedule type");
+    tabs.setAttribute("aria-label", t("Schedule type"));
     const tabButtons = [
-      createScheduleTabButton("modules", "Module schedule", true),
-      createScheduleTabButton("materials", "Material boards"),
-      createScheduleTabButton("edgebanding", "Opaskovanie"),
-      createScheduleTabButton("components", "Components"),
-      createScheduleTabButton("views", "Views")
+      createScheduleTabButton("modules", t("Module schedule"), true),
+      createScheduleTabButton("materials", t("Material boards")),
+      createScheduleTabButton("edgebanding", t("Edge banding")),
+      createScheduleTabButton("components", t("Components")),
+      createScheduleTabButton("views", t("Views"))
     ];
     tabs.append(...tabButtons);
     const content = document.createElement("div");
@@ -179,7 +180,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       if (instanceId && args.selectModuleById) {
         items.push({
           id: "schedule-open-source",
-          label: "Open source module",
+          label: t("Open source module"),
           iconId: "open",
           execute: async () => {
             await handleNav("design");
@@ -189,14 +190,14 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       }
       items.push({
         id: "schedule-copy-row",
-        label: "Copy row",
+        label: t("Copy row"),
         iconId: "copyExport",
         execute: () => copyScheduleRow(row)
       });
       items.push({ type: "separator", id: "schedule-phase-separator" });
       items.push(
-        { id: "schedule-open-materials", label: "Open Materials", iconId: "materials", execute: () => handleNav("materials") },
-        { id: "schedule-open-margins", label: "Open Margins", iconId: "margins", execute: () => handleNav("margins") }
+        { id: "schedule-open-materials", label: t("Open Materials"), iconId: "materials", execute: () => handleNav("materials") },
+        { id: "schedule-open-margins", label: t("Open Margins"), iconId: "margins", execute: () => handleNav("margins") }
       );
       return items;
     });
@@ -207,7 +208,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       });
     });
     render("modules");
-    openOverlay("Schedules", "Tabulky modulov, materialov, opaskovania, komponentov a pohladov.", body, "xl");
+    openOverlay(t("Schedules"), t("Tables of modules, materials, edge banding, components and views."), body, "xl");
   };
 
   const openMaterials = () => {
@@ -222,11 +223,11 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     if (args.materialsController) {
       const materialsLoading = mountLoadingSkeleton(args.materialsPhase.hostEl, {
         variant: "phase",
-        label: "Načítavam materiály projektu"
+        label: t("Loading project materials…")
       });
       const warningsLoading = mountLoadingSkeleton(args.materialsPhase.warningListEl, {
         variant: "phase",
-        label: "Načítavam varovania materiálov"
+        label: t("Loading material warnings…")
       });
       void args.materialsController.open()
         .then((view) => {
@@ -239,8 +240,8 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
           if (!materialsPhaseActive) return;
           materialsLoading.clear();
           warningsLoading.clear();
-          const message = error instanceof Error ? error.message : "Materiály sa nepodarilo načítať.";
-          args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">Materiály sa nedajú bezpečne otvoriť, pretože projekt sa nepodarilo uložiť. ${escapeHtml(message)}</p>`;
+          const message = error instanceof Error ? error.message : t("Materials could not be loaded.");
+          args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">${t("Materials cannot be opened safely because the project could not be saved.")} ${escapeHtml(message)}</p>`;
           args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning">${escapeHtml(message)}</p>`;
         });
       return;
@@ -262,7 +263,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     closeOverlay();
     args.setDesignTopbar();
     if (!args.marginsPhase || !args.marginsController) {
-      openPlaceholder("Marže", "Marže projektu sa nepodarilo inicializovať.");
+      openPlaceholder(t("Margins"), t("Project margins could not be initialized."));
       return;
     }
     args.root.classList.add("archux-margins-phase");
@@ -272,11 +273,11 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     marginsPhaseActive = true;
     const marginsLoading = mountLoadingSkeleton(args.marginsPhase.hostEl, {
       variant: "phase",
-      label: "Načítavam marže projektu"
+      label: t("Loading project margins")
     });
     const footerLoading = mountLoadingSkeleton(args.marginsPhase.footerEl, {
       variant: "phase",
-      label: "Načítavam súhrn marží"
+      label: t("Loading margin summary")
     });
     const opening = args.marginsController.open();
     marginsOpenPromise = opening;
@@ -284,8 +285,8 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
       if (!marginsPhaseActive || !args.marginsPhase) return;
       marginsLoading.clear();
       footerLoading.clear();
-      const message = error instanceof Error ? error.message : "Marže sa nepodarilo načítať.";
-      args.marginsPhase.hostEl.innerHTML = `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">Marže sa nedajú bezpečne otvoriť. ${escapeHtml(message)}</p>`;
+      const message = error instanceof Error ? error.message : t("Margins could not be loaded.");
+      args.marginsPhase.hostEl.innerHTML = `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">${t("Margins cannot be opened safely.")} ${escapeHtml(message)}</p>`;
     }).finally(() => {
       if (marginsOpenPromise === opening) marginsOpenPromise = null;
     });
@@ -325,8 +326,8 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     else if (id === "schedules") openSchedules();
     else if (id === "materials") openMaterials();
     else if (id === "margins") openMargins();
-    else if (id === "documents") showComingSoonDialog("Dokumenty");
-    else if (id === "settings") showComingSoonDialog("Nastavenia");
+    else if (id === "documents") showComingSoonDialog(t("Documents"));
+    else if (id === "settings") showComingSoonDialog(t("Settings"));
   };
 
   for (const button of navButtons) {
@@ -401,8 +402,8 @@ function renderSheetCard(sheet: SheetRecord): HTMLElement {
       <i></i><i></i><i></i><i></i>
     </span>
     <strong>${sheet.name}</strong>
-    <span>${sheet.type}</span>
-    <small>${sheet.source} · ${sheet.status}</small>
+    <span>${t(sheet.type)}</span>
+    <small>${t(sheet.source)} · ${t(sheet.status)}</small>
   `;
   card.addEventListener("click", () => showComingSoonDialog(sheet.name));
   return card;
@@ -417,7 +418,7 @@ function renderModuleSchedule(S: AppState): HTMLElement {
   detail.className = "workspace-schedule-detail";
   list.innerHTML = `
     <table>
-      <thead><tr><th>ID</th><th>Module</th><th>Size</th><th>Position</th><th>Material</th></tr></thead>
+      <thead><tr><th>${t("ID")}</th><th>${t("Module")}</th><th>${t("Size")}</th><th>${t("Position")}</th><th>${t("Material")}</th></tr></thead>
       <tbody></tbody>
     </table>
   `;
@@ -440,7 +441,7 @@ function renderModuleSchedule(S: AppState): HTMLElement {
     tbody?.appendChild(row);
   }
   if (S.instances[0]) renderModuleDetail(detail, S.instances[0]);
-  else detail.innerHTML = `<strong>No modules</strong><p>Po vlozeni modulov sa tu ukaze module schedule.</p>`;
+  else detail.innerHTML = `<strong>${t("No modules")}</strong><p>${t("The module schedule appears here after modules are added.")}</p>`;
   wrap.append(list, detail);
   return wrap;
 }
@@ -449,9 +450,9 @@ function renderModuleDetail(target: HTMLElement, instance: LayoutInstance): void
   const rows = boardRowsForInstance(instance);
   target.innerHTML = `
     <strong>${moduleScheduleId(instance)} · ${formatModuleType(instance.params.type)}</strong>
-    <p>Detailny kusovnik konkretneho modulu.</p>
+    <p>${t("Detailed bill of materials for this module.")}</p>
     <table>
-      <thead><tr><th>Part ID</th><th>Part</th><th>Size</th><th>Material</th><th>Edges</th></tr></thead>
+      <thead><tr><th>${t("Part ID")}</th><th>${t("Part")}</th><th>${t("Size")}</th><th>${t("Material")}</th><th>${t("Edges")}</th></tr></thead>
       <tbody>
         ${rows.map((row) => `<tr><td>${row.id}</td><td>${row.name}</td><td>${row.size}</td><td>${row.material}</td><td>${row.edges}</td></tr>`).join("")}
       </tbody>
@@ -469,7 +470,7 @@ function renderMaterialSchedule(S: AppState, catalog: ClientCatalog): HTMLElemen
       rows.set(materialId, row);
     }
   }
-  return scheduleTable(["Material", "Boards", "Modules", "Catalog name"], Array.from(rows.entries()).map(([materialId, row]) => [
+  return scheduleTable([t("Material"), t("Boards"), t("Modules"), t("Catalog name")], Array.from(rows.entries()).map(([materialId, row]) => [
     materialId,
     String(row.count),
     [...new Set(row.modules)].join(", "),
@@ -481,7 +482,7 @@ function renderEdgeSchedule(S: AppState): HTMLElement {
   const rows = S.instances.flatMap((instance) =>
     boardRowsForInstance(instance).map((part) => [part.id, part.name, part.size, moduleScheduleId(instance), part.edges])
   );
-  return scheduleTable(["Part ID", "Part", "Size", "Module", "Edges"], rows);
+  return scheduleTable([t("Part ID"), t("Part"), t("Size"), t("Module"), t("Edges")], rows);
 }
 
 function renderComponentSchedule(S: AppState): HTMLElement {
@@ -490,20 +491,20 @@ function renderComponentSchedule(S: AppState): HTMLElement {
       .filter(([key, value]) => key.toLowerCase().includes("component") && typeof value === "string")
       .map(([key, value]) => [`CMP-${String(value).slice(-6).toUpperCase()}`, key, String(value), moduleScheduleId(instance)])
   );
-  return scheduleTable(["Component ID", "Use", "Catalog ref", "Module"], rows);
+  return scheduleTable([t("Component ID"), t("Use"), t("Catalog ref"), t("Module")], rows);
 }
 
 function renderViewSchedule(S: AppState): HTMLElement {
   const baseRows = [
-    ["VIEW-FP-001", "Floorplan", "Podorys", "Ready"],
-    ["VIEW-3D-001", "3D", "Model view", "Ready"],
-    ["VIEW-N-001", "North", "Elevation", "Ready"],
-    ["VIEW-E-001", "East", "Elevation", "Ready"],
-    ["VIEW-S-001", "South", "Elevation", "Ready"],
-    ["VIEW-W-001", "West", "Elevation", "Ready"]
+    ["VIEW-FP-001", t("Floorplan"), t("Floor plan"), t("Ready")],
+    ["VIEW-3D-001", t("3D"), t("Model view"), t("Ready")],
+    ["VIEW-N-001", t("North"), t("Elevation"), t("Ready")],
+    ["VIEW-E-001", t("East"), t("Elevation"), t("Ready")],
+    ["VIEW-S-001", t("South"), t("Elevation"), t("Ready")],
+    ["VIEW-W-001", t("West"), t("Elevation"), t("Ready")]
   ];
-  const sectionRows = S.sections.map((section, index) => [`VIEW-SEC-${String(index + 1).padStart(3, "0")}`, section.params.name, "Section", "DXF export later"]);
-  return scheduleTable(["View ID", "Name", "Type", "Status"], [...baseRows, ...sectionRows]);
+  const sectionRows = S.sections.map((section, index) => [`VIEW-SEC-${String(index + 1).padStart(3, "0")}`, section.params.name, t("Section"), t("DXF export later")]);
+  return scheduleTable([t("View ID"), t("Name"), t("Type"), t("Status")], [...baseRows, ...sectionRows]);
 }
 
 function scheduleTable(headers: string[], rows: string[][]): HTMLElement {
@@ -516,7 +517,7 @@ function scheduleTable(headers: string[], rows: string[][]): HTMLElement {
         ${
           rows.length
             ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")
-            : `<tr><td colspan="${headers.length}">No records yet.</td></tr>`
+            : `<tr><td colspan="${headers.length}">${t("No records yet.")}</td></tr>`
         }
       </tbody>
     </table>
@@ -548,11 +549,11 @@ function boardRowsForInstance(instance: LayoutInstance) {
   const material = materialIdForModule(instance) ?? "-";
   const prefix = moduleScheduleId(instance);
   return [
-    { id: `${prefix}-L`, name: "Left side", size: `${depth} × ${height}`, material, edges: "front" },
-    { id: `${prefix}-R`, name: "Right side", size: `${depth} × ${height}`, material, edges: "front" },
-    { id: `${prefix}-B`, name: "Bottom", size: `${width} × ${depth}`, material, edges: "front,left,right" },
-    { id: `${prefix}-T`, name: "Top", size: `${width} × ${depth}`, material, edges: "front,left,right" },
-    { id: `${prefix}-BACK`, name: "Back panel", size: `${width} × ${height}`, material: String(instance.params.backMaterialId ?? material), edges: "-" }
+    { id: `${prefix}-L`, name: t("Left side"), size: `${depth} × ${height}`, material, edges: t("front") },
+    { id: `${prefix}-R`, name: t("Right side"), size: `${depth} × ${height}`, material, edges: t("front") },
+    { id: `${prefix}-B`, name: t("Bottom"), size: `${width} × ${depth}`, material, edges: t("front, left, right") },
+    { id: `${prefix}-T`, name: t("Top"), size: `${width} × ${depth}`, material, edges: t("front, left, right") },
+    { id: `${prefix}-BACK`, name: t("Back panel"), size: `${width} × ${height}`, material: String(instance.params.backMaterialId ?? material), edges: "-" }
   ];
 }
 
