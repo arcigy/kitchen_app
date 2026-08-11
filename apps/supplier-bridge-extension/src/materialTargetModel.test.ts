@@ -12,7 +12,7 @@ const view: ProjectMaterialsView = {
       assignmentId: "material-assignment:module:module-a:corpus:panel-a",
       category: "corpus",
       kind: "material",
-      customValues: { supplierBridge: { supplierProductCode: "175718" } },
+      customValues: { supplierBridge: { supplierProductCode: "175718", rawPriceText: "52,80 EUR", rawUnitText: "ks" } },
       source: "user",
       snapshots: { material: {
         definition: { displayName: "Egger H3303 ST10" } as MaterialDefinition,
@@ -78,6 +78,7 @@ describe("extension material target model", () => {
       assigned: true,
       assignedText: "Egger H3303 ST10 · 175718",
       assignedProductCode: "175718",
+      assignedPrice: "52,80 EUR / ks",
       inherited: false
     });
   });

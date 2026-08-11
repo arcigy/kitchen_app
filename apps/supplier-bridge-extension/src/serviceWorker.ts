@@ -314,7 +314,7 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   return { ok: capture.candidates.length > 0, view, capture, errorCode: capture.candidates.length > 0 ? null : capture.errorCode };
 }
 
-async function captureActiveSupplierProduct(): Promise<BridgeRuntimeResponse> {
+async function captureActiveSupplierProduct(expected?: Extract<BridgeRuntimeRequest, { type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT" }>): Promise<BridgeRuntimeResponse> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (typeof tab?.id !== "number" || !tab.url) {
     return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Otvorte detail produktu dodávateľa." };
@@ -332,9 +332,9 @@ async function captureActiveSupplierProduct(): Promise<BridgeRuntimeResponse> {
     : {
         channel: BRIDGE_CHANNEL,
         type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT",
-        expectedProductType: "unknown",
-        expectedManufacturer: null,
-        expectedThicknessMm: null
+        expectedProductType: expected?.expectedProductType ?? "unknown",
+        expectedManufacturer: expected?.expectedManufacturer ?? null,
+        expectedThicknessMm: expected?.expectedThicknessMm ?? null
       });
   const response = parseBridgeRuntimeResponse(raw);
   const capture = response?.ok ? parseSupplierPageCapture(response.capture) : null;
@@ -473,6 +473,7 @@ async function routeMessage(message: BridgeRuntimeRequest, sender: chrome.runtim
   if (message.type === "CANCEL_SUPPLIER_SESSION") return cancel();
   if (message.type === "SIDE_PANEL_COMMAND") return handleSideCommand(message);
   if (message.type === "CAPTURE_ACTIVE_SUPPLIER_PRODUCT") return captureActiveSupplierProduct();
+  if (message.type === "CAPTURE_CURRENT_SUPPLIER_PRODUCT") return captureActiveSupplierProduct(message);
   if (message.type === "START_DIAGNOSTIC_PICK") return diagnosticPick(message);
   return { ok: false, errorCode: "UNSUPPORTED_MESSAGE" };
 }

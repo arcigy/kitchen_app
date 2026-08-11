@@ -145,4 +145,32 @@ describe("standalone extension assignment flow", () => {
       expect.objectContaining({ expectedThicknessMm: 19 })
     );
   });
+
+  it.each([
+    ["hinge", "hinge"],
+    ["runner", "drawer_system"],
+    ["handle", "handle"],
+    ["lift_up", "lift_up"],
+    ["leg", "leg"],
+    ["fastener", "fastener"],
+    ["lighting", "lighting"],
+    ["other_component", "component"],
+    ["edge_front", "edge_band"],
+    ["edge_other", "edge_band"]
+  ] as const)("creates a %s target with the correct non-board product contract", async (category, expectedProductType) => {
+    const { deps } = fixtures();
+
+    await runExtensionAssignment({
+      ...input,
+      target: { ...target, id: `material-assignment:${category}`, category, expectedThicknessMm: null }
+    }, deps);
+
+    expect(deps.createSession).toHaveBeenCalledWith(
+      input.baseUrl,
+      input.accessToken,
+      input.projectId,
+      input.supplierId,
+      expect.objectContaining({ expectedProductType, expectedThicknessMm: undefined })
+    );
+  });
 });

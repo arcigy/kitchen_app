@@ -160,12 +160,18 @@ function App(): React.JSX.Element {
     finally { setBusy(null); }
   };
 
-  const captureProduct = async () => {
+  const captureProduct = async (target?: ExtensionMaterialTarget) => {
     setBusy("capture"); setError(null); setMessage(null);
     try {
       if (!await loadSupplierBridgePrivacyConsent()) await saveSupplierBridgePrivacyConsent();
       await requestSupplierPermission(supplierId);
-      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_ACTIVE_SUPPLIER_PRODUCT" });
+      const expectedProductType = target?.category === "worktop" ? "worktop"
+        : target?.category === "edge_front" || target?.category === "edge_other" ? "edge_band"
+          : target?.category === "hinge" ? "hinge"
+            : target?.category === "runner" ? "drawer_system"
+              : target && ["corpus", "front", "plinth", "back", "drawer_bottom"].includes(target.category) ? "board"
+                : "hardware";
+      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT", expectedProductType, expectedManufacturer: null, expectedThicknessMm: target?.expectedThicknessMm ?? null });
       const response = parseBridgeRuntimeResponse(raw);
       if (!response?.ok || !response.capture) throw new Error(response?.message ?? response?.errorCode ?? "Produkt sa nepodarilo načítať.");
       if (response.capture.candidates.length !== 1) throw new Error("Rozšírenie nerozpoznalo presne jeden produkt. Otvorte detail konkrétneho produktu a skúste to znova.");
@@ -183,14 +189,16 @@ function App(): React.JSX.Element {
   };
 
   const assign = async (target: ExtensionMaterialTarget) => {
-    if (!account || !selectedCandidate || !selectedProject || assigningRef.current) return;
-    const candidate = selectedCandidate;
+    if (!account || !selectedProject || assigningRef.current) return;
+    assigningRef.current = true;
+    const candidate = await captureProduct(target);
+    if (!candidate) { assigningRef.current = false; return; }
     if (target.assignedProductCode === candidate.supplierProductCode) {
       setError(null);
       setMessage(`${target.assignedText} je už priradený k tejto časti.`);
+      assigningRef.current = false;
       return;
     }
-    assigningRef.current = true;
     const context = { account, candidate, project: selectedProject, supplierId: supplierId as SupplierId };
     setBusy(target.id); setError(null); setMessage(null);
     const startedAt = new Date().toISOString();
@@ -253,7 +261,7 @@ function App(): React.JSX.Element {
       data-material-target={target.id}
       data-target-assigned={target.assigned ? "true" : "false"}
       data-target-source={target.inherited ? "general" : "direct"}
-      disabled={busy !== null || account?.role === "viewer" || !selectedCandidate || sameProduct}
+      disabled={busy !== null || account?.role === "viewer"}
       onClick={() => void assign(target)}
     >
       <span className="target__heading">
@@ -268,7 +276,7 @@ function App(): React.JSX.Element {
       </small>}
       {target.assignedPrice && <small className="target__price">{target.assignedPrice}</small>}
       {target.inherited && <small>Z celého projektu; môžete nastaviť vlastný materiál pre túto časť.</small>}
-      {!selectedCandidate && <small>Najprv načítajte otvorený produkt dodávateľa.</small>}
+      {!selectedCandidate && <small>Otvorte detail produktu u dodávateľa a kliknite priamo na túto položku.</small>}
       {sameProduct && <small>Aktuálny produkt je už na tejto časti.</small>}
     </button>;
   };
@@ -312,7 +320,7 @@ function App(): React.JSX.Element {
     <section className="card">
       <div className="eyebrow">2. Dodávateľ a produkt</div>
       <label className="field">Dodávateľ<select disabled={busy !== null} value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setCapture(null); setMessage(null); setError(null); }}>{suppliers.map((supplier) => <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.displayName}</option>)}</select></label>
-      <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>Otvoriť dodávateľa</button><button type="button" className="button button--primary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? "Načítavam…" : "Načítať otvorený produkt"}</button></div>
+      <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>Otvoriť dodávateľa</button><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? "Načítavam…" : "Skontrolovať otvorený produkt"}</button></div>
       {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span></div>}
     </section>
     <section className="card">
