@@ -175,6 +175,8 @@ Reapplies the next project/domain transaction.
 
 `Escape` should first cancel the active transient operation, then clear selection, then leave the active mode depending on mode policy.
 
+Input priority is explicit: a focused text, numeric, select, or contenteditable control owns `Escape`, `Ctrl/Cmd+Z`, and `Ctrl/Cmd+Y` until it exits its own edit state. Outside text editing, one editor dispatcher resolves Escape in this order: measurement/custom edit owner, active viewer tool, placement, transform/active tool step, selection. Navigation remains available during a tool or transform preview; it is blocked only by a real pointer drag or other pointer-capture interaction.
+
 `Backspace` should map to `DeleteSelection` when the editor canvas owns focus.
 
 Browser Back behavior must be explicitly guarded in project/editor routes.

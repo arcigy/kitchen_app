@@ -163,8 +163,16 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
 
     for (const measure of linkedMeasures) {
       const targetForInput = target;
-      const input = createInputElement("number", String(Math.round(planarDistanceMm(measure.a, measure.b))), { step: "1" });
+      const originalValue = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+      const input = createInputElement("number", originalValue, { step: "1" });
       input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          input.value = originalValue;
+          ev.preventDefault();
+          ev.stopPropagation();
+          input.blur();
+          return;
+        }
         if (ev.key === "Enter") {
           args.onCommitMeasure(measure.id, input.value, targetForInput);
           ev.preventDefault();

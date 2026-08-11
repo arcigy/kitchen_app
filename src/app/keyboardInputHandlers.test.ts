@@ -247,7 +247,7 @@ describe("global undo redo keyboard shortcuts", () => {
     expect(redo).not.toHaveBeenCalled();
   });
 
-  it("registers undo and redo before normal tool key handlers", () => {
+  it("registers one bubble dispatcher so focused inputs keep native undo and redo", () => {
     const addEventListener = vi.fn();
     vi.stubGlobal("window", { addEventListener });
 
@@ -264,10 +264,11 @@ describe("global undo redo keyboard shortcuts", () => {
       isTypingTarget: () => true
     }));
 
-    expect(addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function), { capture: true });
-    const captureHandler = addEventListener.mock.calls[0][1] as (ev: KeyboardEvent) => void;
-    captureHandler(shortcutEvent("z", { defaultPrevented: true }));
-    expect(undo).toHaveBeenCalledTimes(1);
+    expect(addEventListener).toHaveBeenCalledTimes(1);
+    expect(addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
+    const keydownHandler = addEventListener.mock.calls[0][1] as (ev: KeyboardEvent) => void;
+    keydownHandler(shortcutEvent("z", { target: { nodeName: "INPUT" } as unknown as EventTarget }));
+    expect(undo).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
   });
@@ -1189,7 +1190,7 @@ describe("delete selection keyboard shortcut", () => {
       redo: vi.fn()
     }));
 
-    const handler = addEventListener.mock.calls[1][1] as (ev: KeyboardEvent) => void;
+    const handler = addEventListener.mock.calls[0][1] as (ev: KeyboardEvent) => void;
     const ev = {
       ...plainKeyEvent("Delete"),
       defaultPrevented: false,
@@ -1247,6 +1248,9 @@ describe("top-level keyboard input command dispatcher", () => {
         hover: null
       },
       flipDoorPlacementSwingSide: vi.fn(() => false),
+      cancelActiveViewerTool: vi.fn(() => false),
+      handleCustomFurnitureEscape: vi.fn(() => false),
+      handleGlobalMeasurementClear: vi.fn(() => false),
       handleLayoutEscape: vi.fn(() => false),
       helpers: {},
       hideHoverCursor: vi.fn(),
@@ -1309,7 +1313,7 @@ describe("top-level keyboard input command dispatcher", () => {
     return ctx as unknown as Parameters<typeof runKeyboardInputCommand>[0];
   }
 
-  it("stops at typing targets for non-Escape keys without preventing default", () => {
+  it("leaves all keys at typing targets without preventing default", () => {
     const ev = plainKeyEvent("Delete", { preventDefault: vi.fn(), target: { nodeName: "INPUT" } as unknown as EventTarget });
     const deleteSelected = vi.fn(() => true);
     const ctx = topLevelKeyboardContext({
@@ -1317,10 +1321,43 @@ describe("top-level keyboard input command dispatcher", () => {
       isTypingTarget: vi.fn(() => true)
     });
 
-    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(false);
 
     expect(deleteSelected).not.toHaveBeenCalled();
     expect(ev.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("leaves Escape and Undo at typing targets instead of cancelling editor state", () => {
+    const handleLayoutEscape = vi.fn(() => true);
+    const undo = vi.fn();
+    const escape = plainKeyEvent("Escape", { target: { nodeName: "INPUT" } as unknown as EventTarget });
+    const undoEvent = shortcutEvent("z", { target: { nodeName: "INPUT" } as unknown as EventTarget });
+    const ctx = topLevelKeyboardContext({
+      handleLayoutEscape,
+      isTypingTarget: vi.fn(() => true),
+      undo
+    });
+
+    expect(runKeyboardInputCommand(ctx, escape)).toBe(false);
+    expect(runKeyboardInputCommand(ctx, undoEvent)).toBe(false);
+
+    expect(handleLayoutEscape).not.toHaveBeenCalled();
+    expect(undo).not.toHaveBeenCalled();
+  });
+
+  it("runs global Escape owners before placement and layout commands", () => {
+    const handleGlobalMeasurementClear = vi.fn(() => true);
+    const cancelDoorPlacement = vi.fn();
+    const ctx = topLevelKeyboardContext({
+      handleGlobalMeasurementClear,
+      cancelDoorPlacement,
+      isDoorPlacementActive: vi.fn(() => true)
+    });
+
+    expect(runKeyboardInputCommand(ctx, plainKeyEvent("Escape"))).toBe(true);
+
+    expect(handleGlobalMeasurementClear).toHaveBeenCalledOnce();
+    expect(cancelDoorPlacement).not.toHaveBeenCalled();
   });
 
   it("routes placement shortcuts before drawing and layout commands", () => {
