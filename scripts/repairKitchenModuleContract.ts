@@ -6,9 +6,10 @@ import {
   normalizeAppEnvironment
 } from "../src/core/database/database-config";
 import { closeSchemaPools } from "../src/core/database/postgres-client";
-import { withModulePackageHash } from "../src/core/module-package/module-package-file";
+import { computeModulePackageHash, withModulePackageHash } from "../src/core/module-package/module-package-file";
 import { createFileModulePackageRepository, type ModulePackageRepository } from "../src/core/module-package/module-package-repository";
 import { createPostgresModulePackageRepository } from "../src/core/module-package/module-package-postgres-repository";
+import type { FurnQuoteModulePackage } from "../src/core/module-package/module-package-types";
 import type { ClientContext } from "../src/core/client/client-context";
 import { auditKitchenModulePlacementContract } from "../src/layout/kitchenModulePlacementContract";
 import { normalizeKitchenModulePackage } from "../src/layout/kitchenModuleContract";
@@ -74,8 +75,9 @@ function resolveDatabaseConfig(args: Args): DatabaseConfig | null {
   return { connectionString, schema, appEnv };
 }
 
-function packageChanged(before: unknown, after: unknown) {
-  return JSON.stringify(before) !== JSON.stringify(after);
+function packageChanged(before: FurnQuoteModulePackage, after: FurnQuoteModulePackage) {
+  return before.integrity.packageHash !== after.integrity.packageHash ||
+    computeModulePackageHash(before) !== computeModulePackageHash(after);
 }
 
 async function main() {
