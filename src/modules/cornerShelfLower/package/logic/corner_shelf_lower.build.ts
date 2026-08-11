@@ -51,7 +51,7 @@ export const defaultParams = {
   "clipComponentId": "cmp.clip.plinth.standard",
   "handleComponentId": "cmp.handle.bar.160.inox",
   "assemblyContext": "kitchen",
-  "kitchenModuleRole": "base",
+  "kitchenModuleRole": "low",
   "legComponentId": "cmp.leg.adjustable.100.black",
   "requiresWorktop": true,
   "worktopThicknessMm": 38

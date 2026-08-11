@@ -2371,6 +2371,7 @@ function readGroundTruthVectorMm(value: unknown): THREE.Vector3 | null {
 }
 
 type ChamferedGroundTruthParametricContext = {
+  geometryContractVersion: 1 | 2;
   width: number;
   depth: number;
   height: number;
@@ -2398,7 +2399,13 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
   const boardThickness = Math.max(1, num(params, "boardThickness", 18));
   const frontFallback = num(params, "chamferMm", BASE_CORNER_CHAMFERED_SOURCE.chamferMm);
   const requestedFrontChamfer = num(params, "frontChamferMm", frontFallback);
-  const requestedFrontChamferReference = num(params, "frontChamferReferenceMm", 200);
+  const geometryContractVersion = num(params, "geometryContractVersion", 1) >= 2 ? 2 : 1;
+  // V2 defines depth as the complete outside wall leg.  The old reference
+  // field remains readable only for package snapshots authored before this
+  // contract; new modules use the actual cut to divide the fixed envelope.
+  const requestedFrontChamferReference = geometryContractVersion >= 2
+    ? requestedFrontChamfer
+    : num(params, "frontChamferReferenceMm", 200);
   const requestedBackChamfer = num(params, "backChamferMm", 0);
   const frontChamferMm = Math.min(
     Math.max(requestedFrontChamfer, 1),
@@ -2414,15 +2421,12 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
   );
   const plinthHeight = Math.max(0, Math.min(height - 1, num(params, "plinthHeight", BASE_CORNER_CHAMFERED_SOURCE.plinthTop)));
   const plinthSetbackMm = Math.max(0, num(params, "plinthSetbackMm", BASE_CORNER_CHAMFERED_SOURCE.plinthSetbackMm));
-  return { width, depth, height, boardThickness, frontChamferMm, frontChamferReferenceMm, backChamferMm, plinthHeight, plinthSetbackMm };
-}
-
-function chamferedDepthIsStraightSegment(context: ChamferedGroundTruthParametricContext) {
-  return Math.abs(context.frontChamferReferenceMm - BASE_CORNER_CHAMFERED_SOURCE.chamferMm) > 0.001;
+  return { geometryContractVersion, width, depth, height, boardThickness, frontChamferMm, frontChamferReferenceMm, backChamferMm, plinthHeight, plinthSetbackMm };
 }
 
 function chamferedReferenceTotalSpan(context: ChamferedGroundTruthParametricContext) {
-  return chamferedDepthIsStraightSegment(context)
+  if (context.geometryContractVersion >= 2) return Math.max(1, context.depth);
+  return Math.abs(context.frontChamferReferenceMm - BASE_CORNER_CHAMFERED_SOURCE.chamferMm) > 0.001
     ? Math.max(1, context.depth + context.frontChamferReferenceMm)
     : Math.max(1, context.depth);
 }
@@ -3134,21 +3138,33 @@ function attachChamferedCornerKitchenAnchors(group: THREE.Group) {
     createChamferedGroundTruthParametricContext(params ?? ({} as FwmFurnitureParams))
   );
 
+  // V2 placement anchors are the declared outside wall-leg reference planes,
+  // not an incidental board/hardware extent from the baked source mesh.
+  const corner = profile.corner.clone();
+  const xJoin = profile.xJoin.clone();
+  const zJoin = profile.zJoin.clone();
+  if (profile && (group.userData.groundTruthParametricContext as ChamferedGroundTruthParametricContext | undefined)?.geometryContractVersion === 2) {
+    corner.x = xJoin.x + (group.userData.groundTruthParametricContext as ChamferedGroundTruthParametricContext).depth;
+    corner.z = xJoin.z;
+    zJoin.x = corner.x;
+    zJoin.z = corner.z + (group.userData.groundTruthParametricContext as ChamferedGroundTruthParametricContext).depth;
+  }
+
   const cornerAnchor = new THREE.Object3D();
   cornerAnchor.name = kitchenCornerAnchorName;
-  cornerAnchor.position.copy(profile.corner).multiplyScalar(MM);
+  cornerAnchor.position.copy(corner).multiplyScalar(MM);
   cornerAnchor.visible = false;
   group.add(cornerAnchor);
 
   const xAnchor = new THREE.Object3D();
   xAnchor.name = kitchenCornerXAnchorName;
-  xAnchor.position.copy(profile.xJoin).multiplyScalar(MM);
+  xAnchor.position.copy(xJoin).multiplyScalar(MM);
   xAnchor.visible = false;
   group.add(xAnchor);
 
   const zAnchor = new THREE.Object3D();
   zAnchor.name = kitchenCornerZAnchorName;
-  zAnchor.position.copy(profile.zJoin).multiplyScalar(MM);
+  zAnchor.position.copy(zJoin).multiplyScalar(MM);
   zAnchor.visible = false;
   group.add(zAnchor);
 }

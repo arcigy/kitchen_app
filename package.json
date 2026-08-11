@@ -62,6 +62,7 @@
     "db:seed": "tsx scripts/dbSeedArcigy.ts",
     "db:seed:pino-nobilia": "tsx scripts/dbSeedPinoNobilia.ts",
     "db:assign-client-modules": "tsx scripts/assignClientModules.ts",
+    "db:repair-kitchen-module-contract": "tsx scripts/repairKitchenModuleContract.ts",
     "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts",
     "db:set-client-currency": "tsx scripts/setClientCurrency.ts",
     "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply"

@@ -5,8 +5,9 @@ import fridgeTall from "./fridgeTall.fqm.source.json";
 import flapShelvesLow from "./flapShelvesLow.fqm.source.json";
 import { extendedFurnitureModulePackages } from "./extendedFurniture";
 import type { FurnQuoteModulePackage } from "../../core/module-package/module-package-types";
+import { normalizeKitchenModulePackage } from "../../layout/kitchenModuleContract";
 
-export const systemModulePackageTemplates: FurnQuoteModulePackage[] = [
+const rawSystemModulePackageTemplates: FurnQuoteModulePackage[] = [
   drawerLow,
   swingShelvesLow,
   cornerShelfLower,
@@ -14,3 +15,6 @@ export const systemModulePackageTemplates: FurnQuoteModulePackage[] = [
   flapShelvesLow,
   ...extendedFurnitureModulePackages
 ] as FurnQuoteModulePackage[];
+
+/** Every system template is emitted with the current Kitchen Group contract. */
+export const systemModulePackageTemplates: FurnQuoteModulePackage[] = rawSystemModulePackageTemplates.map(normalizeKitchenModulePackage);

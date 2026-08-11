@@ -25,6 +25,52 @@ export type ModulePackageMetadata = {
   tags?: string[];
 };
 
+/**
+ * Stable, package-owned semantics for Kitchen Group modules.  The contract is
+ * deliberately separate from placement rules: placement describes where a
+ * module may be put, while this describes which shared Kitchen Group values it
+ * owns and how its dimensional reference planes are interpreted.
+ */
+export type KitchenModuleProductKind =
+  | "cabinet"
+  | "worktop"
+  | "panel"
+  | "shelf"
+  | "appliance"
+  | "accessory"
+  | "hardware";
+
+export type KitchenModuleRole = "low" | "top" | "tall";
+
+export type KitchenModuleTopology = "rectangular" | "corner-symmetric" | "corner-asymmetric";
+
+export type KitchenModulePlacementMode = "wall" | "corner" | "free-standing";
+
+export type KitchenModuleCapability =
+  | "backs"
+  | "fronts"
+  | "drawers"
+  | "shelves"
+  | "plinth"
+  | "worktop"
+  | "handles"
+  | "hinges"
+  | "runners"
+  | "openable";
+
+export type KitchenModuleContract = {
+  version: 1;
+  productKind: KitchenModuleProductKind;
+  role?: KitchenModuleRole;
+  topology: KitchenModuleTopology;
+  placementMode: KitchenModulePlacementMode;
+  capabilities: KitchenModuleCapability[];
+  /** A named geometry contract prevents a historical package snapshot from silently changing shape. */
+  geometryContractVersion: 1 | 2;
+  /** Parameters which are intentionally package-local rather than shared Kitchen Group parameters. */
+  localParameterKeys?: string[];
+};
+
 export type ModuleCompatibility = {
   minAppVersion?: string;
   maxAppVersion?: string;
@@ -407,6 +453,8 @@ export type FurnQuoteModulePackage = {
   format: typeof MODULE_PACKAGE_FORMAT;
   packageVersion: number;
   module: ModulePackageMetadata;
+  /** Required for newly authored Kitchen packages; absent only on legacy packages awaiting repair. */
+  kitchenContract?: KitchenModuleContract;
   parameters: ModuleParameterSchema;
   placement: ModulePlacementRules;
   constraints: ModuleConstraintRules;

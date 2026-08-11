@@ -46,6 +46,12 @@ describe("kitchen module placement contract", () => {
     const topCornerPackage = structuredClone(wallPackage!);
     topCornerPackage.module.modulePackageId = "client_delfi_wall_corner_chamfered_v1";
     topCornerPackage.module.displayName = "Horni rohovy skoseny";
+    topCornerPackage.kitchenContract = {
+      ...topCornerPackage.kitchenContract!,
+      topology: "corner-asymmetric",
+      placementMode: "corner",
+      capabilities: topCornerPackage.kitchenContract!.capabilities.filter((capability) => capability !== "plinth" && capability !== "worktop")
+    };
     topCornerPackage.placement = {
       allowedContexts: ["kitchen_corner"],
       requiredAnchors: ["two_perpendicular_walls", "corner", "wall"],

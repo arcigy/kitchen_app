@@ -508,7 +508,9 @@ function applyFridgeTallKitchenMaterials(params: ModuleParams, ctx: KitchenConte
   const materials = ensureRecord(record.materials);
   record.materials = materials;
   record.worktopThicknessMm = 0;
-  record.depth = ctx.moduleDepthMm;
+  record.height = ctx.tallHeightMm;
+  record.heightCarcass = ctx.tallHeightMm;
+  record.depth = ctx.tallDepthMm;
   record.plinthHeight = ctx.plinthHeightMm;
   record.plinthSetbackMm = ctx.plinthDepthMm;
 
@@ -623,7 +625,9 @@ function applyPinoSideCabinetKitchenMaterials(params: ModuleParams, ctx: Kitchen
   record.assemblyContext = "kitchen";
   record.kitchenModuleRole = "tall";
   record.requiresWorktop = false;
-  record.depth = ctx.moduleDepthMm;
+  record.height = ctx.tallHeightMm;
+  record.heightCarcass = ctx.tallHeightMm;
+  record.depth = ctx.tallDepthMm;
   record.plinthHeight = ctx.plinthHeightMm;
 
   const corpus = getKitchenMaterial(ctx, "body", catalog);

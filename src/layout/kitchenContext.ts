@@ -27,6 +27,11 @@ export interface KitchenContext {
   upperDepthMm: number
   upperHeightMm: number
 
+  // Tall modules deliberately have their own group dimensions.  Older saved
+  // contexts are upgraded by resolveContext using the historical wall/depth values.
+  tallDepthMm: number
+  tallHeightMm: number
+
   // Doors and panels
   doorOverlayMm: number
   backPanelThicknessMm: number
@@ -89,6 +94,8 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
     upperStartHeightMm: 1400,
     upperDepthMm: 320,
     upperHeightMm: 720,
+    tallDepthMm: worktopDepthMm - worktopFrontOffsetMm - worktopBackOffsetMm,
+    tallHeightMm: 2600,
 
     doorOverlayMm: 18,
     backPanelThicknessMm: defaults.defaultBackPanelThicknessMm ?? FALLBACK_KITCHEN_DEFAULTS.defaultBackPanelThicknessMm,
@@ -109,6 +116,7 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
 
 // Call after changing worktopDepth, frontOffset, backOffset, or height.
 export function resolveContext(ctx: KitchenContext): KitchenContext {
+  const legacy = ctx as Partial<KitchenContext>;
   return {
     ...ctx,
     handleComponentId:
@@ -117,6 +125,12 @@ export function resolveContext(ctx: KitchenContext): KitchenContext {
         : FALLBACK_KITCHEN_DEFAULTS.defaultHandleComponentId,
     moduleDepthMm: ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
     moduleHeightMm: ctx.heightMm - ctx.worktopThicknessMm,
+    tallDepthMm: typeof legacy.tallDepthMm === "number" && legacy.tallDepthMm > 0
+      ? legacy.tallDepthMm
+      : ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
+    tallHeightMm: typeof legacy.tallHeightMm === "number" && legacy.tallHeightMm > 0
+      ? legacy.tallHeightMm
+      : ctx.wallHeightMm,
   }
 }
 
@@ -157,6 +171,10 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push(`upperDepthMm is ${ctx.upperDepthMm}mm - must be greater than 0`)
   if (ctx.upperHeightMm <= 0)
     warnings.push(`upperHeightMm is ${ctx.upperHeightMm}mm - must be greater than 0`)
+  if (ctx.tallDepthMm <= 0)
+    warnings.push(`tallDepthMm is ${ctx.tallDepthMm}mm - must be greater than 0`)
+  if (ctx.tallHeightMm <= 0)
+    warnings.push(`tallHeightMm is ${ctx.tallHeightMm}mm - must be greater than 0`)
   if (ctx.doorOverlayMm < 0)
     warnings.push(`doorOverlayMm is ${ctx.doorOverlayMm}mm - cannot be negative`)
   if (ctx.backPanelThicknessMm < 0)
