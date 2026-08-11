@@ -24,6 +24,17 @@ export function computeModulePackageHash(modulePackage: FurnQuoteModulePackage):
   return createHash("sha256").update(canonicalizeModulePackage(modulePackage)).digest("hex");
 }
 
+/** Returns a package whose embedded integrity value matches its contents. */
+export function withModulePackageHash(modulePackage: FurnQuoteModulePackage): FurnQuoteModulePackage {
+  return {
+    ...modulePackage,
+    integrity: {
+      ...modulePackage.integrity,
+      packageHash: computeModulePackageHash(modulePackage)
+    }
+  };
+}
+
 export function parseModulePackageJson(raw: string): FurnQuoteModulePackage {
   return JSON.parse(raw) as FurnQuoteModulePackage;
 }

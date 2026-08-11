@@ -13,7 +13,7 @@ import { loadProjectSaveFile } from "../project-save/project-save-loader";
 import { createFileModulePackageRepository } from "./module-package-repository";
 import { createModulePackageService } from "./module-package-service";
 import type { FurnQuoteModulePackage } from "./module-package-types";
-import { computeModulePackageHash, parseModulePackageJson } from "./module-package-file";
+import { computeModulePackageHash, parseModulePackageJson, withModulePackageHash } from "./module-package-file";
 import { createModuleFileEnvelope, createModuleFilePayload, packModulePackage, unpackModulePackage } from "./module-file-codec";
 import type { FurnQuoteModuleFileEnvelope, FurnQuoteModulePackagePayload } from "./module-file-types";
 import { sha256Hex } from "./module-file-validation";
@@ -182,6 +182,17 @@ function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuote
 }
 
 describe("FurnQuote module package validation", () => {
+  it("refreshes an embedded package hash after a repair changes package contents", () => {
+    const modulePackage = withModulePackageHash(makePackage());
+    const changed = {
+      ...modulePackage,
+      module: { ...modulePackage.module, displayName: "Repaired Drawer Low" }
+    };
+    expect(() => validateFurnQuoteModulePackage(changed)).toThrow(/packageHash does not match package contents/i);
+    expect(validateFurnQuoteModulePackage(withModulePackageHash(changed)).integrity.packageHash)
+      .toBe(computeModulePackageHash(changed));
+  });
+
   it("accepts a valid .fqm package and computes a stable hash", () => {
     const modulePackage = validateFurnQuoteModulePackage(makePackage());
     const hash = computeModulePackageHash(modulePackage);
