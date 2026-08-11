@@ -68,5 +68,13 @@ describe("measure editing", () => {
     linkedInput.dispatch("keydown", enterEvent);
     expect(onCommitMeasure).toHaveBeenLastCalledWith("measure_1", "1300", target);
     expect(enterEvent.preventDefault).toHaveBeenCalledOnce();
+
+    linkedInput.value = "1400";
+    const escapeEvent = { key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    linkedInput.dispatch("keydown", escapeEvent);
+    expect(linkedInput.value).toBe("1000");
+    expect(escapeEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(escapeEvent.stopPropagation).toHaveBeenCalledOnce();
+    expect(onCommitMeasure).not.toHaveBeenLastCalledWith("measure_1", "1400", target);
   });
 });
