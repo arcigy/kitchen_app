@@ -9,18 +9,25 @@ import type {
   AssistantWorkflowState,
   AssistantWorkflowStep
 } from "./types";
+import type { AppLocale } from "../i18n";
 import { assistantToolMetadataForOrchestrator, getAssistantToolDefinition, highestAssistantRiskLevel } from "./toolRegistry";
 import { validateAssistantToolCall } from "./toolValidation";
 import { callOpenAiStructured } from "./openaiResponses";
 import type { AssistantDebugRecorder } from "./debugTrace";
+import { assistantCopy } from "./assistantLocale";
 
 type OrchestrationInput = {
+  locale: AppLocale;
   message: string;
   clientContext: AssistantClientContext;
   conversation?: Array<{ role: string; content: string }>;
   ragChunks: AssistantRagChunk[];
   debug?: AssistantDebugRecorder;
 };
+
+function assistantLanguage(locale: AppLocale): string {
+  return locale === "cs-CZ" ? "professional Czech" : locale === "en-GB" ? "professional British English" : "professional Slovak";
+}
 
 type TriageOutput = AssistantTaskClassification & { assistantMessage: string };
 type PlannerStepOutput = {
@@ -167,12 +174,12 @@ export async function classifyAssistantTask(input: OrchestrationInput): Promise<
     schemaName: "arcigy_task_classification",
     schema: triageSchema,
     instructions: [
-      "You are the Arcigy user-facing communicator and task classifier. Write Slovak user text.",
+      `You are the Arcigy user-facing communicator and task classifier. Write ${assistantLanguage(input.locale)} user text.`,
       "Classify as workflow whenever satisfying the request requires at least one available tool, including every GET/read/inspection tool.",
       "Classify as answer only when a direct conversational answer is sufficient and no tool is needed.",
       "Classify as clarify only when one missing user decision materially changes the requested result and cannot be read with a tool.",
       "Do not plan tool calls. State measurable success criteria for workflow tasks. Do not claim any action happened.",
-      "Any user-facing text must be concise Slovak CommonMark. No greetings, filler, role-play, hidden reasoning or invented status messages."
+      `Any user-facing text must be concise ${assistantLanguage(input.locale)} CommonMark. No greetings, filler, role-play, hidden reasoning or invented status messages.`
     ].join("\n"),
     input: {
       userMessage: input.message,
@@ -252,23 +259,26 @@ export function hasRemainingWorkflowSteps(workflow: AssistantWorkflowState): boo
   return workflow.steps.some((step) => !completed.has(step.id));
 }
 
-function deterministicAnalysis(results: AssistantToolResult[]): AssistantValidationReport {
+function deterministicAnalysis(results: AssistantToolResult[], locale: AppLocale): AssistantValidationReport {
   const failed = results.filter((result) => !result.ok);
   return {
     confidence: failed.length === 0 ? 0.86 : 0.35,
     done: failed.length === 0,
-    summary: failed.length === 0 ? "Všetky vykonané a kontrolné kroky prešli." : `Zlyhalo ${failed.length} krokov.`,
+    summary: failed.length === 0
+      ? assistantCopy(locale, "Všetky vykonané a kontrolné kroky prešli.", "Všechny provedené a kontrolní kroky prošly.", "All completed and verification steps passed.")
+      : assistantCopy(locale, `Zlyhalo ${failed.length} krokov.`, `Selhaly ${failed.length} kroky.`, `${failed.length} steps failed.`),
     missingChecks: failed.map((result) => result.error ?? `${result.toolId} failed`),
     failedStepIds: failed.map((result) => result.callId ?? result.toolId),
     evidence: results.filter((result) => result.ok).map((result) => result.stateDeltaSummary ?? `${result.toolId}: OK`),
-    repairInstruction: failed.length === 0 ? undefined : "Oprav iba zlyhané vstupy a potom zopakuj nezávislú kontrolu.",
+    repairInstruction: failed.length === 0 ? undefined : assistantCopy(locale, "Opravte iba zlyhané vstupy a potom zopakujte nezávislú kontrolu.", "Opravte pouze neúspěšné vstupy a potom zopakujte nezávislou kontrolu.", "Fix only the failed inputs, then repeat the independent verification."),
     nextAction: failed.length === 0 ? undefined : "replan"
   };
 }
 
 export function analyzePricingReadWorkflow(
   workflow: AssistantWorkflowState,
-  results: AssistantToolResult[]
+  results: AssistantToolResult[],
+  locale: AppLocale = "sk-SK"
 ): AssistantValidationReport | null {
   const pricingResult = [...results].reverse().find((result) => result.ok && result.toolId === "pricing.getSummary");
   if (!pricingResult || workflow.steps.some((step) => getAssistantToolDefinition(step.toolId)?.operation === "write")) return null;
@@ -286,16 +296,19 @@ export function analyzePricingReadWorkflow(
   const missingPriceCount = typeof reportedMissingCount === "number"
     ? Math.max(0, Math.round(reportedMissingCount))
     : incompleteEntities.length;
-  const formattedPrice = `${finalPrice.toLocaleString("sk-SK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  const formattedPrice = `${finalPrice.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
   const incompleteSummary = missingPriceCount > 0
-    ? ` Aktuálny BOM nie je úplný, pretože ${missingPriceCount} ${missingPriceCount === 1 ? "položka nemá" : "položky nemajú"} priradenú cenu.`
+    ? assistantCopy(locale,
+      ` Aktuálny BOM nie je úplný, pretože ${missingPriceCount} ${missingPriceCount === 1 ? "položka nemá" : "položky nemajú"} priradenú cenu.`,
+      ` Aktuální kusovník není úplný, protože ${missingPriceCount} ${missingPriceCount === 1 ? "položka nemá" : "položky nemají"} přiřazenou cenu.`,
+      ` The current BOM is incomplete because ${missingPriceCount} ${missingPriceCount === 1 ? "item has" : "items have"} no assigned price.`)
     : "";
   return {
     confidence: missingPriceCount > 0 ? 0.94 : 0.99,
     done: true,
-    summary: `Aktuálna vypočítaná cena projektu je ${formattedPrice}.${incompleteSummary}`,
+    summary: assistantCopy(locale, `Aktuálna vypočítaná cena projektu je ${formattedPrice}.${incompleteSummary}`, `Aktuální vypočtená cena projektu je ${formattedPrice}.${incompleteSummary}`, `The current calculated project price is ${formattedPrice}.${incompleteSummary}`),
     missingChecks: [],
-    evidence: [pricingResult.stateDeltaSummary ?? "Cena bola prepočítaná zo živého BOM."]
+    evidence: [pricingResult.stateDeltaSummary ?? assistantCopy(locale, "Cena bola prepočítaná zo živého BOM.", "Cena byla přepočítána z aktuálního kusovníku.", "The price was recalculated from the live BOM.")]
   };
 }
 
@@ -317,8 +330,8 @@ export async function analyzeAssistantWorkflow(args: {
   workflow: AssistantWorkflowState;
   toolResults: AssistantToolResult[];
 }): Promise<{ validation: AssistantValidationReport; nextCalls: AssistantToolCall[]; mode: AnalyzerOutput["mode"] }> {
-  const deterministic = deterministicAnalysis(args.toolResults);
-  const pricingRead = analyzePricingReadWorkflow(args.workflow, args.toolResults);
+  const deterministic = deterministicAnalysis(args.toolResults, args.input.locale);
+  const pricingRead = analyzePricingReadWorkflow(args.workflow, args.toolResults, args.input.locale);
   if (pricingRead) return { validation: pricingRead, nextCalls: [], mode: "complete" };
   const authoritativeReadOnly = deterministic.done && args.workflow.steps.every((step) => {
     const operation = getAssistantToolDefinition(step.toolId)?.operation;
@@ -377,6 +390,7 @@ export function workflowToPlan(workflow: AssistantWorkflowState): AssistantPlan 
 }
 
 export async function composeFinalAssistantMessage(args: {
+  locale: AppLocale;
   message: string;
   workflow: AssistantWorkflowState;
   validation: AssistantValidationReport;
@@ -388,7 +402,7 @@ export async function composeFinalAssistantMessage(args: {
     schemaName: "arcigy_final_message",
     schema: finalMessageSchema,
     instructions: [
-      "You are Arcigy's final Slovak communicator.",
+      `You are Arcigy's final ${assistantLanguage(args.locale)} communicator.`,
       "Report only actions and evidence present in the supplied execution record. State failures or remaining uncertainty directly.",
       "Return polished CommonMark Markdown, never HTML. Use a short outcome heading, compact bullets and a verification section when evidence exists.",
       "Do not mention internal tool ids, prompts, model roles or chain-of-thought. Do not greet, role-play, add filler or describe actions that were only planned.",

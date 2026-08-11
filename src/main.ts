@@ -125,6 +125,12 @@ async function start(): Promise<void> {
   }
 
   const clientProfile = await loadCurrentClientProfileForApp(clientContext.clientId);
+  const { initDomI18n, normalizeLanguage, setCurrentLanguage } = await import("./i18n");
+  setCurrentLanguage(normalizeLanguage(clientProfile.defaults.language));
+  // Project manager and login-adjacent views render before the workspace shell;
+  // install the same live DOM translator here so a language switch is immediate
+  // on every application surface, not only after workspace launch.
+  initDomI18n(document.body);
 
   const { resolveLastWorkspace, resolveProjectWorkspace } = await import("./app/project/projectRecoveryBootstrap");
   const lastWorkspace = await resolveLastWorkspace(clientContext).catch((error: unknown) => {
@@ -187,6 +193,7 @@ async function start(): Promise<void> {
         });
       }
     });
+    initDomI18n(appRoot);
     void import("./app/catalogLoader")
       .then(({ prefetchClientAppDataForApp }) => prefetchClientAppDataForApp(clientContext.clientId))
       .catch(() => {

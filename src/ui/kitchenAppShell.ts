@@ -1,4 +1,5 @@
 import { actionIconMarkup, type ActionIconId } from "./actionIcons";
+import { t } from "../i18n";
 
 const navItems: Array<{ id: string; label: string; iconId: ActionIconId }> = [
   {
@@ -28,7 +29,7 @@ const navItems: Array<{ id: string; label: string; iconId: ActionIconId }> = [
   },
   {
     id: "margins",
-    label: "Marže",
+    label: "Margins",
     iconId: "margins"
   },
   {
@@ -46,34 +47,34 @@ const navItems: Array<{ id: string; label: string; iconId: ActionIconId }> = [
 export function renderKitchenAppShell(root: HTMLElement): void {
   root.className = "archux-app";
   root.innerHTML = `
-    <header id="ribbon" aria-label="Ribbon toolbar"></header>
+    <header id="ribbon" aria-label="${t("Ribbon toolbar")}"></header>
 
     <div id="main" class="archux-main" role="main">
-      <nav class="archux-side-nav" aria-label="Main navigation">
+      <nav class="archux-side-nav" aria-label="${t("Main navigation")}">
         ${navItems
           .map(
             (item, index) => `
               <button class="archux-side-nav-item${index === 0 ? " active" : ""}" type="button" data-workspace-nav="${item.id}">
                 ${actionIconMarkup(item.iconId, "archux-side-icon")}
-                <span>${item.label}</span>
+                <span>${t(item.label)}</span>
               </button>
             `
           )
           .join("")}
       </nav>
 
-      <aside id="moduleCatalog" class="archux-module-catalog" aria-label="Module catalog" hidden></aside>
+      <aside id="moduleCatalog" class="archux-module-catalog" aria-label="${t("Module catalog")}" hidden></aside>
 
-      <div id="viewer" aria-label="3D viewer">
-        <button id="resetViewBtn" type="button" title="Reset view">Reset view</button>
-        <div class="archux-view-tools" role="toolbar" aria-label="Viewer navigation tools">
-          <button class="archux-view-tool active" type="button" data-viewer-tool="select" aria-label="Select">
+      <div id="viewer" aria-label="${t("3D viewer")}">
+        <button id="resetViewBtn" type="button" title="${t("Reset view")}">${t("Reset view")}</button>
+        <div class="archux-view-tools" role="toolbar" aria-label="${t("Viewer navigation tools")}">
+          <button class="archux-view-tool active" type="button" data-viewer-tool="select" aria-label="${t("Select")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <path d="M8.7 5.4 23.9 19.8l-8.4.6-3.8 7.2Z" />
               <path d="m17.4 19.7 5.2 7" />
             </svg>
           </button>
-          <button class="archux-view-tool" type="button" data-viewer-tool="pan" aria-label="Pan">
+          <button class="archux-view-tool" type="button" data-viewer-tool="pan" aria-label="${t("Pan")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <path d="M11.2 15.3V8.4a2.1 2.1 0 0 1 4.2 0v5.7" />
               <path d="M15.4 14.2V6.9a2.1 2.1 0 0 1 4.2 0v7.9" />
@@ -81,14 +82,14 @@ export function renderKitchenAppShell(root: HTMLElement): void {
               <path d="M11.2 15.4 9.3 13.5a2.15 2.15 0 0 0-3.1 3l6.5 7.6a7.1 7.1 0 0 0 5.4 2.5h.9a6.7 6.7 0 0 0 6.7-6.7v-4.2" />
             </svg>
           </button>
-          <button class="archux-view-tool" type="button" data-viewer-tool="zoom-out" aria-label="Zoom out">
+          <button class="archux-view-tool" type="button" data-viewer-tool="zoom-out" aria-label="${t("Zoom out")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <circle cx="13.7" cy="13.7" r="8.1" />
               <path d="M19.7 19.7 26.6 26.6" />
               <path d="M9.4 13.7H18" />
             </svg>
           </button>
-          <button class="archux-view-tool" type="button" data-viewer-tool="zoom-in" aria-label="Zoom in">
+          <button class="archux-view-tool" type="button" data-viewer-tool="zoom-in" aria-label="${t("Zoom in")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <circle cx="13.7" cy="13.7" r="8.1" />
               <path d="M19.7 19.7 26.6 26.6" />
@@ -96,7 +97,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
               <path d="M13.7 9.4V18" />
             </svg>
           </button>
-          <button class="archux-view-tool" type="button" data-viewer-tool="orbit" aria-label="Orbit">
+          <button class="archux-view-tool" type="button" data-viewer-tool="orbit" aria-label="${t("Orbit")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <path d="M8.4 10.5 16 6.1l7.6 4.4v9L16 23.9l-7.6-4.4Z" />
               <path d="M16 14.9v9" />
@@ -105,7 +106,7 @@ export function renderKitchenAppShell(root: HTMLElement): void {
               <path d="m25.2 16.7-.7 3.9-3.7-.9" />
             </svg>
           </button>
-          <button class="archux-view-tool" type="button" data-viewer-tool="fit" aria-label="Fit view">
+          <button class="archux-view-tool" type="button" data-viewer-tool="fit" aria-label="${t("Fit view")}">
             <svg viewBox="0 0 32 32" aria-hidden="true">
               <path d="M6.5 13V6.5H13" />
               <path d="M25.5 13V6.5H19" />
@@ -116,98 +117,98 @@ export function renderKitchenAppShell(root: HTMLElement): void {
             </svg>
           </button>
         </div>
-        <div class="archux-view-cube" role="group" aria-label="View cube">
-          <button class="archux-view-cube-roll roll-left" type="button" data-view-rotate="ccw" aria-label="Rotate view left">
+        <div class="archux-view-cube" role="group" aria-label="${t("View cube")}">
+          <button class="archux-view-cube-roll roll-left" type="button" data-view-rotate="ccw" aria-label="${t("Rotate view left")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7.2a6.5 6.5 0 1 1-1.6 6.6" /><path d="M8.6 3.8v3.6H5" /></svg>
           </button>
-          <button class="archux-view-cube-roll roll-right" type="button" data-view-rotate="cw" aria-label="Rotate view right">
+          <button class="archux-view-cube-roll roll-right" type="button" data-view-rotate="cw" aria-label="${t("Rotate view right")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 7.2a6.5 6.5 0 1 0 1.6 6.6" /><path d="M15.4 3.8v3.6H19" /></svg>
           </button>
           <div class="archux-view-cube-orbit" aria-hidden="true"></div>
           <div class="archux-view-cube-shell-shadow" aria-hidden="true"></div>
           <div class="archux-view-cube-shell">
-            <button class="archux-view-cube-face face-front" type="button" data-view-target="front">FRONT</button>
-            <button class="archux-view-cube-face face-back" type="button" data-view-target="back">BACK</button>
-            <button class="archux-view-cube-face face-right" type="button" data-view-target="right">RIGHT</button>
-            <button class="archux-view-cube-face face-left" type="button" data-view-target="left">LEFT</button>
-            <button class="archux-view-cube-face face-top" type="button" data-view-target="top">TOP</button>
-            <button class="archux-view-cube-face face-bottom" type="button" data-view-target="bottom">BOTTOM</button>
-            <button class="archux-view-cube-hit hit-edge hit-top-front" type="button" data-view-target="top-front" aria-label="Top front edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-top-back" type="button" data-view-target="top-back" aria-label="Top back edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-top-left" type="button" data-view-target="top-left" aria-label="Top left edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-top-right" type="button" data-view-target="top-right" aria-label="Top right edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-front-left" type="button" data-view-target="front-left" aria-label="Front left edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-front-right" type="button" data-view-target="front-right" aria-label="Front right edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-back-left" type="button" data-view-target="back-left" aria-label="Back left edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-back-right" type="button" data-view-target="back-right" aria-label="Back right edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-bottom-front" type="button" data-view-target="bottom-front" aria-label="Bottom front edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-bottom-back" type="button" data-view-target="bottom-back" aria-label="Bottom back edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-bottom-left" type="button" data-view-target="bottom-left" aria-label="Bottom left edge view"></button>
-            <button class="archux-view-cube-hit hit-edge hit-bottom-right" type="button" data-view-target="bottom-right" aria-label="Bottom right edge view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-top-front-left" type="button" data-view-target="top-front-left" aria-label="Top front left view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-top-front-right" type="button" data-view-target="top-front-right" aria-label="Top front right view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-top-back-left" type="button" data-view-target="top-back-left" aria-label="Top back left view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-top-back-right" type="button" data-view-target="top-back-right" aria-label="Top back right view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-bottom-front-left" type="button" data-view-target="bottom-front-left" aria-label="Bottom front left view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-bottom-front-right" type="button" data-view-target="bottom-front-right" aria-label="Bottom front right view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-bottom-back-left" type="button" data-view-target="bottom-back-left" aria-label="Bottom back left view"></button>
-            <button class="archux-view-cube-hit hit-corner hit-bottom-back-right" type="button" data-view-target="bottom-back-right" aria-label="Bottom back right view"></button>
+            <button class="archux-view-cube-face face-front" type="button" data-view-target="front">${t("Front")}</button>
+            <button class="archux-view-cube-face face-back" type="button" data-view-target="back">${t("Back")}</button>
+            <button class="archux-view-cube-face face-right" type="button" data-view-target="right">${t("Right")}</button>
+            <button class="archux-view-cube-face face-left" type="button" data-view-target="left">${t("Left")}</button>
+            <button class="archux-view-cube-face face-top" type="button" data-view-target="top">${t("Top")}</button>
+            <button class="archux-view-cube-face face-bottom" type="button" data-view-target="bottom">${t("Bottom")}</button>
+            <button class="archux-view-cube-hit hit-edge hit-top-front" type="button" data-view-target="top-front" aria-label="${t("Top front edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-top-back" type="button" data-view-target="top-back" aria-label="${t("Top back edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-top-left" type="button" data-view-target="top-left" aria-label="${t("Top left edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-top-right" type="button" data-view-target="top-right" aria-label="${t("Top right edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-front-left" type="button" data-view-target="front-left" aria-label="${t("Front left edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-front-right" type="button" data-view-target="front-right" aria-label="${t("Front right edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-back-left" type="button" data-view-target="back-left" aria-label="${t("Back left edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-back-right" type="button" data-view-target="back-right" aria-label="${t("Back right edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-bottom-front" type="button" data-view-target="bottom-front" aria-label="${t("Bottom front edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-bottom-back" type="button" data-view-target="bottom-back" aria-label="${t("Bottom back edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-bottom-left" type="button" data-view-target="bottom-left" aria-label="${t("Bottom left edge view")}"></button>
+            <button class="archux-view-cube-hit hit-edge hit-bottom-right" type="button" data-view-target="bottom-right" aria-label="${t("Bottom right edge view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-top-front-left" type="button" data-view-target="top-front-left" aria-label="${t("Top front left view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-top-front-right" type="button" data-view-target="top-front-right" aria-label="${t("Top front right view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-top-back-left" type="button" data-view-target="top-back-left" aria-label="${t("Top back left view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-top-back-right" type="button" data-view-target="top-back-right" aria-label="${t("Top back right view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-bottom-front-left" type="button" data-view-target="bottom-front-left" aria-label="${t("Bottom front left view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-bottom-front-right" type="button" data-view-target="bottom-front-right" aria-label="${t("Bottom front right view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-bottom-back-left" type="button" data-view-target="bottom-back-left" aria-label="${t("Bottom back left view")}"></button>
+            <button class="archux-view-cube-hit hit-corner hit-bottom-back-right" type="button" data-view-target="bottom-back-right" aria-label="${t("Bottom back right view")}"></button>
           </div>
         </div>
       </div>
 
-      <section id="materialsPhase" class="archux-materials-phase-panel" aria-label="Materiály a komponenty" hidden></section>
-      <section id="marginsPhase" class="archux-margins-phase-panel" aria-label="Marže projektu" hidden></section>
+      <section id="materialsPhase" class="archux-materials-phase-panel" aria-label="${t("Materials and components")}" hidden></section>
+      <section id="marginsPhase" class="archux-margins-phase-panel" aria-label="${t("Project margins")}" hidden></section>
 
-      <aside id="properties" aria-label="Properties"></aside>
+      <aside id="properties" aria-label="${t("Properties")}"></aside>
 
-      <footer class="archux-bottom" aria-label="Project overview">
+      <footer class="archux-bottom" aria-label="${t("Project overview")}">
         <section class="archux-levels archux-view-list" data-bottom-default data-bottom-views>
-          <strong>VIEWS</strong>
+          <strong>${t("Views")}</strong>
           <div class="archux-view-list-scroll">
-            <button type="button" data-bottom-view-key="floorplan"><span>Floorplan</span></button>
-            <button type="button" data-bottom-view-key="3d" class="active"><span>3D</span></button>
-            <button type="button" data-bottom-view-key="elevation:north"><span>North</span></button>
-            <button type="button" data-bottom-view-key="elevation:east"><span>East</span></button>
-            <button type="button" data-bottom-view-key="elevation:south"><span>South</span></button>
-            <button type="button" data-bottom-view-key="elevation:west"><span>West</span></button>
+            <button type="button" data-bottom-view-key="floorplan"><span>${t("Floorplan")}</span></button>
+            <button type="button" data-bottom-view-key="3d" class="active"><span>${t("3D")}</span></button>
+            <button type="button" data-bottom-view-key="elevation:north"><span>${t("North")}</span></button>
+            <button type="button" data-bottom-view-key="elevation:east"><span>${t("East")}</span></button>
+            <button type="button" data-bottom-view-key="elevation:south"><span>${t("South")}</span></button>
+            <button type="button" data-bottom-view-key="elevation:west"><span>${t("West")}</span></button>
           </div>
         </section>
         <section class="archux-levels archux-material-warning-panel" data-bottom-default data-material-warning-panel hidden>
-          <strong>VAROVANIA</strong>
+          <strong>${t("Warnings")}</strong>
           <div class="archux-material-warning-list" data-material-warning-list></div>
         </section>
         <section class="archux-area archux-live-price" data-bottom-default>
-          <strong>BOM / PRICING</strong>
+          <strong>${t("BOM / pricing")}</strong>
           <div class="archux-price-total">
-            <span>Status</span>
-            <b>On demand</b>
+            <span>${t("Status")}</span>
+            <b>${t("On demand")}</b>
           </div>
           <div class="archux-price-breakdown">
-            <p><span>Live calculation</span><b>Off</b></p>
-            <p><span>Refresh impact</span><b>Reduced</b></p>
-            <p><span>100+ modules</span><b>Ready</b></p>
+            <p><span>${t("Live calculation")}</span><b>${t("Off")}</b></p>
+            <p><span>${t("Refresh impact")}</span><b>${t("Reduced")}</b></p>
+            <p><span>${t("100+ modules")}</span><b>${t("Ready")}</b></p>
           </div>
           <div class="archux-bom-preview">
-            <span>BOM ITEMS</span>
+            <span>${t("BOM items")}</span>
             <div>
-              <p><span>Calculated only when opened</span><b>Manual</b></p>
+              <p><span>${t("Calculated only when opened")}</span><b>${t("Manual")}</b></p>
             </div>
-            <button class="archux-activity-open" type="button" data-open-bom-panel>Open BOM</button>
+            <button class="archux-activity-open" type="button" data-open-bom-panel>${t("Open BOM")}</button>
           </div>
         </section>
         <section class="archux-sheet" data-bottom-default>
-          <strong>SHEET PREVIEW</strong>
+          <strong>${t("Sheet preview")}</strong>
           <div></div>
-          <span>A101 - Floor Plan Level 1</span>
+          <span>${t("A101 - Floor plan level 1")}</span>
         </section>
         <section class="archux-margin-footer" data-margin-footer hidden></section>
         <section class="archux-activity">
-          <strong>RECENT ACTIVITY</strong>
+          <strong>${t("Recent activity")}</strong>
           <div class="archux-activity-list" data-recent-activity>
-            <p><span>No recent changes</span><b>now</b></p>
+            <p><span>${t("No recent changes")}</span><b>${t("now")}</b></p>
           </div>
-          <button class="archux-activity-open" type="button" data-recent-activity-count>0 changes</button>
+          <button class="archux-activity-open" type="button" data-recent-activity-count>${t("0 changes")}</button>
         </section>
       </footer>
     </div>

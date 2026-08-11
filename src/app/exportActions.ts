@@ -10,6 +10,7 @@ import {
 import type { KitchenGroup, KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { ModuleParams } from "../model/cabinetTypes";
 import { attachFileMenu } from "../ui/createFileMenu";
+import { t, type AppLanguage } from "../i18n";
 import type { AppArgs } from "./bootstrap";
 import { openBlenderMaterialReview } from "./blenderMaterialReview";
 
@@ -48,7 +49,7 @@ type ExportActionsArgs = {
   getWebsiteShowcaseWorktops: () => readonly KitchenWorktopInstance[];
   getWebsiteShowcaseKitchenGroups: () => readonly KitchenGroup[];
   buildWebsiteShowcaseModule: (params: ModuleParams) => THREE.Group;
-  onLanguageChange: () => void;
+  onLanguageChange: (language: AppLanguage) => void | Promise<void>;
 };
 
 type BlenderExportResponse = {
@@ -76,16 +77,16 @@ const ensureBlenderExportPanel = (): BlenderExportUi => {
     panel.id = "blenderExportPanel";
     panel.className = "blender-export-panel";
     panel.innerHTML = `
-      <div class="blender-export-header">Blender material export</div>
-      <div id="blenderStatus" class="blender-status">Ready.</div>
+      <div class="blender-export-header">${t("Blender material export")}</div>
+      <div id="blenderStatus" class="blender-status">${t("Ready.")}</div>
       <div id="blenderSpinner" class="spinner" aria-hidden="true"></div>
       <div id="blenderError" class="blender-error"></div>
       <div class="blender-open-actions">
-        <button id="blenderOpenBlend" type="button">Open .blend</button>
-        <button id="blenderOpenPng" type="button">Open PNG</button>
+        <button id="blenderOpenBlend" type="button">${t("Open .blend")}</button>
+        <button id="blenderOpenPng" type="button">${t("Open PNG")}</button>
       </div>
-      <a id="blenderPreviewLink" class="blender-preview-link" href="#" target="_blank" rel="noreferrer">Open preview</a>
-      <img id="blenderPreview" class="blender-preview-image" alt="Blender preview" />
+      <a id="blenderPreviewLink" class="blender-preview-link" href="#" target="_blank" rel="noreferrer">${t("Open preview")}</a>
+      <img id="blenderPreview" class="blender-preview-image" alt="${t("Blender preview")}" />
     `;
     document.body.appendChild(panel);
   }
@@ -135,7 +136,7 @@ const openDesktopFile = async (path: string) => {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Open failed (${res.status})`);
+    throw new Error(text || t("Unable to open the exported file."));
   }
 };
 
@@ -239,7 +240,7 @@ export function createExportActions(args: ExportActionsArgs) {
   };
 
   const exportWebsiteShowcaseFile = async (stage: WebsiteShowcaseSnapshotStage) => {
-    args.appArgs.copyStatusEl.textContent = "Preparing website animation export...";
+    args.appArgs.copyStatusEl.textContent = t("Preparing website animation export…");
     try {
       const { json } = buildWebsiteShowcaseExportJson(stage);
       await saveTextFileAs({
@@ -248,7 +249,7 @@ export function createExportActions(args: ExportActionsArgs) {
         prefix: `kitchen-website-${stage}`,
         extension: "json"
       });
-      args.appArgs.copyStatusEl.textContent = `Website ${stage} snapshot exported.`;
+      args.appArgs.copyStatusEl.textContent = stage === "initial" ? t("Initial website snapshot exported.") : t("Final website snapshot exported.");
     } catch (error: unknown) {
       args.appArgs.copyStatusEl.textContent = error instanceof Error ? error.message : String(error);
       throw error;
@@ -260,14 +261,14 @@ export function createExportActions(args: ExportActionsArgs) {
     const text = args.appArgs.exportOutEl.value.trim().length > 0 ? args.appArgs.exportOutEl.value : buildLayoutExportJson();
     args.appArgs.exportOutEl.value = text;
     const copied = await copyTextToClipboard(text);
-    args.appArgs.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
+    args.appArgs.copyStatusEl.textContent = copied ? t("Copied.") : t("Copy failed (browser permission).");
   };
 
   args.appArgs.exportBtn.addEventListener("click", async () => {
     args.appArgs.copyStatusEl.textContent = "";
     const json = buildLayoutExportJson();
     const copied = await copyTextToClipboard(json);
-    args.appArgs.copyStatusEl.textContent = copied ? "Copied." : "Copy failed (browser permission).";
+    args.appArgs.copyStatusEl.textContent = copied ? t("Copied.") : t("Copy failed (browser permission).");
   });
 
   const exportBlenderPreview = async () => {
@@ -295,7 +296,7 @@ export function createExportActions(args: ExportActionsArgs) {
     const { payload } = buildSceneExportJson();
     const reviewedPayload = await openBlenderMaterialReview(payload);
     if (!reviewedPayload) {
-      setUi("idle", "Ready.");
+      setUi("idle", t("Ready."));
       args.appArgs.copyStatusEl.textContent = "";
       return;
     }
@@ -303,19 +304,19 @@ export function createExportActions(args: ExportActionsArgs) {
     args.appArgs.exportOutEl.value = json;
 
     args.appArgs.exportSceneBtn.disabled = true;
-    setUi("running", "Running Blender (up to 60s)...");
+    setUi("running", t("Running Blender (up to 60s)…"));
     if (previewImg) previewImg.removeAttribute("src");
 
     try {
       const ctrl = new AbortController();
-      const t = window.setTimeout(() => ctrl.abort(), 65_000);
+      const timeoutId = window.setTimeout(() => ctrl.abort(), 65_000);
       const res = await fetch("/api/blender/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sceneJson: reviewedPayload, projectId: storageScope.projectId, phaseId: storageScope.phaseId }),
         signal: ctrl.signal
       });
-      window.clearTimeout(t);
+      window.clearTimeout(timeoutId);
 
       const text = await res.text();
       const data = parseBlenderExportResponse(text);
@@ -326,28 +327,28 @@ export function createExportActions(args: ExportActionsArgs) {
 
       const copyOk = await copyTextToClipboard(json);
       const previewUrl = data.previewUrl ?? null;
-      if (!previewUrl) throw new Error("Backend did not return previewUrl.");
+      if (!previewUrl) throw new Error(t("Backend did not return previewUrl."));
 
       if (previewLinkEl) previewLinkEl.href = previewUrl;
       if (previewImg) previewImg.src = previewUrl;
       if (openBlendBtn) {
         openBlendBtn.disabled = !data.blendPath;
         openBlendBtn.onclick = data.blendPath
-          ? () => void openDesktopFile(data.blendPath as string).catch((error: unknown) => setUi("error", "Could not open .blend.", error instanceof Error ? error.message : String(error)))
+          ? () => void openDesktopFile(data.blendPath as string).catch((error: unknown) => setUi("error", t("Could not open .blend."), error instanceof Error ? error.message : String(error)))
           : null;
       }
       if (openPngBtn) {
         openPngBtn.disabled = !data.previewPath;
         openPngBtn.onclick = data.previewPath
-          ? () => void openDesktopFile(data.previewPath as string).catch((error: unknown) => setUi("error", "Could not open PNG.", error instanceof Error ? error.message : String(error)))
+          ? () => void openDesktopFile(data.previewPath as string).catch((error: unknown) => setUi("error", t("Could not open PNG."), error instanceof Error ? error.message : String(error)))
           : null;
       }
 
-      setUi("done", copyOk ? "Done. JSON copied." : "Done.");
+      setUi("done", copyOk ? t("Done. JSON copied.") : t("Done."));
       args.appArgs.copyStatusEl.textContent = "";
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setUi("error", "Blender export failed.", msg);
+      setUi("error", t("Blender export failed."), msg);
       args.appArgs.copyStatusEl.textContent = "";
     } finally {
       args.appArgs.exportSceneBtn.disabled = false;

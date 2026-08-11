@@ -32,7 +32,13 @@ async function main() {
     cwd: process.cwd(),
     env: { ...process.env, BLENDER_WORKER_PORT: String(workerPort) }
   });
-  const vite = spawn(nodeBin, [viteCli, "--host", host, "--port", String(vitePort), "--strictPort"], { stdio: "inherit", cwd: process.cwd() });
+  const vite = spawn(nodeBin, [viteCli, "--host", host, "--port", String(vitePort), "--strictPort"], {
+    stdio: "inherit",
+    cwd: process.cwd(),
+    // Vite reads this while building its API proxy. Without forwarding it,
+    // an isolated UI port can silently proxy into another worktree's worker.
+    env: { ...process.env, BLENDER_WORKER_PORT: String(workerPort), KITCHEN_UI_PORT: String(vitePort) }
+  });
 
   const shutdown = () => {
     try {

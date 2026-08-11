@@ -47,6 +47,16 @@ async function clickButtonByText(page, text) {
   assert(clicked, `Button not found: ${text}`);
 }
 
+async function clickButtonByTexts(page, texts) {
+  await page.waitForFunction((wanted) => {
+    const button = [...document.querySelectorAll("button")]
+      .find((item) => wanted.includes((item.textContent || "").trim()));
+    if (!button) return false;
+    button.click();
+    return true;
+  }, texts, { timeout: 10000 });
+}
+
 async function planPointToViewport(page, pointMm) {
   return await page.evaluate((point) => {
     const api = window.__kitchenDebug;
@@ -136,7 +146,7 @@ async function importEnvelope(context, envelope) {
 }
 
 async function openProjectManagerFromWorkspace(page) {
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.locator("button[data-quick-action='open']").click();
   const saveExit = page.locator("[data-project-exit='save']");
   if (await saveExit.isVisible({ timeout: 1000 }).catch(() => false)) {
     await saveExit.click();
@@ -213,11 +223,14 @@ async function createFullFixture(page) {
     window.__kitchenDebug.patchModuleParams(inst.id, { width: 820, drawerCount: 3 }, { preserveBackAnchor: true });
   });
 
-  await clickButtonByText(page, "Dvere");
+  // Kitchen scenario rendering selects its own ribbon. Return to the shared
+  // architecture ribbon before using its door/window tools.
+  await clickButtonByTexts(page, ["Architektúra", "Architektura", "Architecture"]);
+  await clickButtonByTexts(page, ["Dvere", "Dveře", "Door"]);
   const doorPoint = await planPointToViewport(page, { x: -650, z: -900 });
   await page.mouse.click(doorPoint.x, doorPoint.y);
   await page.waitForTimeout(350);
-  await clickButtonByText(page, "Okno");
+  await clickButtonByTexts(page, ["Okno", "Window"]);
   const windowPoint = await planPointToViewport(page, { x: 650, z: -900 });
   await page.mouse.click(windowPoint.x, windowPoint.y);
   await page.waitForTimeout(650);

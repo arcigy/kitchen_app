@@ -1,5 +1,6 @@
 import type { LayoutTool, SelectedKind } from "../layout/appState";
 import type { ModuleParams } from "../model/cabinetTypes";
+import type { AppLocale } from "../i18n";
 
 export type AssistantRiskLevel = "low" | "medium" | "high";
 export type AssistantToolOperation = "read" | "write" | "verify";
@@ -205,6 +206,8 @@ export type AssistantRagChunk = {
 
 export type AssistantTurnRequest = {
   message: string;
+  /** UI locale selected in the current tenant session. */
+  locale?: AppLocale;
   clientContext: AssistantClientContext;
   conversation?: AssistantChatMessage[];
   toolResults?: AssistantToolResult[];

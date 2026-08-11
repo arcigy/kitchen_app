@@ -54,6 +54,7 @@ export async function handleWorkerApiRequest(
   if (
     await handleClientProfileApi(req, res, url, {
       getContext: context.getClientContext,
+      readJsonBody: context.readJsonBody,
       sendJson: context.sendJson
     })
   ) return;

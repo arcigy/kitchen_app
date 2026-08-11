@@ -6,7 +6,7 @@ export type ClientProfileValidationResult = {
 };
 
 const currencies = new Set<ClientProfile["defaults"]["currency"]>(["EUR", "CZK"]);
-const languages = new Set<ClientProfile["defaults"]["language"]>(["sk", "cz", "en"]);
+const languages = new Set<ClientProfile["defaults"]["language"]>(["sk", "cs", "en"]);
 const organizationRoles = new Set(["administrator", "team_member", "observer"]);
 
 export function validateClientProfile(profile: ClientProfile): ClientProfileValidationResult {

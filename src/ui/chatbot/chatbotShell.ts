@@ -6,6 +6,12 @@ import type {
   AssistantTurnResponse,
   AssistantWorkflowState
 } from "../../assistant/types";
+import { localeForLanguage, getCurrentLanguage } from "../../i18n";
+
+function chatbotCopy(sk: string, cs: string, en: string): string {
+  const language = getCurrentLanguage();
+  return language === "cs" ? cs : language === "en" ? en : sk;
+}
 import { assistantMarkdownToSafeHtml } from "./assistantMarkdown";
 import { actionIconMarkup, type ActionIconId } from "../actionIcons";
 import { bindIconTooltip } from "../iconTooltips";
@@ -35,7 +41,7 @@ export function createChatbotDock(args: ChatbotDockArgs): void {
   launcher.id = launcherId;
   launcher.className = "chatbot-launcher";
   launcher.type = "button";
-  launcher.setAttribute("aria-label", "Open assistant");
+  launcher.setAttribute("aria-label", chatbotCopy("Otvoriť asistenta", "Otevřít asistenta", "Open assistant"));
   launcher.innerHTML = `<span>A</span>`;
   document.body.appendChild(launcher);
   requestAnimationFrame(() => launcher.classList.add("is-visible"));
@@ -78,22 +84,22 @@ function openDockedChatbot(appRoot: HTMLElement): void {
 function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) | null }): HTMLElement {
   const shell = document.createElement("aside");
   shell.className = args.standalone ? "chatbot-panel standalone" : "chatbot-panel";
-  shell.setAttribute("aria-label", "Arcigy assistant");
+  shell.setAttribute("aria-label", chatbotCopy("Asistent Arcigy", "Asistent Arcigy", "Arcigy assistant"));
   shell.innerHTML = `
     <header class="chatbot-header">
       <div>
         <span class="chatbot-app-icon">A</span>
-        <strong>Arcigy Assistant</strong>
+        <strong>${chatbotCopy("Asistent Arcigy", "Asistent Arcigy", "Arcigy assistant")}</strong>
       </div>
       <div class="chatbot-header-actions">
-        <button type="button" class="chatbot-debug-button" data-chatbot-copy-debug aria-label="Kopírovať debug JSON" title="Kopírovať kompletný debug JSON" disabled>{ }</button>
-        <button type="button" data-chatbot-menu aria-haspopup="menu" aria-expanded="false" aria-label="Assistant options">
+        <button type="button" class="chatbot-debug-button" data-chatbot-copy-debug aria-label="${chatbotCopy("Kopírovať debug JSON", "Kopírovat debug JSON", "Copy debug JSON")}" title="${chatbotCopy("Kopírovať kompletný debug JSON", "Kopírovat úplný debug JSON", "Copy complete debug JSON")}" disabled>{ }</button>
+        <button type="button" data-chatbot-menu aria-haspopup="menu" aria-expanded="false" aria-label="${chatbotCopy("Možnosti asistenta", "Možnosti asistenta", "Assistant options")}">
           <span></span><span></span><span></span>
         </button>
-        ${args.standalone ? "" : `<button type="button" data-chatbot-close aria-label="Close assistant">×</button>`}
+        ${args.standalone ? "" : `<button type="button" data-chatbot-close aria-label="${chatbotCopy("Zavrieť asistenta", "Zavřít asistenta", "Close assistant")}">×</button>`}
       </div>
       <div class="chatbot-menu" data-chatbot-menu-panel role="menu" hidden>
-        <button type="button" data-chatbot-popout role="menuitem">Otvoriť v novom okne</button>
+        <button type="button" data-chatbot-popout role="menuitem">${chatbotCopy("Otvoriť v novom okne", "Otevřít v novém okně", "Open in new window")}</button>
       </div>
     </header>
     <main class="chatbot-body" data-chatbot-body>
@@ -101,32 +107,32 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
         <div class="chatbot-mark" aria-hidden="true">
           <i></i><i></i><i></i>
         </div>
-        <strong>Čo dnes navrhneme?</strong>
-        <p>Opíšte výsledok. Rozmery a rozhodnutia premením na bezpečné kroky v otvorenom projekte.</p>
+        <strong>${chatbotCopy("Čo dnes navrhneme?", "Co dnes navrhneme?", "What shall we design today?")}</strong>
+        <p>${chatbotCopy("Popíšte výsledok. Rozmery a rozhodnutia premením na bezpečné kroky v otvorenom projekte.", "Popište výsledek. Rozměry a rozhodnutí převedu na bezpečné kroky v otevřeném projektu.", "Describe the outcome. I will turn dimensions and decisions into safe steps in the open project.")}</p>
         <div class="chatbot-suggestions">
-          <button type="button" data-chatbot-prompt="Koľko modulov je v aktuálnej kuchyni?">Spočítať moduly</button>
-          <button type="button" data-chatbot-prompt="Ukáž mi aktuálny výber spredu v 3D.">Zobraziť výber</button>
-          <button type="button" data-chatbot-prompt="Skontroluj aktuálny projekt a nájdi problémy.">Skontrolovať projekt</button>
+          <button type="button" data-chatbot-prompt="${chatbotCopy("Koľko modulov je v aktuálnej kuchyni?", "Kolik modulů je v aktuální kuchyni?", "How many modules are in the current kitchen?")}">${chatbotCopy("Spočítať moduly", "Spočítat moduly", "Count modules")}</button>
+          <button type="button" data-chatbot-prompt="${chatbotCopy("Ukáž mi aktuálny výber spredu v 3D.", "Ukaž mi aktuální výběr zepředu ve 3D.", "Show the current selection from the front in 3D.")}">${chatbotCopy("Zobraziť výber", "Zobrazit výběr", "Show selection")}</button>
+          <button type="button" data-chatbot-prompt="${chatbotCopy("Skontroluj aktuálny projekt a nájdi problémy.", "Zkontroluj aktuální projekt a najdi problémy.", "Check the current project for issues.")}">${chatbotCopy("Skontrolovať projekt", "Zkontrolovat projekt", "Check project")}</button>
         </div>
       </div>
     </main>
     <footer class="chatbot-composer-wrap">
       <div class="chatbot-context">
         <span class="chatbot-context-icon">A</span>
-        <span>Arcigy Kitchen Layout</span>
+        <span>${chatbotCopy("Návrh kuchyne Arcigy", "Návrh kuchyně Arcigy", "Arcigy Kitchen Layout")}</span>
       </div>
       <form class="chatbot-composer">
-        <textarea placeholder="Pýtajte sa na čokoľvek..." rows="1" aria-label="Assistant message"></textarea>
+        <textarea placeholder="${chatbotCopy("Pýtajte sa na čokoľvek…", "Zeptejte se na cokoli…", "Ask anything…")}" rows="1" aria-label="${chatbotCopy("Správa pre asistenta", "Zpráva pro asistenta", "Assistant message")}"></textarea>
         <div class="chatbot-composer-actions">
-          <button type="button" data-chatbot-attachment aria-label="Add attachment">+</button>
+          <button type="button" data-chatbot-attachment aria-label="${chatbotCopy("Pridať prílohu", "Přidat přílohu", "Add attachment")}">+</button>
           <span></span>
-          <button type="button" data-chatbot-preview-context aria-label="Preview context">
+          <button type="button" data-chatbot-preview-context aria-label="${chatbotCopy("Náhľad kontextu", "Náhled kontextu", "Preview context")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z"/><circle cx="12" cy="12" r="2.4"/></svg>
           </button>
-          <button type="button" data-chatbot-voice aria-label="Voice">
+          <button type="button" data-chatbot-voice aria-label="${chatbotCopy("Hlas", "Hlas", "Voice")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v9"/><path d="M8 9v2a4 4 0 0 0 8 0V9"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
           </button>
-          <button type="submit" class="chatbot-send" data-chatbot-send aria-label="Send message">
+          <button type="submit" class="chatbot-send" data-chatbot-send aria-label="${chatbotCopy("Odoslať správu", "Odeslat zprávu", "Send message")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M7 10l5-5 5 5"/></svg>
           </button>
         </div>
@@ -280,16 +286,20 @@ function renderPlan(body: HTMLElement, response: AssistantTurnResponse, onApply:
   const list = response.workflow
     ? response.workflow.steps.map((step) => `<li class="${completed.has(step.id) ? "is-complete" : ""}"><span>${completed.has(step.id) ? "✓" : ""}</span><div>${escapeHtml(step.label)}</div></li>`).join("")
     : response.plan.steps.map((step) => `<li><span></span><div>${escapeHtml(step.label)}</div></li>`).join("");
-  const riskLabel = response.plan.riskLevel === "high" ? "Vyžaduje potvrdenie" : response.plan.riskLevel === "medium" ? "Kontrolovaná zmena" : "Bezpečné čítanie";
+  const riskLabel = response.plan.riskLevel === "high"
+    ? chatbotCopy("Vyžaduje potvrdenie", "Vyžaduje potvrzení", "Confirmation required")
+    : response.plan.riskLevel === "medium"
+      ? chatbotCopy("Kontrolovaná zmena", "Kontrolovaná změna", "Controlled change")
+      : chatbotCopy("Bezpečné čítanie", "Bezpečné čtení", "Safe read-only action");
   card.innerHTML = `
-    <header><div><span>Plán</span><strong>${escapeHtml(response.plan.goal)}</strong></div><small data-risk="${response.plan.riskLevel}">${riskLabel}</small></header>
+    <header><div><span>${chatbotCopy("Plán", "Plán", "Plan")}</span><strong>${escapeHtml(response.plan.goal)}</strong></div><small data-risk="${response.plan.riskLevel}">${riskLabel}</small></header>
     <ol>${list}</ol>
-    ${response.requiresConfirmation ? `<div class="chatbot-confirm"><p>Zmena sa vykoná až po vašom potvrdení.</p><button type="button" data-chatbot-apply>Potvrdiť a vykonať</button></div>` : ""}
+    ${response.requiresConfirmation ? `<div class="chatbot-confirm"><p>${chatbotCopy("Zmena sa vykoná až po vašom potvrdení.", "Změna se provede až po vašem potvrzení.", "The change will be made only after your confirmation.")}</p><button type="button" data-chatbot-apply>${chatbotCopy("Potvrdiť a vykonať", "Potvrdit a provést", "Confirm and apply")}</button></div>` : ""}
   `;
   card.querySelector<HTMLButtonElement>("[data-chatbot-apply]")?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     button.disabled = true;
-    button.textContent = "Vykonávam…";
+    button.textContent = chatbotCopy("Vykonávam…", "Provádím…", "Applying…");
     onApply();
   }, { once: true });
   body.scrollTop = body.scrollHeight;
@@ -304,6 +314,7 @@ async function postAssistantTurn(
 ) {
   const payload = {
     message,
+    locale: localeForLanguage(getCurrentLanguage()),
     clientContext: getContextSnapshot(),
     conversation: state.conversation.slice(-12),
     toolResults,
@@ -370,7 +381,7 @@ async function executeToolCalls(
   const activeBridge = bridge();
   if (!activeBridge) {
     return calls.map((call) => {
-      const result = { ok: false, toolId: call.toolId, callId: call.id, error: "Live editor bridge is not available." };
+      const result = { ok: false, toolId: call.toolId, callId: call.id, error: chatbotCopy("Prepojenie so živým editorom nie je dostupné.", "Propojení se živým editorem není dostupné.", "The live editor bridge is unavailable.") };
       if (state.debugTrace) {
         appendAssistantDebugEvent(state.debugTrace, {
           stage: "tool_execution",
@@ -455,8 +466,8 @@ function bindAssistantChat(shell: HTMLElement): void {
     if (!debugButton) return;
     debugButton.disabled = !state.debugTrace;
     debugButton.title = state.debugTrace
-      ? "Kopírovať kompletný debug JSON poslednej požiadavky"
-      : "Debug JSON bude dostupný po odoslaní požiadavky";
+      ? chatbotCopy("Kopírovať kompletný debug JSON poslednej požiadavky", "Kopírovat úplný debug JSON posledního požadavku", "Copy the complete debug JSON for the last request")
+      : chatbotCopy("Debug JSON bude dostupný po odoslaní požiadavky", "Debug JSON bude dostupný po odeslání požadavku", "Debug JSON will be available after sending a request");
   };
   debugButton?.addEventListener("click", () => {
     if (!state.debugTrace || !debugButton) return;
@@ -464,11 +475,11 @@ function bindAssistantChat(shell: HTMLElement): void {
       .then(() => {
         debugButton.classList.add("is-copied");
         debugButton.textContent = "✓";
-        debugButton.setAttribute("aria-label", "Debug JSON skopírovaný");
+        debugButton.setAttribute("aria-label", chatbotCopy("Debug JSON skopírovaný", "Debug JSON zkopírován", "Debug JSON copied"));
         window.setTimeout(() => {
           debugButton.classList.remove("is-copied");
           debugButton.textContent = "{ }";
-          debugButton.setAttribute("aria-label", "Kopírovať debug JSON");
+          debugButton.setAttribute("aria-label", chatbotCopy("Kopírovať debug JSON", "Kopírovat debug JSON", "Copy debug JSON"));
         }, 1400);
       })
       .catch(() => {
@@ -511,7 +522,7 @@ function bindAssistantChat(shell: HTMLElement): void {
     if (showPlan) renderPlan(body, response, executeConfirmed);
     else body.querySelectorAll("[data-chatbot-plan]").forEach((plan) => plan.remove());
     if (response.requiresConfirmation) {
-      setActivity(body, "waiting", "Čakám na potvrdenie", "Skontrolujte plán pred vykonaním zmien.");
+      setActivity(body, "waiting", chatbotCopy("Čakám na potvrdenie", "Čekám na potvrzení", "Waiting for confirmation"), chatbotCopy("Skontrolujte plán pred vykonaním zmien.", "Před provedením změn zkontrolujte plán.", "Review the plan before applying changes."));
       setBusy(shell, false);
       return;
     }
@@ -519,13 +530,13 @@ function bindAssistantChat(shell: HTMLElement): void {
   };
 
   continueWithTools = async (message: string, calls: AssistantToolCall[], confirmed: boolean, cycle: number) => {
-    if (cycle > maxClientCycles) throw new Error("Assistant execution stopped at the client iteration safety limit.");
+    if (cycle > maxClientCycles) throw new Error(chatbotCopy("Vykonávanie asistenta sa zastavilo na bezpečnostnom limite iterácií klienta.", "Provádění asistenta se zastavilo na bezpečnostním limitu iterací klienta.", "Assistant execution stopped at the client iteration safety limit."));
     state.busy = true;
     setBusy(shell, true);
-    setActivity(body, "executing", "Vykonávam plán", `${calls.length} ${calls.length === 1 ? "krok" : "kroky"}`);
+    setActivity(body, "executing", chatbotCopy("Vykonávam plán", "Provádím plán", "Applying plan"), chatbotCopy(`${calls.length} ${calls.length === 1 ? "krok" : "kroky"}`, `${calls.length} ${calls.length === 1 ? "krok" : "kroky"}`, `${calls.length} ${calls.length === 1 ? "step" : "steps"}`));
     const results = await executeToolCalls(calls, confirmed, state);
     const failedCount = results.filter((result) => !result.ok).length;
-    setActivity(body, failedCount > 0 ? "error" : "verifying", failedCount > 0 ? "Kontrolujem chybu" : "Overujem výsledok", failedCount > 0 ? `${failedCount} krokov potrebuje opravu.` : "Porovnávam výsledok so zadaním.");
+    setActivity(body, failedCount > 0 ? "error" : "verifying", failedCount > 0 ? chatbotCopy("Kontrolujem chybu", "Kontroluji chybu", "Checking an error") : chatbotCopy("Overujem výsledok", "Ověřuji výsledek", "Verifying the result"), failedCount > 0 ? chatbotCopy(`${failedCount} krokov potrebuje opravu.`, `${failedCount} kroků vyžaduje opravu.`, `${failedCount} steps need repair.`) : chatbotCopy("Porovnávam výsledok so zadaním.", "Porovnávám výsledek se zadáním.", "Comparing the result with the request."));
     const next = await postAssistantTurn("/api/assistant/continue", state, message, cycle, results);
     await handleResponse(message, next, cycle);
   };
@@ -551,11 +562,11 @@ function bindAssistantChat(shell: HTMLElement): void {
     appendMessage(body, "user", message);
     body.querySelectorAll<HTMLButtonElement>("[data-chatbot-apply]").forEach((button) => {
       button.disabled = true;
-      button.textContent = "Plán bol nahradený";
+      button.textContent = chatbotCopy("Plán bol nahradený", "Plán byl nahrazen", "Plan replaced");
     });
     setBusy(shell, true);
     state.busy = true;
-    setActivity(body, "thinking", "Spracúvam zadanie", "Čítam aktuálny projekt a pripravujem bezpečný postup.");
+    setActivity(body, "thinking", chatbotCopy("Spracúvam zadanie", "Zpracovávám zadání", "Processing request"), chatbotCopy("Čítam aktuálny projekt a pripravujem bezpečný postup.", "Čtu aktuální projekt a připravuji bezpečný postup.", "Reading the current project and preparing a safe approach."));
 
     void postAssistantTurn("/api/assistant/turn", state, message, 0)
       .then(async (response) => {
@@ -565,7 +576,7 @@ function bindAssistantChat(shell: HTMLElement): void {
       .catch((error: unknown) => {
         if (state.debugTrace) completeAssistantDebugTrace(state.debugTrace);
         updateDebugButton();
-        appendMessage(body, "assistant", `## Nepodarilo sa spracovať požiadavku\n\n${error instanceof Error ? error.message : String(error)}`);
+        appendMessage(body, "assistant", `## ${chatbotCopy("Požiadavku sa nepodarilo spracovať", "Požadavek se nepodařilo zpracovat", "The request could not be processed")}\n\n${error instanceof Error ? error.message : String(error)}`);
         setActivity(body, null);
         setBusy(shell, false);
         state.busy = false;

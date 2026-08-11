@@ -6,6 +6,7 @@ import { createAccountMenu } from "../account/accountMenu";
 import { createButtonElement } from "../domElements";
 import { mountLoadingSkeleton } from "../loadingSkeleton";
 import { getAppContextMenuController } from "../contextMenu";
+import { t } from "../../i18n";
 import {
   createProject,
   deleteProject,
@@ -42,7 +43,7 @@ export function createProjectVersionActionButton(label: string): HTMLButtonEleme
 }
 
 export function createProjectDeleteActionButton(onDelete: () => void): HTMLButtonElement {
-  const button = createButtonElement("Odstrániť projekt");
+  const button = createButtonElement(t("Delete project"));
   button.classList.add("project-manager-project-menu-danger");
   button.addEventListener("click", () => {
     onDelete();
@@ -70,10 +71,10 @@ export function createProjectDeleteDialog(
 
   const title = document.createElement("h2");
   title.id = "project-delete-title";
-  title.textContent = "Odstrániť projekt?";
+  title.textContent = t("Delete project?");
 
   const description = document.createElement("p");
-  description.textContent = "Odstránia sa všetky uloženia, verzie a súbory tohto projektu.";
+  description.textContent = t("All saves, versions and files for this project will be removed.");
 
   const projectLabel = document.createElement("strong");
   projectLabel.className = "project-delete-dialog__project";
@@ -81,7 +82,7 @@ export function createProjectDeleteDialog(
 
   const warning = document.createElement("p");
   warning.className = "project-delete-dialog__warning";
-  warning.textContent = "Táto akcia sa nedá vrátiť späť.";
+  warning.textContent = t("This action cannot be undone.");
 
   const error = document.createElement("p");
   error.className = "project-delete-dialog__error";
@@ -89,9 +90,9 @@ export function createProjectDeleteDialog(
 
   const actions = document.createElement("div");
   actions.className = "project-delete-dialog__actions";
-  const cancel = createButtonElement("Zrušiť");
+  const cancel = createButtonElement(t("Cancel"));
   cancel.classList.add("project-delete-dialog__cancel");
-  const confirm = createButtonElement("Áno, odstrániť projekt");
+  const confirm = createButtonElement(t("Yes, delete project"));
   confirm.classList.add("project-delete-dialog__confirm");
   actions.append(cancel, confirm);
 
@@ -103,7 +104,7 @@ export function createProjectDeleteDialog(
   confirm.addEventListener("click", async () => {
     cancel.disabled = true;
     confirm.disabled = true;
-    confirm.textContent = "Odstraňujem...";
+    confirm.textContent = t("Deleting…");
     error.hidden = true;
     try {
       await onConfirm();
@@ -113,7 +114,7 @@ export function createProjectDeleteDialog(
       error.hidden = false;
       cancel.disabled = false;
       confirm.disabled = false;
-      confirm.textContent = "Skúsiť znova";
+      confirm.textContent = t("Try again");
     }
   });
 
@@ -145,24 +146,28 @@ function beginProjectLoading(root: HTMLElement, label: string) {
   return mountLoadingSkeleton(root, { variant: "screen", label, mode: "overlay" });
 }
 
+function message(key: string, values: Record<string, string | number> = {}): string {
+  return t(key).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
+}
+
 function editedAgo(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-  if (seconds < 45) return "Edited few seconds ago";
-  if (seconds < 90) return "Edited a minute ago";
+  if (seconds < 45) return t("Edited a few seconds ago");
+  if (seconds < 90) return t("Edited a minute ago");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `Edited ${minutes} minutes ago`;
-  if (minutes < 90) return "Edited an hour ago";
+  if (minutes < 60) return message("Edited {count} minutes ago", { count: minutes });
+  if (minutes < 90) return t("Edited an hour ago");
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Edited ${hours} hours ago`;
-  if (hours < 48) return "Edited a day ago";
+  if (hours < 24) return message("Edited {count} hours ago", { count: hours });
+  if (hours < 48) return t("Edited a day ago");
   const days = Math.floor(hours / 24);
-  if (days < 30) return `Edited ${days} days ago`;
+  if (days < 30) return message("Edited {count} days ago", { count: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return months === 1 ? "Edited a month ago" : `Edited ${months} months ago`;
+  if (months < 12) return months === 1 ? t("Edited a month ago") : message("Edited {count} months ago", { count: months });
   const years = Math.floor(months / 12);
-  return years === 1 ? "Edited a year ago" : `Edited ${years} years ago`;
+  return years === 1 ? t("Edited a year ago") : message("Edited {count} years ago", { count: years });
 }
 
 function openFilePicker(onFile: (file: File) => Promise<void>): void {
@@ -180,7 +185,11 @@ function openFilePicker(onFile: (file: File) => Promise<void>): void {
 function describeSave(save: ProjectSaveFile): string {
   const layout = save.appState?.layout as { snapshot?: { walls?: unknown[]; floors?: unknown[]; instances?: unknown[] } } | null | undefined;
   const snapshot = layout?.snapshot;
-  return `${snapshot?.walls?.length ?? 0} walls / ${snapshot?.floors?.length ?? 0} floors / ${snapshot?.instances?.length ?? 0} modules`;
+  return message("{walls} walls / {floors} floors / {modules} modules", {
+    walls: snapshot?.walls?.length ?? 0,
+    floors: snapshot?.floors?.length ?? 0,
+    modules: snapshot?.instances?.length ?? 0
+  });
 }
 
 function renderActor(users: readonly OrganizationUser[], userId: string, label: string): HTMLElement {
@@ -214,32 +223,32 @@ function renderVersionPreview(target: HTMLElement, save: ProjectSaveFile, versio
     preview.appendChild(image);
   } else {
     const empty = document.createElement("span");
-    empty.textContent = "Bez nahladu";
+    empty.textContent = t("No preview");
     preview.appendChild(empty);
   }
   const meta = document.createElement("p");
-  meta.textContent = `Version ${version.versionNumber} - ${editedAgo(version.updatedAt)} - ${describeSave(save)}`;
-  target.append(preview, meta, renderActor(users, version.savedByUserId, "Saved by"));
+  meta.textContent = message("Version {version} - {edited} - {summary}", { version: version.versionNumber, edited: editedAgo(version.updatedAt), summary: describeSave(save) });
+  target.append(preview, meta, renderActor(users, version.savedByUserId, t("Saved by")));
 }
 
 async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, users: readonly OrganizationUser[], onRestored: () => Promise<void>): Promise<void> {
   const overlay = document.createElement("div");
   overlay.className = "project-version-overlay";
   overlay.innerHTML = `
-    <section class="project-version-dialog" role="dialog" aria-modal="true" aria-label="Stare verzie projektu">
+    <section class="project-version-dialog" role="dialog" aria-modal="true" aria-label="${t("Saved project versions")}">
       <header>
         <div>
-          <strong>Staré verzie</strong>
+          <strong>${t("Saved versions")}</strong>
           <span>${project.name}</span>
         </div>
-        <button type="button" data-version-close>Zavrieť</button>
+        <button type="button" data-version-close>${t("Close")}</button>
       </header>
       <div class="project-version-body">
         <div class="project-version-list" data-version-list>
-          <p>Nacitavam verzie...</p>
+          <p>${t("Loading versions…")}</p>
         </div>
         <div class="project-version-detail" data-version-detail>
-          <p>Vyber verziu a daj Pozrieť.</p>
+          <p>${t("Select a version and choose Preview.")}</p>
         </div>
       </div>
     </section>
@@ -257,7 +266,7 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
     const versions = await listProjectVersions(project.projectId);
     list.innerHTML = "";
     if (versions.length === 0) {
-      list.innerHTML = "<p>Projekt este nema ulozenu ziadnu verziu.</p>";
+      list.innerHTML = `<p>${t("This project has no saved version yet.")}</p>`;
       return;
     }
     for (const version of versions) {
@@ -265,32 +274,32 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
       item.className = "project-version-item";
       item.innerHTML = `
         <div>
-          <strong>Version ${version.versionNumber}</strong>
+          <strong>${message("Version {version}", { version: version.versionNumber })}</strong>
           <span>${editedAgo(version.updatedAt)}</span>
         </div>
       `;
-      item.querySelector("div")?.appendChild(renderActor(users, version.savedByUserId, "Saved by"));
+      item.querySelector("div")?.appendChild(renderActor(users, version.savedByUserId, t("Saved by")));
       const preview = createProjectVersionActionButton("");
-      preview.textContent = "Pozrieť";
+      preview.textContent = t("Preview");
       preview.addEventListener("click", async () => {
-        setStatus(root, `Nacitavam verziu ${version.versionNumber}...`);
+        setStatus(root, message("Loading version {version}…", { version: version.versionNumber }));
         try {
           renderVersionPreview(detail, await loadProjectVersion(project.projectId, version.versionNumber), version, users);
-          setStatus(root, "Verzia je nacitana na nahlad.");
+          setStatus(root, t("Version loaded for preview."));
         } catch (error) {
           setStatus(root, error instanceof Error ? error.message : String(error), "error");
         }
       });
       const restore = createProjectVersionActionButton("");
-      restore.textContent = "Obnoviť";
+      restore.textContent = t("Restore");
       restore.addEventListener("click", async () => {
-        const confirmed = window.confirm(`Chceš obnoviť projekt "${project.name}" na verziu ${version.versionNumber}? Aktuálny stav sa uloží ako nová verzia v histórii.`);
+        const confirmed = window.confirm(message("Restore project \"{project}\" to version {version}? The current state will be saved as a new history version.", { project: project.name, version: version.versionNumber }));
         if (!confirmed) return;
-        setStatus(root, `Obnovujem verziu ${version.versionNumber}...`);
+        setStatus(root, message("Restoring version {version}…", { version: version.versionNumber }));
         try {
           await restoreProjectVersion(project.projectId, version.versionNumber);
           await onRestored();
-          setStatus(root, `Projekt je obnoveny na verziu ${version.versionNumber}.`);
+          setStatus(root, message("Project restored to version {version}.", { version: version.versionNumber }));
           close();
         } catch (error) {
           setStatus(root, error instanceof Error ? error.message : String(error), "error");
@@ -299,8 +308,8 @@ async function openVersionsDialog(root: HTMLElement, project: ProjectMetadata, u
       const actions = document.createElement("div");
       actions.append(preview, restore);
       getAppContextMenuController().register(item, () => [
-        { id: "project-version-preview", label: "Preview version", execute: () => preview.click() },
-        { id: "project-version-restore", label: "Restore version", execute: () => restore.click() }
+        { id: "project-version-preview", label: t("Preview version"), execute: () => preview.click() },
+        { id: "project-version-restore", label: t("Restore version"), execute: () => restore.click() }
       ]);
       item.appendChild(actions);
       list.appendChild(item);
@@ -352,11 +361,11 @@ export function projectCard(
   title.textContent = project.name;
   const date = document.createElement("small");
   date.textContent = editedAgo(project.updatedAt);
-  copy.append(title, date, renderActor(users, project.createdByUserId, "Created by"), renderActor(users, project.updatedByUserId, "Saved by"));
+  copy.append(title, date, renderActor(users, project.createdByUserId, t("Created by")), renderActor(users, project.updatedByUserId, t("Saved by")));
   if (cachedRecovery) {
     const cached = document.createElement("small");
     cached.className = "project-manager-project-cached";
-    cached.textContent = "Lokálny recovery draft – server sa overí pri otvorení";
+    cached.textContent = t("Local recovery draft – server will be verified on open");
     copy.appendChild(cached);
   }
   footer.append(icon, copy);
@@ -366,27 +375,27 @@ export function projectCard(
   menuButton.type = "button";
   menuButton.className = "project-manager-project-menu-button";
   menuButton.textContent = "...";
-  menuButton.title = "Projektove akcie";
+  menuButton.title = t("Project actions");
   const menu = document.createElement("div");
   menu.className = "project-manager-project-menu";
   menu.hidden = true;
   const openItem = document.createElement("button");
   openItem.type = "button";
-  openItem.textContent = "Otvoriť projekt";
+  openItem.textContent = t("Open project");
   openItem.addEventListener("click", () => {
     menu.hidden = true;
     onLoad();
   });
   const exportItem = document.createElement("button");
   exportItem.type = "button";
-  exportItem.textContent = "Exportovať projekt";
+  exportItem.textContent = t("Export project");
   exportItem.addEventListener("click", () => {
     menu.hidden = true;
     onDownload();
   });
   const versionsItem = document.createElement("button");
   versionsItem.type = "button";
-  versionsItem.textContent = "Pozrieť staré verzie";
+  versionsItem.textContent = t("View saved versions");
   versionsItem.addEventListener("click", () => {
     menu.hidden = true;
     onVersions();
@@ -407,12 +416,12 @@ export function projectCard(
     menu.hidden = !menu.hidden;
   });
   getAppContextMenuController().register(card, () => [
-    { id: "project-open", label: "Open project", iconId: "open", execute: onLoad },
-    { id: "project-export", label: "Export project", iconId: "exportJson", execute: onDownload },
-    { id: "project-versions", label: "View saved versions", execute: onVersions },
+    { id: "project-open", label: t("Open project"), iconId: "open", execute: onLoad },
+    { id: "project-export", label: t("Export project"), iconId: "exportJson", execute: onDownload },
+    { id: "project-versions", label: t("View saved versions"), execute: onVersions },
     ...(onDelete ? [
       { type: "separator" as const, id: "project-delete-separator" },
-      { id: "project-delete", label: "Delete project", iconId: "delete" as const, danger: true, execute: onDelete }
+      { id: "project-delete", label: t("Delete project"), iconId: "delete" as const, danger: true, execute: onDelete }
     ] : [])
   ]);
   card.append(button, menuButton, menu);
@@ -435,7 +444,7 @@ function renderProjects(
   if (projects.length === 0) {
     const empty = document.createElement("p");
     empty.className = "project-manager-empty";
-    empty.textContent = "Zatial tu nie su ziadne ulozene projekty.";
+    empty.textContent = t("No saved projects yet.");
     list.appendChild(empty);
     return;
   }
@@ -443,7 +452,7 @@ function renderProjects(
     const loadCard = async () => {
       const buttons = card.querySelectorAll<HTMLButtonElement>("button");
       buttons.forEach((item) => { item.disabled = true; });
-      const loading = beginProjectLoading(root, "Načítavam projekt");
+      const loading = beginProjectLoading(root, t("Loading project"));
       try {
         await onLoad(project.projectId);
         loading.clear();
@@ -456,10 +465,10 @@ function renderProjects(
     const downloadCard = async () => {
       const buttons = card.querySelectorAll<HTMLButtonElement>("button");
       buttons.forEach((item) => { item.disabled = true; });
-      setStatus(root, "Pripravujem kompletny .fqp subor...");
+      setStatus(root, t("Preparing complete .fqp file…"));
       try {
         await downloadProject(project);
-        setStatus(root, "Projektovy subor je stiahnuty.");
+        setStatus(root, t("Project file downloaded."));
       } catch (error) {
         setStatus(root, error instanceof Error ? error.message : String(error), "error");
       } finally {
@@ -469,14 +478,14 @@ function renderProjects(
     const deleteCard = async () => {
       const buttons = card.querySelectorAll<HTMLButtonElement>("button");
       buttons.forEach((item) => { item.disabled = true; });
-      setStatus(root, `Odstraňujem projekt "${project.name}"...`);
+      setStatus(root, message("Deleting project \"{project}\"…", { project: project.name }));
       try {
         await deleteProject(project.projectId);
         if (recoveryIdentity) {
           await createProjectRecoveryStore().clearProject(recoveryIdentity.clientId, recoveryIdentity.userId, project.projectId);
         }
         if (onRefresh) await onRefresh();
-        setStatus(root, "Projekt bol odstránený.");
+        setStatus(root, t("Project deleted."));
       } catch (error) {
         setStatus(root, error instanceof Error ? error.message : String(error), "error");
         buttons.forEach((item) => { item.disabled = false; });
@@ -525,25 +534,25 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
 
       <section class="project-manager-toolbar">
         <div class="project-manager-actions">
-          <button class="project-manager-primary" type="button" data-project-manager-new>New project</button>
-          <button type="button" data-project-manager-blank>Blank workspace</button>
-          <button type="button" data-project-manager-import>Import .fqp</button>
+          <button class="project-manager-primary" type="button" data-project-manager-new>${t("New project")}</button>
+          <button type="button" data-project-manager-blank>${t("Blank workspace")}</button>
+          <button type="button" data-project-manager-import>${t("Import .fqp")}</button>
         </div>
         <div class="project-manager-load-state">
-          <p class="project-manager-status" data-project-manager-status data-tone="muted">Vyber existujuci projekt alebo vytvor novy.</p>
+          <p class="project-manager-status" data-project-manager-status data-tone="muted">${t("Choose an existing project or create a new one.")}</p>
         </div>
       </section>
 
       <section class="project-manager-create-panel" data-project-manager-create-panel hidden>
         <form class="project-manager-form" data-project-manager-form>
           <div class="project-manager-form-grid"></div>
-          <button class="project-manager-primary" type="submit">Vytvorit a otvorit</button>
+          <button class="project-manager-primary" type="submit">${t("Create and open")}</button>
         </form>
       </section>
 
       <section class="project-manager-library">
         <div class="project-manager-list" data-project-manager-list>
-          <p class="project-manager-empty">Nacitavam projekty...</p>
+          <p class="project-manager-empty">${t("Loading projects…")}</p>
         </div>
       </section>
     </main>
@@ -558,18 +567,18 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       users: args.organizationUsers,
       currentUserId: args.currentUserId,
       showName: true,
-      onLogoutStart: () => setStatus(args.root, "Odhlasujem pouzivatela..."),
+      onLogoutStart: () => setStatus(args.root, t("Signing out…")),
       onLogoutError: (message) => setStatus(args.root, message, "error")
     });
   }
   const fields = {
-    name: field("Nazov projektu", true),
-    address: field("Adresa", true),
-    city: field("Mesto"),
-    contactName: field("Kontakt", true),
-    email: field("Email"),
-    phone: field("Telefon"),
-    notes: field("Poznamka")
+    name: field(t("Project name"), true),
+    address: field(t("Address"), true),
+    city: field(t("City")),
+    contactName: field(t("Contact"), true),
+    email: field(t("Email")),
+    phone: field(t("Phone")),
+    notes: field(t("Note"))
   };
   for (const [name, item] of Object.entries(fields)) {
     item.input.name = name;
@@ -577,9 +586,9 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   }
 
   const loadProjects = async () => {
-    setStatus(args.root, "Nacitavam zoznam projektov...");
+    setStatus(args.root, t("Loading project list…"));
     const list = args.root.querySelector<HTMLElement>("[data-project-manager-list]");
-    const loading = list ? mountLoadingSkeleton(list, { variant: "project-list", label: "Načítavam zoznam projektov" }) : null;
+    const loading = list ? mountLoadingSkeleton(list, { variant: "project-list", label: t("Loading project list…") }) : null;
     try {
       const projects = await listProjects();
       loading?.clear();
@@ -590,12 +599,12 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
         clientId: args.clientId,
         userId: args.currentUserId
       });
-      setStatus(args.root, "Project manager pripraveny.");
+      setStatus(args.root, t("Project manager is ready."));
     } catch (error) {
       loading?.clear();
       const canUseLocalRecovery = error instanceof TypeError || (error instanceof ProjectApiError && error.status >= 500);
       if (!canUseLocalRecovery) {
-        if (list) list.innerHTML = '<p class="project-manager-empty">Lokálne recovery dáta sa bez platného prihlásenia nezobrazujú.</p>';
+        if (list) list.innerHTML = `<p class="project-manager-empty">${t("Local recovery data are not shown without a valid sign-in.")}</p>`;
         setStatus(args.root, error instanceof Error ? error.message : String(error), "error");
         return;
       }
@@ -610,7 +619,7 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
       setStatus(
         args.root,
         ownRecoverable.length > 0
-          ? "Server nie je dostupný. Zobrazené sú označené lokálne recovery projekty."
+          ? t("Server is unavailable. Marked local recovery projects are shown.")
           : error instanceof Error ? error.message : String(error),
         "error"
       );
@@ -621,12 +630,12 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
     event.preventDefault();
     const input = collectProjectInput(form);
     if (!input.name || !input.address || !input.contactName) {
-      setStatus(args.root, "Vypln nazov, adresu a kontakt.", "error");
+      setStatus(args.root, t("Please enter the project name, address and contact."), "error");
       return;
     }
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
     if (submit) submit.disabled = true;
-    const loading = beginProjectLoading(args.root, "Vytváram projekt");
+    const loading = beginProjectLoading(args.root, t("Creating project"));
     try {
       await args.onSelect({ kind: "created", project: await createProject(input) });
       loading.clear();
@@ -638,7 +647,7 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   });
 
   args.root.querySelector<HTMLButtonElement>("[data-project-manager-blank]")?.addEventListener("click", async () => {
-    const loading = beginProjectLoading(args.root, "Otváram prázdne pracovisko");
+    const loading = beginProjectLoading(args.root, t("Opening blank workspace"));
     try {
       await args.onSelect({ kind: "blank" });
       loading.clear();
@@ -653,7 +662,7 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   });
   args.root.querySelector<HTMLButtonElement>("[data-project-manager-import]")?.addEventListener("click", () => {
     openFilePicker(async (file) => {
-      const loading = beginProjectLoading(args.root, "Importujem projekt");
+      const loading = beginProjectLoading(args.root, t("Importing project"));
       try {
         const save = await importProjectFile(file);
         await args.onSelect({ kind: "loaded", save });
