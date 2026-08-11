@@ -1309,9 +1309,8 @@ export function startApp(initialArgs: AppArgs) {
       Boolean(wallEditHud.drag) ||
       marquee.active ||
       marquee.pending ||
-      floorEdit.active ||
-      underlayDragState.active ||
-      !!transformState.kind,
+      Boolean(floorEdit.drag) ||
+      underlayDragState.active,
     isPanInteractionBlocked: () =>
       dragState.active ||
       windowDragState.active ||
@@ -1320,8 +1319,7 @@ export function startApp(initialArgs: AppArgs) {
       marquee.active ||
       marquee.pending ||
       Boolean(floorEdit.drag) ||
-      underlayDragState.active ||
-      !!transformState.kind,
+      underlayDragState.active,
     focusProvider: navigationFocusProvider,
     refreshDetailView: () => {
       detailViewController.activeDetailClipPlanes = [];
@@ -1438,17 +1436,6 @@ export function startApp(initialArgs: AppArgs) {
         ev.stopPropagation();
         return;
       }
-      if (handleGlobalMeasurementClear(ev)) return;
-      if (ev.defaultPrevented) return;
-      if (!isEscapeKey(ev)) return;
-      if (customFurnitureMode?.handleEscapeKey(ev)) return;
-      if (getViewerToolMode() !== "select") {
-        cancelViewerToolMode();
-        ev.preventDefault();
-        ev.stopPropagation();
-        return;
-      }
-      handleLayoutEscape(ev);
     },
     true
   );
@@ -4309,6 +4296,13 @@ export function startApp(initialArgs: AppArgs) {
     floorEdit,
     applyKitchenPlacementBinding,
     getKitchenPlacementConstraint,
+    handleGlobalMeasurementClear,
+    handleCustomFurnitureEscape: (ev) => customFurnitureMode?.handleEscapeKey(ev) ?? false,
+    cancelActiveViewerTool: () => {
+      if (getViewerToolMode() === "select") return false;
+      cancelViewerToolMode();
+      return true;
+    },
     handleLayoutEscape,
     hideHoverCursor,
     helpers,

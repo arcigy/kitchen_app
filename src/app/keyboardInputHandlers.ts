@@ -62,6 +62,9 @@ type KeyboardInputHandlersContext = {
     binding: NonNullable<LayoutInstance["kitchenPlacement"]>,
     backOffsetMm: number
   ) => boolean;
+  cancelActiveViewerTool: () => boolean;
+  handleCustomFurnitureEscape: (ev: KeyboardEvent) => boolean;
+  handleGlobalMeasurementClear: (ev: KeyboardEvent) => boolean;
   handleLayoutEscape: (ev: KeyboardEvent) => boolean;
   helpers: HistoryHelpers;
   hideHoverCursor?: () => void;
@@ -359,7 +362,11 @@ type KeyboardInputCommandContext = PlacementShortcutCommandContext &
   LayoutKeyboardCommandContext &
   Pick<
     KeyboardInputHandlersContext,
-    "floorEdit" | "isTypingTarget"
+    | "cancelActiveViewerTool"
+    | "floorEdit"
+    | "handleCustomFurnitureEscape"
+    | "handleGlobalMeasurementClear"
+    | "isTypingTarget"
   >;
 
 type KitchenWorktopTypedInputCommandContext = Pick<
@@ -1202,7 +1209,10 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
 }
 
 export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: KeyboardEvent) {
-  if (handleGlobalUndoRedoShortcut(ctx, ev)) return true;
+  // Native text controls own every key, including Escape and Undo/Redo. This
+  // prevents an in-progress value from cancelling its enclosing editor tool.
+  if (ctx.isTypingTarget(ev.target)) return false;
+
   if (ev.defaultPrevented) {
     if (isSpaceShortcut(ev)) {
       if (runPlacementShortcutCommand(ctx, ev)) {
@@ -1218,11 +1228,22 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     }
     return true;
   }
-  if (ctx.isTypingTarget(ev.target) && ev.key !== "Escape") return true;
+
+  if (handleGlobalUndoRedoShortcut(ctx, ev)) return true;
 
   if (ev.key === "Delete" && runDeleteSelectionShortcutCommand(ctx, ev)) {
     ev.preventDefault();
     return true;
+  }
+
+  if (ev.key === "Escape") {
+    if (ctx.handleGlobalMeasurementClear(ev)) return true;
+    if (ctx.handleCustomFurnitureEscape(ev)) return true;
+    if (ctx.cancelActiveViewerTool()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return true;
+    }
   }
 
   if (runPlacementShortcutCommand(ctx, ev)) {
@@ -1269,14 +1290,6 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
 }
 
 export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) {
-  window.addEventListener(
-    "keydown",
-    (ev) => {
-      handleGlobalUndoRedoShortcut(ctx, ev);
-    },
-    { capture: true }
-  );
-
   window.addEventListener("keydown", (ev) => {
     runKeyboardInputCommand(ctx, ev);
   });

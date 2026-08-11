@@ -94,6 +94,10 @@ export class FakeElement {
     // No-op for lightweight DOM tests.
   }
 
+  blur() {
+    // No-op for lightweight DOM tests.
+  }
+
   remove() {
     this.isConnected = false;
   }
