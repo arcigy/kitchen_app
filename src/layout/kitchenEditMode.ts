@@ -4378,6 +4378,18 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           refreshProps,
         }),
     );
+    addNumberRow(
+      translateParamLabel("tallDepthMm"),
+      ctx.tallDepthMm,
+      (value, refreshProps) =>
+        commitCtx((base) => ({ ...base, tallDepthMm: value }), { refreshProps }),
+    );
+    addNumberRow(
+      translateParamLabel("tallHeightMm"),
+      ctx.tallHeightMm,
+      (value, refreshProps) =>
+        commitCtx((base) => ({ ...base, tallHeightMm: value }), { refreshProps }),
+    );
 
     const gapBadges = document.createElement("div");
     gapBadges.style.display = "flex";

@@ -48,7 +48,7 @@ export const defaultParams = {
   "autoFit": true,
   "handleComponentId": "cmp.handle.bar.160.black",
   "heightCarcass": 662,
-  "kitchenModuleRole": "base",
+  "kitchenModuleRole": "low",
   "legComponentId": "cmp.leg.adjustable.100.black",
   "requiresWorktop": true
 } as const;

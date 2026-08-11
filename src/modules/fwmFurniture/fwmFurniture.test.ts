@@ -2619,6 +2619,7 @@ describe("FWM furniture module packages", () => {
       height: 722,
       frontChamferMm: 200,
       frontChamferReferenceMm: 200,
+      geometryContractVersion: 1,
       backChamferMm: 0,
       plinthHeight: 100,
       plinthSetbackMm: 60
@@ -2764,6 +2765,7 @@ describe("FWM furniture module packages", () => {
     const baseParams = {
       ...defaults,
       variant: "corner_chamfered",
+      geometryContractVersion: 1,
       width: 900,
       depth: 900,
       height: 722,
@@ -3293,6 +3295,14 @@ describe("FWM furniture module packages", () => {
         expect(normalized.height, modulePackage.module.moduleType).toBe(ctx.upperHeightMm);
         expect(normalized.depth, modulePackage.module.moduleType).toBe(ctx.upperDepthMm);
         expect(normalized.plinthHeight, modulePackage.module.moduleType).toBe(0);
+      } else if (normalized.kitchenModuleRole === "tall") {
+        expect(normalized.height, modulePackage.module.moduleType).toBe(ctx.tallHeightMm);
+        expect(normalized.depth, modulePackage.module.moduleType).toBe(ctx.tallDepthMm);
+        if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
+          expect(normalized.plinthHeight, modulePackage.module.moduleType).toBe(ctx.plinthHeightMm);
+        } else {
+          expect(normalized.plinthHeight, modulePackage.module.moduleType).toBe(0);
+        }
       } else {
         expect(normalized.depth, modulePackage.module.moduleType).toBe(ctx.moduleDepthMm);
         if ((createDefaultModulePackageParameters(modulePackage).plinthHeight as number) > 0) {
@@ -3758,6 +3768,8 @@ describe("FWM furniture module packages", () => {
       worktopThicknessMm: 38,
       upperHeightMm: 720,
       upperDepthMm: 320,
+      tallHeightMm: 2400,
+      tallDepthMm: 560,
       plinthHeightMm: 100,
       plinthDepthMm: 50
     });
@@ -3770,6 +3782,8 @@ describe("FWM furniture module packages", () => {
       worktopThicknessMm: 28,
       upperHeightMm: 780,
       upperDepthMm: 360,
+      tallHeightMm: 2550,
+      tallDepthMm: 610,
       plinthHeightMm: 140,
       plinthDepthMm: 80
     });
@@ -3789,6 +3803,10 @@ describe("FWM furniture module packages", () => {
       if (role === "top") {
         expect(normalizedB.height, modulePackage.module.moduleType).toBe(secondCtx.upperHeightMm);
         expect(normalizedB.depth, modulePackage.module.moduleType).toBe(secondCtx.upperDepthMm);
+        expect(normalizedB.depth, modulePackage.module.moduleType).not.toBe(normalizedA.depth);
+      } else if (role === "tall") {
+        expect(normalizedB.height, modulePackage.module.moduleType).toBe(secondCtx.tallHeightMm);
+        expect(normalizedB.depth, modulePackage.module.moduleType).toBe(secondCtx.tallDepthMm);
         expect(normalizedB.depth, modulePackage.module.moduleType).not.toBe(normalizedA.depth);
       } else {
         expect(normalizedB.depth, modulePackage.module.moduleType).toBe(secondCtx.moduleDepthMm);

@@ -777,6 +777,8 @@ const PARAM_LABELS_SK_OVERRIDES: Record<string, string> = {
   shelfSupportComponentId: "Podpera police",
   shelfThickness: "Hrúbka police",
   upperHeightMm: "Výška horných modulov (mm)",
+  tallDepthMm: "Hĺbka vysokých modulov (mm)",
+  tallHeightMm: "Výška vysokých modulov (mm)",
   upperStartHeightMm: "Začiatok horných modulov (mm)",
   wallMounted: "Zavesené na stene",
   worktopBackOffsetMm: "Zadné odsadenie pracovnej dosky (mm)",

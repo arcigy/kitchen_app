@@ -16,6 +16,7 @@ import {
 } from "../../modules/fwmFurniture/definitions";
 import { getFwmModulePreviewImage } from "../../modules/fwmFurniture/modulePreviewImages";
 import { createModuleInternalEditingDefinition } from "../../layout/moduleInternalEditing";
+import { normalizeKitchenModulePackage } from "../../layout/kitchenModuleContract";
 
 const now = "2026-06-09T00:00:00.000Z";
 const BASE_CORNER_NOTES = "Parametric lower catalog corner cabinet. The variant selects blind 1D, 90-degree or chamfered geometry. Depth controls both corner legs, plinthHeight stays independent from height, plinthSetbackMm moves the plinth zone, and chamfer controls are used only by chamfered variants.";
@@ -1404,9 +1405,9 @@ function kitchenBehavior(spec: FwmFurnitureSpec): FurnQuoteModulePackage["behavi
         liveSync: true,
         forbidCrossContextAdjacency: true,
         parameterSync: [
-          { targetParameter: "height", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.wallHeightMm" : "ctx.heightMm", transform: "identity", mode: "live" },
-          { targetParameter: "heightCarcass", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.wallHeightMm" : "ctx.moduleHeightMm", transform: "identity", mode: "live" },
-          { targetParameter: "depth" as const, source: spec.kitchenRole === "top" ? "ctx.upperDepthMm" as const : "ctx.moduleDepthMm" as const, transform: "identity" as const, mode: "live" as const },
+          { targetParameter: "height", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.tallHeightMm" : "ctx.heightMm", transform: "identity", mode: "live" },
+          { targetParameter: "heightCarcass", source: spec.kitchenRole === "top" ? "ctx.upperHeightMm" : spec.kitchenRole === "tall" ? "ctx.tallHeightMm" : "ctx.moduleHeightMm", transform: "identity", mode: "live" },
+          { targetParameter: "depth" as const, source: spec.kitchenRole === "top" ? "ctx.upperDepthMm" as const : spec.kitchenRole === "tall" ? "ctx.tallDepthMm" as const : "ctx.moduleDepthMm" as const, transform: "identity" as const, mode: "live" as const },
           ...(spec.hasPlinth
             ? [
                 { targetParameter: "plinthHeight" as const, source: "ctx.plinthHeightMm", transform: "identity" as const, mode: "live" as const },
@@ -1903,10 +1904,13 @@ function createWallCorner90ModulePackage(): FurnQuoteModulePackage {
   return modulePackage;
 }
 
-export const extendedFurnitureModulePackages: FurnQuoteModulePackage[] = [
+const rawExtendedFurnitureModulePackages: FurnQuoteModulePackage[] = [
   ...FWM_FURNITURE_SPECS
     .filter((spec) => spec.moduleType !== BASE_BOTTLE_PULLOUT_RUNTIME_TYPE)
     .map(makePackage),
   createBaseBottlePulloutModulePackage(),
   createWallCorner90ModulePackage()
 ];
+
+/** Keep direct authoring exports subject to the same contract as seeded system packages. */
+export const extendedFurnitureModulePackages: FurnQuoteModulePackage[] = rawExtendedFurnitureModulePackages.map(normalizeKitchenModulePackage);

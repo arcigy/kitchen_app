@@ -6,7 +6,7 @@ export const displayName = "Shelf Doors";
 export const defaultParams = {
   "type": "swing_shelves_low",
   "assemblyContext": "kitchen",
-  "kitchenModuleRole": "base",
+  "kitchenModuleRole": "low",
   "requiresWorktop": true,
   "worktopThicknessMm": 38,
   "width": 800,

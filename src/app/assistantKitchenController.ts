@@ -109,6 +109,8 @@ const CONTEXT_PATCH_KEYS = new Set<keyof KitchenContext>([
   "upperStartHeightMm",
   "upperDepthMm",
   "upperHeightMm",
+  "tallDepthMm",
+  "tallHeightMm",
   "doorOverlayMm",
   "backPanelThicknessMm",
   "endPanelThicknessMm",
