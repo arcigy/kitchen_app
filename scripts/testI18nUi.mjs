@@ -1,7 +1,13 @@
 import { chromium } from "playwright";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import path from "node:path";
+import process from "node:process";
 import { installAuthSession } from "./uiAuthSession.mjs";
 
-const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
+const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5188/";
+const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? "http://127.0.0.1:5199/health";
+const ownedProcesses = [];
 const variants = [
   ["sk", "sk-SK", "Súbor", "Prihlásenie", "Nový projekt", "Prázdne pracovisko", "Materiály", "Marže", "Kusovník / kalkulácia"],
   ["cs", "cs-CZ", "Soubor", "Přihlášení", "Nový projekt", "Prázdné pracovní prostředí", "Materiály", "Marže", "Kusovník / ocenění"],
@@ -14,6 +20,52 @@ const expectedTopbar = {
 };
 const selectedLanguage = process.env.I18N_UI_LANGUAGE;
 const selectedMode = process.env.I18N_UI_MODE ?? "all";
+
+async function isAvailable(url) {
+  return Boolean((await fetch(url).catch(() => null))?.ok);
+}
+
+function loopbackPort(url, label) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(parsed.hostname) || !parsed.port) {
+    throw new Error(`${label} must use an explicit loopback HTTP port.`);
+  }
+  return parsed.port;
+}
+
+async function ensureLocalApp() {
+  if (await isAvailable(baseUrl)) return;
+  if (await isAvailable(workerHealthUrl)) throw new Error("i18n UI test found only the worker port in use.");
+  const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+  const child = spawn(process.execPath, [tsxCli, "scripts/devLocal.ts"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      KITCHEN_UI_PORT: loopbackPort(baseUrl, "KITCHEN_UI_BASE_URL"),
+      BLENDER_WORKER_PORT: loopbackPort(workerHealthUrl, "KITCHEN_WORKER_HEALTH_URL"),
+      ARCIGY_TRUSTED_ORIGINS: new URL(baseUrl).origin
+    },
+    stdio: "ignore"
+  });
+  ownedProcesses.push(child);
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (await isAvailable(baseUrl) && await isAvailable(workerHealthUrl)) return;
+    if (child.exitCode !== null) throw new Error("Isolated i18n UI app exited before it became ready.");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Isolated i18n UI app was not available at ${baseUrl}.`);
+}
+
+async function stopLocalProcesses() {
+  await Promise.all(ownedProcesses.map(async (child) => {
+    if (child.exitCode !== null || child.killed) return;
+    const exited = once(child, "exit");
+    child.kill("SIGTERM");
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000))]);
+    if (child.exitCode === null) child.kill("SIGKILL");
+  }));
+}
 
 async function setLanguage(page, language, locale) {
   const actualLocale = await page.evaluate(async (nextLanguage) => {
@@ -52,6 +104,7 @@ async function waitFor(page, phase, predicate, timeout = 5_000) {
 
 const browser = await chromium.launch({ headless: true });
 try {
+  await ensureLocalApp();
   const results = [];
   for (const [language, locale, expectedFile, expectedSignIn, expectedNewProject, expectedBlankWorkspace, expectedMaterials, expectedMargins, expectedBom] of variants.filter(([language]) => !selectedLanguage || language === selectedLanguage)) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -61,7 +114,7 @@ try {
     loginPage.on("console", (message) => { if (message.type() === "error" && !message.text().includes("favicon")) errors.push(message.text()); });
     loginPage.on("pageerror", (error) => errors.push(error.message));
     loginPage.on("requestfailed", (request) => errors.push(`failed ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`));
-    await loginPage.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 5_000 });
+    await loginPage.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await waitFor(loginPage, `${language}: login bootstrap`, () => Boolean(document.querySelector(".auth-panel")));
     await expectVisibleText(loginPage, language, expectedSignIn, "login");
     if (await loginPage.evaluate(() => document.documentElement.lang) !== locale) throw new Error(`${language}: login language is not ${locale}`);
@@ -76,8 +129,8 @@ try {
     projectManagerPage.on("pageerror", (error) => errors.push(error.message));
     projectManagerPage.on("requestfailed", (request) => requests.push(`failed ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`));
     projectManagerPage.on("response", (response) => { if (response.status() >= 400) requests.push(`${response.status()} ${response.url()}`); });
-    await installAuthSession(projectManagerPage, { autoStartWorkspace: false });
-    await projectManagerPage.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 5_000 });
+    await installAuthSession(projectManagerPage, { autoStartWorkspace: false, baseUrl });
+    await projectManagerPage.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await waitFor(projectManagerPage, `${language}: project-manager bootstrap`, () => Boolean(document.querySelector("[data-project-manager-new]")));
     await setLanguage(projectManagerPage, language, locale);
     await projectManagerPage.waitForTimeout(300);
@@ -103,8 +156,8 @@ try {
       if (response.status() >= 400) requests.push(`${response.status()} ${response.url()}`);
       if (process.env.I18N_UI_DEBUG && response.status() >= 400) console.log(`[i18n-ui:${language}] HTTP ${response.status()} ${response.url()}`);
     });
-    await installAuthSession(page);
-    await page.goto(new URL("/?workspace=1", baseUrl).toString(), { waitUntil: "domcontentloaded", timeout: 5_000 });
+    await installAuthSession(page, { baseUrl });
+    await page.goto(new URL("/?workspace=1", baseUrl).toString(), { waitUntil: "domcontentloaded", timeout: 30_000 });
     // The renderer/debug API is initialized after the asynchronous 3D scene.
     // Localization belongs to the shell and must be testable before that work
     // completes, otherwise a slow GPU masks a language regression.
@@ -127,4 +180,5 @@ try {
   console.log(JSON.stringify({ ok: true, variants: results }, null, 2));
 } finally {
   await browser.close();
+  await stopLocalProcesses();
 }

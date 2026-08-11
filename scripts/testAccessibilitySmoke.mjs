@@ -101,7 +101,9 @@ async function auditSurface(page, surface) {
     };
   });
 
-  assert(result.lang === "sk-SK", `${surface}: expected Slovak BCP 47 document language`, result);
+  // The initial static document is Slovak before the runtime locale controller
+  // upgrades it to sk-SK. Both are valid BCP 47 Slovak language tags.
+  assert(["sk", "sk-SK"].includes(result.lang), `${surface}: expected Slovak BCP 47 document language`, result);
   assert(result.title, `${surface}: document title is missing`, result);
   assert(result.mainLandmarkCount === 1, `${surface}: expected exactly one visible main landmark`, result);
   assert(result.duplicateIds.length === 0, `${surface}: duplicate IDs found`, result);

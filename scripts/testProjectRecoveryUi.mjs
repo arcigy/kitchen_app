@@ -4,8 +4,11 @@ import path from "node:path";
 import process from "node:process";
 import { chromium } from "playwright";
 
-const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
-const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? "http://127.0.0.1:5191/health";
+// Recovery owns a dedicated default port pair so the UI-regression chain never
+// accidentally validates an already-running developer server with a different
+// source revision or browser-storage state. Callers can still override both.
+const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5186/";
+const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? "http://127.0.0.1:5197/health";
 const result = { ok: false, baseUrl, checks: [], consoleErrors: [] };
 const consoleMessages = [];
 const ownedProcesses = [];
