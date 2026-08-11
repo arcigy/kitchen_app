@@ -166,12 +166,18 @@ function App(): React.JSX.Element {
     finally { setBusy(null); }
   };
 
-  const captureProduct = async () => {
+  const captureProduct = async (target?: ExtensionMaterialTarget) => {
     setBusy("capture"); setError(null); setMessage(null);
     try {
       if (!await loadSupplierBridgePrivacyConsent()) await saveSupplierBridgePrivacyConsent();
       await requestSupplierPermission(supplierId, language);
-      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_ACTIVE_SUPPLIER_PRODUCT" });
+      const expectedProductType = target?.category === "worktop" ? "worktop"
+        : target?.category === "edge_front" || target?.category === "edge_other" ? "edge_band"
+          : target?.category === "hinge" ? "hinge"
+            : target?.category === "runner" ? "drawer_system"
+              : target && ["corpus", "front", "plinth", "back", "drawer_bottom"].includes(target.category) ? "board"
+                : "hardware";
+      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT", expectedProductType, expectedManufacturer: null, expectedThicknessMm: target?.expectedThicknessMm ?? null });
       const response = parseBridgeRuntimeResponse(raw);
       if (!response?.ok || !response.capture) throw new Error(response?.message ?? response?.errorCode ?? copy("Produkt sa nepodarilo načítať.", "Produkt se nepodařilo načíst.", "The product could not be read."));
       if (response.capture.candidates.length !== 1) throw new Error(copy("Rozšírenie nerozpoznalo presne jeden produkt. Otvorte detail konkrétneho produktu a skúste to znova.", "Rozšíření nerozpoznalo právě jeden produkt. Otevřete detail konkrétního produktu a zkuste to znovu.", "The extension did not identify exactly one product. Open a specific product detail and try again."));
@@ -189,14 +195,16 @@ function App(): React.JSX.Element {
   };
 
   const assign = async (target: ExtensionMaterialTarget) => {
-    if (!account || !selectedCandidate || !selectedProject || assigningRef.current) return;
-    const candidate = selectedCandidate;
+    if (!account || !selectedProject || assigningRef.current) return;
+    assigningRef.current = true;
+    const candidate = await captureProduct(target);
+    if (!candidate) { assigningRef.current = false; return; }
     if (target.assignedProductCode === candidate.supplierProductCode) {
       setError(null);
       setMessage(copy(`${target.assignedText} je už priradený k tejto časti.`, `${target.assignedText} už je přiřazen k této části.`, `${target.assignedText} is already assigned to this part.`));
+      assigningRef.current = false;
       return;
     }
-    assigningRef.current = true;
     const context = { account, candidate, project: selectedProject, supplierId: supplierId as SupplierId };
     setBusy(target.id); setError(null); setMessage(null);
     const startedAt = new Date().toISOString();
@@ -259,7 +267,7 @@ function App(): React.JSX.Element {
       data-material-target={target.id}
       data-target-assigned={target.assigned ? "true" : "false"}
       data-target-source={target.inherited ? "general" : "direct"}
-      disabled={busy !== null || account?.role === "viewer" || !selectedCandidate || sameProduct}
+      disabled={busy !== null || account?.role === "viewer"}
       onClick={() => void assign(target)}
     >
       <span className="target__heading">
@@ -274,7 +282,7 @@ function App(): React.JSX.Element {
       </small>}
       {target.assignedPrice && <small className="target__price">{target.assignedPrice}</small>}
       {target.inherited && <small>{copy("Z celého projektu; môžete nastaviť vlastný materiál pre túto časť.", "Z celého projektu; pro tuto část můžete nastavit vlastní materiál.", "Inherited from the whole project; you can set a specific material for this part.")}</small>}
-      {!selectedCandidate && <small>{copy("Najprv načítajte otvorený produkt dodávateľa.", "Nejprve načtěte otevřený produkt dodavatele.", "Load the supplier's open product first.")}</small>}
+      {!selectedCandidate && <small>{copy("Otvorte detail produktu u dodávateľa a kliknite priamo na túto položku.", "Otevřete detail produktu u dodavatele a klikněte přímo na tuto položku.", "Open the supplier product detail and click this item directly.")}</small>}
       {sameProduct && <small>{copy("Aktuálny produkt je už na tejto časti.", "Aktuální produkt už je přiřazen k této části.", "The current product is already assigned to this part.")}</small>}
     </button>;
   };
@@ -318,7 +326,7 @@ function App(): React.JSX.Element {
     <section className="card">
       <div className="eyebrow">{copy("2. Dodávateľ a produkt", "2. Dodavatel a produkt", "2. Supplier and product")}</div>
       <label className="field">{copy("Dodávateľ", "Dodavatel", "Supplier")}<select disabled={busy !== null} value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setCapture(null); setMessage(null); setError(null); }}>{suppliers.map((supplier) => <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.displayName}</option>)}</select></label>
-      <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>{copy("Otvoriť dodávateľa", "Otevřít dodavatele", "Open supplier")}</button><button type="button" className="button button--primary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? copy("Načítavam…", "Načítám…", "Loading…") : copy("Načítať otvorený produkt", "Načíst otevřený produkt", "Load open product")}</button></div>
+      <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>{copy("Otvoriť dodávateľa", "Otevřít dodavatele", "Open supplier")}</button><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? copy("Načítavam…", "Načítám…", "Loading…") : copy("Skontrolovať otvorený produkt", "Zkontrolovat otevřený produkt", "Check open product")}</button></div>
       {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span></div>}
     </section>
     <section className="card">

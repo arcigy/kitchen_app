@@ -186,6 +186,14 @@ async function main() {
   await panel.locator("select").first().selectOption(projectId);
   await panel.locator("select").nth(1).selectOption("mock-supplier");
   assert(true, "Side Panel authenticated and selected the Arcigy project and debug supplier");
+  const initialTargetIds = [
+    "corpus", "front", "worktop", "plinth", "back", "drawer_bottom",
+    "edge_front", "edge_other", "handle", "hinge", "lift_up", "leg", "fastener", "other_component"
+  ];
+  for (const category of initialTargetIds) {
+    await panel.locator(`[data-material-target="material-assignment:${category}"]`).waitFor({ timeout: 15_000 });
+  }
+  assert(true, "all initial board, edge, and hardware categories are visible before supplier-product capture");
   const supplier = await context.newPage();
   supplier.on("console", (message) => { if (message.type() === "error") result.consoleErrors.push(`supplier: ${message.text()}`); });
   await supplier.goto(new URL("/search?query=E2E&scenario=exact-single-result&productType=board", simulatorUrl).toString());
@@ -198,16 +206,12 @@ async function main() {
   assert(true, "supplier simulator opened with visible product detail");
 
   await supplier.bringToFront();
-  await panel.getByRole("button", { name: "Načítať otvorený produkt" }).click();
-  await panel.waitForFunction(() => Boolean(document.querySelector('[data-material-target="material-assignment:corpus"]') || document.querySelector(".notice--error")), undefined, { timeout: 15_000 });
-  const captureError = await panel.locator(".notice--error").count() ? await panel.locator(".notice--error").innerText() : null;
-  if (captureError) throw new Error(`Supplier capture failed: ${captureError}`);
-  assert(true, "user explicitly captured the visible supplier product before choosing a target");
+  await panel.locator('[data-material-target="material-assignment:corpus"]').waitFor({ timeout: 15_000 });
   await panel.locator('[data-material-target="material-assignment:corpus"]').click();
   await panel.waitForFunction(() => [...document.querySelectorAll(".notice--success")].some((notice) => notice.textContent?.includes("bol priradený")) || Boolean(document.querySelector(".notice--error")), undefined, { timeout: 15_000 });
   const assignmentError = await panel.locator(".notice--error").count() ? await panel.locator(".notice--error").innerText() : null;
   if (assignmentError) throw new Error(`Assignment failed: ${assignmentError}`);
-  assert(true, "visible supplier product and price assigned to Corpus");
+  assert(true, "clicking Corpus directly captured the visible supplier product and assigned its raw price");
 
   const success = await panel.locator(".notice--success").filter({ hasText: "bol priradený" }).innerText();
   assert(success.includes("bol priradený"), "backend confirmed the captured product assignment", success);
@@ -219,6 +223,11 @@ async function main() {
   assert(
     corpusAssignment?.customValues?.supplierBridge?.supplierProductCode?.startsWith("SIM-"),
     "confirmed supplier assignment persisted into the Arcigy project",
+    corpusAssignment?.customValues?.supplierBridge ?? null
+  );
+  assert(
+    corpusAssignment?.customValues?.supplierBridge?.rawPriceText === "52.80 EUR gross",
+    "raw supplier price is retained without recalculation in the project assignment",
     corpusAssignment?.customValues?.supplierBridge ?? null
   );
 
