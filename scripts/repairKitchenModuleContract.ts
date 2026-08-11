@@ -6,6 +6,7 @@ import {
   normalizeAppEnvironment
 } from "../src/core/database/database-config";
 import { closeSchemaPools } from "../src/core/database/postgres-client";
+import { withModulePackageHash } from "../src/core/module-package/module-package-file";
 import { createFileModulePackageRepository, type ModulePackageRepository } from "../src/core/module-package/module-package-repository";
 import { createPostgresModulePackageRepository } from "../src/core/module-package/module-package-postgres-repository";
 import type { ClientContext } from "../src/core/client/client-context";
@@ -92,7 +93,10 @@ async function main() {
 
   try {
     const packages = await repository.listPackages(context);
-    const repairs = packages.map((modulePackage) => ({ before: modulePackage, after: normalizeKitchenModulePackage(modulePackage) }))
+    const repairs = packages.map((modulePackage) => ({
+      before: modulePackage,
+      after: withModulePackageHash(normalizeKitchenModulePackage(modulePackage))
+    }))
       .filter(({ before, after }) => packageChanged(before, after));
     const invalid = repairs.flatMap(({ after }) => auditKitchenModulePlacementContract(after)
       .filter((issue) => issue.severity === "error")
