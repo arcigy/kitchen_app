@@ -193,6 +193,16 @@ describe("FurnQuote module package validation", () => {
       .toBe(computeModulePackageHash(changed));
   });
 
+  it("keeps a package hash stable when JSON object key order differs", () => {
+    const modulePackage = withModulePackageHash(makePackage());
+    const { displayName, ...moduleWithoutDisplayName } = modulePackage.module;
+    const reordered = {
+      ...modulePackage,
+      module: { displayName, ...moduleWithoutDisplayName }
+    };
+    expect(computeModulePackageHash(reordered)).toBe(computeModulePackageHash(modulePackage));
+  });
+
   it("accepts a valid .fqm package and computes a stable hash", () => {
     const modulePackage = validateFurnQuoteModulePackage(makePackage());
     const hash = computeModulePackageHash(modulePackage);
