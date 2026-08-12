@@ -33,8 +33,8 @@ describe("assistant capability endpoint", () => {
       knowledgeVersion: "assistant-capabilities.v3",
       tenantAvailability: { enabledModulePackageIds: ["drawer_low_v1"] }
     });
-    expect(body.tools).toHaveLength(45);
-    expect(body.orchestratorToolMetadata).toHaveLength(45);
+    expect(body.tools).toHaveLength(46);
+    expect(body.orchestratorToolMetadata).toHaveLength(46);
     expect(body.orchestration).toMatchObject({
       stages: ["communicator", "orchestrator", "executor", "analyzer", "communicator"],
       maxIterations: 5

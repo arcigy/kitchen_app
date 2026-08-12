@@ -5136,6 +5136,24 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedDoor,
     setSelectedWindow,
     disposeObject3D,
+    exportActions: {
+      downloadViewportPng: () => {
+        if (!exportActions) throw new Error("Export actions are not ready.");
+        exportActions.downloadViewportPng();
+      },
+      exportLayoutJsonFile: async () => {
+        if (!exportActions) throw new Error("Export actions are not ready.");
+        await exportActions.exportLayoutJsonFile();
+      },
+      exportSceneJsonFile: async () => {
+        if (!exportActions) throw new Error("Export actions are not ready.");
+        await exportActions.exportSceneJsonFile();
+      },
+      exportWebsiteShowcaseFile: async (stage) => {
+        if (!exportActions) throw new Error("Export actions are not ready.");
+        await exportActions.exportWebsiteShowcaseFile(stage);
+      }
+    },
     getProjectMarginSettings: () => projectMarginSettings,
     authorizeToolCall: authorizeAssistantToolCall,
     commitHistory: () => commitHistory(S),

@@ -127,6 +127,12 @@ type AssistantBridgeContext = {
   setSelectedDoor: () => void;
   setSelectedWindow: () => void;
   disposeObject3D: (object: THREE.Object3D) => void;
+  exportActions: {
+    downloadViewportPng: () => void;
+    exportLayoutJsonFile: () => Promise<void>;
+    exportSceneJsonFile: () => Promise<void>;
+    exportWebsiteShowcaseFile: (stage: "initial" | "final") => Promise<void>;
+  };
   getProjectMarginSettings: () => ProjectMarginSettingsState;
   authorizeToolCall: (call: AssistantToolCall) => Promise<void>;
   commitHistory: () => void;
@@ -1013,6 +1019,22 @@ function deleteOpening(ctx: AssistantBridgeContext, input: Record<string, unknow
   return { ok: true, toolId: "opening.delete", output: { kind, id }, stateDeltaSummary: `Deleted ${kind} ${id}.` };
 }
 
+async function downloadExport(ctx: AssistantBridgeContext, input: Record<string, unknown>): Promise<AssistantToolResult> {
+  const format = requireString(input, "format");
+  if (format === "layout-json") await ctx.exportActions.exportLayoutJsonFile();
+  else if (format === "scene-json") await ctx.exportActions.exportSceneJsonFile();
+  else if (format === "website-initial-json") await ctx.exportActions.exportWebsiteShowcaseFile("initial");
+  else if (format === "website-final-json") await ctx.exportActions.exportWebsiteShowcaseFile("final");
+  else if (format === "viewport-png") ctx.exportActions.downloadViewportPng();
+  else throw new Error("Export format is invalid.");
+  return {
+    ok: true,
+    toolId: "export.download",
+    output: { format, downloadStarted: true },
+    stateDeltaSummary: `Started ${format} download.`
+  };
+}
+
 async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolCall): Promise<AssistantToolResult> {
   try {
     const definition = assertToolAllowed(call.toolId);
@@ -1311,6 +1333,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
         stateDeltaSummary: `Saved project revision ${save.integrity.saveRevision}.`
       };
     }
+    if (definition.id === "export.download") return await downloadExport(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
     return {

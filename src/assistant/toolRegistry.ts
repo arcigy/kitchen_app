@@ -1121,6 +1121,25 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     riskLevel: "medium",
     requiresConfirmation: false,
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
+    id: "export.download",
+    title: "Download project export",
+    description: "Starts one existing deterministic browser export after explicit confirmation.",
+    ownerSystem: "export-actions",
+    effect: "Generates and downloads the selected export from current project state.",
+    preconditions: ["The browser must allow file downloads.", "The user must explicitly confirm the requested download."],
+    postconditions: ["The browser has started the selected download; the tool never changes project geometry."],
+    examples: [{ format: "layout-json" }, { format: "viewport-png" }],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: {
+      type: "object",
+      properties: { format: { type: "string", enum: ["layout-json", "scene-json", "website-initial-json", "website-final-json", "viewport-png"] } },
+      required: ["format"],
+      additionalProperties: false
+    }
   }
 ];
 
@@ -1195,11 +1214,11 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
   {
     id: "render-export",
     title: "Rendering and exports",
-    status: "not-exposed",
+    status: "partially-available",
     ownerSystem: "render/export controllers",
-    supportedByTools: [],
-    exactBehavior: "The application supports renders, PDF/workbook/customer outputs and project downloads.",
-    limitation: "These launch downloads or long-running render workflows and do not yet expose a verifiable assistant job/result contract."
+    supportedByTools: ["export.download"],
+    exactBehavior: "The assistant can launch existing deterministic layout, scene, website-snapshot JSON and viewport PNG downloads after confirmation.",
+    limitation: "Blender preview, PDF/workbook/customer outputs and other long-running render flows do not yet expose a verifiable assistant job/result contract."
   }
 ];
 
