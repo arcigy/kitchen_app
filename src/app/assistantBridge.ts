@@ -30,7 +30,8 @@ import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync
 import { buildProjectPricingViews } from "../layout/bom/projectPricing";
 import { buildProjectQuoteSummary } from "../layout/bom/projectQuote";
 import type { ProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
-import type { DoorInstance, WindowInstance } from "./localTypes";
+import type { DoorInstance, DoorParams, WindowInstance, WindowParams } from "./localTypes";
+import { validateOpeningPlacement } from "./openingPlacementValidation";
 import {
   createAssistantKitchenController,
   type AssistantKitchenCreateInput
@@ -113,6 +114,19 @@ type AssistantBridgeContext = {
   createFloor: (params: FloorParams) => FloorInstance;
   createColumn: (params: Partial<ColumnParams>) => ColumnInstance;
   createSection: (params: SectionParams) => SectionInstance;
+  createDoor: (defaultWall?: DoorParams["wall"], wallId?: string | null) => DoorInstance;
+  createWindow: (defaultWall?: WindowParams["wall"], wallId?: string | null) => WindowInstance;
+  clampDoorParams: (params: DoorParams) => DoorParams;
+  clampWindowParams: (params: WindowParams) => WindowParams;
+  updateDoorTransform: (inst: DoorInstance) => void;
+  updateWindowTransform: (inst: WindowInstance) => void;
+  rebuildWall: (wall: WallInstance) => void;
+  rebuildWallPlanMesh: () => void;
+  setActiveDoor: (inst: DoorInstance | null) => void;
+  setActiveWindow: (inst: WindowInstance | null) => void;
+  setSelectedDoor: () => void;
+  setSelectedWindow: () => void;
+  disposeObject3D: (object: THREE.Object3D) => void;
   getProjectMarginSettings: () => ProjectMarginSettingsState;
   authorizeToolCall: (call: AssistantToolCall) => Promise<void>;
   commitHistory: () => void;
@@ -862,6 +876,143 @@ async function executePatchSelectedParams(ctx: AssistantBridgeContext, input: Re
   };
 }
 
+function hostedWall(ctx: AssistantBridgeContext, wallId: string): WallInstance {
+  const wall = ctx.walls.find((item) => item.id === wallId);
+  if (!wall) throw new Error(`Wall ${wallId} was not found.`);
+  const { aMm, bMm } = wall.params;
+  if (Math.hypot(bMm.x - aMm.x, bMm.z - aMm.z) <= 0) throw new Error(`Wall ${wallId} has no usable length.`);
+  return wall;
+}
+
+function validateHostedOpening(ctx: AssistantBridgeContext, opening: DoorInstance | WindowInstance, excludedId?: string): WallInstance {
+  const wallId = opening.params.wallId;
+  if (!wallId) throw new Error("A wall-hosted opening requires wallId.");
+  const wall = hostedWall(ctx, wallId);
+  const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
+  const validation = validateOpeningPlacement({
+    wallId,
+    lengthMm,
+    centerMm: opening.params.centerMm,
+    widthMm: opening.params.widthMm,
+    existingOpenings: [...ctx.doors, ...ctx.windows].filter((item) => item.id !== excludedId)
+  });
+  if (!validation.valid) {
+    const conflict = validation.conflictingOpeningId ? ` (${validation.conflictingOpeningId})` : "";
+    throw new Error(`Opening placement is ${validation.reason}${conflict}.`);
+  }
+  return wall;
+}
+
+function refreshOpeningUi(ctx: AssistantBridgeContext, wall: WallInstance) {
+  ctx.rebuildWall(wall);
+  ctx.rebuildWallPlanMesh();
+  ctx.mountProps();
+  ctx.updateLayoutPanel();
+  ctx.updateSelectionHighlights();
+}
+
+function createDoorOpening(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const wallId = requireString(input, "wallId");
+  const inst = ctx.createDoor("back", wallId);
+  const candidate = ctx.clampDoorParams({ ...inst.params, ...cloneJson(input), wall: "back", wallId });
+  inst.params = candidate;
+  const wall = validateHostedOpening(ctx, inst);
+  ctx.doors.push(inst);
+  ctx.layoutRoot.add(inst.root);
+  ctx.updateDoorTransform(inst);
+  ctx.setActiveDoor(inst);
+  ctx.setSelectedDoor();
+  refreshOpeningUi(ctx, wall);
+  ctx.commitHistory();
+  return { ok: true, toolId: "opening.createDoor", output: { id: inst.id, params: cloneJson(inst.params) }, stateDeltaSummary: `Created door ${inst.id} on wall ${wall.id}.` };
+}
+
+function createWindowOpening(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const wallId = requireString(input, "wallId");
+  const inst = ctx.createWindow("back", wallId);
+  const candidate = ctx.clampWindowParams({ ...inst.params, ...cloneJson(input), wall: "back", wallId });
+  inst.params = candidate;
+  const wall = validateHostedOpening(ctx, inst);
+  ctx.windows.push(inst);
+  ctx.layoutRoot.add(inst.root);
+  ctx.updateWindowTransform(inst);
+  ctx.setActiveWindow(inst);
+  ctx.setSelectedWindow();
+  refreshOpeningUi(ctx, wall);
+  ctx.commitHistory();
+  return { ok: true, toolId: "opening.createWindow", output: { id: inst.id, params: cloneJson(inst.params) }, stateDeltaSummary: `Created window ${inst.id} on wall ${wall.id}.` };
+}
+
+function updateDoorOpening(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const id = requireString(input, "id");
+  const inst = ctx.doors.find((item) => item.id === id);
+  if (!inst) throw new Error(`Door ${id} was not found.`);
+  const patch = input.patch as Record<string, unknown>;
+  const previous = cloneJson(inst.params);
+  const candidate = ctx.clampDoorParams({ ...previous, ...cloneJson(patch), wall: "back" });
+  inst.params = candidate;
+  try {
+    const wall = validateHostedOpening(ctx, inst, id);
+    ctx.updateDoorTransform(inst);
+    ctx.setActiveDoor(inst);
+    ctx.setSelectedDoor();
+    refreshOpeningUi(ctx, wall);
+    if (previous.wallId && previous.wallId !== wall.id) refreshOpeningUi(ctx, hostedWall(ctx, previous.wallId));
+    ctx.commitHistory();
+    return { ok: true, toolId: "opening.updateDoor", output: { id, params: cloneJson(inst.params) }, stateDeltaSummary: `Updated door ${id}.` };
+  } catch (error) {
+    inst.params = previous;
+    throw error;
+  }
+}
+
+function updateWindowOpening(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const id = requireString(input, "id");
+  const inst = ctx.windows.find((item) => item.id === id);
+  if (!inst) throw new Error(`Window ${id} was not found.`);
+  const patch = input.patch as Record<string, unknown>;
+  const previous = cloneJson(inst.params);
+  const candidate = ctx.clampWindowParams({ ...previous, ...cloneJson(patch), wall: "back" });
+  inst.params = candidate;
+  try {
+    const wall = validateHostedOpening(ctx, inst, id);
+    ctx.updateWindowTransform(inst);
+    ctx.setActiveWindow(inst);
+    ctx.setSelectedWindow();
+    refreshOpeningUi(ctx, wall);
+    if (previous.wallId && previous.wallId !== wall.id) refreshOpeningUi(ctx, hostedWall(ctx, previous.wallId));
+    ctx.commitHistory();
+    return { ok: true, toolId: "opening.updateWindow", output: { id, params: cloneJson(inst.params) }, stateDeltaSummary: `Updated window ${id}.` };
+  } catch (error) {
+    inst.params = previous;
+    throw error;
+  }
+}
+
+function deleteOpening(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const kind = requireString(input, "kind");
+  const id = requireString(input, "id");
+  const collection = kind === "door" ? ctx.doors : kind === "window" ? ctx.windows : null;
+  if (!collection) throw new Error("Opening kind is invalid.");
+  const index = collection.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error(`${kind === "door" ? "Door" : "Window"} ${id} was not found.`);
+  const inst = collection[index];
+  const wall = inst.params.wallId ? hostedWall(ctx, inst.params.wallId) : null;
+  collection.splice(index, 1);
+  inst.root.parent?.remove(inst.root);
+  ctx.disposeObject3D(inst.root);
+  if (kind === "door") {
+    ctx.setActiveDoor(ctx.doors.at(-1) ?? null);
+    if (ctx.doors.length > 0) ctx.setSelectedDoor(); else ctx.clearSelection();
+  } else {
+    ctx.setActiveWindow(ctx.windows.at(-1) ?? null);
+    if (ctx.windows.length > 0) ctx.setSelectedWindow(); else ctx.clearSelection();
+  }
+  if (wall) refreshOpeningUi(ctx, wall);
+  ctx.commitHistory();
+  return { ok: true, toolId: "opening.delete", output: { kind, id }, stateDeltaSummary: `Deleted ${kind} ${id}.` };
+}
+
 async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolCall): Promise<AssistantToolResult> {
   try {
     const definition = assertToolAllowed(call.toolId);
@@ -1091,6 +1242,11 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       if (!wall) throw new Error("Wall creation was blocked by editor constraints.");
       return { ok: true, toolId: call.toolId, output: { id: wall.id, params: cloneJson(wall.params) }, stateDeltaSummary: `Created wall ${wall.id}.` };
     }
+    if (definition.id === "opening.createDoor") return createDoorOpening(ctx, call.input);
+    if (definition.id === "opening.createWindow") return createWindowOpening(ctx, call.input);
+    if (definition.id === "opening.updateDoor") return updateDoorOpening(ctx, call.input);
+    if (definition.id === "opening.updateWindow") return updateWindowOpening(ctx, call.input);
+    if (definition.id === "opening.delete") return deleteOpening(ctx, call.input);
     if (definition.id === "floor.create") {
       const materialId = requireString(call.input, "materialId");
       assertCatalogMaterial(ctx, materialId);

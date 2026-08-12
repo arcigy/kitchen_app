@@ -113,6 +113,51 @@ const semanticKitchenCreateSchema = {
   additionalProperties: false
 };
 
+const doorOpeningPatchSchema = {
+  type: "object",
+  properties: {
+    wallId: { type: "string", minLength: 1 },
+    widthMm: { type: "number", minimum: 1 },
+    heightMm: { type: "number", minimum: 1 },
+    centerMm: { type: "number" },
+    frameWidthMm: { type: "number", minimum: 0 },
+    offsetFromInteriorMm: { type: "number", minimum: 0 },
+    panelThicknessMm: { type: "number", minimum: 1 },
+    swingDirection: { type: "string", enum: ["left", "right"] },
+    swingSide: { type: "string", enum: ["inward", "outward"] },
+    swingAngleDeg: { type: "number", minimum: 1, maximum: 180 },
+    handleType: { type: "string", enum: ["none", "knob", "bar", "lever"] },
+    handleOffsetMm: { type: "number", minimum: 0 },
+    handleHeightMm: { type: "number", minimum: 0 },
+    materialId: { type: "string", minLength: 1 }
+  },
+  additionalProperties: false
+};
+
+const windowOpeningPatchSchema = {
+  type: "object",
+  properties: {
+    wallId: { type: "string", minLength: 1 },
+    widthMm: { type: "number", minimum: 1 },
+    heightMm: { type: "number", minimum: 1 },
+    sillHeightMm: { type: "number", minimum: 0 },
+    centerMm: { type: "number" },
+    frameWidthMm: { type: "number", minimum: 0 },
+    offsetFromInteriorMm: { type: "number", minimum: 0 },
+    sashWidthMm: { type: "number", minimum: 0 },
+    sashProfileDepthMm: { type: "number", minimum: 1 },
+    frameProfileDepthMm: { type: "number", minimum: 1 },
+    swingDirection: { type: "string", enum: ["left", "right"] },
+    swingSide: { type: "string", enum: ["inward", "outward"] },
+    swingAngleDeg: { type: "number", minimum: 1, maximum: 180 },
+    handleType: { type: "string", enum: ["none", "knob", "bar", "lever"] },
+    handleOffsetMm: { type: "number", minimum: 0 },
+    handleHeightMm: { type: "number", minimum: 0 },
+    materialId: { type: "string", minLength: 1 }
+  },
+  additionalProperties: false
+};
+
 export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
   {
     id: "context.getSelection",
@@ -843,6 +888,101 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     }
   },
   {
+    id: "opening.createDoor",
+    title: "Create wall-hosted door",
+    description: "Creates a door on an exact wall after checking wall bounds and conflicts with existing openings.",
+    ownerSystem: "door-controls/opening-placement-validation",
+    effect: "Adds one persisted door, rebuilds its host wall and records one history snapshot.",
+    preconditions: ["wallId must identify an existing wall.", "The opening must fit entirely inside the host wall and not overlap another door or window."],
+    postconditions: ["The new door is hosted on the requested wall and selected."],
+    examples: [{ wallId: "wall_1", widthMm: 900, heightMm: 2100, centerMm: 1400 }],
+    readOnly: false,
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    inputSchema: {
+      type: "object",
+      properties: doorOpeningPatchSchema.properties,
+      required: ["wallId", "widthMm", "heightMm", "centerMm"],
+      additionalProperties: false
+    }
+  },
+  {
+    id: "opening.createWindow",
+    title: "Create wall-hosted window",
+    description: "Creates a window on an exact wall after checking wall bounds and conflicts with existing openings.",
+    ownerSystem: "window-controls/opening-placement-validation",
+    effect: "Adds one persisted window, rebuilds its host wall and records one history snapshot.",
+    preconditions: ["wallId must identify an existing wall.", "The opening must fit entirely inside the host wall and not overlap another door or window."],
+    postconditions: ["The new window is hosted on the requested wall and selected."],
+    examples: [{ wallId: "wall_1", widthMm: 1200, heightMm: 1000, sillHeightMm: 900, centerMm: 2500 }],
+    readOnly: false,
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    inputSchema: {
+      type: "object",
+      properties: windowOpeningPatchSchema.properties,
+      required: ["wallId", "widthMm", "heightMm", "sillHeightMm", "centerMm"],
+      additionalProperties: false
+    }
+  },
+  {
+    id: "opening.updateDoor",
+    title: "Update wall-hosted door",
+    description: "Updates exact door parameters only when the resulting opening remains valid on its host wall.",
+    ownerSystem: "door-controls/opening-placement-validation",
+    effect: "Changes one persisted door and records one history snapshot.",
+    preconditions: ["id must identify an existing door.", "The resulting opening must fit and not overlap another opening."],
+    postconditions: ["The host wall is rebuilt from validated door parameters."],
+    examples: [{ id: "door_1", patch: { widthMm: 800, swingDirection: "right" } }],
+    readOnly: false,
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", minLength: 1 }, patch: doorOpeningPatchSchema },
+      required: ["id", "patch"],
+      additionalProperties: false
+    }
+  },
+  {
+    id: "opening.updateWindow",
+    title: "Update wall-hosted window",
+    description: "Updates exact window parameters only when the resulting opening remains valid on its host wall.",
+    ownerSystem: "window-controls/opening-placement-validation",
+    effect: "Changes one persisted window and records one history snapshot.",
+    preconditions: ["id must identify an existing window.", "The resulting opening must fit and not overlap another opening."],
+    postconditions: ["The host wall is rebuilt from validated window parameters."],
+    examples: [{ id: "window_1", patch: { sillHeightMm: 950, widthMm: 1100 } }],
+    readOnly: false,
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", minLength: 1 }, patch: windowOpeningPatchSchema },
+      required: ["id", "patch"],
+      additionalProperties: false
+    }
+  },
+  {
+    id: "opening.delete",
+    title: "Delete wall-hosted opening",
+    description: "Deletes one exact door or window and rebuilds its host wall.",
+    ownerSystem: "opening-controls",
+    effect: "Removes one persisted opening and records one history snapshot.",
+    preconditions: ["kind and id must identify an existing opening."],
+    postconditions: ["The host wall no longer contains the opening cutout."],
+    examples: [{ kind: "door", id: "door_1" }],
+    readOnly: false,
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    inputSchema: {
+      type: "object",
+      properties: { kind: { type: "string", enum: ["door", "window"] }, id: { type: "string", minLength: 1 } },
+      required: ["kind", "id"],
+      additionalProperties: false
+    }
+  },
+  {
     id: "floor.create",
     title: "Create floor",
     description: "Creates a floor slab from a closed plan boundary through the floor controller.",
@@ -1039,9 +1179,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Openings, measurements, align and trim",
     status: "partially-available",
     ownerSystem: "opening/measure/align/wall tools",
-    supportedByTools: ["context.queryObjects", "context.getObject", "editor.moveSelection", "editor.deleteSelection"],
-    exactBehavior: "Existing selected doors/windows can participate in shared move/delete flows.",
-    limitation: "Creation, associative dimension authoring, semantic align references and trim/extend do not yet have stable non-pointer command contracts."
+    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "editor.moveSelection", "editor.deleteSelection"],
+    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. Existing selected openings also participate in shared move/delete flows.",
+    limitation: "Associative dimension authoring, semantic align references and trim/extend do not yet have stable non-pointer command contracts."
   },
   {
     id: "custom-furniture-wardrobe",
