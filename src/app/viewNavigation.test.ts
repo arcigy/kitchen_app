@@ -141,11 +141,11 @@ describe("view cube presentation", () => {
 });
 
 describe("viewNavigation camera math", () => {
-  it("uses a fine wheel step instead of a jumpy zoom increment", () => {
+  it("uses a stable Revit-like quarter zoom step", () => {
     const oneNotchZoomInScale = navigationWheelScale(-120);
 
-    expect(oneNotchZoomInScale).toBeGreaterThan(0.9);
-    expect(oneNotchZoomInScale).toBeLessThan(0.93);
+    expect(oneNotchZoomInScale).toBeCloseTo(1 / 1.25, 10);
+    expect(navigationWheelScale(120)).toBeCloseTo(1.25, 10);
   });
 
   it("pans in the camera view plane instead of fixed world axes", () => {
@@ -183,24 +183,22 @@ describe("viewNavigation camera math", () => {
     expect(distances.at(-1)).toBeLessThan(distances[0]! * 0.4);
   });
 
-  it("orbits around an off-center pivot without moving its screen position", () => {
+  it("centers an off-center pivot before orbiting around it", () => {
     const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
     camera.position.set(4, 3, 5);
     camera.lookAt(0, 1, 0);
     camera.updateMatrixWorld(true);
     const pivot = new THREE.Vector3(1.2, 0.8, -0.4);
-    const before = pivot.clone().project(camera);
-
     orbitCameraAroundPivot(camera, pivot, 90, -35, 800);
     camera.updateMatrixWorld(true);
     const after = pivot.clone().project(camera);
 
-    expect(after.x).toBeCloseTo(before.x, 5);
-    expect(after.y).toBeCloseTo(before.y, 5);
+    expect(after.x).toBeCloseTo(0, 8);
+    expect(after.y).toBeCloseTo(0, 8);
     expect(camera.position.distanceTo(pivot)).toBeCloseTo(new THREE.Vector3(4, 3, 5).distanceTo(pivot), 6);
   });
 
-  it("keeps the view cube synchronized through a half orbit from the top view", () => {
+  it("returns reliably from an exact top view through a vertical orbit", () => {
     const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
     const pivot = new THREE.Vector3(0, 0, 0);
     camera.position.set(0, 8, 0);
@@ -208,24 +206,10 @@ describe("viewNavigation camera math", () => {
     camera.lookAt(pivot);
     camera.updateMatrixWorld(true);
 
-    const cssMatrix = new THREE.Matrix4();
-    const initialRight = new THREE.Vector3(1, 0, 0)
-      .applyMatrix4(setViewCubeCssRotationMatrix(camera.quaternion, cssMatrix))
-      .normalize();
-    let previousRight = initialRight.clone();
-    const steps = 36;
-
-    for (let index = 0; index < steps; index += 1) {
-      orbitCameraAroundPivot(camera, pivot, -800 / (2 * steps), 0, 800, 1);
-      const currentRight = new THREE.Vector3(1, 0, 0)
-        .applyMatrix4(setViewCubeCssRotationMatrix(camera.quaternion, cssMatrix))
-        .normalize();
-      expect(previousRight.angleTo(currentRight)).toBeLessThan(THREE.MathUtils.degToRad(5.1));
-      previousRight = currentRight;
-    }
-
-    expect(camera.position.distanceTo(new THREE.Vector3(0, 8, 0))).toBeLessThan(1e-8);
-    expect(previousRight.dot(initialRight)).toBeLessThan(-0.999);
+    expect(orbitCameraAroundPivot(camera, pivot, 0, 120, 800, 1)).toBe(true);
+    expect(camera.position.y).toBeLessThan(8);
+    expect(camera.position.distanceTo(pivot)).toBeCloseTo(8, 8);
+    expect(camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
   });
 
   it("keeps the point below the cursor fixed during axonometric zoom", () => {

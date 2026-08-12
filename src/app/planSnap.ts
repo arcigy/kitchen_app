@@ -350,9 +350,29 @@ function getProjectedPlanPolygonFromMesh(inst: LayoutInstance, mesh: THREE.Mesh)
 }
 
 function getRealModulePlanLocalPolygon(inst: LayoutInstance) {
-  if (!isFwmChamferedCornerPlan(inst)) return [];
-  const planBoard = findPlanBoardMesh(inst);
-  return planBoard ? getProjectedPlanPolygonFromMesh(inst, planBoard) : [];
+  // A Revit profile is authoritative for every module, not only the original
+  // FWM corner family.  Prefer its declared corpus/front board and never let a
+  // handle or another hardware mesh become the plan boundary.
+  const preferredPlanBoard = isFwmChamferedCornerPlan(inst) ? findPlanBoardMesh(inst) : null;
+  if (preferredPlanBoard) return getProjectedPlanPolygonFromMesh(inst, preferredPlanBoard);
+
+  let best: THREE.Mesh | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  inst.module.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || mesh.visible === false || !(mesh.geometry instanceof THREE.BufferGeometry)) return;
+    const profile = mesh.userData.revitPlanProfileMm as Array<{ x?: number; z?: number }> | undefined;
+    if (!Array.isArray(profile) || profile.length < 3) return;
+    const componentType = String(mesh.userData.componentType ?? "").toLowerCase();
+    const materialGroup = String(mesh.userData.materialGroup ?? mesh.userData.materialSlotId ?? "").toLowerCase();
+    if (/handle|hardware|hinge|runner|leg|fastener|clip|appliance/.test(`${componentType} ${materialGroup}`)) return;
+    const rank = /front/.test(materialGroup) ? 0 : /corpus|body|carcass|back|plinth/.test(materialGroup) ? 1 : 2;
+    if (rank < bestRank) {
+      best = mesh;
+      bestRank = rank;
+    }
+  });
+  return best ? getProjectedPlanPolygonFromMesh(inst, best) : [];
 }
 
 export function getModulePlanLocalPolygon(
