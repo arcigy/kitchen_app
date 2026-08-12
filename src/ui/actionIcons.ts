@@ -37,6 +37,7 @@ export const actionIconDetails = {
   bom: { title: "BOM", description: "Open the bill of materials for the current project." },
   install: { title: "Install app", description: "Install Arcigy as an application when the browser supports it." },
   materialEdit: { title: "Material", description: "Edit the material settings for the active selection." },
+  ledStrip: { title: "LED strip", description: "Choose how to place and edit an LED strip." },
   camera: { title: "Camera", description: "Place or configure a camera for the current scene." },
   design: { title: "Design", description: "Open the project design workspace." },
   sheets: { title: "Sheets", description: "Open project drawing sheets." },

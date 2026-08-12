@@ -267,6 +267,8 @@ import { createLayoutSceneQueries } from "./app/layoutSceneQueries";
 import { createInstanceActionsController } from "./app/instanceActionsController";
 import { createKitchenWorktopDrawController } from "./app/kitchenWorktopDrawController";
 import { createLedStripDrawController } from "./app/ledStripDrawController";
+import { createAutomaticLedStripGroups } from "./layout/ledStripPlacement";
+import type { LedStripMode } from "./layout/ledStripTypes";
 import { createKitchenWorktopDrawSnapResolver } from "./app/pointerKitchenWorktopDrawClickHelpers";
 import { createMeasurePlanSnapController } from "./app/measurePlanSnapController";
 import { createEditHudController } from "./app/editHudController";
@@ -1804,6 +1806,7 @@ export function startApp(initialArgs: AppArgs) {
     I_INSTALL,
     I_ISOLATE,
     I_LIVING_WALL,
+    I_LED_STRIP,
     I_MATERIAL_EDIT,
     I_MEASURE,
     I_MOVE,
@@ -2106,6 +2109,7 @@ export function startApp(initialArgs: AppArgs) {
     mountProps();
   }
   const deferredLinkedMeasureInputs = createDeferredLinkedMeasureInputs();
+  let ledStripDrawController: ReturnType<typeof createLedStripDrawController> | null = null;
   const propertiesRouter = createPropertiesRouter({
     S,
     args,
@@ -2183,6 +2187,14 @@ export function startApp(initialArgs: AppArgs) {
     get wardrobeMode() { return wardrobeMode; },
     get drawOrthoEnabled() { return drawOrthoEnabled; },
     get kitchenMode() { return kitchenMode; },
+    ledStrip: {
+      getSelectedGroupId: () => ledStripDrawController?.state.selectedGroupId ?? null,
+      getSelectedPick: () => ledStripDrawController?.state.selectedPick ?? null,
+      getDrawPoint: () => ledStripDrawController?.state.active ? ledStripDrawController.state.points.at(-1) ?? null : null,
+      refresh: () => ledStripDrawController?.refresh(),
+      addVertical: (direction, lengthMm) => ledStripDrawController?.addVertical(direction, lengthMm) ?? false,
+      moveSelectedTo: (point) => ledStripDrawController?.moveSelectedTo(point) ?? false
+    },
     get layoutTool() { return layoutTool; },
     get mode() { return mode; },
     get selectedFloorId() { return selectedFloorId; },
@@ -2203,19 +2215,44 @@ export function startApp(initialArgs: AppArgs) {
     recordActivity: (label) => recentActivityController.record(label)
   });
   const mountProps = () => propertiesRouter.mountProps();
-  const ledStripDrawController = createLedStripDrawController({
+  ledStripDrawController = createLedStripDrawController({
     S,
     layoutRoot,
     commitHistory: () => commitHistory(S),
     mountProps,
     setStatus: setUnderlayStatus
   });
-  const setToolLed = () => {
+  const setToolLed = (mode: LedStripMode = "custom") => {
     cancelViewerToolMode();
     ensureLayoutMode();
     clearWallDrawState();
+    if (mode !== "custom") {
+      const sourceIds = selectedInstanceIds.size ? selectedInstanceIds : selectedInstanceId ? new Set([selectedInstanceId]) : new Set<string>();
+      const sources = S.instances.filter((instance) => sourceIds.has(instance.id)).map((instance) => ({ id: instance.id, root: instance.root }));
+      if (sources.length === 0) {
+        setUnderlayStatus("LED pásik: najprv vyber modul, do ktorého sa má vložiť.");
+        return;
+      }
+      const result = createAutomaticLedStripGroups({
+        mode,
+        sources,
+        nextId: () => `led${S.ledStripCounter++}`
+      });
+      if (result.unsupportedSourceIds.length) {
+        setUnderlayStatus("LED pásik: vybrané moduly nemajú potrebné konštrukčné kotvy; nič sa nevložilo.");
+        return;
+      }
+      S.ledStripGroups.push(...result.groups);
+      layoutTool = "led";
+      ledStripDrawController?.refresh();
+      ledStripDrawController?.selectGroup(result.groups[0]?.id ?? null);
+      commitHistory(S);
+      setUnderlayStatus(`LED pásik: vložené ${result.groups.reduce((total, group) => total + group.runs.length, 0)} pásiky.`);
+      mountProps();
+      return;
+    }
     layoutTool = "led";
-    ledStripDrawController.startCustom();
+    ledStripDrawController?.startCustom();
   };
 
 
@@ -2265,6 +2302,7 @@ export function startApp(initialArgs: AppArgs) {
     restoreLedStripGroups: (groups, ledStripCounter) => {
       S.ledStripGroups.splice(0, S.ledStripGroups.length, ...groups);
       S.ledStripCounter = ledStripCounter ?? S.ledStripCounter;
+      ledStripDrawController?.refresh();
     },
     restoreWardrobe: (state) => wardrobeMode?.restoreSaveState(state),
     restoreProjectMaterialAssignments: (state) => {
@@ -2569,6 +2607,7 @@ export function startApp(initialArgs: AppArgs) {
   const duplicateSelected = layoutActionsController.duplicateSelected;
   const deleteSelected = () => {
     if (kitchenMode?.deleteActiveTallSubmodule?.()) return true;
+    if (layoutTool === "led" && ledStripDrawController?.deleteSelection()) return true;
     return layoutActionsController.deleteSelected();
   };
   const toggle2dView = layoutActionsController.toggle2dView;
@@ -2616,6 +2655,7 @@ export function startApp(initialArgs: AppArgs) {
     I_INSTALL,
     I_ISOLATE,
     I_LIVING_WALL,
+    I_LED_STRIP,
     I_MATERIAL_EDIT,
     I_MEASURE,
     I_MOVE,
