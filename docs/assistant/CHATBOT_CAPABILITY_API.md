@@ -7,18 +7,22 @@ GET /api/assistant/capabilities
 Cookie: <authenticated session>
 ```
 
-It returns 40 exact tool definitions, orchestrator metadata, capability boundaries, tenant package availability and model routing. The machine registry is authoritative; documentation examples never override JSON schemas.
+It returns the exact role-authorized tool definitions, orchestrator metadata, capability boundaries, capability packs, tenant package availability and model routing. The machine registry is authoritative; documentation examples never override JSON schemas.
+
+The planner receives only the smallest matching capability packs plus live-context verification tools. An unmatched request may use the full registered set, but every workflow remains bounded to 12 steps and five server iterations.
 
 ## Runtime flow
 
 1. `POST /api/assistant/turn` classifies the message and creates a workflow.
 2. The browser executes only registered calls through `window.__arcigyAssistant.executeToolCall`.
-3. Schema validation runs before editor state is touched.
+3. Schema and server role authorization run before editor state is touched for every write tool.
 4. High-risk tools require explicit UI confirmation and `confirmed: true`.
 5. `POST /api/assistant/continue` returns tool results plus a fresh live context to the analyzer.
 6. The assistant reports completion only after independent verification.
 
 Tenant identity never appears in tool input. It is derived from the authenticated session. Enabled modules and materials are checked against the tenant catalog.
+
+The agent never elevates permissions: a viewer receives read/verify capabilities only, while write tools require the authenticated role and a successful server authorization immediately before browser execution.
 
 ## Semantic kitchen call
 

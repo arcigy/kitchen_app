@@ -17,7 +17,7 @@ import {
 import { assistantCopy } from "./assistantLocale";
 import { validateAssistantToolCall } from "./toolValidation";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-import { fetchExternalText } from "../server/external-http";
+import type { ClientRole } from "../core/client/client-types";
 import {
   applyPinoResolvedQueryToParams,
   resolvePinoModuleDescription
@@ -35,18 +35,11 @@ import {
 import { openAiAssistantFailureMessage } from "./openaiResponses";
 import { createAssistantDebugRecorder, type AssistantDebugRecorder } from "./debugTrace";
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_FLASH_MODEL = "gemini-2.5-flash";
-const DEFAULT_LITE_MODEL = "gemini-2.5-flash-lite";
-
 type AgentInput = AssistantTurnRequest & {
   ragChunks: AssistantRagChunk[];
   catalog?: Pick<ClientCatalog, "clientId" | "modules" | "vendorCatalog" | "kitchenDefaults">;
+  actorRole?: ClientRole;
 };
-
-function normalizeGeminiModel(model: string): string {
-  return model.trim().replace(/^models\//u, "");
-}
 
 function isLikelyFullKitchenRequest(message: string): boolean {
   const m = message.toLowerCase();
@@ -156,14 +149,6 @@ function buildDeterministicReadWorkflow(input: AgentInput): {
 }
 
 function buildFallbackPlan(input: AgentInput): { message: string; plan: AssistantPlan | null; calls: AssistantToolCall[]; confirm: boolean } {
-  if (isLikelyFullKitchenRequest(input.message)) {
-    return {
-      message: "Automaticke vlozenie celej kuchyne uz nie je dostupne. Mozem pripravit postup alebo vlozit konkretne moduly z katalogu po jednom.",
-      plan: null,
-      calls: [],
-      confirm: false
-    };
-  }
   if (!isHowToQuestion(input.message) && isLikelyModulePatch(input.message)) {
     const ids = selectedModuleIds(input);
     if (ids.length === 0) {
@@ -283,26 +268,6 @@ function buildPrompt(input: AgentInput): string {
   ].join("\n\n");
 }
 
-async function callGeminiJson(input: AgentInput): Promise<Partial<AssistantTurnResponse> | null> {
-  if (process.env.NODE_ENV === "test" && process.env.GEMINI_ASSISTANT_TEST_LIVE !== "true") return null;
-  const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key;
-  if (!apiKey) return null;
-  const model = normalizeGeminiModel(process.env.GEMINI_ASSISTANT_MODEL || (isLikelyFullKitchenRequest(input.message) ? DEFAULT_FLASH_MODEL : DEFAULT_LITE_MODEL));
-  const { response, text } = await fetchExternalText(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
-    })
-  }, { timeoutMs: 30_000, maxBytes: 2 * 1024 * 1024 });
-  if (!response.ok) throw new Error(`Gemini assistant request failed: HTTP ${response.status}`);
-  const parsed = JSON.parse(text) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const jsonText = parsed.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
-  if (!jsonText) return null;
-  return JSON.parse(jsonText) as Partial<AssistantTurnResponse>;
-}
-
 function validateFromToolResults(results: AssistantToolResult[] | undefined, locale: AgentInput["locale"]): AssistantValidationReport | null {
   if (!results || results.length === 0) return null;
   const failed = results.filter((result) => !result.ok);
@@ -379,6 +344,7 @@ async function runAssistantTurnInternal(
     clientContext: input.clientContext,
     conversation: input.conversation,
     ragChunks: input.ragChunks,
+    actorRole: input.actorRole,
     debug
   };
 
@@ -681,59 +647,12 @@ async function runAssistantTurnInternal(
       workflow: null
     };
   }
-  let generated: Partial<AssistantTurnResponse> | null = null;
-  const geminiStartedAt = Date.now();
-  const geminiModel = normalizeGeminiModel(
-    process.env.GEMINI_ASSISTANT_MODEL ||
-    (isLikelyFullKitchenRequest(input.message) ? DEFAULT_FLASH_MODEL : DEFAULT_LITE_MODEL)
-  );
-  try {
-    generated = await callGeminiJson(input);
-    debug.record({
-      stage: "legacy_gemini_fallback",
-      status: generated ? "completed" : "skipped",
-      actor: {
-        kind: "model",
-        role: "legacy_fallback",
-        model: geminiModel
-      },
-      durationMs: Date.now() - geminiStartedAt,
-      input: { message: input.message, clientContext: input.clientContext },
-      output: generated ?? { reason: "Gemini fallback is not configured or returned no output." }
-    });
-  } catch (error) {
-    generated = null;
-    debug.record({
-      stage: "legacy_gemini_fallback",
-      status: "failed",
-      actor: {
-        kind: "model",
-        role: "legacy_fallback",
-        model: geminiModel
-      },
-      durationMs: Date.now() - geminiStartedAt,
-      input: { message: input.message, clientContext: input.clientContext },
-      error: {
-        name: error instanceof Error ? error.name : "Error",
-        message: error instanceof Error ? error.message : String(error)
-      }
-    });
-  }
-
-  const generatedCalls = sanitizeAssistantToolCalls(generated?.toolCalls);
-  const toolCalls = generatedCalls.length > 0 ? generatedCalls : sanitizeAssistantToolCalls(fallback.calls);
-  const generatedMessage = typeof generated?.assistantMessage === "string" ? generated.assistantMessage.trim() : "";
-  const claimsUnverifiedAction = /(idem|pocitam|kontrolujem|vykonavam|upravujem|vkladam|vytvaram|menim|spracuvavam)/u
-    .test(normalizeIntentText(generatedMessage));
-  const assistantMessage = generatedMessage && (toolCalls.length > 0 || !claimsUnverifiedAction)
-    ? generatedMessage
-    : fallback.message;
-  const candidatePlan = generated?.plan && typeof generated.plan === "object" ? generated.plan : fallback.plan;
-  const authoritative = enforceAuthoritativePlan(candidatePlan, toolCalls);
+  const toolCalls = sanitizeAssistantToolCalls(fallback.calls);
+  const authoritative = enforceAuthoritativePlan(fallback.plan, toolCalls);
 
   return {
     ok: true,
-    assistantMessage,
+    assistantMessage: fallback.message,
     plan: authoritative.plan,
     toolCalls,
     validation: null,
@@ -816,7 +735,11 @@ export async function runAssistantTurn(input: AgentInput): Promise<AssistantTurn
         ragSources: response.ragSources
       }
     });
-    return { ...response, debugTrace: debug.fragment() };
+    return {
+      ...response,
+      capabilityDiscovery: response.workflow?.capabilityDiscovery,
+      debugTrace: debug.fragment()
+    };
   } catch (error) {
     debug.record({
       stage: "assistant_turn_response",

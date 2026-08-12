@@ -1,6 +1,7 @@
 import type { LayoutTool, SelectedKind } from "../layout/appState";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppLocale } from "../i18n";
+import type { ClientRole } from "../core/client/client-types";
 
 export type AssistantRiskLevel = "low" | "medium" | "high";
 export type AssistantToolOperation = "read" | "write" | "verify";
@@ -51,6 +52,7 @@ export type AssistantToolDefinition = {
   tags?: string[];
   reversible?: boolean;
   verificationTools?: string[];
+  minimumRole?: ClientRole;
 };
 
 export type AssistantOrchestratorToolMetadata = {
@@ -70,6 +72,7 @@ export type AssistantOrchestratorToolMetadata = {
   reversible: boolean;
   verificationTools: string[];
   tags: string[];
+  minimumRole: ClientRole;
 };
 
 export type AssistantToolCall = {
@@ -87,6 +90,22 @@ export type AssistantCapabilityBoundary = {
   supportedByTools: string[];
   exactBehavior: string;
   limitation?: string;
+};
+
+export type AssistantCapabilityPack = {
+  id: string;
+  title: string;
+  domains: string[];
+  keywords: string[];
+  toolIds: string[];
+  description: string;
+};
+
+export type AssistantCapabilityDiscovery = {
+  packIds: string[];
+  toolIds: string[];
+  fallbackToFullRegistry: boolean;
+  rationale: string;
 };
 
 export type AssistantToolResult = {
@@ -151,6 +170,7 @@ export type AssistantWorkflowState = {
   maxIterations: number;
   status: "planned" | "executing" | "verifying" | "repairing" | "complete" | "failed";
   completedStepIds: string[];
+  capabilityDiscovery?: AssistantCapabilityDiscovery;
   lastError?: string;
 };
 
@@ -227,6 +247,7 @@ export type AssistantTurnResponse = {
   phase?: AssistantExecutionPhase;
   classification?: AssistantTaskClassification | null;
   workflow?: AssistantWorkflowState | null;
+  capabilityDiscovery?: AssistantCapabilityDiscovery;
   debugTrace?: AssistantDebugTraceFragment;
 };
 

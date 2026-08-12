@@ -41,6 +41,28 @@ describe("assistant capability endpoint", () => {
     });
     expect(body.orchestration.models.find((item: { role: string }) => item.role === "executor")).toMatchObject({ model: null });
     expect(body.boundaries.some((item: { id: string }) => item.id === "render-export")).toBe(true);
+    expect(body.capabilityPacks.map((item: { id: string }) => item.id)).toContain("kitchen-pricing");
+  });
+
+  it("exposes only read and verification capabilities to a viewer", async () => {
+    const sendJson = vi.fn();
+    await handleAssistantApi(
+      { method: "GET", headers: { cookie: "session=test" } } as http.IncomingMessage,
+      {} as http.ServerResponse,
+      new URL("http://localhost/api/assistant/capabilities"),
+      {
+        projectRoot: ".",
+        getContext: vi.fn(async () => ({ clientId: "client_a", userId: "user_a", role: "viewer" as const })),
+        getCatalog: vi.fn(async () => ({ modules: [] } as unknown as ClientCatalog)),
+        readJsonBody: vi.fn(),
+        sendJson
+      }
+    );
+
+    const [, status, body] = sendJson.mock.calls[0]!;
+    expect(status).toBe(200);
+    expect(body.tools.every((tool: { readOnly: boolean }) => tool.readOnly)).toBe(true);
+    expect(body.orchestratorToolMetadata.every((tool: { operation: string }) => tool.operation !== "write")).toBe(true);
   });
 
   it("authorizes an exact vendor module only from the authenticated tenant catalog", async () => {
@@ -99,6 +121,24 @@ describe("assistant capability endpoint", () => {
       }
     );
     expect(sendJson).toHaveBeenLastCalledWith(expect.anything(), 403, expect.objectContaining({ authorized: false }));
+  });
+
+  it("rejects a viewer write even when the browser tries to authorize it directly", async () => {
+    const sendJson = vi.fn();
+    await handleAssistantApi(
+      { method: "POST", headers: { cookie: "session=test" } } as http.IncomingMessage,
+      {} as http.ServerResponse,
+      new URL("http://localhost/api/assistant/tool-authorization"),
+      {
+        projectRoot: ".",
+        getContext: vi.fn(async () => ({ clientId: "client_a", userId: "user_a", role: "viewer" as const })),
+        getCatalog: vi.fn(async () => ({ modules: [] } as unknown as ClientCatalog)),
+        readJsonBody: vi.fn(async () => ({ toolId: "project.save", input: {} })),
+        sendJson
+      }
+    );
+
+    expect(sendJson).toHaveBeenCalledWith(expect.anything(), 403, expect.objectContaining({ authorized: false }));
   });
 
   it("authorizes a semantic kitchen only when every referenced catalog item belongs to the tenant", async () => {

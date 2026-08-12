@@ -99,7 +99,7 @@ describe("assistant agent fallback", () => {
     ])).toEqual([{ id: "good_move", toolId: "editor.moveSelection", input: { dxMm: 20, dzMm: 0 } }]);
   });
 
-  it("does not create a full-kitchen generation tool call", async () => {
+  it("does not falsely claim that full-kitchen workflows are unavailable when OpenAI is offline", async () => {
     const response = await runAssistantTurn({
       message: "vytvor celu kuchynu podla zadania",
       clientContext: baseContext,
@@ -107,8 +107,8 @@ describe("assistant agent fallback", () => {
     });
 
     expect(response.requiresConfirmation).toBe(false);
-    expect(response.plan).toBeNull();
     expect(response.toolCalls).toEqual([]);
+    expect(response.assistantMessage).not.toContain("nie je dostupne");
   });
 
   it("creates a module patch tool call for selected module dimensions", async () => {
