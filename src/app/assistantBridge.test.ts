@@ -26,6 +26,19 @@ describe("assistant bridge safety boundary", () => {
     expect(result.error).toContain("input.dzMm is required");
   });
 
+  it("server-authorizes every write tool before invoking its editor owner", async () => {
+    const authorizeToolCall = vi.fn(async () => { throw new Error("role denied"); });
+    const undo = vi.fn();
+    const bridge = createAssistantBridge({ authorizeToolCall, undo } as never);
+
+    const result = await bridge.executeToolCall({ id: "undo_1", toolId: "history.undo", input: {} });
+
+    expect(result.ok).toBe(false);
+    expect(authorizeToolCall).toHaveBeenCalledWith(expect.objectContaining({ toolId: "history.undo" }));
+    expect(undo).not.toHaveBeenCalled();
+    expect(result.error).toContain("role denied");
+  });
+
   it("rolls back earlier module patches when a later target fails", async () => {
     const original = makeDefaultModuleParams("drawer_low");
     const first = { id: "i1", params: structuredClone(original) };

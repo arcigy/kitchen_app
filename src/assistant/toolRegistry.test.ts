@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ASSISTANT_TOOL_DEFINITIONS, assistantToolMetadataForOrchestrator, getAssistantToolDefinition } from "./toolRegistry";
+import { ASSISTANT_TOOL_DEFINITIONS, assistantToolMetadataForOrchestrator, canRoleUseAssistantTool, getAssistantToolDefinition } from "./toolRegistry";
+import { ASSISTANT_CAPABILITY_PACKS } from "./capabilityDiscovery";
 import { validateAssistantToolCall, validateAssistantToolInput } from "./toolValidation";
 
 describe("assistant tool registry", () => {
@@ -30,6 +31,18 @@ describe("assistant tool registry", () => {
       reversible: true,
       verificationTools: ["context.getObject", "validation.inspectProject"]
     });
+  });
+
+  it("publishes capability packs and can scope metadata to a discovered pack", () => {
+    expect(ASSISTANT_CAPABILITY_PACKS.map((pack) => pack.id)).toEqual(expect.arrayContaining(["project-scene", "editor-layout", "modules-catalog", "kitchen-pricing"]));
+    const scoped = assistantToolMetadataForOrchestrator(new Set(["kitchen.create", "pricing.getSummary"]));
+    expect(scoped.map((tool) => tool.id)).toEqual(["kitchen.create", "pricing.getSummary"]);
+  });
+
+  it("never gives a viewer project mutation tools", () => {
+    expect(canRoleUseAssistantTool("viewer", getAssistantToolDefinition("project.save")!)).toBe(false);
+    expect(canRoleUseAssistantTool("viewer", getAssistantToolDefinition("pricing.getSummary")!)).toBe(true);
+    expect(assistantToolMetadataForOrchestrator(undefined, "viewer").some((tool) => tool.operation === "write")).toBe(false);
   });
 
   it("rejects unknown tools and invalid or additional input fields", () => {

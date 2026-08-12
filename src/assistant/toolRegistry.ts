@@ -4,6 +4,7 @@ import type {
   AssistantRiskLevel,
   AssistantToolDefinition
 } from "./types";
+import type { ClientRole } from "../core/client/client-types";
 
 const point2dSchema = {
   type: "object",
@@ -1108,8 +1109,24 @@ const verificationToolsByToolId: Record<string, string[]> = {
   "project.save": ["project.getMetadata"]
 };
 
-export function assistantToolMetadataForOrchestrator(): AssistantOrchestratorToolMetadata[] {
-  return ASSISTANT_TOOL_DEFINITIONS.map((tool) => ({
+const roleRank: Record<ClientRole, number> = { viewer: 0, designer: 1, admin: 2, owner: 3 };
+
+export function minimumAssistantRole(tool: AssistantToolDefinition): ClientRole {
+  return tool.minimumRole ?? ((tool.operation ?? (tool.readOnly ? "read" : "write")) === "write" ? "designer" : "viewer");
+}
+
+export function canRoleUseAssistantTool(role: ClientRole, tool: AssistantToolDefinition): boolean {
+  return roleRank[role] >= roleRank[minimumAssistantRole(tool)];
+}
+
+export function assistantToolsForRole(role: ClientRole): AssistantToolDefinition[] {
+  return ASSISTANT_TOOL_DEFINITIONS.filter((tool) => canRoleUseAssistantTool(role, tool));
+}
+
+export function assistantToolMetadataForOrchestrator(toolIds?: ReadonlySet<string>, role?: ClientRole): AssistantOrchestratorToolMetadata[] {
+  return ASSISTANT_TOOL_DEFINITIONS
+    .filter((tool) => (!toolIds || toolIds.has(tool.id)) && (!role || canRoleUseAssistantTool(role, tool)))
+    .map((tool) => ({
     id: tool.id,
     title: tool.title,
     description: tool.description,
@@ -1125,7 +1142,8 @@ export function assistantToolMetadataForOrchestrator(): AssistantOrchestratorToo
     requiresConfirmation: tool.requiresConfirmation,
     reversible: tool.reversible ?? reversibleToolIds.has(tool.id),
     verificationTools: [...(tool.verificationTools ?? verificationToolsByToolId[tool.id] ?? [])],
-    tags: [...(tool.tags ?? [])]
+    tags: [...(tool.tags ?? [])],
+    minimumRole: minimumAssistantRole(tool)
   }));
 }
 

@@ -1,5 +1,6 @@
 import type {
   AssistantClientContext,
+  AssistantCapabilityDiscovery,
   AssistantPlan,
   AssistantRagChunk,
   AssistantTaskClassification,
@@ -10,11 +11,14 @@ import type {
   AssistantWorkflowStep
 } from "./types";
 import type { AppLocale } from "../i18n";
+import type { ClientRole } from "../core/client/client-types";
 import { assistantToolMetadataForOrchestrator, getAssistantToolDefinition, highestAssistantRiskLevel } from "./toolRegistry";
 import { validateAssistantToolCall } from "./toolValidation";
 import { callOpenAiStructured } from "./openaiResponses";
 import type { AssistantDebugRecorder } from "./debugTrace";
 import { assistantCopy } from "./assistantLocale";
+import { discoverAssistantCapabilities } from "./capabilityDiscovery";
+import { enforceAssistantWorkflowBudget } from "./costPolicy";
 
 type OrchestrationInput = {
   locale: AppLocale;
@@ -23,7 +27,24 @@ type OrchestrationInput = {
   conversation?: Array<{ role: string; content: string }>;
   ragChunks: AssistantRagChunk[];
   debug?: AssistantDebugRecorder;
+  actorRole?: ClientRole;
 };
+
+function discoveredToolMetadata(input: OrchestrationInput): {
+  discovery: AssistantCapabilityDiscovery;
+  metadata: ReturnType<typeof assistantToolMetadataForOrchestrator>;
+} {
+  const allMetadata = assistantToolMetadataForOrchestrator(undefined, input.actorRole);
+  const discovery = discoverAssistantCapabilities({
+    message: input.message,
+    clientContext: input.clientContext,
+    availableTools: allMetadata
+  });
+  return {
+    discovery,
+    metadata: discovery.fallbackToFullRegistry ? allMetadata : assistantToolMetadataForOrchestrator(new Set(discovery.toolIds), input.actorRole)
+  };
+}
 
 function assistantLanguage(locale: AppLocale): string {
   return locale === "cs-CZ" ? "professional Czech" : locale === "en-GB" ? "professional British English" : "professional Slovak";
@@ -168,7 +189,8 @@ function sanitizePlannedSteps(steps: PlannerStepOutput[]): AssistantWorkflowStep
 }
 
 export async function classifyAssistantTask(input: OrchestrationInput): Promise<TriageOutput | null> {
-  const tools = assistantToolMetadataForOrchestrator().map(({ id, title, operation, domain, description }) => ({ id, title, operation, domain, description }));
+  const { metadata } = discoveredToolMetadata(input);
+  const tools = metadata.map(({ id, title, operation, domain, description }) => ({ id, title, operation, domain, description }));
   const output = await callOpenAiStructured<TriageOutput>({
     role: "communicator",
     schemaName: "arcigy_task_classification",
@@ -204,7 +226,7 @@ export async function planAssistantWorkflow(
   feedback?: { validation: AssistantValidationReport; priorWorkflow: AssistantWorkflowState; toolResults: AssistantToolResult[] }
 ): Promise<{ workflow: AssistantWorkflowState; assistantMessage: string; toolCalls: AssistantToolCall[] } | null> {
   const role = feedback && feedback.priorWorkflow.iteration >= 2 ? "escalation" : "orchestrator";
-  const metadata = assistantToolMetadataForOrchestrator();
+  const { discovery, metadata } = discoveredToolMetadata(input);
   const output = await callOpenAiStructured<PlannerOutput>({
     role,
     schemaName: "arcigy_atomic_workflow",
@@ -230,9 +252,10 @@ export async function planAssistantWorkflow(
     debug: input.debug
   });
   if (!output) return null;
-  const steps = sanitizePlannedSteps(output.steps);
+  const allowedToolIds = new Set(metadata.map((tool) => tool.id));
+  const steps = sanitizePlannedSteps(output.steps).filter((step) => allowedToolIds.has(step.toolId));
   if (steps.length === 0) return null;
-  const workflow: AssistantWorkflowState = {
+  const workflow = enforceAssistantWorkflowBudget({
     workflowId: `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
     goal: output.goal.trim() || classification.normalizedGoal,
     successCriteria: output.successCriteria.filter(Boolean).length > 0 ? output.successCriteria.filter(Boolean) : classification.successCriteria,
@@ -241,8 +264,9 @@ export async function planAssistantWorkflow(
     maxIterations: feedback?.priorWorkflow.maxIterations ?? 5,
     status: feedback ? "repairing" : "planned",
     completedStepIds: feedback?.priorWorkflow.completedStepIds ?? [],
+    capabilityDiscovery: discovery,
     lastError: feedback?.validation.repairInstruction
-  };
+  });
   const toolCalls = readyWorkflowToolCalls(workflow);
   return { workflow, assistantMessage: output.assistantMessage, toolCalls };
 }
@@ -338,7 +362,10 @@ export async function analyzeAssistantWorkflow(args: {
     return operation === "read" || operation === "verify";
   });
   if (authoritativeReadOnly) return { validation: deterministic, nextCalls: [], mode: "complete" };
-  const independentTools = assistantToolMetadataForOrchestrator().filter((tool) => tool.operation === "verify" || tool.operation === "read");
+  const independentTools = assistantToolMetadataForOrchestrator(
+    args.workflow.capabilityDiscovery ? new Set(args.workflow.capabilityDiscovery.toolIds) : undefined,
+    args.input.actorRole
+  ).filter((tool) => tool.operation === "verify" || tool.operation === "read");
   let output: AnalyzerOutput | null = null;
   try {
     output = await callOpenAiStructured<AnalyzerOutput>({
@@ -376,7 +403,8 @@ export async function analyzeAssistantWorkflow(args: {
     failedStepIds: output.failedStepIds,
     repairInstruction: output.repairInstruction ?? undefined
   };
-  return { validation, nextCalls: sanitizeAnalyzerCalls(output), mode: output.mode };
+  const allowedToolIds = new Set(independentTools.map((tool) => tool.id));
+  return { validation, nextCalls: sanitizeAnalyzerCalls(output).filter((call) => allowedToolIds.has(call.toolId)), mode: output.mode };
 }
 
 export function workflowToPlan(workflow: AssistantWorkflowState): AssistantPlan {

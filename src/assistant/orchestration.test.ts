@@ -85,6 +85,27 @@ describe("assistant workflow orchestration", () => {
     expect(calls[0]?.toolId).toBe("context.getObject");
   });
 
+  it("keeps analyzer verification inside the workflow's discovered capability set", async () => {
+    const state = {
+      ...workflow(),
+      capabilityDiscovery: {
+        packIds: ["project-scene"],
+        toolIds: ["project.getMetadata", "validation.inspectProject"],
+        fallbackToFullRegistry: false,
+        rationale: "test"
+      }
+    };
+    const response = await runAssistantTurn({
+      message: "Skontroluj projekt.",
+      clientContext,
+      workflow: state,
+      toolResults: [{ ok: false, callId: "read_project", toolId: "project.getMetadata", error: "temporary failure" }],
+      ragChunks: []
+    });
+
+    expect(response.toolCalls.every((call) => state.capabilityDiscovery.toolIds.includes(call.toolId))).toBe(true);
+  });
+
   it("does not report completion while a dependent verification step remains", async () => {
     const response = await runAssistantTurn({
       message: "Skontroluj projekt.",

@@ -870,6 +870,9 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.requiresConfirmation && call.confirmed !== true) {
       throw new Error(`Assistant tool ${definition.id} requires explicit user confirmation.`);
     }
+    if ((definition.operation ?? (definition.readOnly ? "read" : "write")) === "write") {
+      await ctx.authorizeToolCall?.(call);
+    }
     if (definition.id === "context.getSelection") {
       return { ok: true, toolId: call.toolId, output: buildContextSnapshot(ctx), stateDeltaSummary: "Read live editor context." };
     }
@@ -976,7 +979,6 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       };
     }
     if (definition.id === "kitchen.create") {
-      await ctx.authorizeToolCall(call);
       const controller = createAssistantKitchenController(ctx);
       const output = controller.create(call.input as unknown as AssistantKitchenCreateInput);
       return { ok: true, toolId: call.toolId, output, stateDeltaSummary: `Created kitchen ${output.groupId} transactionally.` };
@@ -1117,7 +1119,6 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       return { ok: true, toolId: call.toolId, output: { id: section.id, params: cloneJson(section.params) }, stateDeltaSummary: `Created section ${section.id}.` };
     }
     if (definition.id === "catalog.insertModule") {
-      await ctx.authorizeToolCall(call);
       const inst = insertTenantCatalogModule(ctx, call.input);
       return { ok: true, toolId: call.toolId, output: { instanceId: inst.id, moduleType: inst.params.type }, stateDeltaSummary: `Inserted tenant module ${inst.params.type}.` };
     }
@@ -1128,7 +1129,6 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       const modulePackageId = requireString(call.input, "modulePackageId");
       const moduleMatch = ctx.catalog.modules.some((item) => item.enabled && item.moduleType === moduleType && item.modulePackageId === modulePackageId);
       if (!moduleMatch) throw new Error("Resolved vendor module package is not available in the browser tenant catalog.");
-      await ctx.authorizeToolCall(call);
       const initialParams = call.input.initialParams;
       if (!initialParams || typeof initialParams !== "object" || Array.isArray(initialParams)) {
         throw new Error("initialParams are required.");

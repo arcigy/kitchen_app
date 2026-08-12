@@ -6,9 +6,11 @@ import { reindexAssistantRag, searchAssistantRag } from "../assistant/rag";
 import type { AssistantTurnRequest } from "../assistant/types";
 import {
   ASSISTANT_CAPABILITY_BOUNDARIES,
-  ASSISTANT_TOOL_DEFINITIONS,
-  assistantToolMetadataForOrchestrator
+  assistantToolsForRole,
+  assistantToolMetadataForOrchestrator,
+  canRoleUseAssistantTool
 } from "../assistant/toolRegistry";
+import { ASSISTANT_CAPABILITY_PACKS } from "../assistant/capabilityDiscovery";
 import { validateAssistantToolCall } from "../assistant/toolValidation";
 import { getAssistantModelAssignments } from "../assistant/openaiResponses";
 import { localeForLanguage, normalizeLanguage } from "../i18n";
@@ -84,14 +86,15 @@ export async function handleAssistantApi(
     deps.sendJson(res, 200, {
       ok: true,
       knowledgeVersion: "assistant-capabilities.v3",
-      tools: ASSISTANT_TOOL_DEFINITIONS,
-      orchestratorToolMetadata: assistantToolMetadataForOrchestrator(),
+      tools: assistantToolsForRole(ctx.role),
+      orchestratorToolMetadata: assistantToolMetadataForOrchestrator(undefined, ctx.role),
       orchestration: {
         stages: ["communicator", "orchestrator", "executor", "analyzer", "communicator"],
         maxIterations: 5,
         models: getAssistantModelAssignments()
       },
       boundaries: ASSISTANT_CAPABILITY_BOUNDARIES,
+      capabilityPacks: ASSISTANT_CAPABILITY_PACKS,
       tenantAvailability: {
         enabledModulePackageIds: catalog.modules.filter((item) => item.enabled).map((item) => item.modulePackageId).filter(Boolean),
         vendorId: catalog.vendorCatalog?.vendorId ?? null
@@ -110,6 +113,10 @@ export async function handleAssistantApi(
     const validation = validateAssistantToolCall({ id: "server_authorization", toolId, input });
     if (validation.errors.length > 0) {
       deps.sendJson(res, 400, { authorized: false, error: validation.errors.join(" ") });
+      return true;
+    }
+    if (!validation.definition || !canRoleUseAssistantTool(ctx.role, validation.definition)) {
+      deps.sendJson(res, 403, { authorized: false, error: "Your current role is not allowed to execute this assistant tool." });
       return true;
     }
     if (toolId === "catalog.insertModule") {
@@ -175,7 +182,7 @@ export async function handleAssistantApi(
       });
       return true;
     }
-    deps.sendJson(res, 400, { authorized: false, error: "This assistant tool does not use server catalog authorization." });
+    deps.sendJson(res, 200, { authorized: true });
     return true;
   }
 
@@ -194,7 +201,7 @@ export async function handleAssistantApi(
       query: request.message,
       limit: 6
     });
-    const response = await runAssistantTurn({ ...request, ragChunks, catalog });
+    const response = await runAssistantTurn({ ...request, ragChunks, catalog, actorRole: ctx.role });
     deps.sendJson(res, 200, response);
     return true;
   }
