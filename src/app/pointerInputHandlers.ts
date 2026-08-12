@@ -626,6 +626,24 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     setPointerNdcFromEvent(ctx.pointerNdc, ev, rect);
     ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
   };
+  /** Detail/elevation tabs are orthographic: project LED edits onto their visible plane, never onto the floor. */
+  const getLedEditHitPoint = () => {
+    if (ctx.activeViewerTab === "floorplan") return intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    const led = ctx.ledStripDrawController;
+    const activePoint = led?.state.points.at(-1) ?? null;
+    const selectedGroup = led?.state.selectedGroupId
+      ? ctx.S.ledStripGroups.find((group) => group.id === led.state.selectedGroupId) ?? null
+      : null;
+    const anchor = activePoint
+      ? new THREE.Vector3(activePoint.x / 1000, activePoint.y / 1000, activePoint.z / 1000)
+      : selectedGroup?.runs[0]?.points[0]
+        ? new THREE.Vector3(selectedGroup.runs[0].points[0].x / 1000, selectedGroup.runs[0].points[0].y / 1000, selectedGroup.runs[0].points[0].z / 1000)
+        : new THREE.Box3().setFromObject(ctx.layoutRoot).getCenter(new THREE.Vector3());
+    const normal = ctx.cam().getWorldDirection(new THREE.Vector3()).normalize();
+    return normal.lengthSq() > 1e-8
+      ? intersectRayPlane(ctx.raycaster, new THREE.Plane().setFromNormalAndCoplanarPoint(normal, anchor))
+      : null;
+  };
   const resolveMoveSnap = (raw: THREE.Vector3, rect: DOMRect, perpendicularFrom?: THREE.Vector3 | null) => {
     if (ctx.transformState.moveSnapDisabled) {
       ctx.selectPlanSnap = null;
@@ -2186,12 +2204,34 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       }
 
       if (ctx.layoutTool === "led") {
-        if (ev.button !== 0 || ctx.viewMode !== "2d" || !ctx.ledStripDrawController) return;
-        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (ev.button !== 0 || !ctx.ledStripDrawController) return;
+        if (!ctx.ledStripDrawController.state.active) {
+          const picked = ctx.ledStripDrawController.pick(ctx.raycaster);
+          if (picked) {
+            ctx.ledStripDrawController.selectPick(picked);
+            if (ctx.viewMode === "2d") {
+              const hitPoint = getLedEditHitPoint();
+              if (hitPoint && ctx.ledStripDrawController.beginPointerEdit(ev.pointerId, picked, hitPoint)) {
+                try {
+                  ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+                } catch {
+                  // Pointer capture is optional for LED editing.
+                }
+              }
+            }
+          }
+          return;
+        }
+        if (ctx.viewMode !== "2d") return;
+        const hitPoint = getLedEditHitPoint();
         if (!hitPoint) return;
-        const rect2 = ctx.renderer.domElement.getBoundingClientRect();
-        const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
-        ctx.ledStripDrawController.point(snapped.kind === "none" ? hitPoint : snapped.point);
+        if (ctx.activeViewerTab === "floorplan") {
+          const rect2 = ctx.renderer.domElement.getBoundingClientRect();
+          const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
+          ctx.ledStripDrawController.point(snapped.kind === "none" ? hitPoint : snapped.point);
+        } else {
+          ctx.ledStripDrawController.point(hitPoint);
+        }
         return;
       }
 
@@ -2469,6 +2509,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   // Live hover + preview (SketchUp-like)
   ctx.renderer.domElement.addEventListener("pointermove", (ev) => {
     if (ctx.viewNavigation.handlePointerMove(ev)) {
+      return;
+    }
+
+    if (ctx.mode === "layout" && ctx.layoutTool === "led" && ctx.ledStripDrawController?.state.pointerEdit && ctx.viewMode === "2d") {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = getLedEditHitPoint();
+      if (hitPoint) ctx.ledStripDrawController.updatePointerEdit(ev.pointerId, hitPoint);
       return;
     }
 
@@ -2821,10 +2869,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     if (ctx.mode === "layout" && ctx.layoutTool === "led" && ctx.ledStripDrawController?.state.active && ctx.viewMode === "2d") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
       updateRaycasterFromPointer(ev, rect);
-      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      const hitPoint = getLedEditHitPoint();
       if (!hitPoint) return;
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam());
-      ctx.ledStripDrawController.updatePreview(snapped.kind === "none" ? hitPoint : snapped.point);
+      if (ctx.activeViewerTab === "floorplan") {
+        const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam());
+        ctx.ledStripDrawController.updatePreview(snapped.kind === "none" ? hitPoint : snapped.point);
+      } else {
+        ctx.ledStripDrawController.updatePreview(hitPoint);
+      }
       return;
     }
 
@@ -2965,6 +3017,15 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
 
     if (ctx.mode !== "layout") return;
+
+    if (ctx.layoutTool === "led" && ctx.ledStripDrawController?.finishPointerEdit(ev.pointerId)) {
+      try {
+        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
+      } catch {
+        // Pointer capture may already have been released by the browser.
+      }
+      return;
+    }
 
     if (finishFloorBoundaryEditDragPointerUp({
       floorEdit: ctx.floorEdit,

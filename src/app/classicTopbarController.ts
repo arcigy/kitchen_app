@@ -10,6 +10,8 @@ import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catal
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { ModuleParams } from "../model/cabinetTypes";
 import { t } from "../i18n";
+import { installLedStripMenu } from "../ui/ledStripMenu";
+import type { LedStripMode } from "../layout/ledStripTypes";
 import {
   runToolbarAlignCommand,
   runToolbarBomCommand,
@@ -80,6 +82,7 @@ type ClassicTopbarControllerContext = {
   I_INSTALL: string;
   I_ISOLATE: string;
   I_LIVING_WALL: string;
+  I_LED_STRIP: string;
   I_MATERIAL_EDIT: string;
   I_MEASURE: string;
   I_MOVE: string;
@@ -137,7 +140,7 @@ type ClassicTopbarControllerContext = {
   redo: (S: AppState, helpers: HistoryHelpers) => void;
   setToolAlign: () => void;
   setToolDimension: () => void;
-  setToolLed: () => void;
+  setToolLed: (mode: LedStripMode) => void;
   setToolMeasure: () => void;
   setToolSection: () => void;
   setToolSelect: () => void;
@@ -175,6 +178,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   let unhideAllBtn: HTMLButtonElement | null = null;
   let activeTab: TopbarTab = "architecture";
   let tabHandlersInstalled = false;
+  let disposeLedStripMenu: (() => void) | null = null;
 
   const setToolButton = (button: HTMLButtonElement | null, args: { title: string; label: string; iconSvg?: string; disabled?: boolean }) => {
     if (!button) return;
@@ -285,7 +289,9 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     ctx.kitchenMode?.mountModuleCatalog(document.getElementById("moduleCatalog"));
     ctx.kitchenMode?.mountTopbar(row);
     const led = ctx.tb.addGroup("LED", { row });
-    addButton(led, { title: "LED pásik", label: "LED pásik", iconSvg: ctx.I_MATERIAL_EDIT, onClick: ctx.setToolLed });
+    const ledButton = addButton(led, { title: "LED pásik", label: "LED pásik", iconSvg: ctx.I_LED_STRIP });
+    disposeLedStripMenu?.();
+    disposeLedStripMenu = installLedStripMenu({ trigger: ledButton, onChoose: ctx.setToolLed });
     const auto = ctx.tb.addGroup("Auto", { row });
     addButton(auto, { title: "Fit selected module into gap", label: "Fit gap", iconSvg: ctx.I_FIT_GAP, onClick: ctx.fitSelectedKitchenModuleToGap });
   };
@@ -408,6 +414,8 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
   function buildClassicTopbar() {
     installTabHandlers();
     syncTopbarTabs();
+    disposeLedStripMenu?.();
+    disposeLedStripMenu = null;
     ctx.tb.clear();
     ctx.S.undoBtnEl = null;
     ctx.S.redoBtnEl = null;

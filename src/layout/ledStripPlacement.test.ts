@@ -14,6 +14,13 @@ const source = (id: string, tag: string, count = 1) => {
 };
 
 describe("automatic LED placement anchors", () => {
+  it("uses the selected upper module underside, not each internal shelf", () => {
+    const result = createAutomaticLedStripGroups({ mode: "underUpper", sources: [source("upper", "shelf", 3)], nextId: () => "led1", offsetMm: 50 });
+    expect(result.groups[0]!.runs).toHaveLength(1);
+    // Positive offset moves the wall-back centreline towards the room while retaining the underside height.
+    expect(result.groups[0]!.runs[0]!.points[0]).toMatchObject({ y: 990, z: -100 });
+  });
+
   it("creates one shelf LED run per semantic shelf", () => {
     const result = createAutomaticLedStripGroups({ mode: "shelfJoint", sources: [source("module", "shelf", 7)], nextId: () => "led1" });
     expect(result.unsupportedSourceIds).toEqual([]);

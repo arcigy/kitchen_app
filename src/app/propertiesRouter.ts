@@ -2,12 +2,14 @@ import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
 import { getSectionBasis } from "./sectionViews";
 import { mountAlignToolPropsPanel, mountKitchenWorktopToolPropsPanel, mountMeasureToolPropsPanel, mountTrimToolPropsPanel, mountWallToolPropsPanel } from "./toolPropsPanels";
+import { mountLedStripPropsPanel } from "./ledStripPropsPanel";
 import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlacementPropsPanel, mountDoorPropsPanel, mountFloorBoundaryPropsPanel, mountFloorPropsPanel, mountSectionPropsPanel, mountSectionToolPropsPanel, mountModulePropsPanel, mountMultiModulePropsPanel, mountUnderlayPropsPanel, mountWallPropsPanel, mountWindowPlacementPropsPanel, mountWindowPropsPanel } from "./selectedPropsPanels";
 import { loadUnderlayToCanvas } from "../ui/loadUnderlay";
 import type { Material } from "../types/material";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
+import type { LedStripPointMm } from "../layout/ledStripTypes";
 import type { PlacementHelpers } from "../layout/placementManager";
 import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
@@ -196,6 +198,14 @@ type PropertiesRouterContext = {
   catalog: ClientCatalog;
   recordActivity?: (label: string) => void;
   mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
+  ledStrip?: {
+    getSelectedGroupId: () => string | null;
+    getSelectedPick: () => { groupId: string; runId: string; pointIndex: number | null; segmentIndex: number | null } | null;
+    getDrawPoint: () => LedStripPointMm | null;
+    refresh: () => void;
+    addVertical: (direction: "up" | "down", lengthMm: number) => boolean;
+    moveSelectedTo: (point: LedStripPointMm) => boolean;
+  };
 };
 
 export function createPropertiesRouter(ctx: PropertiesRouterContext) {
@@ -279,6 +289,19 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     setUnderlayStatusEl: ctx.setUnderlayStatusEl,
     markUnderlaySelected: ctx.markUnderlaySelected
   });
+  const mountLedStripProps = () => ctx.ledStrip ? mountLedStripPropsPanel({
+    props: ctx.props,
+    S: ctx.S,
+    groupId: ctx.ledStrip.getSelectedGroupId(),
+    selectedPick: ctx.ledStrip.getSelectedPick(),
+    drawPoint: ctx.ledStrip.getDrawPoint(),
+    catalog: ctx.catalog,
+    commitHistory: ctx.commitHistory,
+    refresh: ctx.ledStrip.refresh,
+    mountProps,
+    addVertical: ctx.ledStrip.addVertical,
+    moveSelectedTo: ctx.ledStrip.moveSelectedTo
+  }) : false;
 
   function mountProps() {
     if (ctx.mode !== "layout") return ctx.showNoProps();
@@ -286,6 +309,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     if (ctx.placement.active) return ctx.mountPlacementControls(ctx.S, ctx.placementHelpers);
     if (ctx.isColumnPlacementActive()) return mountColumnPlacementProps();
     if (ctx.layoutTool === "wall") return mountWallToolProps();
+    if (ctx.layoutTool === "led" && mountLedStripProps()) return;
     if (ctx.isWindowPlacementActive()) return mountWindowPlacementProps();
     if (ctx.isDoorPlacementActive()) return mountDoorPlacementProps();
     if (ctx.layoutTool === "measure") return mountMeasureToolProps();
