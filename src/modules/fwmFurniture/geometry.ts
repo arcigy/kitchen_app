@@ -1754,13 +1754,21 @@ function wallCornerDerivedBaseParams(params: FwmFurnitureParams, variant: string
     type: "fwm_catalog_base_corner",
     variant: "corner_chamfered",
     width,
-    depth: upperDepth,
+    // The top-corner width is its complete outer L-envelope. Its own depth
+    // remains the usable arm depth and is expressed by the front chamfer
+    // below; feeding that depth into the lower baked family used to ignore
+    // the declared width and produced a 624 mm object for width 600.
+    depth: width,
     height,
     heightCarcass: height,
     boardThickness,
     backThickness: boardThickness,
     shelfThickness: boardThickness,
     frontThicknessMm: boardThickness,
+    // Wall corners have always exposed width as their outside envelope.
+    // Build the inherited baked family under the v2 corner contract so the
+    // decorative chamfer cannot add to that declared width.
+    geometryContractVersion: 2,
     plinthHeight: 0,
     plinthSetbackMm: 0,
     hasPlinth: false,
@@ -2115,6 +2123,10 @@ function buildCatalogWallCorner90Cabinet(group: THREE.Group, params: FwmFurnitur
   }
 
   attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
+  // Historical 90-degree packages may carry a front board positioned a few
+  // millimetres past the declared corner planes. Keep every board inside the
+  // same physical envelope as its width anchors.
+  trimChamferedBoardsToKitchenAnchors(group);
   group.userData.catalogWallCornerVariant = String(params.variant ?? "corner_90");
   group.userData.cornerShape = "l_shape";
   group.userData.sourceModuleType = "fwm_catalog_wall_cabinet";
@@ -2154,6 +2166,7 @@ function buildCatalogWallCornerCabinet(group: THREE.Group, params: FwmFurnitureP
   removeWallCornerParts(group, isLowerOnlyWallCornerPart);
   if (openNiche) removeWallCornerParts(group, isOpenWallCornerFrontPart);
   rebaseWallCornerVisibleGeometryToFloor(group);
+  trimChamferedBoardsToKitchenAnchors(group);
   if (!openNiche && bool(params, "opened", false)) openWallCornerChamferedDoor(group);
   group.userData.catalogWallCornerVariant = variant;
   group.userData.cornerShape = variant.includes("90") ? "l_shape" : "chamfered";
@@ -3169,9 +3182,47 @@ function attachChamferedCornerKitchenAnchors(group: THREE.Group) {
   group.add(zAnchor);
 }
 
+/**
+ * The baked chamfered source contains construction overhangs beyond its
+ * declared kitchen-corner planes. Those hidden 18 mm overlaps made a 900 mm
+ * package measure 936 mm in Properties/selection. Trim board vertices to the
+ * contract planes; hardware remains independent of the board envelope.
+ */
+function trimChamferedBoardsToKitchenAnchors(group: THREE.Group) {
+  const corner = group.getObjectByName(kitchenCornerAnchorName);
+  const xAnchor = group.getObjectByName(kitchenCornerXAnchorName);
+  const zAnchor = group.getObjectByName(kitchenCornerZAnchorName);
+  if (!corner || !xAnchor || !zAnchor) return;
+  const minX = Math.min(corner.position.x, xAnchor.position.x, zAnchor.position.x);
+  const maxX = Math.max(corner.position.x, xAnchor.position.x, zAnchor.position.x);
+  const minZ = Math.min(corner.position.z, xAnchor.position.z, zAnchor.position.z);
+  const maxZ = Math.max(corner.position.z, xAnchor.position.z, zAnchor.position.z);
+  const point = new THREE.Vector3();
+  group.updateMatrixWorld(true);
+  group.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || !["corpus", "body", "carcass", "front", "back", "shelf", "drawer_bottom", "plinth"].includes(String(object.userData.materialGroup))) return;
+    const position = object.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!position) return;
+    for (let index = 0; index < position.count; index += 1) {
+      point.fromBufferAttribute(position, index);
+      object.localToWorld(point);
+      point.x = Math.min(maxX, Math.max(minX, point.x));
+      point.z = Math.min(maxZ, Math.max(minZ, point.z));
+      object.worldToLocal(point);
+      position.setXYZ(index, point.x, point.y, point.z);
+    }
+    position.needsUpdate = true;
+    object.geometry.computeBoundingBox();
+    object.geometry.computeBoundingSphere();
+    object.geometry.computeVertexNormals();
+  });
+  group.updateMatrixWorld(true);
+}
+
 function buildCatalogBaseCornerChamfered(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {
   group.userData.groundTruthBuildParams = params;
   buildCatalogBaseCornerChamferedGroundTruth(group, catalog);
+  trimChamferedBoardsToKitchenAnchors(group);
   group.userData.catalogCornerVariant = String(params.variant ?? "corner_chamfered");
 }
 
@@ -3807,6 +3858,9 @@ function buildCatalogBaseBottlePullout(group: THREE.Group, params: FwmFurnitureP
   const frontGap = num(params, "frontGap", 2);
   const sideGap = num(params, "sideGap", 2);
   const frontT = num(params, "frontThicknessMm", 18);
+  const frontDepthAllowance = frontT + 1;
+  const carcassDepth = Math.max(1, depth - frontDepthAllowance);
+  const carcassZOffset = -frontDepthAllowance / 2;
   const frontMat = makeMaterial(params, catalog, "front");
   const hardware = makeMaterial(params, catalog, "hardware");
   const handleComponent = resolveComponentForParam(params, catalog, "handleComponentId", "handle");
@@ -3816,11 +3870,11 @@ function buildCatalogBaseBottlePullout(group: THREE.Group, params: FwmFurnitureP
     group,
     { ...params, drawerCount: 0, doorCount: 0, shelfCount: 0 } as FwmFurnitureParams,
     catalog,
-    { width, height, depth, topRails: true }
+    { width, height, depth: carcassDepth, envelopeDepth: depth, zOffset: carcassZOffset, topRails: true }
   );
 
   const frontAreaHeight = Math.max(80, height - plinth - frontGap * 2);
-  const frontZ = depth / 2 + frontT / 2 + 1;
+  const frontZ = carcassZOffset + carcassDepth / 2 + frontT / 2 + 1;
   const opened = bool(params, "opened", false);
   const openOffset = opened ? Math.min(220, depth * 0.42) : 0;
   const pulloutGroup = new THREE.Group();
@@ -3866,7 +3920,7 @@ function buildCatalogBaseBottlePullout(group: THREE.Group, params: FwmFurnitureP
   handle.userData.submoduleKind = "bottle_pullout";
   handle.userData.selectableSubmoduleId = "bottle_pullout";
 
-  const neutralDrawerDepth = resolveDrawerDepthLayout(depth, num(params, "backThickness", 8), num(params, "drawerBackGapMm", 10));
+  const neutralDrawerDepth = resolveDrawerDepthLayout(carcassDepth, num(params, "backThickness", 8), num(params, "drawerBackGapMm", 10));
   const metalDrawerDepth = neutralDrawerDepth.depthMm;
   const drawerCenterWorldZ = neutralDrawerDepth.centerZ;
   const drawerCenterLocalZ = drawerCenterWorldZ - frontZ;
@@ -4597,7 +4651,9 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
     return finish();
   }
 
-  const usesTotalOutsideDepth = spec.moduleType === "fwm_catalog_base_drawers";
+  const usesTotalOutsideDepth = spec.moduleType === "fwm_catalog_base_drawers" ||
+    spec.moduleType === "fwm_catalog_base_doors" ||
+    spec.moduleType === "fwm_catalog_wall_cabinet";
   const totalOutsideDepth = num(p, "depth", spec.depth);
   const frontDepthAllowance = usesTotalOutsideDepth ? num(p, "frontThicknessMm", 18) + 1 : 0;
   const carcassDepth = Math.max(1, totalOutsideDepth - frontDepthAllowance);

@@ -118,6 +118,27 @@ function upsertParameter(parameters: ModuleParameterDefinition[], next: ModulePa
   else parameters.push(next);
 }
 
+function isDrawerSystemChoiceParameter(key: string) {
+  return key === "drawerSystemBrand" || key === "runnerComponentId" ||
+    /^drawer\d+System(Size|Label|MinFrontHeightMm|BackHeightMm)$/.test(key) ||
+    /^tallSlot\d+DrawerSystemSize$/.test(key) ||
+    /^drawerSystem(?:Brand|Size|Sizes|Labels|Id|Code|Depth|BackHeightsMm|MinFrontHeightsMm|Price)/.test(key);
+}
+
+function removeDrawerSystemChoices(modulePackage: FurnQuoteModulePackage) {
+  const removed = new Set(
+    modulePackage.parameters.parameters
+      .filter((parameter) => isDrawerSystemChoiceParameter(parameter.key))
+      .map((parameter) => parameter.key)
+  );
+  if (removed.size === 0) return;
+  modulePackage.parameters.parameters = modulePackage.parameters.parameters.filter((parameter) => !removed.has(parameter.key));
+  modulePackage.ui = {
+    ...modulePackage.ui,
+    controls: modulePackage.ui.controls.filter((control) => !removed.has(control.parameterKey))
+  };
+}
+
 function canonicalKitchenBinding(contract: KitchenModuleContract, modulePackage: FurnQuoteModulePackage): ModuleContextBinding | null {
   if (contract.productKind !== "cabinet" || !contract.role) return null;
   const has = (key: string) => hasParameter(modulePackage, key);
@@ -251,6 +272,10 @@ export function normalizeKitchenModulePackage(modulePackage: FurnQuoteModulePack
       defaultValue: 2, min: 1, max: 2, step: 1, unit: "pcs", group: "system", uiVisibility: "internal", affects: "geometry"
     });
   }
+  // Drawer-system/size choices are assigned through materials/components,
+  // never manually selected in module Properties. Geometry falls back to the
+  // catalog assignment when a historical package still carries these keys.
+  removeDrawerSystemChoices(normalized);
   return normalized;
 }
 

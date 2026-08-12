@@ -213,9 +213,6 @@ const BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS = new Set([
   "plinthHeight",
   "plinthSetbackMm",
   "opened",
-  "drawerSystemBrand",
-  "drawer1SystemSize",
-  "drawer2SystemSize",
   "bodyMaterialId",
   "frontMaterialId",
   "backMaterialId",
@@ -344,9 +341,6 @@ const BASE_BOTTLE_PULLOUT_UI_CONTROL_KEYS = [
   "plinthHeight",
   "plinthSetbackMm",
   "opened",
-  "drawerSystemBrand",
-  "drawer1SystemSize",
-  "drawer2SystemSize",
   "bodyMaterialId",
   "frontMaterialId",
   "backMaterialId",
@@ -479,7 +473,6 @@ const TALL_HOST_USER_PARAMETER_KEYS = new Set([
   "hingeComponentId",
   "legComponentId",
   "clipComponentId",
-  "drawerSystemBrand",
   "handleType",
   "hasCutleryInnerDrawer",
   "boardThickness",
@@ -507,19 +500,25 @@ const TOP_MODULE_INTERNAL_PARAMETER_KEYS = new Set([
 ]);
 
 function isTallSlotParameter(key: string) {
-  return /^tallSlot\d+(Type|HeightMm|OffsetMm|DrawerSystemSize)$/.test(key);
+  return /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(key);
+}
+
+function isDrawerSystemSelectionParameter(key: string) {
+  return key === "drawerSystemBrand" || key === "runnerComponentId" ||
+    /^drawer\d+System(Size|Label|MinFrontHeightMm|BackHeightMm)$/.test(key) ||
+    /^tallSlot\d+DrawerSystemSize$/.test(key) ||
+    /^drawerSystem(?:Brand|Size|Sizes|Labels|Id|Code|Depth|BackHeightsMm|MinFrontHeightsMm|Price)/.test(key);
 }
 
 function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParameterDefinition): UiVisibility {
+  if (isDrawerSystemSelectionParameter(parameter.key)) return "internal";
   if (INTERNAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "internal";
   if (TECHNICAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "technical";
   if (spec.moduleType === "fwm_catalog_base_doors" && parameter.key === "doorCount") return "user";
   if (spec.moduleType === "fwm_catalog_base_doors" && parameter.key === "side") return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "drawerCount") return "user";
-  if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "drawerSystemBrand") return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && parameter.key === "hasCutleryInnerDrawer") return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerFrontHeightParameter(parameter.key)) return "user";
-  if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemSizeParameter(parameter.key)) return "user";
   if (spec.moduleType === "fwm_catalog_base_drawers" && isIndexedDrawerSystemParameter(parameter.key)) return "technical";
   if (spec.moduleType === BASE_BOTTLE_PULLOUT_RUNTIME_TYPE) {
     if (BASE_BOTTLE_PULLOUT_USER_PARAMETER_KEYS.has(parameter.key)) return "user";
