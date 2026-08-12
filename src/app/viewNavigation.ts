@@ -252,13 +252,6 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     return resolveNavigationFocusCenter(args.focusProvider, DEFAULT_3D_TARGET);
   };
 
-  const syncCompatibilityTarget = () => {
-    const camera = get3dCamera();
-    if (!camera) return;
-    const forward = tmpVecB.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-    getControls().target.copy(camera.position).addScaledVector(forward, getFocusDistance());
-  };
-
   const getExactViewCubeFace = (direction: THREE.Vector3) => {
     let bestFace: ViewCubeFace = "front";
     let bestDot = -Infinity;
@@ -558,7 +551,10 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     if (!camera) return;
     const rect = args.canvasEl.getBoundingClientRect();
     if (!orbitCameraAroundPivot(camera, pivot, deltaX, deltaY, rect.height)) return;
-    syncCompatibilityTarget();
+    // Keep OrbitControls and camera on the exact same pivot for the full
+    // gesture.  Reconstructing a forward proxy here caused top-view drift.
+    getControls().target.copy(pivot);
+    navigationFocusDistance = Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, camera.position.distanceTo(pivot));
     stabilize3dCamera();
     getControls().update();
     syncViewCube();
@@ -762,8 +758,11 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     if (Math.abs(delta) < 1e-8) return true;
     const pointerNdc = pointerNdcFromClient(ev.clientX, ev.clientY, rect);
     const controls = getControls();
+    const selectionBounds = args.focusProvider.getSelectionBounds();
     navigationFocusDistance = camera instanceof THREE.PerspectiveCamera
-      ? applyPerspectiveWheelZoom(camera, controls.target, pointerNdc, delta, getFocusDistance())
+      ? applyPerspectiveWheelZoom(camera, controls.target, pointerNdc, delta, getFocusDistance(), {
+          lockFocus: !!selectionBounds && !selectionBounds.isEmpty()
+        })
       : applyOrthographicWheelZoom(camera, controls.target, pointerNdc, delta, getFocusDistance());
     stabilize3dCamera();
     controls.update();

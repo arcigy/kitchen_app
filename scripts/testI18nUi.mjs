@@ -5,8 +5,12 @@ import path from "node:path";
 import process from "node:process";
 import { installAuthSession } from "./uiAuthSession.mjs";
 
-const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5188/";
-const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? "http://127.0.0.1:5199/health";
+// A fixed default port can point at a stale developer server.  The test owns
+// its local app by default, while explicit environment URLs remain supported
+// for a caller that intentionally supplies an existing stack.
+const isolatedPort = 5200 + (process.pid % 400);
+const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? `http://127.0.0.1:${isolatedPort}/`;
+const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? `http://127.0.0.1:${isolatedPort + 1}/health`;
 const ownedProcesses = [];
 const variants = [
   ["sk", "sk-SK", "Súbor", "Prihlásenie", "Nový projekt", "Prázdne pracovisko", "Materiály", "Marže", "Kusovník / kalkulácia"],

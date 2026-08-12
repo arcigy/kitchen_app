@@ -44,7 +44,9 @@ export function resolveKitchenModulePlanEmphasis(
   params: Record<string, unknown> | null | undefined,
   layer: KitchenModuleEditLayer
 ): KitchenModulePlanEmphasis {
-  const active = isKitchenModuleInEditLayer(params, layer);
+  // Tall cabinets deliberately participate in both edit layers: they are a
+  // stable reference for dimensions and remain directly movable/selectable.
+  const active = isKitchenModuleSelectableInEditLayer(params, layer);
   return active
     ? { active: true, color: 0x111111, opacity: 1, renderOrder: 60 }
     : { active: false, color: 0xb7bdc7, opacity: 1, renderOrder: 54 };

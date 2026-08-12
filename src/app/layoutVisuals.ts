@@ -266,6 +266,10 @@ export function createSelectionHighlights(args: {
     return materials.some((item) => item.transparent && item.opacity <= 0.01);
   };
 
+  // Plan highlights are intentional overlays; 3D highlights must obey depth
+  // so selected rear edges never turn Solid/Realistic into wireframe.
+  const highlightUsesDepth = () => args.getViewMode?.() === "3d";
+
   const addObjectHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
     target.updateMatrixWorld(true);
     target.traverse((object) => {
@@ -280,7 +284,7 @@ export function createSelectionHighlights(args: {
             color: SELECTED_FILL_COLOR,
             transparent: true,
             opacity: 0.2,
-            depthTest: false,
+            depthTest: highlightUsesDepth(),
             depthWrite: false,
             side: THREE.DoubleSide
           })
@@ -299,7 +303,7 @@ export function createSelectionHighlights(args: {
           color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
           transparent: true,
           opacity: mode === "hover" ? 0.98 : 1,
-          depthTest: false,
+          depthTest: highlightUsesDepth(),
           depthWrite: false
         })
       );
@@ -321,7 +325,7 @@ export function createSelectionHighlights(args: {
               color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
               transparent: true,
               opacity: mode === "hover" ? 0.98 : 1,
-              depthTest: false,
+              depthTest: highlightUsesDepth(),
               depthWrite: false
             })
           )
@@ -331,7 +335,7 @@ export function createSelectionHighlights(args: {
               color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
               transparent: true,
               opacity: mode === "hover" ? 0.98 : 1,
-              depthTest: false,
+              depthTest: highlightUsesDepth(),
               depthWrite: false
             })
           );
@@ -360,7 +364,7 @@ export function createSelectionHighlights(args: {
           color: SELECTED_FILL_COLOR,
           transparent: true,
           opacity: 0.14,
-          depthTest: false,
+          depthTest: highlightUsesDepth(),
           depthWrite: false,
           side: THREE.DoubleSide
         })
@@ -377,7 +381,7 @@ export function createSelectionHighlights(args: {
         color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
         transparent: true,
         opacity: mode === "hover" ? 0.98 : 1,
-        depthTest: false,
+        depthTest: highlightUsesDepth(),
         depthWrite: false
       })
     );
@@ -394,7 +398,7 @@ export function createSelectionHighlights(args: {
         color: SELECTED_FILL_COLOR,
         transparent: true,
         opacity: 0.2,
-        depthTest: false,
+        depthTest: highlightUsesDepth(),
         depthWrite: false,
         side: THREE.DoubleSide
       });
@@ -418,7 +422,7 @@ export function createSelectionHighlights(args: {
         color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
         transparent: true,
         opacity: mode === "hover" ? 0.98 : 1,
-        depthTest: false,
+        depthTest: highlightUsesDepth(),
         depthWrite: false
       })
     );

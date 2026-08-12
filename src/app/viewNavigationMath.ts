@@ -3,7 +3,11 @@ import * as THREE from "three";
 export const MIN_NAVIGATION_FOCUS_DISTANCE = 0.001;
 
 const MAX_NORMALIZED_WHEEL_DELTA = 240;
-const WHEEL_EXPONENT_PER_PIXEL = 0.00075;
+// Revit's documented zoom commands use quarter-step increments.  Keeping the
+// wheel on the same logarithmic scale makes one standard mouse notch stable at
+// every camera distance, while trackpads remain continuous.
+export const NAVIGATION_WHEEL_SCALE_PER_NOTCH = 1.25;
+const WHEEL_DELTA_PER_NOTCH = 120;
 const MAX_ORBIT_ELEVATION = Math.PI / 2 - THREE.MathUtils.degToRad(0.5);
 
 export type NavigationViewport = {
@@ -80,7 +84,7 @@ export function normalizeNavigationWheelDelta(
 }
 
 export function navigationWheelScale(deltaY: number) {
-  return Math.exp(deltaY * WHEEL_EXPONENT_PER_PIXEL);
+  return Math.pow(NAVIGATION_WHEEL_SCALE_PER_NOTCH, deltaY / WHEEL_DELTA_PER_NOTCH);
 }
 
 export function pointerNdcFromClient(
@@ -99,24 +103,39 @@ export function applyPerspectiveWheelZoom(
   compatibilityTarget: THREE.Vector3,
   pointerNdc: NavigationPointerNdc,
   normalizedDeltaY: number,
-  focusDistance: number
+  focusDistance: number,
+  options: { lockFocus?: boolean } = {}
 ) {
   const currentDistance = Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, focusDistance);
   const nextDistance = Math.max(
     MIN_NAVIGATION_FOCUS_DISTANCE,
     currentDistance * navigationWheelScale(normalizedDeltaY)
   );
-  const travel = currentDistance - nextDistance;
-  if (Math.abs(travel) > 1e-12) {
+  const scale = nextDistance / currentDistance;
+  if (options.lockFocus) {
+    // A selected object is the explicit orbit centre.  Never pass through it.
+    const offset = camera.position.clone().sub(compatibilityTarget);
+    if (offset.lengthSq() > 1e-12) {
+      camera.position.copy(compatibilityTarget).addScaledVector(offset.normalize(), nextDistance);
+      camera.lookAt(compatibilityTarget);
+    }
+  } else {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
     const rayDirection = new THREE.Vector3(pointerNdc.x, pointerNdc.y, 0.5)
       .unproject(camera)
       .sub(camera.position)
       .normalize();
-    camera.position.addScaledVector(rayDirection, travel);
+    const denominator = rayDirection.dot(forward);
+    // Intersect the cursor ray with the current focus plane.  Scaling camera
+    // and focus around this anchor preserves the world point below the cursor.
+    const anchor = compatibilityTarget.clone();
+    if (Math.abs(denominator) > 1e-8) {
+      const distanceAlongRay = compatibilityTarget.clone().sub(camera.position).dot(forward) / denominator;
+      if (distanceAlongRay > 0) anchor.copy(camera.position).addScaledVector(rayDirection, distanceAlongRay);
+    }
+    camera.position.lerp(anchor, 1 - scale);
+    compatibilityTarget.lerp(anchor, 1 - scale);
   }
-
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-  compatibilityTarget.copy(camera.position).addScaledVector(forward, nextDistance);
   camera.updateMatrixWorld(true);
   return nextDistance;
 }
@@ -188,42 +207,19 @@ export function orbitCameraAroundPivot(
   const height = Math.max(1, viewportHeight);
   const offset = camera.position.clone().sub(pivot);
   if (offset.lengthSq() < 1e-12) return false;
-
-  const yaw = -Math.PI * 2 * deltaX / height * rotateSpeed;
-  const yawRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-  offset.applyQuaternion(yawRotation);
-  camera.quaternion.premultiply(yawRotation);
-
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-  const currentElevation = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
-  const requestedPitch = -Math.PI * 2 * deltaY / height * rotateSpeed;
-  let nextElevation = currentElevation;
-  if (currentElevation > MAX_ORBIT_ELEVATION) {
-    if (requestedPitch < 0) {
-      nextElevation = Math.max(MAX_ORBIT_ELEVATION, currentElevation + requestedPitch);
-    }
-  } else if (currentElevation < -MAX_ORBIT_ELEVATION) {
-    if (requestedPitch > 0) {
-      nextElevation = Math.min(-MAX_ORBIT_ELEVATION, currentElevation + requestedPitch);
-    }
-  } else {
-    nextElevation = THREE.MathUtils.clamp(
-      currentElevation + requestedPitch,
-      -MAX_ORBIT_ELEVATION,
-      MAX_ORBIT_ELEVATION
-    );
-  }
-  const pitch = nextElevation - currentElevation;
-  if (Math.abs(pitch) > 1e-12) {
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
-    const pitchRotation = new THREE.Quaternion().setFromAxisAngle(right, pitch);
-    offset.applyQuaternion(pitchRotation);
-    camera.quaternion.premultiply(pitchRotation);
-  }
-
-  camera.position.copy(pivot).add(offset);
-  camera.quaternion.normalize();
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta -= Math.PI * 2 * deltaX / height * rotateSpeed;
+  // Clamp polar angle, not the camera quaternion.  This remains well-defined
+  // at a top/bottom view and lets the next vertical drag return to an axon.
+  const minPolar = Math.PI / 2 - MAX_ORBIT_ELEVATION;
+  spherical.phi = THREE.MathUtils.clamp(
+    spherical.phi + Math.PI * 2 * deltaY / height * rotateSpeed,
+    minPolar,
+    Math.PI - minPolar
+  );
+  camera.position.copy(pivot).add(new THREE.Vector3().setFromSpherical(spherical));
   camera.up.set(0, 1, 0);
+  camera.lookAt(pivot);
   camera.updateMatrixWorld(true);
   return true;
 }

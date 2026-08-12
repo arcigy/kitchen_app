@@ -22,7 +22,7 @@ describe("kitchen module edit layers", () => {
     expect(isKitchenModuleSelectableInEditLayer({ kitchenModuleRole: "top" }, "base")).toBe(false);
   });
 
-  it("gives the active layer full plan emphasis and keeps the other layer faint", () => {
+  it("gives the active layer and tall modules full plan emphasis while keeping the other layer faint", () => {
     const active = resolveKitchenModulePlanEmphasis({ kitchenModuleRole: "upper" }, "upper");
     const inactive = resolveKitchenModulePlanEmphasis({ kitchenModuleRole: "low" }, "upper");
     const tall = resolveKitchenModulePlanEmphasis({ kitchenModuleRole: "tall" }, "upper");
@@ -40,10 +40,10 @@ describe("kitchen module edit layers", () => {
       renderOrder: 54
     });
     expect(tall).toMatchObject({
-      active: false,
-      color: 0xb7bdc7,
+      active: true,
+      color: 0x111111,
       opacity: 1,
-      renderOrder: 54
+      renderOrder: 60
     });
   });
 });

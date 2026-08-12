@@ -135,6 +135,33 @@ function createWallCorner90Instance(): LayoutInstance {
   } as unknown as LayoutInstance;
 }
 
+function createProfiledModuleWithHardware(): LayoutInstance {
+  const root = new THREE.Group();
+  const module = new THREE.Group();
+  const profile = [
+    { x: -0.4, z: -0.3 }, { x: 0.4, z: -0.3 }, { x: 0.4, z: 0.3 },
+    { x: 0.05, z: 0.3 }, { x: -0.4, z: 0.05 }
+  ];
+  const front = new THREE.Mesh(makePrismGeometry(profile), new THREE.MeshBasicMaterial());
+  front.userData.materialGroup = "front";
+  front.userData.revitPlanProfileMm = profile.map((point) => ({ x: point.x * 1000, z: point.z * 1000 }));
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.1), new THREE.MeshBasicMaterial());
+  handle.userData.componentType = "handle";
+  handle.userData.revitPlanProfileMm = [
+    { x: -750, z: -50 }, { x: 750, z: -50 }, { x: 750, z: 50 }, { x: -750, z: 50 }
+  ];
+  module.add(front, handle);
+  root.add(module);
+  return {
+    id: "profiled-module",
+    params: { type: "catalog_module", width: 800, depth: 600 }, root, module,
+    kitchenGroupId: null, kitchenPlacement: null,
+    localBox: new THREE.Box3().setFromObject(module),
+    pick: new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial()),
+    outline: new THREE.LineSegments()
+  } as unknown as LayoutInstance;
+}
+
 describe("module plan geometry", () => {
   it("suppresses imported triangulation seams when a module board declares a higher edge threshold", () => {
     const geometry = new THREE.BufferGeometry();
@@ -207,5 +234,13 @@ describe("module plan geometry", () => {
 
     const outline = buildModuleEdgeGeometry(inst, true, () => new THREE.Vector3());
     expect(outline.getAttribute("position").count).toBe(12);
+  });
+
+  it("uses any approved Revit front profile and excludes hardware from the boundary", () => {
+    const polygon = getModulePlanLocalPolygon(createProfiledModuleWithHardware(), () => new THREE.Vector3());
+
+    expect(polygon).toHaveLength(5);
+    expect(Math.max(...polygon.map((point) => point.x))).toBeCloseTo(0.4);
+    expect(polygon.some((point) => Math.abs(point.x - 0.05) < 1e-6 && Math.abs(point.z - 0.3) < 1e-6)).toBe(true);
   });
 });
