@@ -59,6 +59,18 @@ The app derives the path, module geometry, placement, rotation, height, corner r
 
 Always run the identical payload through `kitchen.validateCreate` before asking the user to confirm `kitchen.create`.
 
+## Wall-hosted openings
+
+Doors and windows use semantic millimetre values and a real `wallId`; the browser validates host-wall extent and collisions against every existing opening before it changes project state.
+
+```text
+opening.createDoor / opening.createWindow
+  -> opening.updateDoor / opening.updateWindow
+  -> opening.delete
+```
+
+Every write is confirmation-gated, rebuilds the affected wall and records one editor-history snapshot. The API intentionally does not expose associative dimensions, align, or trim/extend until those editor contracts have stable non-pointer command owners.
+
 ## Read-only cross-project material flow
 
 ```text

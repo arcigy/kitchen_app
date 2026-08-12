@@ -4,6 +4,64 @@ import { createAssistantBridge } from "./assistantBridge";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
 describe("assistant bridge safety boundary", () => {
+  it("creates a validated door through the wall-opening owner and records history", async () => {
+    const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
+    const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };
+    const commitHistory = vi.fn();
+    const bridge = createAssistantBridge({
+      walls: [wall],
+      doors,
+      windows: [],
+      layoutRoot: new THREE.Group(),
+      createDoor: () => ({ id: `door_${doors.length + 1}`, params: { wall: "back", wallId: null, widthMm: 900, heightMm: 2100, centerMm: 0, frameWidthMm: 70, offsetFromInteriorMm: 20, panelThicknessMm: 42, swingDirection: "left", swingSide: "inward", swingAngleDeg: 90, handleType: "lever", handleOffsetMm: 85, handleHeightMm: 1050, materialId: "door.default" }, root: new THREE.Group() }),
+      clampDoorParams: (params: Record<string, unknown>) => params,
+      updateDoorTransform: vi.fn(),
+      rebuildWall: vi.fn(),
+      rebuildWallPlanMesh: vi.fn(),
+      setActiveDoor: vi.fn(),
+      setSelectedDoor: vi.fn(),
+      mountProps: vi.fn(),
+      updateLayoutPanel: vi.fn(),
+      updateSelectionHighlights: vi.fn(),
+      commitHistory
+    } as never);
+
+    const result = await bridge.executeToolCall({
+      id: "door_create",
+      toolId: "opening.createDoor",
+      confirmed: true,
+      input: { wallId: "wall_1", widthMm: 900, heightMm: 2100, centerMm: 1400 }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(doors).toHaveLength(1);
+    expect(doors[0]?.params).toMatchObject({ wallId: "wall_1", centerMm: 1400 });
+    expect(commitHistory).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a conflicting opening before it changes the project", async () => {
+    const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [{ id: "door_existing", params: { wall: "back", wallId: "wall_1", widthMm: 900, centerMm: 1400 }, root: new THREE.Group() }];
+    const bridge = createAssistantBridge({
+      walls: [{ id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } }],
+      doors,
+      windows: [],
+      layoutRoot: new THREE.Group(),
+      createDoor: () => ({ id: "door_new", params: { wall: "back", wallId: null, widthMm: 900, heightMm: 2100, centerMm: 0, frameWidthMm: 70, offsetFromInteriorMm: 20, panelThicknessMm: 42, swingDirection: "left", swingSide: "inward", swingAngleDeg: 90, handleType: "lever", handleOffsetMm: 85, handleHeightMm: 1050, materialId: "door.default" }, root: new THREE.Group() }),
+      clampDoorParams: (params: Record<string, unknown>) => params
+    } as never);
+
+    const result = await bridge.executeToolCall({
+      id: "door_overlap",
+      toolId: "opening.createDoor",
+      confirmed: true,
+      input: { wallId: "wall_1", widthMm: 900, heightMm: 2100, centerMm: 1400 }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("overlap");
+    expect(doors).toHaveLength(1);
+  });
+
   it("rejects confirmation-gated tools before calling editor owners", async () => {
     const bridge = createAssistantBridge({} as never);
     const result = await bridge.executeToolCall({
