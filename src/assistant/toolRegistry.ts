@@ -158,6 +158,13 @@ const windowOpeningPatchSchema = {
   additionalProperties: false
 };
 
+const customFurniturePointSchema = {
+  type: "object",
+  properties: { x: { type: "number" }, z: { type: "number" } },
+  required: ["x", "z"],
+  additionalProperties: false
+};
+
 export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
   {
     id: "context.getSelection",
@@ -1140,6 +1147,32 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
       required: ["format"],
       additionalProperties: false
     }
+  },
+  {
+    id: "customFurniture.create",
+    title: "Create custom furniture boundary",
+    description: "Creates one named custom-furniture object from a closed plan boundary in millimetres.",
+    ownerSystem: "custom-furniture-controller",
+    effect: "Adds an editable persisted furniture object, selects it and records one history snapshot.",
+    preconditions: ["boundary must contain at least three distinct plan points."],
+    postconditions: ["The custom-furniture editor owns subsequent board and boundary editing."],
+    examples: [{ name: "Reception counter", boundary: [{ x: 0, z: 0 }, { x: 2400, z: 0 }, { x: 2400, z: 700 }, { x: 0, z: 700 }] }],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1, maxLength: 160 },
+        boundary: { type: "array", minItems: 3, items: customFurniturePointSchema },
+        baseConstraint: { type: "string", enum: ["projectBase", "furnitureBase", "furnitureTop", "absolute"] },
+        baseOffsetMm: { type: "number" },
+        topConstraint: { type: "string", enum: ["projectBase", "furnitureBase", "furnitureTop", "absolute"] },
+        topOffsetMm: { type: "number" }
+      },
+      required: ["name", "boundary"],
+      additionalProperties: false
+    }
   }
 ];
 
@@ -1207,9 +1240,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Custom furniture and wardrobe",
     status: "partially-available",
     ownerSystem: "custom-furniture/wardrobe editors",
-    supportedByTools: ["context.getScene", "context.queryObjects", "context.getObject", "editor.deleteSelection"],
-    exactBehavior: "State can be observed and a currently selected delegated entity can use the shared delete action.",
-    limitation: "Parameter editing, drawing and internal part operations remain inside their dedicated editor modes."
+    supportedByTools: ["context.getScene", "context.queryObjects", "context.getObject", "customFurniture.create", "editor.deleteSelection"],
+    exactBehavior: "The agent can create a named custom-furniture boundary through its controller; state can be observed and a selected delegated entity can use shared delete.",
+    limitation: "Board parameter editing, drawing, trim/align and wardrobe-internal part operations remain inside their dedicated editors."
   },
   {
     id: "render-export",

@@ -5154,6 +5154,13 @@ export function startApp(initialArgs: AppArgs) {
         await exportActions.exportWebsiteShowcaseFile(stage);
       }
     },
+    customFurnitureActions: {
+      createCustomFurniture: (params) => {
+        if (!customFurnitureMode) throw new Error("Custom furniture controller is not ready.");
+        return customFurnitureMode.createCustomFurniture(params);
+      },
+      selectFurniture: (furnitureId, boardId) => customFurnitureMode?.selectFurniture(furnitureId, boardId)
+    },
     getProjectMarginSettings: () => projectMarginSettings,
     authorizeToolCall: authorizeAssistantToolCall,
     commitHistory: () => commitHistory(S),

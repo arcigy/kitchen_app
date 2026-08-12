@@ -40,6 +40,7 @@ import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenRunDimensionSource } from "../layout/kitchenRunDimensions";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
 import { getKitchenModuleRole } from "../layout/kitchenModuleRules";
+import type { CustomFurnitureInstance, CustomFurnitureParams } from "../layout/customFurnitureTypes";
 
 type AssistantBridgeContext = {
   S: AppState;
@@ -132,6 +133,10 @@ type AssistantBridgeContext = {
     exportLayoutJsonFile: () => Promise<void>;
     exportSceneJsonFile: () => Promise<void>;
     exportWebsiteShowcaseFile: (stage: "initial" | "final") => Promise<void>;
+  };
+  customFurnitureActions: {
+    createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
+    selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
   };
   getProjectMarginSettings: () => ProjectMarginSettingsState;
   authorizeToolCall: (call: AssistantToolCall) => Promise<void>;
@@ -1035,6 +1040,28 @@ async function downloadExport(ctx: AssistantBridgeContext, input: Record<string,
   };
 }
 
+function createCustomFurniture(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const boundary = Array.isArray(input.boundary)
+    ? input.boundary.map((point, index) => requirePlanPoint(point, `boundary[${index}]`))
+    : [];
+  if (boundary.length < 3 || new Set(boundary.map((point) => `${point.x}:${point.z}`)).size < 3) {
+    throw new Error("Custom furniture boundary must contain at least three distinct points.");
+  }
+  const constraint = (value: unknown, fallback: "projectBase" | "furnitureTop") =>
+    value === "projectBase" || value === "furnitureBase" || value === "furnitureTop" || value === "absolute" ? value : fallback;
+  const furniture = ctx.customFurnitureActions.createCustomFurniture({
+    name: requireString(input, "name"),
+    boundary,
+    boards: [],
+    baseConstraint: constraint(input.baseConstraint, "projectBase"),
+    baseOffsetMm: typeof input.baseOffsetMm === "number" ? input.baseOffsetMm : 0,
+    topConstraint: constraint(input.topConstraint, "furnitureTop"),
+    topOffsetMm: typeof input.topOffsetMm === "number" ? input.topOffsetMm : 0
+  });
+  ctx.customFurnitureActions.selectFurniture(furniture.id);
+  return { ok: true, toolId: "customFurniture.create", output: { id: furniture.id, params: cloneJson(furniture.params) }, stateDeltaSummary: `Created custom furniture ${furniture.id}.` };
+}
+
 async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolCall): Promise<AssistantToolResult> {
   try {
     const definition = assertToolAllowed(call.toolId);
@@ -1334,6 +1361,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       };
     }
     if (definition.id === "export.download") return await downloadExport(ctx, call.input);
+    if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
     return {
