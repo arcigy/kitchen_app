@@ -4,6 +4,16 @@ import { createAssistantBridge } from "./assistantBridge";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
 describe("assistant bridge safety boundary", () => {
+  it("starts only the confirmed requested export format", async () => {
+    const exportLayoutJsonFile = vi.fn(async () => undefined);
+    const bridge = createAssistantBridge({
+      exportActions: { downloadViewportPng: vi.fn(), exportLayoutJsonFile, exportSceneJsonFile: vi.fn(), exportWebsiteShowcaseFile: vi.fn() }
+    } as never);
+    const result = await bridge.executeToolCall({ id: "export_1", toolId: "export.download", confirmed: true, input: { format: "layout-json" } });
+    expect(result).toMatchObject({ ok: true, output: { format: "layout-json", downloadStarted: true } });
+    expect(exportLayoutJsonFile).toHaveBeenCalledOnce();
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };
