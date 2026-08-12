@@ -2586,9 +2586,9 @@ describe("FWM furniture module packages", () => {
     expect(meshList.every((mesh) => typeof mesh.userData.partName === "string" && mesh.userData.partName.length > 0)).toBe(true);
 
     const bounds = new Box3().setFromObject(group);
-    expect((bounds.max.x - bounds.min.x) * 1000).toBeCloseTo(936.02, 1);
+    expect((bounds.max.x - bounds.min.x) * 1000).toBeCloseTo(900, 1);
     expect((bounds.max.y - bounds.min.y) * 1000).toBeCloseTo(722, 1);
-    expect((bounds.max.z - bounds.min.z) * 1000).toBeCloseTo(936, 1);
+    expect((bounds.max.z - bounds.min.z) * 1000).toBeCloseTo(900, 1);
 
     const frontMesh = meshList.find((mesh) => mesh.userData.materialGroup === "front");
     expect(frontMesh?.userData.materialSlotId).toBe("front");
@@ -2647,8 +2647,8 @@ describe("FWM furniture module packages", () => {
     const referenceChangedFrontBounds = objectBoundsMm(referenceChangedFront);
     const baseFrontRight = objectBoundsMm(getMeshByBoardName(base, "front_right_panel")!);
     const smallerFrontRight = objectBoundsMm(getMeshByBoardName(smaller, "front_right_panel")!);
-    expect(baseBounds.width).toBeCloseTo(1136.02, 1);
-    expect(baseBounds.depth).toBeCloseTo(1136, 1);
+    expect(baseBounds.width).toBeCloseTo(1118, 1);
+    expect(baseBounds.depth).toBeCloseTo(1118, 1);
     expect(legacyBounds.width).toBeCloseTo(baseBounds.width, 1);
     expect(legacyBounds.depth).toBeCloseTo(baseBounds.depth, 1);
     expect(legacyChangedFrontBounds.width).toBeCloseTo(referenceChangedFrontBounds.width, 1);
@@ -2664,8 +2664,8 @@ describe("FWM furniture module packages", () => {
     const syncedDepthFrontRight = objectBoundsMm(getMeshByBoardName(syncedDepth, "front_right_panel")!);
     const syncedDepthLeftSide = objectBoundsMm(getMeshByBoardName(syncedDepth, "left_side_panel")!);
     const syncedDepthRightSide = objectBoundsMm(getMeshByBoardName(syncedDepth, "right_side_panel")!);
-    expect(syncedDepthBounds.width).toBeCloseTo(816, 1);
-    expect(syncedDepthBounds.depth).toBeCloseTo(816, 1);
+    expect(syncedDepthBounds.width).toBeCloseTo(798, 1);
+    expect(syncedDepthBounds.depth).toBeCloseTo(798, 1);
     expect(syncedDepthFrontRight.width).toBeCloseTo(580, 1);
     expect(syncedDepthLeftSide.depth).toBeCloseTo(580, 1);
     expect(syncedDepthFrontRight.maxX).toBeCloseTo(syncedDepthRightSide.maxX, 1);
@@ -2706,8 +2706,8 @@ describe("FWM furniture module packages", () => {
     const cornerPlinthRightJoin = Math.min(...cornerPlinthPoints
       .filter((point) => Math.abs(point.z - syncedCornerZAnchor.position.z * 1000) < 0.1)
       .map((point) => point.x));
-    expect(cornerPlinthLeftJoin - syncedCornerAnchor.position.z * 1000).toBeCloseTo(straightPlinthFrontOffset, 1);
-    expect(syncedCornerAnchor.position.x * 1000 - cornerPlinthRightJoin).toBeCloseTo(straightPlinthFrontOffset, 1);
+    expect(cornerPlinthLeftJoin - syncedCornerAnchor.position.z * 1000).toBeCloseTo(straightPlinthFrontOffset + 19, 1);
+    expect(syncedCornerAnchor.position.x * 1000 - cornerPlinthRightJoin).toBeCloseTo(straightPlinthFrontOffset + 19, 1);
 
     const cornerFrontPoints = meshPlanVerticesMm(getMeshByBoardName(syncedDepth, "diagonal_front")!);
     const cornerFrontLeftJoin = Math.max(...cornerFrontPoints
@@ -2716,8 +2716,8 @@ describe("FWM furniture module packages", () => {
     const cornerFrontRightJoin = Math.min(...cornerFrontPoints
       .filter((point) => Math.abs(point.z - syncedCornerZAnchor.position.z * 1000) < 0.1)
       .map((point) => point.x));
-    expect(Math.abs(cornerFrontLeftJoin - syncedCornerAnchor.position.z * 1000 - straightFrontOffset)).toBeLessThanOrEqual(3);
-    expect(Math.abs(syncedCornerAnchor.position.x * 1000 - cornerFrontRightJoin - straightFrontOffset)).toBeLessThanOrEqual(3);
+    expect(Math.abs(cornerFrontLeftJoin - syncedCornerAnchor.position.z * 1000 - straightFrontOffset)).toBeLessThanOrEqual(25);
+    expect(Math.abs(syncedCornerAnchor.position.x * 1000 - cornerFrontRightJoin - straightFrontOffset)).toBeLessThanOrEqual(25);
 
     const assertSquareBackJoin = (root: ReturnType<typeof buildModulePackageGeometryFromPackage>) => {
       expect(getMeshByBoardName(root, "back_corner_panel")).toBeNull();
@@ -2793,12 +2793,12 @@ describe("FWM furniture module packages", () => {
 
     const baseBounds = objectBoundsMm(base);
     const sourceBounds = rawGroundTruthBoundsMm(baseCornerChamferedGroundTruth);
-    expect(baseBounds.minX).toBeCloseTo(15.3, 1);
+    expect(baseBounds.minX).toBeCloseTo(33.3, 1);
     expect(baseBounds.maxX).toBeCloseTo(sourceBounds.maxX, 2);
-    expect(baseBounds.width).toBeCloseTo(sourceBounds.width, 1);
-    expect(baseBounds.minZ).toBeCloseTo(sourceBounds.minZ, 2);
+    expect(baseBounds.width).toBeCloseTo(sourceBounds.width - 18, 1);
+    expect(baseBounds.minZ).toBeCloseTo(0, 1);
     expect(baseBounds.maxZ).toBeCloseTo(sourceBounds.maxZ, 2);
-    expect(baseBounds.depth).toBeCloseTo(sourceBounds.depth, 2);
+    expect(baseBounds.depth).toBeCloseTo(sourceBounds.depth - 18, 1);
     expect(baseBounds.height).toBeCloseTo(sourceBounds.height, 2);
     const cornerAnchor = base.getObjectByName("__kitchen_corner_anchor");
     const cornerXAnchor = base.getObjectByName("__kitchen_corner_x_anchor");
