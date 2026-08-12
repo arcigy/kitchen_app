@@ -24,4 +24,12 @@ describe("LED strip editing", () => {
     const offset = offsetLedStripPolyline([{ x: 0, y: 900, z: 0 }, { x: 1000, y: 900, z: 0 }, { x: 1000, y: 900, z: 1000 }], 100);
     expect(offset).toEqual([{ x: 0, y: 900, z: 100 }, { x: 900, y: 900, z: 100 }, { x: 900, y: 900, z: 1000 }]);
   });
+
+  it("removes one automatic run without deleting the other generated strips in its group", () => {
+    const automatic = group();
+    automatic.params.mode = "shelfJoint";
+    automatic.runs.push({ id: "shelf-2", points: [{ x: 0, y: 900, z: 500 }, { x: 1000, y: 900, z: 500 }] });
+    const result = deleteLedStripSegment(automatic, { runId: "shelf-2", segmentIndex: 0 });
+    expect(result[0]!.runs.map((run) => run.id)).toEqual(["run"]);
+  });
 });

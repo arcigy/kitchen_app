@@ -48,7 +48,11 @@ export function deleteLedStripSegment(group: LedStripGroup, ref: LedStripSegment
   requirePointIndex(run, ref.segmentIndex);
   requirePointIndex(run, ref.segmentIndex + 1);
 
-  if (run.points.length === 2) return [];
+  if (run.points.length === 2) {
+    if (source.params.mode === "custom") return [];
+    source.runs = source.runs.filter((candidate) => candidate.id !== run.id);
+    return source.runs.length ? [source] : [];
+  }
   if (ref.segmentIndex === 0) {
     run.points.splice(0, 1);
     return [source];
@@ -60,6 +64,10 @@ export function deleteLedStripSegment(group: LedStripGroup, ref: LedStripSegment
 
   const leftRun: LedStripRun = { id: `${run.id}-a`, points: run.points.slice(0, ref.segmentIndex + 1).map(clonePoint) };
   const rightRun: LedStripRun = { id: `${run.id}-b`, points: run.points.slice(ref.segmentIndex + 1).map(clonePoint) };
+  if (source.params.mode !== "custom") {
+    source.runs.splice(source.runs.indexOf(run), 1, leftRun, rightRun);
+    return [source];
+  }
   const left: LedStripGroup = { ...cloneLedStripGroup(source), id: `${source.id}-a`, params: { ...source.params, name: `${source.params.name} A` }, runs: [{ ...leftRun }] };
   const right: LedStripGroup = { ...cloneLedStripGroup(source), id: `${source.id}-b`, params: { ...source.params, name: `${source.params.name} B` }, runs: [{ ...rightRun }] };
   return [left, right];

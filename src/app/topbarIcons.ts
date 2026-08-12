@@ -43,6 +43,7 @@ export const topbarIcons = {
   I_BOM: actionIconMarkup("bom"),
   I_INSTALL: actionIconMarkup("install"),
   I_MATERIAL_EDIT: actionIconMarkup("materialEdit"),
+  I_LED_STRIP: actionIconMarkup("ledStrip"),
   I_CAMERA: actionIconMarkup("camera"),
   I_VIEW: actionIconMarkup("previewContext"),
   I_DONE: actionIconMarkup("done"),
