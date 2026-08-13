@@ -4,6 +4,21 @@ import { createAssistantBridge } from "./assistantBridge";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
 describe("assistant bridge safety boundary", () => {
+  it("creates confirmed custom furniture from a semantic boundary", async () => {
+    const createCustomFurniture = vi.fn((params) => ({ id: "cf1", params }));
+    const selectFurniture = vi.fn();
+    const bridge = createAssistantBridge({ customFurnitureActions: { createCustomFurniture, selectFurniture } } as never);
+    const result = await bridge.executeToolCall({
+      id: "cf_create",
+      toolId: "customFurniture.create",
+      confirmed: true,
+      input: { name: "Reception", boundary: [{ x: 0, z: 0 }, { x: 2000, z: 0 }, { x: 2000, z: 700 }] }
+    });
+    expect(result).toMatchObject({ ok: true, output: { id: "cf1" } });
+    expect(createCustomFurniture).toHaveBeenCalledWith(expect.objectContaining({ name: "Reception", boards: [] }));
+    expect(selectFurniture).toHaveBeenCalledWith("cf1");
+  });
+
   it("starts only the confirmed requested export format", async () => {
     const exportLayoutJsonFile = vi.fn(async () => undefined);
     const bridge = createAssistantBridge({
