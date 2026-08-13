@@ -310,11 +310,13 @@ function downloadPdf(bytes: Uint8Array, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+export type MarketingOfferPdfResult = { fileName: string; pageCount: number; downloadStarted: true };
+
 export async function exportMarketingOfferPdf(
   entries: ProjectPricingView[],
   summary: ProjectQuoteSummary,
   currency: PriceCurrency = "EUR"
-) {
+): Promise<MarketingOfferPdfResult> {
   const boards = aggregateProjectBoards(entries);
   const edges = aggregateProjectEdges(entries);
   const components = aggregateProjectComponents(entries);
@@ -403,5 +405,7 @@ export async function exportMarketingOfferPdf(
 
   const bytes = await pdf.save();
   const date = new Date().toISOString().slice(0, 10);
-  downloadPdf(bytes, `${t("kitchen-quotation").replace(/\s+/g, "-").toLowerCase()}-${date}.pdf`);
+  const fileName = `${t("kitchen-quotation").replace(/\s+/g, "-").toLowerCase()}-${date}.pdf`;
+  downloadPdf(bytes, fileName);
+  return { fileName, pageCount: pages.length, downloadStarted: true };
 }
