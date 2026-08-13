@@ -1185,9 +1185,6 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     const definition = assertToolAllowed(call.toolId);
     const validation = validateAssistantToolCall(call);
     if (validation.errors.length > 0) throw new Error(validation.errors.join(" "));
-    if ((definition.requiresConfirmation || (definition.operation ?? (definition.readOnly ? "read" : "write")) === "write") && call.confirmed !== true) {
-      throw new Error(`Assistant tool ${definition.id} requires explicit user confirmation.`);
-    }
     if ((definition.operation ?? (definition.readOnly ? "read" : "write")) === "write") {
       await ctx.authorizeToolCall?.(call);
     }

@@ -56,4 +56,12 @@ describe("assistant tool registry", () => {
       expect(getAssistantToolDefinition(id)).toMatchObject({ riskLevel: "high", requiresConfirmation: true });
     }
   });
+
+  it("never registers development or system-management capabilities", () => {
+    const ids = ASSISTANT_TOOL_DEFINITIONS.map((tool) => tool.id);
+    for (const forbidden of ["git.commit", "github.createPullRequest", "source.write", "shell.execute", "deploy.release", "settings.apiKey"]) {
+      expect(ids).not.toContain(forbidden);
+      expect(getAssistantToolDefinition(forbidden)).toBeNull();
+    }
+  });
 });

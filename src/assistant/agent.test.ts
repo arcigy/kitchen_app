@@ -123,7 +123,7 @@ describe("assistant agent fallback", () => {
       ragChunks: []
     });
 
-    expect(response.requiresConfirmation).toBe(true);
+    expect(response.requiresConfirmation).toBe(false);
     expect(response.toolCalls[0]?.toolId).toBe("module.patchSelectedParams");
     expect(response.toolCalls[0]?.input).toMatchObject({ instanceIds: ["m1"], patch: { width: 800, drawerCount: 3 } });
   });
@@ -167,7 +167,7 @@ describe("assistant agent fallback", () => {
     expect(response.assistantMessage).not.toContain("git add");
   });
 
-  it("only prepares deletion until the user confirms it in the UI", async () => {
+  it("dispatches deletion as an immediate editor command without exposing archive data", async () => {
     const response = await runAssistantTurn({
       message: "vymaž ich",
       clientContext: {
@@ -178,7 +178,7 @@ describe("assistant agent fallback", () => {
       },
       ragChunks: [{ id: "archive", source: "modpkg.archive.json", title: "Archive", text: "{ secret implementation }", tags: ["schema"], updatedAt: new Date().toISOString() }]
     });
-    expect(response.requiresConfirmation).toBe(true);
+    expect(response.requiresConfirmation).toBe(false);
     expect(response.toolCalls).toEqual([expect.objectContaining({ toolId: "editor.deleteSelection" })]);
     expect(response.assistantMessage).not.toContain("modpkg");
   });
@@ -195,17 +195,17 @@ describe("assistant agent fallback", () => {
       ragChunks: []
     });
     expect(response.phase).toBe("plan");
-    expect(response.requiresConfirmation).toBe(true);
+    expect(response.requiresConfirmation).toBe(false);
     expect(response.toolCalls).toEqual([expect.objectContaining({ toolId: "editor.deleteSelection" })]);
   });
 
-  it("requires confirmation for routine write tools as well", async () => {
+  it("dispatches routine editor writes immediately", async () => {
     const response = await runAssistantTurn({
       message: "nastav sirka 800 a sufliky 3",
       clientContext: { ...baseContext, selectedKind: "module", selectedInstanceIds: ["m1"], selectedParams: [{ id: "m1", kind: "module" }] },
       ragChunks: []
     });
-    expect(response.requiresConfirmation).toBe(true);
+    expect(response.requiresConfirmation).toBe(false);
   });
 
   it("reads the exact open-project name from live metadata instead of answering from RAG", async () => {
@@ -263,7 +263,7 @@ describe("assistant agent fallback", () => {
       catalog: tenantCatalog()
     });
 
-    expect(response.requiresConfirmation).toBe(true);
+    expect(response.requiresConfirmation).toBe(false);
     expect(response.toolCalls[0]?.toolId).toBe("vendorCatalog.insertResolvedModule");
     expect(response.toolCalls[0]?.input).toMatchObject({
       catalogKey: "GBS-FB",

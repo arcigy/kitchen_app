@@ -302,7 +302,7 @@ function buildPrompt(input: AgentInput): string {
     "Nesmieš tvrdiť fakty o appke bez RAG alebo live context dôkazu.",
     "Ak odpoveď vyžaduje aktuálne dáta alebo zmenu v editore, musíš vrátiť aspoň jeden platný tool call.",
     "Nikdy nepíš, že niečo práve robíš, počítaš, kontroluješ alebo vykonávaš, ak si nevrátil tool call, ktorý to reálne vykoná.",
-    "Mutácie rob iba cez dostupné tools. High risk vždy vyžaduje confirmation.",
+    "Mutácie rob iba cez dostupné editorové tools. Nikdy nevymýšľaj systémový, zdrojový, Git, GitHub, deploy, shell alebo konfiguračný nástroj; takéto možnosti nie sú dostupné.",
     "Vráť iba JSON objekt so shape: assistantMessage, plan|null, toolCalls[], validation|null, requiresConfirmation.",
     `Live context: ${JSON.stringify(input.clientContext)}`,
     `Tools:\n${assistantToolSummary()}`,
@@ -358,9 +358,10 @@ function enforceAuthoritativePlan(
 ): { plan: AssistantPlan | null; requiresConfirmation: boolean } {
   if (calls.length === 0) return { plan: null, requiresConfirmation: false };
   const definitions = calls.map((call) => getAssistantToolDefinition(call.toolId)).filter((item): item is NonNullable<typeof item> => !!item);
-  const requiresConfirmation = definitions.some((definition) =>
-    definition.requiresConfirmation || (definition.operation ?? (definition.readOnly ? "read" : "write")) === "write"
-  );
+  // The assistant is limited to the typed in-app registry. Editor actions are
+  // immediate user commands; application, GitHub, source-code and deployment
+  // actions are deliberately absent from that registry and therefore fail closed.
+  const requiresConfirmation = false;
   const riskLevel = highestAssistantRiskLevel(calls.map((call) => call.toolId));
   return {
     requiresConfirmation,
