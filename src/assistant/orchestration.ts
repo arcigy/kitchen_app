@@ -527,6 +527,17 @@ function formatToolResultEvidence(result: AssistantToolResult): string[] {
     }
     return evidence;
   }
+  if (result.toolId === "render.blenderPreview" && output.status === "completed") {
+    const previewUrl = typeof output.previewUrl === "string" ? output.previewUrl.trim() : "";
+    const previewPath = typeof output.previewPath === "string" ? output.previewPath.trim() : "";
+    const blendPath = typeof output.blendPath === "string" ? output.blendPath.trim() : "";
+    const evidence = [previewUrl
+      ? `Blender náhľad je hotový: [Otvoriť náhľad](${previewUrl}).`
+      : "Blender náhľad bol vytvorený."];
+    if (previewPath) evidence.push(`Výstup PNG: \`${previewPath}\`.`);
+    if (blendPath) evidence.push(`Zdrojový Blender súbor: \`${blendPath}\`.`);
+    return evidence;
+  }
   return result.stateDeltaSummary ? [result.stateDeltaSummary] : [];
 }
 
