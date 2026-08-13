@@ -59,6 +59,7 @@ function fixtures() {
       submitCandidate: vi.fn().mockResolvedValue({ view, candidate: view.candidates[0], idempotent: false }),
       confirmCandidate: vi.fn().mockResolvedValue(view),
       loadMaterials: vi.fn().mockResolvedValue(materials),
+      notifyProjectMaterialsChanged: vi.fn().mockResolvedValue(undefined),
       randomId: vi.fn().mockReturnValueOnce("request-1").mockReturnValueOnce("submission-1")
     }
   };
@@ -85,6 +86,7 @@ describe("standalone extension assignment flow", () => {
       requestId: "extension-request-1"
     }));
     expect(deps.confirmCandidate).toHaveBeenCalledTimes(1);
+    expect(deps.notifyProjectMaterialsChanged).toHaveBeenCalledWith(input.baseUrl, input.projectId);
     expect(deps.loadMaterials).toHaveBeenCalledTimes(1);
   });
 

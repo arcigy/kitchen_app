@@ -244,6 +244,35 @@ describe("materials phase controller", () => {
     ]);
   });
 
+  it("applies an externally assigned supplier material immediately without opening the Materials view", async () => {
+    const catalog = testCatalog();
+    const initial = createDefaultProjectMaterialAssignments(catalog, NOW);
+    const remote = structuredClone(initial);
+    const corpus = remote.assignments.find((assignment) => assignment.category === "corpus")!;
+    corpus.thicknessMm = 19;
+    corpus.snapshots.material!.definition.defaultThicknessMm = 19;
+    const onAssignmentsCommitted = vi.fn();
+    const loadProjectMaterials = vi.fn().mockResolvedValue({
+      assignments: remote, quantities: [], warnings: [], scopes: [],
+      priceSource: { priceListId: catalog.priceList.id, name: catalog.priceList.name, currency: catalog.priceList.currency, source: catalog.meta.source, lastSynchronizedAt: null }
+    } satisfies ProjectMaterialsView);
+    const controller = createMaterialsPhaseController({
+      container: new MaterialsHost() as unknown as HTMLElement,
+      catalog,
+      getProjectId: () => "project_1",
+      getQuantities: () => [],
+      initialAssignments: initial,
+      onAssignmentsCommitted,
+      api: { loadProjectMaterials }
+    });
+
+    await controller.refreshFromServer();
+
+    expect(loadProjectMaterials).toHaveBeenCalledWith("project_1", expect.any(AbortSignal));
+    expect(controller.getSaveState().assignments.find((assignment) => assignment.category === "corpus")?.thicknessMm).toBe(19);
+    expect(onAssignmentsCommitted).toHaveBeenCalledWith(expect.objectContaining({ assignments: expect.arrayContaining([expect.objectContaining({ category: "corpus", thicknessMm: 19 })]) }));
+  });
+
   it("replaces a previously loaded Materials view with a skeleton until the refreshed server view arrives", async () => {
     const catalog = testCatalog();
     const initial = createDefaultProjectMaterialAssignments(catalog, NOW);

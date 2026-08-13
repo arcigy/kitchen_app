@@ -227,6 +227,23 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     notifyAssignmentsCommitted();
   };
 
+  async function refreshFromServer(): Promise<ProjectMaterialsView> {
+    const projectId = args.getProjectId?.() ?? null;
+    if (!projectId) return view;
+    loadAbort?.abort();
+    const abort = new AbortController();
+    loadAbort = abort;
+    try {
+      const remoteView = await api.loadProjectMaterials(projectId, abort.signal);
+      if (loadAbort !== abort) return view;
+      remoteLoaded = true;
+      applyRemoteView(remoteView, now());
+    } finally {
+      if (loadAbort === abort) loadAbort = null;
+    }
+    return view;
+  }
+
   async function resetCategory(category: MaterialAssignmentCategory): Promise<void> {
     const changedAt = now();
     const defaults = createDefaultProjectMaterialAssignments(args.catalog, changedAt);
@@ -364,6 +381,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     getView(): ProjectMaterialsView {
       return structuredClone(view);
     },
+    refreshFromServer,
     setSupplierBridgeState(state: SupplierBridgePanelState): void {
       supplierBridgeState = structuredClone(state);
       panel?.updateSupplierBridge(supplierBridgeState);

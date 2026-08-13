@@ -10,6 +10,7 @@ import {
 import type { CapturedSupplierCandidate } from "./messages";
 import type { ExtensionMaterialTarget } from "./materialTargetModel";
 import { supplierExpectedProductTypeForMaterialCategory } from "../../../src/core/supplier-bridge/supplier-target-contract";
+import { notifyOpenArcigyProjectMaterials } from "./projectMaterialsNotifier";
 
 export type ExtensionAssignmentInput = {
   baseUrl: string;
@@ -26,6 +27,7 @@ type AssignmentDependencies = {
   submitCandidate: typeof submitSupplierCandidate;
   confirmCandidate: typeof confirmSupplierCandidate;
   loadMaterials: typeof loadExtensionProjectMaterials;
+  notifyProjectMaterialsChanged: typeof notifyOpenArcigyProjectMaterials;
   randomId: () => string;
 };
 
@@ -41,6 +43,7 @@ const dependencies: AssignmentDependencies = {
   submitCandidate: submitSupplierCandidate,
   confirmCandidate: confirmSupplierCandidate,
   loadMaterials: loadExtensionProjectMaterials,
+  notifyProjectMaterialsChanged: notifyOpenArcigyProjectMaterials,
   randomId: () => crypto.randomUUID()
 };
 
@@ -73,6 +76,7 @@ export async function runExtensionAssignment(
     price: input.candidate.price
   });
   await deps.confirmCandidate(input.baseUrl, creation.view.session.id, attachment.accessToken, item.id, submission.candidate.id);
+  await deps.notifyProjectMaterialsChanged(input.baseUrl, input.projectId).catch(() => undefined);
 
   try {
     const materials = await deps.loadMaterials(input.baseUrl, input.accessToken, input.projectId);

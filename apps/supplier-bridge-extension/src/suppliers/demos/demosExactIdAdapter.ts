@@ -37,6 +37,13 @@ function firstParameter(parameters: Map<string, string>, pattern: RegExp): strin
   return null;
 }
 
+function materialThickness(parameters: Map<string, string>): string | null {
+  // Démos board details can list veneer thickness before the board thickness.
+  // A veneer is a surface layer, never the thickness to assign to a board.
+  return firstParameter(parameters, /Tloušťka\s+materiálu/i)
+    ?? firstParameter(parameters, /Tloušťka(?!\s+dýhy)/i);
+}
+
 function definitionValue(document: Document, label: string): string | null {
   const term = [...document.querySelectorAll("dt")].find((candidate) => cleanText(candidate) === label);
   return term ? cleanText(term.nextElementSibling) || null : null;
@@ -148,7 +155,7 @@ function detailExtraction(document: Document, context: ExactProductExtractionCon
       description: null,
       decorCode: firstParameter(parameters, /Číslo dekoru|Název dekoru/i),
       surfaceCode: firstParameter(parameters, /Struktura/i),
-      thicknessMm: localizedNumber(firstParameter(parameters, /Tloušťka/i)),
+      thicknessMm: localizedNumber(materialThickness(parameters)),
       dimensions: productDimensions,
       availability: availability(availabilityText)
     },
