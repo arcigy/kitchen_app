@@ -1149,6 +1149,20 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     }
   },
   {
+    id: "render.blenderPreview",
+    title: "Render Blender material preview",
+    description: "Opens the existing material review and returns the completed Blender preview result after explicit confirmation.",
+    ownerSystem: "export-actions/blender-render",
+    effect: "Runs the current project scene through the approved Blender preview workflow without changing project geometry.",
+    preconditions: ["The user must explicitly confirm the render.", "The material review must be confirmed before Blender starts.", "The Blender export service must be available."],
+    postconditions: ["Returns completed preview URL and any output paths, a cancellation, or an exact render failure."],
+    examples: [{}],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
     id: "customFurniture.create",
     title: "Create custom furniture boundary",
     description: "Creates one named custom-furniture object from a closed plan boundary in millimetres.",
@@ -1249,9 +1263,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Rendering and exports",
     status: "partially-available",
     ownerSystem: "render/export controllers",
-    supportedByTools: ["export.download"],
-    exactBehavior: "The assistant can launch existing deterministic layout, scene, website-snapshot JSON and viewport PNG downloads after confirmation.",
-    limitation: "Blender preview, PDF/workbook/customer outputs and other long-running render flows do not yet expose a verifiable assistant job/result contract."
+    supportedByTools: ["export.download", "render.blenderPreview"],
+    exactBehavior: "The assistant can launch existing deterministic layout, scene, website-snapshot JSON and viewport PNG downloads after confirmation. It can also open the mandatory material review and return the completed Blender preview URL/output paths, cancellation, or exact render failure.",
+    limitation: "PDF/workbook/customer outputs and other long-running render flows do not yet expose a verifiable assistant job/result contract."
   }
 ];
 
