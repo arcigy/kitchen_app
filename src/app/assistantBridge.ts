@@ -152,6 +152,7 @@ type AssistantBridgeContext = {
   };
   customFurnitureActions: {
     createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
+    patchBoard: (furnitureId: string, boardId: string, patch: Record<string, unknown>) => unknown | null;
     selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
   };
   getProjectMarginSettings: () => ProjectMarginSettingsState;
@@ -1153,6 +1154,14 @@ function createCustomFurniture(ctx: AssistantBridgeContext, input: Record<string
   return { ok: true, toolId: "customFurniture.create", output: { id: furniture.id, params: cloneJson(furniture.params) }, stateDeltaSummary: `Created custom furniture ${furniture.id}.` };
 }
 
+function patchCustomFurnitureBoard(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const patch = input.patch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("patch must be an object.");
+  const board = ctx.customFurnitureActions.patchBoard(requireString(input, "furnitureId"), requireString(input, "boardId"), patch as Record<string, unknown>);
+  if (!board) throw new Error("Custom furniture board was not found.");
+  return { ok: true, toolId: "customFurniture.patchBoard", output: { furnitureId: input.furnitureId, boardId: input.boardId, board }, stateDeltaSummary: "Updated custom furniture board." };
+}
+
 async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolCall): Promise<AssistantToolResult> {
   try {
     const definition = assertToolAllowed(call.toolId);
@@ -1459,6 +1468,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "editor.alignLines") return alignLines(ctx, call.input);
     if (definition.id === "editor.trimWallsToCorner") return trimWallsToCorner(ctx, call.input);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
+    if (definition.id === "customFurniture.patchBoard") return patchCustomFurnitureBoard(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
     return {

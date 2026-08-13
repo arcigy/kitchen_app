@@ -98,6 +98,17 @@ describe("assistant bridge safety boundary", () => {
     expect(result).toMatchObject({ ok: true, output: { ...input, reason: "Trim: done." } });
   });
 
+  it("patches a custom furniture board through its controller", async () => {
+    const patchBoard = vi.fn(() => ({ id: "b1", thicknessMm: 18 }));
+    const bridge = createAssistantBridge({ customFurnitureActions: { patchBoard } } as never);
+    const input = { furnitureId: "cf1", boardId: "b1", patch: { thicknessMm: 18 } };
+
+    const result = await bridge.executeToolCall({ id: "board_1", toolId: "customFurniture.patchBoard", confirmed: true, input });
+
+    expect(patchBoard).toHaveBeenCalledWith("cf1", "b1", { thicknessMm: 18 });
+    expect(result).toMatchObject({ ok: true, output: { furnitureId: "cf1", boardId: "b1" } });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };

@@ -1296,6 +1296,20 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
       required: ["name", "boundary"],
       additionalProperties: false
     }
+  },
+  {
+    id: "customFurniture.patchBoard",
+    title: "Update custom furniture board",
+    description: "Updates a named board through the custom-furniture controller.",
+    ownerSystem: "custom-furniture-controller",
+    effect: "Rebuilds the board and records history.",
+    preconditions: ["Furniture and board IDs must exist."],
+    postconditions: ["The board reflects the validated patch."],
+    examples: [{ furnitureId: "cf1", boardId: "b1", patch: { thicknessMm: 18 } }],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: { type: "object", properties: { furnitureId: { type: "string", minLength: 1 }, boardId: { type: "string", minLength: 1 }, patch: { type: "object", minProperties: 1, additionalProperties: true } }, required: ["furnitureId", "boardId", "patch"], additionalProperties: false }
   }
 ];
 

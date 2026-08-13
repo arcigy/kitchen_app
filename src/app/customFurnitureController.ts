@@ -1660,6 +1660,27 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     args.refreshProps();
   };
 
+  const patchBoard = (furnitureId: string, boardId: string, patch: Partial<Pick<CustomFurnitureBoardParams, "name" | "materialId" | "thicknessMm" | "justification" | "baseConstraint" | "baseOffsetMm" | "topConstraint" | "topOffsetMm">>) => {
+    const furniture = findFurniture(furnitureId);
+    const board = furniture?.params.boards.find((item) => item.id === boardId) ?? null;
+    if (!furniture || !board) return null;
+    if (patch.name !== undefined) board.name = patch.name.trim() || board.name;
+    if (patch.materialId !== undefined) board.materialId = patch.materialId;
+    if (patch.thicknessMm !== undefined) board.thicknessMm = patch.thicknessMm;
+    if (patch.justification !== undefined) board.justification = patch.justification;
+    if (patch.baseConstraint !== undefined) board.baseConstraint = patch.baseConstraint;
+    if (patch.baseOffsetMm !== undefined) board.baseOffsetMm = patch.baseOffsetMm;
+    if (patch.topConstraint !== undefined) board.topConstraint = patch.topConstraint;
+    if (patch.topOffsetMm !== undefined) board.topOffsetMm = patch.topOffsetMm;
+    if (board.kind === "vertical") syncVerticalBoardProfileToConstraints(furniture, board);
+    selectedFurnitureId = furniture.id;
+    selectedBoardId = board.id;
+    rebuildFurniture(furniture);
+    args.commitHistory();
+    args.refreshProps();
+    return board;
+  };
+
   const removeSelected = (opts?: { skipHistory?: boolean }) => {
     if (boundaryEditActive && deleteBoundarySelection()) return true;
     const furniture = findFurniture();
@@ -3120,6 +3141,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     isCursorToolActive: () => boundaryEditActive || activeTool !== null,
     redoActiveEdit: redoBoundaryEdit,
     rebuildFurniture,
+    patchBoard,
     restoreCustomFurnitureFromSnapshot,
     selectFurniture,
     startEdgeBanding,
