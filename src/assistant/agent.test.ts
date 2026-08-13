@@ -183,6 +183,22 @@ describe("assistant agent fallback", () => {
     expect(response.assistantMessage).not.toContain("modpkg");
   });
 
+  it("prioritizes deletion over a generic selected-objects read", async () => {
+    const response = await runAssistantTurn({
+      message: "Vyma\u017e ozna\u010den\u00e9 moduly a potom over projekt.",
+      clientContext: {
+        ...baseContext,
+        selectedKind: "module",
+        selectedInstanceIds: ["m1"],
+        selectedParams: [{ id: "m1", kind: "module" }]
+      },
+      ragChunks: []
+    });
+    expect(response.phase).toBe("plan");
+    expect(response.requiresConfirmation).toBe(true);
+    expect(response.toolCalls).toEqual([expect.objectContaining({ toolId: "editor.deleteSelection" })]);
+  });
+
   it("requires confirmation for routine write tools as well", async () => {
     const response = await runAssistantTurn({
       message: "nastav sirka 800 a sufliky 3",
