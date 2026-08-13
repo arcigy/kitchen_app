@@ -109,6 +109,19 @@ describe("assistant bridge safety boundary", () => {
     expect(result).toMatchObject({ ok: true, output: { furnitureId: "cf1", boardId: "b1" } });
   });
 
+  it("creates a wardrobe and adds a named internal board through its editor", async () => {
+    const createWardrobe = vi.fn(() => ({ id: "wg_1", name: "Wardrobe", partIds: ["wg_1_1"] }));
+    const addPart = vi.fn(() => ({ id: "wg_1_2", kind: "horizontal" }));
+    const bridge = createAssistantBridge({ wardrobeActions: { createWardrobe, addPart } } as never);
+
+    const created = await bridge.executeToolCall({ id: "wardrobe_1", toolId: "wardrobe.create", confirmed: true, input: {} });
+    const added = await bridge.executeToolCall({ id: "wardrobe_2", toolId: "wardrobe.addPart", confirmed: true, input: { groupId: "wg_1", kind: "horizontal" } });
+
+    expect(created).toMatchObject({ ok: true, output: { id: "wg_1" } });
+    expect(addPart).toHaveBeenCalledWith("wg_1", "horizontal");
+    expect(added).toMatchObject({ ok: true, output: { groupId: "wg_1", part: { id: "wg_1_2" } } });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };

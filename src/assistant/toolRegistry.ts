@@ -1311,6 +1311,12 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     requiresConfirmation: true,
     inputSchema: { type: "object", properties: { furnitureId: { type: "string", minLength: 1 }, boardId: { type: "string", minLength: 1 }, patch: { type: "object", minProperties: 1, additionalProperties: true } }, required: ["furnitureId", "boardId", "patch"], additionalProperties: false }
   }
+  ,{
+    id: "wardrobe.create", title: "Create wardrobe", description: "Creates a new editable wardrobe through the existing wardrobe editor.", ownerSystem: "wardrobe-edit-mode", effect: "Adds a default wardrobe with corpus, back and starter boards.", preconditions: ["The wardrobe editor must be available."], postconditions: ["Returns the wardrobe group ID and its starter part IDs."], examples: [{}], readOnly: false, riskLevel: "medium", requiresConfirmation: true, inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
+    id: "wardrobe.addPart", title: "Add wardrobe board", description: "Adds an internal vertical, horizontal or back board to a named wardrobe.", ownerSystem: "wardrobe-edit-mode", effect: "Creates and selects the requested board through the existing wardrobe geometry owner.", preconditions: ["The wardrobe group must exist.", "Only one back board is allowed."], postconditions: ["Returns the new part ID."], examples: [{ groupId: "wg_1", kind: "horizontal" }], readOnly: false, riskLevel: "medium", requiresConfirmation: true, inputSchema: { type: "object", properties: { groupId: { type: "string", minLength: 1 }, kind: { type: "string", enum: ["vertical", "horizontal", "back"] } }, required: ["groupId", "kind"], additionalProperties: false }
+  }
 ];
 
 export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
@@ -1377,9 +1383,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Custom furniture and wardrobe",
     status: "partially-available",
     ownerSystem: "custom-furniture/wardrobe editors",
-    supportedByTools: ["context.getScene", "context.queryObjects", "context.getObject", "customFurniture.create", "editor.deleteSelection"],
-    exactBehavior: "The agent can create a named custom-furniture boundary through its controller; state can be observed and a selected delegated entity can use shared delete.",
-    limitation: "Board parameter editing, drawing, trim/align and wardrobe-internal part operations remain inside their dedicated editors."
+    supportedByTools: ["context.getScene", "context.queryObjects", "context.getObject", "customFurniture.create", "customFurniture.patchBoard", "wardrobe.create", "wardrobe.addPart", "editor.deleteSelection"],
+    exactBehavior: "The agent can create a named custom-furniture boundary, update a named board through its controller, create a wardrobe and add an internal vertical, horizontal or back board through the wardrobe editor; state can be observed and a selected delegated entity can use shared delete.",
+    limitation: "Custom-furniture drawing, trim/align and precise wardrobe-part parameter editing remain inside their dedicated editors."
   },
   {
     id: "render-export",

@@ -5218,6 +5218,18 @@ export function startApp(initialArgs: AppArgs) {
       patchBoard: (furnitureId, boardId, patch) => customFurnitureMode?.patchBoard(furnitureId, boardId, patch) ?? null,
       selectFurniture: (furnitureId, boardId) => customFurnitureMode?.selectFurniture(furnitureId, boardId)
     },
+    wardrobeActions: {
+      createWardrobe: () => {
+        const wardrobe = wardrobeMode?.createWardrobe() ?? null;
+        if (wardrobe) commitHistory(S);
+        return wardrobe;
+      },
+      addPart: (groupId, kind) => {
+        const part = wardrobeMode?.addPartToGroup(groupId, kind) ?? null;
+        if (part) commitHistory(S);
+        return part;
+      }
+    },
     getProjectMarginSettings: () => projectMarginSettings,
     authorizeToolCall: authorizeAssistantToolCall,
     commitHistory: () => commitHistory(S),
