@@ -155,6 +155,10 @@ type AssistantBridgeContext = {
     patchBoard: (furnitureId: string, boardId: string, patch: Record<string, unknown>) => unknown | null;
     selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
   };
+  wardrobeActions: {
+    createWardrobe: () => { id: string; name: string; partIds: string[] } | null;
+    addPart: (groupId: string, kind: "vertical" | "horizontal" | "back") => { id: string; kind: string } | null;
+  };
   getProjectMarginSettings: () => ProjectMarginSettingsState;
   authorizeToolCall: (call: AssistantToolCall) => Promise<void>;
   commitHistory: () => void;
@@ -1162,6 +1166,20 @@ function patchCustomFurnitureBoard(ctx: AssistantBridgeContext, input: Record<st
   return { ok: true, toolId: "customFurniture.patchBoard", output: { furnitureId: input.furnitureId, boardId: input.boardId, board }, stateDeltaSummary: "Updated custom furniture board." };
 }
 
+function createWardrobe(ctx: AssistantBridgeContext): AssistantToolResult {
+  const wardrobe = ctx.wardrobeActions.createWardrobe();
+  if (!wardrobe) throw new Error("Wardrobe editor is not ready.");
+  return { ok: true, toolId: "wardrobe.create", output: wardrobe, stateDeltaSummary: `Created wardrobe ${wardrobe.id}.` };
+}
+
+function addWardrobePart(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const kind = input.kind === "vertical" || input.kind === "horizontal" || input.kind === "back" ? input.kind : null;
+  if (!kind) throw new Error("kind must be vertical, horizontal or back.");
+  const part = ctx.wardrobeActions.addPart(requireString(input, "groupId"), kind);
+  if (!part) throw new Error("Wardrobe group was not found or cannot accept this part.");
+  return { ok: true, toolId: "wardrobe.addPart", output: { groupId: input.groupId, part }, stateDeltaSummary: `Added ${kind} wardrobe part ${part.id}.` };
+}
+
 async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolCall): Promise<AssistantToolResult> {
   try {
     const definition = assertToolAllowed(call.toolId);
@@ -1469,6 +1487,8 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "editor.trimWallsToCorner") return trimWallsToCorner(ctx, call.input);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     if (definition.id === "customFurniture.patchBoard") return patchCustomFurnitureBoard(ctx, call.input);
+    if (definition.id === "wardrobe.create") return createWardrobe(ctx);
+    if (definition.id === "wardrobe.addPart") return addWardrobePart(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
     return {

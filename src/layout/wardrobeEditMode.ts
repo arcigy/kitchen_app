@@ -1299,6 +1299,21 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     activeGroupId = null;
   };
 
+  const createWardrobe = () => {
+    enterNew();
+    const group = findActiveGroup();
+    return group ? { id: group.id, name: group.name, partIds: group.parts.map((part) => part.id) } : null;
+  };
+
+  const addPartToGroup = (groupId: string, kind: WardrobePartKind) => {
+    const group = groups.find((item) => item.id === groupId) ?? null;
+    if (!group) return null;
+    activeGroupId = group.id;
+    addPart(kind);
+    const part = findPart(group, group.selectedPartId);
+    return part ? { id: part.id, kind: part.kind } : null;
+  };
+
   const getSaveState = (): WardrobeEditSaveState => ({
     activeGroupId,
     groups: groups.map((group) => ({
@@ -1347,6 +1362,8 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
   };
 
   return {
+    addPartToGroup,
+    createWardrobe,
     enterNew,
     deleteSelected,
     getSaveState,
