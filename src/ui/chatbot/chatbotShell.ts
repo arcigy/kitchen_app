@@ -4,9 +4,11 @@ import type {
   AssistantToolDefinition,
   AssistantToolResult,
   AssistantTurnResponse,
-  AssistantWorkflowState
+  AssistantWorkflowState,
+  AssistantChatMessage
 } from "../../assistant/types";
 import { localeForLanguage, getCurrentLanguage } from "../../i18n";
+import { AssistantChatThreadStore } from "./chatThreadStore";
 
 function chatbotCopy(sk: string, cs: string, en: string): string {
   const language = getCurrentLanguage();
@@ -92,7 +94,6 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
         <strong>${chatbotCopy("Asistent Arcigy", "Asistent Arcigy", "Arcigy assistant")}</strong>
       </div>
       <div class="chatbot-header-actions">
-        <button type="button" class="chatbot-debug-button" data-chatbot-copy-debug aria-label="${chatbotCopy("Kopírovať debug JSON", "Kopírovat debug JSON", "Copy debug JSON")}" title="${chatbotCopy("Kopírovať kompletný debug JSON", "Kopírovat úplný debug JSON", "Copy complete debug JSON")}" disabled>{ }</button>
         <button type="button" data-chatbot-menu aria-haspopup="menu" aria-expanded="false" aria-label="${chatbotCopy("Možnosti asistenta", "Možnosti asistenta", "Assistant options")}">
           <span></span><span></span><span></span>
         </button>
@@ -102,6 +103,10 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
         <button type="button" data-chatbot-popout role="menuitem">${chatbotCopy("Otvoriť v novom okne", "Otevřít v novém okně", "Open in new window")}</button>
       </div>
     </header>
+    <nav class="chatbot-threads" aria-label="Assistant chats">
+      <button type="button" data-chatbot-new-thread>+ ${chatbotCopy("Nový chat", "Nový chat", "New chat")}</button>
+      <div data-chatbot-thread-list></div>
+    </nav>
     <main class="chatbot-body" data-chatbot-body>
       <div class="chatbot-empty" data-chatbot-empty>
         <div class="chatbot-mark" aria-hidden="true">
@@ -140,7 +145,6 @@ function createChatbotPanel(args: { standalone: boolean; onClose: (() => void) |
     </footer>
   `;
 
-  setChatbotActionIcon(shell, "[data-chatbot-copy-debug]", "debug");
   setChatbotActionIcon(shell, "[data-chatbot-menu]", "menu");
   setChatbotActionIcon(shell, "[data-chatbot-close]", "close");
   setChatbotActionIcon(shell, "[data-chatbot-attachment]", "attachment");
@@ -185,7 +189,9 @@ function setChatbotActionIcon(shell: HTMLElement, selector: string, iconId: Acti
 }
 
 type ChatbotState = {
-  conversation: Array<{ role: "user" | "assistant" | "tool"; content: string }>;
+  conversation: AssistantChatMessage[];
+  threadId: string;
+  threadStore: AssistantChatThreadStore;
   workflow: AssistantWorkflowState | null;
   busy: boolean;
   debugTrace: AssistantDebugTraceBundle | null;
@@ -459,9 +465,19 @@ function bindAssistantChat(shell: HTMLElement): void {
   const textarea = shell.querySelector<HTMLTextAreaElement>("textarea");
   if (!body || !form || !textarea) return;
 
-  const state: ChatbotState = { conversation: [], workflow: null, busy: false, debugTrace: null };
+  const context = getContextSnapshot();
+  const threadStore = new AssistantChatThreadStore(context.projectId, context.phaseId);
+  const initialThread = threadStore.list()[0] ?? threadStore.create();
+  const state: ChatbotState = {
+    conversation: initialThread.messages,
+    threadId: initialThread.id,
+    threadStore,
+    workflow: null,
+    busy: false,
+    debugTrace: null
+  };
   const maxClientCycles = 8;
-  const debugButton = shell.querySelector<HTMLButtonElement>("[data-chatbot-copy-debug]");
+  const debugButton = shell.querySelector<HTMLButtonElement>("[data-chatbot-debug-control]");
   const updateDebugButton = () => {
     if (!debugButton) return;
     debugButton.disabled = !state.debugTrace;
@@ -491,6 +507,50 @@ function bindAssistantChat(shell: HTMLElement): void {
   });
   updateDebugButton();
 
+  const threadList = shell.querySelector<HTMLElement>("[data-chatbot-thread-list]");
+  const renderThreadList = () => {
+    if (!threadList) return;
+    threadList.innerHTML = state.threadStore.list().map((thread) =>
+      `<button type="button" data-chatbot-thread="${escapeHtml(thread.id)}" class="${thread.id === state.threadId ? "is-active" : ""}" title="${escapeHtml(thread.title)}">${escapeHtml(thread.title)}</button>`
+    ).join("");
+  };
+  const renderThread = () => {
+    body.innerHTML = "";
+    if (state.conversation.length === 0) {
+      body.innerHTML = `<div class="chatbot-empty" data-chatbot-empty><strong>${chatbotCopy("Čo dnes navrhneme?", "Co dnes navrhneme?", "What shall we design today?")}</strong><p>${chatbotCopy("Popíšte výsledok a pripravím bezpečný postup.", "Popište výsledek a připravím bezpečný postup.", "Describe the outcome and I will prepare a safe workflow.")}</p></div>`;
+      return;
+    }
+    for (const message of state.conversation) appendMessage(body, message.role, message.content);
+  };
+  const saveChatMessage = (message: AssistantChatMessage) => {
+    state.threadStore.append(state.threadId, message);
+    state.conversation = state.threadStore.get(state.threadId)?.messages ?? state.conversation;
+    renderThreadList();
+  };
+  renderThread();
+  renderThreadList();
+  shell.querySelector<HTMLButtonElement>("[data-chatbot-new-thread]")?.addEventListener("click", () => {
+    if (state.busy) return;
+    const thread = state.threadStore.create();
+    state.threadId = thread.id;
+    state.conversation = [];
+    state.workflow = null;
+    renderThread();
+    renderThreadList();
+    textarea.focus();
+  });
+  threadList?.addEventListener("click", (event) => {
+    if (state.busy) return;
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-chatbot-thread]");
+    const thread = button ? state.threadStore.get(button.dataset.chatbotThread ?? "") : null;
+    if (!thread) return;
+    state.threadId = thread.id;
+    state.conversation = thread.messages;
+    state.workflow = null;
+    renderThread();
+    renderThreadList();
+  });
+
   let continueWithTools: (message: string, calls: AssistantToolCall[], confirmed: boolean, cycle: number) => Promise<void>;
 
   const handleResponse = async (message: string, response: AssistantTurnResponse, cycle: number): Promise<void> => {
@@ -498,7 +558,7 @@ function bindAssistantChat(shell: HTMLElement): void {
     const showPlan = shouldRenderAssistantPlan(response, getToolDefinitions());
     const visibleResponse = response.phase === "answer" || response.phase === "clarify" || response.phase === "complete" || response.phase === "failed" || (!response.plan && response.toolCalls.length === 0);
     if (visibleResponse && response.assistantMessage.trim()) {
-      state.conversation.push({ role: "assistant", content: response.assistantMessage });
+      saveChatMessage({ role: "assistant", content: response.assistantMessage });
       appendMessage(body, "assistant", response.assistantMessage);
     }
     if (response.toolCalls.length === 0) {
@@ -558,7 +618,7 @@ function bindAssistantChat(shell: HTMLElement): void {
       input: { message }
     });
     updateDebugButton();
-    state.conversation.push({ role: "user", content: message });
+    saveChatMessage({ role: "user", content: message });
     appendMessage(body, "user", message);
     body.querySelectorAll<HTMLButtonElement>("[data-chatbot-apply]").forEach((button) => {
       button.disabled = true;
@@ -581,6 +641,12 @@ function bindAssistantChat(shell: HTMLElement): void {
         setBusy(shell, false);
         state.busy = false;
       });
+  });
+
+  textarea.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    if (!state.busy && textarea.value.trim()) form.requestSubmit();
   });
 
   shell.querySelectorAll<HTMLButtonElement>("[data-chatbot-prompt]").forEach((button) => {

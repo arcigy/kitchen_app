@@ -1185,7 +1185,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     const definition = assertToolAllowed(call.toolId);
     const validation = validateAssistantToolCall(call);
     if (validation.errors.length > 0) throw new Error(validation.errors.join(" "));
-    if (definition.requiresConfirmation && call.confirmed !== true) {
+    if ((definition.requiresConfirmation || (definition.operation ?? (definition.readOnly ? "read" : "write")) === "write") && call.confirmed !== true) {
       throw new Error(`Assistant tool ${definition.id} requires explicit user confirmation.`);
     }
     if ((definition.operation ?? (definition.readOnly ? "read" : "write")) === "write") {
@@ -1348,6 +1348,9 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     }
     if (definition.id === "pricing.getSummary") {
       const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
+      const selectedIds = new Set(selectedInstanceIds(ctx));
+      const selectedEntries = entries.filter((entry) => selectedIds.has(entry.instanceId));
+      const selectedFinalPrice = selectedEntries.reduce((total, entry) => total + entry.result.pricing.finalPrice, 0);
       return {
         ok: true,
         toolId: call.toolId,
@@ -1360,7 +1363,15 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
             pricingStatus: entry.result.pricing.pricingStatus,
             validationErrors: entry.result.pricing.validationErrors,
             finalPrice: entry.result.pricing.finalPrice
-          }))
+          })),
+          selected: selectedEntries.length > 0
+            ? {
+              entityCount: selectedEntries.length,
+              finalPrice: selectedFinalPrice,
+              incompletePriceCount: selectedEntries.filter((entry) => entry.result.pricing.pricingStatus === "incomplete").length,
+              entityIds: selectedEntries.map((entry) => entry.instanceId)
+            }
+            : null
         },
         stateDeltaSummary: "Calculated the current BOM-backed project price."
       };

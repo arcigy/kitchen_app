@@ -283,6 +283,12 @@ function scoreChunk(queryTokens: string[], chunk: AssistantRagChunk): number {
   return score;
 }
 
+function isClientSafeRagChunk(chunk: AssistantRagChunk): boolean {
+  const source = chunk.source.replaceAll("\\", "/").toLowerCase();
+  if (source.startsWith("tenant-catalog/")) return true;
+  return !source.endsWith(".json") && !source.includes("/node_modules/") && !source.includes("/dist/") && !source.includes("modpkg.archive");
+}
+
 export function replaceAssistantRagTenantChunks(
   baseIndex: AssistantRagIndex,
   tenantChunks: AssistantRagChunk[]
@@ -313,6 +319,7 @@ export async function searchAssistantRag(args: {
   setTransientIndex(args.ctx.clientId, index, args.catalog);
   const queryTokens = normalizePinoSearchText(args.query).split(/[^a-z0-9]+/iu).filter(Boolean);
   return [...index.chunks]
+    .filter(isClientSafeRagChunk)
     .map((chunk) => ({ chunk, score: scoreChunk(queryTokens, chunk) }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)

@@ -26,6 +26,8 @@
     "import:modpkg": "tsx scripts/importModpkg.ts",
     "test:pricing-contract": "tsx scripts/testPricingContract.ts",
     "test:assistant-live": "node scripts/testAssistantCapabilitiesLive.mjs",
+    "test:assistant-evals": "tsx scripts/evaluateAssistantSuite.ts",
+    "test:assistant-chat-ui": "node scripts/testAssistantChatUi.mjs",
     "test:assistant-project": "node scripts/testAssistantCapabilitiesPersistedProject.mjs",
     "test:pricing-ui": "node scripts/testPricingUi.mjs",
     "test:kitchen-context-live": "node scripts/testKitchenContextLive.mjs",

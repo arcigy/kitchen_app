@@ -123,7 +123,7 @@ describe("assistant agent fallback", () => {
       ragChunks: []
     });
 
-    expect(response.requiresConfirmation).toBe(false);
+    expect(response.requiresConfirmation).toBe(true);
     expect(response.toolCalls[0]?.toolId).toBe("module.patchSelectedParams");
     expect(response.toolCalls[0]?.input).toMatchObject({ instanceIds: ["m1"], patch: { width: 800, drawerCount: 3 } });
   });
@@ -155,6 +155,41 @@ describe("assistant agent fallback", () => {
       input: { kinds: ["module"], limit: 500 }
     });
     expect(response.workflow?.successCriteria[0]).toContain("počet modulov");
+  });
+
+  it("routes a live price question away from unrelated RAG content", async () => {
+    const response = await runAssistantTurn({
+      message: "koľko stoja označené veci dokopy teraz, akú majú cenu?",
+      clientContext: baseContext,
+      ragChunks: [{ id: "irrelevant", source: "AGENTS.md", title: "Git workflow", text: "git add -A", tags: [], updatedAt: new Date().toISOString() }]
+    });
+    expect(response.toolCalls).toEqual([expect.objectContaining({ toolId: "pricing.getSummary", input: {} })]);
+    expect(response.assistantMessage).not.toContain("git add");
+  });
+
+  it("only prepares deletion until the user confirms it in the UI", async () => {
+    const response = await runAssistantTurn({
+      message: "vymaž ich",
+      clientContext: {
+        ...baseContext,
+        selectedKind: "module",
+        selectedInstanceIds: ["m1", "m2"],
+        selectedParams: [{ id: "m1", kind: "module" }, { id: "m2", kind: "module" }]
+      },
+      ragChunks: [{ id: "archive", source: "modpkg.archive.json", title: "Archive", text: "{ secret implementation }", tags: ["schema"], updatedAt: new Date().toISOString() }]
+    });
+    expect(response.requiresConfirmation).toBe(true);
+    expect(response.toolCalls).toEqual([expect.objectContaining({ toolId: "editor.deleteSelection" })]);
+    expect(response.assistantMessage).not.toContain("modpkg");
+  });
+
+  it("requires confirmation for routine write tools as well", async () => {
+    const response = await runAssistantTurn({
+      message: "nastav sirka 800 a sufliky 3",
+      clientContext: { ...baseContext, selectedKind: "module", selectedInstanceIds: ["m1"], selectedParams: [{ id: "m1", kind: "module" }] },
+      ragChunks: []
+    });
+    expect(response.requiresConfirmation).toBe(true);
   });
 
   it("reads the exact open-project name from live metadata instead of answering from RAG", async () => {
