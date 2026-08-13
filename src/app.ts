@@ -5152,6 +5152,10 @@ export function startApp(initialArgs: AppArgs) {
       exportWebsiteShowcaseFile: async (stage) => {
         if (!exportActions) throw new Error("Export actions are not ready.");
         await exportActions.exportWebsiteShowcaseFile(stage);
+      },
+      exportBlenderPreview: async () => {
+        if (!exportActions) throw new Error("Export actions are not ready.");
+        return await exportActions.exportBlenderPreview();
       }
     },
     customFurnitureActions: {

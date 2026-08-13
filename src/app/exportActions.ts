@@ -60,6 +60,11 @@ type BlenderExportResponse = {
   blendPath?: string;
 };
 
+export type BlenderPreviewExportResult =
+  | { status: "completed"; previewUrl: string; previewPath?: string; blendPath?: string }
+  | { status: "cancelled" }
+  | { status: "failed"; error: string };
+
 type BlenderExportUi = {
   statusEl: HTMLElement | null;
   spinnerEl: HTMLElement | null;
@@ -271,7 +276,7 @@ export function createExportActions(args: ExportActionsArgs) {
     args.appArgs.copyStatusEl.textContent = copied ? t("Copied.") : t("Copy failed (browser permission).");
   });
 
-  const exportBlenderPreview = async () => {
+  const exportBlenderPreview = async (): Promise<BlenderPreviewExportResult> => {
     args.appArgs.copyStatusEl.textContent = "";
     const { statusEl, spinnerEl, errorEl, previewLinkEl, previewImg, openBlendBtn, openPngBtn } = ensureBlenderExportPanel();
 
@@ -298,7 +303,7 @@ export function createExportActions(args: ExportActionsArgs) {
     if (!reviewedPayload) {
       setUi("idle", t("Ready."));
       args.appArgs.copyStatusEl.textContent = "";
-      return;
+      return { status: "cancelled" };
     }
     const json = JSON.stringify(reviewedPayload, null, 2);
     args.appArgs.exportOutEl.value = json;
@@ -346,10 +351,17 @@ export function createExportActions(args: ExportActionsArgs) {
 
       setUi("done", copyOk ? t("Done. JSON copied.") : t("Done."));
       args.appArgs.copyStatusEl.textContent = "";
+      return {
+        status: "completed",
+        previewUrl,
+        ...(data.previewPath ? { previewPath: data.previewPath } : {}),
+        ...(data.blendPath ? { blendPath: data.blendPath } : {})
+      };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setUi("error", t("Blender export failed."), msg);
       args.appArgs.copyStatusEl.textContent = "";
+      return { status: "failed", error: msg };
     } finally {
       args.appArgs.exportSceneBtn.disabled = false;
     }
@@ -372,7 +384,9 @@ export function createExportActions(args: ExportActionsArgs) {
       exportSceneJson: exportSceneJsonFile,
       exportWebsiteInitial: () => exportWebsiteShowcaseFile("initial"),
       exportWebsiteFinal: () => exportWebsiteShowcaseFile("final"),
-      exportBlenderPreview,
+      exportBlenderPreview: async () => {
+        await exportBlenderPreview();
+      },
       exportPng: downloadViewportPng,
       copyJson: copyCurrentExport,
       onLanguageChange: args.onLanguageChange

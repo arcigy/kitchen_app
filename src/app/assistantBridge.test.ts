@@ -29,6 +29,24 @@ describe("assistant bridge safety boundary", () => {
     expect(exportLayoutJsonFile).toHaveBeenCalledOnce();
   });
 
+  it("returns the verified Blender preview result from the existing reviewed render owner", async () => {
+    const exportBlenderPreview = vi.fn(async () => ({
+      status: "completed" as const,
+      previewUrl: "/storage/client/project/preview.png",
+      previewPath: "C:/exports/preview.png",
+      blendPath: "C:/exports/scene.blend"
+    }));
+    const bridge = createAssistantBridge({ exportActions: { exportBlenderPreview } } as never);
+
+    const result = await bridge.executeToolCall({ id: "render_1", toolId: "render.blenderPreview", confirmed: true, input: {} });
+
+    expect(exportBlenderPreview).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      ok: true,
+      output: { status: "completed", previewUrl: "/storage/client/project/preview.png", blendPath: "C:/exports/scene.blend" }
+    });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };

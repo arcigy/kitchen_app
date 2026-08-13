@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { BlenderPreviewExportResult } from "./exportActions";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { createDefaultModulePackageParameters } from "../core/module-package/runtime/module-runtime-adapter";
@@ -133,6 +134,7 @@ type AssistantBridgeContext = {
     exportLayoutJsonFile: () => Promise<void>;
     exportSceneJsonFile: () => Promise<void>;
     exportWebsiteShowcaseFile: (stage: "initial" | "final") => Promise<void>;
+    exportBlenderPreview: () => Promise<BlenderPreviewExportResult>;
   };
   customFurnitureActions: {
     createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
@@ -1040,6 +1042,17 @@ async function downloadExport(ctx: AssistantBridgeContext, input: Record<string,
   };
 }
 
+async function renderBlenderPreview(ctx: AssistantBridgeContext): Promise<AssistantToolResult> {
+  const result = await ctx.exportActions.exportBlenderPreview();
+  if (result.status === "failed") throw new Error(result.error);
+  return {
+    ok: true,
+    toolId: "render.blenderPreview",
+    output: result,
+    stateDeltaSummary: result.status === "completed" ? "Blender material preview completed." : "Blender material preview was cancelled before rendering."
+  };
+}
+
 function createCustomFurniture(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
   const boundary = Array.isArray(input.boundary)
     ? input.boundary.map((point, index) => requirePlanPoint(point, `boundary[${index}]`))
@@ -1361,6 +1374,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       };
     }
     if (definition.id === "export.download") return await downloadExport(ctx, call.input);
+    if (definition.id === "render.blenderPreview") return await renderBlenderPreview(ctx);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
