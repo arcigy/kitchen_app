@@ -69,7 +69,19 @@ jobs:
         run: npm run lint --if-present
 
       - name: Test
-        run: npm run test --if-present
+        # Unit tests normally finish in a few minutes. Keep the protected
+        # branch from waiting indefinitely on a wedged runner, while leaving
+        # enough time for the complete suite and collecting useful diagnostics.
+        timeout-minutes: 15
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=30s 12m npm run test --if-present
+          status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error::Unit test suite exceeded its 12-minute limit."
+            ps -ef
+          fi
+          exit "$status"
 
       - name: PostgreSQL backup and restore drill
         timeout-minutes: 10
