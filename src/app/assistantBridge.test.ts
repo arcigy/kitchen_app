@@ -87,6 +87,17 @@ describe("assistant bridge safety boundary", () => {
     expect(result).toMatchObject({ ok: true, output: { reference, target, reason: "Align: done." } });
   });
 
+  it("trims explicit wall endpoints through the shared connected-wall owner", async () => {
+    const trimWallsToCorner = vi.fn(() => ({ ok: true, reason: "Trim: done." }));
+    const bridge = createAssistantBridge({ trimActions: { trimWallsToCorner } } as never);
+    const input = { targetWallId: "wall_1", targetEndpoint: "b", cutterWallId: "wall_2", cutterEndpoint: "a" };
+
+    const result = await bridge.executeToolCall({ id: "trim_1", toolId: "editor.trimWallsToCorner", confirmed: true, input });
+
+    expect(trimWallsToCorner).toHaveBeenCalledWith("wall_1", "b", "wall_2", "a");
+    expect(result).toMatchObject({ ok: true, output: { ...input, reason: "Trim: done." } });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };

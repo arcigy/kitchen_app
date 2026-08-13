@@ -49,6 +49,7 @@ import {
   getAlignShiftVector,
   pickBestAlignLine
 } from "./app/alignTool";
+import { resolveTrimCornerEdit, trimWallEndpointWorldPoint } from "./app/pointerTrimGeometryHelpers";
 import {
   addUnlockedAlignLockForEndpoints,
   alignEndpointFromPickedLine,
@@ -5180,6 +5181,33 @@ export function startApp(initialArgs: AppArgs) {
           commitHistory(S);
         }
         return result;
+      }
+    },
+    trimActions: {
+      trimWallsToCorner: (targetWallId, targetEndpoint, cutterWallId, cutterEndpoint) => {
+        const targetWall = walls.find((wall) => wall.id === targetWallId) ?? null;
+        const cutterWall = walls.find((wall) => wall.id === cutterWallId) ?? null;
+        if (!targetWall || !cutterWall) return { ok: false, reason: "Trim: selected wall was not found." };
+        if (targetWall.id === cutterWall.id) return { ok: false, reason: "Trim: target and cutter must be different walls." };
+        if (pinnedWallIds.has(targetWall.id) || pinnedWallIds.has(cutterWall.id)) return { ok: false, reason: "Trim: a selected wall is pinned." };
+        const targetPick = resolveAlignLine({ targetKind: "wall", targetId: targetWallId, lineRole: "center" });
+        const cutterPick = resolveAlignLine({ targetKind: "wall", targetId: cutterWallId, lineRole: "center" });
+        if (!targetPick || !cutterPick) return { ok: false, reason: "Trim: selected wall centerline was not found." };
+        const result = resolveTrimCornerEdit({
+          targetWall,
+          cutterWall,
+          targetPick,
+          cutterPick,
+          targetClick: trimWallEndpointWorldPoint(targetWall, targetEndpoint),
+          cutterClick: trimWallEndpointWorldPoint(cutterWall, cutterEndpoint),
+          geometry: { lineLineIntersectionXZ, toMmPoint }
+        });
+        if (result.kind === "parallel") return { ok: false, reason: "Trim: walls must not be parallel." };
+        if (result.kind === "noChange") return { ok: true, reason: "Trim: walls already meet at the requested corner." };
+        if (!setWallEndpointsAndConnectedMm(result.edits)) return { ok: false, reason: "Trim: connected wall endpoints could not be updated." };
+        updateSelectionHighlights();
+        commitHistory(S);
+        return { ok: true, reason: "Trim: walls were extended or trimmed to their intersection." };
       }
     },
     customFurnitureActions: {
