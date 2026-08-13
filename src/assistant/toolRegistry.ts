@@ -1163,6 +1163,20 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
   },
   {
+    id: "export.marketingPdf",
+    title: "Download marketing quotation PDF",
+    description: "Generates the existing BOM-backed marketing quotation PDF after explicit confirmation.",
+    ownerSystem: "bom-marketing-pdf",
+    effect: "Creates and downloads a PDF based on the current project's priced BOM without changing project geometry or prices.",
+    preconditions: ["The project must contain at least one priced entity.", "The user must explicitly confirm the PDF download."],
+    postconditions: ["Returns the exact generated filename and page count after the browser download starts."],
+    examples: [{}],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
     id: "customFurniture.create",
     title: "Create custom furniture boundary",
     description: "Creates one named custom-furniture object from a closed plan boundary in millimetres.",
@@ -1263,9 +1277,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Rendering and exports",
     status: "partially-available",
     ownerSystem: "render/export controllers",
-    supportedByTools: ["export.download", "render.blenderPreview"],
-    exactBehavior: "The assistant can launch existing deterministic layout, scene, website-snapshot JSON and viewport PNG downloads after confirmation. It can also open the mandatory material review and return the completed Blender preview URL/output paths, cancellation, or exact render failure.",
-    limitation: "PDF/workbook/customer outputs and other long-running render flows do not yet expose a verifiable assistant job/result contract."
+    supportedByTools: ["export.download", "render.blenderPreview", "export.marketingPdf"],
+    exactBehavior: "The assistant can launch existing deterministic layout, scene, website-snapshot JSON, viewport PNG and BOM-backed marketing PDF downloads after confirmation. It can also open the mandatory material review and return the completed Blender preview URL/output paths, cancellation, or exact render failure.",
+    limitation: "Workbook/customer outputs and other long-running render flows do not yet expose a verifiable assistant job/result contract."
   }
 ];
 
