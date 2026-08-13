@@ -229,7 +229,8 @@ describe("assistant workflow orchestration", () => {
           pricingStatus: "incomplete",
           validationErrors: ["Missing price"],
           finalPrice: 0
-        }]
+        }],
+        selected: { entityCount: 2, finalPrice: 420.5, incompletePriceCount: 1, entityIds: ["module_1", "worktop_1"] }
       },
       stateDeltaSummary: "Calculated the current BOM-backed project price."
     }];
@@ -247,6 +248,37 @@ describe("assistant workflow orchestration", () => {
     expect(message).toContain("**Aktuálna vypočítaná cena:** 899,42 €");
     expect(message).toContain("**Upozornenie:** 1 položka nemá cenu");
     expect(message).toContain("Pracovná doska");
+  });
+
+  it("formats a selected-items subtotal instead of exposing implementation data", () => {
+    const state: AssistantWorkflowState = {
+      ...workflow(),
+      status: "complete",
+      steps: [{
+        id: "read_price",
+        label: "Read selected price",
+        toolId: "pricing.getSummary",
+        input: {},
+        dependsOn: [],
+        expectedEvidence: ["Selected subtotal"],
+        onFailure: "stop",
+        riskLevel: "low"
+      }]
+    };
+    const message = formatVerifiedAssistantResult({
+      workflow: state,
+      validation: { confidence: 1, done: true, summary: "Price read.", missingChecks: [] },
+      toolResults: [{
+        ok: true,
+        callId: "read_price",
+        toolId: "pricing.getSummary",
+        output: { quote: { finalPrice: 900 }, entities: [], selected: { entityCount: 2, finalPrice: 420.5, incompletePriceCount: 0, entityIds: ["m1", "m2"] } },
+        stateDeltaSummary: "Calculated price."
+      }]
+    });
+    expect(message).toContain("420,50");
+    expect(message).toContain("(2)");
+    expect(message).not.toContain("entityIds");
   });
 
   it("answers an exact project-name read as a direct conversational sentence", () => {

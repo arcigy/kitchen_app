@@ -31,9 +31,15 @@ describe("chatbot plan presentation", () => {
     expect(shouldRenderAssistantPlan(response("project.getMetadata", true), definitions)).toBe(true);
   });
 
-  it("keeps a visible debug JSON copy control in the assistant header", () => {
+  it("does not expose internal debug JSON in the client chat", () => {
     const source = readFileSync(new URL("./chatbotShell.ts", import.meta.url), "utf8");
-    expect(source).toContain('data-chatbot-copy-debug');
-    expect(source).toContain('serializeAssistantDebugTrace(state.debugTrace)');
+    expect(source).not.toContain('data-chatbot-copy-debug');
+    expect(source).toContain('createAssistantDebugTraceBundle');
+  });
+
+  it("submits a non-composing Enter key and preserves Shift+Enter for a newline", () => {
+    const source = readFileSync(new URL("./chatbotShell.ts", import.meta.url), "utf8");
+    expect(source).toContain('event.key !== "Enter" || event.shiftKey || event.isComposing');
+    expect(source).toContain("form.requestSubmit()");
   });
 });

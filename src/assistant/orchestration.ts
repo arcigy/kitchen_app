@@ -514,8 +514,22 @@ function formatToolResultEvidence(result: AssistantToolResult): string[] {
     const missingPriceCount = typeof reportedMissingCount === "number"
       ? Math.max(0, Math.round(reportedMissingCount))
       : incomplete.length;
+    const selected = recordValue(output.selected);
+    const selectedFinalPrice = selected?.finalPrice;
+    const selectedEntityCount = selected?.entityCount;
+    const selectedIncompletePriceCount = selected?.incompletePriceCount;
     const formattedPrice = `${finalPrice.toLocaleString("sk-SK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-    const evidence = [`**Aktuálna vypočítaná cena:** ${formattedPrice}`];
+    const evidence = [
+      typeof selectedFinalPrice === "number" && Number.isFinite(selectedFinalPrice) && typeof selectedEntityCount === "number" && selectedEntityCount > 0
+        ? `**Cena označených položiek (${selectedEntityCount}):** ${selectedFinalPrice.toLocaleString("sk-SK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+        : `**Aktuálna vypočítaná cena projektu:** ${formattedPrice}`
+    ];
+    if (typeof selectedFinalPrice === "number" && Number.isFinite(selectedFinalPrice) && typeof selectedEntityCount === "number" && selectedEntityCount > 0) {
+      evidence.push(`**Aktuálna vypočítaná cena:** ${formattedPrice}`);
+    }
+    if (typeof selectedIncompletePriceCount === "number" && selectedIncompletePriceCount > 0) {
+      evidence.push(`**Upozornenie:** ${selectedIncompletePriceCount} ${selectedIncompletePriceCount === 1 ? "označená položka nemá" : "označené položky nemajú"} kompletnú cenu, preto súčet nemusí byť úplný.`);
+    }
     if (missingPriceCount > 0) {
       const labels = incomplete
         .map((entity) => typeof entity.label === "string" ? entity.label : null)

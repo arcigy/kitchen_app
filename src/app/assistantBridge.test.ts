@@ -68,6 +68,7 @@ describe("assistant bridge safety boundary", () => {
     const result = await bridge.executeToolCall({
       id: "measure_create",
       toolId: "measure.createDistance",
+      confirmed: true,
       input: { aMm: { x: 0, z: 0 }, bMm: { x: 2400, z: 0 } }
     });
 
@@ -191,6 +192,15 @@ describe("assistant bridge safety boundary", () => {
     expect(result.error).toContain("requires explicit user confirmation");
   });
 
+  it("rejects every write tool without explicit confirmation", async () => {
+    const undo = vi.fn();
+    const bridge = createAssistantBridge({ undo } as never);
+    const result = await bridge.executeToolCall({ id: "undo_without_confirmation", toolId: "history.undo", input: {} });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("requires explicit user confirmation");
+    expect(undo).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed tool inputs before touching editor state", async () => {
     const bridge = createAssistantBridge({} as never);
     const result = await bridge.executeToolCall({
@@ -207,7 +217,7 @@ describe("assistant bridge safety boundary", () => {
     const undo = vi.fn();
     const bridge = createAssistantBridge({ authorizeToolCall, undo } as never);
 
-    const result = await bridge.executeToolCall({ id: "undo_1", toolId: "history.undo", input: {} });
+    const result = await bridge.executeToolCall({ id: "undo_1", toolId: "history.undo", confirmed: true, input: {} });
 
     expect(result.ok).toBe(false);
     expect(authorizeToolCall).toHaveBeenCalledWith(expect.objectContaining({ toolId: "history.undo" }));
@@ -232,6 +242,7 @@ describe("assistant bridge safety boundary", () => {
     const result = await bridge.executeToolCall({
       id: "patch_1",
       toolId: "module.patchSelectedParams",
+      confirmed: true,
       input: { instanceIds: ["i1", "missing"], patch: { widthMm: 800 } }
     });
 
@@ -284,6 +295,7 @@ describe("assistant bridge safety boundary", () => {
     const result = await bridge.executeToolCall({
       id: "rotate_1",
       toolId: "editor.rotateSelection",
+      confirmed: true,
       input: { angleDeg: 90 }
     });
 

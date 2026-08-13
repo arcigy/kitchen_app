@@ -61,6 +61,11 @@ function isHowToQuestion(message: string): boolean {
   return /^(kde|ako|kam|co|čo|preco|prečo|where|how|what)\b/iu.test(message.trim());
 }
 
+function isLivePriceQuestion(message: string): boolean {
+  const normalized = normalizeIntentText(message);
+  return /(kolko|aka|aky|suma|cena|cenu|stoja|stoji|nacen|price|cost|total).{0,48}(cena|cenu|stoja|stoji|suma|nacen|price|cost|dokopy|spolu|total)|(cena|cenu|stoja|stoji|suma|nacen|price|cost).{0,48}(oznacen|vybran|vyber|dokopy|spolu|total)/u.test(normalized);
+}
+
 function selectedModuleIds(input: AgentInput): string[] {
   return input.clientContext.selectedParams
     .filter((item) => item.kind === "module")
@@ -84,7 +89,12 @@ function buildDeterministicReadWorkflow(input: AgentInput): {
   let stepLabel = "";
   let successCriteria: string[] = [];
 
-  if (/(kolko|pocet|spocitaj).{0,24}modul/u.test(message)) {
+  if (isLivePriceQuestion(input.message)) {
+    toolId = "pricing.getSummary";
+    goal = assistantCopy(input.locale, "Zistiť aktuálnu BOM cenu otvoreného projektu z live dát.", "Zjistit aktuální BOM cenu otevřeného projektu z živých dat.", "Find the current BOM price of the open project from live data.");
+    stepLabel = assistantCopy(input.locale, "Prepočítať aktuálnu cenu z live BOM a overiť úplnosť cien.", "Přepočítat aktuální cenu z živého BOM a ověřit úplnost cen.", "Recalculate the current price from the live BOM and verify price completeness.");
+    successCriteria = [assistantCopy(input.locale, "Odpoveď obsahuje aktuálnu cenu z live BOM, nie text zo znalostnej bázy.", "Odpověď obsahuje aktuální cenu z živého BOM, ne text ze znalostní báze.", "The response contains the current price from the live BOM, not knowledge-base text.")];
+  } else if (/(kolko|pocet|spocitaj).{0,24}modul/u.test(message)) {
     toolId = "context.queryObjects";
     toolInput = { kinds: ["module"], limit: 500 };
     goal = assistantCopy(input.locale, "Zistiť presný počet modulov v otvorenom projekte.", "Zjistit přesný počet modulů v otevřeném projektu.", "Find the exact number of modules in the open project.");
@@ -149,6 +159,33 @@ function buildDeterministicReadWorkflow(input: AgentInput): {
 }
 
 function buildFallbackPlan(input: AgentInput): { message: string; plan: AssistantPlan | null; calls: AssistantToolCall[]; confirm: boolean } {
+  const wantsDelete = /\b(vymaz|zmaz|odstran|delete|remove)\b/iu.test(normalizeIntentText(input.message));
+  if (wantsDelete) {
+    const ids = selectedModuleIds(input);
+    if (ids.length === 0) {
+      return {
+        message: assistantCopy(input.locale, "Nemám vybraný žiadny modul na odstránenie. Najprv označ konkrétne moduly; potom ti ukážem plán na potvrdenie.", "Nemám vybraný žádný modul k odstranění. Nejprve označte konkrétní moduly; potom ukážu plán k potvrzení.", "No module is selected for deletion. Select the exact modules first; I will then show a plan for confirmation."),
+        plan: null,
+        calls: [],
+        confirm: false
+      };
+    }
+    return {
+      message: assistantCopy(input.locale, `Pripravil som odstránenie ${ids.length} označených modulov. Nič som ešte nezmenil.`, `Připravil jsem odstranění ${ids.length} označených modulů. Zatím jsem nic nezměnil.`, `I prepared removal of ${ids.length} selected modules. Nothing has been changed yet.`),
+      plan: {
+        goal: assistantCopy(input.locale, "Odstrániť iba aktuálne označené moduly po potvrdení.", "Odstranit pouze aktuálně označené moduly po potvrzení.", "Remove only the currently selected modules after confirmation."),
+        riskLevel: "high",
+        requiresConfirmation: true,
+        touchedObjects: ids,
+        steps: [
+          { label: assistantCopy(input.locale, "Po potvrdení odstránim presne označené moduly.", "Po potvrzení odstraním přesně označené moduly.", "After confirmation, remove exactly the selected modules."), toolId: "editor.deleteSelection", riskLevel: "high" },
+          { label: assistantCopy(input.locale, "Overím stav výberu a projektu.", "Ověřím stav výběru a projektu.", "Verify selection and project state."), toolId: "validation.inspectProject", riskLevel: "low" }
+        ]
+      },
+      calls: [{ id: `tool_${Date.now()}_delete_selection`, toolId: "editor.deleteSelection", input: {} }],
+      confirm: true
+    };
+  }
   if (!isHowToQuestion(input.message) && isLikelyModulePatch(input.message)) {
     const ids = selectedModuleIds(input);
     if (ids.length === 0) {
@@ -238,7 +275,9 @@ function buildFallbackPlan(input: AgentInput): { message: string; plan: Assistan
     }
   }
 
-  const sources = input.ragChunks.slice(0, 3);
+  const sources = input.ragChunks
+    .filter((chunk) => /(^|\/)docs\/|\.md$/iu.test(chunk.source) && !/\.json$/iu.test(chunk.source))
+    .slice(0, 3);
   const sourceText = sources.length > 0
     ? sources.map((chunk) => `- ${chunk.title}: ${chunk.text.slice(0, 360)}`).join("\n")
     : "";
@@ -315,7 +354,9 @@ function enforceAuthoritativePlan(
 ): { plan: AssistantPlan | null; requiresConfirmation: boolean } {
   if (calls.length === 0) return { plan: null, requiresConfirmation: false };
   const definitions = calls.map((call) => getAssistantToolDefinition(call.toolId)).filter((item): item is NonNullable<typeof item> => !!item);
-  const requiresConfirmation = definitions.some((definition) => definition.requiresConfirmation);
+  const requiresConfirmation = definitions.some((definition) =>
+    definition.requiresConfirmation || (definition.operation ?? (definition.readOnly ? "read" : "write")) === "write"
+  );
   const riskLevel = highestAssistantRiskLevel(calls.map((call) => call.toolId));
   return {
     requiresConfirmation,
