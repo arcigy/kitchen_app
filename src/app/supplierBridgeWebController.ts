@@ -2,6 +2,8 @@ import type { SupplierSyncSessionView } from "../core/supplier-bridge/supplier-b
 import { EMPTY_SUPPLIER_BRIDGE_PANEL_STATE, type SupplierBridgePanelState } from "../ui/materialsPhasePanel";
 import { cancelSupplierSyncSession, createSupplierSyncSession, loadConfiguredSuppliers, loadSupplierSyncSession } from "./supplierBridgeApi";
 
+const PROJECT_MATERIALS_UPDATED_EVENT = "arcigy:supplier-bridge-project-materials-updated";
+
 export type ConfiguredSupplierId = string;
 
 type BridgeRequestType = "START_SUPPLIER_SESSION" | "OPEN_SUPPLIER_BRIDGE" | "GET_SUPPLIER_SESSION_STATUS" | "CANCEL_SUPPLIER_SESSION" | "SET_SUPPLIER_PROJECT_CONTEXT";
@@ -67,6 +69,12 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
     waiter.resolve(response);
   };
   window.addEventListener("message", onWindowMessage);
+  const onProjectMaterialsUpdated = (event: Event) => {
+    const detail = event instanceof CustomEvent ? event.detail : null;
+    if (!detail || typeof detail !== "object" || (detail as { projectId?: unknown }).projectId !== args.getProjectId()) return;
+    void Promise.resolve(args.onProjectMaterialsChanged()).catch(() => undefined);
+  };
+  window.addEventListener(PROJECT_MATERIALS_UPDATED_EVENT, onProjectMaterialsUpdated);
 
   const requestExtension = (type: BridgeRequestType, requestedSessionId: string, bridgeToken?: string, timeoutMs = 1_800): Promise<BridgeResponse> => {
     const requestId = crypto.randomUUID();
@@ -216,6 +224,7 @@ export function createSupplierBridgeWebController(args: SupplierBridgeWebControl
     },
     destroy(): void {
       active = false; stopPolling(); window.removeEventListener("message", onWindowMessage);
+      window.removeEventListener(PROJECT_MATERIALS_UPDATED_EVENT, onProjectMaterialsUpdated);
       for (const waiter of pending.values()) { window.clearTimeout(waiter.timer); waiter.reject(new Error("Supplier Bridge controller was destroyed.")); }
       pending.clear();
     }

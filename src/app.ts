@@ -3844,8 +3844,7 @@ export function startApp(initialArgs: AppArgs) {
     getProjectLabel: () => projectActions.getState().currentProject?.name ?? null,
     onStateChanged: (state) => materialsPhaseController?.setSupplierBridgeState(state),
     onProjectMaterialsChanged: async () => {
-      const view = await materialsPhaseController?.open();
-      if (view) applyCommittedProjectMaterialAssignments(view.assignments);
+      await materialsPhaseController?.refreshFromServer();
     }
   });
   marginsPhaseController = createMarginsPhaseController({

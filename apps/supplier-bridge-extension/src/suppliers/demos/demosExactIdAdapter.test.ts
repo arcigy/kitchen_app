@@ -59,6 +59,23 @@ describe("Démos exact-ID read-only adapter", () => {
     expect(extracted.result!.pricing.normalizedPrice!.amount).toBeCloseTo(50 / 5.796, 6);
   });
 
+  it("uses the board thickness instead of an earlier veneer-thickness parameter", () => {
+    document.body.innerHTML = `
+      <h1 class="box-detail__top__title">DTDD Dub Radial LINEA 2800/2070/19</h1>
+      <strong class="box-detail__top__code__value">540119</strong>
+      <div class="box-detail-add__availability">Skladem</div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl>
+      <table class="table-params"><tbody>
+        <tr><td>Tloušťka dýhy</td><td>0,6</td></tr>
+        <tr><td>Tloušťka materiálu (mm)</td><td>19</td></tr>
+      </tbody></table>
+    `;
+
+    expect(demosExactIdAdapter.extractExactProduct(document, {
+      requestedProductId: "540119", expectedProductType: "board", expectedManufacturer: null, expectedThicknessMm: 19
+    })).toMatchObject({ ok: true, result: { product: { thicknessMm: 19 } } });
+  });
+
   it("extracts one exact search result and ignores purchase controls", () => {
     document.body.innerHTML = `
       <main class="lb-search__main"><table><tbody><tr class="list-products-line__item lb-product">

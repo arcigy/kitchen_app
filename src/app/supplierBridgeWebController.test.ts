@@ -13,6 +13,20 @@ const view: SupplierSyncSessionView = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("supplier bridge web controller", () => {
+  it("refreshes only the matching open project immediately after an extension assignment", async () => {
+    const onProjectMaterialsChanged = vi.fn();
+    const controller = createSupplierBridgeWebController({
+      getProjectId: () => "project-1", onStateChanged: vi.fn(), onProjectMaterialsChanged
+    });
+
+    window.dispatchEvent(new CustomEvent("arcigy:supplier-bridge-project-materials-updated", { detail: { projectId: "other-project" } }));
+    window.dispatchEvent(new CustomEvent("arcigy:supplier-bridge-project-materials-updated", { detail: { projectId: "project-1" } }));
+    await Promise.resolve();
+
+    expect(onProjectMaterialsChanged).toHaveBeenCalledOnce();
+    controller.destroy();
+  });
+
   it("opens the selected supplier with the active project context", async () => {
     history.replaceState({}, "", "/");
     const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(new Response(JSON.stringify(
