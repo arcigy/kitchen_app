@@ -31,6 +31,7 @@ import {
   type SupplierBridgeProgress
 } from "./storage";
 import { SupplierBridgeSessionRecoveryError } from "./sessionRecovery";
+import { notifyOpenArcigyProjectMaterials } from "./projectMaterialsNotifier";
 
 const sidePanelOpenedFromArcigyClick = new Set<number>();
 
@@ -371,7 +372,8 @@ async function confirm(candidateId?: string, syncItemId?: string): Promise<Bridg
   }
   try {
     const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
-    await trace(await saveView(progress, view, null), "Materiál priradený", "ok");
+    const saved = await trace(await saveView(progress, view, null), "Materiál priradený", "ok");
+    await notifyOpenArcigyProjectMaterials(saved.arcigyOrigin, view.session.projectId).catch(() => undefined);
     return { ok: true, view };
   } catch (error) {
     if (error instanceof SupplierBridgeApiError && error.status === 503 && error.code) {
@@ -379,7 +381,8 @@ async function confirm(candidateId?: string, syncItemId?: string): Promise<Bridg
       await trace(progress, "Materiál uložený, dokončujem potvrdenie Bridge", "warning", pendingCode);
       try {
         const view = await confirmSupplierCandidate(progress.backendBaseUrl, progress.sessionId, accessToken, item.id, candidate.id);
-        await trace(await saveView(progress, view, null), "Materiál priradený po bezpečnom opakovaní", "ok");
+        const saved = await trace(await saveView(progress, view, null), "Materiál priradený po bezpečnom opakovaní", "ok");
+        await notifyOpenArcigyProjectMaterials(saved.arcigyOrigin, view.session.projectId).catch(() => undefined);
         return { ok: true, view };
       } catch (retryError) {
         const retryCode = retryError instanceof SupplierBridgeApiError

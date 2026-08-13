@@ -6,6 +6,10 @@ import {
   type ArcigyWindowResponse,
   type BridgeRuntimeRequest
 } from "../messages";
+import {
+  isProjectMaterialsUpdatedNotice,
+  PROJECT_MATERIALS_UPDATED_EVENT
+} from "../projectMaterialsNotifier";
 
 const origin = window.location.origin;
 const seenRequests = new Set<string>();
@@ -24,6 +28,13 @@ if (isAllowedArcigyOrigin(origin)) {
     ok: true,
     opened: false,
     errorCode: null
+  });
+
+  chrome.runtime.onMessage.addListener((message: unknown) => {
+    if (!isProjectMaterialsUpdatedNotice(message)) return;
+    window.dispatchEvent(new CustomEvent(PROJECT_MATERIALS_UPDATED_EVENT, {
+      detail: { projectId: message.projectId }
+    }));
   });
 
   window.addEventListener("message", (event: MessageEvent<unknown>) => {
