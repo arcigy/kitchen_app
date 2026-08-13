@@ -1206,6 +1206,30 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     }
   },
   {
+    id: "editor.trimWallsToCorner",
+    title: "Trim or extend walls to a corner",
+    description: "Moves the specified endpoints of two non-parallel walls to their shared centerline intersection through the existing trim geometry and connected-wall owner.",
+    ownerSystem: "pointer-trim-geometry/wall-controller",
+    effect: "Trims or extends both specified wall endpoints, preserving their connected endpoints, then records one history step.",
+    preconditions: ["Both wall IDs must exist and differ.", "Both endpoint selectors must be a or b.", "Neither wall may be pinned.", "Wall centerlines must not be parallel."],
+    postconditions: ["The selected endpoints coincide at the wall centerline intersection.", "Connected endpoint groups and wall visuals are rebuilt through the existing owner."],
+    examples: [{ targetWallId: "wall_1", targetEndpoint: "b", cutterWallId: "wall_2", cutterEndpoint: "a" }],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetWallId: { type: "string", minLength: 1 },
+        targetEndpoint: { type: "string", enum: ["a", "b"] },
+        cutterWallId: { type: "string", minLength: 1 },
+        cutterEndpoint: { type: "string", enum: ["a", "b"] }
+      },
+      required: ["targetWallId", "targetEndpoint", "cutterWallId", "cutterEndpoint"],
+      additionalProperties: false
+    }
+  },
+  {
     id: "render.blenderPreview",
     title: "Render Blender material preview",
     description: "Opens the existing material review and returns the completed Blender preview result after explicit confirmation.",
@@ -1330,9 +1354,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Openings, measurements, align and trim",
     status: "partially-available",
     ownerSystem: "opening/measure/align/wall tools",
-    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "measure.createDistance", "editor.alignLines", "editor.moveSelection", "editor.deleteSelection"],
-    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. The agent can create a live associative distance measure from exact plan points and align exact live wall, module or worktop lines through the existing lock-aware owner. Existing selected openings participate in shared move/delete flows.",
-    limitation: "Trim/extend does not yet have a stable non-pointer command contract."
+    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "measure.createDistance", "editor.alignLines", "editor.trimWallsToCorner", "editor.moveSelection", "editor.deleteSelection"],
+    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. The agent can create a live associative distance measure from exact plan points, align exact live wall, module or worktop lines through the existing lock-aware owner, and trim or extend exact wall endpoints to a non-parallel wall intersection through the shared connected-wall owner.",
+    limitation: "The stable trim contract currently covers two wall centerlines only; arbitrary cutter geometry remains pointer-only."
   },
   {
     id: "custom-furniture-wardrobe",

@@ -147,6 +147,9 @@ type AssistantBridgeContext = {
       target: { targetKind: "wall" | "module" | "worktop"; targetId: string; lineRole: "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB"; segmentIndex?: number }
     ) => { ok: boolean; reason: string };
   };
+  trimActions: {
+    trimWallsToCorner: (targetWallId: string, targetEndpoint: "a" | "b", cutterWallId: string, cutterEndpoint: "a" | "b") => { ok: boolean; reason: string };
+  };
   customFurnitureActions: {
     createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
     selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
@@ -1109,6 +1112,17 @@ function alignLines(ctx: AssistantBridgeContext, input: Record<string, unknown>)
   return { ok: true, toolId: "editor.alignLines", output: { reference, target, reason: result.reason }, stateDeltaSummary: result.reason };
 }
 
+function trimWallsToCorner(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const targetWallId = requireString(input, "targetWallId");
+  const cutterWallId = requireString(input, "cutterWallId");
+  const targetEndpoint = input.targetEndpoint === "a" || input.targetEndpoint === "b" ? input.targetEndpoint : null;
+  const cutterEndpoint = input.cutterEndpoint === "a" || input.cutterEndpoint === "b" ? input.cutterEndpoint : null;
+  if (!targetEndpoint || !cutterEndpoint) throw new Error("Trim endpoints must be 'a' or 'b'.");
+  const result = ctx.trimActions.trimWallsToCorner(targetWallId, targetEndpoint, cutterWallId, cutterEndpoint);
+  if (!result.ok) throw new Error(result.reason);
+  return { ok: true, toolId: "editor.trimWallsToCorner", output: { targetWallId, targetEndpoint, cutterWallId, cutterEndpoint, reason: result.reason }, stateDeltaSummary: result.reason };
+}
+
 function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult {
   const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
   if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
@@ -1443,6 +1457,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "export.pricingWorkbook") return exportPricingWorkbook(ctx);
     if (definition.id === "measure.createDistance") return createDistanceMeasure(ctx, call.input);
     if (definition.id === "editor.alignLines") return alignLines(ctx, call.input);
+    if (definition.id === "editor.trimWallsToCorner") return trimWallsToCorner(ctx, call.input);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
