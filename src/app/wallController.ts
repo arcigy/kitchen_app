@@ -7,6 +7,13 @@ import { worldToScreen } from "./sharedUtils";
 import type { AlignPickedLine, DoorInstance, KitchenWorktopInstance, LayoutInstance, PickedLine2D, WallInstance, WallParams, WindowInstance } from "./localTypes";
 import { disposeObject3D } from "../core/dispose";
 import { sanitizeKitchenWorktopPath, kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
+
+export type SemanticAlignLineSelector = {
+  targetKind: AlignPickedLine["targetKind"];
+  targetId: string;
+  lineRole: AlignPickedLine["lineRole"];
+  segmentIndex?: number;
+};
 import { commitHistory } from "../layout/historyManager";
 import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
@@ -449,6 +456,15 @@ export function createWallController(ctx: WallControllerContext) {
   const pickAlignLineAt = (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
     void hitPoint;
     return pickBestAlignLine(mousePx, rect, cam(), buildAlignLineCandidates(), SNAP_DISTANCE_PX.alignPick);
+  };
+
+  const resolveAlignLine = (selector: SemanticAlignLineSelector): AlignPickedLine | null => {
+    return buildAlignLineCandidates().find((line) =>
+      line.targetKind === selector.targetKind &&
+      line.lineRole === selector.lineRole &&
+      (selector.targetKind === "wall" ? line.wallId === selector.targetId : selector.targetKind === "module" ? line.instanceId === selector.targetId : line.worktopId === selector.targetId) &&
+      (selector.segmentIndex === undefined || line.segmentIndex === selector.segmentIndex)
+    ) ?? null;
   };
 
   const pickCompatibleAlignLineAt = (reference: AlignPickedLine, hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => {
@@ -2396,6 +2412,7 @@ export function createWallController(ctx: WallControllerContext) {
 
   return {
     pickAlignLineAt,
+    resolveAlignLine,
     pickCompatibleAlignLineAt,
     pickDimensionLineAt,
     lineLineIntersectionXZ,

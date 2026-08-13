@@ -5,7 +5,7 @@ import { validateAssistantToolCall, validateAssistantToolInput } from "./toolVal
 
 describe("assistant tool registry", () => {
   it("publishes complete machine-readable knowledge for every tool", () => {
-    expect(ASSISTANT_TOOL_DEFINITIONS).toHaveLength(51);
+    expect(ASSISTANT_TOOL_DEFINITIONS).toHaveLength(52);
     expect(new Set(ASSISTANT_TOOL_DEFINITIONS.map((tool) => tool.id)).size).toBe(ASSISTANT_TOOL_DEFINITIONS.length);
     for (const tool of ASSISTANT_TOOL_DEFINITIONS) {
       expect(tool.effect.length).toBeGreaterThan(10);
