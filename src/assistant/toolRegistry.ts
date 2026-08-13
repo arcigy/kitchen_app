@@ -172,6 +172,18 @@ const measurePointSchema = {
   additionalProperties: false
 };
 
+const alignLineSelectorSchema = {
+  type: "object",
+  properties: {
+    targetKind: { type: "string", enum: ["wall", "module", "worktop"] },
+    targetId: { type: "string", minLength: 1 },
+    lineRole: { type: "string", enum: ["center", "exterior", "interior", "back", "front", "edge", "endA", "endB"] },
+    segmentIndex: { type: "integer", minimum: 0 }
+  },
+  required: ["targetKind", "targetId", "lineRole"],
+  additionalProperties: false
+};
+
 export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
   {
     id: "context.getSelection",
@@ -1175,6 +1187,25 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     }
   },
   {
+    id: "editor.alignLines",
+    title: "Align two object lines",
+    description: "Aligns an exact target line to an exact parallel reference line using the existing alignment and lock owner.",
+    ownerSystem: "wall-controller/align-locks",
+    effect: "Moves the target wall, module or worktop feature to the reference and creates or refreshes the shared alignment lock.",
+    preconditions: ["Both selectors must resolve to live lines.", "The selected lines must be parallel.", "The target must not be protected by a locked alignment joint."],
+    postconditions: ["Returns the editor alignment result and records one history snapshot."],
+    examples: [{ reference: { targetKind: "wall", targetId: "wall_1", lineRole: "center" }, target: { targetKind: "module", targetId: "module_1", lineRole: "edge" } }],
+    readOnly: false,
+    riskLevel: "medium",
+    requiresConfirmation: true,
+    inputSchema: {
+      type: "object",
+      properties: { reference: alignLineSelectorSchema, target: alignLineSelectorSchema },
+      required: ["reference", "target"],
+      additionalProperties: false
+    }
+  },
+  {
     id: "render.blenderPreview",
     title: "Render Blender material preview",
     description: "Opens the existing material review and returns the completed Blender preview result after explicit confirmation.",
@@ -1299,9 +1330,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Openings, measurements, align and trim",
     status: "partially-available",
     ownerSystem: "opening/measure/align/wall tools",
-    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "measure.createDistance", "editor.moveSelection", "editor.deleteSelection"],
-    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. The agent can also create a live associative distance measure from exact plan points. Existing selected openings participate in shared move/delete flows.",
-    limitation: "Semantic align references and trim/extend do not yet have stable non-pointer command contracts."
+    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "measure.createDistance", "editor.alignLines", "editor.moveSelection", "editor.deleteSelection"],
+    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. The agent can create a live associative distance measure from exact plan points and align exact live wall, module or worktop lines through the existing lock-aware owner. Existing selected openings participate in shared move/delete flows.",
+    limitation: "Trim/extend does not yet have a stable non-pointer command contract."
   },
   {
     id: "custom-furniture-wardrobe",

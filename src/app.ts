@@ -217,7 +217,7 @@ import {
 import { getInstallState, promptAppInstall, subscribeInstallState } from "./pwa/installController";
 import { installKitchenDebugApi } from "./app/kitchenDebugApi";
 import { installAssistantBridge } from "./app/assistantBridge";
-import { createWallController, type WallPlanMultiPolygon } from "./app/wallController";
+import { createWallController, type SemanticAlignLineSelector, type WallPlanMultiPolygon } from "./app/wallController";
 import { DEFAULT_WALL_TYPE_ID } from "./app/wallTypes";
 import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
@@ -909,6 +909,7 @@ export function startApp(initialArgs: AppArgs) {
 
   let wallController!: ReturnType<typeof createWallController>;
   const pickAlignLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickAlignLineAt"]>) => wallController.pickAlignLineAt(...args);
+  const resolveAlignLine = (...args: Parameters<ReturnType<typeof createWallController>["resolveAlignLine"]>) => wallController.resolveAlignLine(...args);
   const pickCompatibleAlignLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickCompatibleAlignLineAt"]>) => wallController.pickCompatibleAlignLineAt(...args);
   const pickDimensionLineAt = (...args: Parameters<ReturnType<typeof createWallController>["pickDimensionLineAt"]>) => wallController.pickDimensionLineAt(...args);
   const lineLineIntersectionXZ = (...args: Parameters<ReturnType<typeof createWallController>["lineLineIntersectionXZ"]>) => wallController.lineLineIntersectionXZ(...args);
@@ -5166,6 +5167,19 @@ export function startApp(initialArgs: AppArgs) {
           kind: "distance",
           distanceMm: Math.hypot(bMm.x - aMm.x, (bMm.y ?? 0) - (aMm.y ?? 0), bMm.z - aMm.z)
         });
+      }
+    },
+    alignActions: {
+      align: (reference: SemanticAlignLineSelector, target: SemanticAlignLineSelector) => {
+        const ref = resolveAlignLine(reference);
+        const picked = resolveAlignLine(target);
+        if (!ref || !picked) return { ok: false, reason: "Align: selected reference line was not found." };
+        const result = applyAlignBetweenPickedLines(ref, picked);
+        if (result.ok) {
+          updateSelectionHighlights();
+          commitHistory(S);
+        }
+        return result;
       }
     },
     customFurnitureActions: {

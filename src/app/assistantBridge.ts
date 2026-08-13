@@ -141,6 +141,12 @@ type AssistantBridgeContext = {
   measureActions: {
     createDistance: (aMm: { x: number; y?: number; z: number }, bMm: { x: number; y?: number; z: number }) => { id: string };
   };
+  alignActions: {
+    align: (
+      reference: { targetKind: "wall" | "module" | "worktop"; targetId: string; lineRole: "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB"; segmentIndex?: number },
+      target: { targetKind: "wall" | "module" | "worktop"; targetId: string; lineRole: "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB"; segmentIndex?: number }
+    ) => { ok: boolean; reason: string };
+  };
   customFurnitureActions: {
     createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
     selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
@@ -1080,6 +1086,29 @@ function createDistanceMeasure(ctx: AssistantBridgeContext, input: Record<string
   };
 }
 
+function alignLines(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const readSelector = (value: unknown, field: string) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${field} must be an alignment line selector.`);
+    const item = value as Record<string, unknown>;
+    const rawTargetKind = item.targetKind;
+    const rawLineRole = item.lineRole;
+    if ((rawTargetKind !== "wall" && rawTargetKind !== "module" && rawTargetKind !== "worktop") || (rawLineRole !== "center" && rawLineRole !== "exterior" && rawLineRole !== "interior" && rawLineRole !== "back" && rawLineRole !== "front" && rawLineRole !== "edge" && rawLineRole !== "endA" && rawLineRole !== "endB")) throw new Error(`${field} has invalid targetKind or lineRole.`);
+    const targetKind: "wall" | "module" | "worktop" = rawTargetKind;
+    const lineRole: "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB" = rawLineRole;
+    return {
+      targetKind,
+      targetId: requireString(item, "targetId"),
+      lineRole,
+      ...(typeof item.segmentIndex === "number" ? { segmentIndex: item.segmentIndex } : {})
+    };
+  };
+  const reference = readSelector(input.reference, "reference");
+  const target = readSelector(input.target, "target");
+  const result = ctx.alignActions.align(reference, target);
+  if (!result.ok) throw new Error(result.reason);
+  return { ok: true, toolId: "editor.alignLines", output: { reference, target, reason: result.reason }, stateDeltaSummary: result.reason };
+}
+
 function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult {
   const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
   if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
@@ -1413,6 +1442,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "export.marketingPdf") return await exportMarketingPdf(ctx);
     if (definition.id === "export.pricingWorkbook") return exportPricingWorkbook(ctx);
     if (definition.id === "measure.createDistance") return createDistanceMeasure(ctx, call.input);
+    if (definition.id === "editor.alignLines") return alignLines(ctx, call.input);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {

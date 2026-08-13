@@ -861,6 +861,25 @@ describe("wall plan fill", () => {
     });
   });
 
+  it("resolves an exact semantic wall alignment line without screen picking", () => {
+    const ctx = createTestWallContext();
+    const wall = createTestWallInstance("alignable", { x: 0, z: 0 }, { x: 4000, z: 0 });
+    ctx.walls.push(wall);
+    const controller = createWallController(ctx);
+
+    const line = controller.resolveAlignLine({
+      targetKind: "wall",
+      targetId: "alignable",
+      lineRole: "center"
+    });
+
+    expect(line).toMatchObject({
+      targetKind: "wall",
+      lineRole: "center",
+      wallId: "alignable"
+    });
+  });
+
   it("lets dimensions pick visible wall-plan segments and their endpoint references", () => {
     const ctx = createTestWallContext();
     const camera = createPlanCamera();
