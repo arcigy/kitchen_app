@@ -61,6 +61,20 @@ describe("assistant bridge safety boundary", () => {
     expect(result).toMatchObject({ ok: false, error: "Pricing workbook requires at least one priced project entity." });
   });
 
+  it("creates a distance measure through the existing measurement owner", async () => {
+    const createDistance = vi.fn(() => ({ id: "measure_9" }));
+    const bridge = createAssistantBridge({ measureActions: { createDistance } } as never);
+
+    const result = await bridge.executeToolCall({
+      id: "measure_create",
+      toolId: "measure.createDistance",
+      input: { aMm: { x: 0, z: 0 }, bMm: { x: 2400, z: 0 } }
+    });
+
+    expect(createDistance).toHaveBeenCalledWith({ x: 0, z: 0 }, { x: 2400, z: 0 });
+    expect(result).toMatchObject({ ok: true, output: { id: "measure_9", distanceMm: 2400 } });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };

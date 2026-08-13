@@ -138,6 +138,9 @@ type AssistantBridgeContext = {
     exportWebsiteShowcaseFile: (stage: "initial" | "final") => Promise<void>;
     exportBlenderPreview: () => Promise<BlenderPreviewExportResult>;
   };
+  measureActions: {
+    createDistance: (aMm: { x: number; y?: number; z: number }, bMm: { x: number; y?: number; z: number }) => { id: string };
+  };
   customFurnitureActions: {
     createCustomFurniture: (params: CustomFurnitureParams) => CustomFurnitureInstance;
     selectFurniture: (furnitureId: string | null, boardId?: string | null) => void;
@@ -1063,6 +1066,20 @@ async function exportMarketingPdf(ctx: AssistantBridgeContext): Promise<Assistan
   return { ok: true, toolId: "export.marketingPdf", output, stateDeltaSummary: `Started marketing PDF download ${output.fileName}.` };
 }
 
+function createDistanceMeasure(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
+  const aMm = requirePlanPoint(input.aMm, "aMm");
+  const bMm = requirePlanPoint(input.bMm, "bMm");
+  if (aMm.x === bMm.x && aMm.z === bMm.z) throw new Error("Measure endpoints must be distinct.");
+  const measure = ctx.measureActions.createDistance(aMm, bMm);
+  const distanceMm = Math.hypot(bMm.x - aMm.x, bMm.z - aMm.z);
+  return {
+    ok: true,
+    toolId: "measure.createDistance",
+    output: { id: measure.id, aMm, bMm, distanceMm },
+    stateDeltaSummary: `Created associative distance measure ${measure.id}.`
+  };
+}
+
 function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult {
   const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
   if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
@@ -1395,6 +1412,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "render.blenderPreview") return await renderBlenderPreview(ctx);
     if (definition.id === "export.marketingPdf") return await exportMarketingPdf(ctx);
     if (definition.id === "export.pricingWorkbook") return exportPricingWorkbook(ctx);
+    if (definition.id === "measure.createDistance") return createDistanceMeasure(ctx, call.input);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {

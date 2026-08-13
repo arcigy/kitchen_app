@@ -5158,6 +5158,16 @@ export function startApp(initialArgs: AppArgs) {
         return await exportActions.exportBlenderPreview();
       }
     },
+    measureActions: {
+      createDistance: (aMm, bMm) => {
+        const a = new THREE.Vector3(aMm.x / 1000, (aMm.y ?? 0) / 1000, aMm.z / 1000);
+        const b = new THREE.Vector3(bMm.x / 1000, (bMm.y ?? 0) / 1000, bMm.z / 1000);
+        return addMeasurement(a, b, toFreePlanBinding(a), toFreePlanBinding(b), {
+          kind: "distance",
+          distanceMm: Math.hypot(bMm.x - aMm.x, (bMm.y ?? 0) - (aMm.y ?? 0), bMm.z - aMm.z)
+        });
+      }
+    },
     customFurnitureActions: {
       createCustomFurniture: (params) => {
         if (!customFurnitureMode) throw new Error("Custom furniture controller is not ready.");
