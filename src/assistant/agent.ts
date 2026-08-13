@@ -76,6 +76,10 @@ function normalizeIntentText(value: string): string {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLowerCase().replace(/\s+/gu, " ").trim();
 }
 
+function isDeleteIntent(message: string): boolean {
+  return /\b(vymaz|zmaz|odstran|delete|remove)\b/iu.test(normalizeIntentText(message));
+}
+
 function buildDeterministicReadWorkflow(input: AgentInput): {
   classification: AssistantTaskClassification;
   workflow: AssistantWorkflowState;
@@ -159,7 +163,7 @@ function buildDeterministicReadWorkflow(input: AgentInput): {
 }
 
 function buildFallbackPlan(input: AgentInput): { message: string; plan: AssistantPlan | null; calls: AssistantToolCall[]; confirm: boolean } {
-  const wantsDelete = /\b(vymaz|zmaz|odstran|delete|remove)\b/iu.test(normalizeIntentText(input.message));
+  const wantsDelete = isDeleteIntent(input.message);
   if (wantsDelete) {
     const ids = selectedModuleIds(input);
     if (ids.length === 0) {
@@ -583,6 +587,24 @@ async function runAssistantTurnInternal(
       phase: "failed",
       classification: null,
       workflow: failedWorkflow
+    };
+  }
+
+  if (isDeleteIntent(input.message)) {
+    const fallback = buildFallbackPlan(input);
+    const toolCalls = sanitizeAssistantToolCalls(fallback.calls);
+    const authoritative = enforceAuthoritativePlan(fallback.plan, toolCalls);
+    return {
+      ok: true,
+      assistantMessage: fallback.message,
+      plan: authoritative.plan,
+      toolCalls,
+      validation: null,
+      requiresConfirmation: authoritative.requiresConfirmation,
+      ragSources: [],
+      phase: authoritative.plan ? "plan" : "answer",
+      classification: null,
+      workflow: null
     };
   }
 
