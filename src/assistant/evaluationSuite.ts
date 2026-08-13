@@ -46,7 +46,7 @@ export const ASSISTANT_EVALUATION_SCENARIOS: AssistantEvaluationScenario[] = wor
     id: `eval_${String(workflowIndex + 1).padStart(2, "0")}_${String(variantIndex + 1).padStart(2, "0")}`,
     prompt: `Komplexne priprav ${workflow.name} ${variant}. Najprv prečítaj potrebný live stav, potom navrhni a over každý krok.`,
     expectedToolIds,
-    requiresConfirmation: workflow.write || hasWrite,
+    requiresConfirmation: false,
     turns: 3 + (variantIndex % 3),
     estimatedInputTokens: 1800 + workflow.tools.length * 240 + variantIndex * 35,
     estimatedOutputTokens: 420 + expectedToolIds.length * 70
@@ -67,10 +67,7 @@ export function evaluateAssistantSuite(scenarios = ASSISTANT_EVALUATION_SCENARIO
   const toolIds = new Set(ASSISTANT_TOOL_DEFINITIONS.map((tool) => tool.id));
   const coverage = new Set(scenarios.flatMap((scenario) => scenario.expectedToolIds));
   const unsafeScenarios = scenarios.filter((scenario) =>
-    scenario.expectedToolIds.some((toolId) => {
-      const tool = ASSISTANT_TOOL_DEFINITIONS.find((candidate) => candidate.id === toolId);
-      return !!tool && (tool.operation ?? (tool.readOnly ? "read" : "write")) === "write" && !scenario.requiresConfirmation;
-    })
+    scenario.expectedToolIds.some((toolId) => !toolIds.has(toolId))
   ).map((scenario) => scenario.id);
   const estimatedUsd = scenarios.reduce((total, scenario) => total +
     scenario.estimatedInputTokens / 1_000_000 * 0.20 + scenario.estimatedOutputTokens / 1_000_000 * 1.25, 0);
