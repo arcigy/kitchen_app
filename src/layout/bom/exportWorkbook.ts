@@ -902,7 +902,7 @@ export function exportProjectPricingWorkbook(
   entries: ProjectPricingView[],
   summary: ProjectQuoteSummary,
   currency: PriceCurrency = "EUR"
-) {
+): { fileName: string; sheetNames: string[]; downloadStarted: true } {
   const usedNames = new Set<string>();
   const overviewName = sanitizeSheetName("Prehlad", usedNames);
   const priceSheetName = sanitizeSheetName("Cennik", usedNames);
@@ -942,5 +942,7 @@ export function exportProjectPricingWorkbook(
   });
   const styledWorkbook = applyWorkbookTheme(data, orderedSheets, currency);
   const date = new Date().toISOString().slice(0, 10);
-  downloadWorkbook(`kusovnik-${date}.xlsx`, styledWorkbook);
+  const fileName = `kusovnik-${date}.xlsx`;
+  downloadWorkbook(fileName, styledWorkbook);
+  return { fileName, sheetNames: orderedSheets.map((sheet) => sheet.name), downloadStarted: true };
 }

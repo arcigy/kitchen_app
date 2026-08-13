@@ -31,6 +31,7 @@ import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync
 import { buildProjectPricingViews } from "../layout/bom/projectPricing";
 import { buildProjectQuoteSummary } from "../layout/bom/projectQuote";
 import { exportMarketingOfferPdf } from "../layout/bom/exportMarketingPdf";
+import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
 import type { ProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 import type { DoorInstance, DoorParams, WindowInstance, WindowParams } from "./localTypes";
 import { validateOpeningPlacement } from "./openingPlacementValidation";
@@ -1062,6 +1063,14 @@ async function exportMarketingPdf(ctx: AssistantBridgeContext): Promise<Assistan
   return { ok: true, toolId: "export.marketingPdf", output, stateDeltaSummary: `Started marketing PDF download ${output.fileName}.` };
 }
 
+function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult {
+  const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
+  if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
+  const quote = buildProjectQuoteSummary(entries, ctx.getProjectMarginSettings());
+  const output = exportProjectPricingWorkbook(entries, quote);
+  return { ok: true, toolId: "export.pricingWorkbook", output, stateDeltaSummary: `Started pricing workbook download ${output.fileName}.` };
+}
+
 function createCustomFurniture(ctx: AssistantBridgeContext, input: Record<string, unknown>): AssistantToolResult {
   const boundary = Array.isArray(input.boundary)
     ? input.boundary.map((point, index) => requirePlanPoint(point, `boundary[${index}]`))
@@ -1385,6 +1394,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
     if (definition.id === "export.download") return await downloadExport(ctx, call.input);
     if (definition.id === "render.blenderPreview") return await renderBlenderPreview(ctx);
     if (definition.id === "export.marketingPdf") return await exportMarketingPdf(ctx);
+    if (definition.id === "export.pricingWorkbook") return exportPricingWorkbook(ctx);
     if (definition.id === "customFurniture.create") return createCustomFurniture(ctx, call.input);
     throw new Error(`Assistant tool ${call.toolId} has no executor.`);
   } catch (error) {
