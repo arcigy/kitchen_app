@@ -5215,6 +5215,7 @@ export function startApp(initialArgs: AppArgs) {
         if (!customFurnitureMode) throw new Error("Custom furniture controller is not ready.");
         return customFurnitureMode.createCustomFurniture(params);
       },
+      patchBoard: (furnitureId, boardId, patch) => customFurnitureMode?.patchBoard(furnitureId, boardId, patch) ?? null,
       selectFurniture: (furnitureId, boardId) => customFurnitureMode?.selectFurniture(furnitureId, boardId)
     },
     getProjectMarginSettings: () => projectMarginSettings,
