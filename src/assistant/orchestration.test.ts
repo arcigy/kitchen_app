@@ -159,6 +159,45 @@ describe("assistant workflow orchestration", () => {
     expect(message).not.toContain("context.queryObjects");
   });
 
+  it("always exposes the completed Blender preview as an exact client-facing result", () => {
+    const state: AssistantWorkflowState = {
+      ...workflow(),
+      goal: "Vytvor Blender náhľad.",
+      status: "complete",
+      completedStepIds: ["render_preview"],
+      steps: [{
+        id: "render_preview",
+        label: "Render preview",
+        toolId: "render.blenderPreview",
+        input: {},
+        dependsOn: [],
+        expectedEvidence: ["Preview URL"],
+        onFailure: "stop",
+        riskLevel: "medium"
+      }]
+    };
+
+    const message = formatVerifiedAssistantResult({
+      workflow: state,
+      validation: { confidence: 0.99, done: true, summary: "Render prešiel kontrolou.", missingChecks: [] },
+      toolResults: [{
+        ok: true,
+        callId: "render_preview",
+        toolId: "render.blenderPreview",
+        output: {
+          status: "completed",
+          previewUrl: "/storage/client/project/preview.png",
+          previewPath: "C:/exports/preview.png",
+          blendPath: "C:/exports/scene.blend"
+        }
+      }]
+    });
+
+    expect(message).toContain("[Otvoriť náhľad](/storage/client/project/preview.png)");
+    expect(message).toContain("`C:/exports/preview.png`");
+    expect(message).toContain("`C:/exports/scene.blend`");
+  });
+
   it("finishes a read-only pricing workflow with an explicit incomplete-price warning", () => {
     const state: AssistantWorkflowState = {
       ...workflow(),

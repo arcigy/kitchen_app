@@ -332,6 +332,16 @@ function enforceAuthoritativePlan(
   };
 }
 
+function hasClientDeliverable(toolResults: AssistantToolResult[]): boolean {
+  return toolResults.some((result) => {
+    if (!result.ok || result.toolId !== "render.blenderPreview") return false;
+    const output = result.output;
+    return !!output && typeof output === "object" && !Array.isArray(output)
+      && (output as Record<string, unknown>).status === "completed"
+      && typeof (output as Record<string, unknown>).previewUrl === "string";
+  });
+}
+
 async function runAssistantTurnInternal(
   input: AgentInput,
   debug: AssistantDebugRecorder
@@ -402,7 +412,7 @@ async function runAssistantTurnInternal(
         const definition = getAssistantToolDefinition(result.toolId);
         return result.ok && definition && definition.operation !== "write";
       });
-      const finalMessage = hasOnlyReadEvidence
+      const finalMessage = hasOnlyReadEvidence || hasClientDeliverable(input.toolResults)
           ? formatVerifiedAssistantResult({
             workflow: completeWorkflow,
             validation: analysis.validation,
