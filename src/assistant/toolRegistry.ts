@@ -165,6 +165,13 @@ const customFurniturePointSchema = {
   additionalProperties: false
 };
 
+const measurePointSchema = {
+  type: "object",
+  properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } },
+  required: ["x", "z"],
+  additionalProperties: false
+};
+
 export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
   {
     id: "context.getSelection",
@@ -1149,6 +1156,25 @@ export const ASSISTANT_TOOL_DEFINITIONS: AssistantToolDefinition[] = [
     }
   },
   {
+    id: "measure.createDistance",
+    title: "Create associative distance measure",
+    description: "Creates one live distance measure from two explicit plan points in millimetres.",
+    ownerSystem: "measure-tools",
+    effect: "Adds a visible associative measurement through the existing measurement owner without changing geometry.",
+    preconditions: ["Endpoints must be distinct finite plan points."],
+    postconditions: ["Returns the created measure id and measured distance in millimetres."],
+    examples: [{ aMm: { x: 0, z: 0 }, bMm: { x: 2400, z: 0 } }],
+    readOnly: false,
+    riskLevel: "low",
+    requiresConfirmation: false,
+    inputSchema: {
+      type: "object",
+      properties: { aMm: measurePointSchema, bMm: measurePointSchema },
+      required: ["aMm", "bMm"],
+      additionalProperties: false
+    }
+  },
+  {
     id: "render.blenderPreview",
     title: "Render Blender material preview",
     description: "Opens the existing material review and returns the completed Blender preview result after explicit confirmation.",
@@ -1273,9 +1299,9 @@ export const ASSISTANT_CAPABILITY_BOUNDARIES: AssistantCapabilityBoundary[] = [
     title: "Openings, measurements, align and trim",
     status: "partially-available",
     ownerSystem: "opening/measure/align/wall tools",
-    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "editor.moveSelection", "editor.deleteSelection"],
-    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. Existing selected openings also participate in shared move/delete flows.",
-    limitation: "Associative dimension authoring, semantic align references and trim/extend do not yet have stable non-pointer command contracts."
+    supportedByTools: ["context.queryObjects", "context.getObject", "opening.createDoor", "opening.createWindow", "opening.updateDoor", "opening.updateWindow", "opening.delete", "measure.createDistance", "editor.moveSelection", "editor.deleteSelection"],
+    exactBehavior: "Doors and windows can be created, changed or deleted through host-wall bounds and overlap validation, shared wall rebuilds and history. The agent can also create a live associative distance measure from exact plan points. Existing selected openings participate in shared move/delete flows.",
+    limitation: "Semantic align references and trim/extend do not yet have stable non-pointer command contracts."
   },
   {
     id: "custom-furniture-wardrobe",
