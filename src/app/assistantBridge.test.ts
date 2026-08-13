@@ -47,6 +47,20 @@ describe("assistant bridge safety boundary", () => {
     });
   });
 
+  it("refuses a confirmed pricing workbook when the live project has nothing to price", async () => {
+    const bridge = createAssistantBridge({
+      instances: [],
+      kitchenWorktops: [],
+      S: { customFurniture: [], kitchenCtx: {} },
+      catalog: {},
+      getProjectMarginSettings: () => ({})
+    } as never);
+
+    const result = await bridge.executeToolCall({ id: "workbook_empty", toolId: "export.pricingWorkbook", confirmed: true, input: {} });
+
+    expect(result).toMatchObject({ ok: false, error: "Pricing workbook requires at least one priced project entity." });
+  });
+
   it("creates a validated door through the wall-opening owner and records history", async () => {
     const doors: Array<{ id: string; params: Record<string, unknown>; root: THREE.Group }> = [];
     const wall = { id: "wall_1", params: { aMm: { x: 0, z: 0 }, bMm: { x: 4000, z: 0 } } };
