@@ -550,7 +550,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     const camera = get3dCamera();
     if (!camera) return;
     const rect = args.canvasEl.getBoundingClientRect();
-    if (!orbitCameraAroundPivot(camera, pivot, deltaX, deltaY, rect.height)) return;
+    if (!orbitCameraAroundPivot(camera, pivot, deltaX, deltaY, rect)) return;
     // Keep OrbitControls and camera on the exact same pivot for the full
     // gesture.  Reconstructing a forward proxy here caused top-view drift.
     getControls().target.copy(pivot);

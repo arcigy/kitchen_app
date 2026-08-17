@@ -9,6 +9,7 @@ const MAX_NORMALIZED_WHEEL_DELTA = 240;
 export const NAVIGATION_WHEEL_SCALE_PER_NOTCH = 1.25;
 const WHEEL_DELTA_PER_NOTCH = 120;
 const MAX_ORBIT_ELEVATION = Math.PI / 2 - THREE.MathUtils.degToRad(0.5);
+const MAX_ORBIT_POINTER_DELTA_PX = 48;
 
 export type NavigationViewport = {
   width: number;
@@ -201,19 +202,22 @@ export function orbitCameraAroundPivot(
   pivot: THREE.Vector3,
   deltaX: number,
   deltaY: number,
-  viewportHeight: number,
-  rotateSpeed = 0.85
+  viewport: NavigationViewport,
+  rotateSpeed = 0.6
 ) {
-  const height = Math.max(1, viewportHeight);
+  const width = Math.max(1, viewport.width);
+  const height = Math.max(1, viewport.height);
+  const safeDeltaX = THREE.MathUtils.clamp(deltaX, -MAX_ORBIT_POINTER_DELTA_PX, MAX_ORBIT_POINTER_DELTA_PX);
+  const safeDeltaY = THREE.MathUtils.clamp(deltaY, -MAX_ORBIT_POINTER_DELTA_PX, MAX_ORBIT_POINTER_DELTA_PX);
   const offset = camera.position.clone().sub(pivot);
   if (offset.lengthSq() < 1e-12) return false;
   const spherical = new THREE.Spherical().setFromVector3(offset);
-  spherical.theta -= Math.PI * 2 * deltaX / height * rotateSpeed;
+  spherical.theta -= Math.PI * safeDeltaX / width * rotateSpeed;
   // Clamp polar angle, not the camera quaternion.  This remains well-defined
   // at a top/bottom view and lets the next vertical drag return to an axon.
   const minPolar = Math.PI / 2 - MAX_ORBIT_ELEVATION;
   spherical.phi = THREE.MathUtils.clamp(
-    spherical.phi + Math.PI * 2 * deltaY / height * rotateSpeed,
+    spherical.phi + Math.PI * safeDeltaY / height * rotateSpeed,
     minPolar,
     Math.PI - minPolar
   );
