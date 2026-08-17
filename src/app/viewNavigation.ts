@@ -39,6 +39,13 @@ export function resolveNavigationFocusCenter(
   return fallback.clone();
 }
 
+// Orbiting is a continuation of the view currently on screen.  Replacing this
+// pivot with a selected module or the project bounds at pointer-down changes
+// the camera position on the first drag and looks like a teleport.
+export function resolveStableOrbitPivot(currentTarget: THREE.Vector3) {
+  return currentTarget.clone();
+}
+
 export type NavigationViewerToolMode = "select" | "pan" | "zoom-in" | "zoom-out" | "orbit" | "fit";
 export type NavigationGesture = "pan" | "orbit";
 
@@ -690,7 +697,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     gestureState.pointerId = ev.pointerId;
     gestureState.lastClientX = ev.clientX;
     gestureState.lastClientY = ev.clientY;
-    if (kind === "orbit") gestureState.pivot.copy(resolveOrbitPivot());
+    if (kind === "orbit") gestureState.pivot.copy(resolveStableOrbitPivot(getControls().target));
     args.setViewerPanActive?.(true);
     try {
       args.canvasEl.setPointerCapture(ev.pointerId);
