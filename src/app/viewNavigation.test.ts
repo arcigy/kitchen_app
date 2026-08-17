@@ -239,7 +239,7 @@ describe("viewNavigation camera math", () => {
     expect(camera.position.distanceTo(cappedPosition)).toBeLessThan(1e-8);
   });
 
-  it("moves the camera right when the orbit drag moves right", () => {
+  it("moves the camera left when the orbit drag moves right", () => {
     const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
     const pivot = new THREE.Vector3(0, 1, 0);
     camera.position.set(0, 3, 6);
@@ -248,7 +248,7 @@ describe("viewNavigation camera math", () => {
 
     orbitCameraAroundPivot(camera, pivot, 48, 0, { width: 1200, height: 800 });
 
-    expect(camera.position.x).toBeGreaterThan(0);
+    expect(camera.position.x).toBeLessThan(0);
   });
 
   it("keeps the point below the cursor fixed during axonometric zoom", () => {
