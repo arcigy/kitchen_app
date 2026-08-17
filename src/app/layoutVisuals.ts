@@ -268,7 +268,7 @@ export function createSelectionHighlights(args: {
 
   // Plan highlights are intentional overlays; 3D highlights must obey depth
   // so selected rear edges never turn Solid/Realistic into wireframe.
-  const highlightUsesDepth = () => args.getViewMode?.() === "3d";
+  const highlightUsesDepth = () => args.getViewMode?.() !== "2d";
 
   const addObjectHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
     target.updateMatrixWorld(true);

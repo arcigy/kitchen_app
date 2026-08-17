@@ -189,7 +189,7 @@ describe("viewNavigation camera math", () => {
     camera.lookAt(0, 1, 0);
     camera.updateMatrixWorld(true);
     const pivot = new THREE.Vector3(1.2, 0.8, -0.4);
-    orbitCameraAroundPivot(camera, pivot, 90, -35, 800);
+    orbitCameraAroundPivot(camera, pivot, 90, -35, { width: 1200, height: 800 });
     camera.updateMatrixWorld(true);
     const after = pivot.clone().project(camera);
 
@@ -206,10 +206,27 @@ describe("viewNavigation camera math", () => {
     camera.lookAt(pivot);
     camera.updateMatrixWorld(true);
 
-    expect(orbitCameraAroundPivot(camera, pivot, 0, 120, 800, 1)).toBe(true);
+    expect(orbitCameraAroundPivot(camera, pivot, 0, 120, { width: 1200, height: 800 }, 1)).toBe(true);
     expect(camera.position.y).toBeLessThan(8);
     expect(camera.position.distanceTo(pivot)).toBeCloseTo(8, 8);
     expect(camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
+  });
+
+  it("caps a delayed pointer event so orbit cannot jump away", () => {
+    const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
+    const pivot = new THREE.Vector3(0, 1, 0);
+    camera.position.set(4, 3, 5);
+    camera.lookAt(pivot);
+    camera.updateMatrixWorld(true);
+
+    orbitCameraAroundPivot(camera, pivot, 48, -48, { width: 1200, height: 800 });
+    const cappedPosition = camera.position.clone();
+    camera.position.set(4, 3, 5);
+    camera.lookAt(pivot);
+    camera.updateMatrixWorld(true);
+    orbitCameraAroundPivot(camera, pivot, 10000, -10000, { width: 1200, height: 800 });
+
+    expect(camera.position.distanceTo(cappedPosition)).toBeLessThan(1e-8);
   });
 
   it("keeps the point below the cursor fixed during axonometric zoom", () => {
