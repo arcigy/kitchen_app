@@ -5,6 +5,7 @@ import {
   resolveNavigationFocusCenter,
   resolveNavigationGesture,
   resolveNavigationPointerControls,
+  resolveStableOrbitPivot,
   resolveNavigationViewerToolMode,
   shouldHandleNavigationKeyboardEvent,
   resolveViewCubePresentation
@@ -100,6 +101,15 @@ describe("viewNavigation pointer controls", () => {
     expect(resolveNavigationFocusCenter(provider).toArray()).toEqual([2, 3, 4]);
     selectionBounds = null;
     expect(resolveNavigationFocusCenter(provider).toArray()).toEqual([0, 2, 0]);
+  });
+
+  it("keeps the currently visible target as the orbit pivot", () => {
+    const currentTarget = new THREE.Vector3(8, 1.2, -4);
+
+    const pivot = resolveStableOrbitPivot(currentTarget);
+
+    expect(pivot).toEqual(currentTarget);
+    expect(pivot).not.toBe(currentTarget);
   });
 });
 
@@ -227,6 +237,18 @@ describe("viewNavigation camera math", () => {
     orbitCameraAroundPivot(camera, pivot, 10000, -10000, { width: 1200, height: 800 });
 
     expect(camera.position.distanceTo(cappedPosition)).toBeLessThan(1e-8);
+  });
+
+  it("moves the camera right when the orbit drag moves right", () => {
+    const camera = new THREE.PerspectiveCamera(50, 1.5, 0.001, 1000);
+    const pivot = new THREE.Vector3(0, 1, 0);
+    camera.position.set(0, 3, 6);
+    camera.lookAt(pivot);
+    camera.updateMatrixWorld(true);
+
+    orbitCameraAroundPivot(camera, pivot, 48, 0, { width: 1200, height: 800 });
+
+    expect(camera.position.x).toBeGreaterThan(0);
   });
 
   it("keeps the point below the cursor fixed during axonometric zoom", () => {
