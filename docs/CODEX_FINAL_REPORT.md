@@ -44,13 +44,15 @@ The repository is not entitled to claim 100% operational or compliance
 completion until these P1 items are closed:
 
 1. Revoke and rotate the three open historical GitHub Google API-key alerts.
-2. Enable administrator enforcement for `develop` branch protection
-   (`enforce_admins` was false during this audit).
-3. Verify PostgreSQL RLS and least-privilege roles against the deployment.
-4. Prove encrypted off-host backups, PITR, an isolated timed restore and
+2. Verify PostgreSQL RLS and least-privilege roles against the deployment.
+3. Prove encrypted off-host backups, PITR, an isolated timed restore and
    approved RPO/RTO.
-5. Configure central telemetry retention/access control and exercise a real
+4. Configure central telemetry retention/access control and exercise a real
    alert/incident path.
+
+Administrator enforcement on `develop` was completed after this report's
+initial delivery: `enforce_admins=true`, strict `verify` and `CodeQL` checks,
+and disabled force-pushes/deletions were re-verified through the GitHub API.
 
 These controls require provider or operator authority and must not be simulated
 by repository changes. Detailed owners and safe procedures are in

@@ -40,14 +40,15 @@ outside this repository:
 1. provider-side revoke/rotation for historic GitHub secret alerts;
    read-only GitHub evidence on 2026-08-23: three open Google API Key alerts
    with unknown validity;
-2. repository administrator-bypass prevention; read-only GitHub evidence:
-   `develop` requires a PR and `verify`/`CodeQL` checks, but
-   `enforce_admins=false`;
-3. database RLS/least-privilege verification against the live deployment
+2. database RLS/least-privilege verification against the live deployment
    topology;
-4. proven encrypted off-host backups, PITR and a timed restore;
-5. centralized observability retention and an exercised paging path;
-6. MFA/SSO and shared rate limiting decisions.
+3. proven encrypted off-host backups, PITR and a timed restore;
+4. centralized observability retention and an exercised paging path;
+5. MFA/SSO and shared rate limiting decisions.
+
+The administrator-bypass finding was closed on 2026-08-23: `develop` now
+enforces administrators while retaining strict `verify` and `CodeQL` status
+checks, PR protection, disabled force-pushes and disabled deletions.
 
 Do not close these as accepted risks without a named owner, due date and
 evidence link. See `SECURITY_THREAT_MODEL.md`, `PRIVACY_REVIEW.md`,
