@@ -135,8 +135,9 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toContain("/user/apps/appDefinitions/register");
     expect(workflow).toContain("CAPROVER_APP_URL is required");
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
-    expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(workflow).toContain("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09");
+    expect(workflow).toContain("actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444");
+    expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("npm run security:dependencies");
     expect(workflow).not.toContain("npm audit --omit=dev --audit-level=critical");
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d+/);
@@ -154,8 +155,9 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain('ARCIGY_RESTORE_DRILL_ISOLATED: "true"');
     expect(workflow).toContain("npm run test:db-restore-drill");
     expect(workflow).not.toContain("npm audit --omit=dev --audit-level=critical");
-    expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
-    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(workflow).toContain("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09");
+    expect(workflow).toContain("actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444");
+    expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("github/codeql-action/init@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
     expect(workflow).toContain("github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
     expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
