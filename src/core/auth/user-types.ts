@@ -5,6 +5,7 @@ export type AuthUser = {
   username: string;
   email?: string;
   displayName: string;
+  organizationName: string;
   passwordHash: string;
   clientId: string;
   role: ClientRole;

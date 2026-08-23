@@ -104,6 +104,15 @@ jobs:
           ARCIGY_OBJECT_STORAGE_PREFIX: dev
         run: |
           set -euo pipefail
+          TEST_PASSWORD="$(openssl rand -hex 24)"
+          export ARCIGY_DEV_AUTH_PASSWORD="${TEST_PASSWORD}"
+          export ARCIGY_UI_TEST_COMPANY="Arcigy Kitchen"
+          export ARCIGY_UI_TEST_USERNAME="arcigy"
+          export ARCIGY_UI_TEST_PASSWORD="${TEST_PASSWORD}"
+          echo "ARCIGY_DEV_AUTH_PASSWORD=${TEST_PASSWORD}" >> "${GITHUB_ENV}"
+          echo "ARCIGY_UI_TEST_COMPANY=Arcigy Kitchen" >> "${GITHUB_ENV}"
+          echo "ARCIGY_UI_TEST_USERNAME=arcigy" >> "${GITHUB_ENV}"
+          echo "ARCIGY_UI_TEST_PASSWORD=${TEST_PASSWORD}" >> "${GITHUB_ENV}"
           setsid node node_modules/tsx/dist/cli.mjs scripts/devLocal.ts > "${RUNNER_TEMP}/arcigy-ui.log" 2>&1 &
           echo "ARCIGY_UI_PID=$!" >> "${GITHUB_ENV}"
           for attempt in {1..60}; do

@@ -168,6 +168,7 @@ describe("multi-client worker isolation", () => {
       userId: "user_client_b_owner",
       username: "clientb",
       displayName: "Client B",
+      organizationName: "Client B",
       passwordHash: seedAuthUsers[0].passwordHash,
       clientId: "client_b_demo",
       role: "owner" as const,
@@ -179,6 +180,7 @@ describe("multi-client worker isolation", () => {
       userId: "user_client_a_inactive",
       username: "inactive-client-a",
       displayName: "Inactive",
+      organizationName: "Client A",
       passwordHash: seedAuthUsers[0].passwordHash,
       clientId: "client_a_inactive",
       role: "viewer" as const,
@@ -190,6 +192,7 @@ describe("multi-client worker isolation", () => {
       userId: `user_arcigy_${role}`,
       username: `arcigy-${role}`,
       displayName: `Arcigy ${role}`,
+      organizationName: "Arcigy Kitchen",
       passwordHash: seedAuthUsers[0].passwordHash,
       clientId: "client_arcigy_demo",
       role,
@@ -264,6 +267,7 @@ describe("multi-client worker isolation", () => {
   it("returns retryable 503 for a database session failure and keeps serving requests", async () => {
     const unavailableUserService: UserService = {
       authenticate: async () => null,
+      authenticateByUsername: async () => null,
       getUserById: async () => {
         throw new Error("Connection terminated due to connection timeout");
       }

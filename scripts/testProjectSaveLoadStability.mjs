@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { readUiTestCredentials } from "./uiAuthSession.mjs";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 const projectName = `QA Save Load Stability ${Date.now()}`;
@@ -12,10 +13,7 @@ function assert(condition, message, context) {
 
 async function login(context) {
   const response = await context.request.post(new URL("/api/auth/login", baseUrl).toString(), {
-    data: {
-      username: process.env.ARCIGY_UI_TEST_USERNAME ?? "arcigy",
-      password: process.env.ARCIGY_UI_TEST_PASSWORD ?? "kitchen2026"
-    }
+    data: readUiTestCredentials()
   });
   if (!response.ok()) throw new Error(`Login failed: HTTP ${response.status()}`);
 }

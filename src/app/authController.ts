@@ -116,35 +116,30 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   heading.innerHTML = `
     <span>${t("Sign in")}</span>
     <h1>${t("Welcome back")}</h1>
-    <p>${t("Choose your profile and continue to the Arcigy workspace.")}</p>
-  `;
-
-  const profiles = document.createElement("div");
-  profiles.className = "auth-profiles";
-  profiles.innerHTML = `
-    <button type="button" class="auth-profile-card is-active" data-auth-user="branislav" aria-label="${t("Select Branislav")}">
-      <img src="/organization/branislav.png" alt="" />
-      <span><strong>Branislav</strong><small>${t("Project architect")}</small></span>
-    </button>
-    <button type="button" class="auth-profile-card" data-auth-user="andrej" aria-label="${t("Select Andrej")}">
-      <img src="/organization/andrej.png" alt="" />
-      <span><strong>Andrej</strong><small>${t("Technical creator")}</small></span>
-    </button>
-    <button type="button" class="auth-profile-card" data-auth-user="pino_nobilia" aria-label="${t("Select PINO Nobilia")}">
-      <img src="/organization/pino-nobilia.png" alt="" />
-      <span><strong>PINO</strong><small>${t("Tenant catalogue VKH 2026")}</small></span>
-    </button>
+    <p>${t("Enter your company credentials to continue to the Arcigy workspace.")}</p>
   `;
 
   const form = document.createElement("form");
   form.className = "auth-form";
 
+  const companyLabel = document.createElement("label");
+  const companyText = document.createElement("span");
+  companyText.textContent = t("Company");
+  const companyInput = createInputElement("text", "", {
+    autocomplete: "organization",
+    name: "company",
+    placeholder: t("Enter company"),
+    required: true
+  });
+  companyLabel.append(companyText, companyInput);
+
   const usernameLabel = document.createElement("label");
   const usernameText = document.createElement("span");
   usernameText.textContent = t("User");
-  const usernameInput = createInputElement("text", "branislav", {
+  const usernameInput = createInputElement("text", "", {
     autocomplete: "username",
     name: "username",
+    placeholder: t("Enter username"),
     required: true
   });
   usernameLabel.append(usernameText, usernameInput);
@@ -162,36 +157,17 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
 
   const error = document.createElement("div");
   error.className = "auth-error";
+  error.id = "auth-error";
   error.setAttribute("role", "alert");
 
   const submit = createButtonElement(t("Sign in to workspace"), { type: "submit" });
 
-  const hint = document.createElement("p");
-  hint.className = "auth-hint";
-  hint.innerHTML = `<strong>${t("Available accounts")}</strong><span>branislav / branislav2026</span><span>andrej / andrej2026</span><span>pino_nobilia / ${t("tenant password")}</span>`;
-
-  form.append(usernameLabel, passwordLabel, hint, error, submit);
-  content.append(heading, profiles, form);
+  form.setAttribute("aria-describedby", error.id);
+  form.append(companyLabel, usernameLabel, passwordLabel, error, submit);
+  content.append(heading, form);
   panel.append(visual, content);
   root.appendChild(panel);
   passwordInput.focus();
-
-  const syncActiveProfile = () => {
-    const value = usernameInput.value.trim().toLowerCase();
-    profiles.querySelectorAll<HTMLButtonElement>(".auth-profile-card").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.authUser === value);
-    });
-  };
-
-  profiles.querySelectorAll<HTMLButtonElement>("[data-auth-user]").forEach((button) => {
-    button.addEventListener("click", () => {
-      usernameInput.value = button.dataset.authUser ?? "";
-      syncActiveProfile();
-      passwordInput.focus();
-      passwordInput.select();
-    });
-  });
-  usernameInput.addEventListener("input", syncActiveProfile);
 
   return await new Promise<AuthenticatedClientSession>((resolve) => {
     form.addEventListener("submit", (event) => {
@@ -199,7 +175,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       error.textContent = "";
       submit.disabled = true;
 
-      void login(usernameInput.value, passwordInput.value).then((result) => {
+      void login(companyInput.value, usernameInput.value, passwordInput.value).then((result) => {
         if (!result.ok) {
           error.textContent = result.message;
           submit.disabled = false;
@@ -214,13 +190,13 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   });
 }
 
-async function login(username: string, password: string): Promise<LoginResult> {
+async function login(company: string, username: string, password: string): Promise<LoginResult> {
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ company, username, password })
     });
     if (!response.ok) return { ok: false, message: resolveLoginFailureMessage(response.status) };
     const data = await readAuthResponse(response);

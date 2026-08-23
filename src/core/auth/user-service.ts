@@ -12,22 +12,35 @@ export function createUserService(repository: UserRepository) {
       return repository.findByUserId(userId);
     },
 
-    async authenticate(username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
-      const user = await repository.findByUsername(username);
-      if (!user || !user.isActive) return null;
-      if (!(await verifyPassword(password, user.passwordHash))) return null;
+    async authenticate(company: string, username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
+      const user = await repository.findByCompanyAndUsername(company, username);
+      return await createSession(user, password, now);
+    },
 
-      const issuedAt = now.toISOString();
-      const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
-      return {
-        version: 1,
-        userId: user.userId,
-        clientId: user.clientId,
-        role: user.role,
-        displayName: user.displayName,
-        issuedAt,
-        expiresAt
-      };
+    async authenticateByUsername(username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
+      const user = await repository.findByUsername(username);
+      return await createSession(user, password, now);
     }
+  };
+}
+
+async function createSession(
+  user: Awaited<ReturnType<UserRepository["findByUsername"]>>,
+  password: string,
+  now: Date
+): Promise<AuthenticatedClientSession | null> {
+  if (!user || !user.isActive) return null;
+  if (!(await verifyPassword(password, user.passwordHash))) return null;
+
+  const issuedAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
+  return {
+    version: 1,
+    userId: user.userId,
+    clientId: user.clientId,
+    role: user.role,
+    displayName: user.displayName,
+    issuedAt,
+    expiresAt
   };
 }

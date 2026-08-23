@@ -34,12 +34,12 @@ function getStringField(value: unknown, field: string): string | null {
   return typeof candidate === "string" ? candidate : null;
 }
 
-function getLoginRateLimitKey(req: http.IncomingMessage, username: string): string {
+function getLoginRateLimitKey(req: http.IncomingMessage, company: string, username: string): string {
   const forwardedFor = req.headers["x-forwarded-for"];
   const ip = Array.isArray(forwardedFor)
     ? forwardedFor[forwardedFor.length - 1]
     : forwardedFor?.split(",").at(-1)?.trim() || req.socket.remoteAddress || "unknown";
-  return `${ip}:${username.trim().toLowerCase()}`;
+  return `${ip}:${company.trim().toLowerCase()}:${username.trim().toLowerCase()}`;
 }
 
 export async function handleAuthLogin(
@@ -53,16 +53,17 @@ export async function handleAuthLogin(
   const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
   const authSessionStore = dependencies.authSessionStore ?? defaultAuthSessionStore;
   const body = await readJsonBody(req);
+  const company = getStringField(body, "company");
   const username = getStringField(body, "username");
   const password = getStringField(body, "password");
-  if (!username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
+  if (!company || !username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
 
-  const rateLimitKey = getLoginRateLimitKey(req, username);
+  const rateLimitKey = getLoginRateLimitKey(req, company, username);
   if (loginRateLimiter.isLimited(rateLimitKey)) {
     return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
   }
 
-  const authenticatedSession = await userService.authenticate(username, password);
+  const authenticatedSession = await userService.authenticate(company, username, password);
   if (!authenticatedSession) {
     loginRateLimiter.recordFailure(rateLimitKey);
     return sendJson(res, 401, { ok: false, error: INVALID_CREDENTIALS });
@@ -95,9 +96,9 @@ export async function handleExtensionAuthLogin(
   const password = getStringField(body, "password");
   if (!username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
 
-  const rateLimitKey = getLoginRateLimitKey(req, username);
+  const rateLimitKey = getLoginRateLimitKey(req, "extension", username);
   if (loginRateLimiter.isLimited(rateLimitKey)) return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
-  const authenticatedSession = await userService.authenticate(username, password);
+  const authenticatedSession = await userService.authenticateByUsername(username, password);
   if (!authenticatedSession) {
     loginRateLimiter.recordFailure(rateLimitKey);
     return sendJson(res, 401, { ok: false, error: INVALID_CREDENTIALS });

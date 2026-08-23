@@ -31,6 +31,7 @@ Authenticated scenarios require credentials held only in environment variables:
 
 ```powershell
 $env:ARCIGY_LOAD_TEST_USERNAME = "<isolated-test-user>"
+$env:ARCIGY_LOAD_TEST_COMPANY = "<isolated-test-company>"
 $env:ARCIGY_LOAD_TEST_PASSWORD = "<secret>"
 ```
 

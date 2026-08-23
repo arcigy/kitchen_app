@@ -31,11 +31,11 @@ async function measuredFetch(baseUrl: URL, path: string, samples: SaasLoadSample
   }
 }
 
-async function login(baseUrl: URL, username: string, password: string, samples: SaasLoadSample[]): Promise<string> {
+async function login(baseUrl: URL, company: string, username: string, password: string, samples: SaasLoadSample[]): Promise<string> {
   const response = await measuredFetch(baseUrl, "/api/auth/login", samples, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: baseUrl.origin },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ company, username, password })
   });
   if (!response.ok) throw new Error(`Login failed with HTTP ${response.status}.`);
   return cookieFrom(response);
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   const runWorker = async () => {
     let cookie = "";
     if (config.scenario !== "health") {
-      cookie = await login(config.baseUrl, config.username!, config.password!, samples);
+      cookie = await login(config.baseUrl, config.company!, config.username!, config.password!, samples);
     }
     while (!stopping && performance.now() < deadline) {
       for (const path of scenarioPaths(config.scenario, config.projectId)) {

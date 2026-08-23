@@ -3,6 +3,7 @@ import { once } from "node:events";
 import path from "node:path";
 import process from "node:process";
 import { chromium } from "playwright";
+import { readUiTestCredentials } from "./uiAuthSession.mjs";
 
 // Recovery owns a dedicated default port pair so the UI-regression chain never
 // accidentally validates an already-running developer server with a different
@@ -98,10 +99,7 @@ function collectConsoleErrors(page, label) {
 
 async function login() {
   const response = await context.request.post(new URL("/api/auth/login", baseUrl).toString(), {
-    data: {
-      username: process.env.ARCIGY_UI_TEST_USERNAME ?? "arcigy",
-      password: process.env.ARCIGY_UI_TEST_PASSWORD ?? "kitchen2026"
-    }
+    data: readUiTestCredentials()
   });
   assert(response.ok(), "authenticated recovery test session", response.status());
 }
