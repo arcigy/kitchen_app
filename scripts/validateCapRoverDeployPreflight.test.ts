@@ -140,12 +140,17 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d+/);
   });
 
-  it("runs CI for pull requests and direct protected-branch updates", async () => {
+  it("uses a fast PR gate and reserves full regression for develop, scheduled, or explicitly labelled runs", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8");
 
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("push:");
+    expect(workflow).toContain("schedule:");
+    expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toMatch(/push:\s+branches:\s+- develop\s+- main/m);
+    expect(workflow).toContain("fast-verify:");
+    expect(workflow).toContain("full-regression:");
+    expect(workflow).toContain("contains(github.event.pull_request.labels.*.name, 'full-regression')");
     expect(workflow).toContain("npm run security:secrets");
     expect(workflow).toContain("npm run security:dependencies");
     expect(workflow).toContain("name: PostgreSQL backup and restore drill");
