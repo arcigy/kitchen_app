@@ -124,6 +124,23 @@ describe("shared worker request pipeline", () => {
     expect(logged).not.toContain("private customer detail");
   });
 
+  it("returns a generic bad-request message for malformed JSON", async () => {
+    const harness = await createHarness();
+    const response = await harness.request("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{not-json"
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: "Malformed JSON request body.",
+      requestId: expect.any(String)
+    });
+    expect(String(harness.logError.mock.calls[0]?.[0] ?? "")).not.toContain("not-json");
+  });
+
   it("returns structured 409 details through the shared error pipeline", async () => {
     const harness = await createHarness({
       application: async () => { throw new ProjectSaveRevisionConflictError(4, 5); }

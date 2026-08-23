@@ -57,3 +57,13 @@ Signals, including browser project-open/app-data timing and runtime errors/long 
 - add traces only after attribute redaction and sampling rules are tested.
 
 See `docs/SAAS_SLO.md`, `docs/database-operations.md`, and `docs/SAAS_OPERATIONS_RUNBOOK.md`.
+
+## Audit status — 2026-08-23
+
+Local verification confirmed the existing request IDs, structured mutation audit
+events, health/readiness endpoints and browser-runtime checks without exposing
+raw project payloads. It did not create a central telemetry backend or send an
+alert. Until a protected collector, retention/access policy and an exercised
+alert path exist, observability is a **P1 operational gap**, not a completed
+production control. The owner checklist and incident actions are maintained in
+`docs/SECURITY_THREAT_MODEL.md` and `docs/INCIDENT_RESPONSE.md`.

@@ -204,4 +204,23 @@ describe("catalog exact lookup", () => {
     expect(materialReads).toBe(2);
     expect(priceReads).toBe(2);
   });
+
+  it("releases registered lookup state when a worker lifecycle disposes its cache", () => {
+    const cache = new CatalogExactLookupCache({ ttlMs: 60_000 });
+    cache.set(clientA.clientId, "material", "material-code", {
+      kind: "material",
+      value: { material: null, unitPrice: null }
+    });
+    expect(cache.size).toBe(1);
+
+    cache.dispose();
+
+    expect(cache.size).toBe(0);
+    expect(cache.get(clientA.clientId, "material", "material-code")).toBeUndefined();
+    cache.set(clientA.clientId, "material", "material-code", {
+      kind: "material",
+      value: { material: null, unitPrice: null }
+    });
+    expect(cache.size).toBe(0);
+  });
 });

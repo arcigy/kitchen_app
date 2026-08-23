@@ -58,4 +58,10 @@ export class BoundedCompressedResponseCache<Key> {
     this.pending.set(key, promise);
     return promise;
   }
+
+  clear(): void {
+    this.entries.clear();
+    this.pending.clear();
+    this.totalBytes = 0;
+  }
 }

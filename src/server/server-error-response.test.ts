@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DATABASE_UNAVAILABLE_MESSAGE,
   INTERNAL_SERVER_ERROR_MESSAGE,
+  MALFORMED_JSON_MESSAGE,
   databaseUnavailableStatus,
   getServerErrorStatus,
   publicServerErrorDetails,
@@ -27,6 +28,11 @@ describe("server database error responses", () => {
     expect(publicServerErrorMessage(new Error("password=secret host=private-db"), 500)).toBe(
       INTERNAL_SERVER_ERROR_MESSAGE
     );
+  });
+
+  it("keeps malformed JSON parser details private", () => {
+    expect(publicServerErrorMessage(new SyntaxError("Unexpected token < in JSON at position 0"), 400))
+      .toBe(MALFORMED_JSON_MESSAGE);
   });
 
   it("publishes machine-readable project revision conflicts", () => {
