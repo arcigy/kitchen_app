@@ -1,4 +1,4 @@
-import { createInMemoryUserRepository } from "../core/auth/user-repository";
+import { createDevelopmentAuthUsers, createInMemoryUserRepository } from "../core/auth/user-repository";
 import { createInMemoryAuthSessionStore, type AuthSessionStore } from "../core/auth/auth-session-store";
 import { createPostgresAuthSessionStore } from "../core/auth/auth-session-postgres-store";
 import { createPostgresUserRepository } from "../core/auth/user-postgres-repository";
@@ -30,6 +30,9 @@ export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean
 
 export function createServerUserService(): UserService {
   const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  if (!databaseConfig && process.env.ARCIGY_DEV_AUTH_PASSWORD) {
+    return createUserService(createInMemoryUserRepository(createDevelopmentAuthUsers(process.env.ARCIGY_DEV_AUTH_PASSWORD)));
+  }
   return createUserService(databaseConfig
     ? createPostgresUserRepository(databaseConfig)
     : createInMemoryUserRepository());

@@ -55,6 +55,10 @@ function readBody(body: unknown) {
   return async () => body;
 }
 
+function readAuthBody(username: string, password: string, company = "Arcigy Kitchen") {
+  return readBody({ company, username, password });
+}
+
 function createTestUserService(users = seedAuthUsers) {
   return createUserService(createInMemoryUserRepository(users));
 }
@@ -68,7 +72,7 @@ describe("auth endpoints", () => {
     const req = mockReq();
     const res = mockRes();
 
-    await handleAuthLogin(req, res, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(req, res, readAuthBody("arcigy", "kitchen2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -93,7 +97,7 @@ describe("auth endpoints", () => {
 
   it("rejects bad password with safe error", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "arcigy", password: "bad" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("arcigy", "bad"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -104,7 +108,7 @@ describe("auth endpoints", () => {
 
   it("rejects unknown user with safe error", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "missing", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("missing", "kitchen2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -115,13 +119,35 @@ describe("auth endpoints", () => {
 
   it("authenticates with case-insensitive username", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "ARcIgY", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("ARcIgY", "kitchen2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
 
     expect(res.statusCode).toBe(200);
     expect((res.body as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("requires a company for browser login", async () => {
+    const res = mockRes();
+    await handleAuthLogin(mockReq(), res, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+      userService: createTestUserService(),
+      loginRateLimiter: createLoginRateLimiter()
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ ok: false, error: "Invalid credentials." });
+  });
+
+  it("does not authenticate a user through another company", async () => {
+    const res = mockRes();
+    await handleAuthLogin(mockReq(), res, readAuthBody("arcigy", "kitchen2026", "Other Company"), sendJson, {
+      userService: createTestUserService(),
+      loginRateLimiter: createLoginRateLimiter()
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ ok: false, error: "Invalid credentials." });
   });
 
   it("issues a revocable bearer session for the extension without exposing the password or session id", async () => {
@@ -153,7 +179,7 @@ describe("auth endpoints", () => {
 
   it("logs in Andrej with organization credentials", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "andrej", password: "andrej2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("andrej", "andrej2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -167,7 +193,7 @@ describe("auth endpoints", () => {
 
   it("logs in Branislav with his organization credentials", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "branislav", password: "branislav2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("branislav", "branislav2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -182,7 +208,7 @@ describe("auth endpoints", () => {
   it("rejects inactive user with safe error", async () => {
     const inactiveUser = { ...seedAuthUsers[0]!, username: "inactive", isActive: false };
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "inactive", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readAuthBody("inactive", "kitchen2026"), sendJson, {
       userService: createTestUserService([inactiveUser]),
       loginRateLimiter: createLoginRateLimiter()
     });
@@ -281,7 +307,7 @@ describe("auth endpoints", () => {
     try {
       const req = mockReq();
       const res = mockRes();
-      await handleAuthLogin(req, res, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+      await handleAuthLogin(req, res, readAuthBody("arcigy", "kitchen2026"), sendJson, {
         userService: createTestUserService(),
         loginRateLimiter: createLoginRateLimiter()
       });
@@ -303,7 +329,7 @@ describe("auth endpoints", () => {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const res = mockRes();
-      await handleAuthLogin(mockReq({ ip: "10.0.0.1" }), res, readBody({ username: "arcigy", password: "bad" }), sendJson, {
+      await handleAuthLogin(mockReq({ ip: "10.0.0.1" }), res, readAuthBody("arcigy", "bad"), sendJson, {
         userService,
         loginRateLimiter: limiter
       });
@@ -311,7 +337,7 @@ describe("auth endpoints", () => {
     }
 
     const limited = mockRes();
-    await handleAuthLogin(mockReq({ ip: "10.0.0.1" }), limited, readBody({ username: "arcigy", password: "bad" }), sendJson, {
+    await handleAuthLogin(mockReq({ ip: "10.0.0.1" }), limited, readAuthBody("arcigy", "bad"), sendJson, {
       userService,
       loginRateLimiter: limiter
     });
@@ -326,7 +352,7 @@ describe("auth endpoints", () => {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const res = mockRes();
-      await handleAuthLogin(mockReq({ ip: "10.0.0.2" }), res, readBody({ username: "unknown", password: "kitchen2026" }), sendJson, {
+      await handleAuthLogin(mockReq({ ip: "10.0.0.2" }), res, readAuthBody("unknown", "kitchen2026"), sendJson, {
         userService,
         loginRateLimiter: limiter
       });
@@ -335,7 +361,7 @@ describe("auth endpoints", () => {
     }
 
     const limited = mockRes();
-    await handleAuthLogin(mockReq({ ip: "10.0.0.2" }), limited, readBody({ username: "unknown", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq({ ip: "10.0.0.2" }), limited, readAuthBody("unknown", "kitchen2026"), sendJson, {
       userService,
       loginRateLimiter: limiter
     });
@@ -347,7 +373,7 @@ describe("auth endpoints", () => {
   it("revokes the original cookie on logout for session and protected API checks", async () => {
     const authSessionStore = createInMemoryAuthSessionStore();
     const login = mockRes();
-    await handleAuthLogin(mockReq(), login, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), login, readAuthBody("arcigy", "kitchen2026"), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter(),
       authSessionStore
@@ -386,7 +412,7 @@ describe("auth endpoints", () => {
       await handleAuthLogin(
         mockReq({ forwardedFor: `198.51.100.${attempt}, 203.0.113.10` }),
         mockRes(),
-        readBody({ username: "arcigy", password: "bad" }),
+        readAuthBody("arcigy", "bad"),
         sendJson,
         { userService, loginRateLimiter: limiter }
       );
@@ -395,7 +421,7 @@ describe("auth endpoints", () => {
     await handleAuthLogin(
       mockReq({ forwardedFor: "198.51.100.99, 203.0.113.10" }),
       limited,
-      readBody({ username: "arcigy", password: "bad" }),
+      readAuthBody("arcigy", "bad"),
       sendJson,
       { userService, loginRateLimiter: limiter }
     );

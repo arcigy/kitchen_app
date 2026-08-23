@@ -2547,79 +2547,9 @@ body {
   font-weight: 650;
 }
 
-.auth-profiles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.auth-profile-card {
-  min-width: 0;
-  min-height: 72px;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 11px;
-  border: 1px solid #e1e6ef;
-  border-radius: 14px;
-  background: #fbfcff;
-  color: #172033;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
-}
-
-.auth-profile-card:hover,
-.auth-profile-card.is-active {
-  border-color: rgba(102, 85, 255, 0.44);
-  background: #f7f5ff;
-  box-shadow: 0 12px 28px rgba(88, 71, 232, 0.12);
-  transform: translateY(-1px);
-}
-
-.auth-profile-card img {
-  width: 44px;
-  height: 44px;
-  display: block;
-  object-fit: cover;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  box-shadow: 0 8px 18px rgba(31, 37, 58, 0.12);
-}
-
-.auth-profile-card span {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.auth-profile-card strong,
-.auth-profile-card small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.auth-profile-card strong {
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.auth-profile-card small {
-  color: #667085;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .auth-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .auth-form label {
@@ -2679,34 +2609,6 @@ body {
   font-weight: 800;
 }
 
-.auth-hint {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  align-items: center;
-  margin: 0;
-  padding: 10px;
-  border: 1px solid #e4e0ff;
-  border-radius: 12px;
-  background: #f7f5ff;
-  color: #5847e8 !important;
-  font-size: 12px !important;
-  font-weight: 800;
-}
-
-.auth-hint strong {
-  width: 100%;
-  color: #312e81;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.auth-hint span {
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: #ffffff;
-}
-
 @media (max-width: 860px) {
   .auth-panel {
     min-height: 0;
@@ -2732,9 +2634,6 @@ body {
     padding: 22px;
   }
 
-  .auth-profiles {
-    grid-template-columns: 1fr;
-  }
 }
 
 #main {
