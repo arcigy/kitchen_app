@@ -47,9 +47,11 @@ export function createWorkerRequestHandler(context: WorkerRequestPipelineContext
     registerResponseCompression(req, res);
     const requestId = registerRequestObservability(req, res);
     context.requestMetrics.register(req, res);
+    let requestPath = "/";
     try {
       const protocolHost = req.headers.host || `${context.host}:${context.port}`;
       const url = new URL(req.url || "/", `http://${protocolHost}`);
+      requestPath = url.pathname;
       registerMutationAudit(req, res, url, requestId);
 
       if (shouldRejectRequestOrigin(req, url.pathname)) {
@@ -133,8 +135,15 @@ export function createWorkerRequestHandler(context: WorkerRequestPipelineContext
       const status = getServerErrorStatus(error);
       if (status === 503) res.setHeader("Retry-After", "2");
       const message = publicServerErrorMessage(error, status);
+      const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(error.name)
+        ? error.name
+        : "UnknownError";
+      const errorCode = error && typeof error === "object" && "code" in error &&
+        typeof (error as NodeJS.ErrnoException).code === "string" && /^[A-Z0-9_]{1,64}$/.test((error as NodeJS.ErrnoException).code!)
+        ? ` code=${(error as NodeJS.ErrnoException).code}`
+        : "";
       (context.logError ?? console.error)(
-        `[worker] requestId=${requestId} ${req.method ?? "UNKNOWN"} ${req.url ?? "/"} -> ${status}: ${error instanceof Error ? error.message : String(error)}`
+        `[worker] requestId=${requestId} ${req.method ?? "UNKNOWN"} ${requestPath} -> ${status}: ${errorName}${errorCode}`
       );
       return context.sendJson(res, status, { ok: false, error: message, requestId, ...publicServerErrorDetails(error) });
     }

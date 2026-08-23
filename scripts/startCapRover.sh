@@ -4,7 +4,7 @@ set -eu
 export BLENDER_WORKER_HOST=127.0.0.1
 export BLENDER_WORKER_PORT=5191
 
-npm run serve:caprover &
+./node_modules/.bin/tsx scripts/worker.ts &
 worker_pid=$!
 nginx -g 'daemon off;' &
 nginx_pid=$!

@@ -30,6 +30,7 @@ async function createHarness(options: {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ path: url.pathname }));
   }));
+  const logError = vi.fn();
   const sendJson = (res: http.ServerResponse, status: number, data: unknown) => {
     res.statusCode = status;
     res.setHeader("Content-Type", "application/json");
@@ -56,13 +57,13 @@ async function createHarness(options: {
     checkReadiness: options.readiness ?? (async () => ({ ok: true, storage: "file" })),
     getClientContext: async () => ({ clientId: "client-a", userId: "user-a", role: "owner" }),
     handleApplicationRequest: application,
-    logError: vi.fn()
+    logError
   }));
   servers.push(server);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
-  return { application, request: (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init) };
+  return { application, logError, request: (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init) };
 }
 
 describe("shared worker request pipeline", () => {
@@ -110,13 +111,17 @@ describe("shared worker request pipeline", () => {
     const errorHarness = await createHarness({
       application: async () => { throw new Error("private customer detail"); }
     });
-    const failed = await errorHarness.request("/explode");
+    const failed = await errorHarness.request("/explode?token=top-secret");
     expect(failed.status).toBe(500);
     expect(await failed.json()).toMatchObject({
       ok: false,
       error: "Internal server error.",
       requestId: expect.any(String)
     });
+    const logged = String(errorHarness.logError.mock.calls[0]?.[0] ?? "");
+    expect(logged).toContain("GET /explode -> 500: Error");
+    expect(logged).not.toContain("top-secret");
+    expect(logged).not.toContain("private customer detail");
   });
 
   it("returns structured 409 details through the shared error pipeline", async () => {

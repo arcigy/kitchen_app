@@ -93,6 +93,10 @@ export async function handleModulePackageApi(
 
   const presetMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/parameter-presets$/);
   if (req.method === "POST" && presetMatch) {
+    if (context.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot create module parameter presets." });
+      return true;
+    }
     const body = bodyRecord(await deps.readJsonBody(req));
     if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
     const name = typeof body.name === "string" ? body.name : "";
@@ -118,6 +122,10 @@ export async function handleModulePackageApi(
   }
 
   if (req.method === "POST" && url.pathname === "/api/modules/import") {
+    if (context.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot import module packages." });
+      return true;
+    }
     const body = bodyRecord(await deps.readJsonBody(req));
     if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
     const fqm = typeof body.fqm === "string" ? body.fqm : typeof body.moduleFile === "string" ? body.moduleFile : undefined;

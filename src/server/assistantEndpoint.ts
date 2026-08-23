@@ -187,6 +187,10 @@ export async function handleAssistantApi(
   }
 
   if (req.method === "POST" && url.pathname === "/api/assistant/rag/reindex") {
+    if (ctx.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot rebuild the assistant index." });
+      return true;
+    }
     const index = await reindexAssistantRag(deps.projectRoot, ctx, catalog);
     deps.sendJson(res, 200, { ok: true, persisted: index.persisted, chunks: index.chunks.length });
     return true;

@@ -962,6 +962,24 @@ describe("multi-client worker isolation", () => {
       body: { clientId: "client_b_demo", package: cornerShelfLowerFixture }
     });
     expect(badClient.status).toBe(403);
+
+    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const viewerImport = await requestWorker(controller!.port, "/api/modules/import", {
+      method: "POST",
+      cookie: viewerCookie,
+      body: { package: clientACustomPackage }
+    });
+    expect(viewerImport.status).toBe(403);
+    const viewerPreset = await requestWorker(
+      controller!.port,
+      "/api/modules/client_a_corner_custom_v1/parameter-presets",
+      {
+        method: "POST",
+        cookie: viewerCookie,
+        body: { name: "Viewer preset", parameters: { width: 700 } }
+      }
+    );
+    expect(viewerPreset.status).toBe(403);
   }, 30_000);
 
   it("keeps module package routes registered in the dev:local root worker entrypoint", async () => {
@@ -1584,6 +1602,28 @@ describe("multi-client worker isolation", () => {
     expect(response.status).toBe(403);
   });
 
+  it("keeps viewer project access read-only for create and import operations", async () => {
+    const viewerCookie = makeCookieHeader({
+      userId: "user_arcigy_viewer",
+      clientId: "client_arcigy_demo",
+      role: "viewer"
+    });
+
+    const created = await requestWorker(controller!.port, "/api/projects", {
+      method: "POST",
+      cookie: viewerCookie,
+      body: { name: "Viewer Project", address: "Main 4", contactName: "Jane" }
+    });
+    expect(created.status).toBe(403);
+
+    const imported = await requestWorker(controller!.port, "/api/projects/import", {
+      method: "POST",
+      cookie: viewerCookie,
+      body: { envelope: "not-even-parsed-for-a-viewer" }
+    });
+    expect(imported.status).toBe(403);
+  });
+
   it("returns a client error for a structurally invalid project JSON body", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
@@ -1934,6 +1974,31 @@ describe("multi-client worker isolation", () => {
     expect(JSON.stringify(response.body)).not.toContain("client_b_demo");
   });
 
+  it("keeps viewer Blender operations read-only", async () => {
+    const viewerCookie = makeCookieHeader({
+      userId: "user_arcigy_viewer",
+      clientId: "client_arcigy_demo",
+      role: "viewer"
+    });
+    const exported = await requestWorker(controller!.port, "/api/blender/export", {
+      method: "POST",
+      cookie: viewerCookie,
+      body: {
+        projectId: "viewer-project",
+        phaseId: "viewer-phase",
+        sceneJson: { objects: [] }
+      }
+    });
+    expect(exported.status).toBe(403);
+
+    const opened = await requestWorker(controller!.port, "/api/blender/open-output", {
+      method: "POST",
+      cookie: viewerCookie,
+      body: { path: "ignored-for-viewers.png" }
+    });
+    expect(opened.status).toBe(403);
+  });
+
   it("rejects storage path traversal", async () => {
     await seedRenderFixture(projectRoot, "client_arcigy_demo", "project-a", "phase-a", "safe.json", "user_arcigy_owner");
     const response = await requestWorker(
@@ -2018,6 +2083,58 @@ describe("multi-client worker isolation", () => {
     const preview = typeof body === "object" && body && "previewUrl" in body ? String(body.previewUrl) : "";
     expect(preview.includes("/storage/clients/client_arcigy_demo/projects/shared-project/phases/phase-shared/")).toBe(true);
     expect(preview.includes("client_b_demo")).toBe(false);
+  });
+
+  it("rejects opening Blender output from another tenant namespace", async () => {
+    const clientBFile = await seedRenderFixture(
+      projectRoot,
+      "client_b_demo",
+      "project-b",
+      "phase-b",
+      "private.png",
+      "user_client_b_owner"
+    );
+    const response = await requestWorker(controller!.port, "/api/blender/open-output", {
+      method: "POST",
+      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      body: { path: clientBFile }
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("does not expose server filesystem paths or desktop-open behavior in production", async () => {
+    process.env.NODE_ENV = "production";
+    const ownFile = await seedRenderFixture(
+      projectRoot,
+      "client_arcigy_demo",
+      "production-project",
+      "production-phase",
+      "preview.png",
+      "user_arcigy_owner"
+    );
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const exported = await requestWorker(controller!.port, "/api/blender/export", {
+      method: "POST",
+      cookie,
+      body: {
+        projectId: "production-project",
+        phaseId: "production-phase",
+        sceneJson: { objects: [] }
+      }
+    });
+    expect(exported.status).toBe(200);
+    expect(exported.body).toMatchObject({ ok: true, previewUrl: expect.any(String) });
+    expect(exported.body).not.toHaveProperty("jsonPath");
+    expect(exported.body).not.toHaveProperty("blendPath");
+    expect(exported.body).not.toHaveProperty("previewPath");
+
+    const opened = await requestWorker(controller!.port, "/api/blender/open-output", {
+      method: "POST",
+      cookie,
+      body: { path: ownFile }
+    });
+    expect(opened.status).toBe(404);
   });
 
   it("creates project metadata and does not write export output to global folders", async () => {

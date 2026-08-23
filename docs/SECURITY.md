@@ -39,12 +39,13 @@ This document defines the engineering security contract for Arcigy. It is not a 
 |---|---|---|
 | Cross-tenant object access | Signed session, live user/tenant/role revalidation, tenant-scoped repositories, composite keys, storage path validation, negative tests | PostgreSQL RLS and least-privilege runtime role |
 | Session theft or stale access | HttpOnly, Secure production cookie, SameSite=Lax, expiry, durable PostgreSQL-backed revocation for new logins, active user/role/tenant revalidation | Re-authentication/MFA for sensitive actions; legacy pre-rollout cookies age out within their existing seven-day expiry |
-| Login abuse | Generic errors, IP+username failed-attempt limiter with bounded memory | Trusted shared/distributed limiter and alerting |
+| Login abuse | Generic errors, client-IP+username failed-attempt limiter with bounded memory and explicit trusted-proxy hop handling | Shared/distributed limiter and alerting |
 | CSRF, XSS, clickjacking, and foreign origins | Unsafe cookie-authenticated methods validate Origin/Sec-Fetch-Site; token bridge remains separate; enforced CSP limits scripts to same-origin, blocks objects and framing, and `X-Frame-Options: DENY` provides legacy clickjacking defense | Nonce-based styles if the current inline-style product surface is later removed; independent penetration review |
 | Oversized requests | Route-aware JSON limits, early `Content-Length` rejection, streamed overflow rejection, HTTP 413 | Explicit response limits/pagination for every growing list |
 | SSRF/external dependency abuse | Exact host rules, timeouts, size caps, redirect denial, content-type checks | Central egress policy and dependency SLOs |
 | Resource exhaustion | Tenant/peer request budgets for expensive routes, DB/pool timeouts, Blender timeout | Shared gateway limits, durable queue, per-tenant quotas |
 | Path traversal/subprocess abuse | Sanitized tenant paths, storage-root containment, allowed Blender output extensions | Sandbox/worker isolation before broader file formats |
+| Portable project tampering and archive bombs | AES-256-GCM import requires a 96-bit IV and full 128-bit authentication tag; strict base64 parsing, bounded gzip output, asset count/size limits, and tenant validation fail closed before persistence | Independent malformed-import fuzzing and worker memory profiling at the configured maximum bundle size |
 | Sensitive logs/metric cardinality | Request IDs, normalized metric routes, no tenant/project labels, HMAC mutation references | Central encrypted retention and access policy |
 | Data loss | Transactional migrations and persistent PostgreSQL volume | Off-host encrypted backup, PITR, durable app files, tested restore |
 | Supply chain | Lockfile, CI install/build/test, a fail-closed production dependency policy that blocks every high/critical advisory, official SheetJS 0.20.3 with retained Excel export compatibility, no-dependency tracked/untracked text secret scan with value-safe findings, GitHub provider secret scanning and push protection, official actions pinned to verified full commit SHAs, local CodeQL init/analyze gate for JavaScript/TypeScript, CI-generated CycloneDX production SBOM artifact, bounded weekly Dependabot version-update PRs for npm and GitHub Actions targeting `develop` without auto-merge, and a PR-only dependency review gate for newly introduced high/critical vulnerabilities across all dependency scopes | Revoke three unresolved historical Google API keys, enable or prove the GitHub dependency graph prerequisite, publish and review the first CodeQL/SBOM/Dependabot/dependency-review runs, close alerts as revoked, enable validity checks after approval, signed build provenance |
@@ -54,6 +55,12 @@ This document defines the engineering security contract for Arcigy. It is not a 
 `mutation_audit` events contain only timestamp, request ID, static action, source type, status/outcome, role, and HMAC references. They never include URLs with query data, request/response bodies, names, emails, tokens, cookies, or raw tenant/user/project/session IDs.
 
 Production should set a separate `ARCIGY_AUDIT_HASH_SECRET`. If absent, the logger falls back to `AUTH_SESSION_SECRET`; secret rotation changes future references and must be recorded operationally. Audit logs are evidence, not authorization and not a durable audit store until centralized retention is configured.
+
+## Boundary configuration
+
+Production defaults `ARCIGY_TRUSTED_PROXY_HOPS` to `2` for the CapRover edge plus the loopback nginx sidecar. Change it only when the verified proxy topology changes; local and test workers trust no forwarding header by default.
+
+Portable project import derives its decompressed payload ceiling from `PROJECT_FILE_MAX_TOTAL_ASSET_MB` plus fixed metadata overhead. `PROJECT_FILE_MAX_DECOMPRESSED_MB` can set a stricter explicit ceiling, while `HTTP_PROJECT_IMPORT_BODY_MAX_MB` independently limits the encrypted HTTP request body. Any override must still permit the largest supported project and be load-tested before release.
 
 ## Session lifecycle contract
 

@@ -1,8 +1,12 @@
 import type http from "node:http";
 import type { ClientContext } from "../core/client/client-context";
+import { fetchExternalText } from "./external-http";
 
 const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024;
+const MAX_ODOO_RESPONSE_BYTES = 1024 * 1024;
+const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 const kinds = new Set(["bug", "feature_request", "improvement", "question", "other"]);
 
@@ -41,6 +45,27 @@ function text(value: unknown, name: string, max: number, required = true): strin
 
 function jsonBytes(value: unknown): number { return Buffer.byteLength(JSON.stringify(value), "utf8"); }
 
+function validatedPngDataUrl(value: unknown): string {
+  const maxEncodedLength = PNG_DATA_URL_PREFIX.length + (4 * Math.ceil(MAX_SCREENSHOT_BYTES / 3));
+  const screenshot = text(value, "screenshotDataUrl", maxEncodedLength);
+  if (!screenshot.startsWith(PNG_DATA_URL_PREFIX)) {
+    throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  }
+  const encoded = screenshot.slice(PNG_DATA_URL_PREFIX.length);
+  if (!encoded || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+    throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  }
+  const decoded = Buffer.from(encoded, "base64");
+  if (
+    decoded.length > MAX_SCREENSHOT_BYTES
+    || !decoded.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+    || decoded.toString("base64") !== encoded
+  ) {
+    throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+  }
+  return screenshot;
+}
+
 function config(env: NodeJS.ProcessEnv) {
   const baseUrl = env.ARCIGY_ODOO_URL?.trim();
   const apiKey = env.ARCIGY_ODOO_API_KEY?.trim();
@@ -60,14 +85,23 @@ function cleanupDeliveries(now = Date.now()): void {
 }
 
 async function odooCall(fetchImpl: typeof fetch, settings: ReturnType<typeof config>, model: string, method: string, body: unknown) {
-  const response = await fetchImpl(`${settings.baseUrl}/json/2/${model}/${method}`, {
-    method: "POST",
-    redirect: "error",
-    headers: { Authorization: `Bearer ${settings.apiKey}`, "Content-Type": "application/json; charset=utf-8", ...(settings.database ? { "X-Odoo-Database": settings.database } : {}) },
-    body: JSON.stringify(body), signal: AbortSignal.timeout(15_000)
-  });
+  let response: Response;
+  let text: string;
+  try {
+    ({ response, text } = await fetchExternalText(`${settings.baseUrl}/json/2/${model}/${method}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${settings.apiKey}`, "Content-Type": "application/json; charset=utf-8", ...(settings.database ? { "X-Odoo-Database": settings.database } : {}) },
+      body: JSON.stringify(body)
+    }, { timeoutMs: 15_000, maxBytes: MAX_ODOO_RESPONSE_BYTES, fetchImpl }));
+  } catch {
+    throw new FeedbackReportError("Odoo prijatie reportu zlyhalo.", 502);
+  }
   if (!response.ok) throw new FeedbackReportError("Odoo prijatie reportu zlyhalo.", 502);
-  return await response.json() as unknown;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new FeedbackReportError("Odoo vrátilo neplatnú odpoveď.", 502);
+  }
 }
 
 async function odooCreate(
@@ -134,8 +168,7 @@ export async function handleFeedbackReportApi(req: http.IncomingMessage, res: ht
     const title = text(body.title, "title", 180);
     const description = text(body.description, "description", 8_000);
     const comment = text(body.comment ?? "", "comment", 4_000, false);
-    const screenshot = text(body.screenshotDataUrl, "screenshotDataUrl", Math.ceil(MAX_SCREENSHOT_BYTES * 4 / 3));
-    if (!screenshot.startsWith("data:image/png;base64,") || Buffer.byteLength(screenshot, "utf8") > MAX_SCREENSHOT_BYTES * 4 / 3) throw new FeedbackReportError("Screenshot je príliš veľký alebo neplatný.");
+    const screenshot = validatedPngDataUrl(body.screenshotDataUrl);
     if (jsonBytes(body.projectSnapshot) > MAX_SNAPSHOT_BYTES || jsonBytes(body.diagnostics) > MAX_SNAPSHOT_BYTES) throw new FeedbackReportError("Projektový snapshot je príliš veľký na bezpečné odoslanie.");
     const diagnostics = object(body.diagnostics);
     const settings = config(deps.env ?? process.env);

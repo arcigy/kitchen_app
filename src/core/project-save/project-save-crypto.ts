@@ -2,6 +2,11 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { gzipSync, gunzipSync } from "node:zlib";
 import type { EncryptedProjectFileEnvelope, ProjectBundledAssetPayload, ProjectExportPayload, ProjectSaveFile } from "./project-save-types";
 import { PROJECT_FILE_MAGIC } from "./project-save-file";
+import {
+  getProjectAssetBundleLimits,
+  getProjectFileDecompressedLimitBytes,
+  type ProjectAssetBundleLimits
+} from "./project-file-limits";
 import { loadProjectSaveFile } from "./project-save-loader";
 import { validateProjectSaveFile } from "./project-save-validation";
 
@@ -9,6 +14,7 @@ export type ProjectFileCryptoOptions = {
   secret?: string;
   keyId?: string;
   allowDevFallback?: boolean;
+  maxDecompressedBytes?: number;
 };
 
 function getSecret(options: ProjectFileCryptoOptions = {}): string {
@@ -51,16 +57,23 @@ function assertSha256(value: string): void {
   if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error("Bundled asset sha256 is invalid.");
 }
 
-function decodeBase64Strict(value: string): Buffer {
+function decodeBase64Strict(value: string, label = "Bundled asset data"): Buffer {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    throw new Error("Bundled asset data must be valid base64.");
+    throw new Error(`${label} must be valid base64.`);
   }
-  return Buffer.from(value, "base64");
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.toString("base64") !== value) throw new Error(`${label} must be valid base64.`);
+  return decoded;
 }
 
-export function validateBundledAssets(assets: ProjectBundledAssetPayload[]): void {
+export function validateBundledAssets(
+  assets: ProjectBundledAssetPayload[],
+  limits: ProjectAssetBundleLimits = getProjectAssetBundleLimits()
+): void {
   if (!Array.isArray(assets)) throw new Error("Project export bundledAssets must be an array.");
+  if (assets.length > limits.maxAssetCount) throw new Error("Project export has too many bundled assets.");
   const ids = new Set<string>();
+  let totalBytes = 0;
   for (const asset of assets) {
     if (!asset || typeof asset !== "object") throw new Error("Bundled asset is invalid.");
     if (typeof asset.assetId !== "string" || !asset.assetId.trim()) throw new Error("Bundled asset assetId is required.");
@@ -76,6 +89,9 @@ export function validateBundledAssets(assets: ProjectBundledAssetPayload[]): voi
     assertSha256(asset.sha256);
     if (!Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes < 0) throw new Error("Bundled asset sizeBytes is invalid.");
     if (typeof asset.data !== "string") throw new Error("Bundled asset data is required.");
+    if (asset.sizeBytes > limits.maxSingleAssetBytes) throw new Error("Bundled asset exceeds the single asset size limit.");
+    totalBytes += asset.sizeBytes;
+    if (totalBytes > limits.maxTotalAssetBytes) throw new Error("Project assets exceed the total bundle size limit.");
     const decoded = decodeBase64Strict(asset.data);
     if (decoded.byteLength !== asset.sizeBytes) throw new Error("Bundled asset sizeBytes does not match data.");
     const actual = createHash("sha256").update(decoded).digest("hex");
@@ -141,10 +157,29 @@ export function decryptProjectSaveFile(envelopeValue: unknown, options: ProjectF
 
 export function decryptProjectExportPayload(envelopeValue: unknown, options: ProjectFileCryptoOptions = {}): ProjectExportPayload {
   const envelope = assertEnvelope(envelopeValue);
-  const decipher = createDecipheriv("aes-256-gcm", getKey(options), Buffer.from(envelope.iv, "base64"));
-  decipher.setAuthTag(Buffer.from(envelope.authTag, "base64"));
-  const decrypted = Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, "base64")), decipher.final()]);
-  const payload = JSON.parse(gunzipSync(decrypted).toString("utf-8")) as ProjectExportPayload | ProjectSaveFile;
+  const iv = decodeBase64Strict(envelope.iv, "Encrypted project file iv");
+  const authTag = decodeBase64Strict(envelope.authTag, "Encrypted project file authTag");
+  const ciphertext = decodeBase64Strict(envelope.ciphertext, "Encrypted project file ciphertext");
+  if (iv.byteLength !== 12) throw new Error("Encrypted project file iv must decode to 12 bytes.");
+  if (authTag.byteLength !== 16) throw new Error("Encrypted project file authTag must decode to 16 bytes.");
+  if (ciphertext.byteLength === 0) throw new Error("Encrypted project file ciphertext is empty.");
+  const maxDecompressedBytes = options.maxDecompressedBytes ?? getProjectFileDecompressedLimitBytes();
+  if (!Number.isSafeInteger(maxDecompressedBytes) || maxDecompressedBytes <= 0) {
+    throw new Error("Project file decompressed size limit is invalid.");
+  }
+  const decipher = createDecipheriv("aes-256-gcm", getKey(options), iv, { authTagLength: 16 });
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  let decompressed: Buffer;
+  try {
+    decompressed = gunzipSync(decrypted, { maxOutputLength: maxDecompressedBytes });
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && (error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error("Project export payload exceeds the decompressed size limit.");
+    }
+    throw error;
+  }
+  const payload = JSON.parse(decompressed.toString("utf-8")) as ProjectExportPayload | ProjectSaveFile;
   if (isRecord(payload) && "payloadType" in payload && payload.payloadType === "furnquote-project-export") {
     const migratedPayload = {
       ...payload,

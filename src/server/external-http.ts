@@ -9,6 +9,7 @@ export type ExternalFetchOptions = {
   timeoutMs: number;
   maxBytes: number;
   allowRedirects?: boolean;
+  fetchImpl?: typeof fetch;
 };
 
 async function readLimitedBody(response: Response, maxBytes: number, controller: AbortController): Promise<Uint8Array> {
@@ -57,7 +58,7 @@ export async function fetchExternalBytes(
   else init.signal?.addEventListener("abort", relayAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(new Error("External request timed out.")), options.timeoutMs);
   try {
-    const response = await fetch(input, {
+    const response = await (options.fetchImpl ?? fetch)(input, {
       ...init,
       redirect: options.allowRedirects ? (init.redirect ?? "follow") : "error",
       signal: controller.signal
@@ -77,4 +78,3 @@ export async function fetchExternalText(
   const { response, body } = await fetchExternalBytes(input, init, options);
   return { response, text: new TextDecoder().decode(body) };
 }
-

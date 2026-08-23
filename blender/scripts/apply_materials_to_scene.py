@@ -23,7 +23,7 @@ def _argv() -> list[str]:
 
 def _material_hash(request: dict[str, Any]) -> str:
     payload = json.dumps(request, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:10]
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def _apply_material(obj: bpy.types.Object, mat: bpy.types.Material) -> None:
