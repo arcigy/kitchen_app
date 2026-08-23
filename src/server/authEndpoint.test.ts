@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import type http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -115,6 +115,17 @@ describe("auth endpoints", () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ ok: false, error: "Invalid credentials." });
+  });
+
+  it("performs a dummy password verification for unknown users to reduce timing enumeration", async () => {
+    const passwordVerifier = vi.fn(async () => false);
+    const userService = createUserService(createInMemoryUserRepository([]), { verifyPassword: passwordVerifier });
+
+    await expect(userService.authenticate("Arcigy", "missing", "candidate-password")).resolves.toBeNull();
+    expect(passwordVerifier).toHaveBeenCalledWith(
+      "candidate-password",
+      expect.stringMatching(/^scrypt\$v1\$/)
+    );
   });
 
   it("authenticates with case-insensitive username", async () => {
@@ -405,27 +416,37 @@ describe("auth endpoints", () => {
     })).rejects.toThrow("Missing authenticated client session.");
   });
 
-  it("uses the trusted proxy-appended address instead of a spoofable first forwarded address", async () => {
+  it("uses the real client address behind the trusted two-proxy production chain", async () => {
     const limiter = createLoginRateLimiter();
     const userService = createTestUserService();
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await handleAuthLogin(
-        mockReq({ forwardedFor: `198.51.100.${attempt}, 203.0.113.10` }),
+        mockReq({ forwardedFor: `198.51.100.${attempt}, 203.0.113.10, 10.0.0.20` }),
         mockRes(),
         readAuthBody("arcigy", "bad"),
         sendJson,
-        { userService, loginRateLimiter: limiter }
+        { userService, loginRateLimiter: limiter, trustedProxyHops: 2 }
       );
     }
     const limited = mockRes();
     await handleAuthLogin(
-      mockReq({ forwardedFor: "198.51.100.99, 203.0.113.10" }),
+      mockReq({ forwardedFor: "198.51.100.99, 203.0.113.10, 10.0.0.20" }),
       limited,
       readAuthBody("arcigy", "bad"),
       sendJson,
-      { userService, loginRateLimiter: limiter }
+      { userService, loginRateLimiter: limiter, trustedProxyHops: 2 }
     );
     expect(limited.statusCode).toBe(429);
+
+    const otherClient = mockRes();
+    await handleAuthLogin(
+      mockReq({ forwardedFor: "198.51.100.99, 203.0.113.11, 10.0.0.20" }),
+      otherClient,
+      readAuthBody("arcigy", "bad"),
+      sendJson,
+      { userService, loginRateLimiter: limiter, trustedProxyHops: 2 }
+    );
+    expect(otherClient.statusCode).toBe(401);
   });
 
   it("rejects validly signed session for missing user", async () => {

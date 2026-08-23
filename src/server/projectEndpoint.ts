@@ -128,6 +128,10 @@ export async function handleProjectApi(
   const service = createProjectService(repository);
 
   if (req.method === "POST" && url.pathname === "/api/projects") {
+    if (ctx.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot create projects." });
+      return true;
+    }
     const body = await deps.readJsonBody(req);
     assertNoClientIdPayload(body);
     const record = getBodyRecord(body);
@@ -151,6 +155,10 @@ export async function handleProjectApi(
   }
 
   if (req.method === "POST" && url.pathname === "/api/projects/import") {
+    if (ctx.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot import projects." });
+      return true;
+    }
     const body = await deps.readJsonBody(req);
     assertNoClientIdPayload(body);
     const record = getBodyRecord(body);

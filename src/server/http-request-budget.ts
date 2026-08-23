@@ -1,5 +1,6 @@
 import type http from "node:http";
 import { parseClientSessionCookie } from "../core/client/session-cookie";
+import { clientAddressForRequest, resolveTrustedProxyHops } from "./http-client-address";
 
 export type HttpRequestBudgetPolicy = {
   operation: string;
@@ -33,10 +34,10 @@ export const DEFAULT_HTTP_REQUEST_BUDGET_POLICIES: readonly HttpRequestBudgetPol
   { operation: "demos-external", method: "GET", pathname: /^\/api\/demos\/(material-lookup|material-image)$/, maxRequests: 300, windowMs: MINUTE_MS, maxConcurrent: 16 }
 ];
 
-function requestScope(req: http.IncomingMessage): string {
+function requestScope(req: http.IncomingMessage, trustedProxyHops: number): string {
   const session = parseClientSessionCookie(req.headers.cookie);
   if (session) return `tenant:${session.clientId}`;
-  return `ip:${req.socket?.remoteAddress || "unknown"}`;
+  return `ip:${clientAddressForRequest(req, trustedProxyHops)}`;
 }
 
 function policyFor(
@@ -52,10 +53,12 @@ export function createHttpRequestBudget(options: {
   policies?: readonly HttpRequestBudgetPolicy[];
   maxBuckets?: number;
   now?: () => number;
+  trustedProxyHops?: number;
 } = {}) {
   const policies = options.policies ?? DEFAULT_HTTP_REQUEST_BUDGET_POLICIES;
   const maxBuckets = options.maxBuckets ?? 10_000;
   const now = options.now ?? Date.now;
+  const trustedProxyHops = resolveTrustedProxyHops(options.trustedProxyHops);
   const buckets = new Map<string, RequestBucket>();
 
   const evictExpiredOrOldestInactive = (current: number): void => {
@@ -80,7 +83,7 @@ export function createHttpRequestBudget(options: {
     if (!policy) return { allowed: true, registerRelease: () => undefined };
 
     const current = now();
-    const bucketKey = `${policy.operation}\u0000${requestScope(req)}`;
+    const bucketKey = `${policy.operation}\u0000${requestScope(req, trustedProxyHops)}`;
     let bucket = buckets.get(bucketKey);
     if (!bucket && buckets.size >= maxBuckets) evictExpiredOrOldestInactive(current);
     if (!bucket && buckets.size >= maxBuckets) {

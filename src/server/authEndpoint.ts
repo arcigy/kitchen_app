@@ -12,6 +12,7 @@ import {
   shouldUseSecureSessionCookie
 } from "../core/client/session-cookie";
 import { bearerSessionToken } from "./requestAuthentication";
+import { clientAddressForRequest, resolveTrustedProxyHops } from "./http-client-address";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -26,6 +27,7 @@ export type AuthEndpointDependencies = {
   userService?: UserService;
   loginRateLimiter?: LoginRateLimiter;
   authSessionStore?: AuthSessionStore;
+  trustedProxyHops?: number;
 };
 
 function getStringField(value: unknown, field: string): string | null {
@@ -34,12 +36,14 @@ function getStringField(value: unknown, field: string): string | null {
   return typeof candidate === "string" ? candidate : null;
 }
 
-function getLoginRateLimitKey(req: http.IncomingMessage, company: string, username: string): string {
-  const forwardedFor = req.headers["x-forwarded-for"];
-  const ip = Array.isArray(forwardedFor)
-    ? forwardedFor[forwardedFor.length - 1]
-    : forwardedFor?.split(",").at(-1)?.trim() || req.socket.remoteAddress || "unknown";
-  return `${ip}:${company.trim().toLowerCase()}:${username.trim().toLowerCase()}`;
+function getLoginRateLimitKey(
+  req: http.IncomingMessage,
+  namespace: string,
+  username: string,
+  trustedProxyHops?: number
+): string {
+  const ip = clientAddressForRequest(req, resolveTrustedProxyHops(trustedProxyHops));
+  return `${ip}:${namespace.trim().toLowerCase()}:${username.trim().toLowerCase()}`;
 }
 
 export async function handleAuthLogin(
@@ -58,7 +62,7 @@ export async function handleAuthLogin(
   const password = getStringField(body, "password");
   if (!company || !username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
 
-  const rateLimitKey = getLoginRateLimitKey(req, company, username);
+  const rateLimitKey = getLoginRateLimitKey(req, company, username, dependencies.trustedProxyHops);
   if (loginRateLimiter.isLimited(rateLimitKey)) {
     return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
   }
@@ -96,7 +100,7 @@ export async function handleExtensionAuthLogin(
   const password = getStringField(body, "password");
   if (!username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
 
-  const rateLimitKey = getLoginRateLimitKey(req, "extension", username);
+  const rateLimitKey = getLoginRateLimitKey(req, "extension", username, dependencies.trustedProxyHops);
   if (loginRateLimiter.isLimited(rateLimitKey)) return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
   const authenticatedSession = await userService.authenticateByUsername(username, password);
   if (!authenticatedSession) {

@@ -30,6 +30,14 @@ function response(): http.ServerResponse {
   return new EventEmitter() as unknown as http.ServerResponse;
 }
 
+function anonymousRequest(forwardedFor: string): http.IncomingMessage {
+  return {
+    method: "POST",
+    headers: { "x-forwarded-for": forwardedFor },
+    socket: { remoteAddress: "127.0.0.1" }
+  } as unknown as http.IncomingMessage;
+}
+
 describe("HTTP request budget", () => {
   it.each(["/api/catalog", "/api/catalog/bootstrap"])("applies the default catalog budget to %s", (pathname) => {
     const budget = createHttpRequestBudget();
@@ -107,5 +115,19 @@ describe("HTTP request budget", () => {
     expect(budget.acquire(request("client_b"), new URL("http://local/api/expensive")).allowed).toBe(true);
     expect(budget.acquire(request("client_c"), new URL("http://local/api/expensive")).allowed).toBe(false);
     expect(budget.size()).toBe(2);
+  });
+
+  it("separates anonymous clients behind the trusted two-proxy production chain", () => {
+    const budget = createHttpRequestBudget({ policies: [policy], trustedProxyHops: 2 });
+    const first = budget.acquire(
+      anonymousRequest("198.51.100.90, 203.0.113.10, 10.0.0.20"),
+      new URL("http://local/api/expensive")
+    );
+    expect(first.allowed).toBe(true);
+    const secondClient = budget.acquire(
+      anonymousRequest("198.51.100.90, 203.0.113.11, 10.0.0.20"),
+      new URL("http://local/api/expensive")
+    );
+    expect(secondClient.allowed).toBe(true);
   });
 });

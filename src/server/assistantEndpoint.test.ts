@@ -141,6 +141,28 @@ describe("assistant capability endpoint", () => {
     expect(sendJson).toHaveBeenCalledWith(expect.anything(), 403, expect.objectContaining({ authorized: false }));
   });
 
+  it("rejects a viewer-triggered assistant index rebuild", async () => {
+    const sendJson = vi.fn();
+    await handleAssistantApi(
+      { method: "POST", headers: { cookie: "session=test" } } as http.IncomingMessage,
+      {} as http.ServerResponse,
+      new URL("http://localhost/api/assistant/rag/reindex"),
+      {
+        projectRoot: ".",
+        getContext: vi.fn(async () => ({ clientId: "client_a", userId: "user_a", role: "viewer" as const })),
+        getCatalog: vi.fn(async () => ({ modules: [] } as unknown as ClientCatalog)),
+        readJsonBody: vi.fn(),
+        sendJson
+      }
+    );
+
+    expect(sendJson).toHaveBeenCalledWith(
+      expect.anything(),
+      403,
+      expect.objectContaining({ ok: false, error: expect.stringContaining("Viewer") })
+    );
+  });
+
   it("authorizes a semantic kitchen only when every referenced catalog item belongs to the tenant", async () => {
     const sendJson = vi.fn();
     const readJsonBody = vi.fn<() => Promise<unknown>>(async () => ({
