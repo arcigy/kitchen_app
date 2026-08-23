@@ -108,10 +108,10 @@ jobs:
           ARCIGY_DEPLOY_OBJECT_PREFIX: dev
           ARCIGY_DEPLOY_STORAGE_PATH: /app/storage
 
-      - name: Reclaim safe CapRover image space
+      - name: Inspect CapRover image capacity (read-only)
         run: |
           set -euo pipefail
-          trap 'rm -f caprover-unused-images.json caprover-delete-images.json caprover-delete-result.json' EXIT
+          trap 'rm -f caprover-unused-images.json' EXIT
           npx caprover@2.3.1 api \
             -u "$CAPROVER_SERVER" \
             -p "$CAPROVER_PASSWORD" \
@@ -120,22 +120,8 @@ jobs:
             -d '{"mostRecentLimit":2}' \
             -o caprover-unused-images.json
           chmod 600 caprover-unused-images.json
-          npx --no-install tsx scripts/caproverUnusedImageCleanup.ts plan \
-            caprover-unused-images.json caprover-delete-images.json
-          candidate_count="$(node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(p.imageIds.length));' caprover-delete-images.json)"
-          echo "CapRover reported ${candidate_count} unused image(s); current plus two rollback releases are retained per application."
-          if [ "$candidate_count" -eq 0 ]; then
-            exit 0
-          fi
-          npx caprover@2.3.1 api \
-            -u "$CAPROVER_SERVER" \
-            -p "$CAPROVER_PASSWORD" \
-            -t /user/apps/appDefinitions/deleteImages \
-            -m POST \
-            -d "$(cat caprover-delete-images.json)" \
-            -o caprover-delete-result.json
-          chmod 600 caprover-delete-result.json
-          npx --no-install tsx scripts/caproverUnusedImageCleanup.ts verify caprover-delete-result.json
+          npx --no-install tsx scripts/caproverUnusedImageCleanup.ts inspect caprover-unused-images.json
+          echo "Automatic image deletion is disabled. Any cleanup requires a fresh reviewed inventory and explicit operational approval."
         env:
           CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}

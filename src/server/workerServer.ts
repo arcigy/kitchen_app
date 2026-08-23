@@ -568,6 +568,12 @@ export function startWorkerServer(
     })
   }));
 
+  server.once("close", () => {
+    catalogLookupCache.dispose();
+    clientCatalogBootstrapResponseCache.clear();
+    clientModulePackagesResponseCache.clear();
+  });
+
   server.listen(port, host, () => {
     console.log(`[blender-worker] listening on http://${host}:${port}`);
     void verifyDatabaseReady(projectRoot).catch((error: unknown) => {

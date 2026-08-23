@@ -44,6 +44,7 @@ export class CatalogExactLookupCache {
   private readonly missingTtlMs: number;
   private readonly now: () => number;
   private globalGeneration = 0;
+  private disposed = false;
 
   constructor(options: CatalogExactLookupCacheOptions = {}) {
     this.maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 1_000));
@@ -54,6 +55,7 @@ export class CatalogExactLookupCache {
   }
 
   get(clientId: string, kind: CachedLookupResult["kind"], code: string): CachedLookupResult | undefined {
+    if (this.disposed) return undefined;
     const key = cacheKey(clientId, kind, code);
     const entry = this.entries.get(key);
     if (!entry) return undefined;
@@ -68,6 +70,7 @@ export class CatalogExactLookupCache {
   }
 
   set(clientId: string, kind: CachedLookupResult["kind"], code: string, result: CachedLookupResult): void {
+    if (this.disposed) return;
     const key = cacheKey(clientId, kind, code);
     const missing = result.kind === "material" ? result.value.material === null : result.value.component === null;
     const ttl = missing ? this.missingTtlMs : this.ttlMs;
@@ -86,6 +89,7 @@ export class CatalogExactLookupCache {
   }
 
   captureGeneration(clientId: string): CacheGeneration {
+    if (this.disposed) return { global: Number.NaN, client: Number.NaN };
     return {
       global: this.globalGeneration,
       client: this.clientGenerations.get(clientId) ?? 0
@@ -93,11 +97,13 @@ export class CatalogExactLookupCache {
   }
 
   isGenerationCurrent(clientId: string, generation: CacheGeneration): boolean {
+    if (this.disposed) return false;
     return generation.global === this.globalGeneration
       && generation.client === (this.clientGenerations.get(clientId) ?? 0);
   }
 
   invalidateClient(clientId: string): void {
+    if (this.disposed) return;
     this.clientGenerations.set(clientId, (this.clientGenerations.get(clientId) ?? 0) + 1);
     for (const [key, entry] of this.entries) {
       if (entry.clientId === clientId) this.entries.delete(key);
@@ -108,6 +114,13 @@ export class CatalogExactLookupCache {
     this.globalGeneration += 1;
     this.clientGenerations.clear();
     this.entries.clear();
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.clear();
+    this.disposed = true;
+    registeredCaches.delete(this);
   }
 
   get size(): number {

@@ -133,3 +133,14 @@ Current cleanup direction:
 - Worker security/observability and common API routing are consolidated; entrypoint-specific hooks remain explicit instead of duplicating the request pipeline.
 - Production worker startup cannot silently fall back to file or in-memory repositories; local, test, and isolated file-storage development remain supported.
 - `dist/` build output is not committed as part of refactor commits.
+
+## Full-audit boundary record — 2026-08-23
+
+The codebase trust-boundary inventory is recorded in
+`docs/SECURITY_THREAT_MODEL.md`. In particular, the worker API is the
+authorization boundary for authenticated tenant context; the browser is never
+trusted to choose its tenant identity. Integration, file-import, assistant and
+Blender routes must preserve this model. The deployment workflow is also a
+trust boundary: it verifies its target and readiness but performs no automatic
+destructive CapRover image cleanup. External backup/PITR, database RLS and
+central telemetry remain operational controls requiring independent evidence.
