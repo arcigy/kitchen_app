@@ -24,7 +24,8 @@ const FORBIDDEN_ERROR_MESSAGE_PATTERNS = [
   "fileName is required.",
   "Unexpected clientId in request body.",
   "Imported project belongs to a different client.",
-  "Project save belongs to a different client."
+  "Project save belongs to a different client.",
+  "File path is outside current client storage."
 ] as const;
 
 export function getServerErrorStatus(error: unknown): number {

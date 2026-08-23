@@ -6,41 +6,18 @@ import { resolvePhaseBucketPath, resolveUploadPath } from "../storage/storage-pa
 import { createClientProjectPhaseScope, sanitizeStorageFileName } from "../storage/storage-types";
 import type { ProjectBundledAssetManifestItem, ProjectBundledAssetPayload, ProjectSaveFile } from "./project-save-types";
 import { validateBundledAssets } from "./project-save-crypto";
-
-const DEFAULT_MAX_SINGLE_ASSET_MB = 25;
-const DEFAULT_MAX_TOTAL_ASSET_MB = 150;
-const DEFAULT_MAX_ASSET_COUNT = 200;
+import { getProjectAssetBundleLimits, type ProjectAssetBundleLimits } from "./project-file-limits";
 
 const ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 
-export type ProjectAssetBundleLimits = {
-  maxSingleAssetBytes: number;
-  maxTotalAssetBytes: number;
-  maxAssetCount: number;
-};
+export type { ProjectAssetBundleLimits } from "./project-file-limits";
 
 export type ProjectAssetBundleResult = {
   save: ProjectSaveFile;
   bundledAssets: ProjectBundledAssetPayload[];
 };
 
-function mbEnv(name: string, fallbackMb: number): number {
-  const parsed = Number(process.env[name]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMb;
-}
-
-function intEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(String(process.env[name] ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export function getProjectAssetBundleLimits(): ProjectAssetBundleLimits {
-  return {
-    maxSingleAssetBytes: mbEnv("PROJECT_FILE_MAX_SINGLE_ASSET_MB", DEFAULT_MAX_SINGLE_ASSET_MB) * 1024 * 1024,
-    maxTotalAssetBytes: mbEnv("PROJECT_FILE_MAX_TOTAL_ASSET_MB", DEFAULT_MAX_TOTAL_ASSET_MB) * 1024 * 1024,
-    maxAssetCount: intEnv("PROJECT_FILE_MAX_ASSET_COUNT", DEFAULT_MAX_ASSET_COUNT)
-  };
-}
+export { getProjectAssetBundleLimits } from "./project-file-limits";
 
 function mimeTypeForFileName(fileName: string): string | null {
   const ext = path.extname(fileName).toLowerCase();

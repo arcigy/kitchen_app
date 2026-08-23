@@ -17,7 +17,7 @@ function report(submissionId = "report-1") {
     description: "Po kliknutí sa nič nestane.",
     comment: "",
     consent: true,
-    screenshotDataUrl: "data:image/png;base64,cG5n",
+    screenshotDataUrl: "data:image/png;base64,iVBORw0KGgo=",
     projectSnapshot: { projectId: "project-a", objects: [] },
     diagnostics: { viewport: { width: 1440, height: 900 } }
   };
@@ -85,6 +85,19 @@ describe("feedback report endpoint", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects an oversized Odoo response without parsing or exposing it", async () => {
+    const fetchImpl = vi.fn(async () => new Response("x".repeat(1024 * 1024 + 1), { status: 200 })) as unknown as typeof fetch;
+
+    const result = await send(report(), fetchImpl);
+
+    expect(result.sendJson).toHaveBeenCalledWith(
+      expect.anything(),
+      502,
+      expect.objectContaining({ ok: false, error: "Odoo prijatie reportu zlyhalo." })
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("requires a matching idempotency key and a screenshot", async () => {
     const sendJson = vi.fn();
     const invalid = { ...report(), screenshotDataUrl: "" };
@@ -95,5 +108,21 @@ describe("feedback report endpoint", () => {
       { getContext: vi.fn(async () => context), readJsonBody: vi.fn(async () => invalid), sendJson, env }
     );
     expect(sendJson).toHaveBeenCalledWith(expect.anything(), 400, expect.objectContaining({ ok: false }));
+  });
+
+  it("rejects non-PNG and malformed base64 screenshot payloads", async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    for (const screenshotDataUrl of [
+      "data:image/png;base64,dGV4dA==",
+      "data:image/png;base64,iVBORw0KGgo!"
+    ]) {
+      const result = await send({ ...report(), submissionId: `bad-${screenshotDataUrl.length}`, screenshotDataUrl }, fetchImpl);
+      expect(result.sendJson).toHaveBeenCalledWith(
+        expect.anything(),
+        400,
+        expect.objectContaining({ ok: false, error: expect.stringContaining("Screenshot") })
+      );
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

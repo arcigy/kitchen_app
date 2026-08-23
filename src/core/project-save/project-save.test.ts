@@ -20,6 +20,7 @@ import {
   decryptProjectExportPayload,
   decryptProjectSaveFile,
   encryptProjectSaveFile,
+  validateBundledAssets,
 } from "./project-save-crypto";
 import {
   PROJECT_FILE_EXTENSION,
@@ -145,16 +146,22 @@ function encryptLegacyProjectSave(
   save: unknown,
   secret: string,
 ): EncryptedProjectFileEnvelope {
-  const iv = randomBytes(12);
-  const key = createHash("sha256").update(secret, "utf-8").digest();
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const payload = {
+  return encryptUncheckedProjectPayload({
     payloadType: "furnquote-project-export",
     payloadVersion: 1,
     exportedAt: assignmentTimestamp,
     save,
     bundledAssets: [],
-  };
+  }, secret);
+}
+
+function encryptUncheckedProjectPayload(
+  payload: unknown,
+  secret: string,
+): EncryptedProjectFileEnvelope {
+  const iv = randomBytes(12);
+  const key = createHash("sha256").update(secret, "utf-8").digest();
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([
     cipher.update(gzipSync(Buffer.from(JSON.stringify(payload), "utf-8"))),
     cipher.final(),
@@ -876,12 +883,81 @@ describe("project create/save/encryption", () => {
         { secret: "test-project-file-secret" },
       ),
     ).toThrow();
+    const shortenedAuthTag = Buffer.from(envelope.authTag, "base64").subarray(0, 4).toString("base64");
+    expect(() =>
+      decryptProjectSaveFile(
+        { ...envelope, authTag: shortenedAuthTag },
+        { secret: "test-project-file-secret" },
+      ),
+    ).toThrow("Encrypted project file authTag must decode to 16 bytes.");
+    expect(() =>
+      decryptProjectSaveFile(
+        { ...envelope, iv: Buffer.alloc(8).toString("base64") },
+        { secret: "test-project-file-secret" },
+      ),
+    ).toThrow("Encrypted project file iv must decode to 12 bytes.");
     await expect(() =>
       decryptProjectSaveFile(
         { ...envelope, magic: "KITCHEN_APP_ENCRYPTED_PROJECT" },
         { secret: "test-project-file-secret" },
       ),
     ).toThrow();
+  });
+
+  it("bounds decompression before parsing an imported project payload", () => {
+    const oversizedEnvelope = encryptUncheckedProjectPayload({
+      payloadType: "furnquote-project-export",
+      payloadVersion: 1,
+      exportedAt: assignmentTimestamp,
+      save: { ignored: true },
+      bundledAssets: [],
+      padding: "A".repeat(4096),
+    }, "test-project-file-secret");
+
+    expect(() => decryptProjectExportPayload(oversizedEnvelope, {
+      secret: "test-project-file-secret",
+      maxDecompressedBytes: 1024,
+    })).toThrow("Project export payload exceeds the decompressed size limit.");
+  });
+
+  it("rejects imported bundled assets that exceed count and byte limits", () => {
+    const data = Buffer.from("asset-data", "utf-8");
+    const asset = {
+      assetId: "asset-a",
+      phaseId: "phase-a",
+      encoding: "base64" as const,
+      mimeType: "image/png",
+      fileName: "asset.png",
+      sha256: createHash("sha256").update(data).digest("hex"),
+      sizeBytes: data.byteLength,
+      data: data.toString("base64"),
+    };
+
+    expect(() => validateBundledAssets([asset], {
+      maxSingleAssetBytes: data.byteLength - 1,
+      maxTotalAssetBytes: data.byteLength * 2,
+      maxAssetCount: 1,
+    })).toThrow("Bundled asset exceeds the single asset size limit.");
+    expect(() => validateBundledAssets([asset, { ...asset, assetId: "asset-b" }], {
+      maxSingleAssetBytes: data.byteLength,
+      maxTotalAssetBytes: data.byteLength * 2,
+      maxAssetCount: 1,
+    })).toThrow("Project export has too many bundled assets.");
+    expect(() => validateBundledAssets([asset, { ...asset, assetId: "asset-b" }], {
+      maxSingleAssetBytes: data.byteLength,
+      maxTotalAssetBytes: data.byteLength * 2 - 1,
+      maxAssetCount: 2,
+    })).toThrow("Project assets exceed the total bundle size limit.");
+    expect(() => validateBundledAssets([{
+      ...asset,
+      data: "AB==",
+      sizeBytes: 1,
+      sha256: createHash("sha256").update(Buffer.from([0])).digest("hex"),
+    }], {
+      maxSingleAssetBytes: data.byteLength,
+      maxTotalAssetBytes: data.byteLength,
+      maxAssetCount: 1,
+    })).toThrow("Bundled asset data must be valid base64.");
   });
 
   it("uses the FurnQuote project file extension and safe filenames", () => {

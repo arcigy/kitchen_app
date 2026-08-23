@@ -1,9 +1,8 @@
 import type http from "node:http";
-import { getProjectAssetBundleLimits } from "../core/project-save/project-asset-bundling";
+import { getProjectImportBodyLimitBytes } from "../core/project-save/project-file-limits";
 
 const MEBIBYTE = 1024 * 1024;
 const DEFAULT_JSON_BODY_MB = 64;
-const PROJECT_IMPORT_OVERHEAD_MB = 16;
 const CLIENT_METRICS_BODY_MAX_BYTES = 8 * 1024;
 const FEEDBACK_REPORT_BODY_MAX_BYTES = 32 * MEBIBYTE;
 
@@ -23,12 +22,7 @@ export function getJsonBodyLimitBytes(req: Pick<http.IncomingMessage, "url">): n
   const pathname = String(req.url ?? "").split("?", 1)[0];
   if (pathname === "/api/client-metrics") return CLIENT_METRICS_BODY_MAX_BYTES;
   if (pathname === "/api/feedback-reports") return FEEDBACK_REPORT_BODY_MAX_BYTES;
-  if (pathname === "/api/projects/import") {
-    const configured = positiveMbEnv("HTTP_PROJECT_IMPORT_BODY_MAX_MB");
-    if (configured) return Math.ceil(configured * MEBIBYTE);
-    const encodedAssets = Math.ceil(getProjectAssetBundleLimits().maxTotalAssetBytes * 4 / 3);
-    return encodedAssets + PROJECT_IMPORT_OVERHEAD_MB * MEBIBYTE;
-  }
+  if (pathname === "/api/projects/import") return getProjectImportBodyLimitBytes();
   return Math.ceil((positiveMbEnv("HTTP_JSON_BODY_MAX_MB") ?? DEFAULT_JSON_BODY_MB) * MEBIBYTE);
 }
 

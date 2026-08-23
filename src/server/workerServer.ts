@@ -1,5 +1,4 @@
 import http from "node:http";
-import { spawn } from "node:child_process";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -28,6 +27,7 @@ import { handleWorkerApiRequest } from "./workerApiRouter";
 import { assertWorkerRuntimeEnvironment } from "./workerRuntimeEnvironment";
 import { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
 import { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
+import { isBlenderDesktopOpenAllowed, openFileInDesktop, resolveTenantBlenderOutputPath } from "./blender/blenderOutputAccess";
 
 const DEFAULT_PROJECT_ROOT = process.cwd();
 type WorkerServerDependencies = {
@@ -451,6 +451,9 @@ const handleExport = async (
   projectRoot: string
 ) => {
   const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
+  if (context.role === "viewer") {
+    return sendJson(res, 403, { ok: false, error: "Viewer role cannot export Blender output." });
+  }
   const body = await readJsonBody(req);
 
   if (isUnexpectedClientId(body)) {
@@ -485,40 +488,12 @@ const handleExport = async (
   sendJson(res, 200, {
     ok: true,
     previewUrl,
-    jsonPath: result.jsonPath,
-    blendPath: result.blendPath,
-    previewPath: result.previewPath
+    ...(isBlenderDesktopOpenAllowed() ? {
+      jsonPath: result.jsonPath,
+      blendPath: result.blendPath,
+      previewPath: result.previewPath
+    } : {})
   });
-};
-
-const assertOpenableBlenderOutputPath = (projectRoot: string, filePath: string): string => {
-  const resolved = path.resolve(filePath);
-  const storageRoot = path.resolve(projectRoot, "storage");
-  const rel = path.relative(storageRoot, resolved);
-  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error("File path is outside storage.");
-  }
-  const lower = resolved.toLowerCase();
-  if (!lower.endsWith(".blend") && !lower.endsWith(".png")) {
-    throw new Error("Only .blend and .png Blender outputs can be opened.");
-  }
-  return resolved;
-};
-
-const openFileInDesktop = (filePath: string) => {
-  let child;
-  if (process.platform === "win32") {
-    child = spawn("powershell.exe", ["-NoProfile", "-Command", "Start-Process -LiteralPath $args[0]", filePath], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true
-    });
-  } else if (process.platform === "darwin") {
-    child = spawn("open", [filePath], { detached: true, stdio: "ignore" });
-  } else {
-    child = spawn("xdg-open", [filePath], { detached: true, stdio: "ignore" });
-  }
-  child.unref();
 };
 
 const handleOpenBlenderOutput = async (
@@ -528,13 +503,16 @@ const handleOpenBlenderOutput = async (
   authSessionStore: AuthSessionStore,
   projectRoot: string
 ) => {
-  await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
+  if (!isBlenderDesktopOpenAllowed()) return sendJson(res, 404, { ok: false, error: "Not found" });
+  const context = await getValidatedClientContext(req.headers.cookie, userService, authSessionStore);
+  if (context.role === "viewer") {
+    return sendJson(res, 403, { ok: false, error: "Viewer role cannot open Blender output." });
+  }
   const body = await readJsonBody(req);
   const filePath = getRequiredStringField(body, "path");
-  const resolved = assertOpenableBlenderOutputPath(projectRoot, filePath);
-  await access(resolved);
+  const resolved = await resolveTenantBlenderOutputPath(projectRoot, context, filePath);
   openFileInDesktop(resolved);
-  return sendJson(res, 200, { ok: true, path: resolved });
+  return sendJson(res, 200, { ok: true });
 };
 
 export function startWorkerServer(
