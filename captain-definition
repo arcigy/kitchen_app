@@ -4,6 +4,7 @@
     "FROM node:22-alpine AS build",
     "WORKDIR /app",
     "COPY package*.json ./",
+    "RUN npm install --global npm@10.9.9",
     "RUN npm ci",
     "COPY . .",
     "RUN npm run build",
@@ -15,14 +16,17 @@
     "ENV KITCHEN_STATIC_ROOT=/app/dist",
     "ENV KITCHEN_APP_PROJECT_ROOT=/app",
     "COPY package*.json ./",
-    "RUN npm ci --omit=dev",
-    "COPY --from=build /app /app",
+    "RUN npm install --global npm@10.9.9 && npm ci --omit=dev && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx",
+    "COPY --chown=node:node --from=build /app /app",
     "RUN test -x /app/node_modules/.bin/tsx",
-    "RUN apk add --no-cache nginx",
+    "RUN apk add --no-cache nginx libcap && setcap cap_net_bind_service=+ep /usr/sbin/nginx && apk del libcap",
     "COPY deploy/nginx.conf /etc/nginx/nginx.conf",
     "COPY deploy/nginx-security-headers.conf /etc/nginx/arcigy-security-headers.conf",
+    "RUN chown node:node /app && mkdir -p /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi && chown -R node:node /tmp/nginx-*",
     "RUN chmod +x /app/scripts/startCapRover.sh",
+    "USER node:node",
     "EXPOSE 80",
+    "HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1/ready || exit 1",
     "CMD [\"/app/scripts/startCapRover.sh\"]"
   ]
 }
