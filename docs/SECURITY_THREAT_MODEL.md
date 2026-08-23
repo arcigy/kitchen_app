@@ -52,7 +52,7 @@ operational controls have been enabled.
 | Priority | Risk | Required owner action |
 | --- | --- | --- |
 | P1 | Historical GitHub secret alerts cannot be closed by source changes. | Revoke/rotate the affected provider credentials, invalidate old keys and close alerts with evidence. |
-| P1 | `develop` protection still allows administrator bypass (`enforce_admins=false`). | Repository administrator must enable administrator enforcement and verify no actor can bypass required PR checks. |
+| Closed 2026-08-23 | `develop` protection allowed administrator bypass (`enforce_admins=false`). | Repository protection was updated to enforce administrators; `verify` and `CodeQL` remain strict required checks, with force pushes and deletions disabled. |
 | P1 | Database RLS and least-privilege grants need live schema verification. | Database operator must provide a non-production schema snapshot or run the documented role/RLS verification. |
 | P1 | Off-host backups, PITR and a timed restore have no repository-verifiable proof. | Operations must configure and exercise encrypted off-host backup/PITR, then record RPO/RTO evidence. |
 | P1 | Centralized log/metric/trace retention and alert delivery are not proven. | Select a provider, configure redaction/retention/access control and test a real alert. |
