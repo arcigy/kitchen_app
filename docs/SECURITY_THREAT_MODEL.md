@@ -57,6 +57,7 @@ operational controls have been enabled.
 | P1 | Off-host backups, PITR and a timed restore have no repository-verifiable proof. | Operations must configure and exercise encrypted off-host backup/PITR, then record RPO/RTO evidence. |
 | P1 | Centralized log/metric/trace retention and alert delivery are not proven. | Select a provider, configure redaction/retention/access control and test a real alert. |
 | P2 | Shared distributed rate limiting and MFA/SSO depend on approved identity and cache services. | Product/operations decision and staged implementation. |
+| P2 | GitHub's current immutable `actions/upload-artifact` v5 release still declares the Node 20 action runtime. GitHub Actions forces it onto Node 24 and emits a deprecation annotation, while the verified CI job remains green. | Monitor the upstream action for a Node 24-native release and replace the immutable pin when available; do not suppress or ignore the CI annotation. |
 | P2 | Production CSP still permits narrowly scoped compatibility allowances. | Remove only after browser compatibility characterization. |
 
 ## Required regression scenarios
