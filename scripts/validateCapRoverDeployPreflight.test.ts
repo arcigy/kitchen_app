@@ -158,9 +158,9 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09");
     expect(workflow).toContain("actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444");
     expect(workflow).toContain("persist-credentials: false");
-    expect(workflow).toContain("github/codeql-action/init@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
-    expect(workflow).toContain("github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9");
-    expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28");
+    expect(workflow).toContain("github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28");
+    expect(workflow).toContain("actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4");
     expect(workflow).toContain("security-events: write");
     expect(workflow).toContain("npm sbom --omit=dev --sbom-format=cyclonedx > sbom.cdx.json");
     expect(workflow).toContain("if-no-files-found: error");
