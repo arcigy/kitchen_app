@@ -131,7 +131,6 @@ jobs:
           ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}
           ARCIGY_DEPLOY_DATABASE_SCHEMA: ${{ steps.caprover_app.outputs.database_schema }}
           ARCIGY_DEPLOY_OBJECT_PREFIX: ${{ steps.caprover_app.outputs.object_prefix }}
-          ARCIGY_DEPLOY_STORAGE_PATH: /app/storage
 
       - name: Inspect CapRover image capacity (read-only)
         run: |
