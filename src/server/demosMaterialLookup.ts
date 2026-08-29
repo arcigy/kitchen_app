@@ -77,20 +77,17 @@ const fetchText = async (url: string): Promise<string> => {
   return text;
 };
 
+const SAFE_HTML_ENTITIES: Record<string, string> = {
+  "&nbsp;": " ",
+  "&quot;": "\"",
+  "&#039;": "'",
+  "&apos;": "'"
+};
+
 const decodeHtml = (value: string): string => {
-  const decoded = value
+  return value
     .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#039;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)));
-  return decoded
-    .replace(/<[^>]*>/g, "")
-    .replace(/[<>]/g, "")
+    .replace(/&(?:nbsp|quot|#039|apos);/g, (entity) => SAFE_HTML_ENTITIES[entity] ?? "")
     .replace(/\s+/g, " ")
     .trim();
 };

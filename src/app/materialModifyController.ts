@@ -324,7 +324,7 @@ function renderPanel(target: EditableTarget, draft: MaterialDraft, groupCount: n
       <header class="material-modify-header">
         <div>
           <p>Visualisation / Material Modify</p>
-          <h2>${escapeHtml(target.label)}</h2>
+          <h2 data-material-modify-label></h2>
           <span>${groupCount} scene part${groupCount === 1 ? "" : "s"} using this material group</span>
         </div>
         <button type="button" data-action="close">Close</button>
@@ -351,7 +351,7 @@ function renderPanel(target: EditableTarget, draft: MaterialDraft, groupCount: n
           <label>Tile size meters<input data-field="tileSizeMeters" type="number" min="0.1" max="10" step="0.05" value="${formatNumber(draft.tileSizeMeters)}"></label>
           <label>Grain direction<select data-field="grainDirection">${renderDirectionOptions(draft.grainDirection)}</select></label>
         </form>
-        <pre class="material-modify-payload">${JSON.stringify(payload, null, 2)}</pre>
+        <pre class="material-modify-payload"></pre>
       </div>
       <footer class="material-modify-footer">
         <button type="button" data-action="cancel">Cancel</button>
@@ -388,10 +388,12 @@ export function createMaterialModifyController(ctx: MaterialModifyControllerCont
 
     const render = () => {
       if (!overlay) return;
-      // target.label is escaped by renderPanel; all draft fields are validated by
-      // draftFromRequest/updateDraft before they are interpolated into the panel.
-      // codeql[js/dom-text-reinterpreted-as-html] -- reviewed template boundary.
       overlay.innerHTML = renderPanel(target, draft, group.length);
+      const label = overlay.querySelector<HTMLElement>("[data-material-modify-label]");
+      const payload = overlay.querySelector<HTMLElement>(".material-modify-payload");
+      if (!label || !payload) throw new Error("Material modify panel is incomplete.");
+      label.textContent = target.label;
+      payload.textContent = JSON.stringify(requestFromDraft(target.request, draft), null, 2);
       bind();
     };
 
