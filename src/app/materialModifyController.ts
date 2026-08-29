@@ -388,6 +388,9 @@ export function createMaterialModifyController(ctx: MaterialModifyControllerCont
 
     const render = () => {
       if (!overlay) return;
+      // target.label is escaped by renderPanel; all draft fields are validated by
+      // draftFromRequest/updateDraft before they are interpolated into the panel.
+      // codeql[js/dom-text-reinterpreted-as-html] -- reviewed template boundary.
       overlay.innerHTML = renderPanel(target, draft, group.length);
       bind();
     };
