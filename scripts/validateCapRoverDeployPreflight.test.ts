@@ -135,6 +135,13 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toContain("/user/apps/appDefinitions/register");
     expect(workflow).toContain("CAPROVER_APP_URL is required");
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
+    expect(workflow).toMatch(/branches:\s+- main\s+- develop/m);
+    expect(workflow).toContain("github.ref == 'refs/heads/main' && 'production' || 'develop'");
+    expect(workflow).toContain("CAPROVER_PRODUCTION_APP");
+    expect(workflow).toContain("CAPROVER_PRODUCTION_APP_URL");
+    expect(workflow).toContain("ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}");
+    expect(workflow).toContain("grep -q '\"ok\":true'");
+    expect(workflow).toContain("grep -Eq '\"ok\":true.*\"storage\":\"postgres\"'");
     expect(workflow).toContain("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09");
     expect(workflow).toContain("actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444");
     expect(workflow).toContain("persist-credentials: false");
